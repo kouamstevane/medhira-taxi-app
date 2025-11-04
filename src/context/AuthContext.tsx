@@ -1,53 +1,101 @@
+/**
+ * Contexte d'Authentification
+ * 
+ * Fournit l'état d'authentification à toute l'application via Context API.
+ * Utilise Firebase Auth pour gérer l'authentification et Firestore pour les données utilisateur.
+ * 
+ * @module context/AuthContext
+ */
+
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../app/lib/firebase';
 import { User, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/config/firebase';
+import { AuthContextType, UserData } from '@/types';
 
-interface AuthContextType {
-  currentUser: User | null;
-  loading: boolean;
-}
-
+/**
+ * Contexte d'authentification avec valeurs par défaut
+ */
 const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   loading: true,
+  userData: null,
 });
 
+/**
+ * Provider d'authentification
+ * 
+ * Wrapper qui fournit l'état d'authentification à tous les composants enfants.
+ * S'intègre au layout principal pour être disponible dans toute l'application.
+ * 
+ * @component
+ */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('Initializing auth state listener...'); // Debug
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed:', user); // Important pour le debug
+    // Écouter les changements d'état d'authentification Firebase
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+
+      if (user) {
+        try {
+          // Récupérer les données utilisateur depuis Firestore
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            setUserData({
+              uid: user.uid,
+              email: user.email,
+              phoneNumber: user.phoneNumber,
+              firstName: data.firstName || '',
+              lastName: data.lastName || '',
+              profileImageUrl: data.profileImageUrl || user.photoURL || '',
+              userType: data.userType || 'client',
+              country: data.country,
+              createdAt: data.createdAt,
+              updatedAt: data.updatedAt,
+            });
+          } else {
+            setUserData(null);
+          }
+        } catch (error) {
+          console.error('Erreur lors du chargement des données utilisateur:', error);
+          setUserData(null);
+        }
+      } else {
+        setUserData(null);
+      }
+
       setLoading(false);
     });
 
-    // Vérification immédiate de l'état actuel
-    const currentUser = auth.currentUser;
-    console.log('Immediate auth check:', currentUser); // Debug
-    if (currentUser) {
-      setCurrentUser(currentUser);
-      setLoading(false);
-    }
-
-    return () => {
-      console.log('Cleaning up auth listener...'); // Debug
-      unsubscribe();
-    };
+    // Nettoyage de l'écouteur lors du démontage
+    return () => unsubscribe();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading }}>
+    <AuthContext.Provider value={{ currentUser, loading, userData }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
+/**
+ * Hook pour utiliser le contexte d'authentification
+ * 
+ * @returns {AuthContextType} État d'authentification
+ * @throws {Error} Si utilisé hors d'un AuthProvider
+ * 
+ * @example
+ * const { currentUser, userData, loading } = useAuth();
+ */
+export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');

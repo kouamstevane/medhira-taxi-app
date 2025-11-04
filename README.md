@@ -1,36 +1,125 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚕 Medjira Taxi App
 
-## Getting Started
+Application moderne de réservation de taxis et de livraison construite avec **Next.js 15**, **TypeScript**, **Firebase** et **Tailwind CSS**.
 
-First, run the development server:
+## ✨ Caractéristiques
+
+- 🔐 **Authentification complète** : Téléphone, Email, Google
+- 🚖 **Réservation de taxis** en temps réel avec Google Maps
+- 💰 **Portefeuille intégré** avec historique des transactions
+- 👤 **Interface chauffeur** et client séparées
+- 📱 **Design responsive** optimisé mobile
+- 🎨 **UI moderne** avec composants réutilisables
+- 🔥 **Firebase** pour la base de données et l'authentification
+- 📍 **Google Maps API** pour la géolocalisation
+- 🌍 **Multi-pays** : Cameroun, France, Belgique, Canada
+
+## 🏗️ Architecture Moderne
+
+Le projet suit une **architecture modulaire** avec séparation claire des responsabilités :
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+src/
+├── app/              # Routes et pages (Next.js App Router)
+├── components/       # Composants UI réutilisables
+├── config/           # Configuration (Firebase, etc.)
+├── context/          # Contextes React (Auth)
+├── hooks/            # Hooks personnalisés
+├── lib/              # Bibliothèques et helpers
+├── types/            # Types TypeScript centralisés
+└── utils/            # Utilitaires et constantes
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+📚 **Consultez** [ARCHITECTURE.md](./ARCHITECTURE.md) pour plus de détails.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 Démarrage Rapide
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Prérequis
 
-## Learn More
+- Node.js 18+ et npm
+- Compte Firebase avec projet configuré
+- Clé API Google Maps
 
-To learn more about Next.js, take a look at the following resources:
+### Installation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. **Cloner le projet**
+```bash
+git clone <repository-url>
+cd medhira-taxi-app
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+2. **Installer les dépendances**
+```bash
+npm install
+```
 
-## Deploy on Vercel
+3. **Configurer les variables d'environnement**
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Créez un fichier `.env.local` à la racine :
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_maps_key
+```
+
+4. **Lancer le serveur de développement**
+```bash
+npm run dev
+```
+
+Ouvrez [http://localhost:3000](http://localhost:3000) dans votre navigateur.
+
+## 📦 Scripts Disponibles
+
+```bash
+npm run dev      # Démarre le serveur de développement avec Turbopack
+npm run build    # Compile l'application pour la production
+npm start        # Démarre le serveur de production
+npm run lint     # Vérifie le code avec ESLint
+```
+
+## 🔑 Fonctionnalités Principales
+
+### 1. Authentification Multi-Canaux
+- Connexion par numéro de téléphone (SMS OTP)
+- Connexion par email et mot de passe
+- Connexion via Google
+- Support multi-pays avec indicatifs
+
+### 2. Réservation de Taxi
+- Sélection du point de départ et destination avec Google Maps
+- Calcul automatique du prix (distance, durée, type de véhicule, heures de pointe)
+- Recherche de chauffeur en temps réel
+- Suivi de la course
+
+### 3. Portefeuille
+- Consultation du solde
+- Rechargement (Orange Money, MTN, Visa, PayPal)
+- Historique des transactions
+
+### 4. Dashboard
+- Vue d'ensemble des services
+- Historique des commandes
+- Profil utilisateur
+
+## 🛠️ Technologies
+
+- **Next.js 15** (App Router)
+- **TypeScript**
+- **Tailwind CSS 4**
+- **Firebase** (Auth, Firestore, Storage)
+- **Google Maps API**
+
+## 📚 Documentation
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - Architecture détaillée
+- [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md) - Guide de migration
+
+---
+
+**Fait avec ❤️ au Cameroun 🇨🇲**

@@ -1,20 +1,36 @@
+/**
+ * Page Dashboard - Tableau de bord utilisateur
+ * 
+ * Affiche les services disponibles, l'historique des commandes,
+ * et les informations utilisateur. Page protégée nécessitant l'authentification.
+ * 
+ * @page
+ */
+
 "use client";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { auth, db } from "../lib/firebase";
+import { auth, db } from "@/config/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { UserData } from "@/types";
 
 export default function Dashboard() {
   const router = useRouter();
   const [notifCount, setNotifCount] = useState(2);
-  const [userData, setUserData] = useState({
+  const [userData, setUserData] = useState<{
+    phoneNumber: string;
+    firstName: string;
+    lastName: string;
+    profileImageUrl: string;
+    userType: 'client' | 'chauffeur';
+  }>({
     phoneNumber: "",
     firstName: "",
     lastName: "",
-    photoURL: "/images/default.png",
-    userType: "client" // 'client' ou 'chauffeur'
+    profileImageUrl: "/images/default.png",
+    userType: "client"
   });
 
   useEffect(() => {
@@ -28,7 +44,7 @@ export default function Dashboard() {
           phoneNumber: user.phoneNumber || "",
           firstName: userDataFromDB.firstName || "",
           lastName: userDataFromDB.lastName || "",
-          photoURL: userDataFromDB.profileImageUrl || user.photoURL || "/images/default.png",
+          profileImageUrl: userDataFromDB.profileImageUrl || user.photoURL || "/images/default.png",
           userType: userDataFromDB.userType || "client"
         }));
       } else {
@@ -111,7 +127,7 @@ export default function Dashboard() {
           <div className="relative group">
             <button className="flex items-center space-x-2 focus:outline-none">
               <img
-                src={userData.photoURL}
+                src={userData.profileImageUrl}
                 alt="Profil"
                 className="w-9 h-9 rounded-full object-cover border-2 border-[#f29200] shadow-sm"
               />
@@ -142,7 +158,7 @@ export default function Dashboard() {
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#f29200] opacity-10 rounded-full -translate-y-16 translate-x-16"></div>
           <div className="relative flex flex-col sm:flex-row items-start">
             <img
-              src={userData.photoURL}
+              src={userData.profileImageUrl}
               alt="Profil"
               className="w-20 h-20 rounded-full object-cover border-4 border-[#f29200] shadow-lg mb-4 sm:mb-0 sm:mr-6"
             />

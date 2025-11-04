@@ -1,0 +1,52 @@
+/**
+ * Configuration Firebase - Point d'entrée unique pour tous les services Firebase
+ * 
+ * Ce fichier centralise l'initialisation de Firebase et exporte les services
+ * nécessaires (Auth, Firestore, Storage) pour toute l'application.
+ * 
+ * @module config/firebase
+ */
+
+import { initializeApp, getApps, FirebaseApp } from "firebase/app";
+import { getAuth, Auth } from "firebase/auth";
+import { getFirestore, Firestore } from "firebase/firestore";
+import { getStorage, FirebaseStorage } from "firebase/storage";
+
+/**
+ * Configuration Firebase récupérée depuis les variables d'environnement
+ * Pour la production, utilisez des variables d'environnement sécurisées
+ */
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDMXeXZCFAVGeSFW_-3MYkrqV2bN1SXY-8",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "medjira-service.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "medjira-service",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "medjira-service.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "113581657187",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:113581657187:web:cd8e2ef19a25b4a424bc56",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-3LNHS26HML"
+};
+
+/**
+ * Initialise Firebase de manière sécurisée
+ * Vérifie si une instance existe déjà pour éviter les duplications
+ */
+let app: FirebaseApp;
+
+if (!getApps().length) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApps()[0];
+}
+
+/**
+ * Instances des services Firebase
+ * Exportées pour être utilisées dans toute l'application
+ */
+export const auth: Auth = getAuth(app);
+export const db: Firestore = getFirestore(app);
+export const storage: FirebaseStorage = getStorage(app);
+
+/**
+ * Export de l'app Firebase pour des cas d'usage avancés
+ */
+export default app;
