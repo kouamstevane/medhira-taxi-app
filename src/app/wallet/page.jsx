@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from "../lib/firebase";
-import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { auth, db } from "@/config/firebase";
+import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export default function WalletPage() {
@@ -36,37 +36,46 @@ useEffect(() => {
           setBalance(0);
         }
 
-        // 2. Chargement des transactions
-        console.log("Fetching transactions for user:", user.uid); // Debug
-        const transactionsRef = collection(db, 'transactions');
-        const q = query(
-          transactionsRef,
-          where('userId', '==', user.uid),
-          orderBy('createdAt', 'desc'),
-          limit(3)
-        );
+        // 2. Chargement des transactions (avec gestion d'erreur)
+        try {
+          console.log("Fetching transactions for user:", user.uid); // Debug
+          const transactionsRef = collection(db, 'transactions');
+          const q = query(
+            transactionsRef,
+            where('userId', '==', user.uid),
+            orderBy('createdAt', 'desc'),
+            limit(3)
+          );
 
-        const querySnapshot = await getDocs(q);
-        console.log("Transactions found:", querySnapshot.size); // Debug
-        
-        const transactionsData = querySnapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            // Conversion explicite du Timestamp
-            date: data.createdAt?.toDate?.() || new Date()
-          };
-        });
+          const querySnapshot = await getDocs(q);
+          console.log("Transactions found:", querySnapshot.size); // Debug
+          
+          const transactionsData = querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              // Conversion explicite du Timestamp
+              date: data.createdAt?.toDate?.() || new Date()
+            };
+          });
 
-        setTransactions(transactionsData);
+          setTransactions(transactionsData);
+        } catch (transactionError) {
+          console.warn("Impossible de charger les transactions:", transactionError.message);
+          // Ne pas afficher d'erreur, juste laisser la liste vide
+          setTransactions([]);
+        }
       } catch (err) {
         console.error("Detailed error:", { 
           message: err.message, 
           stack: err.stack,
           userId: user?.uid 
         });
-        setError('Erreur lors du chargement des transactions');
+        // Afficher l'erreur seulement si critique (pas juste les permissions)
+        if (!err.message?.includes('offline') && !err.message?.includes('permission')) {
+          setError('Erreur lors du chargement du portefeuille');
+        }
       } finally {
         setLoading(false);
       }
@@ -197,11 +206,11 @@ useEffect(() => {
                       {transaction.method || 'Recharge'} - {transaction.type === 'deposit' ? 'Dépôt' : 'Retrait'}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {transaction.createdAt?.toDate().toLocaleDateString('fr-FR', {
+                      {transaction.date?.toLocaleDateString?.('fr-FR', {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric'
-                      })}
+                      }) || 'Date inconnue'}
                     </p>
                   </div>
                   <p className={`font-semibold ${

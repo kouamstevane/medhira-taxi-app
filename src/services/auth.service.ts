@@ -107,6 +107,20 @@ export const verifyCode = async (
   code: string
 ): Promise<User> => {
   const result = await confirmationResult.confirm(code);
+  
+  // Vérifier si l'utilisateur existe dans Firestore
+  const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+  
+  if (!userDoc.exists()) {
+    // Créer le document utilisateur s'il n'existe pas
+    await createUserDocument(result.user.uid, {
+      phoneNumber: result.user.phoneNumber || '',
+      firstName: '',
+      lastName: '',
+      userType: 'client',
+    });
+  }
+  
   return result.user;
 };
 

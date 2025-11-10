@@ -10,15 +10,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { auth, db } from "@/config/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { UserData } from "@/types";
+import { 
+  FiCreditCard, FiBell, FiLogOut, FiPhone, FiUser, 
+  FiTruck, FiPackage, FiCheckCircle, FiLock, FiPlus,
+  FiSettings, FiShield, FiFileText, FiUsers
+} from 'react-icons/fi';
 
 export default function Dashboard() {
   const router = useRouter();
   const [notifCount, setNotifCount] = useState(2);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [userData, setUserData] = useState<{
     phoneNumber: string;
     firstName: string;
@@ -47,18 +54,40 @@ export default function Dashboard() {
           profileImageUrl: userDataFromDB.profileImageUrl || user.photoURL || "/images/default.png",
           userType: userDataFromDB.userType || "client"
         }));
+
+        // Vérifier si l'utilisateur est admin
+        try {
+          const adminDocRef = doc(db, 'admins', user.uid);
+          const adminDoc = await getDoc(adminDocRef);
+          
+          if (adminDoc.exists()) {
+            setIsAdmin(true);
+          } else {
+            // Fallback: chercher dans la collection où userId correspond à l'UID
+            const adminQuery = query(
+              collection(db, 'admins'),
+              where('userId', '==', user.uid)
+            );
+            const adminSnapshot = await getDocs(adminQuery);
+            setIsAdmin(!adminSnapshot.empty);
+          }
+        } catch (err) {
+          console.error('Erreur vérification admin:', err);
+          setIsAdmin(false);
+        }
       } else {
         router.push("/login");
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [router]);
 
   const logout = async () => {
     try {
       await signOut(auth);
-      router.push("/login");
+      // Forcer le rechargement complet pour vider le cache
+      window.location.href = "/login";
     } catch (error) {
       console.error("Erreur de déconnexion :", error);
       alert("Erreur lors de la déconnexion");
@@ -75,47 +104,50 @@ export default function Dashboard() {
       {/* Entête fixe */}
       <header className="bg-[#101010] text-white flex items-center justify-between px-4 sm:px-6 py-3 sticky top-0 z-50 shadow-lg border-b border-[#333]">
         <h1 className="text-xl sm:text-2xl font-bold flex items-center">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-7 w-7 mr-2 text-[#f29200]"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-          </svg>
+          <FiTruck className="h-7 w-7 mr-2 text-[#f29200]" />
           Medjira Service
         </h1>
 
-        <div className="flex items-center space-x-2 sm:space-x-4">
+                    <div className="flex items-center space-x-2 sm:space-x-4">
+                      {/* Link to Driver Space */}
+                      <Link
+                        href="/driver/login"
+                        className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition duration-200 shadow-md"
+                        aria-label="Espace chauffeur"
+                      >
+                        <FiUser className="h-5 w-5" />
+                        <span className="hidden sm:inline text-sm font-medium">Chauffeur</span>
+                      </Link>
+                      
+                      {/* Admin Button - Visible uniquement pour les admins */}
+                      {isAdmin && (
+                        <button
+                          onClick={() => router.push('/admin/drivers')}
+                          className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg transition duration-200 shadow-md"
+                          aria-label="Administration"
+                        >
+                          <FiShield className="h-5 w-5" />
+                          <span className="hidden sm:inline text-sm font-medium">Admin</span>
+                        </button>
+                      )}
+
+          {/* Wallet Button */}
+          <button
+            onClick={() => router.push('/wallet')}
+            className="flex items-center space-x-2 bg-[#f29200] hover:bg-[#e08800] text-white px-3 py-2 rounded-lg transition duration-200 shadow-md"
+            aria-label="Portefeuille"
+          >
+            <FiCreditCard className="h-5 w-5" />
+            <span className="hidden sm:inline text-sm font-medium">Wallet</span>
+          </button>
+
           {/* Notifications */}
           <button
             onClick={handleNotifications}
             className="relative p-2 rounded-full hover:bg-[#333] transition duration-200 group"
             aria-label="Notifications"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6 text-white group-hover:text-[#f29200] transition"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.6 0 00-9.33-5.032"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13.73 21a2 2 0 01-3.46 0"
-              />
-            </svg>
+            <FiBell className="h-6 w-6 text-white group-hover:text-[#f29200] transition" />
             {notifCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
                 {notifCount}
@@ -140,11 +172,21 @@ export default function Dashboard() {
                 <p className="font-semibold text-gray-900">{userData.firstName} {userData.lastName}</p>
                 <p className="text-xs text-gray-500 truncate">{userData.phoneNumber}</p>
               </div>
+              {isAdmin && (
+                <button
+                  onClick={() => router.push('/admin/drivers')}
+                  className="block w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 hover:text-purple-700 transition flex items-center"
+                >
+                  <FiShield className="h-4 w-4 mr-2" />
+                  Administration
+                </button>
+              )}
               <button
                 onClick={logout}
-                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition"
+                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition flex items-center"
               >
-                🔐 Déconnexion
+                <FiLogOut className="h-4 w-4 mr-2" />
+                Déconnexion
               </button>
             </div>
           </div>
@@ -171,15 +213,11 @@ export default function Dashboard() {
               </p>
               <div className="space-y-2 text-sm">
                 <p className="flex items-center">
-                  <svg className="h-4 w-4 mr-2 text-[#f29200]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
+                  <FiPhone className="h-4 w-4 mr-2 text-[#f29200]" />
                   {userData.phoneNumber || "Non renseigné"}
                 </p>
                 <p className="flex items-center">
-                  <svg className="h-4 w-4 mr-2 text-[#f29200]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
+                  <FiUser className="h-4 w-4 mr-2 text-[#f29200]" />
                   <span className="font-medium">Statut :</span>
                   <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
                     userData.userType === 'chauffeur'
@@ -194,13 +232,34 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Section Admin - Visible uniquement pour les admins */}
+        {isAdmin && (
+          <section className="mb-8">
+            <h3 className="text-lg font-bold text-[#101010] mb-5 flex items-center">
+              <FiShield className="h-5 w-5 mr-2 text-purple-600" />
+              Administration
+            </h3>
+            <div
+              onClick={() => router.push("/admin/drivers")}
+              className="group p-5 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl shadow-md hover:shadow-xl border-2 border-purple-200 transition-all duration-300 cursor-pointer transform hover:-translate-y-1"
+            >
+              <div className="flex items-center">
+                <div className="w-14 h-14 bg-purple-600 rounded-full flex items-center justify-center mr-4 group-hover:scale-110 transition">
+                  <FiUsers className="h-7 w-7 text-white" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-[#101010] group-hover:text-purple-600 transition">Gérer les comptes chauffeurs</h4>
+                  <p className="text-sm text-gray-600">Valider ou refuser les demandes d'inscription</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Services principaux */}
         <section className="mb-8">
           <h3 className="text-lg font-bold text-[#101010] mb-5 flex items-center">
-            <svg className="h-5 w-5 mr-2 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-              <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z" />
-            </svg>
+            <FiTruck className="h-5 w-5 mr-2 text-[#f29200]" />
             Nos Services
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -211,10 +270,7 @@ export default function Dashboard() {
             >
               <div className="flex items-center">
                 <div className="w-14 h-14 bg-[#f29200] bg-opacity-10 rounded-full flex items-center justify-center mr-4 group-hover:scale-110 transition">
-                  <svg className="h-7 w-7 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                    <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z" />
-                  </svg>
+                  <FiTruck className="h-7 w-7 text-[#f29200]" />
                 </div>
                 <div>
                   <h4 className="font-bold text-[#101010] group-hover:text-[#f29200] transition">Commander un taxi</h4>
@@ -230,10 +286,7 @@ export default function Dashboard() {
             >
               <div className="flex items-center">
                 <div className="w-14 h-14 bg-[#f29200] bg-opacity-10 rounded-full flex items-center justify-center mr-4 group-hover:scale-110 transition">
-                  <svg className="h-7 w-7 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
+                  <FiPackage className="h-7 w-7 text-[#f29200]" />
                 </div>
                 <div>
                   <h4 className="font-bold text-[#101010] group-hover:text-[#f29200] transition">Livraison express</h4>
@@ -248,9 +301,7 @@ export default function Dashboard() {
         {userData.userType === 'chauffeur' && (
           <section className="mb-8">
             <h3 className="text-lg font-bold text-[#101010] mb-5 flex items-center">
-              <svg className="h-5 w-5 mr-2 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
+              <FiUser className="h-5 w-5 mr-2 text-[#f29200]" />
               Chauffeur
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -282,16 +333,14 @@ export default function Dashboard() {
         <section className="mb-8">
           <div className="flex justify-between items-center mb-5">
             <h3 className="text-lg font-bold text-[#101010] flex items-center">
-              <svg className="h-5 w-5 mr-2 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
-              </svg>
+              <FiLock className="h-5 w-5 mr-2 text-[#f29200]" />
               Dernières commandes
             </h3>
             <button
               onClick={() => router.push("/commandes")}
-              className="text-sm text-[#f29200] hover:underline font-medium"
+              className="text-sm text-[#f29200] hover:underline font-medium flex items-center"
             >
-              Voir tout →
+              Voir tout <span className="ml-1">→</span>
             </button>
           </div>
           <div className="space-y-4">
@@ -301,8 +350,9 @@ export default function Dashboard() {
             >
               <div className="flex justify-between items-center">
                 <h4 className="font-semibold text-[#101010]">Taxi - Centre ville</h4>
-                <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
-                  ✅ Complétée
+                <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium flex items-center">
+                  <FiCheckCircle className="h-3 w-3 mr-1" />
+                  Complétée
                 </span>
               </div>
               <p className="text-sm text-gray-600 mt-1">Hier à 14:30 • 1 500 FCFA</p>
@@ -313,11 +363,12 @@ export default function Dashboard() {
             >
               <div className="flex justify-between items-center">
                 <h4 className="font-semibold text-[#101010]">Livraison - Restaurant</h4>
-                <span className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
-                  🚚 En cours
+                <span className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium flex items-center">
+                  <FiTruck className="h-3 w-3 mr-1" />
+                  En cours
                 </span>
               </div>
-              <p className="text-sm text-gray-600 mt-1">Aujourd’hui à 12:15 • 2 000 FCFA</p>
+              <p className="text-sm text-gray-600 mt-1">Aujourd'hui à 12:15 • 2 000 FCFA</p>
             </div>
           </div>
         </section>
@@ -328,9 +379,7 @@ export default function Dashboard() {
             onClick={() => router.push("/commander")}
             className="inline-flex items-center space-x-2 bg-[#f29200] hover:bg-[#e68600] text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition transform hover:scale-105"
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
+            <FiPlus className="h-5 w-5" />
             <span>Commander maintenant</span>
           </button>
         </div>
@@ -338,20 +387,25 @@ export default function Dashboard() {
         {/* Menu secondaire */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
-            { icon: "📱", title: "Mon profil", route: "/profil" },
-            { icon: "💰", title: "Paiements", route: "/paiements" },
-            { icon: "📜", title: "Historique", route: "/historique" },
-            { icon: "🛡️", title: "Sécurité", route: "/securite" },
-          ].map((item, i) => (
-            <div
-              key={i}
-              onClick={() => router.push(item.route)}
-              className="p-4 bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-[#f29200] transition cursor-pointer text-center group"
-            >
-              <div className="text-2xl mb-2 group-hover:scale-110 transition">{item.icon}</div>
-              <span className="text-sm font-medium text-[#101010]">{item.title}</span>
-            </div>
-          ))}
+            { icon: FiSettings, title: "Mon profil", route: "/profil" },
+            { icon: FiCreditCard, title: "Paiements", route: "/paiements" },
+            { icon: FiFileText, title: "Historique", route: "/historique" },
+            { icon: FiShield, title: "Sécurité", route: "/securite" },
+          ].map((item, i) => {
+            const IconComponent = item.icon;
+            return (
+              <div
+                key={i}
+                onClick={() => router.push(item.route)}
+                className="p-4 bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-[#f29200] transition cursor-pointer text-center group"
+              >
+                <div className="flex justify-center mb-2">
+                  <IconComponent className="h-6 w-6 text-gray-600 group-hover:text-[#f29200] group-hover:scale-110 transition" />
+                </div>
+                <span className="text-sm font-medium text-[#101010]">{item.title}</span>
+              </div>
+            );
+          })}
         </section>
       </main>
     </div>

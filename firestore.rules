@@ -1,0 +1,119 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Fonction helper pour vérifier l'authentification
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Fonction helper pour vérifier si l'utilisateur accède à ses propres données
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Fonction helper pour vérifier si l'utilisateur est admin
+    // Vérifie si un document existe avec l'UID comme ID
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Collection users - Les utilisateurs peuvent lire et écrire leurs propres données
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+    
+    // Collection drivers - Les chauffeurs peuvent lire et écrire leurs propres données
+    // Les admins peuvent modifier le statut
+    // Les utilisateurs peuvent supprimer leur propre compte refusé pour permettre la recréation
+    match /drivers/{driverId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == driverId;
+      allow update: if isOwner(driverId) || isAdmin();
+      // Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé
+      allow delete: if isAdmin() || 
+                    (isOwner(driverId) && 
+                     resource.data.status == 'rejected');
+    }
+    
+    // Collection admins - Permettre la lecture pour vérifier si on est admin
+    match /admins/{adminId} {
+      // Permettre la lecture si l'utilisateur est authentifié (pour les requêtes avec where)
+      allow read: if isAuthenticated();
+      allow write: if false; // Seulement via Admin SDK ou console Firebase
+    }
+    
+    // Collection wallets - Les utilisateurs peuvent lire et écrire leur propre wallet
+    match /wallets/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false; // Ne jamais permettre la suppression des wallets
+    }
+    
+    // Collection transactions - Les utilisateurs peuvent lire leurs propres transactions
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || 
+                      resource.data.driverId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update: if false; // Les transactions ne doivent pas être modifiées
+      allow delete: if false; // Les transactions ne doivent pas être supprimées
+    }
+    
+    // Collection bookings - Les utilisateurs et chauffeurs peuvent lire leurs propres réservations
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || 
+                      resource.data.driverId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+                       (resource.data.userId == request.auth.uid || 
+                        resource.data.driverId == request.auth.uid);
+      allow delete: if false;
+    }
+    
+    // Collection active_bookings - Similaire aux bookings
+    match /active_bookings/{bookingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+    
+    // Collection parcels - Les utilisateurs peuvent lire et créer leurs propres colis
+    match /parcels/{parcelId} {
+      allow read: if isAuthenticated() && 
+                     (resource.data.senderId == request.auth.uid || 
+                      resource.data.receiverId == request.auth.uid ||
+                      resource.data.driverId == request.auth.uid);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && 
+                       (resource.data.senderId == request.auth.uid || 
+                        resource.data.driverId == request.auth.uid);
+      allow delete: if false;
+    }
+    
+    // Collection vehicles - Les chauffeurs peuvent gérer leurs propres véhicules
+    match /vehicles/{vehicleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+    }
+    
+    // Collection config - Lecture seule pour tous les utilisateurs authentifiés
+    match /config/{document} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Seulement via Admin SDK
+    }
+    
+    // Collection carTypes - Lecture pour tous les utilisateurs authentifiés
+    match /carTypes/{carTypeId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Seulement via Admin SDK
+    }
+  }
+}
+

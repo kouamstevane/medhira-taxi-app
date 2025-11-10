@@ -1,8 +1,8 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db, storage } from '../lib/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { auth, db, storage } from '@/config/firebase';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
@@ -104,12 +104,31 @@ export default function ProfilPage() {
     }
 
     try {
-      await updateDoc(doc(db, 'users', user.uid), {
-        ...userData,
-        email: user.email,
-        profileImageUrl: imageUrl,
-        updatedAt: new Date()
-      });
+      // Utiliser setDoc avec merge pour créer le document s'il n'existe pas
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        // Le document existe, on met à jour
+        await updateDoc(userRef, {
+          ...userData,
+          email: user.email,
+          profileImageUrl: imageUrl,
+          updatedAt: new Date()
+        });
+      } else {
+        // Le document n'existe pas, on le crée
+        await setDoc(userRef, {
+          ...userData,
+          email: user.email,
+          phoneNumber: user.phoneNumber || `+237${userData.phone}`,
+          profileImageUrl: imageUrl,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          country: userData.country || 'Cameroun'
+        });
+      }
+      
       setEditing(false);
       setError(null);
     } catch (error) {
@@ -225,11 +244,11 @@ export default function ProfilPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Prénom *</label>
-                    <input type="text" name="firstName" value={userData.firstName} onChange={handleInputChange} required className="w-full rounded-md border border-[#E8D9A5] p-2" />
+                    <input type="text" name="firstName" value={userData.firstName} onChange={handleInputChange} required className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Nom *</label>
-                    <input type="text" name="lastName" value={userData.lastName} onChange={handleInputChange} required className="w-full rounded-md border border-[#E8D9A5] p-2" />
+                    <input type="text" name="lastName" value={userData.lastName} onChange={handleInputChange} required className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
                   </div>
                 </div>
 
@@ -238,25 +257,25 @@ export default function ProfilPage() {
                   <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Numéro de téléphone *</label>
                   <div className="flex">
                     <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-[#E8D9A5] bg-gray-50 text-gray-500">+237</span>
-                    <input type="tel" name="phone" value={userData.phone} onChange={handleInputChange} required className="flex-1 rounded-r-md border border-[#E8D9A5] p-2" />
+                    <input type="tel" name="phone" value={userData.phone} onChange={handleInputChange} required className="flex-1 rounded-r-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
                   </div>
                 </div>
 
                 {/* Adresse */}
                 <div>
                   <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Adresse</label>
-                  <input type="text" name="address" value={userData.address} onChange={handleInputChange} className="w-full rounded-md border border-[#E8D9A5] p-2" />
+                  <input type="text" name="address" value={userData.address} onChange={handleInputChange} className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
                 </div>
 
                 {/* Ville et Pays */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Ville</label>
-                    <input type="text" name="city" value={userData.city} onChange={handleInputChange} className="w-full rounded-md border border-[#E8D9A5] p-2" />
+                    <input type="text" name="city" value={userData.city} onChange={handleInputChange} className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Pays</label>
-                    <select name="country" value={userData.country} onChange={handleInputChange} className="w-full rounded-md border border-[#E8D9A5] p-2">
+                    <select name="country" value={userData.country} onChange={handleInputChange} className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] bg-white">
                       {countries.map(country => (
                         <option key={country} value={country}>{country}</option>
                       ))}
@@ -267,7 +286,7 @@ export default function ProfilPage() {
                 {/* Bio */}
                 <div>
                   <label className="block text-sm font-medium text-[#5A4A1A] mb-1">À propos de moi</label>
-                  <textarea name="bio" value={userData.bio} onChange={handleInputChange} rows={3} className="w-full rounded-md border border-[#E8D9A5] p-2" placeholder="Parlez-nous un peu de vous..." />
+                  <textarea name="bio" value={userData.bio} onChange={handleInputChange} rows={3} className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" placeholder="Parlez-nous un peu de vous..." />
                 </div>
 
                 {/* Boutons */}

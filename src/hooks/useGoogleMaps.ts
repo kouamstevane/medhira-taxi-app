@@ -35,12 +35,40 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
   const initializeServices = useCallback(() => {
     if (window.google && window.google.maps) {
       try {
+        // Vérifier que DirectionsService est disponible
+        if (!window.google.maps.DirectionsService) {
+          throw new Error('DirectionsService non disponible. Vérifiez que Google Maps API est chargée.');
+        }
+        
+        // Vérifier que la bibliothèque places est disponible (peut prendre un peu de temps)
+        if (!window.google.maps.places) {
+          // Attendre un peu et réessayer
+          setTimeout(() => {
+            if (window.google?.maps?.places) {
+              try {
+                setDirectionsService(new window.google.maps.DirectionsService());
+                setAutocompleteService(new window.google.maps.places.AutocompleteService());
+                setIsLoaded(true);
+                setLoadError(null);
+              } catch (err: any) {
+                console.error('Erreur lors de l\'initialisation des services Google Maps:', err);
+                setLoadError(err.message || 'Erreur d\'initialisation de Google Maps');
+              }
+            } else {
+              setLoadError('La bibliothèque "places" n\'est pas disponible. Vérifiez que l\'API Places est activée.');
+            }
+          }, 500);
+          return;
+        }
+        
+        // Initialiser les services
         setDirectionsService(new window.google.maps.DirectionsService());
         setAutocompleteService(new window.google.maps.places.AutocompleteService());
         setIsLoaded(true);
-      } catch (err) {
+        setLoadError(null);
+      } catch (err: any) {
         console.error('Erreur lors de l\'initialisation des services Google Maps:', err);
-        setLoadError('Erreur d\'initialisation de Google Maps');
+        setLoadError(err.message || 'Erreur d\'initialisation de Google Maps');
       }
     }
   }, []);
@@ -48,7 +76,25 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
   useEffect(() => {
     // Vérifier si Google Maps est déjà chargé
     if (window.google && window.google.maps) {
-      initializeServices();
+      // Attendre que places soit disponible si ce n'est pas déjà le cas
+      if (window.google.maps.places) {
+        initializeServices();
+      } else {
+        // Attendre un peu pour que places se charge
+        const checkPlaces = setInterval(() => {
+          if (window.google?.maps?.places) {
+            clearInterval(checkPlaces);
+            initializeServices();
+          }
+        }, 100);
+        
+        setTimeout(() => {
+          clearInterval(checkPlaces);
+          if (!window.google?.maps?.places) {
+            setLoadError('La bibliothèque "places" n\'est pas disponible. Vérifiez que l\'API Places est activée.');
+          }
+        }, 5000);
+      }
       return;
     }
 
@@ -56,40 +102,101 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
     if (existingScript) {
       const checkLoaded = setInterval(() => {
-        if (window.google && window.google.maps) {
+        if (window.google && window.google.maps && window.google.maps.places) {
           clearInterval(checkLoaded);
           initializeServices();
         }
       }, 100);
+      
+      // Timeout après 10 secondes
+      setTimeout(() => {
+        clearInterval(checkLoaded);
+        if (!window.google?.maps?.places) {
+          setLoadError('Timeout: La bibliothèque "places" n\'a pas pu être chargée. Vérifiez que l\'API Places est activée.');
+        }
+      }, 10000);
+      
       return () => clearInterval(checkLoaded);
     }
 
     // Charger le script Google Maps
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
-      setLoadError('Clé API Google Maps manquante');
+      setLoadError('Clé API Google Maps manquante. Configurez NEXT_PUBLIC_GOOGLE_MAPS_API_KEY dans .env.local');
       return;
     }
 
+    // Vérifier que la clé API a le bon format
+    if (!apiKey.startsWith('AIza')) {
+      setLoadError('Format de clé API invalide. La clé doit commencer par "AIza"');
+      return;
+    }
+
+    // Générer un callback unique pour éviter les conflits
+    const callbackName = `initGoogleMaps_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,routes&callback=initMap`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}`;
     script.async = true;
     script.defer = true;
 
-    window.initMap = () => {
-      initializeServices();
+    // Gérer les erreurs de callback Google Maps avec un nom unique
+    (window as any)[callbackName] = () => {
+      try {
+        // Vérifier si Google Maps a bien chargé
+        if (!window.google || !window.google.maps) {
+          throw new Error('Google Maps API n\'a pas chargé correctement');
+        }
+        
+        // Attendre que la bibliothèque places soit disponible
+        const checkPlaces = setInterval(() => {
+          if (window.google?.maps?.places) {
+            clearInterval(checkPlaces);
+            initializeServices();
+            // Nettoyer le callback après utilisation
+            delete (window as any)[callbackName];
+          }
+        }, 100);
+        
+        // Timeout après 5 secondes
+        setTimeout(() => {
+          clearInterval(checkPlaces);
+          if (!window.google?.maps?.places) {
+            setLoadError('La bibliothèque "places" n\'a pas pu être chargée. Vérifiez que l\'API Places est activée dans Google Cloud Console.');
+            delete (window as any)[callbackName];
+          }
+        }, 5000);
+      } catch (err: any) {
+        console.error('Erreur initialisation Google Maps:', err);
+        setLoadError(`Erreur d'initialisation: ${err.message || 'Erreur inconnue'}`);
+        delete (window as any)[callbackName];
+      }
     };
 
-    script.onerror = () => {
-      setLoadError('Erreur de chargement de Google Maps');
+    // Gérer les erreurs de chargement du script
+    script.onerror = (error) => {
+      console.error('Erreur chargement script Google Maps:', error);
+      setLoadError('Erreur de chargement de Google Maps. Vérifiez votre clé API dans Google Cloud Console.');
     };
+
+    // Écouter les erreurs globales de Google Maps
+    const errorHandler = (event: ErrorEvent) => {
+      if (event.message && event.message.includes('ApiProjectMapError')) {
+        console.error('ApiProjectMapError détectée:', event);
+        setLoadError('Erreur de configuration de la clé API. Vérifiez que les APIs sont activées dans Google Cloud Console et que les restrictions autorisent localhost:3000');
+        window.removeEventListener('error', errorHandler);
+      }
+    };
+    
+    window.addEventListener('error', errorHandler);
 
     document.head.appendChild(script);
 
     return () => {
-      // Nettoyage si nécessaire
-      if ('initMap' in window) {
-        window.initMap = undefined as any;
+      window.removeEventListener('error', errorHandler);
+      // Nettoyage du callback
+      if (callbackName in window) {
+        delete (window as any)[callbackName];
       }
     };
   }, [initializeServices]);

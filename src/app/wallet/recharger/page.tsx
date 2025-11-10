@@ -1,8 +1,9 @@
 "use client";
+import type React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { auth, db } from '../../lib/firebase';
+import { auth, db } from '@/config/firebase';
 import { doc, runTransaction, collection, setDoc } from 'firebase/firestore';
 
 export default function RechargerPage() {
@@ -12,7 +13,7 @@ export default function RechargerPage() {
   const [error, setError] = useState('');
   const router = useRouter();
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -48,13 +49,13 @@ export default function RechargerPage() {
     }
   };
 
-  const simulatePaymentAPI = async (amount, method) => {
+  const simulatePaymentAPI = async (amount: number, method: string) => {
     // Simulation du délai de traitement API
     await new Promise(resolve => setTimeout(resolve, 1500));
     return true; // Simule toujours un succès pour le moment
   };
 
-  const processWalletUpdate = async (userId, amount, method) => {
+  const processWalletUpdate = async (userId: string, amount: number, method: string) => {
     const fees = Math.max(amount * 0.01, 100);
     const netAmount = amount - fees;
 
@@ -135,7 +136,7 @@ export default function RechargerPage() {
                 onChange={(e) => setAmount(e.target.value)}
                 required
                 min="500"
-                className="w-full p-3 border border-[#E8D9A5] rounded-lg focus:ring-[#FDBC01] focus:border-[#FDBC01]"
+                className="w-full p-3 border border-[#E8D9A5] rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-[#FDBC01] focus:border-[#FDBC01]"
                 placeholder="5000"
               />
               

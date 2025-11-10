@@ -2,8 +2,8 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
-import { db } from "../../lib/firebase";
+import { doc, onSnapshot, updateDoc, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
+import { db } from "@/config/firebase";
 import { LoadScript, GoogleMap, Marker, DirectionsRenderer } from "@react-google-maps/api";
 
 const mapContainerStyle = { width: "100%", height: "200px" };
@@ -34,7 +34,7 @@ function ConfirmationContent() {
 
     const unsubscribe = onSnapshot(
       bookingRef,
-      (docSnap) => {
+      (docSnap: DocumentSnapshot<DocumentData>) => {
         if (!docSnap.exists()) {
           setError("Course non trouvée");
           setLoading(false);
@@ -58,7 +58,7 @@ function ConfirmationContent() {
         if (data.status === "accepted" && data.driverId) {
           // Charger la position du chauffeur
           const driverRef = doc(db, "drivers", data.driverId);
-          const unsubscribeDriver = onSnapshot(driverRef, (driverSnap) => {
+          const unsubscribeDriver = onSnapshot(driverRef, (driverSnap: DocumentSnapshot<DocumentData>) => {
             if (driverSnap.exists()) {
               const driverData = driverSnap.data();
               if (driverData.lastLocation) {
@@ -99,7 +99,7 @@ function ConfirmationContent() {
 
         setLoading(false);
       },
-      (err) => {
+      (err: unknown) => {
         console.error("Erreur Firestore:", err);
         setError("Erreur de connexion");
         setLoading(false);

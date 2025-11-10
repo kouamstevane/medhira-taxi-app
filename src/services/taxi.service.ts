@@ -7,6 +7,7 @@
  * @module services/taxi
  */
 
+import { logger } from '@/utils/logger';
 import {
   collection,
   doc,
@@ -115,7 +116,10 @@ export const getCarTypes = async (): Promise<CarType[]> => {
   const querySnapshot = await getDocs(carTypesRef);
   
   return querySnapshot.docs
-    .map(doc => doc.data() as CarType)
+    .map(doc => ({
+      ...doc.data(),
+      id: doc.data().id || doc.id, // Utiliser l'ID du document si pas présent dans les données
+    } as CarType))
     .sort((a, b) => (a.order || 0) - (b.order || 0));
 };
 
@@ -134,6 +138,152 @@ export const calculatePrice = (
     carType.pricePerKm,
     carType.pricePerMinute
   );
+};
+
+/**
+ * Interface pour l'estimation de tarif
+ */
+export interface FareEstimate {
+  price: number;
+  distance: number;
+  duration: number;
+  currency: string;
+}
+
+/**
+ * Interface pour les paramètres d'estimation
+ */
+export interface EstimateFareParams {
+  from: string | Location;
+  to: string | Location;
+  type: string; // ID du type de véhicule
+}
+
+/**
+ * Estimer le tarif d'une course
+ * 
+ * @param params - Paramètres de la course (départ, destination, type de véhicule)
+ * @returns Estimation du tarif avec distance et durée
+ */
+export const estimateFare = async (params: EstimateFareParams): Promise<FareEstimate> => {
+  const { from, to, type } = params;
+
+  // Récupérer le type de véhicule
+  const carTypes = await getCarTypes();
+  const carType = carTypes.find(ct => ct.id === type || ct.name.toLowerCase() === type.toLowerCase());
+  
+  if (!carType) {
+    throw new Error(`Type de véhicule "${type}" introuvable`);
+  }
+
+  // Calculer la distance et la durée
+  let distance: number;
+  let duration: number;
+
+  if (typeof from === 'string' && typeof to === 'string') {
+    // Utiliser Google Directions API pour calculer distance et durée
+    if (typeof window === 'undefined' || !window.google || !window.google.maps) {
+      throw new Error('Google Maps API non chargée');
+    }
+    
+    const directionsService = new window.google.maps.DirectionsService();
+    
+    try {
+      const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
+        directionsService.route(
+          {
+            origin: from,
+            destination: to,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+            provideRouteAlternatives: false,
+          },
+          (result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
+            if (status === 'OK' && result && result.routes && result.routes.length > 0) {
+              resolve(result);
+            } else if (status === 'ZERO_RESULTS') {
+              reject(new Error('Aucun itinéraire trouvé entre ces deux points. Vérifiez les adresses.'));
+            } else if (status === 'NOT_FOUND') {
+              reject(new Error('Une ou plusieurs adresses n\'ont pas pu être trouvées. Vérifiez les adresses saisies.'));
+            } else {
+              reject(new Error(`Erreur calcul itinéraire: ${status}. Vérifiez que l'API Directions est activée.`));
+            }
+          }
+        );
+      });
+
+      const route = result.routes[0];
+      const leg = route.legs[0];
+      
+      if (!leg || !leg.distance || !leg.duration) {
+        throw new Error('Impossible de calculer la distance et la durée');
+      }
+
+      distance = leg.distance.value / 1000; // Convertir en km
+      duration = Math.ceil(leg.duration.value / 60); // Convertir en minutes
+    } catch (directionsError: any) {
+      // Si Directions API échoue, essayer avec Geocoding pour obtenir les coordonnées
+      logger.warn('Directions API échoué, tentative avec Geocoding', { error: directionsError });
+      
+      try {
+        const geocoder = new window.google.maps.Geocoder();
+        
+        // Géocoder les deux adresses
+        const [fromResult, toResult] = await Promise.all([
+          new Promise<google.maps.GeocoderResult>((resolve, reject) => {
+            geocoder.geocode({ address: from }, (results, status) => {
+              if (status === 'OK' && results && results.length > 0) {
+                resolve(results[0]);
+              } else {
+                reject(new Error(`Impossible de géocoder le point de départ: ${status}`));
+              }
+            });
+          }),
+          new Promise<google.maps.GeocoderResult>((resolve, reject) => {
+            geocoder.geocode({ address: to }, (results, status) => {
+              if (status === 'OK' && results && results.length > 0) {
+                resolve(results[0]);
+              } else {
+                reject(new Error(`Impossible de géocoder la destination: ${status}`));
+              }
+            });
+          }),
+        ]);
+
+        const fromLocation = {
+          lat: fromResult.geometry.location.lat(),
+          lng: fromResult.geometry.location.lng(),
+        };
+        const toLocation = {
+          lat: toResult.geometry.location.lat(),
+          lng: toResult.geometry.location.lng(),
+        };
+
+        // Calculer avec la formule de Haversine
+        distance = calculateDistance(fromLocation, toLocation);
+        duration = Math.ceil((distance / 40) * 60); // Estimation: 40 km/h moyenne
+      } catch (geocodingError: any) {
+        // Si tout échoue, relancer l'erreur originale
+        throw new Error(`Impossible de calculer l'itinéraire: ${directionsError.message}. Vérifiez que les adresses sont correctes et que l'API Directions est activée.`);
+      }
+    }
+  } else if (typeof from === 'object' && typeof to === 'object') {
+    // Calculer directement avec les coordonnées (formule de Haversine)
+    distance = calculateDistance(from, to);
+    // Estimation de durée basée sur la distance (vitesse moyenne 40 km/h)
+    duration = Math.ceil((distance / 40) * 60);
+  } else {
+    throw new Error('Format de départ ou destination invalide');
+  }
+
+  // Calculer le prix
+  const price = calculatePrice(distance, duration, carType);
+
+  return {
+    price,
+    distance,
+    duration,
+    currency: 'FCFA',
+  };
 };
 
 /**

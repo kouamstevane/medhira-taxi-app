@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { auth, db } from '../lib/firebase';
+import { auth, db } from '../../config/firebase';
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
@@ -354,7 +354,7 @@ export default function LoginPage() {
                         setCode(value.slice(0, 6));
                         setError(null);
                       }}
-                      className="w-full rounded-md border border-gray-300 p-2 focus:ring-[#f29200] focus:border-[#f29200]"
+                      className="w-full rounded-md border border-gray-300 p-2 text-[#101010] placeholder-gray-400 bg-white focus:ring-[#f29200] focus:border-[#f29200]"
                       placeholder="123456"
                       maxLength={6}
                     />
@@ -415,7 +415,7 @@ export default function LoginPage() {
                     setEmail(e.target.value);
                     setError(null);
                   }}
-                  className="w-full rounded-md border border-gray-300 p-2 focus:ring-[#f29200] focus:border-[#f29200]"
+                  className="w-full rounded-md border border-gray-300 p-2 text-[#101010] placeholder-gray-400 bg-white focus:ring-[#f29200] focus:border-[#f29200]"
                   placeholder="votre@email.com"
                 />
               </div>
@@ -431,7 +431,7 @@ export default function LoginPage() {
                     setPassword(e.target.value);
                     setError(null);
                   }}
-                  className="w-full rounded-md border border-gray-300 p-2 focus:ring-[#f29200] focus:border-[#f29200]"
+                  className="w-full rounded-md border border-gray-300 p-2 text-[#101010] placeholder-gray-400 bg-white focus:ring-[#f29200] focus:border-[#f29200]"
                   placeholder="••••••••"
                 />
               </div>
@@ -495,6 +495,12 @@ export default function LoginPage() {
               Vous n'avez pas de compte ?{' '}
               <Link href="/auth/register" className="text-[#f29200] font-medium hover:underline">
                 S'inscrire
+              </Link>
+            </p>
+            <p className="text-gray-500 mt-3 text-xs sm:text-sm">
+              Vous êtes un chauffeur ?{' '}
+              <Link href="/driver/login" className="text-[#f29200] font-medium hover:underline touch-manipulation" style={{ minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}>
+                Accéder à l'espace chauffeur
               </Link>
             </p>
           </div>

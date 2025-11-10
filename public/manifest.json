@@ -1,0 +1,37 @@
+{
+  "name": "Medjira - Taxi et Livraison",
+  "short_name": "Medjira",
+  "description": "Application de mobilité et livraison au Cameroun",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#f29200",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["travel", "transportation", "food"],
+  "lang": "fr",
+  "dir": "ltr"
+}
+
+
+
+
+

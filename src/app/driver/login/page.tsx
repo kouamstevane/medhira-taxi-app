@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { auth, db } from '../../lib/firebase';
+import { auth, db } from '../../../config/firebase';
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
@@ -218,7 +218,7 @@ export default function DriverLogin() {
                           setPhone(e.target.value.replace(/\D/g, ''));
                           setError(null);
                         }}
-                        className="flex-1 rounded-r-lg border border-gray-300 px-4 py-3 focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
+                        className="flex-1 rounded-r-lg border border-gray-300 px-4 py-3 text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
                         placeholder="655744484"
                         maxLength={9}
                       />
@@ -257,7 +257,7 @@ export default function DriverLogin() {
                         setCode(value.slice(0, 6));
                         setError(null);
                       }}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f29200] focus:border-transparent text-center text-xl tracking-widest"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent text-center text-xl tracking-widest"
                       placeholder="123456"
                       maxLength={6}
                     />
@@ -316,7 +316,7 @@ export default function DriverLogin() {
                     setEmail(e.target.value);
                     setError(null);
                   }}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
                   placeholder="votre@email.com"
                 />
               </div>
@@ -332,7 +332,7 @@ export default function DriverLogin() {
                     setPassword(e.target.value);
                     setError(null);
                   }}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
                   placeholder="••••••••"
                 />
               </div>
@@ -396,6 +396,12 @@ export default function DriverLogin() {
               Vous n'avez pas de compte chauffeur ?{' '}
               <Link href="/driver/register" className="text-[#f29200] font-medium hover:underline transition">
                 📋 Devenir chauffeur
+              </Link>
+            </p>
+            <p className="text-gray-500 mt-3 text-xs sm:text-sm">
+              Vous êtes un client ?{' '}
+              <Link href="/login" className="text-[#f29200] font-medium hover:underline transition touch-manipulation" style={{ minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}>
+                Accéder à l'espace client
               </Link>
             </p>
           </div>

@@ -7,3 +7,4 @@
 
 export { useAuth } from './useAuth';
 export { useGoogleMaps } from './useGoogleMaps';
+export { usePlacesAutocomplete } from './usePlacesAutocomplete';
