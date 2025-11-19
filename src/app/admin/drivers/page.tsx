@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { auth, db } from '@/config/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp, getDoc, deleteDoc } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 
 type Driver = {
   id: string;
@@ -13,18 +12,25 @@ type Driver = {
   lastName: string;
   email: string;
   phone: string;
+  phoneNumber?: string; // Alias pour compatibilité
   licenseNumber: string;
   car: {
     model: string;
     plate: string;
     color: string;
   };
+  carModel?: string; // Propriétés alternatives
+  carPlate?: string;
+  carColor?: string;
   documents: {
     licensePhoto: string;
     carRegistration: string;
     insurance?: string;
   };
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'available' | 'offline' | 'busy';
+  isActive?: boolean;
+  isSuspended?: boolean;
+  suspensionReason?: string;
   createdAt: Timestamp | Date;
   updatedAt?: Timestamp | Date;
   rejectionReason?: string;
@@ -32,7 +38,7 @@ type Driver = {
 
 export default function AdminDriversPage() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +48,17 @@ export default function AdminDriversPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [actionModal, setActionModal] = useState<{
+    show: boolean;
+    action: 'suspend' | 'deactivate' | 'delete' | null;
+    driver: Driver | null;
+    reason: string;
+  }>({
+    show: false,
+    action: null,
+    driver: null,
+    reason: '',
+  });
 
   // Vérifier si l'utilisateur est admin
   useEffect(() => {
@@ -82,26 +99,26 @@ export default function AdminDriversPage() {
   }, [router]);
 
   // Charger les chauffeurs
-  useEffect(() => {
-    if (isAdmin) {
-      loadDrivers();
-    }
-  }, [isAdmin, filter]);
-
-  const loadDrivers = async () => {
+  const loadDrivers = useCallback(async () => {
     try {
       setLoading(true);
       const driversRef = collection(db, 'drivers');
       let q;
 
       if (filter === 'all') {
+        // Charger TOUS les chauffeurs sans filtre
+        q = query(driversRef);
+      } else if (filter === 'approved') {
+        // Approuvés : inclure 'approved' ET les statuts actifs (available, offline, busy)
+        // On ne peut pas utiliser 'in' avec plusieurs valeurs ET d'autres filtres, donc on charge tout et filtre après
         q = query(driversRef);
       } else {
+        // Pour pending et rejected, filtrer normalement
         q = query(driversRef, where('status', '==', filter));
       }
 
       const querySnapshot = await getDocs(q);
-      const driversList: Driver[] = [];
+      let driversList: Driver[] = [];
       
       querySnapshot.forEach((doc) => {
         driversList.push({
@@ -109,6 +126,16 @@ export default function AdminDriversPage() {
           ...doc.data()
         } as Driver);
       });
+
+      // Filtrer côté client pour "Approuvés" (inclut tous les chauffeurs actifs)
+      if (filter === 'approved') {
+        driversList = driversList.filter(driver => 
+          driver.status === 'approved' || 
+          driver.status === 'available' || 
+          driver.status === 'offline' || 
+          driver.status === 'busy'
+        );
+      }
 
       // Trier par date de création (plus récent en premier)
       driversList.sort((a, b) => {
@@ -118,15 +145,27 @@ export default function AdminDriversPage() {
       });
 
       setDrivers(driversList);
+      console.log(`📊 ${driversList.length} chauffeur(s) chargé(s) avec filtre "${filter}"`);
     } catch (err) {
       console.error('Erreur chargement chauffeurs:', err);
       setError('Erreur lors du chargement des chauffeurs');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadDrivers();
+    }
+  }, [isAdmin, loadDrivers]);
 
   const handleApprove = async (driverId: string, driverEmail: string, driverName: string) => {
+    if (!currentUser) {
+      setError('Vous devez être connecté pour effectuer cette action');
+      return;
+    }
+
     try {
       setProcessing(driverId);
       setError(null);
@@ -136,6 +175,7 @@ export default function AdminDriversPage() {
       const driverRef = doc(db, 'drivers', driverId);
       await updateDoc(driverRef, {
         status: 'approved',
+        isAvailable: true, // Rendre le chauffeur disponible automatiquement
         updatedAt: new Date(),
         approvedAt: new Date(),
         approvedBy: currentUser.uid
@@ -144,12 +184,13 @@ export default function AdminDriversPage() {
       // Envoyer l'email d'approbation
       await sendApprovalEmail(driverEmail, driverName);
 
-      setSuccess(`Le compte de ${driverName} a été approuvé avec succès`);
+      setSuccess(`Le compte de ${driverName} a été supprimé avec succès`);
       setSelectedDriver(null);
       loadDrivers();
-    } catch (err: any) {
-      console.error('Erreur approbation:', err);
-      setError(`Erreur lors de l'approbation: ${err.message}`);
+    } catch (err: unknown) {
+      console.error('Erreur suppression:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+      setError(`Erreur lors de la suppression: ${errorMessage}`);
     } finally {
       setProcessing(null);
     }
@@ -158,6 +199,11 @@ export default function AdminDriversPage() {
   const handleReject = async (driverId: string, driverEmail: string, driverName: string) => {
     if (!rejectionReason.trim()) {
       setError('Veuillez indiquer la raison du refus');
+      return;
+    }
+
+    if (!currentUser) {
+      setError('Vous devez être connecté pour effectuer cette action');
       return;
     }
 
@@ -176,8 +222,9 @@ export default function AdminDriversPage() {
       try {
         await deleteDoc(driverRef);
         console.log(`✅ Compte chauffeur ${driverId} supprimé après refus`);
-      } catch (deleteError: any) {
+      } catch (deleteError: unknown) {
         console.error('Erreur lors de la suppression du compte:', deleteError);
+        const errorMessage = deleteError instanceof Error ? deleteError.message : 'Erreur inconnue';
         // Si la suppression échoue, on marque quand même le compte comme refusé
         // pour éviter qu'il ne soit pas traité
         await updateDoc(driverRef, {
@@ -187,7 +234,7 @@ export default function AdminDriversPage() {
           rejectedBy: currentUser.uid,
           updatedAt: new Date(),
         });
-        throw new Error(`Le compte a été marqué comme refusé, mais la suppression a échoué: ${deleteError.message}. Veuillez supprimer manuellement le compte ${driverId}.`);
+        throw new Error(`Le compte a été marqué comme refusé, mais la suppression a échoué: ${errorMessage}. Veuillez supprimer manuellement le compte ${driverId}.`);
       }
 
       // Afficher le succès même si l'email a échoué (l'erreur est déjà gérée dans sendRejectionEmail)
@@ -195,9 +242,10 @@ export default function AdminDriversPage() {
       setSelectedDriver(null);
       setRejectionReason('');
       loadDrivers();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Erreur refus:', err);
-      setError(`Erreur lors du refus: ${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+      setError(`Erreur lors du refus: ${errorMessage}`);
     } finally {
       setProcessing(null);
     }
@@ -224,10 +272,11 @@ export default function AdminDriversPage() {
       }
 
       console.log('✅ Email d\'approbation envoyé avec succès:', data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ Erreur envoi email d\'approbation:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
       // Afficher l'erreur à l'utilisateur mais ne pas bloquer l'approbation
-      setError(`Le compte a été approuvé, mais l'email n'a pas pu être envoyé: ${err.message || 'Erreur inconnue'}`);
+      setError(`Le compte a été approuvé, mais l'email n'a pas pu être envoyé: ${errorMessage}`);
       // Ne pas bloquer l'approbation si l'email échoue
     }
   };
@@ -254,11 +303,59 @@ export default function AdminDriversPage() {
       }
 
       console.log('✅ Email de refus envoyé avec succès:', data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ Erreur envoi email de refus:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
       // Afficher l'erreur à l'utilisateur mais ne pas bloquer le refus
-      setError(`Le compte a été refusé, mais l'email n'a pas pu être envoyé: ${err.message || 'Erreur inconnue'}`);
+      setError(`Le compte a été refusé, mais l'email n'a pas pu être envoyé: ${errorMessage}`);
       // Ne pas bloquer le refus si l'email échoue
+    }
+  };
+
+  // Gestion des actions administratives (suspend, deactivate, delete)
+  const handleAdminAction = async (
+    action: 'suspend' | 'unsuspend' | 'deactivate' | 'reactivate' | 'delete',
+    driverId: string,
+    reason?: string
+  ) => {
+    if (!currentUser) {
+      setError('Vous devez être connecté pour effectuer cette action');
+      return;
+    }
+
+    try {
+      setProcessing(driverId);
+      setError(null);
+      setSuccess(null);
+
+      const response = await fetch('/api/admin/manage-driver', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action,
+          driverId,
+          reason,
+          adminUid: currentUser.uid,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.details || 'Erreur lors de l\'action');
+      }
+
+      setSuccess(data.message);
+      setActionModal({ show: false, action: null, driver: null, reason: '' });
+      loadDrivers();
+    } catch (err: unknown) {
+      console.error(`Erreur ${action}:`, err);
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+      setError(`Erreur lors de l'action: ${errorMessage}`);
+    } finally {
+      setProcessing(null);
     }
   };
 
@@ -302,7 +399,7 @@ export default function AdminDriversPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold">Administration - Gestion des Chauffeurs</h1>
-              <p className="text-gray-300 text-sm mt-1">Gérez les demandes d'inscription des chauffeurs</p>
+              <p className="text-gray-300 text-sm mt-1">Gérez les demandes d&apos;inscription des chauffeurs</p>
             </div>
             <button
               onClick={() => router.push('/dashboard')}
@@ -391,22 +488,38 @@ export default function AdminDriversPage() {
                             <div className="text-sm font-medium text-gray-900">
                               {driver.firstName} {driver.lastName}
                             </div>
-                            <div className="text-sm text-gray-500">Permis: {driver.licenseNumber}</div>
+                            <div className="text-sm text-gray-500">
+                              Permis: {driver.licenseNumber || 'N/A'}
+                            </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">{driver.email}</div>
-                        <div className="text-sm text-gray-500">{driver.phone}</div>
+                        <div className="text-sm text-gray-500">{driver.phone || driver.phoneNumber}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{driver.car.model}</div>
+                        <div className="text-sm text-gray-900">
+                          {driver.car?.model || driver.carModel || 'N/A'}
+                        </div>
                         <div className="text-sm text-gray-500">
-                          {driver.car.plate} • {driver.car.color}
+                          {driver.car?.plate || driver.carPlate || 'N/A'} • {driver.car?.color || driver.carColor || 'N/A'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(driver.status)}
+                        <div className="flex flex-col gap-1">
+                          {getStatusBadge(driver.status)}
+                          {driver.isSuspended && (
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-300">
+                              ⏸️ Suspendu
+                            </span>
+                          )}
+                          {driver.isActive === false && (
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-300">
+                              🚫 Désactivé
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {driver.createdAt instanceof Timestamp
@@ -420,6 +533,8 @@ export default function AdminDriversPage() {
                         >
                           Voir détails
                         </button>
+                        
+                        {/* Actions pour les chauffeurs en attente */}
                         {driver.status === 'pending' && (
                           <>
                             <button
@@ -438,6 +553,58 @@ export default function AdminDriversPage() {
                               className="text-red-600 hover:text-red-900 disabled:opacity-50"
                             >
                               Refuser
+                            </button>
+                          </>
+                        )}
+                        
+                        {/* Actions pour TOUS les chauffeurs approuvés ou existants */}
+                        {(driver.status === 'approved' || driver.status === 'available' || driver.status === 'offline' || driver.status === 'busy') && (
+                          <>
+                            {driver.isSuspended ? (
+                              <button
+                                onClick={() => handleAdminAction('unsuspend', driver.id)}
+                                disabled={processing === driver.id}
+                                className="text-green-600 hover:text-green-900 mr-2 disabled:opacity-50"
+                              >
+                                Réactiver
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setActionModal({ 
+                                  show: true, 
+                                  action: 'suspend', 
+                                  driver, 
+                                  reason: '' 
+                                })}
+                                disabled={processing === driver.id}
+                                className="text-orange-600 hover:text-orange-900 mr-2 disabled:opacity-50"
+                              >
+                                Suspendre
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setActionModal({ 
+                                show: true, 
+                                action: 'deactivate', 
+                                driver, 
+                                reason: '' 
+                              })}
+                              disabled={processing === driver.id}
+                              className="text-yellow-600 hover:text-yellow-900 mr-2 disabled:opacity-50"
+                            >
+                              Désactiver
+                            </button>
+                            <button
+                              onClick={() => setActionModal({ 
+                                show: true, 
+                                action: 'delete', 
+                                driver, 
+                                reason: '' 
+                              })}
+                              disabled={processing === driver.id}
+                              className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                            >
+                              Supprimer
                             </button>
                           </>
                         )}
@@ -616,6 +783,87 @@ export default function AdminDriversPage() {
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'actions administratives */}
+      {actionModal.show && actionModal.driver && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">
+              {actionModal.action === 'suspend' && 'Suspendre le chauffeur'}
+              {actionModal.action === 'deactivate' && 'Désactiver le chauffeur'}
+              {actionModal.action === 'delete' && 'Supprimer définitivement'}
+            </h3>
+            
+            <p className="text-gray-600 mb-4">
+              Chauffeur : <strong>{actionModal.driver.firstName} {actionModal.driver.lastName}</strong>
+            </p>
+
+            {actionModal.action !== 'delete' && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Raison (obligatoire)
+                </label>
+                <textarea
+                  value={actionModal.reason}
+                  onChange={(e) => setActionModal({ ...actionModal, reason: e.target.value })}
+                  placeholder={
+                    actionModal.action === 'suspend' 
+                      ? 'Ex: Plaintes multiples des clients' 
+                      : 'Ex: Fraude détectée, documents invalides'
+                  }
+                  className="w-full p-3 border border-gray-300 rounded-lg text-[#101010]"
+                  rows={3}
+                />
+              </div>
+            )}
+
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+              <p className="text-sm text-yellow-700">
+                {actionModal.action === 'suspend' && '⚠️ Le chauffeur sera bloqué temporairement. Vous pourrez le réactiver plus tard.'}
+                {actionModal.action === 'deactivate' && '⚠️ Le compte sera désactivé définitivement. Le chauffeur ne pourra plus se connecter.'}
+                {actionModal.action === 'delete' && '🗑️ Cette action est irréversible. Toutes les données du chauffeur seront supprimées.'}
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setActionModal({ show: false, action: null, driver: null, reason: '' })}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  if (actionModal.action && actionModal.driver) {
+                    if (actionModal.action === 'delete') {
+                      handleAdminAction('delete', actionModal.driver.id);
+                    } else {
+                      if (!actionModal.reason.trim()) {
+                        setError('Veuillez indiquer la raison');
+                        return;
+                      }
+                      handleAdminAction(actionModal.action, actionModal.driver.id, actionModal.reason.trim());
+                    }
+                  }
+                }}
+                disabled={
+                  processing === actionModal.driver?.id || 
+                  (actionModal.action !== 'delete' && !actionModal.reason.trim())
+                }
+                className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 ${
+                  actionModal.action === 'delete' 
+                    ? 'bg-red-600 hover:bg-red-700' 
+                    : actionModal.action === 'deactivate'
+                    ? 'bg-yellow-600 hover:bg-yellow-700'
+                    : 'bg-orange-600 hover:bg-orange-700'
+                }`}
+              >
+                {processing === actionModal.driver?.id ? 'Traitement...' : 'Confirmer'}
+              </button>
             </div>
           </div>
         </div>

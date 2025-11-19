@@ -207,6 +207,40 @@ export const incrementDriverTrips = async (driverId: string): Promise<void> => {
 };
 
 /**
+ * Incrémenter le nombre de courses acceptées
+ */
+export const incrementDriverAcceptedTrips = async (driverId: string): Promise<void> => {
+  const driverRef = doc(db, 'drivers', driverId);
+  const driverSnap = await getDoc(driverRef);
+
+  if (driverSnap.exists()) {
+    const currentAccepted = driverSnap.data().tripsAccepted || 0;
+    
+    await updateDoc(driverRef, {
+      tripsAccepted: currentAccepted + 1,
+      updatedAt: serverTimestamp(),
+    });
+  }
+};
+
+/**
+ * Incrémenter le nombre de courses refusées
+ */
+export const incrementDriverDeclinedTrips = async (driverId: string): Promise<void> => {
+  const driverRef = doc(db, 'drivers', driverId);
+  const driverSnap = await getDoc(driverRef);
+
+  if (driverSnap.exists()) {
+    const currentDeclined = driverSnap.data().tripsDeclined || 0;
+    
+    await updateDoc(driverRef, {
+      tripsDeclined: currentDeclined + 1,
+      updatedAt: serverTimestamp(),
+    });
+  }
+};
+
+/**
  * Récupérer les évaluations d'un chauffeur
  */
 export const getDriverRatings = async (driverId: string): Promise<Rating[]> => {

@@ -66,14 +66,43 @@ service cloud.firestore {
     
     // Collection bookings - Les utilisateurs et chauffeurs peuvent lire leurs propres réservations
     match /bookings/{bookingId} {
+      // Permettre la lecture si c'est la réservation de l'utilisateur ou du chauffeur assigné
       allow read: if isAuthenticated() && 
                      (resource.data.userId == request.auth.uid || 
                       resource.data.driverId == request.auth.uid);
+      // Permettre la lecture à tous les utilisateurs authentifiés pour les bookings en attente
+      // Cela permet aux chauffeurs de voir les demandes disponibles
+      allow read: if isAuthenticated() && resource.data.status == 'pending';
       allow create: if isAuthenticated();
+      // Permettre la mise à jour par le propriétaire ou le chauffeur assigné
       allow update: if isAuthenticated() && 
                        (resource.data.userId == request.auth.uid || 
                         resource.data.driverId == request.auth.uid);
+      // Permettre à un chauffeur d'accepter une course en attente
+      // Un chauffeur peut mettre à jour un booking pending pour l'accepter
+      allow update: if isAuthenticated() && 
+                       resource.data.status == 'pending' &&
+                       request.resource.data.status == 'accepted' &&
+                       request.resource.data.driverId == request.auth.uid;
       allow delete: if false;
+      
+      // Sous-collection candidates - Les chauffeurs peuvent lire et mettre à jour leurs candidatures
+      match /candidates/{candidateId} {
+        // Permettre la lecture à un chauffeur si c'est sa propre candidature
+        // OU si le chauffeur est assigné à la course parente (pour lire les autres candidatures à expirer)
+        allow read: if isAuthenticated() && 
+                     (request.auth.uid == candidateId || 
+                      get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+        allow create: if isAuthenticated();
+        // Permettre la mise à jour si :
+        // 1. C'est la propre candidature du chauffeur (pour accepter/refuser)
+        // 2. Le chauffeur est assigné à la course et met à jour le statut à 'expired'
+        allow update: if isAuthenticated() && 
+                     (request.auth.uid == candidateId || 
+                      (get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid && 
+                       request.resource.data.status == 'expired'));
+        allow delete: if false;
+      }
     }
     
     // Collection active_bookings - Similaire aux bookings

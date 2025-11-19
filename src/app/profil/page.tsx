@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db, storage } from '@/config/firebase';
-import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
@@ -25,6 +25,7 @@ export default function ProfilPage() {
   const [editing, setEditing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<any[]>([]);
   const router = useRouter();
   const { currentUser } = useAuth();
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -72,6 +73,7 @@ export default function ProfilPage() {
       if (user) {
         setPhoneNumber(user.phoneNumber || "");
         fetchUserData(user);
+        fetchHistory(user.uid);
       } else {
         router.push("/login");
       }
@@ -158,6 +160,39 @@ export default function ProfilPage() {
       setLoading(false);
     }
   };
+
+  const fetchHistory = async (userId: string) => {
+    try {
+      const bookingsQuery = query(
+        collection(db, 'bookings'),
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc'),
+        limit(5)
+      );
+      const parcelsQuery = query(
+        collection(db, 'parcels'),
+        where('senderId', '==', userId),
+        orderBy('createdAt', 'desc'),
+        limit(5)
+      );
+
+      const [bookingsSnapshot, parcelsSnapshot] = await Promise.all([
+        getDocs(bookingsQuery),
+        getDocs(parcelsQuery),
+      ]);
+
+      const bookings = bookingsSnapshot.docs.map(doc => ({ id: doc.id, type: 'Taxi', ...doc.data() }));
+      const parcels = parcelsSnapshot.docs.map(doc => ({ id: doc.id, type: 'Livraison', ...doc.data() }));
+
+      const combinedHistory = [...bookings, ...parcels].sort((a: any, b: any) => b.createdAt.toMillis() - a.createdAt.toMillis());
+
+      setHistory(combinedHistory.slice(0, 5));
+    } catch (error) {
+      console.error("Erreur chargement historique:", error);
+      // Ne pas bloquer l'affichage du profil si l'historique échoue
+    }
+  };
+
 
   const countries = ['Cameroun', 'Sénégal', "Côte d'Ivoire", 'Gabon', 'Autre'];
 
@@ -336,6 +371,38 @@ export default function ProfilPage() {
             )}
           </div>
         </div>
+
+        {/* Section Dernières commandes */}
+        <div className="mt-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-[#2E2307]">Dernières commandes</h2>
+            <Link href="/historique" className="text-sm font-medium text-[#FDBC01] hover:underline">
+              Voir tout →
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {history.length > 0 ? (
+              history.map(item => (
+                <div key={item.id} className="bg-white rounded-lg shadow-sm p-4 flex justify-between items-center">
+                  <div>
+                    <p className="font-semibold text-gray-800">{item.type} - {item.destination || item.description}</p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(item.createdAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(item.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {item.price} FCFA
+                    </p>
+                  </div>
+                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${item.status === 'completed' || item.status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                    {item.status}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                <p className="text-gray-500">Aucune commande récente.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   );

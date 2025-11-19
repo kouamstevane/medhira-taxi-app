@@ -9,7 +9,9 @@ import {
   updateDoc,
   collection,
   query,
-  where
+  where,
+  getDocs,
+  orderBy
 } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
@@ -17,8 +19,19 @@ import Link from 'next/link';
 import { 
   FiTruck, FiDollarSign, FiStar, FiRefreshCw, 
   FiLogOut, FiUser, FiMapPin, FiCheckCircle,
-  FiPlay, FiX, FiArrowRight
+  FiPlay, FiX, FiArrowRight, FiClock
 } from 'react-icons/fi';
+import { 
+  getPendingCandidatesForDriver,
+  subscribeToDriverRideRequests,
+  markCandidateDeclined,
+  RideCandidate,
+} from '@/services/matching/broadcast';
+import { assignDriver } from '@/services/matching/assignment';
+import { incrementDriverAcceptedTrips, incrementDriverDeclinedTrips } from '@/services/driver.service';
+import { RideRequestCard } from './components/RideRequestCard';
+import { CurrentTripCard } from './components/CurrentTripCard';
+import { StatsCard } from './components/StatsCard';
 
 interface CarInfo {
   model?: string;
@@ -49,12 +62,26 @@ interface Trip {
   createdAt: any;
 }
 
+interface RideRequest {
+  rideId: string;
+  candidate: RideCandidate;
+  bookingData?: {
+    pickup: string;
+    destination: string;
+    price: number;
+    distance?: number;
+    duration?: number;
+  };
+}
+
 export default function DriverDashboard() {
   const [driver, setDriver] = useState<DriverData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [availableTrips, setAvailableTrips] = useState<Trip[]>([]);
   const [currentTrip, setCurrentTrip] = useState<Trip | null>(null);
+  const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
+  const [dailyHistory, setDailyHistory] = useState<Trip[]>([]);
   const router = useRouter();
 
   const getInitials = (firstName?: string, lastName?: string): string => {
@@ -83,6 +110,36 @@ export default function DriverDashboard() {
         }
 
         const driverData = driverDoc.data();
+        
+        // Vérifier si le compte est actif
+        if (driverData.isActive === false) {
+          await signOut(auth);
+          alert('Votre compte a été désactivé par un administrateur. Contactez le support.');
+          router.push('/driver/login');
+          return;
+        }
+
+        // Vérifier si le compte est suspendu
+        if (driverData.isSuspended) {
+          await signOut(auth);
+          const reason = driverData.suspensionReason || 'Contactez le support pour plus d\'informations.';
+          alert(`Votre compte a été suspendu. Raison: ${reason}`);
+          router.push('/driver/login');
+          return;
+        }
+
+        // Vérifier si le compte est approuvé
+        if (driverData.status === 'pending') {
+          router.push('/driver/verify');
+          return;
+        }
+
+        if (driverData.status === 'rejected') {
+          alert('Votre demande a été rejetée. Vous pouvez soumettre une nouvelle demande.');
+          router.push('/driver/register');
+          return;
+        }
+        
         const safeDriverData: DriverData = {
           firstName: driverData.firstName || 'Chauffeur',
           lastName: driverData.lastName || '',
@@ -101,7 +158,7 @@ export default function DriverDashboard() {
         };
         setDriver(safeDriverData);
 
-        // Écouter les courses en attente
+        // Écouter les courses en attente (ancien système)
         const q = query(collection(db, "bookings"), where("status", "==", "pending"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
           const trips: Trip[] = [];
@@ -120,19 +177,105 @@ export default function DriverDashboard() {
           setAvailableTrips(trips);
         });
 
+        // Écouter les nouvelles demandes de course (nouveau système de matching)
+        const unsubscribeRideRequests = subscribeToDriverRideRequests(user.uid, async (requests) => {
+          // Charger les détails de chaque booking
+          const rideRequestsWithData: RideRequest[] = await Promise.all(
+            requests.map(async (req) => {
+              try {
+                const bookingDoc = await getDoc(doc(db, 'bookings', req.rideId));
+                if (bookingDoc.exists()) {
+                  const bookingData = bookingDoc.data();
+                  return {
+                    ...req,
+                    bookingData: {
+                      pickup: bookingData.pickup,
+                      destination: bookingData.destination,
+                      price: bookingData.price,
+                      distance: bookingData.distance,
+                      duration: bookingData.duration,
+                    },
+                  };
+                }
+                return req;
+              } catch (error) {
+                console.error('Erreur chargement booking:', error);
+                return req;
+              }
+            })
+          );
+          setRideRequests(rideRequestsWithData);
+        });
+
+        // Charger les demandes en attente au démarrage
+        getPendingCandidatesForDriver(user.uid).then(async (requests) => {
+          const rideRequestsWithData: RideRequest[] = await Promise.all(
+            requests.map(async (req) => {
+              try {
+                const bookingDoc = await getDoc(doc(db, 'bookings', req.rideId));
+                if (bookingDoc.exists()) {
+                  const bookingData = bookingDoc.data();
+                  return {
+                    ...req,
+                    bookingData: {
+                      pickup: bookingData.pickup,
+                      destination: bookingData.destination,
+                      price: bookingData.price,
+                      distance: bookingData.distance,
+                      duration: bookingData.duration,
+                    },
+                  };
+                }
+                return req;
+              } catch (error) {
+                console.error('Erreur chargement booking:', error);
+                return req;
+              }
+            })
+          );
+          setRideRequests(rideRequestsWithData);
+        });
+
         return () => {
           unsubscribe();
+          unsubscribeRideRequests();
         };
       } catch (err) {
         console.error('Erreur de chargement:', err);
         setError("Erreur de chargement");
       } finally {
         setLoading(false);
+        fetchDailyHistory(user.uid);
       }
     });
 
     return () => unsubscribeAuth();
   }, [router]);
+
+  const fetchDailyHistory = async (driverId: string) => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const historyQuery = query(
+        collection(db, 'bookings'),
+        where('driverId', '==', driverId),
+        where('status', '==', 'completed'),
+        where('completedAt', '>=', today),
+        orderBy('completedAt', 'desc')
+      );
+
+      const historySnapshot = await getDocs(historyQuery);
+      const history: Trip[] = [];
+      historySnapshot.forEach(doc => {
+        history.push({ id: doc.id, ...doc.data() } as Trip);
+      });
+
+      setDailyHistory(history);
+    } catch (error) {
+      console.error("Erreur chargement historique du jour:", error);
+    }
+  };
 
   const toggleAvailability = async () => {
     if (!auth.currentUser || !driver) return;
@@ -146,48 +289,100 @@ export default function DriverDashboard() {
     }
   };
 
-  const acceptTrip = async (tripId: string) => {
+  const handleAcceptRideRequest = async (rideId: string) => {
     if (!auth.currentUser || !driver) return;
 
-    const bookingRef = doc(db, "bookings", tripId);
     try {
-      const tripSnap = await getDoc(bookingRef);
-      if (!tripSnap.exists() || tripSnap.data().status !== "pending") {
-        alert("Course déjà prise.");
+      // Utiliser le service d'assignation atomique
+      const result = await assignDriver(rideId, auth.currentUser.uid);
+
+      if (!result.success) {
+        alert(result.error || "Impossible d'accepter la course. Elle a peut-être déjà été prise.");
         return;
       }
 
-      await updateDoc(bookingRef, {
-        status: "accepted",
-        driverId: auth.currentUser.uid,
-        driverName: `${driver.firstName} ${driver.lastName}`,
-        driverPhone: driver.phone,
-        carModel: driver.car?.model,
-        carPlate: driver.car?.plate,
-        carColor: driver.car?.color,
-        acceptedAt: new Date()
-      });
+      // Incrémenter le compteur de courses acceptées
+      await incrementDriverAcceptedTrips(auth.currentUser.uid);
 
-      await updateDoc(doc(db, 'drivers', auth.currentUser.uid), {
-        isAvailable: false
-      });
+      // Mettre à jour l'état local
+      setDriver({ ...driver, isAvailable: false });
+      setRideRequests(prev => prev.filter(r => r.rideId !== rideId));
+      
+      // Charger les détails de la course acceptée
+      const bookingRef = doc(db, "bookings", rideId);
+      const bookingSnap = await getDoc(bookingRef);
+      
+      if (bookingSnap.exists()) {
+        const bookingData = bookingSnap.data();
+        setCurrentTrip({
+          id: rideId,
+          passengerName: bookingData.userEmail || "Client",
+          pickup: bookingData.pickup,
+          destination: bookingData.destination,
+          price: bookingData.price,
+          status: "accepted",
+          createdAt: bookingData.createdAt
+        });
+      }
+    } catch (err: any) {
+      console.error("Erreur d'acceptation:", err);
+      alert(err.message || "Impossible d'accepter la course.");
+    }
+  };
 
+  const handleDeclineRideRequest = async (rideId: string) => {
+    if (!auth.currentUser) return;
+
+    try {
+      await markCandidateDeclined(rideId, auth.currentUser.uid);
+      await incrementDriverDeclinedTrips(auth.currentUser.uid);
+      
+      // Retirer de la liste
+      setRideRequests(prev => prev.filter(r => r.rideId !== rideId));
+    } catch (err: any) {
+      console.error("Erreur de refus:", err);
+      // Ne pas bloquer l'UI si le refus échoue
+    }
+  };
+
+  const acceptTrip = async (tripId: string) => {
+    if (!auth.currentUser || !driver) return;
+
+    try {
+      // Utiliser le service d'assignation atomique pour être cohérent
+      const result = await assignDriver(tripId, auth.currentUser.uid);
+
+      if (!result.success) {
+        alert(result.error || "Impossible d'accepter la course. Elle a peut-être déjà été prise.");
+        return;
+      }
+
+      // Incrémenter le compteur de courses acceptées
+      await incrementDriverAcceptedTrips(auth.currentUser.uid);
+
+      // Mettre à jour l'état local
       setDriver({ ...driver, isAvailable: false });
       setAvailableTrips(prev => prev.filter(t => t.id !== tripId));
+
+      // Charger les détails de la course acceptée
+      const bookingRef = doc(db, "bookings", tripId);
+      const bookingSnap = await getDoc(bookingRef);
       
-      const tripData = tripSnap.data();
-      setCurrentTrip({
-        id: tripId,
-        passengerName: tripData.passengerName || "Client",
-        pickup: tripData.pickup,
-        destination: tripData.destination,
-        price: tripData.price,
-        status: "accepted",
-        createdAt: tripData.createdAt
-      });
-    } catch (err) {
+      if (bookingSnap.exists()) {
+        const bookingData = bookingSnap.data();
+        setCurrentTrip({
+          id: tripId,
+          passengerName: bookingData.userEmail || "Client",
+          pickup: bookingData.pickup,
+          destination: bookingData.destination,
+          price: bookingData.price,
+          status: "accepted",
+          createdAt: bookingData.createdAt
+        });
+      }
+    } catch (err: any) {
       console.error("Erreur d'acceptation:", err);
-      alert("Impossible d'accepter la course.");
+      alert(err.message || "Impossible d'accepter la course.");
     }
   };
 
@@ -300,129 +495,111 @@ export default function DriverDashboard() {
             { label: "Revenus", value: `${(driver.earnings || 0).toLocaleString()} FCFA`, icon: FiDollarSign, color: "bg-green-100", iconColor: "text-green-600" },
             { label: "Note", value: `${formatValue(driver.rating, 0)}/5`, icon: FiStar, color: "bg-yellow-100", iconColor: "text-yellow-600" },
             { label: "Statut", value: formatValue(driver.status, 'actif'), icon: FiRefreshCw, color: "bg-purple-100", iconColor: "text-purple-600" }
-          ].map((stat, i) => {
-            const IconComponent = stat.icon;
-            return (
-              <div key={i} className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
-                <div className="flex items-center">
-                  <div className={`${stat.color} p-2 sm:p-3 rounded-lg flex-shrink-0`}>
-                    <IconComponent className={`h-5 w-5 sm:h-6 sm:w-6 ${stat.iconColor}`} />
+          ].map((stat, i) => (
+            <StatsCard
+              key={i}
+              label={stat.label}
+              value={stat.value}
+              icon={stat.icon}
+              color={stat.color}
+              iconColor={stat.iconColor}
+            />
+          ))}
+        </div>
+
+        {/* Section Historique du jour */}
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-xl font-bold mb-4 text-gray-800">Historique du jour</h2>
+          <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
+            {dailyHistory.length > 0 ? (
+              <div className="space-y-4">
+                {dailyHistory.map(trip => (
+                  <div key={trip.id} className="border-b border-gray-200 pb-3 last:border-b-0">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-semibold text-gray-800">Course #{trip.id.slice(-4)} - {trip.destination}</p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(trip.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {trip.price} FCFA
+                        </p>
+                      </div>
+                      <span className="text-sm font-medium text-green-600">Complétée</span>
+                    </div>
                   </div>
-                  <div className="ml-3 sm:ml-4 min-w-0 flex-1">
-                    <p className="text-xs sm:text-sm text-gray-600">{stat.label}</p>
-                    <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 truncate">{stat.value}</p>
-                  </div>
-                </div>
+                ))}
               </div>
-            );
-          })}
+            ) : (
+              <p className="text-gray-500 text-center py-4">Aucune course complétée aujourd'hui.</p>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {currentTrip && (
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
-                <h2 className="text-xl font-bold mb-4">Course en cours</h2>
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <p className="font-semibold">Client</p>
-                      <p className="text-sm text-gray-600 truncate">{currentTrip.pickup}</p>
-                      <p className="text-sm text-gray-600">→ {currentTrip.destination}</p>
-                    </div>
-                    <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm">
-                      {currentTrip.status === "accepted" ? "Acceptée" : 
-                       currentTrip.status === "arrived" ? "Arrivé" : 
-                       currentTrip.status === "in_progress" ? "En cours" : 
-                       currentTrip.status}
-                    </span>
-                  </div>
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center">
-                      <FiMapPin className="h-4 w-4 text-green-500 mr-3" />
-                      <span className="text-sm">{currentTrip.pickup}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <FiMapPin className="h-4 w-4 text-red-500 mr-3" />
-                      <span className="text-sm">{currentTrip.destination}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-lg font-bold">{currentTrip.price} FCFA</span>
-                    <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
-                      {currentTrip.status === "accepted" && (
-                        <button 
-                          onClick={() => markAsArrived(currentTrip.id)} 
-                          className="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm flex items-center justify-center space-x-1 sm:space-x-2 transition touch-manipulation"
-                          style={{ minHeight: '44px' }}
-                        >
-                          <FiCheckCircle className="h-4 w-4" />
-                          <span>Je suis arrivé</span>
-                        </button>
-                      )}
-                      {currentTrip.status === "arrived" && (
-                        <button 
-                          onClick={() => startTrip(currentTrip.id)} 
-                          className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm flex items-center justify-center space-x-1 sm:space-x-2 transition touch-manipulation"
-                          style={{ minHeight: '44px' }}
-                        >
-                          <FiPlay className="h-4 w-4" />
-                          <span>Démarrer</span>
-                        </button>
-                      )}
-                      {currentTrip.status === "in_progress" && (
-                        <button 
-                          onClick={() => completeTrip(currentTrip.id)} 
-                          className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm flex items-center justify-center space-x-1 sm:space-x-2 transition touch-manipulation"
-                          style={{ minHeight: '44px' }}
-                        >
-                          <FiCheckCircle className="h-4 w-4" />
-                          <span>Terminer</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <CurrentTripCard
+              trip={currentTrip}
+              onMarkAsArrived={markAsArrived}
+              onStartTrip={startTrip}
+              onCompleteTrip={completeTrip}
+            />
           )}
 
           <div className={currentTrip ? 'lg:col-span-1' : 'lg:col-span-3'}>
             <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
-              <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4">Courses disponibles</h2>
-              {availableTrips.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">Aucune course disponible</p>
-              ) : (
-                <div className="space-y-4">
-                  {availableTrips.map((trip) => (
-                    <div key={trip.id} className="border border-gray-200 rounded-lg p-3 sm:p-4">
-                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm sm:text-base">Course #{trip.id.slice(-4)}</p>
-                          <div className="flex items-start mt-1 sm:mt-2">
-                            <FiMapPin className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 mr-1 sm:mr-2 flex-shrink-0 mt-0.5" />
-                            <p className="text-xs sm:text-sm text-gray-600 break-words">{trip.pickup}</p>
-                          </div>
-                          <div className="flex items-start mt-1 sm:mt-2">
-                            <FiArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 mr-1 sm:mr-2 flex-shrink-0 mt-0.5" />
-                            <p className="text-xs sm:text-sm text-gray-600 break-words">{trip.destination}</p>
-                          </div>
-                        </div>
-                        <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold self-start sm:self-auto">
-                          {trip.price} FCFA
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => acceptTrip(trip.id)}
-                        className="w-full bg-[#f29200] hover:bg-[#e68600] active:bg-[#d67a00] text-white py-3 sm:py-2 rounded-lg transition flex items-center justify-center space-x-2 touch-manipulation"
-                        style={{ minHeight: '44px' }}
-                      >
-                        <FiCheckCircle className="h-4 w-4" />
-                        <span className="text-sm sm:text-base">Accepter</span>
-                      </button>
-                    </div>
+              <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-gray-800">Nouvelles demandes</h2>
+              
+              {/* Demandes de course avec matching */}
+              {rideRequests.length > 0 && (
+                <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+                  {rideRequests.map((request) => (
+                    <RideRequestCard
+                      key={request.rideId}
+                      request={request}
+                      onAccept={() => handleAcceptRideRequest(request.rideId)}
+                      onDecline={() => handleDeclineRideRequest(request.rideId)}
+                    />
                   ))}
                 </div>
+              )}
+
+              {/* Anciennes courses disponibles (fallback) */}
+              {rideRequests.length === 0 && (
+                <>
+                  <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-700">Courses disponibles</h3>
+                  {availableTrips.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">Aucune course disponible</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {availableTrips.map((trip) => (
+                        <div key={trip.id} className="border border-gray-200 rounded-lg p-3 sm:p-4">
+                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm sm:text-base">Course #{trip.id.slice(-4)}</p>
+                              <div className="flex items-start mt-1 sm:mt-2">
+                                <FiMapPin className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 mr-1 sm:mr-2 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs sm:text-sm text-gray-600 break-words">{trip.pickup}</p>
+                              </div>
+                              <div className="flex items-start mt-1 sm:mt-2">
+                                <FiArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 mr-1 sm:mr-2 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs sm:text-sm text-gray-600 break-words">{trip.destination}</p>
+                              </div>
+                            </div>
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold self-start sm:self-auto">
+                              {trip.price} FCFA
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => acceptTrip(trip.id)}
+                            className="w-full bg-[#f29200] hover:bg-[#e68600] active:bg-[#d67a00] text-white py-3 sm:py-2 rounded-lg transition flex items-center justify-center space-x-2 touch-manipulation"
+                            style={{ minHeight: '44px' }}
+                          >
+                            <FiCheckCircle className="h-4 w-4" />
+                            <span className="text-sm sm:text-base">Accepter</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -431,6 +608,7 @@ export default function DriverDashboard() {
     </div>
   );
 }
+
 
 function Loading() {
   return (

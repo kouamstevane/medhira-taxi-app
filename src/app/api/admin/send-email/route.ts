@@ -15,7 +15,7 @@ import nodemailer from 'nodemailer';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { to, type, driverName, reason } = body;
+    const { to, type, driverName, reason, actionType } = body;
 
     // Validation des paramètres
     if (!to || !type || !driverName) {
@@ -111,7 +111,126 @@ export async function POST(request: NextRequest) {
         </body>
         </html>
       `;
+    } else if (type === 'suspension') {
+      subject = '⚠️ Votre compte chauffeur Medjira a été suspendu';
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #f97316; color: white; padding: 20px; text-align: center; }
+            .content { padding: 20px; background-color: #f9f9f9; }
+            .reason-box { background-color: #fed7aa; border-left: 4px solid #f97316; padding: 15px; margin: 20px 0; }
+            .warning { background-color: #fef3c7; border-left: 4px solid #eab308; padding: 15px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>⚠️ Suspension de compte</h1>
+            </div>
+            <div class="content">
+              <p>Bonjour ${driverName},</p>
+              <p>Nous vous informons que votre compte chauffeur sur la plateforme Medjira a été <strong>suspendu temporairement</strong>.</p>
+              <div class="reason-box">
+                <strong>Raison de la suspension :</strong>
+                <p>${reason || 'Violation des conditions d\'utilisation'}</p>
+              </div>
+              <div class="warning">
+                <strong>⚠️ Important :</strong>
+                <p>Vous ne pourrez plus accepter de courses ni vous connecter à l'application pendant la durée de cette suspension.</p>
+              </div>
+              <p>Pour toute question ou pour faire appel de cette décision, veuillez contacter notre support à l'adresse : <strong>support@medjira.com</strong></p>
+              <p>Cordialement,<br>L'équipe Medjira</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    } else if (type === 'deactivation') {
+      subject = '🚫 Votre compte chauffeur Medjira a été désactivé';
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #dc2626; color: white; padding: 20px; text-align: center; }
+            .content { padding: 20px; background-color: #f9f9f9; }
+            .reason-box { background-color: #fee2e2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0; }
+            .alert { background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>🚫 Désactivation de compte</h1>
+            </div>
+            <div class="content">
+              <p>Bonjour ${driverName},</p>
+              <p>Nous vous informons que votre compte chauffeur sur la plateforme Medjira a été <strong>désactivé définitivement</strong>.</p>
+              <div class="reason-box">
+                <strong>Raison de la désactivation :</strong>
+                <p>${reason || 'Violation grave des conditions d\'utilisation'}</p>
+              </div>
+              <div class="alert">
+                <strong>⚠️ Important :</strong>
+                <p>Vous ne pourrez plus accéder à votre compte ni utiliser nos services.</p>
+              </div>
+              <p>Si vous estimez qu'il s'agit d'une erreur, veuillez contacter notre support à l'adresse : <strong>support@medjira.com</strong></p>
+              <p>Cordialement,<br>L'équipe Medjira</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    } else if (type === 'reactivation') {
+      subject = '✅ Votre compte chauffeur Medjira a été réactivé';
+      htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background-color: #10b981; color: white; padding: 20px; text-align: center; }
+            .content { padding: 20px; background-color: #f9f9f9; }
+            .button { display: inline-block; padding: 12px 24px; background-color: #10b981; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }
+            .success { background-color: #d1fae5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✅ Compte réactivé</h1>
+            </div>
+            <div class="content">
+              <p>Bonjour ${driverName},</p>
+              <p>Bonne nouvelle ! Votre compte chauffeur sur la plateforme Medjira a été <strong>réactivé</strong>.</p>
+              <div class="success">
+                <strong>✅ Accès rétabli :</strong>
+                <p>Vous pouvez à nouveau vous connecter et accepter des courses.</p>
+              </div>
+              <p>
+                <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/driver/login" class="button">
+                  Se connecter maintenant
+                </a>
+              </p>
+              <p>Merci de votre compréhension et bienvenue de nouveau sur Medjira !</p>
+              <p>Cordialement,<br>L'équipe Medjira</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
     }
+
 
     // Vérifier que les variables d'environnement SMTP sont configurées
     const smtpHost = process.env.SMTP_HOST;

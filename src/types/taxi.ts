@@ -17,20 +17,35 @@ export type DriverStatus = 'offline' | 'available' | 'busy' | 'unavailable';
  */
 export interface Driver {
   id: string;
-  userId: string;
+  userId?: string;
   firstName: string;
   lastName: string;
-  phoneNumber: string;
+  phoneNumber?: string;
+  phone?: string; // Alias pour compatibilité
   email?: string;
   profileImageUrl?: string;
-  status: DriverStatus;
+  status: DriverStatus | string; // Peut être 'approved', 'pending', etc.
   carModel?: string;
   carColor?: string;
   carPlate?: string;
+  car?: {
+    model?: string;
+    plate?: string;
+    color?: string;
+    type?: string;
+  };
   currentLocation?: Location;
   rating?: number;
   totalTrips?: number;
+  tripsAccepted?: number;
+  tripsDeclined?: number;
+  isAvailable?: boolean;
   verified: boolean;
+  isActive?: boolean; // Compte actif ou désactivé par admin
+  isSuspended?: boolean; // Compte suspendu temporairement
+  suspensionReason?: string; // Raison de la suspension
+  suspendedAt?: Date | Timestamp;
+  suspendedBy?: string; // UID de l'admin qui a suspendu
   createdAt: Date | Timestamp;
   updatedAt: Date | Timestamp;
 }

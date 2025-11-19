@@ -50,8 +50,8 @@ export default function DriverRegister() {
             console.log('Compte refusé détecté, suppression pour permettre la recréation');
             await deleteDoc(doc(db, 'drivers', user.uid));
           } else {
-            setError('Vous êtes déjà enregistré comme chauffeur');
-            setTimeout(() => router.push('/driver/login'), 2000);
+          setError('Vous êtes déjà enregistré comme chauffeur');
+          setTimeout(() => router.push('/driver/login'), 2000);
             return;
           }
         }
@@ -138,9 +138,9 @@ export default function DriverRegister() {
             console.log('Compte refusé détecté, suppression pour permettre la recréation');
             await deleteDoc(doc(db, 'drivers', userId));
           } else {
-            setError('Vous êtes déjà enregistré comme chauffeur');
-            router.push('/driver/login');
-            return;
+          setError('Vous êtes déjà enregistré comme chauffeur');
+          router.push('/driver/login');
+          return;
           }
         }
       } else {
@@ -201,9 +201,9 @@ export default function DriverRegister() {
                 return;
               }
             } else {
-              setError('Vous êtes déjà enregistré comme chauffeur');
-              router.push('/driver/login');
-              return;
+            setError('Vous êtes déjà enregistré comme chauffeur');
+            router.push('/driver/login');
+            return;
             }
           }
           

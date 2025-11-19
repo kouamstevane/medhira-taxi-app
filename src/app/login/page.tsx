@@ -8,12 +8,12 @@ import {
   signInWithCredential,
   signInWithEmailAndPassword,
   AuthErrorCodes,
-  GoogleAuthProvider,
-  signInWithPopup
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { AuthService } from '@/services';
+import { FiArrowLeft } from 'react-icons/fi';
 
 // Liste des pays supportés avec codes, drapeaux et formats de numéro par défaut
 const countries = [
@@ -85,7 +85,7 @@ export default function LoginPage() {
       
       setVerificationId(confirmation.verificationId);
       setSuccess(`Code de vérification envoyé au ${fullPhoneNumber}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleAuthError(error);
     } finally {
       setLoading(false);
@@ -105,7 +105,7 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleAuthError(error);
     } finally {
       setLoading(false);
@@ -114,10 +114,9 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      await AuthService.signInWithGoogle();
       router.push('/dashboard');
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleAuthError(error);
     }
   };
@@ -138,14 +137,14 @@ export default function LoginPage() {
       const userCredential = await signInWithCredential(auth, credential);
       await createUserDocument(userCredential.user);
       router.push('/dashboard');
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleAuthError(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const createUserDocument = async (user: any) => {
+  const createUserDocument = async (user: { uid: string; phoneNumber?: string | null; email?: string | null; photoURL?: string | null }) => {
     const userDocRef = doc(db, 'users', user.uid);
     const docSnapshot = await getDoc(userDocRef);
 
@@ -163,10 +162,11 @@ export default function LoginPage() {
     }
   };
 
-  const handleAuthError = (error: any) => {
+  const handleAuthError = (error: unknown) => {
+    const err = error as { code?: string; message?: string };
     let errorMessage = "Une erreur est survenue";
     
-    switch (error.code) {
+    switch (err.code) {
       case AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER:
         errorMessage = "Trop de tentatives. Veuillez réessayer plus tard.";
         break;
@@ -184,7 +184,7 @@ export default function LoginPage() {
         errorMessage = "Problème de connexion. Vérifiez votre réseau.";
         break;
       default:
-        errorMessage = error.message || "Erreur d'authentification";
+        errorMessage = err.message || "Erreur d'authentification";
     }
 
     setError(errorMessage);
@@ -210,7 +210,13 @@ export default function LoginPage() {
     <div className="min-h-screen bg-[#e6e6e6] flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-lg overflow-hidden w-full max-w-md">
         {/* Header */}
-        <div className="bg-[#101010] p-6 text-center">
+        <div className="bg-[#101010] p-6 text-center relative">
+          <Link 
+            href="/"
+            className="absolute left-4 top-6 inline-flex items-center text-white hover:text-[#f29200] transition-colors"
+          >
+            <FiArrowLeft className="text-xl" />
+          </Link>
           <div className="flex justify-center mb-4">
             <div className="w-16 h-16 bg-[#f29200] rounded-full flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" viewBox="0 0 20 20" fill="currentColor">
@@ -492,15 +498,15 @@ export default function LoginPage() {
           {/* Signup Link */}
           <div className="mt-6 text-center text-sm">
             <p className="text-gray-600">
-              Vous n'avez pas de compte ?{' '}
+              Vous n&apos;avez pas de compte ?{' '}
               <Link href="/auth/register" className="text-[#f29200] font-medium hover:underline">
-                S'inscrire
+                S&apos;inscrire
               </Link>
             </p>
             <p className="text-gray-500 mt-3 text-xs sm:text-sm">
               Vous êtes un chauffeur ?{' '}
               <Link href="/driver/login" className="text-[#f29200] font-medium hover:underline touch-manipulation" style={{ minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}>
-                Accéder à l'espace chauffeur
+                Accéder à l&apos;espace chauffeur
               </Link>
             </p>
           </div>

@@ -6,12 +6,15 @@ import {
   signInWithPhoneNumber,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  PhoneAuthProvider,
+  signInWithCredential
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { AuthService } from '@/services';
 
 export default function DriverLogin() {
   const [activeTab, setActiveTab] = useState<'phone' | 'email'>('phone');
@@ -89,8 +92,10 @@ export default function DriverLogin() {
   const verifyDriverAccount = async (uid: string) => {
     const driverDoc = await getDoc(doc(db, 'drivers', uid));
     
+    // Si aucun profil chauffeur n'existe encore, rediriger vers l'inscription chauffeur
     if (!driverDoc.exists()) {
-      throw new Error("Compte chauffeur non trouvé");
+      router.push('/driver/register');
+      return;
     }
 
     const driverData = driverDoc.data();
@@ -103,9 +108,8 @@ export default function DriverLogin() {
 
   const handleGoogleLogin = async () => {
     try {
-      const provider = new GoogleAuthProvider();
-      const userCredential = await signInWithPopup(auth, provider);
-      await verifyDriverAccount(userCredential.user.uid);
+      const user = await AuthService.signInWithGoogle();
+      await verifyDriverAccount(user.uid);
     } catch (error: any) {
       setError(error.message || "Erreur de connexion Google");
     }
@@ -116,20 +120,33 @@ export default function DriverLogin() {
       setError('Veuillez entrer le code complet');
       return;
     }
+    if (!verificationId) {
+      setError('Aucun ID de vérification');
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
-      if (!verificationId) throw new Error('Aucun ID de vérification');
+      const credential = PhoneAuthProvider.credential(verificationId, code);
+      const userCredential = await signInWithCredential(auth, credential);
+      const user = userCredential.user;
 
       // Pour phone auth, on redirige vers le register si le compte n'existe pas
-      const user = auth.currentUser;
-      if (user) {
-        await verifyDriverAccount(user.uid);
-      } else {
-        setError('Erreur d\'authentification');
+      const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
+
+      if (!driverDoc.exists()) {
+        router.push('/driver/register');
+        return;
       }
+
+      const driverData = driverDoc.data();
+      if (driverData.status !== 'approved') {
+        throw new Error("Votre compte n'est pas encore approuvé");
+      }
+
+      router.push('/driver/dashboard');
     } catch (error: any) {
       setError(error.message || "Erreur de vérification");
     } finally {

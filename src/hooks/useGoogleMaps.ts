@@ -84,7 +84,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
         const checkPlaces = setInterval(() => {
           if (window.google?.maps?.places) {
             clearInterval(checkPlaces);
-            initializeServices();
+      initializeServices();
           }
         }, 100);
         
@@ -134,7 +134,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
 
     // Générer un callback unique pour éviter les conflits
     const callbackName = `initGoogleMaps_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const script = document.createElement('script');
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}`;
     script.async = true;
@@ -152,7 +152,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
         const checkPlaces = setInterval(() => {
           if (window.google?.maps?.places) {
             clearInterval(checkPlaces);
-            initializeServices();
+      initializeServices();
             // Nettoyer le callback après utilisation
             delete (window as any)[callbackName];
           }

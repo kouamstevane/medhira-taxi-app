@@ -42,6 +42,27 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
   };
   
   await setDoc(newBookingRef, booking);
+  
+  // Déclencher le broadcast automatiquement si une localisation est disponible
+  if (bookingData.pickupLocation) {
+    try {
+      const { broadcastRideRequest } = await import('./matching');
+      await broadcastRideRequest({
+        rideId: newBookingRef.id,
+        pickupLocation: bookingData.pickupLocation,
+        destination: bookingData.destination,
+        price: bookingData.price,
+        carType: bookingData.carType,
+        rangeKm: 5, // Rayon par défaut de 5 km
+        timeoutSeconds: 30, // Délai de 30 secondes
+      });
+      logger.info('Broadcast automatique déclenché', { bookingId: newBookingRef.id });
+    } catch (error: any) {
+      // Ne pas bloquer la création si le broadcast échoue
+      logger.warn('Erreur lors du broadcast automatique', { error, bookingId: newBookingRef.id });
+    }
+  }
+  
   return newBookingRef.id;
 };
 
