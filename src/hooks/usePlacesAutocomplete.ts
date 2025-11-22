@@ -85,12 +85,23 @@ export const usePlacesAutocomplete = (
       try {
         const request: google.maps.places.AutocompletionRequest = {
           input,
+          // Restreindre les résultats au Cameroun uniquement
+          componentRestrictions: {
+            country: 'cm', // Code ISO 3166-1 Alpha-2 du Cameroun
+          },
+          // Types de lieux à inclure pour meilleure couverture
+          types: ['geocode', 'establishment'], // Adresses complètes + établissements
         };
 
         // Ajouter location et radius seulement si location est disponible
         if (location && window.google?.maps?.LatLng) {
           request.location = new window.google.maps.LatLng(location.lat, location.lng);
-          request.radius = 20000; // 20km de rayon
+          request.radius = 100000; // 100km pour meilleure couverture (villes + périphérie)
+        } else {
+          // Si pas de location GPS, centrer sur Yaoundé (capitale)
+          const yaoundeCenter = new window.google.maps.LatLng(3.8480, 11.5021);
+          request.location = yaoundeCenter;
+          request.radius = 200000; // 200km pour couvrir tout le Cameroun central
         }
 
         autocompleteService.getPlacePredictions(request, (predictions, status) => {
@@ -112,8 +123,9 @@ export const usePlacesAutocomplete = (
             setError(null);
           }
         });
-      } catch (err: any) {
-        console.error('Erreur lors de l\'appel à getPlacePredictions:', err);
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+        console.error('Erreur lors de l\'appel à getPlacePredictions:', errorMessage);
         setLoading(false);
         setSuggestions([]);
         setError(null);

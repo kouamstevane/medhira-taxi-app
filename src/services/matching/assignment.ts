@@ -123,7 +123,7 @@ export const assignDriver = async (
 
       // Préparer les données de mise à jour (exclure les valeurs undefined)
       // Firestore n'accepte pas les valeurs undefined, donc on n'inclut que les champs définis
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         status: 'accepted',
         driverId: driverId,
         driverName: driverName,
@@ -132,6 +132,7 @@ export const assignDriver = async (
       };
 
       // Ajouter les champs optionnels seulement s'ils existent
+      // Note: driverPhone est stocké mais pas affiché au client pour la sécurité
       if (driverPhone) {
         updateData.driverPhone = driverPhone;
       }
@@ -156,15 +157,21 @@ export const assignDriver = async (
     });
 
     // Expirer toutes les autres candidatures en attente (en dehors de la transaction)
-    await expireAllPendingCandidates(rideId);
+    try {
+      await expireAllPendingCandidates(rideId);
+    } catch (expireError) {
+      // Log l'erreur mais ne pas échouer l'attribution
+      logger.error('Erreur lors de l\'expiration des candidatures', { error: expireError, rideId });
+    }
 
     logger.info('Course attribuée avec succès', { rideId, driverId });
     return result;
-  } catch (error: any) {
-    logger.error('Erreur lors de l\'attribution', { error, rideId, driverId });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    logger.error('Erreur lors de l\'attribution', { error: errorMessage, rideId, driverId });
     return {
       success: false,
-      error: error.message || 'Erreur lors de l\'attribution de la course',
+      error: errorMessage || 'Erreur lors de l\'attribution de la course',
     };
   }
 };

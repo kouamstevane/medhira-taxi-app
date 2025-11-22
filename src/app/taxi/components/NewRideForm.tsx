@@ -8,8 +8,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { auth, db } from '@/config/firebase';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { estimateFare, createBooking, getCarTypes, FareEstimate } from '@/services/taxi.service';
@@ -20,12 +19,12 @@ import { FareSummary } from './FareSummary';
 import { logger } from '@/utils/logger';
 
 interface NewRideFormProps {
-  onBookingCreated?: (bookingId: string) => void;
+  onBookingCreated?: (bookingId: string, pickup: string, destination: string) => void;
   onSearchDriver?: () => void;
 }
 
 export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormProps) => {
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<{ uid: string; email: string | null } | null>(null);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [pickupAddress, setPickupAddress] = useState('');
   const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
@@ -51,53 +50,120 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
 
   // Récupérer la position GPS
   useEffect(() => {
+    // Attendre que Google Maps soit chargé
+    if (!mapsLoaded) return;
+
     if (navigator.geolocation) {
       // Options pour améliorer la précision sur mobile
       const options: PositionOptions = {
         enableHighAccuracy: true, // Utiliser GPS si disponible
-        timeout: 10000, // Timeout de 10 secondes
-        maximumAge: 60000, // Accepter une position de moins de 1 minute
+        timeout: 20000, // Timeout de 20 secondes
+        maximumAge: 0, // Ne jamais utiliser de position en cache - toujours demander une nouvelle position
       };
       
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const location: Location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          };
-          setCurrentLocation(location);
-          setPickupLocation(location);
-          
-          // Obtenir l'adresse depuis les coordonnées
-          if (window.google && window.google.maps) {
-            const geocoder = new window.google.maps.Geocoder();
-            geocoder.geocode({ location }, (results, status) => {
-              if (status === 'OK' && results?.[0]) {
-                setPickupAddress(results[0].formatted_address);
-              } else {
-                setPickupAddress(`Position actuelle (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})`);
-              }
-            });
-          }
-        },
-        (err) => {
-          logger.error('Erreur GPS', { error: err });
-          // Ne pas afficher d'erreur bloquante, juste utiliser une position par défaut
-          const defaultLocation: Location = { lat: 3.848, lng: 11.5021 };
-          setCurrentLocation(defaultLocation);
-          setPickupLocation(defaultLocation);
-          setPickupAddress('Yaoundé, Cameroun');
-        },
-        options
-      );
+      logger.info('Requesting GPS permission', { timestamp: new Date().toISOString() });
+      
+      // Tenter d'obtenir la position
+      const attemptGeolocation = () => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const location: Location = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            };
+            setCurrentLocation(location);
+            setPickupLocation(location);
+            
+            // Obtenir l'adresse depuis les coordonnées
+            if (window.google && window.google.maps) {
+              const geocoder = new window.google.maps.Geocoder();
+              geocoder.geocode({ location }, (results, status) => {
+                if (status === 'OK' && results?.[0]) {
+                  setPickupAddress(results[0].formatted_address);
+                  logger.info('GPS position obtained', { address: results[0].formatted_address });
+                } else {
+                  const coordsAddress = `Position actuelle (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})`;
+                  setPickupAddress(coordsAddress);
+                  logger.info('GPS coordinates only', { address: coordsAddress });
+                }
+              });
+            }
+          },
+          (err) => {
+            // Déterminer le type d'erreur pour un message clair
+            let errorMessage = '';
+            switch (err.code) {
+              case err.PERMISSION_DENIED:
+                errorMessage = 'Accès à la localisation refusé. Veuillez saisir votre adresse de départ.';
+                break;
+              case err.POSITION_UNAVAILABLE:
+                errorMessage = 'Position GPS indisponible. Veuillez saisir votre adresse de départ.';
+                break;
+              case err.TIMEOUT:
+                errorMessage = 'Délai de localisation dépassé. Veuillez saisir votre adresse de départ.';
+                break;
+              default:
+                errorMessage = 'Impossible d\'obtenir votre position. Veuillez saisir votre adresse de départ.';
+            }
+            
+            logger.info('Geolocation error', { errorMessage, errorCode: err.code, error: err.message });
+            
+            // NE PAS remplir automatiquement - laisser l'utilisateur saisir
+            const defaultLocation: Location = { lat: 3.848, lng: 11.5021 }; // Position par défaut pour la carte uniquement
+            setCurrentLocation(defaultLocation);
+            setPickupLocation(null); // Pas de position de pickup
+            setPickupAddress(''); // Champ VIDE - l'utilisateur doit saisir
+            setError(errorMessage); // Afficher le message d'erreur
+          },
+          options
+        );
+      };
+      
+      // Sur HTTP (mobile dev), essayer watchPosition qui peut mieux fonctionner
+      if (window.location.protocol === 'http:') {
+        logger.info('HTTP detected - using watchPosition for better mobile support');
+        const watchId = navigator.geolocation.watchPosition(
+          (position) => {
+            const location: Location = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            };
+            setCurrentLocation(location);
+            setPickupLocation(location);
+            
+            // Obtenir l'adresse
+            if (window.google && window.google.maps) {
+              const geocoder = new window.google.maps.Geocoder();
+              geocoder.geocode({ location }, (results, status) => {
+                if (status === 'OK' && results?.[0]) {
+                  setPickupAddress(results[0].formatted_address);
+                  logger.info('GPS position obtained via watchPosition', { address: results[0].formatted_address });
+                }
+              });
+            }
+            
+            // Arrêter le watch après avoir obtenu la position
+            navigator.geolocation.clearWatch(watchId);
+          },
+          (err) => {
+            logger.info('watchPosition failed, trying getCurrentPosition', { error: err.message });
+            attemptGeolocation(); // Fallback sur getCurrentPosition
+          },
+          options
+        );
+      } else {
+        attemptGeolocation();
+      }
     } else {
-      // Position par défaut si géolocalisation non supportée
+      // Géolocalisation non supportée
       const defaultLocation: Location = { lat: 3.848, lng: 11.5021 };
       setCurrentLocation(defaultLocation);
-      setPickupLocation(defaultLocation);
-      setPickupAddress('Yaoundé, Cameroun');
+      setPickupLocation(null);
+      setPickupAddress(''); // Champ VIDE
+      setError('Votre navigateur ne supporte pas la géolocalisation. Veuillez saisir votre adresse de départ.');
+      logger.info('Geolocation not supported', { message: 'Géolocalisation non supportée par le navigateur' });
     }
-  }, []);
+  }, [mapsLoaded]);
 
   // Charger les types de véhicules
   useEffect(() => {
@@ -108,7 +174,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
         if (types.length > 0) {
           setSelectedCarType(types[0]); // Sélectionner le premier par défaut
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         logger.error('Erreur chargement types véhicules', { error: err });
         setError('Impossible de charger les types de véhicules');
       }
@@ -145,9 +211,9 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
 
       setEstimate(result);
       logger.info('Estimation calculée', { estimate: result });
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Erreur calcul estimation', { error: err });
-      setError(err.message || 'Erreur lors du calcul de l\'estimation');
+      setError((err as Error).message || 'Erreur lors du calcul de l\'estimation');
       setEstimate(null);
     } finally {
       setEstimating(false);
@@ -252,15 +318,15 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
       setShowConfirmModal(false);
       
       if (onBookingCreated) {
-        onBookingCreated(bookingId);
+        onBookingCreated(bookingId, pickupAddress, destinationAddress);
       }
       
       if (onSearchDriver) {
         onSearchDriver();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error('Erreur création course', { error: err });
-      setError(err.message || 'Erreur lors de la création de la course');
+      setError((err as Error).message || 'Erreur lors de la création de la course');
     } finally {
       setLoading(false);
     }

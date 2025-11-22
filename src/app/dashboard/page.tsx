@@ -11,10 +11,11 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { auth, db } from "@/config/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { 
   FiCreditCard, FiBell, FiLogOut, FiPhone, FiUser, 
   FiTruck, FiPackage, FiCheckCircle, FiPlus,
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [notifCount, setNotifCount] = useState(2);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [history, setHistory] = useState<Array<{
     id: string;
     type: string;
@@ -52,15 +54,21 @@ export default function Dashboard() {
 
   const fetchHistory = async (userId: string) => {
     try {
+      // Obtenir la date du début de la journée (00:00:00)
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      
       const bookingsQuery = query(
         collection(db, 'bookings'),
         where('userId', '==', userId),
+        where('createdAt', '>=', Timestamp.fromDate(todayStart)),
         orderBy('createdAt', 'desc'),
         limit(2)
       );
       const parcelsQuery = query(
         collection(db, 'parcels'),
         where('senderId', '==', userId),
+        where('createdAt', '>=', Timestamp.fromDate(todayStart)),
         orderBy('createdAt', 'desc'),
         limit(2)
       );
@@ -132,6 +140,17 @@ export default function Dashboard() {
         // Charger l'historique des commandes
         fetchHistory(user.uid);
 
+        // Vérifier si l'utilisateur est aussi chauffeur
+        const driverDocRef = doc(db, 'drivers', user.uid);
+        const driverDoc = await getDoc(driverDocRef);
+        if (driverDoc.exists() && driverDoc.data().status === 'approved') {
+          // L'utilisateur est un chauffeur approuvé, mettre à jour son userType
+          setUserData(prev => ({
+            ...prev,
+            userType: 'chauffeur'
+          }));
+        }
+
         // Vérifier si l'utilisateur est admin
         try {
           const adminDocRef = doc(db, 'admins', user.uid);
@@ -162,12 +181,14 @@ export default function Dashboard() {
 
   const logout = async () => {
     try {
+      // Déconnexion Firebase
       await signOut(auth);
-      // Forcer le rechargement complet pour vider le cache
-      window.location.href = "/login";
+      // Redirection immédiate - plus performant sur mobile
+      router.push('/login');
     } catch (error) {
       console.error("Erreur de déconnexion :", error);
-      alert("Erreur lors de la déconnexion");
+      // Forcer la redirection même en cas d'erreur
+      router.push('/login');
     }
   };
 
@@ -190,11 +211,12 @@ export default function Dashboard() {
                       {userData.userType === 'chauffeur' && (
                         <Link
                           href="/driver/dashboard"
-                          className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition duration-200 shadow-md"
+                          className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition duration-200 shadow-md touch-manipulation"
+                          style={{ minHeight: '48px', minWidth: '48px' }}
                           aria-label="Espace chauffeur"
                         >
                           <FiUser className="h-5 w-5" />
-                          <span className="hidden sm:inline text-sm font-medium">Chauffeur</span>
+                          <span className="hidden md:inline text-sm font-medium">Chauffeur</span>
                         </Link>
                       )}
                       
@@ -235,39 +257,78 @@ export default function Dashboard() {
           </button>
 
           {/* Profil avec menu déroulant */}
-          <div className="relative group">
-            <button className="flex items-center space-x-2 focus:outline-none">
-              <img
-                src={userData.profileImageUrl}
-                alt="Profil"
-                className="w-9 h-9 rounded-full object-cover border-2 border-[#f29200] shadow-sm"
-              />
+          <div className="relative">
+            <button 
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              className="flex items-center space-x-2 focus:outline-none touch-manipulation"
+              style={{ minHeight: '44px', minWidth: '44px' }}
+              aria-label="Menu profil"
+            >
+              {userData.profileImageUrl ? (
+                <Image
+                  src={userData.profileImageUrl}
+                  alt="Profil"
+                  width={36}
+                  height={36}
+                  className="w-9 h-9 rounded-full object-cover border-2 border-[#f29200] shadow-sm"
+                  priority
+                  unoptimized={userData.profileImageUrl.includes('googleusercontent.com')}
+                  onError={(e) => {
+                    // En cas d'erreur, afficher l'image par défaut
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="w-9 h-9 bg-gray-300 rounded-full flex items-center justify-center border-2 border-[#f29200] shadow-sm">
+                  <FiUser className="h-5 w-5 text-gray-600" />
+                </div>
+              )}
               <span className="hidden sm:inline text-sm font-medium text-white">{userData.firstName}</span>
             </button>
 
-            {/* Menu déroulant */}
-            <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-xl py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <p className="font-semibold text-gray-900">{userData.firstName} {userData.lastName}</p>
-                <p className="text-xs text-gray-500 truncate">{userData.phoneNumber}</p>
-              </div>
-              {isAdmin && (
-                <button
-                  onClick={() => router.push('/admin/drivers')}
-                  className="block w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 hover:text-purple-700 transition flex items-center"
-                >
-                  <FiShield className="h-4 w-4 mr-2" />
-                  Administration
-                </button>
-              )}
-              <button
-                onClick={logout}
-                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition flex items-center"
-              >
-                <FiLogOut className="h-4 w-4 mr-2" />
-                Déconnexion
-              </button>
-            </div>
+            {/* Menu déroulant - Toggle sur click */}
+            {isProfileMenuOpen && (
+              <>
+                {/* Backdrop pour fermer le menu */}
+                <div 
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsProfileMenuOpen(false)}
+                />
+                
+                {/* Menu */}
+                <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-xl py-2 z-50 animate-fadeIn">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <p className="font-semibold text-gray-900">{userData.firstName} {userData.lastName}</p>
+                    <p className="text-xs text-gray-500 truncate">{userData.phoneNumber}</p>
+                  </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setIsProfileMenuOpen(false);
+                        router.push('/admin/drivers');
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-purple-600 hover:bg-purple-50 active:bg-purple-100 hover:text-purple-700 transition flex items-center touch-manipulation"
+                      style={{ minHeight: '44px' }}
+                    >
+                      <FiShield className="h-4 w-4 mr-2" />
+                      Administration
+                    </button>
+                  )}
+                  <button
+                    onClick={async () => {
+                      setIsProfileMenuOpen(false);
+                      await logout();
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 active:bg-red-100 hover:text-red-700 transition flex items-center touch-manipulation"
+                    style={{ minHeight: '48px' }}
+                  >
+                    <FiLogOut className="h-4 w-4 mr-2" />
+                    Déconnexion
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -278,14 +339,23 @@ export default function Dashboard() {
         <div className="bg-gradient-to-br from-[#101010] via-[#1a1a1a] to-[#2a2a2a] text-white rounded-2xl p-6 mb-8 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#f29200] opacity-10 rounded-full -translate-y-16 translate-x-16"></div>
           <div className="relative flex flex-col sm:flex-row items-start">
-            <img
-              src={userData.profileImageUrl}
-              alt="Profil"
-              className="w-20 h-20 rounded-full object-cover border-4 border-[#f29200] shadow-lg mb-4 sm:mb-0 sm:mr-6"
-            />
+            {userData.profileImageUrl ? (
+              <Image
+                src={userData.profileImageUrl}
+                alt="Profil"
+                width={80}
+                height={80}
+                className="w-20 h-20 rounded-full object-cover border-4 border-[#f29200] shadow-lg mb-4 sm:mb-0 sm:mr-6"
+                priority
+              />
+            ) : (
+              <div className="w-20 h-20 bg-gray-300 rounded-full flex items-center justify-center border-4 border-[#f29200] shadow-lg mb-4 sm:mb-0 sm:mr-6">
+                <FiUser className="h-10 w-10 text-gray-600" />
+              </div>
+            )}
             <div>
               <h2 className="text-2xl sm:text-3xl font-bold mb-1">
-                👋 Bonjour, {userData.firstName}
+                Bonjour, {userData.firstName}
               </h2>
               <p className="text-gray-300 text-sm mb-3">
                 Prêt à démarrer votre journée ?
@@ -408,15 +478,15 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* Historique des commandes */}
-        <section className="mb-8">
-          <div className="flex justify-between items-center mb-5">
-            <h3 className="text-lg font-bold text-[#101010] flex items-center">
-              <FiFileText className="h-5 w-5 mr-2 text-[#f29200]" />
-              Dernières commandes
+        {/* Section Dernières commandes */}
+        <section className="mb-10">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-bold text-[#101010] flex items-center">
+              <FiPackage className="h-5 w-5 mr-2 text-[#f29200]" />
+              Commandes du jour
             </h3>
             <button
-              onClick={() => router.push("/profil")}
+              onClick={() => router.push("/historique")}
               className="text-sm text-[#f29200] hover:underline font-medium flex items-center"
             >
               Voir tout <span className="ml-1">→</span>
@@ -461,23 +531,23 @@ export default function Dashboard() {
             ) : (
               <div className="p-8 bg-white rounded-xl shadow-sm border border-gray-200 text-center">
                 <FiPackage className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 font-medium">Aucune commande récente</p>
+                <p className="text-gray-500 font-medium">Aucune commande aujourd&apos;hui</p>
                 <p className="text-sm text-gray-400 mt-1">Commencez par réserver un taxi ou une livraison</p>
               </div>
             )}
           </div>
         </section>
 
-        {/* Bouton principal */}
+        {/* //Bouton principal
         <div className="text-center mb-10">
           <button
-            onClick={() => router.push("/commander")}
+            onClick={() => router.push("/taxi")}
             className="inline-flex items-center space-x-2 bg-[#f29200] hover:bg-[#e68600] text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition transform hover:scale-105"
           >
             <FiPlus className="h-5 w-5" />
             <span>Commander maintenant</span>
           </button>
-        </div>
+        </div> */}
 
         {/* Menu secondaire */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -503,6 +573,24 @@ export default function Dashboard() {
           })}
         </section>
       </main>
+
+      {/* Styles pour l'animation du menu */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+      `}</style>
     </div>
   );
 }

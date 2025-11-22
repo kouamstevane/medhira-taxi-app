@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { auth, db, storage } from '@/config/firebase';
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
@@ -23,12 +24,10 @@ export default function ProfilPage() {
   const [profileImageUrl, setProfileImageUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<Array<Record<string, unknown>>>([]);
   const router = useRouter();
   const { currentUser } = useAuth();
-  const [phoneNumber, setPhoneNumber] = useState("");
 
   useEffect(() => {
     const fetchUserData = async (user: User) => {
@@ -71,7 +70,6 @@ export default function ProfilPage() {
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        setPhoneNumber(user.phoneNumber || "");
         fetchUserData(user);
         fetchHistory(user.uid);
       } else {
@@ -163,15 +161,21 @@ export default function ProfilPage() {
 
   const fetchHistory = async (userId: string) => {
     try {
+      // Obtenir la date du début de la journée (00:00:00)
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      
       const bookingsQuery = query(
         collection(db, 'bookings'),
         where('userId', '==', userId),
+        where('createdAt', '>=', Timestamp.fromDate(todayStart)),
         orderBy('createdAt', 'desc'),
         limit(5)
       );
       const parcelsQuery = query(
         collection(db, 'parcels'),
         where('senderId', '==', userId),
+        where('createdAt', '>=', Timestamp.fromDate(todayStart)),
         orderBy('createdAt', 'desc'),
         limit(5)
       );
@@ -184,7 +188,13 @@ export default function ProfilPage() {
       const bookings = bookingsSnapshot.docs.map(doc => ({ id: doc.id, type: 'Taxi', ...doc.data() }));
       const parcels = parcelsSnapshot.docs.map(doc => ({ id: doc.id, type: 'Livraison', ...doc.data() }));
 
-      const combinedHistory = [...bookings, ...parcels].sort((a: any, b: any) => b.createdAt.toMillis() - a.createdAt.toMillis());
+      const combinedHistory = [...bookings, ...parcels].sort((a, b) => {
+        const aCreatedAt = (a as Record<string, unknown>).createdAt as { toMillis?: () => number; seconds?: number } | undefined;
+        const bCreatedAt = (b as Record<string, unknown>).createdAt as { toMillis?: () => number; seconds?: number } | undefined;
+        const aTime = aCreatedAt?.toMillis ? aCreatedAt.toMillis() : (aCreatedAt?.seconds ? aCreatedAt.seconds * 1000 : 0);
+        const bTime = bCreatedAt?.toMillis ? bCreatedAt.toMillis() : (bCreatedAt?.seconds ? bCreatedAt.seconds * 1000 : 0);
+        return bTime - aTime;
+      });
 
       setHistory(combinedHistory.slice(0, 5));
     } catch (error) {
@@ -235,7 +245,19 @@ export default function ProfilPage() {
             <div className="flex flex-col items-center mb-6">
               <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-[#E8D9A5] mb-4">
                 {profileImageUrl ? (
-                  <img src={profileImageUrl} alt="Photo de profil" className="w-full h-full object-cover" />
+                  <Image 
+                    src={profileImageUrl} 
+                    alt="Photo de profil" 
+                    width={128}
+                    height={128}
+                    className="w-full h-full object-cover"
+                    priority
+                    unoptimized={profileImageUrl.includes('googleusercontent.com')}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
+                  />
                 ) : (
                   <div className="w-full h-full bg-gray-200 flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -375,29 +397,43 @@ export default function ProfilPage() {
         {/* Section Dernières commandes */}
         <div className="mt-8">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-[#2E2307]">Dernières commandes</h2>
+            <h2 className="text-xl font-bold text-[#2E2307]">Commandes du jour</h2>
             <Link href="/historique" className="text-sm font-medium text-[#FDBC01] hover:underline">
               Voir tout →
             </Link>
           </div>
           <div className="space-y-3">
             {history.length > 0 ? (
-              history.map(item => (
-                <div key={item.id} className="bg-white rounded-lg shadow-sm p-4 flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-gray-800">{item.type} - {item.destination || item.description}</p>
-                    <p className="text-sm text-gray-500">
-                      {new Date(item.createdAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(item.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {item.price} FCFA
-                    </p>
+              history.map(item => {
+                const createdAt = item.createdAt as { seconds?: number; toMillis?: () => number } | undefined;
+                const timestamp = createdAt?.seconds ? createdAt.seconds * 1000 : (createdAt?.toMillis ? createdAt.toMillis() : Date.now());
+                const destination = item.destination as string | undefined;
+                const description = item.description as string | undefined;
+                const price = item.price as number | undefined;
+                const status = item.status as string | undefined;
+                const type = item.type as string | undefined;
+                const id = item.id as string | undefined;
+                
+                return (
+                  <div key={id} className="bg-white rounded-lg shadow-sm p-4 flex justify-between items-center">
+                    <div>
+                      <p className="font-semibold text-gray-800">{type} - {destination || description}</p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(timestamp).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {price} FCFA
+                      </p>
+                    </div>
+                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${status === 'completed' || status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                      {status}
+                    </span>
                   </div>
-                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${item.status === 'completed' || item.status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
-                    {item.status}
-                  </span>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-                <p className="text-gray-500">Aucune commande récente.</p>
+                <p className="text-gray-500">Aucune commande aujourd&apos;hui.</p>
+                <Link href="/historique" className="text-sm text-[#FDBC01] hover:underline mt-2 inline-block">
+                  Voir l&apos;historique complet
+                </Link>
               </div>
             )}
           </div>

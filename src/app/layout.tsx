@@ -3,7 +3,7 @@
  * 
  * Root layout qui enveloppe toute l'application Next.js.
  * Intègre le AuthProvider pour rendre l'authentification disponible partout.
- * Configure les polices Google Fonts, métadonnées SEO avancées et header global.
+ * Configure les métadonnées SEO avancées et header global.
  * 
  * Features:
  * - AuthProvider pour l'authentification Firebase
@@ -16,27 +16,19 @@
  */
 
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import LayoutClient from "./LayoutClient";
 
 /**
- * Configuration de la police principale (Geist Sans)
+ * Configuration de la police principale (Inter)
+ * Inter est une police fiable et toujours disponible sur Google Fonts
  */
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
   display: "swap",
-});
-
-/**
- * Configuration de la police monospace (Geist Mono)
- */
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  display: "swap",
+  variable: "--font-inter",
 });
 
 /**
@@ -168,7 +160,7 @@ export default function RootLayout({
       </head>
       
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#f5f5f5] min-h-screen`}
+        className={`${inter.variable} antialiased bg-[#f5f5f5] min-h-screen`}
       >
         {/* AuthProvider rend l'authentification disponible dans toute l'app */}
         <AuthProvider>

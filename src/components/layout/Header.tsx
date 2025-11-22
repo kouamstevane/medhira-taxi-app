@@ -11,6 +11,7 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { UserData } from '@/types';
@@ -97,11 +98,23 @@ export const Header: React.FC<HeaderProps> = ({
         {userData && (
           <div className="relative group">
             <button className="flex items-center space-x-2 focus:outline-none">
-              <img
-                src={userData.profileImageUrl || '/images/default.png'}
-                alt="Profil"
-                className="w-9 h-9 rounded-full object-cover border-2 border-[#f29200] shadow-sm"
-              />
+              {userData.profileImageUrl ? (
+                <Image
+                  src={userData.profileImageUrl}
+                  alt="Profil"
+                  width={36}
+                  height={36}
+                  className="w-9 h-9 rounded-full object-cover border-2 border-[#f29200] shadow-sm"
+                  priority
+                  unoptimized={userData.profileImageUrl.includes('googleusercontent.com')}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="w-9 h-9 bg-gray-300 rounded-full border-2 border-[#f29200] shadow-sm" />
+              )}
               <span className="hidden sm:inline text-sm font-medium text-white">
                 {userData.firstName}
               </span>

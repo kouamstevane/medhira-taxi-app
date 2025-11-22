@@ -158,6 +158,63 @@ export default function DriverDashboard() {
         };
         setDriver(safeDriverData);
 
+        // Écouter les courses du chauffeur (en cours)
+        const currentTripQuery = query(
+          collection(db, "bookings"),
+          where("driverId", "==", user.uid),
+          where("status", "in", ["accepted", "arrived", "in_progress"])
+        );
+        
+        console.log('[DRIVER] Initialisation listener courses actives pour:', user.uid);
+        
+        const unsubscribeCurrentTrip = onSnapshot(currentTripQuery, async (snapshot) => {
+          console.log('[DRIVER] Snapshot courses actives:', snapshot.size, 'résultat(s)');
+          
+          if (!snapshot.empty) {
+            const doc = snapshot.docs[0]; // Prendre la première course active
+            const data = doc.data();
+            
+            console.log('[DRIVER] Course active trouvée:', {
+              id: doc.id,
+              status: data.status,
+              pickup: data.pickup,
+              destination: data.destination
+            });
+            
+            // Double vérification du statut
+            if (data.status === 'cancelled') {
+              console.log('[DRIVER] ⚠️ Course annulée détectée (ne devrait pas arriver), ignorée');
+              setCurrentTrip(null);
+              return;
+            }
+            
+            setCurrentTrip({
+              id: doc.id,
+              passengerName: data.userEmail || "Client",
+              pickup: data.pickup,
+              destination: data.destination,
+              price: data.price,
+              status: data.status as 'accepted' | 'arrived' | 'in_progress',
+              createdAt: data.createdAt
+            });
+          } else {
+            // Aucune course active, réinitialiser
+            console.log('[DRIVER] ✓ Aucune course active, réinitialisation');
+            setCurrentTrip(null);
+            // Remettre le chauffeur disponible automatiquement
+            try {
+              await updateDoc(doc(db, 'drivers', user.uid), {
+                isAvailable: true
+              });
+              console.log('[DRIVER] ✓ Disponibilité réactivée automatiquement');
+              // Mettre à jour l'état local
+              setDriver(prev => prev ? { ...prev, isAvailable: true } : null);
+            } catch (err) {
+              console.error('[DRIVER] ❌ Erreur mise à jour disponibilité:', err);
+            }
+          }
+        });
+
         // Écouter les courses en attente (ancien système)
         const q = query(collection(db, "bookings"), where("status", "==", "pending"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -237,6 +294,7 @@ export default function DriverDashboard() {
         });
 
         return () => {
+          unsubscribeCurrentTrip();
           unsubscribe();
           unsubscribeRideRequests();
         };

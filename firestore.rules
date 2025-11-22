@@ -84,6 +84,11 @@ service cloud.firestore {
                        resource.data.status == 'pending' &&
                        request.resource.data.status == 'accepted' &&
                        request.resource.data.driverId == request.auth.uid;
+      // Permettre au client d'annuler sa propre commande (même si acceptée)
+      allow update: if isAuthenticated() && 
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'cancelled' &&
+                       request.resource.data.cancelledBy == 'client';
       allow delete: if false;
       
       // Sous-collection candidates - Les chauffeurs peuvent lire et mettre à jour leurs candidatures
@@ -93,14 +98,19 @@ service cloud.firestore {
         allow read: if isAuthenticated() && 
                      (request.auth.uid == candidateId || 
                       get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
-        allow create: if isAuthenticated();
+        // Permettre la création par le client qui a créé le booking OU par le système
+        allow create: if isAuthenticated() && 
+                         (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
+                          request.auth.uid == candidateId);
         // Permettre la mise à jour si :
         // 1. C'est la propre candidature du chauffeur (pour accepter/refuser)
         // 2. Le chauffeur est assigné à la course et met à jour le statut à 'expired'
+        // 3. Le client propriétaire du booking (pour expirer les candidatures)
         allow update: if isAuthenticated() && 
                      (request.auth.uid == candidateId || 
                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid && 
-                       request.resource.data.status == 'expired'));
+                       request.resource.data.status == 'expired') ||
+                      get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid);
         allow delete: if false;
       }
     }

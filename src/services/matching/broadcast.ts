@@ -21,8 +21,8 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { logger } from '@/utils/logger';
-import { findAvailableDrivers, AvailableDriver } from './findAvailableDrivers';
+// import { logger } from '@/utils/logger'; // Commenté pour éviter les erreurs
+import { findAvailableDrivers } from './findAvailableDrivers';
 import { Location } from '@/types';
 
 export interface RideCandidate {
@@ -62,7 +62,7 @@ export const broadcastRideRequest = async (
   } = params;
 
   try {
-    logger.info('Début du broadcast de la course', { rideId, rangeKm });
+    console.log('[BROADCAST] Début du broadcast de la course', { rideId, rangeKm });
 
     // Trouver les chauffeurs disponibles
     const availableDrivers = await findAvailableDrivers({
@@ -73,7 +73,7 @@ export const broadcastRideRequest = async (
     });
 
     if (availableDrivers.length === 0) {
-      logger.warn('Aucun chauffeur disponible trouvé', { rideId, rangeKm });
+      console.warn('[BROADCAST] Aucun chauffeur disponible trouvé', { rideId, rangeKm });
       return [];
     }
 
@@ -100,15 +100,16 @@ export const broadcastRideRequest = async (
       driverIds.push(driver.driverId);
     }
 
-    logger.info('Broadcast terminé', {
+    console.log('[BROADCAST] Broadcast terminé', {
       rideId,
       driversNotified: driverIds.length,
     });
 
     return driverIds;
-  } catch (error: any) {
-    logger.error('Erreur lors du broadcast', { error, rideId });
-    throw new Error(`Erreur lors du broadcast: ${error.message}`);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    console.error('[BROADCAST] Erreur lors du broadcast:', errorMessage);
+    throw new Error(`Erreur lors du broadcast: ${errorMessage}`);
   }
 };
 
@@ -124,7 +125,7 @@ export const markCandidateAccepted = async (
     const candidateSnap = await getDoc(candidateRef);
 
     if (!candidateSnap.exists()) {
-      logger.warn('Candidature non trouvée', { rideId, driverId });
+      console.warn('[BROADCAST] Candidature non trouvée', { rideId, driverId });
       return false;
     }
 
@@ -132,7 +133,7 @@ export const markCandidateAccepted = async (
     
     // Vérifier que la candidature est toujours en attente
     if (candidateData.status !== 'pending') {
-      logger.warn('Candidature déjà traitée', {
+      console.warn('[BROADCAST] Candidature déjà traitée', {
         rideId,
         driverId,
         status: candidateData.status,
@@ -143,7 +144,7 @@ export const markCandidateAccepted = async (
     // Vérifier que la candidature n'a pas expiré
     const expiresAt = candidateData.expiresAt?.toDate();
     if (expiresAt && expiresAt < new Date()) {
-      logger.warn('Candidature expirée', { rideId, driverId });
+      console.warn('[BROADCAST] Candidature expirée', { rideId, driverId });
       await updateDoc(candidateRef, { status: 'expired' });
       return false;
     }
@@ -154,10 +155,11 @@ export const markCandidateAccepted = async (
       acceptedAt: serverTimestamp(),
     });
 
-    logger.info('Candidature acceptée', { rideId, driverId });
+    console.log('[BROADCAST] Candidature acceptée', { rideId, driverId });
     return true;
-  } catch (error: any) {
-    logger.error('Erreur lors de l\'acceptation', { error, rideId, driverId });
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
+    console.error('[BROADCAST] Erreur lors de l\'acceptation:', errorMsg);
     return false;
   }
 };
@@ -174,7 +176,7 @@ export const markCandidateDeclined = async (
     const candidateSnap = await getDoc(candidateRef);
 
     if (!candidateSnap.exists()) {
-      logger.warn('Candidature non trouvée pour refus', { rideId, driverId });
+      console.warn('[BROADCAST] Candidature non trouvée pour refus', { rideId, driverId });
       return;
     }
 
@@ -183,9 +185,10 @@ export const markCandidateDeclined = async (
       declinedAt: serverTimestamp(),
     });
 
-    logger.info('Candidature refusée', { rideId, driverId });
-  } catch (error: any) {
-    logger.error('Erreur lors du refus', { error, rideId, driverId });
+    console.log('[BROADCAST] Candidature refusée', { rideId, driverId });
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
+    console.error('[BROADCAST] Erreur lors du refus:', errorMsg);
   }
 };
 
@@ -213,12 +216,13 @@ export const expireAllPendingCandidates = async (
 
     await Promise.all(updatePromises);
 
-    logger.info('Candidatures expirées', {
+    console.log('[BROADCAST] Candidatures expirées', {
       rideId,
       count: pendingSnapshot.size,
     });
-  } catch (error: any) {
-    logger.error('Erreur lors de l\'expiration', { error, rideId });
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
+    console.error('[BROADCAST] Erreur lors de l\'expiration:', errorMsg);
   }
 };
 
@@ -269,15 +273,12 @@ export const subscribeToDriverRideRequests = (
       callback(requests);
     },
     (error) => {
-      logger.error('Erreur lors de l\'écoute des demandes', { error, driverId, code: error.code, message: error.message });
+      const errorCode = (error as { code?: string }).code;
+      const errorMessage = (error as { message?: string }).message;
+      console.error('[BROADCAST] Erreur lors de l\'écoute:', errorCode, errorMessage);
       
-      // Si erreur de permission, logger plus de détails
-      if (error.code === 'permission-denied') {
-        logger.error('Permission refusée - Vérifiez les règles Firestore', {
-          driverId,
-          collection: 'bookings',
-          subcollection: 'candidates',
-        });
+      if (errorCode === 'permission-denied') {
+        console.error('[BROADCAST] Permission refusée - Vérifiez les règles Firestore');
       }
     }
   );
@@ -322,21 +323,13 @@ export const getPendingCandidatesForDriver = async (
     }
 
     return requests;
-  } catch (error: any) {
-    logger.error('Erreur lors de la récupération des candidatures', {
-      error,
-      driverId,
-      code: error.code,
-      message: error.message,
-    });
+  } catch (error) {
+    const errorCode = (error as { code?: string }).code;
+    const errorMessage = (error as { message?: string }).message;
+    console.error('[BROADCAST] Erreur récupération candidatures:', errorCode, errorMessage);
     
-    // Si erreur de permission, logger plus de détails
-    if (error.code === 'permission-denied') {
-      logger.error('Permission refusée - Vérifiez les règles Firestore', {
-        driverId,
-        collection: 'bookings',
-        subcollection: 'candidates',
-      });
+    if (errorCode === 'permission-denied') {
+      console.error('[BROADCAST] Permission refusée - Vérifiez les règles Firestore');
     }
     
     return [];

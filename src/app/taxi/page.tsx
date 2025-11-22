@@ -11,6 +11,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { NewRideForm } from './components/NewRideForm';
 import { DriverFoundView } from './components/DriverFoundView';
+import { SearchingDriverBottomSheet } from './components/SearchingDriverBottomSheet';
 import { logger } from '@/utils/logger';
 import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -22,16 +23,53 @@ export default function TaxiPage() {
   const [step, setStep] = useState<Step>('form');
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(60);
+  const [pickupAddress, setPickupAddress] = useState<string>('');
+  const [destinationAddress, setDestinationAddress] = useState<string>('');
 
-  const handleBookingCreated = (id: string) => {
+  const handleBookingCreated = (id: string, pickup: string, destination: string) => {
     logger.info('Course créée, recherche de chauffeur', { bookingId: id });
     setBookingId(id);
+    setPickupAddress(pickup);
+    setDestinationAddress(destination);
     setStep('searching');
     setTimeRemaining(60);
   };
 
   const handleSearchDriver = () => {
     logger.info('Recherche de chauffeur démarrée', { bookingId });
+  };
+
+  const handleCancelSearch = async () => {
+    if (!bookingId) return;
+    
+    logger.info('Annulation de la recherche', { bookingId });
+    
+    try {
+      // Mettre à jour le statut du booking à "cancelled"
+      const bookingRef = doc(db, 'bookings', bookingId);
+      await updateDoc(bookingRef, {
+        status: 'cancelled',
+        cancellationReason: 'Annulé par le client',
+        updatedAt: serverTimestamp(),
+      });
+      
+      logger.info('Recherche annulée avec succès', { bookingId });
+      
+      // Retourner au formulaire
+      setStep('form');
+      setBookingId(null);
+      setPickupAddress('');
+      setDestinationAddress('');
+      setTimeRemaining(60);
+    } catch (error) {
+      logger.error('Erreur lors de l\'annulation', { error, bookingId });
+      // Retourner quand même au formulaire
+      setStep('form');
+      setBookingId(null);
+      setPickupAddress('');
+      setDestinationAddress('');
+      setTimeRemaining(60);
+    }
   };
 
   // Écouter les changements du booking pour détecter l'acceptation d'un chauffeur
@@ -112,7 +150,7 @@ export default function TaxiPage() {
           
           // Vérifier une dernière fois le statut avant de marquer comme failed
           const bookingRef = doc(db, 'bookings', bookingId);
-          getDoc(bookingRef).then((snapshot) => {
+              getDoc(bookingRef).then((snapshot) => {
             if (snapshot.exists()) {
               const bookingData = snapshot.data();
               if (bookingData.status === 'pending') {
@@ -128,11 +166,22 @@ export default function TaxiPage() {
                   logger.error('Erreur lors du marquage failed', { error, bookingId });
                   setStep('failed');
               });
+              } else {
+                // Déjà mis à jour, passer à l'état approprié
+                if (bookingData.status === 'failed') {
+                  setStep('failed');
+                } else if (bookingData.status === 'accepted' && bookingData.driverId) {
+                  setStep('driver_found');
+                }
+              }
+            } else {
+              // Booking n'existe plus, revenir au formulaire
+              setStep('failed');
             }
-          }
-          });
-          
-          return 0;
+          }).catch((error) => {
+            logger.error('Erreur vérification finale timeout', { error, bookingId });
+            setStep('failed');
+          });          return 0;
         }
         return newTime;
       });
@@ -177,38 +226,121 @@ export default function TaxiPage() {
             </div>
           )}
 
-        {step === 'searching' && (
-          <div className="bg-white rounded-lg shadow-md p-8 text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-[#f29200] mx-auto mb-4"></div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Recherche d'un chauffeur</h2>
-                <p className="text-gray-600 mb-4">Nous recherchons le meilleur chauffeur pour vous</p>
-            <p className="text-sm text-gray-500 mb-2">Temps restant: {timeRemaining} secondes</p>
-            <div className="w-full bg-gray-200 rounded-full h-2 mt-4">
-              <div
-                className="bg-[#f29200] h-2 rounded-full transition-all duration-1000"
-                style={{ width: `${((60 - timeRemaining) / 60) * 100}%` }}
-              ></div>
-              </div>
-            </div>
-          )}
+        {step === 'searching' && bookingId && (
+          <SearchingDriverBottomSheet
+            bookingId={bookingId}
+            pickupAddress={pickupAddress}
+            destinationAddress={destinationAddress}
+            timeRemaining={timeRemaining}
+            onCancel={handleCancelSearch}
+          />
+        )}
 
         {step === 'failed' && (
-          <div className="bg-white rounded-lg shadow-md p-8 text-center">
-            <div className="text-red-500 text-4xl mb-4">⚠️</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Aucun chauffeur disponible</h2>
-            <p className="text-gray-600 mb-6">
-              Désolé, aucun chauffeur n'est disponible dans votre zone pour le moment.
-            </p>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
+            <div className="bg-white w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 sm:p-8 text-center transform transition-all duration-300 animate-slideUp">
+              {/* Icône d'erreur animée */}
+              <div className="mb-4">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto animate-bounce">
+                  <svg className="w-8 h-8 sm:w-10 sm:h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+              </div>
+              
+              {/* Titre et message */}
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
+                Aucun chauffeur disponible
+              </h2>
+              <p className="text-sm sm:text-base text-gray-600 mb-6">
+                Désolé, aucun chauffeur n&apos;est disponible dans votre zone pour le moment. 
+                Veuillez réessayer dans quelques instants.
+              </p>
+              
+              {/* Bouton réessayer */}
                 <button
-              onClick={() => {
-                setStep('form');
-                setBookingId(null);
-                setTimeRemaining(60);
-              }}
-              className="bg-[#f29200] hover:bg-[#e68600] text-white font-bold py-3 px-6 rounded-lg transition"
-            >
-              Réessayer
+                onClick={async () => {
+                  if (!bookingId) return;
+                  
+                  console.log('[RETRY] Début du réessai pour bookingId:', bookingId);
+                  
+                  try {
+                    // Récupérer les infos du booking
+                    const bookingRef = doc(db, 'bookings', bookingId);
+                    const bookingSnap = await getDoc(bookingRef);
+                    
+                    if (!bookingSnap.exists()) {
+                      console.error('[RETRY] Booking introuvable');
+                      return;
+                    }
+                    
+                    const data = bookingSnap.data();
+                    console.log('[RETRY] Données du booking récupérées:', data);
+                    
+                    // Réinitialiser complètement le booking
+                    await updateDoc(bookingRef, {
+                      status: 'pending',
+                      driverId: null,
+                      driverName: null,
+                      driverPhone: null,
+                      failureReason: null,
+                      updatedAt: serverTimestamp(),
+                    });
+                    
+                    console.log('[RETRY] Booking réinitialisé à pending');
+                    
+                    // Passer en mode recherche
+                    setStep('searching');
+                    setTimeRemaining(60);
+                    
+                    // Lancer la recherche après un délai
+                    setTimeout(async () => {
+                      try {
+                        console.log('[RETRY] Lancement de findDriverWithRetry');
+                        const { findDriverWithRetry } = await import('@/services/matching');
+                        
+                        await findDriverWithRetry(
+                          bookingId,
+                          data.pickupLocation,
+                          data.destination,
+                          data.price,
+                          data.carType
+                        );
+                        
+                        console.log('[RETRY] findDriverWithRetry terminé');
+                      } catch (error) {
+                        console.error('[RETRY] Erreur findDriverWithRetry:', error);
+                      }
+                    }, 500);
+                  } catch (error) {
+                    console.error('[RETRY] Erreur lors du redémarrage:', error);
+                    setStep('failed');
+                  }
+                }}
+                className="w-full bg-gradient-to-r from-[#f29200] to-[#e68600] hover:from-[#e68600] hover:to-[#d67a00] active:from-[#d67a00] active:to-[#c56900] text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl touch-manipulation"
+                style={{ minHeight: '56px' }}
+              >
+                Réessayer
                 </button>
+                
+                {/* Bouton retour à l'accueil */}
+                <button
+                onClick={() => {
+                  setStep('form');
+                  setBookingId(null);
+                  router.push('/dashboard');
+                }}
+                className="w-full mt-3 bg-white hover:bg-gray-50 text-gray-700 font-medium py-3 px-6 rounded-xl border-2 border-gray-300 transition-all touch-manipulation"
+                style={{ minHeight: '56px' }}
+              >
+                Retour à l&apos;accueil
+                </button>
+              
+              {/* Info supplémentaire */}
+              <p className="text-xs text-gray-500 mt-4">
+                💡 Conseil : Essayez à une heure différente pour plus de disponibilité
+              </p>
+            </div>
           </div>
         )}
 
@@ -217,21 +349,36 @@ export default function TaxiPage() {
         )}
 
         {step === 'completed' && (
-          <div className="bg-white rounded-lg shadow-md p-8 text-center">
-            <div className="text-green-500 text-4xl mb-2">✓</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Course terminée</h2>
-            <p className="text-gray-600 mb-4">Merci d'avoir utilisé Medjira Taxi</p>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
+            <div className="bg-white w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 sm:p-8 text-center transform transition-all duration-300 animate-slideUp">
+              {/* Icône de succès */}
+              <div className="mb-4">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                  <svg className="w-10 h-10 sm:w-12 sm:h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+              
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Course terminée !</h2>
+              <p className="text-sm sm:text-base text-gray-600 mb-6">
+                Merci d&apos;avoir utilisé Medjira Taxi
+              </p>
                 <button
-              onClick={() => {
-                setStep('form');
-                setBookingId(null);
-              }}
-              className="bg-[#f29200] hover:bg-[#e68600] text-white font-bold py-3 px-6 rounded-lg transition"
-            >
-              Nouvelle course
+                onClick={() => {
+                  setStep('form');
+                  setBookingId(null);
+                setPickupAddress('');
+                setDestinationAddress('');
+                }}
+                className="w-full bg-gradient-to-r from-[#f29200] to-[#e68600] hover:from-[#e68600] hover:to-[#d67a00] text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl touch-manipulation"
+                style={{ minHeight: '56px' }}
+              >
+                Nouvelle course
                 </button>
             </div>
-          )}
+          </div>
+        )}
       </main>
     </div>
   );

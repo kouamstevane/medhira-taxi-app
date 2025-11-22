@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { auth, db } from '@/config/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp, getDoc, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
@@ -700,9 +701,11 @@ export default function AdminDriversPage() {
                       rel="noopener noreferrer"
                       className="block"
                     >
-                      <img
+                      <Image
                         src={selectedDriver.documents.licensePhoto}
                         alt="Permis de conduire"
+                        width={400}
+                        height={192}
                         className="w-full h-48 object-cover rounded-lg border border-gray-300 hover:border-[#f29200] transition"
                       />
                     </a>
@@ -715,9 +718,11 @@ export default function AdminDriversPage() {
                       rel="noopener noreferrer"
                       className="block"
                     >
-                      <img
+                      <Image
                         src={selectedDriver.documents.carRegistration}
                         alt="Carte grise"
+                        width={400}
+                        height={192}
                         className="w-full h-48 object-cover rounded-lg border border-gray-300 hover:border-[#f29200] transition"
                       />
                     </a>
@@ -731,9 +736,11 @@ export default function AdminDriversPage() {
                         rel="noopener noreferrer"
                         className="block"
                       >
-                        <img
+                        <Image
                           src={selectedDriver.documents.insurance}
                           alt="Assurance"
+                          width={400}
+                          height={192}
                           className="w-full h-48 object-cover rounded-lg border border-gray-300 hover:border-[#f29200] transition"
                         />
                       </a>

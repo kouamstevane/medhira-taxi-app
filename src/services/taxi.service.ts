@@ -43,23 +43,52 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
   
   await setDoc(newBookingRef, booking);
   
-  // Déclencher le broadcast automatiquement si une localisation est disponible
+  // Déclencher le matching automatique avec retry si une localisation est disponible
   if (bookingData.pickupLocation) {
     try {
-      const { broadcastRideRequest } = await import('./matching');
-      await broadcastRideRequest({
+      const { findDriverWithRetry } = await import('./matching');
+      
+      // Utiliser le retry automatique avec élargissement progressif
+      const startTime = Date.now();
+      const result = await findDriverWithRetry(
+        newBookingRef.id,
+        bookingData.pickupLocation,
+        bookingData.destination,
+        bookingData.price,
+        bookingData.carType,
+        {
+          initialRangeKm: 5,    // Commence par 5 km
+          maxRangeKm: 20,       // Élargit jusqu'à 20 km
+          rangeIncrement: 5,    // Incrémente de 5 km à chaque retry
+          maxRetries: 3,        // Maximum 3 tentatives
+          timeoutSeconds: 30,   // 30 secondes par tentative
+        }
+      );
+      
+      const duration = Date.now() - startTime;
+      
+      // Logger les métriques
+      const { logMatchingMetrics } = await import('./matching');
+      await logMatchingMetrics({
         rideId: newBookingRef.id,
-        pickupLocation: bookingData.pickupLocation,
-        destination: bookingData.destination,
-        price: bookingData.price,
-        carType: bookingData.carType,
-        rangeKm: 5, // Rayon par défaut de 5 km
-        timeoutSeconds: 30, // Délai de 30 secondes
+        timestamp: new Date(),
+        initialRange: 5,
+        finalRange: result.finalRange,
+        retryCount: Math.floor(result.finalRange / 5) - 1,
+        driversNotified: result.driversNotified,
+        success: result.success,
+        duration,
       });
-      logger.info('Broadcast automatique déclenché', { bookingId: newBookingRef.id });
+      
+      logger.info('Matching automatique terminé', { 
+        bookingId: newBookingRef.id, 
+        success: result.success,
+        driversNotified: result.driversNotified,
+        finalRange: result.finalRange,
+      });
     } catch (error: any) {
-      // Ne pas bloquer la création si le broadcast échoue
-      logger.warn('Erreur lors du broadcast automatique', { error, bookingId: newBookingRef.id });
+      // Ne pas bloquer la création si le matching échoue
+      logger.warn('Erreur lors du matching automatique', { error, bookingId: newBookingRef.id });
     }
   }
   
