@@ -16,6 +16,7 @@ interface SearchingDriverBottomSheetProps {
   destinationAddress: string;
   timeRemaining: number;
   onCancel: () => void;
+  isAutoSearching?: boolean;
 }
 
 export function SearchingDriverBottomSheet({
@@ -23,6 +24,7 @@ export function SearchingDriverBottomSheet({
   destinationAddress,
   timeRemaining,
   onCancel,
+  isAutoSearching = false,
 }: SearchingDriverBottomSheetProps) {
   // Animation pulsing
   useEffect(() => {
@@ -97,6 +99,11 @@ export function SearchingDriverBottomSheet({
             <p className="text-sm sm:text-base text-gray-600">
               Nous recherchons les chauffeurs proches de vous
             </p>
+            {isAutoSearching && (
+              <div className="inline-block mt-2 px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full animate-pulse">
+                Recherche automatique active
+              </div>
+            )}
           </div>
 
           {/* Timer et barre de progression */}
@@ -107,7 +114,7 @@ export function SearchingDriverBottomSheet({
                 {timeRemaining}s restantes
               </span>
             </div>
-            
+
             {/* Barre de progression */}
             <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
               <div

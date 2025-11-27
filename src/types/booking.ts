@@ -56,7 +56,30 @@ export interface Booking {
   completedAt?: Date | Timestamp;
   cancelledAt?: Date | Timestamp;
   reason?: string;
+
+  // Système de bonus (Plan B)
+  bonus?: number; // Montant du bonus en FCFA
+  bonusActivatedAt?: Date | Timestamp; // Date d'activation du bonus
+
+  // Périmètre de recherche (Plan A)
+  searchPerimeter?: {
+    maxMinutes: number; // Périmètre en minutes (3-5 min par défaut)
+    expandedWithBonus: boolean; // Si élargi à 10 min avec bonus
+  };
+
+  // Recherche automatique
+  automaticSearch?: {
+    enabled: boolean;
+    intervalSeconds: number; // Intervalle entre tentatives (60-180s)
+    attemptCount: number; // Nombre de tentatives effectuées
+    maxAttempts: number; // Nombre max de tentatives (défaut: 10)
+    lastAttemptAt?: Date | Timestamp; // Date de la dernière tentative
+  };
+
+  failureReason?: string; // Raison d'échec (si status = 'failed')
+  cancellationReason?: string; // Raison d'annulation (si status = 'cancelled')
 }
+
 
 /**
  * Type de véhicule disponible

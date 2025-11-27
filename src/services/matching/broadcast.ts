@@ -21,29 +21,8 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-// import { logger } from '@/utils/logger'; // Commenté pour éviter les erreurs
 import { findAvailableDrivers } from './findAvailableDrivers';
-import { Location } from '@/types';
-
-export interface RideCandidate {
-  rideId: string;
-  driverId: string;
-  status: 'pending' | 'accepted' | 'declined' | 'expired';
-  expiresAt: Timestamp;
-  createdAt: Timestamp;
-  distance?: number;
-  score?: number;
-}
-
-export interface BroadcastRideParams {
-  rideId: string;
-  pickupLocation: Location;
-  destination: string;
-  price: number;
-  carType?: string;
-  rangeKm?: number;
-  timeoutSeconds?: number; // Délai avant expiration (défaut: 30s)
-}
+import { RideCandidate, BroadcastRideParams } from '@/types';
 
 /**
  * Diffuser une demande de course aux chauffeurs disponibles
@@ -57,35 +36,45 @@ export const broadcastRideRequest = async (
     destination,
     price,
     carType,
-    rangeKm = 5, // Rayon par défaut de 5 km
-    timeoutSeconds = 30, // Délai par défaut de 30 secondes
+    rangeKm = 20, // Rayon large par défaut
+    maxTravelMinutes = 5, // Périmètre par défaut (Plan A)
+    timeoutSeconds = 30,
+    bonus = 0,
   } = params;
 
   try {
-    console.log('[BROADCAST] Début du broadcast de la course', { rideId, rangeKm });
+    console.log('[BROADCAST] Début du broadcast de la course', {
+      rideId,
+      maxTravelMinutes,
+      bonus
+    });
 
-    // Trouver les chauffeurs disponibles
+    // Trouver les chauffeurs disponibles avec le nouveau système de périmètre
     const availableDrivers = await findAvailableDrivers({
       location: pickupLocation,
       rangeKm,
+      maxTravelMinutes,
       maxResults: 10,
       carType,
+      useDirectionsAPI: true, // Activer la vérification précise
     });
 
     if (availableDrivers.length === 0) {
-      console.warn('[BROADCAST] Aucun chauffeur disponible trouvé', { rideId, rangeKm });
+      console.warn('[BROADCAST] Aucun chauffeur disponible trouvé dans le périmètre', {
+        rideId,
+        maxTravelMinutes
+      });
       return [];
     }
 
     // Créer les candidatures pour chaque chauffeur
-    // Utiliser la collection 'bookings' au lieu de 'rides'
     const candidatesRef = collection(db, 'bookings', rideId, 'candidates');
     const driverIds: string[] = [];
     const expiresAt = new Date(Date.now() + timeoutSeconds * 1000);
 
     for (const driver of availableDrivers) {
       const candidateRef = doc(candidatesRef, driver.driverId);
-      
+
       const candidate: RideCandidate = {
         rideId,
         driverId: driver.driverId,
@@ -94,6 +83,9 @@ export const broadcastRideRequest = async (
         createdAt: serverTimestamp() as Timestamp,
         distance: driver.distance,
         score: driver.score,
+        // Nouveaux champs
+        travelTimeMinutes: driver.travelTimeMinutes,
+        bonus: bonus,
       };
 
       await setDoc(candidateRef, candidate);
@@ -103,6 +95,7 @@ export const broadcastRideRequest = async (
     console.log('[BROADCAST] Broadcast terminé', {
       rideId,
       driversNotified: driverIds.length,
+      bonus: bonus > 0 ? `${bonus} FCFA` : 'Aucun',
     });
 
     return driverIds;
@@ -130,7 +123,7 @@ export const markCandidateAccepted = async (
     }
 
     const candidateData = candidateSnap.data();
-    
+
     // Vérifier que la candidature est toujours en attente
     if (candidateData.status !== 'pending') {
       console.warn('[BROADCAST] Candidature déjà traitée', {
@@ -206,7 +199,7 @@ export const expireAllPendingCandidates = async (
     );
 
     const pendingSnapshot = await getDocs(pendingQuery);
-    
+
     const updatePromises = pendingSnapshot.docs.map((doc) =>
       updateDoc(doc.ref, {
         status: 'expired',
@@ -233,11 +226,6 @@ export const subscribeToDriverRideRequests = (
   driverId: string,
   callback: (requests: Array<{ rideId: string; candidate: RideCandidate }>) => void
 ): (() => void) => {
-  // Écouter toutes les collections candidates où le driverId correspond
-  // Note: Firestore ne supporte pas directement les requêtes sur les sous-collections
-  // On utilise une approche différente : écouter les bookings avec status 'pending'
-  // et vérifier si le chauffeur a une candidature
-  
   const bookingsRef = collection(db, 'bookings');
   const pendingRidesQuery = query(
     bookingsRef,
@@ -256,8 +244,7 @@ export const subscribeToDriverRideRequests = (
 
         if (candidateSnap.exists()) {
           const candidateData = candidateSnap.data() as RideCandidate;
-          
-          // Ne retourner que les candidatures en attente et non expirées
+
           if (candidateData.status === 'pending') {
             const expiresAt = candidateData.expiresAt?.toDate();
             if (!expiresAt || expiresAt > new Date()) {
@@ -276,10 +263,6 @@ export const subscribeToDriverRideRequests = (
       const errorCode = (error as { code?: string }).code;
       const errorMessage = (error as { message?: string }).message;
       console.error('[BROADCAST] Erreur lors de l\'écoute:', errorCode, errorMessage);
-      
-      if (errorCode === 'permission-denied') {
-        console.error('[BROADCAST] Permission refusée - Vérifiez les règles Firestore');
-      }
     }
   );
 
@@ -309,7 +292,7 @@ export const getPendingCandidatesForDriver = async (
 
       if (candidateSnap.exists()) {
         const candidateData = candidateSnap.data() as RideCandidate;
-        
+
         if (candidateData.status === 'pending') {
           const expiresAt = candidateData.expiresAt?.toDate();
           if (!expiresAt || expiresAt > new Date()) {
@@ -327,12 +310,6 @@ export const getPendingCandidatesForDriver = async (
     const errorCode = (error as { code?: string }).code;
     const errorMessage = (error as { message?: string }).message;
     console.error('[BROADCAST] Erreur récupération candidatures:', errorCode, errorMessage);
-    
-    if (errorCode === 'permission-denied') {
-      console.error('[BROADCAST] Permission refusée - Vérifiez les règles Firestore');
-    }
-    
     return [];
   }
 };
-

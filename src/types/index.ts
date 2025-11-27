@@ -57,5 +57,17 @@ export type {
   TransactionHistory,
 } from './wallet';
 
+// ==================== Matching & Candidatures ====================
+export type {
+  CandidateStatus,
+  RideCandidate,
+  BroadcastRideParams,
+  AvailableDriver,
+  FindDriversConfig,
+  DriverSearchResult,
+  MatchingMetrics,
+} from './matching';
+
 // ==================== Re-export Firebase Types ====================
 export type { Timestamp };
+

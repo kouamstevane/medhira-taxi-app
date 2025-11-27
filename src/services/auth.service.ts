@@ -21,6 +21,8 @@ import {
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { UserData, UserType } from '@/types';
+import { Capacitor } from '@capacitor/core';
+import { SocialLogin } from '@capgo/capacitor-social-login';
 
 /**
  * Connexion par email et mot de passe
@@ -41,7 +43,7 @@ export const signUpWithEmail = async (
   userType: UserType = 'client'
 ): Promise<User> => {
   const result = await createUserWithEmailAndPassword(auth, email, password);
-  
+
   // Créer le document utilisateur dans Firestore
   await createUserDocument(result.user.uid, {
     email,
@@ -49,32 +51,71 @@ export const signUpWithEmail = async (
     lastName,
     userType,
   });
-  
+
   return result.user;
 };
+
 
 /**
  * Connexion avec Google
  */
 export const signInWithGoogle = async (): Promise<User> => {
-  const provider = new GoogleAuthProvider();
-  const result = await signInWithPopup(auth, provider);
-  
+  let user: User;
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      // Initialisation du plugin (nécessaire pour @capgo/capacitor-social-login)
+      // IMPORTANT: Remplacez par vos vrais IDs depuis la console Firebase/Google Cloud
+      await SocialLogin.initialize({
+        google: {
+          webClientId: '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com',
+          iOSClientId: '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com', // À remplacer par iOS Client ID
+          iOSServerClientId: '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com', // Même que webClientId
+          mode: 'online', // 'online' pour obtenir les données utilisateur
+        },
+      });
+
+      const response = await SocialLogin.login({
+        provider: 'google',
+        options: {},
+      });
+
+      // Vérifier que nous sommes en mode online (avec idToken)
+      if (response.result.responseType === 'offline' || !('idToken' in response.result)) {
+        throw new Error('Google Sign-In failed: No ID token received (mode offline?)');
+      }
+
+      const credential = GoogleAuthProvider.credential(response.result.idToken);
+      // Sur mobile, on utilise signInWithCredential car on a déjà le token
+      const { signInWithCredential } = await import('firebase/auth');
+      const result = await signInWithCredential(auth, credential);
+      user = result.user;
+    } catch (error) {
+      console.error('Native Google Sign-In Error:', error);
+      throw error;
+    }
+  } else {
+    // Web: Utilisation standard de la popup
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    user = result.user;
+  }
+
   // Vérifier si l'utilisateur existe dans Firestore
-  const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-  
+  const userDoc = await getDoc(doc(db, 'users', user.uid));
+
   if (!userDoc.exists()) {
     // Créer le document utilisateur s'il n'existe pas
-    await createUserDocument(result.user.uid, {
-      email: result.user.email,
-      firstName: result.user.displayName?.split(' ')[0] || '',
-      lastName: result.user.displayName?.split(' ')[1] || '',
-      profileImageUrl: result.user.photoURL || undefined,
+    await createUserDocument(user.uid, {
+      email: user.email,
+      firstName: user.displayName?.split(' ')[0] || '',
+      lastName: user.displayName?.split(' ')[1] || '',
+      profileImageUrl: user.photoURL || undefined,
       userType: 'client',
     });
   }
-  
-  return result.user;
+
+  return user;
 };
 
 /**
@@ -107,10 +148,10 @@ export const verifyCode = async (
   code: string
 ): Promise<User> => {
   const result = await confirmationResult.confirm(code);
-  
+
   // Vérifier si l'utilisateur existe dans Firestore
   const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-  
+
   if (!userDoc.exists()) {
     // Créer le document utilisateur s'il n'existe pas
     await createUserDocument(result.user.uid, {
@@ -120,7 +161,7 @@ export const verifyCode = async (
       userType: 'client',
     });
   }
-  
+
   return result.user;
 };
 

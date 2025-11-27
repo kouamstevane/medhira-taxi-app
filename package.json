@@ -7,6 +7,9 @@
     "dev:mobile": "next dev --turbopack -H 0.0.0.0",
     "mobile:setup": "node scripts/setup-mobile-dev.js",
     "build": "next build",
+    "mobile:build": "node scripts/mobile-build.js",
+    "mobile:open:android": "npx cap open android",
+    "mobile:open:ios": "npx cap open ios",
     "start": "next start -p $PORT",
     "lint": "next lint",
     "test": "jest --watch",
@@ -14,6 +17,13 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/geolocation": "^7.1.5",
+    "@capacitor/google-maps": "^7.2.0",
+    "@capacitor/ios": "^7.4.4",
+    "@capgo/capacitor-social-login": "^7.18.2",
     "@react-google-maps/api": "^2.20.7",
     "firebase": "^12.1.0",
     "firebase-admin": "^13.6.0",

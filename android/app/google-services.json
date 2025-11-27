@@ -1,0 +1,158 @@
+{
+  "project_info": {
+    "project_number": "113581657187",
+    "project_id": "medjira-service",
+    "storage_bucket": "medjira-service.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:113581657187:android:299bc2eaf222633124bc56",
+        "android_client_info": {
+          "package_name": "com.medhira.taxi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "113581657187-c6s6pp2h3gmr4v8pk9kdf526d2qk27hi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.medhira.taxi",
+            "certificate_hash": "aed627cbd4fdabd00008f6eaaf42fe161723a6e9"
+          }
+        },
+        {
+          "client_id": "113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjXY4_ueKfpnmeAP3YI5_hQ4HQN2UtEj0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "113581657187-tsad08tt5ma561868gd6mkjjh19evm1q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.medjiraservice.medjiraservice"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:113581657187:android:a47580bff963d28324bc56",
+        "android_client_info": {
+          "package_name": "com.medjiraservice.medjiraservice"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "113581657187-7kf42968p6ok0viaukcb5tsei292v1el.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.medjiraservice.medjiraservice",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "113581657187-pf0rdotpdb8ibmvosj3iaqsf2tt4kh6e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.medjiraservice.medjiraservice",
+            "certificate_hash": "a83fbde6650151552a29ffe8b49e8194e690ef3c"
+          }
+        },
+        {
+          "client_id": "113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjXY4_ueKfpnmeAP3YI5_hQ4HQN2UtEj0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "113581657187-tsad08tt5ma561868gd6mkjjh19evm1q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.medjiraservice.medjiraservice"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:113581657187:android:80d7915859e4187224bc56",
+        "android_client_info": {
+          "package_name": "com.medjiraservice.medjiraserviceapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "113581657187-hk77buv2l3hmodcaspm2n9slcmm8jbqr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.medjiraservice.medjiraserviceapp",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "113581657187-qagfjabakcv3jq6kifol6hautre5hoss.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.medjiraservice.medjiraserviceapp",
+            "certificate_hash": "1bd56247c58e17aa3427b040f4f04db572cb974a"
+          }
+        },
+        {
+          "client_id": "113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjXY4_ueKfpnmeAP3YI5_hQ4HQN2UtEj0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "113581657187-tsad08tt5ma561868gd6mkjjh19evm1q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.medjiraservice.medjiraservice"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

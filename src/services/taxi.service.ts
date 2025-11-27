@@ -32,7 +32,7 @@ import { calculateTripPrice, isPeakHour } from '@/lib/firebase-helpers';
 export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   const bookingsRef = collection(db, 'bookings');
   const newBookingRef = doc(bookingsRef);
-  
+
   const booking: Booking = {
     ...bookingData,
     id: newBookingRef.id,
@@ -40,58 +40,43 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
     createdAt: serverTimestamp() as Timestamp,
     updatedAt: serverTimestamp() as Timestamp,
   };
-  
+
   await setDoc(newBookingRef, booking);
-  
+
   // Déclencher le matching automatique avec retry si une localisation est disponible
   if (bookingData.pickupLocation) {
     try {
       const { findDriverWithRetry } = await import('./matching');
-      
-      // Utiliser le retry automatique avec élargissement progressif
-      const startTime = Date.now();
+
+      // Utiliser le retry automatique avec périmètre
+      // Plan A : 3-5 minutes initialement
       const result = await findDriverWithRetry(
         newBookingRef.id,
         bookingData.pickupLocation,
         bookingData.destination,
         bookingData.price,
         bookingData.carType,
+        bookingData.bonus || 0, // Passer le bonus
         {
-          initialRangeKm: 5,    // Commence par 5 km
-          maxRangeKm: 20,       // Élargit jusqu'à 20 km
-          rangeIncrement: 5,    // Incrémente de 5 km à chaque retry
-          maxRetries: 3,        // Maximum 3 tentatives
-          timeoutSeconds: 30,   // 30 secondes par tentative
+          initialPerimeterMinutes: 5, // Plan A: 5 min max
+          expandedPerimeterMinutes: 10, // Plan B: 10 min max
+          maxRetries: 3,
+          timeoutSeconds: 30,
         }
       );
-      
-      const duration = Date.now() - startTime;
-      
-      // Logger les métriques
-      const { logMatchingMetrics } = await import('./matching');
-      await logMatchingMetrics({
-        rideId: newBookingRef.id,
-        timestamp: new Date(),
-        initialRange: 5,
-        finalRange: result.finalRange,
-        retryCount: Math.floor(result.finalRange / 5) - 1,
-        driversNotified: result.driversNotified,
-        success: result.success,
-        duration,
-      });
-      
-      logger.info('Matching automatique terminé', { 
-        bookingId: newBookingRef.id, 
+
+      logger.info('Matching automatique terminé', {
+        bookingId: newBookingRef.id,
         success: result.success,
         driversNotified: result.driversNotified,
-        finalRange: result.finalRange,
+        finalPerimeter: result.finalPerimeter,
       });
     } catch (error: any) {
       // Ne pas bloquer la création si le matching échoue
       logger.warn('Erreur lors du matching automatique', { error, bookingId: newBookingRef.id });
     }
   }
-  
+
   return newBookingRef.id;
 };
 
@@ -101,11 +86,11 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
 export const getBookingById = async (bookingId: string): Promise<Booking | null> => {
   const bookingRef = doc(db, 'bookings', bookingId);
   const bookingSnap = await getDoc(bookingRef);
-  
+
   if (bookingSnap.exists()) {
     return bookingSnap.data() as Booking;
   }
-  
+
   return null;
 };
 
@@ -120,7 +105,7 @@ export const getUserBookings = async (userId: string, limitCount: number = 10): 
     orderBy('createdAt', 'desc'),
     limit(limitCount)
   );
-  
+
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => doc.data() as Booking);
 };
@@ -134,20 +119,20 @@ export const updateBookingStatus = async (
   additionalData?: Partial<Booking>
 ): Promise<void> => {
   const bookingRef = doc(db, 'bookings', bookingId);
-  
+
   const updateData: any = {
     status,
     updatedAt: serverTimestamp(),
     ...additionalData,
   };
-  
+
   // Ajouter des timestamps spécifiques selon le statut
   if (status === 'completed') {
     updateData.completedAt = serverTimestamp();
   } else if (status === 'cancelled') {
     updateData.cancelledAt = serverTimestamp();
   }
-  
+
   await updateDoc(bookingRef, updateData);
 };
 
@@ -164,7 +149,7 @@ export const cancelBooking = async (bookingId: string, reason?: string): Promise
 export const getCarTypes = async (): Promise<CarType[]> => {
   const carTypesRef = collection(db, 'carTypes');
   const querySnapshot = await getDocs(carTypesRef);
-  
+
   return querySnapshot.docs
     .map(doc => ({
       ...doc.data(),
@@ -221,7 +206,7 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
   // Récupérer le type de véhicule
   const carTypes = await getCarTypes();
   const carType = carTypes.find(ct => ct.id === type || ct.name.toLowerCase() === type.toLowerCase());
-  
+
   if (!carType) {
     throw new Error(`Type de véhicule "${type}" introuvable`);
   }
@@ -235,9 +220,9 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
     if (typeof window === 'undefined' || !window.google || !window.google.maps) {
       throw new Error('Google Maps API non chargée');
     }
-    
+
     const directionsService = new window.google.maps.DirectionsService();
-    
+
     try {
       const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
         directionsService.route(
@@ -263,7 +248,7 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
 
       const route = result.routes[0];
       const leg = route.legs[0];
-      
+
       if (!leg || !leg.distance || !leg.duration) {
         throw new Error('Impossible de calculer la distance et la durée');
       }
@@ -273,10 +258,10 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
     } catch (directionsError: any) {
       // Si Directions API échoue, essayer avec Geocoding pour obtenir les coordonnées
       logger.warn('Directions API échoué, tentative avec Geocoding', { error: directionsError });
-      
+
       try {
         const geocoder = new window.google.maps.Geocoder();
-        
+
         // Géocoder les deux adresses
         const [fromResult, toResult] = await Promise.all([
           new Promise<google.maps.GeocoderResult>((resolve, reject) => {
@@ -351,10 +336,10 @@ export const findNearbyDrivers = async (
     where('status', '==', 'available'),
     limit(10)
   );
-  
+
   const querySnapshot = await getDocs(q);
   const drivers = querySnapshot.docs.map(doc => doc.data() as Driver);
-  
+
   // Filtrer par distance (simplifi�� - devrait utiliser GeoFirestore)
   return drivers.filter(driver => {
     if (!driver.currentLocation) return false;
@@ -369,13 +354,13 @@ export const findNearbyDrivers = async (
 export const assignDriver = async (bookingId: string, driverId: string): Promise<void> => {
   const driverRef = doc(db, 'drivers', driverId);
   const driverSnap = await getDoc(driverRef);
-  
+
   if (!driverSnap.exists()) {
     throw new Error('Chauffeur introuvable');
   }
-  
+
   const driver = driverSnap.data() as Driver;
-  
+
   await updateBookingStatus(bookingId, 'accepted', {
     driverId,
     driverName: `${driver.firstName} ${driver.lastName}`,
@@ -384,7 +369,7 @@ export const assignDriver = async (bookingId: string, driverId: string): Promise
     carColor: driver.carColor,
     carPlate: driver.carPlate,
   });
-  
+
   // Mettre à jour le statut du chauffeur
   await updateDoc(driverRef, {
     status: 'busy',
@@ -399,14 +384,14 @@ function calculateDistance(point1: Location, point2: Location): number {
   const R = 6371; // Rayon de la Terre en km
   const dLat = toRad(point2.lat - point1.lat);
   const dLon = toRad(point2.lng - point1.lng);
-  
+
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRad(point1.lat)) *
     Math.cos(toRad(point2.lat)) *
     Math.sin(dLon / 2) *
     Math.sin(dLon / 2);
-  
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }

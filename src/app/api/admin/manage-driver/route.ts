@@ -14,6 +14,14 @@ import { adminDb } from '@/config/firebase-admin';
 
 export async function POST(request: NextRequest) {
   try {
+    // Vérifier que Firebase Admin est initialisé
+    if (!adminDb) {
+      return NextResponse.json(
+        { error: 'Firebase Admin SDK non configuré. Contactez l\'administrateur.' },
+        { status: 503 }
+      );
+    }
+
     const body = await request.json();
     const { action, driverId, reason, adminUid } = body;
 
@@ -107,13 +115,13 @@ export async function POST(request: NextRequest) {
           isAvailable: false,
           updatedAt: timestamp,
         });
-        
+
         // Envoyer email de notification
         await sendEmail('suspension', reason);
-        
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Chauffeur suspendu avec succès' 
+
+        return NextResponse.json({
+          success: true,
+          message: 'Chauffeur suspendu avec succès'
         });
 
       case 'unsuspend':
@@ -124,13 +132,13 @@ export async function POST(request: NextRequest) {
           suspendedBy: null,
           updatedAt: timestamp,
         });
-        
+
         // Envoyer email de réactivation
         await sendEmail('reactivation');
-        
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Chauffeur réactivé avec succès' 
+
+        return NextResponse.json({
+          success: true,
+          message: 'Chauffeur réactivé avec succès'
         });
 
       case 'deactivate':
@@ -150,13 +158,13 @@ export async function POST(request: NextRequest) {
           isAvailable: false,
           updatedAt: timestamp,
         });
-        
+
         // Envoyer email de désactivation
         await sendEmail('deactivation', reason);
-        
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Chauffeur désactivé définitivement' 
+
+        return NextResponse.json({
+          success: true,
+          message: 'Chauffeur désactivé définitivement'
         });
 
       case 'reactivate':
@@ -168,19 +176,19 @@ export async function POST(request: NextRequest) {
           suspendedBy: null,
           updatedAt: timestamp,
         });
-        
+
         // Envoyer email de réactivation
         await sendEmail('reactivation');
-        
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Chauffeur réactivé avec succès' 
+
+        return NextResponse.json({
+          success: true,
+          message: 'Chauffeur réactivé avec succès'
         });
 
       case 'delete':
         // Pas d'email pour la suppression (le compte sera supprimé)
         await driverRef.delete();
-        
+
         // Optionnel : Supprimer aussi l'utilisateur Firebase Auth
         // Décommentez si vous voulez supprimer complètement l'accès
         /*
@@ -194,10 +202,10 @@ export async function POST(request: NextRequest) {
           console.error('Erreur suppression auth:', authError);
         }
         */
-        
-        return NextResponse.json({ 
-          success: true, 
-          message: 'Chauffeur supprimé définitivement' 
+
+        return NextResponse.json({
+          success: true,
+          message: 'Chauffeur supprimé définitivement'
         });
 
       default:

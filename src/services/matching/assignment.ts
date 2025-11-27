@@ -94,7 +94,7 @@ export const assignDriver = async (
       } else {
         // Si la candidature existe, vérifier qu'elle est en attente
         const candidateData = candidateSnap.data();
-        
+
         if (candidateData.status !== 'pending') {
           throw new Error(
             `Candidature déjà traitée. Statut: ${candidateData.status}`
@@ -150,6 +150,7 @@ export const assignDriver = async (
       }
 
       // Mettre à jour la course
+      logger.info('Mise à jour de la course avec les données:', { rideId, updateData });
       transaction.update(rideRef, updateData);
 
 
@@ -168,7 +169,9 @@ export const assignDriver = async (
     return result;
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-    logger.error('Erreur lors de l\'attribution', { error: errorMessage, rideId, driverId });
+    // Log l'erreur complète pour le débogage
+    console.error('[ASSIGNMENT_DEBUG] Full error:', error);
+    logger.error('Erreur lors de l\'attribution', { error: errorMessage, rideId, driverId, fullError: error });
     return {
       success: false,
       error: errorMessage || 'Erreur lors de l\'attribution de la course',

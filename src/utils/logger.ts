@@ -7,6 +7,8 @@
  * @module utils/logger
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogEntry {
@@ -90,10 +92,8 @@ class Logger {
       this.logs.shift();
     }
 
-    // Logger dans la console en développement
-    if (this.isDevelopment) {
-      this.logToConsole(entry);
-    }
+    // TOUJOURS logger dans la console (même en production) pour le debugging
+    this.logToConsole(entry);
 
     // Envoyer les erreurs vers un service externe en production
     if (!this.isDevelopment && level === 'error') {

@@ -21,6 +21,7 @@ interface AddressInputProps {
   disabled?: boolean;
   required?: boolean;
   error?: string;
+  externalLoading?: boolean;
 }
 
 export const AddressInput = ({
@@ -34,6 +35,7 @@ export const AddressInput = ({
   disabled = false,
   required = false,
   error,
+  externalLoading = false,
 }: AddressInputProps) => {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -101,7 +103,7 @@ export const AddressInput = ({
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
-      
+
       <div className="relative">
         <input
           ref={inputRef}
@@ -113,13 +115,12 @@ export const AddressInput = ({
           disabled={disabled}
           required={required}
           autoComplete="off"
-          className={`w-full p-3 sm:p-3.5 border rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent ${
-            error ? 'border-red-500' : 'border-gray-300'
-          } ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+          className={`w-full p-3 sm:p-3.5 border rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent ${error ? 'border-red-500' : 'border-gray-300'
+            } ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
           style={{ fontSize: '16px' }} // Évite le zoom automatique sur iOS
         />
-        
-        {loading && (
+
+        {(loading || externalLoading) && (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
             <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-[#f29200]"></div>
           </div>

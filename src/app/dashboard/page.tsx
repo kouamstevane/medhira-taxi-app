@@ -18,7 +18,7 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { 
   FiCreditCard, FiBell, FiLogOut, FiPhone, FiUser, 
-  FiTruck, FiPackage, FiCheckCircle, FiPlus,
+  FiTruck, FiPackage, FiCheckCircle,
   FiSettings, FiShield, FiFileText, FiUsers
 } from 'react-icons/fi';
 
@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [notifCount, setNotifCount] = useState(2);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true); // État de chargement de l'auth
   const [history, setHistory] = useState<Array<{
     id: string;
     type: string;
@@ -171,7 +172,12 @@ export default function Dashboard() {
           console.error('Erreur vérification admin:', err);
           setIsAdmin(false);
         }
+
+        // Authentification terminée
+        setIsAuthLoading(false);
       } else {
+        // Pas d'utilisateur connecté - confirmer et rediriger
+        setIsAuthLoading(false);
         router.push("/login");
       }
     });
@@ -196,6 +202,34 @@ export default function Dashboard() {
     alert("Voir les notifications");
     setNotifCount(0);
   };
+
+  // Écran de chargement pendant la vérification de l'authentification
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#f5f5f5] to-[#e6e6e6] flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative w-24 h-24 mx-auto mb-8">
+            <div className="absolute inset-0 bg-[#f29200] rounded-full opacity-20 animate-ping" />
+            <div className="relative w-24 h-24 bg-[#f29200] rounded-full flex items-center justify-center shadow-2xl animate-pulse">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-12 w-12 text-white"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z" />
+              </svg>
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-[#101010] mb-2">Medjira</h2>
+          <p className="text-gray-600 animate-pulse">
+            Redirection...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#e6e6e6]">

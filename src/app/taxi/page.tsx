@@ -15,6 +15,8 @@ import { SearchingDriverBottomSheet } from './components/SearchingDriverBottomSh
 import { logger } from '@/utils/logger';
 import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
+import { startAutomaticSearch, stopAutomaticSearch } from '@/services/matching/automaticSearch';
+import { BonusSelector } from './components/BonusSelector';
 
 type Step = 'form' | 'searching' | 'driver_found' | 'completed' | 'failed';
 
@@ -26,13 +28,25 @@ export default function TaxiPage() {
   const [pickupAddress, setPickupAddress] = useState<string>('');
   const [destinationAddress, setDestinationAddress] = useState<string>('');
 
-  const handleBookingCreated = (id: string, pickup: string, destination: string) => {
-    logger.info('Course créée, recherche de chauffeur', { bookingId: id });
+  // État pour le bonus en cas d'échec
+  const [retryBonus, setRetryBonus] = useState(0);
+  const [isAutoSearching, setIsAutoSearching] = useState(false);
+  const [stopAutoSearch, setStopAutoSearch] = useState<(() => void) | null>(null);
+
+  const handleBookingCreated = (id: string, pickup: string, destination: string, autoSearch: boolean = false) => {
+    logger.info('Course créée, recherche de chauffeur', { bookingId: id, autoSearch });
     setBookingId(id);
     setPickupAddress(pickup);
     setDestinationAddress(destination);
     setStep('searching');
     setTimeRemaining(60);
+    setRetryBonus(0); // Reset bonus
+
+    if (autoSearch) {
+      setIsAutoSearching(true);
+      const stopFn = startAutomaticSearch(id, { intervalSeconds: 60, maxAttempts: 10 });
+      setStopAutoSearch(() => stopFn);
+    }
   };
 
   const handleSearchDriver = () => {
@@ -41,9 +55,19 @@ export default function TaxiPage() {
 
   const handleCancelSearch = async () => {
     if (!bookingId) return;
-    
+
     logger.info('Annulation de la recherche', { bookingId });
-    
+
+    // Arrêter la recherche auto si active
+    if (stopAutoSearch) {
+      stopAutoSearch();
+      setStopAutoSearch(null);
+    }
+    setIsAutoSearching(false);
+
+    // Arrêter aussi via Firestore pour être sûr
+    await stopAutomaticSearch(bookingId);
+
     try {
       // Mettre à jour le statut du booking à "cancelled"
       const bookingRef = doc(db, 'bookings', bookingId);
@@ -52,9 +76,9 @@ export default function TaxiPage() {
         cancellationReason: 'Annulé par le client',
         updatedAt: serverTimestamp(),
       });
-      
+
       logger.info('Recherche annulée avec succès', { bookingId });
-      
+
       // Retourner au formulaire
       setStep('form');
       setBookingId(null);
@@ -147,10 +171,10 @@ export default function TaxiPage() {
           clearInterval(timerInterval);
           // Si toujours en attente après 60s, marquer comme failed
           logger.warn('Timeout de 60 secondes atteint', { bookingId });
-          
+
           // Vérifier une dernière fois le statut avant de marquer comme failed
           const bookingRef = doc(db, 'bookings', bookingId);
-              getDoc(bookingRef).then((snapshot) => {
+          getDoc(bookingRef).then((snapshot) => {
             if (snapshot.exists()) {
               const bookingData = snapshot.data();
               if (bookingData.status === 'pending') {
@@ -158,14 +182,14 @@ export default function TaxiPage() {
                 updateDoc(bookingRef, {
                   status: 'failed',
                   failureReason: 'Aucun chauffeur disponible après 60 secondes',
-        updatedAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
                 }).then(() => {
                   logger.info('Booking marqué comme failed après timeout', { bookingId });
                   setStep('failed');
                 }).catch((error) => {
                   logger.error('Erreur lors du marquage failed', { error, bookingId });
                   setStep('failed');
-              });
+                });
               } else {
                 // Déjà mis à jour, passer à l'état approprié
                 if (bookingData.status === 'failed') {
@@ -181,7 +205,7 @@ export default function TaxiPage() {
           }).catch((error) => {
             logger.error('Erreur vérification finale timeout', { error, bookingId });
             setStep('failed');
-          });          return 0;
+          }); return 0;
         }
         return newTime;
       });
@@ -190,8 +214,11 @@ export default function TaxiPage() {
     return () => {
       unsubscribe();
       clearInterval(timerInterval);
+      if (stopAutoSearch) {
+        stopAutoSearch();
+      }
     };
-  }, [bookingId, step]);
+  }, [bookingId, step, stopAutoSearch]);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -203,28 +230,29 @@ export default function TaxiPage() {
               <h1 className="text-lg sm:text-2xl font-bold truncate">Commander un taxi</h1>
               <p className="text-gray-300 text-xs sm:text-sm mt-1 hidden sm:block">Réservez votre course en quelques clics</p>
             </div>
-              <button 
+            <button
               onClick={() => router.back()}
               className="px-3 sm:px-4 py-2 bg-gray-700 active:bg-gray-600 hover:bg-gray-600 rounded-lg transition touch-manipulation flex-shrink-0"
               style={{ minHeight: '44px', minWidth: '44px' }}
             >
               <span className="hidden sm:inline">Retour</span>
               <span className="sm:hidden">←</span>
-                </button>
-              </div>
-            </div>
+            </button>
+          </div>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
         {step === 'form' && (
           <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 md:p-8">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Nouvelle course</h2>
+
             <NewRideForm
               onBookingCreated={handleBookingCreated}
               onSearchDriver={handleSearchDriver}
             />
-            </div>
-          )}
+          </div>
+        )}
 
         {step === 'searching' && bookingId && (
           <SearchingDriverBottomSheet
@@ -233,6 +261,7 @@ export default function TaxiPage() {
             destinationAddress={destinationAddress}
             timeRemaining={timeRemaining}
             onCancel={handleCancelSearch}
+            isAutoSearching={isAutoSearching}
           />
         )}
 
@@ -247,36 +276,44 @@ export default function TaxiPage() {
                   </svg>
                 </div>
               </div>
-              
+
               {/* Titre et message */}
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
                 Aucun chauffeur disponible
               </h2>
               <p className="text-sm sm:text-base text-gray-600 mb-6">
-                Désolé, aucun chauffeur n&apos;est disponible dans votre zone pour le moment. 
+                Désolé, aucun chauffeur n&apos;est disponible dans votre zone pour le moment.
                 Veuillez réessayer dans quelques instants.
               </p>
-              
+
+              {/* Sélecteur de Bonus pour le retry */}
+              <div className="mb-6 text-left bg-gray-50 p-4 rounded-xl border border-gray-100">
+                <BonusSelector
+                  selectedBonus={retryBonus}
+                  onSelect={setRetryBonus}
+                />
+              </div>
+
               {/* Bouton réessayer */}
-                <button
+              <button
                 onClick={async () => {
                   if (!bookingId) return;
-                  
+
                   console.log('[RETRY] Début du réessai pour bookingId:', bookingId);
-                  
+
                   try {
                     // Récupérer les infos du booking
                     const bookingRef = doc(db, 'bookings', bookingId);
                     const bookingSnap = await getDoc(bookingRef);
-                    
+
                     if (!bookingSnap.exists()) {
                       console.error('[RETRY] Booking introuvable');
                       return;
                     }
-                    
+
                     const data = bookingSnap.data();
                     console.log('[RETRY] Données du booking récupérées:', data);
-                    
+
                     // Réinitialiser complètement le booking
                     await updateDoc(bookingRef, {
                       status: 'pending',
@@ -285,28 +322,31 @@ export default function TaxiPage() {
                       driverPhone: null,
                       failureReason: null,
                       updatedAt: serverTimestamp(),
+                      // Ajouter le bonus si sélectionné (conditionnel pour éviter undefined)
+                      ...(retryBonus > 0 && { bonus: retryBonus }),
                     });
-                    
+
                     console.log('[RETRY] Booking réinitialisé à pending');
-                    
+
                     // Passer en mode recherche
                     setStep('searching');
                     setTimeRemaining(60);
-                    
+
                     // Lancer la recherche après un délai
                     setTimeout(async () => {
                       try {
                         console.log('[RETRY] Lancement de findDriverWithRetry');
                         const { findDriverWithRetry } = await import('@/services/matching');
-                        
+
                         await findDriverWithRetry(
                           bookingId,
                           data.pickupLocation,
                           data.destination,
                           data.price,
-                          data.carType
+                          data.carType,
+                          retryBonus || data.bonus || 0 // Passer le bonus
                         );
-                        
+
                         console.log('[RETRY] findDriverWithRetry terminé');
                       } catch (error) {
                         console.error('[RETRY] Erreur findDriverWithRetry:', error);
@@ -321,10 +361,10 @@ export default function TaxiPage() {
                 style={{ minHeight: '56px' }}
               >
                 Réessayer
-                </button>
-                
-                {/* Bouton retour à l'accueil */}
-                <button
+              </button>
+
+              {/* Bouton retour à l'accueil */}
+              <button
                 onClick={() => {
                   setStep('form');
                   setBookingId(null);
@@ -334,8 +374,8 @@ export default function TaxiPage() {
                 style={{ minHeight: '56px' }}
               >
                 Retour à l&apos;accueil
-                </button>
-              
+              </button>
+
               {/* Info supplémentaire */}
               <p className="text-xs text-gray-500 mt-4">
                 💡 Conseil : Essayez à une heure différente pour plus de disponibilité
@@ -359,23 +399,23 @@ export default function TaxiPage() {
                   </svg>
                 </div>
               </div>
-              
+
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Course terminée !</h2>
               <p className="text-sm sm:text-base text-gray-600 mb-6">
                 Merci d&apos;avoir utilisé Medjira Taxi
               </p>
-                <button
+              <button
                 onClick={() => {
                   setStep('form');
                   setBookingId(null);
-                setPickupAddress('');
-                setDestinationAddress('');
+                  setPickupAddress('');
+                  setDestinationAddress('');
                 }}
                 className="w-full bg-gradient-to-r from-[#f29200] to-[#e68600] hover:from-[#e68600] hover:to-[#d67a00] text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl touch-manipulation"
                 style={{ minHeight: '56px' }}
               >
                 Nouvelle course
-                </button>
+              </button>
             </div>
           </div>
         )}

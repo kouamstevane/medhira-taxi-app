@@ -11,15 +11,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { getApiBaseUrl } from '@/utils/api-helper';
 import { estimateFare, createBooking, getCarTypes, FareEstimate } from '@/services/taxi.service';
 import { CarType, PlaceSuggestion, Location } from '@/types';
 import { AddressInput } from './AddressInput';
 import { VehicleOption } from './VehicleOption';
 import { FareSummary } from './FareSummary';
+import { BonusSelector } from './BonusSelector';
 import { logger } from '@/utils/logger';
 
 interface NewRideFormProps {
-  onBookingCreated?: (bookingId: string, pickup: string, destination: string) => void;
+  onBookingCreated?: (bookingId: string, pickup: string, destination: string, autoSearch?: boolean) => void;
   onSearchDriver?: () => void;
 }
 
@@ -38,6 +41,11 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   const [error, setError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
+  // Nouveaux états pour Bonus et Recherche Auto
+  const [bonus, setBonus] = useState(0);
+  const [showBonus, setShowBonus] = useState(false);
+  const [autoSearchEnabled, setAutoSearchEnabled] = useState(false);
+
   const { isLoaded: mapsLoaded, autocompleteService } = useGoogleMaps();
 
   // Récupérer l'utilisateur actuel
@@ -48,122 +56,69 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     return () => unsubscribe();
   }, []);
 
+  const { getCurrentPosition, loading: geoLoading, error: geoError } = useCapacitorGeolocation();
+  const [loadingAddress, setLoadingAddress] = useState(false);
+
   // Récupérer la position GPS
   useEffect(() => {
     // Attendre que Google Maps soit chargé
     if (!mapsLoaded) return;
 
-    if (navigator.geolocation) {
-      // Options pour améliorer la précision sur mobile
-      const options: PositionOptions = {
-        enableHighAccuracy: true, // Utiliser GPS si disponible
-        timeout: 20000, // Timeout de 20 secondes
-        maximumAge: 0, // Ne jamais utiliser de position en cache - toujours demander une nouvelle position
-      };
-      
-      logger.info('Requesting GPS permission', { timestamp: new Date().toISOString() });
-      
-      // Tenter d'obtenir la position
-      const attemptGeolocation = () => {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const location: Location = {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-            };
-            setCurrentLocation(location);
-            setPickupLocation(location);
-            
-            // Obtenir l'adresse depuis les coordonnées
-            if (window.google && window.google.maps) {
+    const fetchLocation = async () => {
+      try {
+        setLoadingAddress(true);
+        logger.info('Requesting GPS position', { timestamp: new Date().toISOString() });
+
+        const position = await getCurrentPosition();
+
+        if (position) {
+          const location: Location = {
+            lat: position.lat,
+            lng: position.lng,
+          };
+          setCurrentLocation(location);
+          setPickupLocation(location);
+
+          // Afficher immédiatement les coordonnées pendant qu'on cherche l'adresse
+          const coordsAddress = `Ma position (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})`;
+          setPickupAddress(coordsAddress);
+
+          // Reverse Geocoding optimisé (client-side uniquement pour vitesse)
+          if (window.google && window.google.maps) {
+            try {
               const geocoder = new window.google.maps.Geocoder();
-              geocoder.geocode({ location }, (results, status) => {
-                if (status === 'OK' && results?.[0]) {
-                  setPickupAddress(results[0].formatted_address);
-                  logger.info('GPS position obtained', { address: results[0].formatted_address });
-                } else {
-                  const coordsAddress = `Position actuelle (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})`;
-                  setPickupAddress(coordsAddress);
-                  logger.info('GPS coordinates only', { address: coordsAddress });
-                }
-              });
+
+              // Ajouter un timeout de 3 secondes pour le geocoding
+              const geocodePromise = geocoder.geocode({ location });
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Geocoding timeout')), 3000)
+              );
+
+              const response = await Promise.race([geocodePromise, timeoutPromise]) as google.maps.GeocoderResponse;
+
+              if (response.results && response.results[0]) {
+                const address = response.results[0].formatted_address;
+                setPickupAddress(address);
+                logger.info('Address obtained via Client Geocoder', { address });
+              }
+            } catch (e) {
+              console.warn('Client Geocoder failed or timeout', e);
+              // Garder les coordonnées affichées
             }
-          },
-          (err) => {
-            // Déterminer le type d'erreur pour un message clair
-            let errorMessage = '';
-            switch (err.code) {
-              case err.PERMISSION_DENIED:
-                errorMessage = 'Accès à la localisation refusé. Veuillez saisir votre adresse de départ.';
-                break;
-              case err.POSITION_UNAVAILABLE:
-                errorMessage = 'Position GPS indisponible. Veuillez saisir votre adresse de départ.';
-                break;
-              case err.TIMEOUT:
-                errorMessage = 'Délai de localisation dépassé. Veuillez saisir votre adresse de départ.';
-                break;
-              default:
-                errorMessage = 'Impossible d\'obtenir votre position. Veuillez saisir votre adresse de départ.';
-            }
-            
-            logger.info('Geolocation error', { errorMessage, errorCode: err.code, error: err.message });
-            
-            // NE PAS remplir automatiquement - laisser l'utilisateur saisir
-            const defaultLocation: Location = { lat: 3.848, lng: 11.5021 }; // Position par défaut pour la carte uniquement
-            setCurrentLocation(defaultLocation);
-            setPickupLocation(null); // Pas de position de pickup
-            setPickupAddress(''); // Champ VIDE - l'utilisateur doit saisir
-            setError(errorMessage); // Afficher le message d'erreur
-          },
-          options
-        );
-      };
-      
-      // Sur HTTP (mobile dev), essayer watchPosition qui peut mieux fonctionner
-      if (window.location.protocol === 'http:') {
-        logger.info('HTTP detected - using watchPosition for better mobile support');
-        const watchId = navigator.geolocation.watchPosition(
-          (position) => {
-            const location: Location = {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-            };
-            setCurrentLocation(location);
-            setPickupLocation(location);
-            
-            // Obtenir l'adresse
-            if (window.google && window.google.maps) {
-              const geocoder = new window.google.maps.Geocoder();
-              geocoder.geocode({ location }, (results, status) => {
-                if (status === 'OK' && results?.[0]) {
-                  setPickupAddress(results[0].formatted_address);
-                  logger.info('GPS position obtained via watchPosition', { address: results[0].formatted_address });
-                }
-              });
-            }
-            
-            // Arrêter le watch après avoir obtenu la position
-            navigator.geolocation.clearWatch(watchId);
-          },
-          (err) => {
-            logger.info('watchPosition failed, trying getCurrentPosition', { error: err.message });
-            attemptGeolocation(); // Fallback sur getCurrentPosition
-          },
-          options
-        );
-      } else {
-        attemptGeolocation();
+          }
+
+          setLoadingAddress(false);
+        }
+      } catch (err: unknown) {
+        logger.error('Geolocation error', { error: err });
+        setPickupLocation(null);
+        setPickupAddress('');
+        setLoadingAddress(false);
       }
-    } else {
-      // Géolocalisation non supportée
-      const defaultLocation: Location = { lat: 3.848, lng: 11.5021 };
-      setCurrentLocation(defaultLocation);
-      setPickupLocation(null);
-      setPickupAddress(''); // Champ VIDE
-      setError('Votre navigateur ne supporte pas la géolocalisation. Veuillez saisir votre adresse de départ.');
-      logger.info('Geolocation not supported', { message: 'Géolocalisation non supportée par le navigateur' });
-    }
-  }, [mapsLoaded]);
+    };
+
+    fetchLocation();
+  }, [mapsLoaded, getCurrentPosition]);
 
   // Charger les types de véhicules
   useEffect(() => {
@@ -192,7 +147,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
 
   const calculateEstimate = useCallback(async () => {
     if (!pickupAddress || !destinationAddress || !selectedCarType) return;
-    
+
     // Ne calculer que si les adresses sont complètes
     if (!isCompleteAddress(pickupAddress) || !isCompleteAddress(destinationAddress)) {
       setEstimate(null);
@@ -277,7 +232,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!pickupAddress || !destinationAddress || !selectedCarType || !estimate) {
       setError('Veuillez remplir tous les champs et attendre l\'estimation');
       return;
@@ -312,15 +267,25 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
         price: estimate.price,
         carType: selectedCarType.name,
         status: 'pending',
+        // Nouveaux champs (ajout conditionnel pour éviter undefined)
+        ...(bonus > 0 && { bonus }),
+        ...(autoSearchEnabled && {
+          automaticSearch: {
+            enabled: true,
+            intervalSeconds: 60,
+            attemptCount: 0,
+            maxAttempts: 10,
+          }
+        }),
       });
 
       logger.info('Course créée', { bookingId });
       setShowConfirmModal(false);
-      
+
       if (onBookingCreated) {
-        onBookingCreated(bookingId, pickupAddress, destinationAddress);
+        onBookingCreated(bookingId, pickupAddress, destinationAddress, autoSearchEnabled);
       }
-      
+
       if (onSearchDriver) {
         onSearchDriver();
       }
@@ -346,6 +311,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
           location={currentLocation}
           required
           error={error && !pickupAddress ? error : undefined}
+          externalLoading={geoLoading || loadingAddress}
         />
 
         {/* Destination */}
@@ -369,7 +335,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
           {carTypes.length === 0 ? (
             <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
               <p className="text-gray-500 text-sm">
-                {error && error.includes('types de véhicules') 
+                {error && error.includes('types de véhicules')
                   ? 'Impossible de charger les types de véhicules. Veuillez rafraîchir la page.'
                   : 'Chargement des types de véhicules...'}
               </p>
@@ -396,6 +362,50 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
           price={estimate?.price ?? null}
           loading={estimating}
         />
+
+        {/* Options Avancées (Bonus & Recherche Auto) */}
+        <div className="space-y-4 pt-2 border-t border-gray-100">
+          {/* Toggle Bonus */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowBonus(!showBonus)}
+              className="text-sm font-medium text-[#f29200] hover:text-[#d67a00] flex items-center gap-1 transition-colors"
+            >
+              {showBonus ? '− Masquer les options de motivation' : '+ Ajouter un bonus pour le chauffeur'}
+            </button>
+
+            {showBonus && (
+              <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <BonusSelector
+                  selectedBonus={bonus}
+                  onSelect={setBonus}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Toggle Recherche Auto */}
+          <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+            <div className="flex items-center h-5">
+              <input
+                id="auto-search"
+                type="checkbox"
+                checked={autoSearchEnabled}
+                onChange={(e) => setAutoSearchEnabled(e.target.checked)}
+                className="w-5 h-5 text-[#f29200] border-gray-300 rounded focus:ring-[#f29200]"
+              />
+            </div>
+            <div className="flex-1">
+              <label htmlFor="auto-search" className="text-sm font-medium text-gray-900 cursor-pointer">
+                Recherche automatique
+              </label>
+              <p className="text-xs text-gray-500">
+                Réessayer automatiquement si aucun chauffeur n&apos;est trouvé immédiatement.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Message d'erreur */}
         {error && (
@@ -424,7 +434,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
               <h2 className="text-xl sm:text-2xl font-bold mb-1">Confirmer la course</h2>
               <p className="text-xs sm:text-sm text-white/90">Vérifiez les détails avant de confirmer</p>
             </div>
-            
+
             <div className="p-4 sm:p-6">
               <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
                 {/* Point de départ */}
@@ -432,13 +442,13 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">De</p>
                   <p className="text-sm sm:text-base font-semibold text-gray-900 leading-tight break-words">{pickupAddress}</p>
                 </div>
-                
+
                 {/* Destination */}
                 <div className="border-b border-gray-200 pb-3 sm:pb-4">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">À</p>
                   <p className="text-sm sm:text-base font-semibold text-gray-900 leading-tight break-words">{destinationAddress}</p>
                 </div>
-                
+
                 {/* Informations de la course */}
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-200">
                   <div>
@@ -454,13 +464,19 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                     <p className="text-sm sm:text-base font-semibold text-gray-900">~{estimate.duration} min</p>
                   </div>
                 </div>
-                
+
                 {/* Prix estimé - Mise en évidence */}
                 <div className="bg-gradient-to-r from-[#f29200] to-[#e68600] p-4 sm:p-5 rounded-lg shadow-lg">
                   <p className="text-xs sm:text-sm font-semibold text-white/90 mb-2">Prix estimé</p>
                   <p className="text-2xl sm:text-3xl font-bold text-white">
                     {estimate.price ? estimate.price.toLocaleString('fr-FR') : '0'} {estimate.currency || 'FCFA'}
                   </p>
+                  {bonus > 0 && (
+                    <div className="mt-1 pt-1 border-t border-white/20 flex justify-between items-center text-white/90 text-sm">
+                      <span>+ Bonus chauffeur</span>
+                      <span className="font-bold">+{bonus} FCFA</span>
+                    </div>
+                  )}
                   <p className="text-xs text-white/80 mt-2">* Le prix final peut varier selon le trafic</p>
                 </div>
               </div>

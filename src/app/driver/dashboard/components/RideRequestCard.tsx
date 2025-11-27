@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { FiClock, FiMapPin, FiArrowRight, FiCheckCircle, FiX, FiNavigation } from 'react-icons/fi';
-import { RideCandidate } from '@/services/matching/broadcast';
+import { RideCandidate } from '@/types';
 
 interface RideRequest {
   rideId: string;
@@ -61,9 +61,8 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
   }
 
   return (
-    <div className={`border-2 rounded-xl p-3 sm:p-4 transition-all ${
-      isUrgent ? 'border-red-500 bg-red-50 shadow-lg shadow-red-200' : 'border-[#f29200] bg-orange-50 shadow-md'
-    }`}>
+    <div className={`border-2 rounded-xl p-3 sm:p-4 transition-all ${isUrgent ? 'border-red-500 bg-red-50 shadow-lg shadow-red-200' : 'border-[#f29200] bg-orange-50 shadow-md'
+      }`}>
       <div className="flex items-start justify-between mb-3 sm:mb-4">
         <div className="flex-1 min-w-0">
           {/* Timer avec animation */}
@@ -80,7 +79,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
               </span>
             )}
           </div>
-          
+
           {request.bookingData && (
             <>
               {/* Départ */}
@@ -91,7 +90,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
                   <p className="text-xs sm:text-sm text-gray-900 break-words font-medium">{request.bookingData.pickup}</p>
                 </div>
               </div>
-              
+
               {/* Destination */}
               <div className="flex items-start mt-2 bg-white/60 rounded-lg p-2">
                 <div className="w-2 h-2 rounded-full bg-red-500 mt-1 mr-2 flex-shrink-0"></div>
@@ -100,7 +99,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
                   <p className="text-xs sm:text-sm text-gray-900 break-words font-medium">{request.bookingData.destination}</p>
                 </div>
               </div>
-              
+
               {/* Infos course */}
               <div className="flex items-center space-x-4 mt-2 text-xs text-gray-600">
                 {request.candidate.distance && (
@@ -120,12 +119,28 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
           )}
         </div>
         {request.bookingData && (
-          <div className="ml-3 flex-shrink-0">
-            <div className="bg-gradient-to-r from-[#f29200] to-[#e68600] text-white px-3 py-2 rounded-lg shadow-lg">
-              <p className="text-xs font-semibold opacity-90">Prix</p>
-              <p className="text-sm sm:text-base font-bold">{request.bookingData.price.toLocaleString('fr-FR')}</p>
+          <div className="ml-3 flex-shrink-0 flex flex-col items-end space-y-2">
+            {/* Prix Total */}
+            <div className={`px-3 py-2 rounded-lg shadow-lg text-white ${(request.candidate.bonus || 0) > 0
+              ? 'bg-gradient-to-r from-green-500 to-emerald-600 ring-2 ring-green-300 ring-offset-1'
+              : 'bg-gradient-to-r from-[#f29200] to-[#e68600]'
+              }`}>
+              <p className="text-xs font-semibold opacity-90">Gain Total</p>
+              <p className="text-sm sm:text-base font-bold">
+                {(request.bookingData.price + (request.candidate.bonus || 0)).toLocaleString('fr-FR')}
+              </p>
               <p className="text-xs opacity-75">FCFA</p>
             </div>
+
+            {/* Badge Bonus */}
+            {(request.candidate.bonus || 0) > 0 && (
+              <div className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-md border border-yellow-200 shadow-sm animate-pulse">
+                <p className="text-xs font-bold flex items-center">
+                  <span className="mr-1">🎁</span>
+                  +{request.candidate.bonus} Bonus
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -153,22 +168,23 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
       </button>
 
       {/* Boutons d'action - Large et tactile */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+      {/* Boutons d'action - Large et tactile */}
+      <div className="flex flex-col sm:flex-row gap-3">
         <button
           onClick={onAccept}
-          className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 active:from-green-700 active:to-green-800 text-white py-3 sm:py-3.5 rounded-xl transition-all transform active:scale-98 flex items-center justify-center space-x-2 touch-manipulation font-bold shadow-lg hover:shadow-xl"
+          className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white py-4 rounded-xl transition-transform active:scale-95 flex items-center justify-center space-x-2 touch-manipulation font-bold shadow-lg will-change-transform"
           style={{ minHeight: '56px' }}
         >
-          <FiCheckCircle className="h-5 w-5 sm:h-6 sm:w-6" />
-          <span className="text-base sm:text-lg">Accepter</span>
+          <FiCheckCircle className="h-6 w-6" />
+          <span className="text-lg">Accepter</span>
         </button>
         <button
           onClick={onDecline}
-          className="flex-1 bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 active:from-gray-600 active:to-gray-700 text-white py-3 sm:py-3.5 rounded-xl transition-all transform active:scale-98 flex items-center justify-center space-x-2 touch-manipulation font-bold shadow-md hover:shadow-lg"
+          className="flex-1 bg-gray-100 text-gray-700 hover:bg-gray-200 py-4 rounded-xl transition-transform active:scale-95 flex items-center justify-center space-x-2 touch-manipulation font-bold will-change-transform"
           style={{ minHeight: '56px' }}
         >
-          <FiX className="h-5 w-5 sm:h-6 sm:w-6" />
-          <span className="text-base sm:text-lg">Refuser</span>
+          <FiX className="h-6 w-6" />
+          <span className="text-lg">Refuser</span>
         </button>
       </div>
     </div>

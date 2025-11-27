@@ -11,8 +11,16 @@
 
 import React, { useState, useCallback } from 'react';
 import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
+import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { Capacitor } from '@capacitor/core';
 import { LoadingSpinner } from './LoadingSpinner';
 import { MapFallback } from './MapFallback';
+import dynamic from 'next/dynamic';
+
+const NativeMapView = dynamic(() => import('./NativeMapView').then(mod => mod.NativeMapView), {
+  ssr: false,
+  loading: () => <LoadingSpinner size="lg" />
+});
 
 /**
  * Style de conteneur pour la carte (plein écran)
@@ -82,26 +90,30 @@ export const MapView: React.FC<MapViewProps> = ({
   /**
    * Callback quand la carte est chargée
    */
+  const { getCurrentPosition } = useCapacitorGeolocation();
+
+  /**
+   * Callback quand la carte est chargée
+   */
   const onLoad = useCallback((map: google.maps.Map) => {
     setMap(map);
 
     // Obtenir la localisation de l'utilisateur
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
+    getCurrentPosition()
+      .then((position) => {
+        if (position) {
           const pos = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
+            lat: position.lat,
+            lng: position.lng,
           };
           setUserLocation(pos);
           map.setCenter(pos);
-        },
-        (error) => {
-          console.warn('Erreur de géolocalisation:', error);
         }
-      );
-    }
-  }, []);
+      })
+      .catch((error) => {
+        console.warn('Erreur de géolocalisation:', error);
+      });
+  }, [getCurrentPosition]);
 
   /**
    * Callback quand la carte est démontée
@@ -125,7 +137,22 @@ export const MapView: React.FC<MapViewProps> = ({
   }
 
   if (loadError) {
-    return <MapFallback error={loadError} apiKey={apiKey} />;
+    return <MapFallback error={loadError.message} apiKey={apiKey} />;
+  }
+
+  // Utiliser la carte native sur mobile
+  if (Capacitor.isNativePlatform()) {
+    return (
+      <NativeMapView
+        apiKey={apiKey}
+        center={center}
+        zoom={zoom}
+        markers={markers}
+        onMapClick={onMapClick}
+        onMarkerClick={onMarkerClick}
+        className={className}
+      />
+    );
   }
 
   if (!isLoaded) {

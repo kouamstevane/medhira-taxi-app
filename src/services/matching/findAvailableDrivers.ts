@@ -2,7 +2,7 @@
  * Service de Recherche de Chauffeurs Disponibles
  * 
  * Trouve les chauffeurs disponibles dans une zone géographique
- * et les trie par distance et score (rating, acceptRate).
+ * et les trie par temps de trajet, distance et score.
  * 
  * @module services/matching/findAvailableDrivers
  */
@@ -15,29 +15,8 @@ import {
   limit,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { Location } from '@/types';
+import { Location, AvailableDriver, FindDriversConfig } from '@/types';
 import { logger } from '@/utils/logger';
-
-export interface AvailableDriver {
-  driverId: string;
-  driverName: string;
-  location: Location;
-  distance: number; // Distance en km
-  score: number; // Score combiné (rating + acceptRate)
-  rating: number;
-  acceptRate: number;
-  isAvailable: boolean;
-  carModel?: string;
-  carPlate?: string;
-  carColor?: string;
-}
-
-export interface FindAvailableDriversParams {
-  location: Location;
-  rangeKm: number;
-  maxResults?: number;
-  carType?: string; // Optionnel : filtrer par type de véhicule
-}
 
 /**
  * Calculer la distance entre deux points (formule de Haversine)
@@ -46,14 +25,14 @@ function calculateDistance(loc1: Location, loc2: Location): number {
   const R = 6371; // Rayon de la Terre en km
   const dLat = toRad(loc2.lat - loc1.lat);
   const dLon = toRad(loc2.lng - loc1.lng);
-  
+
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRad(loc1.lat)) *
-      Math.cos(toRad(loc2.lat)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  
+    Math.cos(toRad(loc2.lat)) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
+
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -63,51 +42,91 @@ function toRad(degrees: number): number {
 }
 
 /**
+ * Estimer le temps de trajet en minutes basé sur la distance
+ * Vitesse moyenne supposée : 30 km/h en ville
+ */
+function estimateTravelTime(distanceKm: number): number {
+  const averageSpeedKmh = 30;
+  return (distanceKm / averageSpeedKmh) * 60;
+}
+
+/**
+ * Obtenir le temps de trajet réel via Google Directions API
+ */
+async function getRealTravelTime(
+  origin: Location,
+  destination: Location
+): Promise<number | null> {
+  if (typeof window === 'undefined' || !window.google || !window.google.maps) {
+    return null;
+  }
+
+  try {
+    const service = new window.google.maps.DirectionsService();
+    const result = await service.route({
+      origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+      destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+      travelMode: window.google.maps.TravelMode.DRIVING,
+    });
+
+    if (result.routes[0]?.legs[0]?.duration?.value) {
+      return Math.ceil(result.routes[0].legs[0].duration.value / 60);
+    }
+    return null;
+  } catch (error) {
+    logger.warn('Erreur Directions API', { error });
+    return null;
+  }
+}
+
+/**
  * Calculer le score d'un chauffeur
  * Score = (rating * 0.6) + (acceptRate * 0.4)
- * Plus le score est élevé, meilleur est le chauffeur
  */
 function calculateScore(rating: number, acceptRate: number): number {
-  const normalizedRating = Math.min(rating / 5, 1); // Normaliser entre 0 et 1
+  const normalizedRating = Math.min(rating / 5, 1);
   return normalizedRating * 0.6 + acceptRate * 0.4;
 }
 
 /**
  * Calculer le taux d'acceptation d'un chauffeur
- * acceptRate = tripsAccepted / (tripsAccepted + tripsDeclined)
  */
 function calculateAcceptRate(
   tripsAccepted: number,
   tripsDeclined: number
 ): number {
   const total = tripsAccepted + tripsDeclined;
-  if (total === 0) return 0.5; // Par défaut 50% si aucune donnée
+  if (total === 0) return 0.5;
   return tripsAccepted / total;
 }
 
 /**
  * Trouver les chauffeurs disponibles dans une zone
- * 
- * Pour l'instant, on utilise une requête simple sur Firestore.
- * Pour une meilleure performance avec beaucoup de chauffeurs,
- * on pourrait utiliser Geohash ou GeoFirestore.
  */
 export const findAvailableDrivers = async (
-  params: FindAvailableDriversParams
+  config: FindDriversConfig
 ): Promise<AvailableDriver[]> => {
-  const { location, rangeKm, maxResults = 10, carType } = params;
+  const {
+    location,
+    rangeKm = 20, // Rayon large pour filtrer ensuite par temps
+    maxTravelMinutes = 5,
+    maxResults = 10,
+    carType,
+    useDirectionsAPI = false
+  } = config;
 
   try {
     logger.info('Recherche de chauffeurs disponibles', {
       location,
       rangeKm,
+      maxTravelMinutes,
       maxResults,
       carType,
     });
 
-    // Récupérer tous les chauffeurs disponibles et approuvés
+    // 1. Récupération initiale large via Firestore
     const driversRef = collection(db, 'drivers');
-    
+
     // Essayer d'abord avec isAvailable == true
     let driversQuery = query(
       driversRef,
@@ -117,8 +136,7 @@ export const findAvailableDrivers = async (
     );
 
     let driversSnapshot = await getDocs(driversQuery);
-    
-    // Si aucun trouvé, essayer sans le filtre isAvailable (pour inclure ceux qui n'ont pas ce champ)
+
     if (driversSnapshot.empty) {
       logger.warn('Aucun chauffeur avec isAvailable=true, recherche sans ce filtre');
       driversQuery = query(
@@ -128,105 +146,138 @@ export const findAvailableDrivers = async (
       );
       driversSnapshot = await getDocs(driversQuery);
     }
-    
+
     if (driversSnapshot.empty) {
       logger.info('Aucun chauffeur approuvé trouvé');
       return [];
     }
-    
-    logger.info(`Trouvé ${driversSnapshot.size} chauffeur(s) approuvé(s) à filtrer`);
 
-    const availableDrivers: AvailableDriver[] = [];
+    // 2. Filtrage et calculs initiaux (Estimation)
+    let candidates: AvailableDriver[] = [];
 
-    // Filtrer par distance et calculer les scores
     for (const driverDoc of driversSnapshot.docs) {
       const driverData = driverDoc.data();
       const driverId = driverDoc.id;
 
+      // Vérification localisation
+      let driverLocation: Location;
       let distance: number;
-      let driverLocation: Location | null = null;
 
-      // Vérifier si le chauffeur a une localisation
       if (driverData.currentLocation) {
         driverLocation = {
           lat: driverData.currentLocation.lat || driverData.currentLocation.latitude,
           lng: driverData.currentLocation.lng || driverData.currentLocation.longitude,
         };
-        // Calculer la distance réelle
         distance = calculateDistance(location, driverLocation);
       } else {
-        // Si pas de localisation, utiliser une distance par défaut (0 km pour inclure le chauffeur)
-        // Cela permet aux chauffeurs sans GPS d'être quand même disponibles
-        logger.warn('Chauffeur sans localisation, utilisation distance par défaut', { driverId });
-        distance = 0; // Distance 0 pour inclure le chauffeur même sans localisation
-      }
-
-      // Filtrer par distance (sauf si distance = 0, ce qui signifie pas de localisation)
-      if (distance > rangeKm && driverLocation !== null) {
+        // Skip drivers without location
         continue;
       }
 
-      // Vérifier la disponibilité (si le champ existe, il doit être true)
-      // Si le champ n'existe pas, on considère le chauffeur comme disponible
+      // Filtre distance brute (pré-filtre)
+      if (distance > rangeKm) continue;
+
+      // Vérification disponibilité explicite
       const isAvailable = driverData.isAvailable !== undefined ? driverData.isAvailable : true;
-      
-      if (!isAvailable) {
-        logger.debug('Chauffeur non disponible', { driverId, isAvailable: driverData.isAvailable });
-        continue;
-      }
+      if (!isAvailable) continue;
 
-      // Filtrer par type de véhicule si spécifié
-      // Note: carType peut être dans car.type ou directement dans carType
+      // Filtre type véhicule
       const driverCarType = driverData.car?.type || driverData.carType;
-      if (carType && driverCarType && driverCarType !== carType) {
-        logger.debug('Type de véhicule ne correspond pas', { driverId, required: carType, driver: driverCarType });
-        continue;
-      }
+      if (carType && driverCarType && driverCarType !== carType) continue;
 
-      // Calculer le taux d'acceptation
+      // Calculs métriques
       const tripsAccepted = driverData.tripsAccepted || 0;
       const tripsDeclined = driverData.tripsDeclined || 0;
       const acceptRate = calculateAcceptRate(tripsAccepted, tripsDeclined);
-
-      // Récupérer la note
       const rating = driverData.rating || 0;
-
-      // Calculer le score
       const score = calculateScore(rating, acceptRate);
 
-      availableDrivers.push({
+      // Estimation temps de trajet
+      const estimatedTime = estimateTravelTime(distance);
+
+      // Pré-filtre sur le temps estimé (avec une marge de 50% pour ne pas exclure trop vite)
+      if (estimatedTime > maxTravelMinutes * 1.5) continue;
+
+      candidates.push({
         driverId,
         driverName: `${driverData.firstName || ''} ${driverData.lastName || ''}`.trim() || 'Chauffeur',
-        location: driverLocation || location, // Utiliser la location du pickup si pas de localisation
+        location: driverLocation,
         distance,
+        travelTimeMinutes: estimatedTime,
         score,
         rating,
         acceptRate,
-        isAvailable: true, // On a déjà filtré, donc c'est disponible
+        isAvailable: true,
         carModel: driverData.car?.model || driverData.carModel,
         carPlate: driverData.car?.plate || driverData.carPlate,
         carColor: driverData.car?.color || driverData.carColor,
       });
-      
-      logger.debug('Chauffeur ajouté à la liste', { driverId, driverName: availableDrivers[availableDrivers.length - 1].driverName, distance, score });
     }
 
-    // Trier par score (décroissant) puis par distance (croissante)
-    availableDrivers.sort((a, b) => {
-      // Priorité au score
-      if (Math.abs(a.score - b.score) > 0.1) {
-        return b.score - a.score;
+    // 3. Vérification précise avec Directions API (Hybride)
+    if (useDirectionsAPI && candidates.length > 0) {
+      // Trier par estimation d'abord pour ne vérifier que les plus prometteurs
+      candidates.sort((a, b) => (a.travelTimeMinutes || 0) - (b.travelTimeMinutes || 0));
+
+      // OPTIMISATION MOBILE : Vérifier seulement les 5 meilleurs pour réduire la latence et la data
+      const candidatesToVerify = candidates.slice(0, 5);
+      const verifiedCandidates: AvailableDriver[] = [];
+
+      // Exécuter les requêtes en parallèle avec un timeout strict
+      await Promise.all(candidatesToVerify.map(async (candidate) => {
+        // Timeout de 2s pour ne pas bloquer l'UI sur mobile
+        const timeoutPromise = new Promise<number | null>((resolve) =>
+          setTimeout(() => resolve(null), 2000)
+        );
+
+        const apiPromise = getRealTravelTime(candidate.location, location);
+
+        // Race entre l'API et le timeout
+        const realTime = await Promise.race([apiPromise, timeoutPromise]);
+
+        if (realTime !== null) {
+          // Mettre à jour avec le temps réel
+          candidate.travelTimeMinutes = realTime;
+
+          // Filtrer strictement sur le temps réel
+          if (realTime <= maxTravelMinutes) {
+            verifiedCandidates.push(candidate);
+          }
+        } else {
+          // Fallback sur l'estimation si API échoue ou timeout
+          // Cela garantit une réponse "instantanée" même si le réseau est lent
+          if ((candidate.travelTimeMinutes || 0) <= maxTravelMinutes) {
+            verifiedCandidates.push(candidate);
+          }
+        }
+      }));
+
+      candidates = verifiedCandidates;
+    } else {
+      // Filtrage strict sur l'estimation si pas d'API
+      candidates = candidates.filter(c => (c.travelTimeMinutes || 0) <= maxTravelMinutes);
+    }
+
+    // 4. Tri final
+    candidates.sort((a, b) => {
+      // Priorité au temps de trajet
+      const timeA = a.travelTimeMinutes || 0;
+      const timeB = b.travelTimeMinutes || 0;
+
+      if (Math.abs(timeA - timeB) > 2) { // Si différence > 2 min
+        return timeA - timeB; // Le plus rapide d'abord
       }
-      // En cas d'égalité, priorité à la distance
-      return a.distance - b.distance;
+
+      // Sinon par score
+      return b.score - a.score;
     });
 
-    // Limiter le nombre de résultats
-    const results = availableDrivers.slice(0, maxResults);
+    const results = candidates.slice(0, maxResults);
 
-    logger.info('Chauffeurs disponibles trouvés', {
-      total: availableDrivers.length,
+    logger.info('Chauffeurs disponibles trouvés (filtrés par temps)', {
+      total: candidates.length,
       returned: results.length,
+      maxTravelMinutes,
     });
 
     return results;
@@ -235,4 +286,3 @@ export const findAvailableDrivers = async (
     throw new Error(`Erreur lors de la recherche de chauffeurs: ${error.message}`);
   }
 };
-

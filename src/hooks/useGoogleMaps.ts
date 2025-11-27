@@ -10,6 +10,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
 
 interface UseGoogleMapsReturn {
   isLoaded: boolean;
@@ -39,7 +40,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
         if (!window.google.maps.DirectionsService) {
           throw new Error('DirectionsService non disponible. Vérifiez que Google Maps API est chargée.');
         }
-        
+
         // Vérifier que la bibliothèque places est disponible (peut prendre un peu de temps)
         if (!window.google.maps.places) {
           // Attendre un peu et réessayer
@@ -50,9 +51,9 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
                 setAutocompleteService(new window.google.maps.places.AutocompleteService());
                 setIsLoaded(true);
                 setLoadError(null);
-              } catch (err: any) {
+              } catch (err: unknown) {
                 console.error('Erreur lors de l\'initialisation des services Google Maps:', err);
-                setLoadError(err.message || 'Erreur d\'initialisation de Google Maps');
+                setLoadError((err as Error).message || 'Erreur d\'initialisation de Google Maps');
               }
             } else {
               setLoadError('La bibliothèque "places" n\'est pas disponible. Vérifiez que l\'API Places est activée.');
@@ -60,15 +61,15 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
           }, 500);
           return;
         }
-        
+
         // Initialiser les services
         setDirectionsService(new window.google.maps.DirectionsService());
         setAutocompleteService(new window.google.maps.places.AutocompleteService());
         setIsLoaded(true);
         setLoadError(null);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Erreur lors de l\'initialisation des services Google Maps:', err);
-        setLoadError(err.message || 'Erreur d\'initialisation de Google Maps');
+        setLoadError((err as Error).message || 'Erreur d\'initialisation de Google Maps');
       }
     }
   }, []);
@@ -84,10 +85,10 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
         const checkPlaces = setInterval(() => {
           if (window.google?.maps?.places) {
             clearInterval(checkPlaces);
-      initializeServices();
+            initializeServices();
           }
-        }, 100);
-        
+        }, 50); // Optimisé pour Android
+
         setTimeout(() => {
           clearInterval(checkPlaces);
           if (!window.google?.maps?.places) {
@@ -106,23 +107,40 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
           clearInterval(checkLoaded);
           initializeServices();
         }
-      }, 100);
-      
-      // Timeout après 10 secondes
+      }, 50); // Optimisé pour vérification rapide
+
+      // Timeout après 5 secondes (optimisé)
       setTimeout(() => {
         clearInterval(checkLoaded);
         if (!window.google?.maps?.places) {
           setLoadError('Timeout: La bibliothèque "places" n\'a pas pu être chargée. Vérifiez que l\'API Places est activée.');
         }
-      }, 10000);
-      
+      }, 5000);
+
       return () => clearInterval(checkLoaded);
     }
 
     // Charger le script Google Maps
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    // Utiliser la clé spécifique à la plateforme
+    let apiKey: string | undefined;
+
+    // Pour le SDK JavaScript Google Maps, on doit TOUJOURS utiliser une clé avec restrictions HTTP (Referrer)
+    // ou sans restriction. Les clés restreintes par application Android (SHA-1) NE FONCTIONNENT PAS
+    // avec le SDK JavaScript, même dans une WebView Android.
+    // On utilise donc toujours la clé "Browser" / "Web".
+    apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+    // Debug: Afficher quelle clé est utilisée
+    console.log('🔑 [useGoogleMaps] Clé depuis .env:', apiKey ? apiKey.substring(0, 20) + '...' : 'NON DÉFINIE');
+
+    // Fallback sur la clé Browser si aucune clé n'est trouvée
     if (!apiKey) {
-      setLoadError('Clé API Google Maps manquante. Configurez NEXT_PUBLIC_GOOGLE_MAPS_API_KEY dans .env.local');
+      apiKey = 'AIzaSyDMXeXZCFAVGeSFW_-3MYkrqV2bN1SXY-8'; // Clé Browser avec restrictions HTTP
+      console.log('⚠️ [useGoogleMaps] Utilisation de la clé fallback Browser');
+    }
+
+    if (!apiKey) {
+      setLoadError('Clé API Google Maps manquante.');
       return;
     }
 
@@ -132,72 +150,51 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
       return;
     }
 
-    // Générer un callback unique pour éviter les conflits
-    const callbackName = `initGoogleMaps_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}`;
+    // Utiliser loading=async pour un chargement plus rapide et moderne
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
     script.async = true;
     script.defer = true;
 
-    // Gérer les erreurs de callback Google Maps avec un nom unique
-    (window as any)[callbackName] = () => {
-      try {
-        // Vérifier si Google Maps a bien chargé
-        if (!window.google || !window.google.maps) {
-          throw new Error('Google Maps API n\'a pas chargé correctement');
+
+    // Avec loading=async, pas besoin de callback - on utilise un polling simple
+    script.onload = () => {
+      // Attendre que Google Maps et Places soient disponibles
+      const checkLoaded = setInterval(() => {
+        if (window.google?.maps?.places) {
+          clearInterval(checkLoaded);
+          initializeServices();
         }
-        
-        // Attendre que la bibliothèque places soit disponible
-        const checkPlaces = setInterval(() => {
-          if (window.google?.maps?.places) {
-            clearInterval(checkPlaces);
-      initializeServices();
-            // Nettoyer le callback après utilisation
-            delete (window as any)[callbackName];
-          }
-        }, 100);
-        
-        // Timeout après 5 secondes
-        setTimeout(() => {
-          clearInterval(checkPlaces);
-          if (!window.google?.maps?.places) {
-            setLoadError('La bibliothèque "places" n\'a pas pu être chargée. Vérifiez que l\'API Places est activée dans Google Cloud Console.');
-            delete (window as any)[callbackName];
-          }
-        }, 5000);
-      } catch (err: any) {
-        console.error('Erreur initialisation Google Maps:', err);
-        setLoadError(`Erreur d'initialisation: ${err.message || 'Erreur inconnue'}`);
-        delete (window as any)[callbackName];
-      }
+      }, 100); // Vérification toutes les 100ms
+
+      // Timeout après 10 secondes
+      setTimeout(() => {
+        clearInterval(checkLoaded);
+        if (!window.google?.maps?.places) {
+          setLoadError('Timeout: Google Maps n\'a pas pu charger. Vérifiez votre connexion et votre clé API.');
+        }
+      }, 10000);
     };
 
     // Gérer les erreurs de chargement du script
-    script.onerror = (error) => {
-      console.error('Erreur chargement script Google Maps:', error);
+    script.onerror = () => {
       setLoadError('Erreur de chargement de Google Maps. Vérifiez votre clé API dans Google Cloud Console.');
     };
 
     // Écouter les erreurs globales de Google Maps
     const errorHandler = (event: ErrorEvent) => {
       if (event.message && event.message.includes('ApiProjectMapError')) {
-        console.error('ApiProjectMapError détectée:', event);
         setLoadError('Erreur de configuration de la clé API. Vérifiez que les APIs sont activées dans Google Cloud Console et que les restrictions autorisent localhost:3000');
         window.removeEventListener('error', errorHandler);
       }
     };
-    
+
     window.addEventListener('error', errorHandler);
 
     document.head.appendChild(script);
 
     return () => {
       window.removeEventListener('error', errorHandler);
-      // Nettoyage du callback
-      if (callbackName in window) {
-        delete (window as any)[callbackName];
-      }
     };
   }, [initializeServices]);
 
