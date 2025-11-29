@@ -25,7 +25,7 @@ export interface PlaceSuggestion {
 /**
  * Statut d'une réservation
  */
-export type BookingStatus = 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+export type BookingStatus = 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 
 /**
  * Interface pour une réservation de taxi

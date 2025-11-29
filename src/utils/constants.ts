@@ -68,7 +68,7 @@ export const PEAK_HOURS = {
  * URLs par défaut
  */
 export const DEFAULT_URLS = {
-  DEFAULT_AVATAR: '/images/default.png',
+  DEFAULT_AVATAR: '/images/default.webp',
   LOGO: '/images/logo.png',
 };
 

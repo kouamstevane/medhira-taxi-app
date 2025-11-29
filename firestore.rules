@@ -98,7 +98,8 @@ service cloud.firestore {
         allow read: if isAuthenticated() && 
                      (request.auth.uid == candidateId || 
                       get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
-        // Permettre la création par le client qui a créé le booking OU par le système
+        // Permettre la création par le client qui a créé le booking (pour le broadcast automatique)
+        // OU par un chauffeur pour sa propre candidature (cas edge, mais sécurisé)
         allow create: if isAuthenticated() && 
                          (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
                           request.auth.uid == candidateId);

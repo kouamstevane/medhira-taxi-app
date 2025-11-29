@@ -404,3 +404,84 @@ function calculateDistance(point1: Location, point2: Location): number {
 function toRad(degrees: number): number {
   return degrees * (Math.PI / 180);
 }
+
+/**
+ * Mettre à jour la localisation du chauffeur pour une course
+ */
+export const updateDriverLocation = async (
+  bookingId: string,
+  location: Location
+): Promise<void> => {
+  const bookingRef = doc(db, 'bookings', bookingId);
+  await updateDoc(bookingRef, {
+    driverLocation: location,
+    updatedAt: serverTimestamp(),
+  });
+};
+
+/**
+ * Mettre à jour la destination (changement par le client)
+ * Recalcule le prix estimé
+ */
+export const updateDestination = async (
+  bookingId: string,
+  newDestination: string,
+  newDestinationLocation?: Location
+): Promise<void> => {
+  const bookingRef = doc(db, 'bookings', bookingId);
+  const bookingSnap = await getDoc(bookingRef);
+
+  if (!bookingSnap.exists()) throw new Error('Réservation introuvable');
+  
+  const booking = bookingSnap.data() as Booking;
+  
+  // Recalculer l'itinéraire et le prix
+  let newPrice = booking.price;
+  let newDistance = booking.distance;
+  let newDuration = booking.duration;
+
+  try {
+    // Si on a la localisation actuelle du chauffeur (ou pickup si pas encore parti)
+    const startLocation = booking.status === 'in_progress' && booking.driverLocation 
+      ? booking.driverLocation 
+      : booking.pickupLocation || booking.pickup;
+
+    // Note: On suppose que startLocation est utilisable par estimateFare
+    // Dans une implémentation réelle, il faudrait gérer les types Location vs string plus finement
+    const estimate = await estimateFare({
+      from: typeof startLocation === 'object' ? `${startLocation.lat},${startLocation.lng}` : booking.pickup,
+      to: newDestination,
+      type: booking.carType
+    });
+
+    newPrice = estimate.price;
+    newDistance = estimate.distance;
+    newDuration = estimate.duration;
+  } catch (error) {
+    logger.warn('Impossible de recalculer le prix exact, estimation approximative', { error });
+  }
+
+  await updateDoc(bookingRef, {
+    destination: newDestination,
+    destinationLocation: newDestinationLocation,
+    price: newPrice, // Mise à jour du prix estimé
+    distance: newDistance,
+    duration: newDuration,
+    updatedAt: serverTimestamp(),
+  });
+};
+
+/**
+ * Calculer le prix final de la course
+ * Appelé à la fin de la course par le chauffeur
+ */
+export const calculateFinalFare = async (bookingId: string): Promise<number> => {
+  const bookingRef = doc(db, 'bookings', bookingId);
+  const bookingSnap = await getDoc(bookingRef);
+
+  if (!bookingSnap.exists()) throw new Error('Réservation introuvable');
+  const booking = bookingSnap.data() as Booking;
+
+  // Pour l'instant, on confirme le dernier prix calculé
+  return booking.price;
+};

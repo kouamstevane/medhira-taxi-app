@@ -1,5 +1,5 @@
 "use client";
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { auth, db } from '@/config/firebase';
 import {
@@ -25,10 +25,11 @@ import {
   getPendingCandidatesForDriver,
   subscribeToDriverRideRequests,
   markCandidateDeclined,
-  RideCandidate,
 } from '@/services/matching/broadcast';
+import { RideCandidate } from '@/types';
 import { assignDriver } from '@/services/matching/assignment';
-import { incrementDriverAcceptedTrips, incrementDriverDeclinedTrips } from '@/services/driver.service';
+import { incrementDriverAcceptedTrips, incrementDriverAcceptedTrips as incrementDriverAcceptedTripsAlias, incrementDriverDeclinedTrips } from '@/services/driver.service';
+import { updateDriverLocation, calculateFinalFare } from '@/services/taxi.service';
 import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
 import { StatsCard } from './components/StatsCard';
@@ -310,6 +311,29 @@ export default function DriverDashboard() {
     return () => unsubscribeAuth();
   }, [router]);
 
+  // Suivi GPS en temps réel quand une course est active
+  useEffect(() => {
+    if (!currentTrip || !['accepted', 'arrived', 'in_progress'].includes(currentTrip.status)) return;
+
+    console.log('[DRIVER] Démarrage du suivi GPS pour la course:', currentTrip.id);
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        // Mettre à jour la position dans Firestore
+        updateDriverLocation(currentTrip.id, { lat: latitude, lng: longitude })
+          .catch(err => console.error('Erreur updateDriverLocation:', err));
+      },
+      (error) => console.error('Erreur GPS:', error),
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+    );
+
+    return () => {
+      console.log('[DRIVER] Arrêt du suivi GPS');
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [currentTrip?.id, currentTrip?.status]);
+
   const fetchDailyHistory = async (driverId: string) => {
     try {
       const today = new Date();
@@ -461,27 +485,35 @@ export default function DriverDashboard() {
   const completeTrip = async (tripId: string) => {
     if (!auth.currentUser || !driver || !currentTrip) return;
     
-    const ref = doc(db, "bookings", tripId);
-    await updateDoc(ref, {
-      status: "completed",
-      finalPrice: currentTrip.price,
-      completedAt: new Date()
-    });
+    try {
+      // Calculer le prix final réel
+      const finalPrice = await calculateFinalFare(tripId);
 
-    await updateDoc(doc(db, 'drivers', auth.currentUser.uid), {
-      isAvailable: true,
-      earnings: (driver.earnings || 0) + (currentTrip.price || 0),
-      tripsCompleted: (driver.tripsCompleted || 0) + 1
-    });
+      const ref = doc(db, "bookings", tripId);
+      await updateDoc(ref, {
+        status: "completed",
+        finalPrice: finalPrice,
+        completedAt: new Date()
+      });
 
-    setDriver({
-      ...driver,
-      isAvailable: true,
-      earnings: (driver.earnings || 0) + (currentTrip.price || 0),
-      tripsCompleted: (driver.tripsCompleted || 0) + 1
-    });
+      await updateDoc(doc(db, 'drivers', auth.currentUser.uid), {
+        isAvailable: true,
+        earnings: (driver.earnings || 0) + (finalPrice || 0),
+        tripsCompleted: (driver.tripsCompleted || 0) + 1
+      });
 
-    setCurrentTrip(null);
+      setDriver({
+        ...driver,
+        isAvailable: true,
+        earnings: (driver.earnings || 0) + (finalPrice || 0),
+        tripsCompleted: (driver.tripsCompleted || 0) + 1
+      });
+
+      setCurrentTrip(null);
+    } catch (error) {
+      console.error("Erreur lors de la fin de course:", error);
+      alert("Erreur lors de la clôture de la course");
+    }
   };
 
   const handleLogout = async () => {
@@ -586,7 +618,7 @@ export default function DriverDashboard() {
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-4">Aucune course complétée aujourd'hui.</p>
+              <p className="text-gray-500 text-center py-4">Aucune course complétée aujourd&apos;hui.</p>
             )}
           </div>
         </div>

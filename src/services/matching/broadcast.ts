@@ -38,7 +38,7 @@ export const broadcastRideRequest = async (
     carType,
     rangeKm = 20, // Rayon large par défaut
     maxTravelMinutes = 5, // Périmètre par défaut (Plan A)
-    timeoutSeconds = 30,
+    timeoutSeconds = 90, // 90 secondes pour laisser le temps aux chauffeurs de réagir
     bonus = 0,
   } = params;
 

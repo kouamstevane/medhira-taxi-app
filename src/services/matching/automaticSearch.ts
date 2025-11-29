@@ -100,8 +100,7 @@ export const startAutomaticSearch = (
                     booking.bonus || 0,
                     {
                         // Configuration spécifique pour une tentative périodique
-                        // On réduit un peu le timeout interne car on relance souvent
-                        timeoutSeconds: 20,
+                        timeoutSeconds: 90, // Aligné avec les autres configurations
                         maxRetries: 1, // Une seule tentative par cycle périodique
                     }
                 );
@@ -112,10 +111,10 @@ export const startAutomaticSearch = (
         }
     };
 
-    // Lancer la première tentative immédiatement (ou après un court délai)
-    // setTimeout(attemptSearch, 1000);
+    // Lancer la première tentative après un court délai (1s) pour éviter de surcharger
+    setTimeout(attemptSearch, 1000);
 
-    // Configurer l'intervalle
+    // Configurer l'intervalle pour les tentatives suivantes
     intervalId = setInterval(attemptSearch, finalConfig.intervalSeconds * 1000);
 
     // Fonction de nettoyage

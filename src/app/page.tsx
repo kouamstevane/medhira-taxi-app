@@ -110,7 +110,7 @@ export default function HomePage() {
 
           <div className="relative w-full h-72 mb-12 px-6">
             <Image
-              src="/images/taxi-booking.svg"
+              src="/images/taxi-booking.webp"
               alt="Medjira Service"
               fill
               className="object-contain drop-shadow-2xl"
@@ -153,7 +153,7 @@ export default function HomePage() {
         <footer className="mt-12 text-center text-sm text-gray-500 relative z-10">
           <p>🇨🇲 Service disponible au Cameroun</p>
           {/* <p className="mt-2">Douala • Yaoundé • Bafoussam</p> */}
-          <p className="mt-2">Quelqu'en soit votre region</p>
+          <p className="mt-2">Quelqu&apos;en soit votre region</p>
         </footer>
       </div>
     );

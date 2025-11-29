@@ -23,7 +23,7 @@ android {
             enable true
             reset()
             include 'arm64-v8a', 'armeabi-v7a'
-            universalApk false
+            universalApk true  // Générer aussi un APK universel
         }
     }
     
@@ -36,10 +36,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            // Même en debug, on peut activer ces optimisations
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // En mode debug, désactiver les optimisations pour éviter les problèmes d'installation
+            minifyEnabled false
+            shrinkResources false
+            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
     compileOptions {

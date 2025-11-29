@@ -7,6 +7,8 @@
  * @module services/matching/retry
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { logger } from '@/utils/logger';
 import { broadcastRideRequest } from './broadcast';
 import { Location, MatchingMetrics } from '@/types';
@@ -24,7 +26,7 @@ const DEFAULT_CONFIG: RetryConfig = {
   initialPerimeterMinutes: 5,
   expandedPerimeterMinutes: 10,
   maxRetries: 3,
-  timeoutSeconds: 30,
+  timeoutSeconds: 90, // Aligné avec broadcast.ts
 };
 
 /**
@@ -147,8 +149,10 @@ export const findDriverWithRetry = async (
     retryCount,
   });
 
-  // Marquer la course comme échouée
-  await notifyNoDriverAvailable(rideId);
+  // NE PAS marquer automatiquement comme failed ici, 
+  // car le client peut vouloir réessayer manuellement avec un bonus
+  // C'est le timer de 60s côté client (page.tsx) qui marquera failed si besoin
+  // await notifyNoDriverAvailable(rideId);
 
   // Log métriques échec
   await logMatchingMetrics({

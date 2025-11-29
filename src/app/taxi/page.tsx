@@ -328,9 +328,11 @@ export default function TaxiPage() {
 
                     console.log('[RETRY] Booking réinitialisé à pending');
 
+                    // Réinitialiser le timer AVANT de passer en searching
+                    setTimeRemaining(60);
+                    
                     // Passer en mode recherche
                     setStep('searching');
-                    setTimeRemaining(60);
 
                     // Lancer la recherche après un délai
                     setTimeout(async () => {
