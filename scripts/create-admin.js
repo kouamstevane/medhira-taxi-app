@@ -8,14 +8,19 @@
  * Note: Vous devez d'abord obtenir l'UID de l'utilisateur depuis Firebase Console > Authentication
  */
 
-const admin = require('firebase-admin');
-const path = require('path');
+import admin from 'firebase-admin';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Charger la clé de service
 const serviceAccountPath = path.join(__dirname, '../src/config/keys/serviceAccountKey.json');
 
 try {
-  const serviceAccount = require(serviceAccountPath);
+  const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
   
   if (!admin.apps.length) {
     admin.initializeApp({

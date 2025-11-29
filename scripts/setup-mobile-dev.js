@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
-const os = require('os');
+import os from 'os';
 
 console.log('\n🔍 Configuration pour développement mobile\n');
 console.log('━'.repeat(60));

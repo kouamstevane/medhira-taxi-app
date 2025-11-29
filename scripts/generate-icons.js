@@ -8,12 +8,16 @@
  * node scripts/generate-icons.js
  */
 
-const fs = require('fs');
-const path = require('path');
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Si sharp n'est pas installé, on affiche un message
 try {
-  const sharp = require('sharp');
+  const sharp = (await import('sharp')).default;
   
   const sizes = [
     { size: 192, name: 'icon-192.png' },
@@ -38,7 +42,7 @@ try {
 
   generateIcons().catch(console.error);
 
-} catch (error) {
+} catch {
   console.log('⚠️  Sharp n\'est pas installé.');
   console.log('\nPour générer les icônes automatiquement:');
   console.log('1. Installez sharp: npm install --save-dev sharp');

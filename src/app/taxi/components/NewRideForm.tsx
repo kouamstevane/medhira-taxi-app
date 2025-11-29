@@ -353,6 +353,11 @@ useEffect(() => {
     }
   };
 
+  // DEBUG : Afficher les valeurs pour comprendre pourquoi le message ne s'affiche pas
+  console.log('🔍 [NewRideForm] geoError:', geoError);
+  console.log('🔍 [NewRideForm] pickupAddress:', pickupAddress);
+  console.log('🔍 [NewRideForm] Condition (geoError || !pickupAddress):', (geoError || !pickupAddress));
+
   return (
     <div className="w-full max-w-2xl mx-auto px-2 sm:px-0">
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">

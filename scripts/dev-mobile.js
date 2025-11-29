@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
-const { spawn } = require('child_process');
-const os = require('os');
+import { spawn } from 'child_process';
+import os from 'os';
 
 // Obtenir les adresses IP
 const interfaces = os.networkInterfaces();

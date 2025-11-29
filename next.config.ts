@@ -4,6 +4,13 @@ const isMobile = process.env.MOBILE_BUILD === 'true';
 
 const nextConfig: NextConfig = {
   output: isMobile ? 'export' : undefined,
+  // Désactiver les source maps en production pour réduire la taille
+  productionBrowserSourceMaps: false,
+  // Optimisations agressives
+  compress: true,
+  poweredByHeader: false,
+  reactStrictMode: true,
+  // Optimisation des images
   images: {
     unoptimized: true,
     remotePatterns: [
@@ -18,8 +25,8 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
     ],
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    deviceSizes: [640, 828, 1200],
+    imageSizes: [16, 32, 48, 64, 96],
     formats: ['image/webp'],
     minimumCacheTTL: 60,
   },
@@ -28,6 +35,19 @@ const nextConfig: NextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true,
+  },
+  // Webpack optimizations
+  webpack: (config, { dev, isServer }) => {
+    if (!dev && !isServer) {
+      // Optimisations de production
+      config.optimization = {
+        ...config.optimization,
+        minimize: true,
+        usedExports: true,
+        sideEffects: false,
+      };
+    }
+    return config;
   },
 };
 

@@ -2,11 +2,15 @@
  * Script pour générer les images Open Graph
  */
 
-const fs = require('fs');
-const path = require('path');
+
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 try {
-  const sharp = require('sharp');
+  const sharp = (await import('sharp')).default;
   
   const ogImages = [
     { 
