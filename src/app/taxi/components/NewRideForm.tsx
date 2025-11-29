@@ -12,7 +12,6 @@ import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
-import { getApiBaseUrl } from '@/utils/api-helper';
 import { estimateFare, createBooking, getCarTypes, FareEstimate } from '@/services/taxi.service';
 import { CarType, PlaceSuggestion, Location } from '@/types';
 import { AddressInput } from './AddressInput';
@@ -56,11 +55,13 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     return () => unsubscribe();
   }, []);
 
-  const { getCurrentPosition, loading: geoLoading, error: geoError } = useCapacitorGeolocation();
+  //const { getCurrentPosition, loading: geoLoading, error: geoError } = useCapacitorGeolocation(); //ceci est OK
+  // NOUVEAU CODE : Récupérez tout ce dont vous avez besoin du hook
+  const { location: currentGpsLocation, error: geoError, loading: geoLoading, getCurrentPosition } = useCapacitorGeolocation();
   const [loadingAddress, setLoadingAddress] = useState(false);
 
-  // Récupérer la position GPS
-  useEffect(() => {
+  // Récupérer la position GPS //ceci est OK
+  /*useEffect(() => {
     // Attendre que Google Maps soit chargé
     if (!mapsLoaded) return;
 
@@ -118,7 +119,62 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     };
 
     fetchLocation();
-  }, [mapsLoaded, getCurrentPosition]);
+  }, [mapsLoaded, getCurrentPosition]); */
+
+  // ÉTAPE 1 : Déclencher la géolocalisation une seule fois
+useEffect(() => {
+  // On s'assure que Google Maps est prêt avant de demander la position
+  if (!mapsLoaded) return;
+
+  // On appelle la fonction, c'est tout. Le hook s'occupe du reste.
+  getCurrentPosition();
+
+}, [mapsLoaded, getCurrentPosition]); // Le tableau de dépendances est correct
+
+
+// ÉTAPE 2 : Réagir aux changements venant du hook
+useEffect(() => {
+  // Ce code s'exécutera SEULEMENT si le hook réussit à obtenir une position
+  if (currentGpsLocation) { // <-- ICI, on lit enfin la valeur de `currentGpsLocation`
+    setLoadingAddress(true);
+
+    const location: Location = {
+      lat: currentGpsLocation.lat,
+      lng: currentGpsLocation.lng,
+    };
+    
+    // Mettre à jour les états du composant avec la nouvelle position
+    setCurrentLocation(location);
+    setPickupLocation(location);
+
+    // Afficher temporairement les coordonnées
+    const coordsAddress = `Ma position (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})`;
+    setPickupAddress(coordsAddress);
+
+    // Votre logique de Geocoding inversé (traduire les coordonnées en adresse)
+    if (window.google && window.google.maps) {
+      const geocoder = new window.google.maps.Geocoder();
+      
+      // Utilisation de .then/.catch/.finally pour une meilleure lisibilité
+      geocoder.geocode({ location })
+        .then(response => {
+          if (response.results && response.results[0]) {
+            setPickupAddress(response.results[0].formatted_address);
+          }
+        })
+        .catch(e => {
+          console.warn('Le Geocoding inversé a échoué, les coordonnées sont conservées.', e);
+        })
+        .finally(() => {
+          setLoadingAddress(false); // Arrêter le chargement dans tous les cas
+        });
+    } else {
+      // Si google.maps n'est pas disponible, arrêter le chargement
+      setLoadingAddress(false);
+    }
+  }
+}, [currentGpsLocation]); // <-- Ce useEffect dépend UNIQUEMENT de la position GPS du hook
+
 
   // Charger les types de véhicules
   useEffect(() => {
@@ -300,6 +356,44 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   return (
     <div className="w-full max-w-2xl mx-auto px-2 sm:px-0">
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+        {/* Message d'erreur GPS - affiché si la géolocalisation échoue */}
+        {geoError && !pickupAddress && (
+          <div className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-lg">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-orange-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-orange-800">
+                  Impossible de détecter votre position
+                </h3>
+                <div className="mt-2 text-sm text-orange-700">
+                  <p>Le signal GPS est trop faible. Pour une meilleure précision :</p>
+                  <ul className="list-disc list-inside mt-1 space-y-1">
+                    <li>Sortez à l&apos;extérieur (ciel dégagé)</li>
+                    <li>Éloignez-vous des immeubles</li>
+                    <li>Vérifiez que le GPS est activé sur votre téléphone</li>
+                  </ul>
+                </div>
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-orange-700 bg-orange-100 hover:bg-orange-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                  >
+                    <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Réessayer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Point de départ */}
         <AddressInput
           label="Point de départ"

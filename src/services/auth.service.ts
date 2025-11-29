@@ -109,10 +109,19 @@ export const signInWithGoogle = async (): Promise<User> => {
     await createUserDocument(user.uid, {
       email: user.email,
       firstName: user.displayName?.split(' ')[0] || '',
-      lastName: user.displayName?.split(' ')[1] || '',
+      lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
       profileImageUrl: user.photoURL || undefined,
       userType: 'client',
     });
+  } else {
+    // Mettre à jour l'image de profil si l'utilisateur existe mais n'a pas d'image
+    const userData = userDoc.data();
+    if (user.photoURL && !userData.profileImageUrl) {
+      await updateDoc(doc(db, 'users', user.uid), {
+        profileImageUrl: user.photoURL,
+        updatedAt: serverTimestamp(),
+      });
+    }
   }
 
   return user;

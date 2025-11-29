@@ -6,6 +6,7 @@
  * 
  * @module services/taxi
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { logger } from '@/utils/logger';
 import {
@@ -297,6 +298,10 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
         distance = calculateDistance(fromLocation, toLocation);
         duration = Math.ceil((distance / 40) * 60); // Estimation: 40 km/h moyenne
       } catch (geocodingError: any) {
+        // On utilise l'erreur de géocodage pour enrichir le log
+        logger.error('Le Geocoding de secours a aussi échoué', { error: geocodingError });
+        console.log("Le Geocoding de secours a aussi échoué", { error: geocodingError });
+
         // Si tout échoue, relancer l'erreur originale
         throw new Error(`Impossible de calculer l'itinéraire: ${directionsError.message}. Vérifiez que les adresses sont correctes et que l'API Directions est activée.`);
       }
