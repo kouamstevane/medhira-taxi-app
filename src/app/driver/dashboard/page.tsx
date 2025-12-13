@@ -19,7 +19,7 @@ import Link from 'next/link';
 import { 
   FiTruck, FiDollarSign, FiStar, FiRefreshCw, 
   FiLogOut, FiUser, FiMapPin, FiCheckCircle,
-  FiPlay, FiX, FiArrowRight, FiClock
+  FiArrowRight
 } from 'react-icons/fi';
 import { 
   getPendingCandidatesForDriver,
@@ -28,8 +28,8 @@ import {
 } from '@/services/matching/broadcast';
 import { RideCandidate } from '@/types';
 import { assignDriver } from '@/services/matching/assignment';
-import { incrementDriverAcceptedTrips, incrementDriverAcceptedTrips as incrementDriverAcceptedTripsAlias, incrementDriverDeclinedTrips } from '@/services/driver.service';
-import { updateDriverLocation, calculateFinalFare } from '@/services/taxi.service';
+import { incrementDriverAcceptedTrips, incrementDriverDeclinedTrips } from '@/services/driver.service';
+import { updateDriverLocation, calculateFinalFare, markDriverArrived, startTrip, completeTrip } from '@/services/taxi.service';
 import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
 import { StatsCard } from './components/StatsCard';
@@ -55,12 +55,17 @@ interface DriverData {
 
 interface Trip {
   id: string;
+  userId: string; // ID du client pour le chat
   passengerName: string;
   pickup: string;
   destination: string;
   price: number;
-  status: 'pending' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled';
   createdAt: any;
+  unreadMessages?: {
+    client: number;
+    driver: number;
+  };
 }
 
 interface RideRequest {
@@ -163,7 +168,7 @@ export default function DriverDashboard() {
         const currentTripQuery = query(
           collection(db, "bookings"),
           where("driverId", "==", user.uid),
-          where("status", "in", ["accepted", "arrived", "in_progress"])
+          where("status", "in", ["accepted", "driver_arrived", "in_progress"])
         );
         
         console.log('[DRIVER] Initialisation listener courses actives pour:', user.uid);
@@ -189,15 +194,17 @@ export default function DriverDashboard() {
               return;
             }
             
-            setCurrentTrip({
-              id: doc.id,
-              passengerName: data.userEmail || "Client",
-              pickup: data.pickup,
-              destination: data.destination,
-              price: data.price,
-              status: data.status as 'accepted' | 'arrived' | 'in_progress',
-              createdAt: data.createdAt
-            });
+              setCurrentTrip({
+                id: doc.id,
+                userId: data.userId,
+                passengerName: data.userEmail || "Client",
+                pickup: data.pickup,
+                destination: data.destination,
+                price: data.price,
+                status: data.status as 'accepted' | 'driver_arrived' | 'in_progress',
+                createdAt: data.createdAt,
+                unreadMessages: data.unreadMessages
+              });
           } else {
             // Aucune course active, réinitialiser
             console.log('[DRIVER] ✓ Aucune course active, réinitialisation');
@@ -224,6 +231,7 @@ export default function DriverDashboard() {
             const data = doc.data();
             trips.push({
               id: doc.id,
+              userId: data.userId || '',
               passengerName: data.passengerName || "Client",
               pickup: data.pickup,
               destination: data.destination,
@@ -313,7 +321,7 @@ export default function DriverDashboard() {
 
   // Suivi GPS en temps réel quand une course est active
   useEffect(() => {
-    if (!currentTrip || !['accepted', 'arrived', 'in_progress'].includes(currentTrip.status)) return;
+    if (!currentTrip || !['accepted', 'driver_arrived', 'in_progress'].includes(currentTrip.status)) return;
 
     console.log('[DRIVER] Démarrage du suivi GPS pour la course:', currentTrip.id);
 
@@ -332,6 +340,7 @@ export default function DriverDashboard() {
       console.log('[DRIVER] Arrêt du suivi GPS');
       navigator.geolocation.clearWatch(watchId);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrip?.id, currentTrip?.status]);
 
   const fetchDailyHistory = async (driverId: string) => {
@@ -366,7 +375,7 @@ export default function DriverDashboard() {
         isAvailable: !driver.isAvailable
       });
       setDriver({ ...driver, isAvailable: !driver.isAvailable });
-    } catch (error) {
+    } catch {
       setError("Erreur de changement de disponibilité");
     }
   };
@@ -398,12 +407,14 @@ export default function DriverDashboard() {
         const bookingData = bookingSnap.data();
         setCurrentTrip({
           id: rideId,
+          userId: bookingData.userId,
           passengerName: bookingData.userEmail || "Client",
           pickup: bookingData.pickup,
           destination: bookingData.destination,
           price: bookingData.price,
           status: "accepted",
-          createdAt: bookingData.createdAt
+          createdAt: bookingData.createdAt,
+          unreadMessages: bookingData.unreadMessages
         });
       }
     } catch (err: any) {
@@ -454,12 +465,14 @@ export default function DriverDashboard() {
         const bookingData = bookingSnap.data();
         setCurrentTrip({
           id: tripId,
+          userId: bookingData.userId,
           passengerName: bookingData.userEmail || "Client",
           pickup: bookingData.pickup,
           destination: bookingData.destination,
           price: bookingData.price,
           status: "accepted",
-          createdAt: bookingData.createdAt
+          createdAt: bookingData.createdAt,
+          unreadMessages: bookingData.unreadMessages
         });
       }
     } catch (err: any) {
@@ -468,36 +481,39 @@ export default function DriverDashboard() {
     }
   };
 
-  const markAsArrived = async (tripId: string) => {
+  const handleMarkAsArrived = async (tripId: string) => {
     if (!currentTrip) return;
-    const ref = doc(db, "bookings", tripId);
-    await updateDoc(ref, { status: "arrived" });
-    setCurrentTrip({ ...currentTrip, status: "arrived" });
+    try {
+      await markDriverArrived(tripId);
+      // Le state se mettra à jour via onSnapshot
+    } catch (error) {
+      console.error('Erreur marquage arrivée:', error);
+      alert('❌ Erreur lors du marquage. Réessayez.');
+    }
   };
 
-  const startTrip = async (tripId: string) => {
+  const handleStartTrip = async (tripId: string) => {
     if (!currentTrip) return;
-    const ref = doc(db, "bookings", tripId);
-    await updateDoc(ref, { status: "in_progress" });
-    setCurrentTrip({ ...currentTrip, status: "in_progress" });
+    try {
+      await startTrip(tripId);
+      // Le state se mettra à jour via onSnapshot
+    } catch (error) {
+      console.error('Erreur démarrage course:', error);
+      alert('❌ Erreur lors du démarrage. Réessayez.');
+    }
   };
 
-  const completeTrip = async (tripId: string) => {
+  const handleCompleteTrip = async (tripId: string) => {
     if (!auth.currentUser || !driver || !currentTrip) return;
     
     try {
-      // Calculer le prix final réel
+      // Appel de la fonction du service qui gère tout
+      await completeTrip(tripId);
+      
+      // Récupérer le prix final pour mettre à jour les stats
       const finalPrice = await calculateFinalFare(tripId);
 
-      const ref = doc(db, "bookings", tripId);
-      await updateDoc(ref, {
-        status: "completed",
-        finalPrice: finalPrice,
-        completedAt: new Date()
-      });
-
       await updateDoc(doc(db, 'drivers', auth.currentUser.uid), {
-        isAvailable: true,
         earnings: (driver.earnings || 0) + (finalPrice || 0),
         tripsCompleted: (driver.tripsCompleted || 0) + 1
       });
@@ -521,7 +537,7 @@ export default function DriverDashboard() {
       await signOut(auth);
       // Forcer le rechargement complet pour vider le cache
       window.location.href = '/driver/login';
-    } catch (error) {
+    } catch {
       setError("Erreur de déconnexion");
     }
   };
@@ -627,9 +643,9 @@ export default function DriverDashboard() {
           {currentTrip && (
             <CurrentTripCard
               trip={currentTrip}
-              onMarkAsArrived={markAsArrived}
-              onStartTrip={startTrip}
-              onCompleteTrip={completeTrip}
+              onMarkAsArrived={handleMarkAsArrived}
+              onStartTrip={handleStartTrip}
+              onCompleteTrip={handleCompleteTrip}
             />
           )}
 

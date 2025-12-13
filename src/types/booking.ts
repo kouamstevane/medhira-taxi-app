@@ -55,11 +55,22 @@ export interface Booking {
   updatedAt: Date | Timestamp;
   completedAt?: Date | Timestamp;
   cancelledAt?: Date | Timestamp;
+  startedAt?: Date | Timestamp; // Début de la course
+  actualDuration?: number; // Durée réelle en minutes
+  cancellationFee?: number; // Frais d'annulation en FCFA
   reason?: string;
 
   // Système de bonus (Plan B)
   bonus?: number; // Montant du bonus en FCFA
   bonusActivatedAt?: Date | Timestamp; // Date d'activation du bonus
+
+  // Messagerie In-App
+  lastMessage?: string;
+  lastMessageAt?: Timestamp;
+  unreadMessages?: {
+    client: number;
+    driver: number;
+  };
 
   // Périmètre de recherche (Plan A)
   searchPerimeter?: {

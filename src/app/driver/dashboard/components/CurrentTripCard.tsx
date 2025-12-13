@@ -1,15 +1,22 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { FiMapPin, FiCheckCircle, FiPlay } from 'react-icons/fi';
+import { useState } from 'react';
+import { FiMapPin, FiCheckCircle, FiPlay, FiMessageSquare } from 'react-icons/fi';
+import { ChatModal } from '@/components/ChatModal';
 
 interface Trip {
   id: string;
+  userId: string; // ID du client pour le chat
   passengerName: string;
   pickup: string;
   destination: string;
   price: number;
-  status: 'pending' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled';
   createdAt: any;
+  unreadMessages?: {
+    client: number;
+    driver: number;
+  };
 }
 
 interface CurrentTripCardProps {
@@ -25,11 +32,13 @@ export function CurrentTripCard({
   onStartTrip,
   onCompleteTrip,
 }: CurrentTripCardProps) {
+  const [showChat, setShowChat] = useState(false);
+
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'accepted':
         return 'Acceptée';
-      case 'arrived':
+      case 'driver_arrived':
         return 'Arrivé';
       case 'in_progress':
         return 'En cours';
@@ -54,26 +63,57 @@ export function CurrentTripCard({
             </span>
           </div>
           <div className="space-y-2 mb-4">
-            <div className="flex items-center">
-              <FiMapPin className="h-4 w-4 text-green-500 mr-3" />
-              <span className="text-sm text-gray-700">{trip.pickup}</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <FiMapPin className="h-4 w-4 text-green-500 mr-3" />
+                <span className="text-sm text-gray-700">{trip.pickup}</span>
+              </div>
+              {/* Navigation vers le point de départ (quand accepté) */}
+              {trip.status === 'accepted' && (
+                <button
+                  onClick={() => {
+                     const query = encodeURIComponent(trip.pickup);
+                     window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                  }}
+                  className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center ml-4"
+                >
+                  <span className="mr-1">Naviguer</span>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                </button>
+              )}
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <FiMapPin className="h-4 w-4 text-red-500 mr-3" />
                 <span className="text-sm text-gray-700">{trip.destination}</span>
               </div>
-              <button
-                onClick={() => {
-                   // Ouvrir Google Maps ou Waze
-                   const query = encodeURIComponent(trip.destination);
-                   window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
-                }}
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
-              >
-                <span className="mr-1">Naviguer</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Navigation vers la destination (quand course démarrée) */}
+                {(trip.status === 'driver_arrived' || trip.status === 'in_progress') && (
+                  <button
+                    onClick={() => {
+                       const query = encodeURIComponent(trip.destination);
+                       window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                    }}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
+                  >
+                    <span className="mr-1">Naviguer</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowChat(true)}
+                  className="text-[#f29200] hover:text-[#e68600] text-sm font-medium flex items-center relative"
+                >
+                  <FiMessageSquare className="w-4 h-4 mr-1" />
+                  <span>Chat</span>
+                  {(trip.unreadMessages?.driver || 0) > 0 && (
+                    <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-white">
+                      {trip.unreadMessages?.driver}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex justify-between">
@@ -89,7 +129,7 @@ export function CurrentTripCard({
                   <span>Je suis arrivé</span>
                 </button>
               )}
-              {trip.status === 'arrived' && (
+              {trip.status === 'driver_arrived' && (
                 <button
                   onClick={() => onStartTrip(trip.id)}
                   className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm flex items-center justify-center space-x-1 sm:space-x-2 transition touch-manipulation"
@@ -113,6 +153,15 @@ export function CurrentTripCard({
           </div>
         </div>
       </div>
+      {showChat && (
+        <ChatModal
+          bookingId={trip.id}
+          driverName="Client" // Le nom du client n'est pas toujours dispo ici, on met "Client" par défaut
+          driverId={trip.userId} // C'est l'ID de l'autre partie
+          userType="driver"
+          onClose={() => setShowChat(false)}
+        />
+      )}
     </div>
   );
 }

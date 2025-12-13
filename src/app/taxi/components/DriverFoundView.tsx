@@ -1,15 +1,16 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { logger } from '@/utils/logger';
-import { FiPhone, FiMessageSquare, FiEdit2 } from 'react-icons/fi';
+import { FiMessageSquare, FiEdit2 } from 'react-icons/fi';
 import { Booking, Location, PlaceSuggestion } from '@/types/booking';
 import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api';
 import { updateDestination } from '@/services/taxi.service';
 import { AddressInput } from './AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import { ChatModal } from '@/components/ChatModal';
 
 interface DriverFoundViewProps {
   bookingId: string;
@@ -34,6 +35,9 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   const [newDestination, setNewDestination] = useState('');
   const [newDestLocation, setNewDestLocation] = useState<Location | null>(null);
   const [updatingDest, setUpdatingDest] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const [realTimeDistance, setRealTimeDistance] = useState<number>(0); // En km
+  const [realTimeDuration, setRealTimeDuration] = useState<number>(0); // En minutes
   
   const [cancelling, setCancelling] = useState(false);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
@@ -54,9 +58,17 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
     setMap(null);
   }, []);
 
-  // Calculer l'itinéraire quand les positions changent
+  // Calculer l'itinéraire
   useEffect(() => {
     if (!isLoaded || !booking || !window.google) return;
+
+    // Si on a déjà un itinéraire et que le statut n'a pas changé, on ne recalcule pas
+    // sauf si on n'a pas encore de réponse (premier chargement)
+    if (directionsResponse && booking.status === 'accepted' && booking.driverLocation) {
+       // Pour la phase d'approche, on garde l'itinéraire initial pour éviter que la carte ne saute
+       // Le marqueur du chauffeur bougera sur la carte, c'est suffisant
+       return;
+    }
 
     const directionsService = new window.google.maps.DirectionsService();
 
@@ -72,7 +84,9 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       }
     } else if (booking.status === 'in_progress') {
       // Client vers Destination (ou Chauffeur vers Destination)
-      if (booking.driverLocation && booking.destinationLocation) { // Priorité à la loc chauffeur
+      // En cours de route, on peut mettre à jour l'origine pour affiner le temps restant
+      // Mais on va limiter les mises à jour pour la stabilité
+      if (booking.driverLocation && booking.destinationLocation) { 
          origin = booking.driverLocation;
          destination = booking.destinationLocation;
       } else if (booking.pickupLocation && booking.destinationLocation) {
@@ -90,33 +104,86 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
         },
         (result, status) => {
           if (status === 'OK' && result) {
+            // On ne met à jour que si c'est nécessaire pour éviter les clignotements
             setDirectionsResponse(result);
+            
+            // Extraire la distance et la durée en temps réel
+            const route = result.routes[0];
+            if (route && route.legs[0]) {
+              const leg = route.legs[0];
+              // Distance en km
+              const distanceKm = (leg.distance?.value || 0) / 1000;
+              // Durée en minutes
+              const durationMin = Math.ceil((leg.duration?.value || 0) / 60);
+              
+              setRealTimeDistance(distanceKm);
+              setRealTimeDuration(durationMin);
+            }
           } else {
             console.error(`Directions request failed due to ${status}`);
           }
         }
       );
     }
-  }, [isLoaded, booking?.status, booking?.driverLocation, booking?.pickupLocation, booking?.destinationLocation]);
+  }, [
+    isLoaded, 
+    booking?.status, 
+    // On retire driverLocation des dépendances directes pour éviter le recalcul à chaque tick GPS
+    // On ne le garde que pour l'initialisation ou le changement de statut
+    // booking?.driverLocation?.lat, 
+    // booking?.driverLocation?.lng,
+    booking?.pickupLocation?.lat,
+    booking?.pickupLocation?.lng,
+    booking?.destinationLocation?.lat,
+    booking?.destinationLocation?.lng
+  ]);
 
 
   const handleCancelBooking = async () => {
     setCancelling(true);
     try {
       const bookingRef = doc(db, 'bookings', bookingId);
+      const bookingSnap = await getDoc(bookingRef);
+      
+      if (!bookingSnap.exists()) {
+        alert('❌ Réservation introuvable.');
+        return;
+      }
+      
+      const bookingData = bookingSnap.data();
+      let cancellationFee = 0;
+      
+      // Calculer les pénalités si la course est en cours
+      if (bookingData.status === 'in_progress') {
+        const { calculateCancellationPenalty } = await import('@/services/taxi.service');
+        cancellationFee = await calculateCancellationPenalty(bookingId);
+        
+        const confirmMsg = `⚠️ Attention !\n\nVous êtes sur le point d'annuler une course en cours.\n\nPénalité d'annulation : ${cancellationFee.toFixed(0)} FCFA\n\nVoulez-vous vraiment continuer ?`;
+        
+        if (!confirm(confirmMsg)) {
+          setCancelling(false);
+          return;
+        }
+      }
       
       await updateDoc(bookingRef, {
         status: 'cancelled',
         cancelledAt: serverTimestamp(),
         cancelledBy: 'client',
+        cancellationFee: cancellationFee,
         updatedAt: serverTimestamp(),
       });
       
       setShowCancelModal(false);
-      alert('✅ Commande annulée avec succès.');
-      setTimeout(() => {
-        window.location.href = '/dashboard';
-      }, 1000);
+      
+      if (cancellationFee > 0) {
+        alert(`✅ Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toFixed(0)} FCFA ont été appliqués à votre compte.`);
+      } else {
+        alert('✅ Commande annulée avec succès.');
+      }
+      
+      // Retourner proprement à la page de réservation sans rechargement complet
+      onComplete();
     } catch (error) {
       console.error('[CLIENT] ❌ Erreur lors de l\'annulation:', error);
       alert('❌ Erreur lors de l\'annulation. Veuillez réessayer.');
@@ -124,6 +191,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       setCancelling(false);
     }
   };
+
 
   const handleUpdateDestination = async () => {
     if (!newDestination || !booking) return;
@@ -229,7 +297,8 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               <DirectionsRenderer
                 options={{
                   directions: directionsResponse,
-                  suppressMarkers: true, // On utilise nos propres marqueurs
+                  suppressMarkers: true,
+                  preserveViewport: true, // Empêche le re-centrage automatique
                   polylineOptions: {
                     strokeColor: '#f29200',
                     strokeWeight: 5,
@@ -260,7 +329,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               <Marker
                 position={booking.pickupLocation}
                 icon={{
-                  url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png"
+                  url: "https://maps.google.com/mapfiles/ms/icons/green-dot.png"
                 }}
               />
             )}
@@ -270,7 +339,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               <Marker
                 position={booking.destinationLocation}
                 icon={{
-                  url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png"
+                  url: "https://maps.google.com/mapfiles/ms/icons/red-dot.png"
                 }}
               />
             )}
@@ -299,17 +368,24 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               <p className="text-sm text-gray-500">
                 {booking.carModel} • {booking.carColor}
               </p>
-              <div className="inline-block bg-gray-100 px-2 py-0.5 rounded text-xs font-mono font-bold mt-1">
+              <div className="inline-block bg-blue-50 border border-blue-200 px-3 py-1 rounded text-sm font-mono font-bold mt-1 text-blue-900">
                 {booking.carPlate}
               </div>
             </div>
           </div>
           <div className="flex space-x-2">
-            <button className="p-3 bg-green-100 text-green-600 rounded-full hover:bg-green-200 transition">
-              <FiPhone className="w-5 h-5" />
-            </button>
-            <button className="p-3 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition">
+            <button 
+              onClick={() => setShowChat(true)}
+              className="p-3 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition relative"
+              title="Messagerie"
+            >
               <FiMessageSquare className="w-5 h-5" />
+              {/* Indicateur de message non lu */}
+              {(booking.unreadMessages?.client || 0) > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-white">
+                  {booking.unreadMessages?.client}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -344,6 +420,54 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
             </div>
           </div>
         </div>
+
+        {/* Suivi en temps réel (course en cours) */}
+        {booking.status === 'in_progress' && realTimeDistance > 0 && (
+          <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+            <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center">
+              <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Suivi en temps réel
+            </h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <p className="text-xs text-gray-500 mb-1">Distance restante</p>
+                <p className="text-lg font-bold text-blue-600">{realTimeDistance.toFixed(1)} km</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 shadow-sm">
+                <p className="text-xs text-gray-500 mb-1">Temps estimé</p>
+                <p className="text-lg font-bold text-blue-600">{realTimeDuration} min</p>
+              </div>
+            </div>
+            <div className="mt-3 bg-white rounded-lg p-3 shadow-sm">
+              <p className="text-xs text-gray-500 mb-1">Estimation tarifaire</p>
+              <p className="text-xl font-bold text-green-600">
+                {(() => {
+                  // Calcul temps écoulé depuis le début
+                  const startTime = booking.startedAt instanceof Date ? booking.startedAt : new Date();
+                  const elapsedMinutes = Math.ceil((new Date().getTime() - startTime.getTime()) / 60000);
+                  
+                  // Utiliser la distance parcourue (distance initiale - distance restante)
+                  const distanceTraveled = Math.max(0, booking.distance - realTimeDistance);
+                  
+                  // Estimation basée sur le type de véhicule
+                  // Note: Les tarifs sont récupérés côté serveur, on fait une estimation simple ici
+                  const basePrice = 500; // Prix de base estimé
+                  const pricePerKm = 200; // Prix par km estimé
+                  const pricePerMin = 50; // Prix par minute estimé
+                  
+                  const estimatedPrice = basePrice + (distanceTraveled * pricePerKm) + (elapsedMinutes * pricePerMin);
+                  
+                  return `${Math.round(estimatedPrice)} FCFA`;
+                })()}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                ⚠️ Estimation basée sur le trajet en cours
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="mt-6 pt-4 border-t border-gray-100">
@@ -428,6 +552,16 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
             </div>
           </div>
         </div>
+      )}
+      {/* Modal de Chat */}
+      {showChat && booking.driverId && (
+        <ChatModal
+          bookingId={bookingId}
+          driverName={booking.driverName || 'Chauffeur'}
+          driverId={booking.driverId}
+          userType="client"
+          onClose={() => setShowChat(false)}
+        />
       )}
     </div>
   );

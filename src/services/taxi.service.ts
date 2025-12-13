@@ -11,6 +11,7 @@
 import { logger } from '@/utils/logger';
 import {
   collection,
+
   doc,
   getDoc,
   getDocs,
@@ -25,7 +26,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
-import { calculateTripPrice, isPeakHour } from '@/lib/firebase-helpers';
+import { calculateTripPrice } from '@/lib/firebase-helpers';
 
 /**
  * Créer une nouvelle réservation
@@ -46,36 +47,41 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
 
   // Déclencher le matching automatique avec retry si une localisation est disponible
   if (bookingData.pickupLocation) {
-    try {
-      const { findDriverWithRetry } = await import('./matching');
+    const pickupLocation = bookingData.pickupLocation; // Capture pour TypeScript
+    
+    // Exécuter le matching en arrière-plan pour ne pas bloquer l'interface utilisateur
+    (async () => {
+      try {
+        const { findDriverWithRetry } = await import('./matching');
 
-      // Utiliser le retry automatique avec périmètre
-      // Plan A : 3-5 minutes initialement
-      const result = await findDriverWithRetry(
-        newBookingRef.id,
-        bookingData.pickupLocation,
-        bookingData.destination,
-        bookingData.price,
-        bookingData.carType,
-        bookingData.bonus || 0, // Passer le bonus
-        {
-          initialPerimeterMinutes: 5, // Plan A: 5 min max
-          expandedPerimeterMinutes: 10, // Plan B: 10 min max
-          maxRetries: 3,
-          timeoutSeconds: 30,
-        }
-      );
+        // Utiliser le retry automatique avec périmètre
+        // Plan A : 3-5 minutes initialement
+        const result = await findDriverWithRetry(
+          newBookingRef.id,
+          pickupLocation,
+          bookingData.destination,
+          bookingData.price,
+          bookingData.carType,
+          bookingData.bonus || 0, // Passer le bonus
+          {
+            initialPerimeterMinutes: 5, // Plan A: 5 min max
+            expandedPerimeterMinutes: 10, // Plan B: 10 min max
+            maxRetries: 3,
+            timeoutSeconds: 30,
+          }
+        );
 
-      logger.info('Matching automatique terminé', {
-        bookingId: newBookingRef.id,
-        success: result.success,
-        driversNotified: result.driversNotified,
-        finalPerimeter: result.finalPerimeter,
-      });
-    } catch (error: any) {
-      // Ne pas bloquer la création si le matching échoue
-      logger.warn('Erreur lors du matching automatique', { error, bookingId: newBookingRef.id });
-    }
+        logger.info('Matching automatique terminé', {
+          bookingId: newBookingRef.id,
+          success: result.success,
+          driversNotified: result.driversNotified,
+          finalPerimeter: result.finalPerimeter,
+        });
+      } catch (error: any) {
+        // Ne pas bloquer la création si le matching échoue
+        logger.warn('Erreur lors du matching automatique', { error, bookingId: newBookingRef.id });
+      }
+    })();
   }
 
   return newBookingRef.id;
@@ -326,6 +332,8 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
   };
 };
 
+
+
 /**
  * Rechercher des chauffeurs disponibles à proximité
  */
@@ -485,3 +493,124 @@ export const calculateFinalFare = async (bookingId: string): Promise<number> => 
   // Pour l'instant, on confirme le dernier prix calculé
   return booking.price;
 };
+
+/**
+ * Marquer le chauffeur comme arrivé au point de prise en charge
+ * Envoie une notification au client
+ */
+export const markDriverArrived = async (bookingId: string): Promise<void> => {
+  await updateBookingStatus(bookingId, 'driver_arrived');
+  
+  // Envoyer une notification au client via le chat système
+  try {
+    const { sendSystemMessage } = await import('@/services/chat.service');
+    await sendSystemMessage(bookingId, '🚗 Votre chauffeur est arrivé au point de rendez-vous !');
+  } catch (error) {
+    logger.error('Erreur envoi message système', { error, bookingId });
+  }
+};
+
+/**
+ * Démarrer la course (client à bord)
+ * Active le suivi GPS en temps réel
+ */
+export const startTrip = async (bookingId: string): Promise<void> => {
+  await updateBookingStatus(bookingId, 'in_progress', {
+    startedAt: serverTimestamp() as any
+  });
+  
+  // Notification système
+  try {
+    const { sendSystemMessage } = await import('@/services/chat.service');
+    await sendSystemMessage(bookingId, '✅ Course démarrée ! Bon trajet !');
+  } catch (error) {
+    logger.error('Erreur envoi message système', { error, bookingId });
+  }
+};
+
+/**
+ * Terminer la course et calculer le prix final
+ * Affiche une facture détaillée au client
+ */
+export const completeTrip = async (bookingId: string): Promise<void> => {
+  const bookingRef = doc(db, 'bookings', bookingId);
+  const bookingSnap = await getDoc(bookingRef);
+  
+  if (!bookingSnap.exists()) throw new Error('Booking not found');
+  const booking = bookingSnap.data() as Booking;
+
+  // Calcul du prix final basé sur la durée réelle
+  const startTime = booking.startedAt instanceof Timestamp ? booking.startedAt.toDate() : new Date();
+  const endTime = new Date();
+  // Durée en minutes (minimum 1 minute)
+  const durationMinutes = Math.max(1, Math.ceil((endTime.getTime() - startTime.getTime()) / 60000));
+  
+  // Récupérer les tarifs
+  const carTypes = await getCarTypes();
+  const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
+  
+  // Recalculer le prix final
+  const finalPrice = calculateTripPrice(
+    booking.distance,
+    durationMinutes,
+    carType.basePrice,
+    carType.pricePerKm,
+    carType.pricePerMinute
+  );
+
+  await updateBookingStatus(bookingId, 'completed', {
+    finalPrice: finalPrice,
+    price: finalPrice,
+    actualDuration: durationMinutes,
+    completedAt: serverTimestamp() as any
+  });
+  
+  // Libérer le chauffeur
+  if (booking.driverId) {
+    const driverRef = doc(db, 'drivers', booking.driverId);
+    await updateDoc(driverRef, {
+      status: 'available',
+      currentBookingId: null
+    });
+  }
+  
+  // Envoyer la facture détaillée
+  try {
+    const { sendSystemMessage } = await import('@/services/chat.service');
+    const invoice = `🏁 Course terminée !\n\n📋 Facture détaillée :\n• Tarif de base : ${carType.basePrice} FCFA\n• Distance (${booking.distance.toFixed(2)} km) : ${(booking.distance * carType.pricePerKm).toFixed(0)} FCFA\n• Durée (${durationMinutes} min) : ${(durationMinutes * carType.pricePerMinute).toFixed(0)} FCFA\n\n💰 Total : ${finalPrice.toFixed(0)} FCFA\n\nMerci pour votre confiance ! 🙏`;
+    await sendSystemMessage(bookingId, invoice);
+  } catch (error) {
+    logger.error('Erreur envoi facture', { error, bookingId });
+  }
+};
+
+/**
+ * Calculer les pénalités d'annulation après le début de la course
+ */
+export const calculateCancellationPenalty = async (bookingId: string): Promise<number> => {
+  const bookingRef = doc(db, 'bookings', bookingId);
+  const bookingSnap = await getDoc(bookingRef);
+  
+  if (!bookingSnap.exists()) return 0;
+  const booking = bookingSnap.data() as Booking;
+  
+  // Pas de pénalité si la course n'a pas démarré
+  if (booking.status !== 'in_progress' || !booking.startedAt) {
+    return 0;
+  }
+  
+  // Calculer le temps écoulé depuis le début
+  const startTime = booking.startedAt instanceof Timestamp ? booking.startedAt.toDate() : new Date();
+  const now = new Date();
+  const elapsedMinutes = Math.ceil((now.getTime() - startTime.getTime()) / 60000);
+  
+  // Récupérer les tarifs
+  const carTypes = await getCarTypes();
+  const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
+  
+  // Pénalité = 50% du tarif de base + temps x tarif minute
+  const penalty = (carType.basePrice * 0.5) + (elapsedMinutes * carType.pricePerMinute);
+  
+  return Math.max(penalty, 500); // Minimum 500 FCFA
+};
+

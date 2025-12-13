@@ -303,7 +303,22 @@ useEffect(() => {
   };
 
   const handleConfirmBooking = async () => {
+    console.log('🔍 [NewRideForm] handleConfirmBooking appelé');
+    console.log('🔍 [NewRideForm] État actuel:', {
+      currentUser: !!currentUser,
+      pickupAddress: !!pickupAddress,
+      destinationAddress: !!destinationAddress,
+      selectedCarType: !!selectedCarType,
+      estimate: !!estimate
+    });
+
     if (!currentUser || !pickupAddress || !destinationAddress || !selectedCarType || !estimate) {
+      console.error('❌ [NewRideForm] Données manquantes pour la confirmation');
+      if (!currentUser) console.error('❌ User manquant');
+      if (!pickupAddress) console.error('❌ Pickup manquant');
+      if (!destinationAddress) console.error('❌ Destination manquante');
+      if (!selectedCarType) console.error('❌ Type véhicule manquant');
+      if (!estimate) console.error('❌ Estimation manquante');
       return;
     }
 

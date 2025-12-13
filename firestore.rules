@@ -114,6 +114,26 @@ service cloud.firestore {
                       get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid);
         allow delete: if false;
       }
+      
+      // Sous-collection messages - Communications client-chauffeur
+      match /messages/{messageId} {
+        // Les deux parties peuvent lire tous les messages
+        allow read: if isAuthenticated() &&
+                     (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
+                      get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+        
+        // Les deux parties peuvent créer des messages
+        allow create: if isAuthenticated() &&
+                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
+                        get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+        
+        // Les deux parties peuvent mettre à jour (pour marquer comme lu)
+        allow update: if isAuthenticated() &&
+                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
+                        get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+        
+        allow delete: if false;
+      }
     }
     
     // Collection active_bookings - Similaire aux bookings

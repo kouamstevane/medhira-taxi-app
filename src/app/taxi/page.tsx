@@ -13,15 +13,17 @@ import { NewRideForm } from './components/NewRideForm';
 import { DriverFoundView } from './components/DriverFoundView';
 import { SearchingDriverBottomSheet } from './components/SearchingDriverBottomSheet';
 import { logger } from '@/utils/logger';
-import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { startAutomaticSearch, stopAutomaticSearch } from '@/services/matching/automaticSearch';
 import { BonusSelector } from './components/BonusSelector';
+import { useAuth } from '@/hooks/useAuth';
 
 type Step = 'form' | 'searching' | 'driver_found' | 'completed' | 'failed';
 
 export default function TaxiPage() {
   const router = useRouter();
+  const { currentUser } = useAuth();
   const [step, setStep] = useState<Step>('form');
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(60);
@@ -32,6 +34,55 @@ export default function TaxiPage() {
   const [retryBonus, setRetryBonus] = useState(0);
   const [isAutoSearching, setIsAutoSearching] = useState(false);
   const [stopAutoSearch, setStopAutoSearch] = useState<(() => void) | null>(null);
+
+  // Récupérer la course active au chargement
+  useEffect(() => {
+    const fetchActiveBooking = async () => {
+      if (!currentUser) return;
+
+      try {
+        const bookingsRef = collection(db, 'bookings');
+        // On cherche les courses qui ne sont ni terminées, ni annulées, ni échouées
+        // Note: On retire orderBy pour éviter d'avoir à créer un index composite complexe
+        const q = query(
+          bookingsRef,
+          where('userId', '==', currentUser.uid),
+          where('status', 'in', ['pending', 'accepted', 'driver_arrived', 'in_progress'])
+        );
+
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          // On trie côté client pour prendre la plus récente
+          const docs = snapshot.docs.sort((a, b) => {
+            const dateA = a.data().createdAt?.toMillis() || 0;
+            const dateB = b.data().createdAt?.toMillis() || 0;
+            return dateB - dateA;
+          });
+
+          const bookingData = docs[0].data();
+          const id = docs[0].id;
+          
+          logger.info('Course active trouvée', { id, status: bookingData.status });
+          
+          setBookingId(id);
+          setPickupAddress(bookingData.pickup);
+          setDestinationAddress(bookingData.destination);
+
+          if (bookingData.status === 'pending') {
+            setStep('searching');
+            // Relancer le timer si besoin, ou juste laisser l'UI de recherche
+            // Idéalement on devrait calculer le temps restant
+          } else {
+            setStep('driver_found');
+          }
+        }
+      } catch (error) {
+        logger.error('Erreur récupération course active', error);
+      }
+    };
+
+    fetchActiveBooking();
+  }, [currentUser]);
 
   const handleBookingCreated = (id: string, pickup: string, destination: string, autoSearch: boolean = false) => {
     logger.info('Course créée, recherche de chauffeur', { bookingId: id, autoSearch });

@@ -98,7 +98,7 @@ useEffect(() => {
         {/* En-tête avec bouton de retour */}
         <div className="flex items-center mb-6">
           <button 
-            onClick={() => router.back()}
+            onClick={() => router.push('/dashboard')}
             className="mr-4 p-2 rounded-full hover:bg-[#E8D9A5] transition"
             aria-label="Retour"
           >
