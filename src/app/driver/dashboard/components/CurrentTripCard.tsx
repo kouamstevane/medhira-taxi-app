@@ -1,8 +1,14 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react';
-import { FiMapPin, FiCheckCircle, FiPlay, FiMessageSquare } from 'react-icons/fi';
+import { FiMapPin, FiCheckCircle, FiPlay, FiMessageSquare, FiNavigation2 } from 'react-icons/fi';
 import { ChatModal } from '@/components/ChatModal';
+
+interface PreciseLocation {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+}
 
 interface Trip {
   id: string;
@@ -17,6 +23,10 @@ interface Trip {
     client: number;
     driver: number;
   };
+  // Coordonnées GPS précises pour la navigation
+  pickupLocation?: PreciseLocation;
+  pickupLocationAccuracy?: number; // Précision en mètres
+  destinationLocation?: PreciseLocation;
 }
 
 interface CurrentTripCardProps {
@@ -64,21 +74,48 @@ export function CurrentTripCard({
           </div>
           <div className="space-y-2 mb-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <FiMapPin className="h-4 w-4 text-green-500 mr-3" />
-                <span className="text-sm text-gray-700">{trip.pickup}</span>
+              <div className="flex items-center flex-1 min-w-0">
+                <FiMapPin className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-sm text-gray-700 block truncate">{trip.pickup}</span>
+                  {/* Indicateur de précision GPS */}
+                  {trip.pickupLocation && (
+                    <span className={`text-xs flex items-center gap-1 ${
+                      (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 20 
+                        ? 'text-green-600' 
+                        : (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 50 
+                          ? 'text-yellow-600' 
+                          : 'text-orange-600'
+                    }`}>
+                      <FiNavigation2 className="h-3 w-3" />
+                      GPS {(trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 20 ? '📍 Très précis' : 
+                           (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 50 ? '📍 Précis' : 
+                           '⚠️ Approximatif'}
+                      {trip.pickupLocationAccuracy && ` (±${Math.round(trip.pickupLocationAccuracy)}m)`}
+                    </span>
+                  )}
+                </div>
               </div>
-              {/* Navigation vers le point de départ (quand accepté) */}
+              {/* Navigation vers le point de départ (quand accepté) - UTILISE LES COORDONNÉES PRÉCISES */}
               {trip.status === 'accepted' && (
                 <button
                   onClick={() => {
-                     const query = encodeURIComponent(trip.pickup);
-                     window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                    // Priorité aux coordonnées GPS précises pour la navigation
+                    if (trip.pickupLocation) {
+                      // Navigation avec coordonnées GPS ultra-précises
+                      const { lat, lng } = trip.pickupLocation;
+                      // Utiliser Google Maps avec coordonnées directes pour une navigation précise
+                      window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`, '_blank');
+                    } else {
+                      // Fallback sur l'adresse texte
+                      const query = encodeURIComponent(trip.pickup);
+                      window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
+                    }
                   }}
-                  className="text-green-600 hover:text-green-800 text-sm font-medium flex items-center ml-4"
+                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center ml-2 shadow-md transition-all"
                 >
-                  <span className="mr-1">Naviguer</span>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  <FiNavigation2 className="h-4 w-4 mr-1" />
+                  <span>Naviguer</span>
                 </button>
               )}
             </div>

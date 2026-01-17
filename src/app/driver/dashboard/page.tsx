@@ -53,6 +53,13 @@ interface DriverData {
   earnings?: number;
 }
 
+
+interface PreciseLocation {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+}
+
 interface Trip {
   id: string;
   userId: string; // ID du client pour le chat
@@ -66,6 +73,10 @@ interface Trip {
     client: number;
     driver: number;
   };
+  // Coordonnées GPS précises pour la navigation
+  pickupLocation?: PreciseLocation;
+  pickupLocationAccuracy?: number; // Précision en mètres
+  destinationLocation?: PreciseLocation;
 }
 
 interface RideRequest {
@@ -203,7 +214,10 @@ export default function DriverDashboard() {
                 price: data.price,
                 status: data.status as 'accepted' | 'driver_arrived' | 'in_progress',
                 createdAt: data.createdAt,
-                unreadMessages: data.unreadMessages
+                unreadMessages: data.unreadMessages,
+                pickupLocation: data.pickupLocation,
+                pickupLocationAccuracy: data.pickupLocationAccuracy,
+                destinationLocation: data.destinationLocation
               });
           } else {
             // Aucune course active, réinitialiser
@@ -414,7 +428,10 @@ export default function DriverDashboard() {
           price: bookingData.price,
           status: "accepted",
           createdAt: bookingData.createdAt,
-          unreadMessages: bookingData.unreadMessages
+          unreadMessages: bookingData.unreadMessages,
+          pickupLocation: bookingData.pickupLocation,
+          pickupLocationAccuracy: bookingData.pickupLocationAccuracy,
+          destinationLocation: bookingData.destinationLocation
         });
       }
     } catch (err: any) {

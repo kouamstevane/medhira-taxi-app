@@ -15,6 +15,18 @@ export interface Location {
 }
 
 /**
+ * Coordonnées géographiques avec précision
+ * Utilisé pour garantir une localisation ultra-précise
+ */
+export interface PreciseLocation extends Location {
+  accuracy?: number; // Précision en mètres (plus petit = plus précis)
+  altitude?: number | null;
+  heading?: number | null; // Direction en degrés
+  speed?: number | null; // Vitesse en m/s
+  timestamp?: number; // Timestamp de la mesure GPS
+}
+
+/**
  * Suggestion d'adresse pour l'autocomplétion Google Maps
  */
 export interface PlaceSuggestion {
@@ -36,8 +48,9 @@ export interface Booking {
   userEmail?: string | null;
   pickup: string;
   destination: string;
-  pickupLocation?: Location;
+  pickupLocation?: PreciseLocation; // Maintenant avec précision
   destinationLocation?: Location;
+  pickupLocationAccuracy?: number; // Précision du point de départ en mètres
   distance: number;
   duration: number;
   price: number;

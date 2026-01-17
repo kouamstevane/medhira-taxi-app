@@ -4,10 +4,17 @@
  * @module services/matching
  */
 
+// Les types sont exportés depuis @/types/matching
+export type {
+  AvailableDriver,
+  FindDriversConfig,
+  RideCandidate,
+  BroadcastRideParams,
+  MatchingMetrics,
+} from '@/types/matching';
+
 export {
   findAvailableDrivers,
-  type AvailableDriver,
-  type FindAvailableDriversParams,
 } from './findAvailableDrivers';
 
 export {
@@ -17,8 +24,6 @@ export {
   expireAllPendingCandidates,
   subscribeToDriverRideRequests,
   getPendingCandidatesForDriver,
-  type RideCandidate,
-  type BroadcastRideParams,
 } from './broadcast';
 
 export {
@@ -31,6 +36,4 @@ export {
   findDriverWithRetry,
   logMatchingMetrics,
   type RetryConfig,
-  type MatchingMetrics,
 } from './retry';
-

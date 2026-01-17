@@ -4,8 +4,11 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/config/firebase';
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged } from "firebase/auth";
 import Link from 'next/link';
+import { FiDownload } from 'react-icons/fi';
+import { downloadInvoiceFromBooking } from '@/services/invoice.service';
+import { Booking } from '@/types/booking';
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'all';
 
@@ -137,6 +140,39 @@ export default function HistoriquePage() {
     return colorMap[status] || 'bg-gray-100 text-gray-800';
   };
 
+  // Télécharger la facture d'une course
+  const handleDownloadInvoice = (item: Record<string, unknown>) => {
+    try {
+      // Convertir l'item en Booking pour la génération de facture
+      const booking: Booking = {
+        id: item.id as string,
+        userId: item.userId as string || '',
+        userEmail: item.userEmail as string | null,
+        pickup: item.pickup as string || '',
+        destination: item.destination as string || '',
+        distance: item.distance as number || 0,
+        duration: item.duration as number || 0,
+        price: item.price as number || 0,
+        finalPrice: item.finalPrice as number || item.price as number,
+        carType: item.carType as string || 'Standard',
+        status: item.status as 'completed',
+        driverId: item.driverId as string,
+        driverName: item.driverName as string,
+        carModel: item.carModel as string,
+        carPlate: item.carPlate as string,
+        createdAt: item.createdAt as Timestamp,
+        updatedAt: item.updatedAt as Timestamp,
+        completedAt: item.completedAt as Timestamp,
+        actualDuration: item.actualDuration as number,
+      };
+      
+      downloadInvoiceFromBooking(booking);
+    } catch (error) {
+      console.error('Erreur téléchargement facture:', error);
+      alert('❌ Erreur lors du téléchargement de la facture');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FFF9E6] p-4 sm:p-6">
       <div className="max-w-4xl mx-auto">
@@ -261,6 +297,19 @@ export default function HistoriquePage() {
                           <p className="font-medium text-gray-900">{destination || 'Non spécifié'}</p>
                         </div>
                       </div>
+                      
+                      {/* Bouton télécharger facture - uniquement pour les courses terminées */}
+                      {status === 'completed' && (
+                        <div className="mt-3 pt-3 border-t">
+                          <button
+                            onClick={() => handleDownloadInvoice(item)}
+                            className="flex items-center justify-center w-full px-4 py-2.5 bg-gradient-to-r from-[#f29200] to-[#e68600] text-white font-medium rounded-lg hover:from-[#e68600] hover:to-[#d67a00] transition-all shadow-sm hover:shadow-md"
+                          >
+                            <FiDownload className="w-4 h-4 mr-2" />
+                            Télécharger la facture PDF
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 

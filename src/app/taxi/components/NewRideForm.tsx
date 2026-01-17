@@ -13,7 +13,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 import { estimateFare, createBooking, getCarTypes, FareEstimate } from '@/services/taxi.service';
-import { CarType, PlaceSuggestion, Location } from '@/types';
+import { CarType, PlaceSuggestion, Location, PreciseLocation as BookingPreciseLocation } from '@/types';
 import { AddressInput } from './AddressInput';
 import { VehicleOption } from './VehicleOption';
 import { FareSummary } from './FareSummary';
@@ -29,7 +29,8 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   const [currentUser, setCurrentUser] = useState<{ uid: string; email: string | null } | null>(null);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [pickupAddress, setPickupAddress] = useState('');
-  const [pickupLocation, setPickupLocation] = useState<Location | null>(null);
+  const [pickupLocation, setPickupLocation] = useState<BookingPreciseLocation | null>(null);
+  const [pickupAccuracy, setPickupAccuracy] = useState<number | null>(null);
   const [destinationAddress, setDestinationAddress] = useState('');
   const [destinationLocation, setDestinationLocation] = useState<Location | null>(null);
   const [selectedCarType, setSelectedCarType] = useState<CarType | null>(null);
@@ -55,9 +56,14 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     return () => unsubscribe();
   }, []);
 
-  //const { getCurrentPosition, loading: geoLoading, error: geoError } = useCapacitorGeolocation(); //ceci est OK
-  // NOUVEAU CODE : Récupérez tout ce dont vous avez besoin du hook
-  const { location: currentGpsLocation, error: geoError, loading: geoLoading, getCurrentPosition } = useCapacitorGeolocation();
+  // Utiliser le hook de géolocalisation avec précision ultra-haute
+  const { 
+    preciseLocation,
+    error: geoError, 
+    loading: geoLoading, 
+    getCurrentPosition,
+    getAccuracyQuality 
+  } = useCapacitorGeolocation();
   const [loadingAddress, setLoadingAddress] = useState(false);
 
   // Récupérer la position GPS //ceci est OK
@@ -134,22 +140,34 @@ useEffect(() => {
 
 // ÉTAPE 2 : Réagir aux changements venant du hook
 useEffect(() => {
-  // Ce code s'exécutera SEULEMENT si le hook réussit à obtenir une position
-  if (currentGpsLocation) { // <-- ICI, on lit enfin la valeur de `currentGpsLocation`
+  // Ce code s'exécutera SEULEMENT si le hook réussit à obtenir une position avec précision
+  if (preciseLocation) {
     setLoadingAddress(true);
 
-    const location: Location = {
-      lat: currentGpsLocation.lat,
-      lng: currentGpsLocation.lng,
+    // Utiliser la position précise avec toutes les métadonnées
+    const location: BookingPreciseLocation = {
+      lat: preciseLocation.lat,
+      lng: preciseLocation.lng,
+      accuracy: preciseLocation.accuracy,
+      altitude: preciseLocation.altitude,
+      heading: preciseLocation.heading,
+      speed: preciseLocation.speed,
+      timestamp: preciseLocation.timestamp,
     };
     
-    // Mettre à jour les états du composant avec la nouvelle position
-    setCurrentLocation(location);
+    // Stocker la précision pour l'afficher et l'envoyer au backend
+    setPickupAccuracy(preciseLocation.accuracy);
+    
+    // Mettre à jour les états du composant avec la position ultra-précise
+    setCurrentLocation({ lat: location.lat, lng: location.lng });
     setPickupLocation(location);
 
-    // Afficher temporairement les coordonnées
-    const coordsAddress = `Ma position (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})`;
+    // Afficher temporairement les coordonnées avec la précision
+    const accuracyText = preciseLocation.accuracy <= 20 ? '📍 Précis' : preciseLocation.accuracy <= 50 ? '📍 OK' : '⚠️ Imprécis';
+    const coordsAddress = `${accuracyText} Ma position (±${Math.round(preciseLocation.accuracy)}m)`;
     setPickupAddress(coordsAddress);
+    
+    console.log(`📍 [GPS] Précision: ${preciseLocation.accuracy.toFixed(1)}m - Qualité: ${getAccuracyQuality()}`);
 
     // Votre logique de Geocoding inversé (traduire les coordonnées en adresse)
     if (window.google && window.google.maps) {
@@ -173,7 +191,7 @@ useEffect(() => {
       setLoadingAddress(false);
     }
   }
-}, [currentGpsLocation]); // <-- Ce useEffect dépend UNIQUEMENT de la position GPS du hook
+}, [preciseLocation, getAccuracyQuality]); // Dépend de la position précise du hook
 
 
   // Charger les types de véhicules
@@ -331,7 +349,9 @@ useEffect(() => {
         userEmail: currentUser.email,
         pickup: pickupAddress,
         destination: destinationAddress,
+        // Utiliser la position précise avec toutes les métadonnées GPS
         pickupLocation: pickupLocation || undefined,
+        pickupLocationAccuracy: pickupAccuracy || undefined, // Précision en mètres
         destinationLocation: destinationLocation || undefined,
         distance: estimate.distance,
         duration: estimate.duration,
@@ -349,6 +369,8 @@ useEffect(() => {
           }
         }),
       });
+      
+      console.log(`📍 [Booking] Course créée avec précision GPS: ${pickupAccuracy ? pickupAccuracy.toFixed(0) + 'm' : 'N/A'}`);
 
       logger.info('Course créée', { bookingId });
       setShowConfirmModal(false);

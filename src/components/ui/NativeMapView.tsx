@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { GoogleMap } from '@capacitor/google-maps';
-import { Capacitor } from '@capacitor/core';
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 interface NativeMapViewProps {
     apiKey: string;
@@ -25,7 +26,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
     onMarkerClick,
     className = '',
 }) => {
-    const mapRef = useRef<HTMLElement>(null);
+    const mapRef = useRef<HTMLDivElement>(null);
     const [map, setMap] = useState<GoogleMap | null>(null);
 
     useEffect(() => {
@@ -108,14 +109,15 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
 
     return (
         <div className={`relative w-full h-full ${className}`}>
-            <capacitor-google-map
+            <div
                 ref={mapRef}
+                id="capacitor-map-container"
                 style={{
                     display: 'block',
                     width: '100%',
                     height: '100%',
                 }}
-            ></capacitor-google-map>
+            />
         </div>
     );
 };

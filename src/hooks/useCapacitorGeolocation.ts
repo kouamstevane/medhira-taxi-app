@@ -1,77 +1,151 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Geolocation, Position } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface Location {
     lat: number;
     lng: number;
 }
 
+export interface PreciseLocation extends Location {
+    accuracy: number; // Précision en mètres
+    altitude?: number | null;
+    heading?: number | null; // Direction (pour la navigation)
+    speed?: number | null;
+    timestamp: number;
+}
+
 export interface GeolocationState {
     location: Location | null;
+    preciseLocation: PreciseLocation | null;
     error: string | null;
     loading: boolean;
+    accuracy: number | null; // Précision en mètres
 }
+
+// Précision minimale acceptable (en mètres) pour une localisation "ultra-précise"
+const MIN_ACCEPTABLE_ACCURACY = 50; // 50 mètres max
+const IDEAL_ACCURACY = 20; // Idéalement moins de 20 mètres
+
 
 export const useCapacitorGeolocation = () => {
     const [state, setState] = useState<GeolocationState>({
         location: null,
+        preciseLocation: null,
         error: null,
         loading: false,
+        accuracy: null,
     });
 
+    /**
+     * Obtenir la position actuelle avec précision ultra-élevée
+     * Fait plusieurs tentatives si la précision est insuffisante
+     */
     const getCurrentPosition = useCallback(async () => {
         setState(prev => ({ ...prev, loading: true, error: null }));
 
         try {
-            console.log('📍 [Geolocation] Démarrage de la géolocalisation...');
+            console.log('[Geolocation] Démarrage de la géolocalisation HAUTE PRÉCISION...');
             
             // Vérifier les permissions
             const permissionStatus = await Geolocation.checkPermissions();
-            console.log('📍 [Geolocation] Statut permissions:', permissionStatus);
+            console.log('[Geolocation] Statut permissions:', permissionStatus);
 
             if (permissionStatus.location === 'denied') {
-                console.log('⚠️ [Geolocation] Permission refusée, demande en cours...');
-                // Demander la permission si elle n'est pas accordée (sauf si refusée définitivement)
+                console.log('[Geolocation] Permission refusée, demande en cours...');
                 const request = await Geolocation.requestPermissions();
-                console.log('📍 [Geolocation] Résultat demande:', request);
+                console.log('[Geolocation] Résultat demande:', request);
                 if (request.location === 'denied') {
                     throw new Error('Permission de géolocalisation refusée');
                 }
             }
 
-            console.log('📍 [Geolocation] Récupération position GPS (timeout: 30s)...');
-            // Obtenir la position avec paramètres optimisés pour une précision maximale
-            // Timeout augmenté pour permettre au GPS de se fixer, même à l'intérieur
-            const position = await Geolocation.getCurrentPosition({
-                enableHighAccuracy: true, // Force l'utilisation du GPS
-                timeout: 30000, // 30 secondes pour laisser le temps au GPS de se fixer
-                maximumAge: 2000 // Position fraîche uniquement
+            // Stratégies de tentatives progressives pour éviter les timeouts
+            const strategies = [
+                // Tentative 1 : Haute précision, timeout 10s (rapide si GPS déjà chaud)
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+                // Tentative 2 : Haute précision, timeout 20s (laisser plus de temps au GPS pour fixer)
+                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+                // Tentative 3 : Haute précision, accepte cache récent (5s) et timeout très long
+                { enableHighAccuracy: true, timeout: 25000, maximumAge: 5000 },
+                // Tentative 4 : Mode standard (Wifi/Réseau), timeout court (fallback utile en intérieur)
+                { enableHighAccuracy: false, timeout: 10000, maximumAge: 10000 }
+            ];
+
+            let bestPosition: Position | null = null;
+            let bestAccuracy = Infinity;
+
+            for (let i = 0; i < strategies.length; i++) {
+                try {
+                    const strategy = strategies[i];
+                    console.log(`[Geolocation] Tentative ${i + 1}/${strategies.length}`, strategy);
+                    
+                    const position = await Geolocation.getCurrentPosition(strategy);
+                    const accuracy = position.coords.accuracy;
+                    
+                    console.log(`[Geolocation] Succès tentative ${i + 1}. Précision: ${accuracy.toFixed(1)}m`);
+
+                    // Garder la meilleure position trouvée jusqu'à présent
+                    if (accuracy < bestAccuracy) {
+                        bestAccuracy = accuracy;
+                        bestPosition = position;
+                    }
+
+                    // Si la précision est acceptable (<= 50m), on s'arrête là pour ne pas faire attendre l'utilisateur
+                    if (accuracy <= MIN_ACCEPTABLE_ACCURACY) {
+                        console.log('[Geolocation] Précision acceptable atteinte !');
+                        break;
+                    }
+                    
+                } catch (err: any) {
+                    console.warn(`[Geolocation] Échec tentative ${i + 1} (${err.code}):`, err.message);
+                    // On continue à la prochaine stratégie
+                }
+            }
+
+            if (!bestPosition) {
+                throw new Error("Impossible d'obtenir une localisation valide après plusieurs tentatives. Vérifiez que le GPS est activé.");
+            }
+
+            const preciseLocation: PreciseLocation = {
+                lat: bestPosition.coords.latitude,
+                lng: bestPosition.coords.longitude,
+                accuracy: bestAccuracy,
+                altitude: bestPosition.coords.altitude,
+                heading: bestPosition.coords.heading,
+                speed: bestPosition.coords.speed,
+                timestamp: bestPosition.timestamp,
+            };
+
+            console.log('[Geolocation] Position FINALE:', {
+                lat: preciseLocation.lat.toFixed(6),
+                lng: preciseLocation.lng.toFixed(6),
+                accuracy: `${preciseLocation.accuracy.toFixed(1)}m`,
+                qualité: preciseLocation.accuracy <= IDEAL_ACCURACY ? 'EXCELLENTE' : 
+                         preciseLocation.accuracy <= MIN_ACCEPTABLE_ACCURACY ? 'BONNE' : 'ACCEPTABLE'
             });
 
-            console.log('✅ [Geolocation] Position obtenue:', {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-                accuracy: position.coords.accuracy
-            });
+            // Avertir si la précision n'est pas idéale
+            if (bestAccuracy > MIN_ACCEPTABLE_ACCURACY) {
+                console.warn(`[Geolocation] Précision limitée (${bestAccuracy.toFixed(0)}m). Conseil: sortir à l'extérieur.`);
+            }
 
             setState({
                 location: {
-                    lat: position.coords.latitude,
-                    lng: position.coords.longitude
+                    lat: preciseLocation.lat,
+                    lng: preciseLocation.lng
                 },
+                preciseLocation,
                 error: null,
-                loading: false
+                loading: false,
+                accuracy: bestAccuracy,
             });
 
-            return {
-                lat: position.coords.latitude,
-                lng: position.coords.longitude
-            };
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return preciseLocation;
+
+         
         } catch (err: any) {
-            console.error('Erreur géolocalisation:', err);
-            console.log("Erreur géolocalisation:", err)
+            console.error('[Geolocation] Erreur:', err);
             let errorMessage = 'Impossible d\'obtenir la position';
 
             if (err.message) {
@@ -80,16 +154,20 @@ export const useCapacitorGeolocation = () => {
 
             setState({
                 location: null,
+                preciseLocation: null,
                 error: errorMessage,
-                loading: false
+                loading: false,
+                accuracy: null,
             });
 
             throw err;
         }
     }, []);
 
-    // Watch position (pour le suivi en temps réel)
-    const watchPosition = useCallback((callback: (location: Location) => void) => {
+    /**
+     * Watch position (pour le suivi en temps réel avec precision)
+     */
+    const watchPosition = useCallback((callback: (location: PreciseLocation) => void) => {
         let watchId: string | null = null;
 
         const startWatch = async () => {
@@ -98,25 +176,29 @@ export const useCapacitorGeolocation = () => {
                     {
                         enableHighAccuracy: true,
                         timeout: 10000,
-                        maximumAge: 0
+                        maximumAge: 0 // Toujours une position fraîche
                     },
                     (position, err) => {
                         if (err) {
                             console.error('Erreur watch position:', err);
-                            console.log('Erreur watch position:', err);
                             return;
                         }
                         if (position) {
-                            callback({
+                            const preciseLocation: PreciseLocation = {
                                 lat: position.coords.latitude,
-                                lng: position.coords.longitude
-                            });
+                                lng: position.coords.longitude,
+                                accuracy: position.coords.accuracy,
+                                altitude: position.coords.altitude,
+                                heading: position.coords.heading,
+                                speed: position.coords.speed,
+                                timestamp: position.timestamp,
+                            };
+                            callback(preciseLocation);
                         }
                     }
                 );
             } catch (err) {
                 console.error('Erreur démarrage watch:', err);
-                console.log('Erreur démarrage watch:', err);
             }
         };
 
@@ -129,10 +211,32 @@ export const useCapacitorGeolocation = () => {
         };
     }, []);
 
+    /**
+     * Vérifier si la précision actuelle est suffisante pour une navigation fiable
+     */
+    const isAccuracyGoodEnough = useCallback(() => {
+        if (!state.accuracy) return false;
+        return state.accuracy <= MIN_ACCEPTABLE_ACCURACY;
+    }, [state.accuracy]);
+
+    /**
+     * Obtenir une description textuelle de la qualité de la précision
+     */
+    const getAccuracyQuality = useCallback(() => {
+        if (!state.accuracy) return 'Inconnue';
+        if (state.accuracy <= 10) return 'Excellente (GPS)';
+        if (state.accuracy <= IDEAL_ACCURACY) return 'Très bonne';
+        if (state.accuracy <= MIN_ACCEPTABLE_ACCURACY) return 'Bonne';
+        if (state.accuracy <= 100) return 'Moyenne';
+        return 'Faible (WiFi/Réseau)';
+    }, [state.accuracy]);
+
     return {
         ...state,
         getCurrentPosition,
         watchPosition,
+        isAccuracyGoodEnough,
+        getAccuracyQuality,
         isNative: Capacitor.isNativePlatform()
     };
 };

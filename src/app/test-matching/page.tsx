@@ -6,6 +6,7 @@ import { collection, query, where, getDocs, doc, getDoc, updateDoc, serverTimest
 import { findAvailableDrivers } from '@/services/matching/findAvailableDrivers';
 import { broadcastRideRequest } from '@/services/matching/broadcast';
 import { logger } from '@/utils/logger';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default function TestMatchingPage() {
   const [results, setResults] = useState<any[]>([]);
@@ -25,6 +26,7 @@ export default function TestMatchingPage() {
       const availableDrivers = await findAvailableDrivers({
         location: testLocation,
         rangeKm: 50, // Rayon large pour le test
+        maxTravelMinutes: 30, // 30 minutes pour le test
         maxResults: 10,
       });
 

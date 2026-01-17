@@ -34,6 +34,7 @@ export type {
   CarType,
   PricingConfig,
   PriceCalculation,
+  PreciseLocation,
 } from './booking';
 
 // ==================== Chauffeurs & Véhicules ====================

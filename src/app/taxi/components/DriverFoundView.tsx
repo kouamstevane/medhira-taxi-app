@@ -11,6 +11,7 @@ import { updateDestination } from '@/services/taxi.service';
 import { AddressInput } from './AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { ChatModal } from '@/components/ChatModal';
+import { InvoiceModal } from '@/components/InvoiceModal';
 
 interface DriverFoundViewProps {
   bookingId: string;
@@ -36,6 +37,8 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   const [newDestLocation, setNewDestLocation] = useState<Location | null>(null);
   const [updatingDest, setUpdatingDest] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [completedBooking, setCompletedBooking] = useState<Booking | null>(null);
   const [realTimeDistance, setRealTimeDistance] = useState<number>(0); // En km
   const [realTimeDuration, setRealTimeDuration] = useState<number>(0); // En minutes
   
@@ -230,11 +233,14 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
     const unsubscribe = onSnapshot(bookingRef, (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
-          setBooking({ id: snapshot.id, ...data } as Booking);
+          const currentBooking = { id: snapshot.id, ...data } as Booking;
+          setBooking(currentBooking);
           setLoading(false);
           
-          if (data.status === 'completed') {
-            onComplete();
+          // Quand la course est terminée, afficher le modal de facture
+          if (data.status === 'completed' && !showInvoiceModal && !completedBooking) {
+            setCompletedBooking(currentBooking);
+            setShowInvoiceModal(true);
           }
         }
       },
@@ -245,7 +251,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
     );
 
     return () => unsubscribe();
-  }, [bookingId, onComplete]);
+  }, [bookingId, showInvoiceModal, completedBooking]);
 
   if (loading) {
     return (
@@ -561,6 +567,17 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
           driverId={booking.driverId}
           userType="client"
           onClose={() => setShowChat(false)}
+        />
+      )}
+      
+      {/* Modal de Facture - affiché quand la course est terminée */}
+      {showInvoiceModal && completedBooking && (
+        <InvoiceModal
+          booking={completedBooking}
+          onClose={() => {
+            setShowInvoiceModal(false);
+            onComplete();
+          }}
         />
       )}
     </div>

@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "google-maps-platform-code-assist": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@googlemaps/code-assist-mcp@latest"
+      ],
+      "alwaysAllow": [
+        "retrieve-instructions",
+        "retrieve-google-maps-platform-docs"
+      ]
+    },
+    "firebase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "firebase-tools@latest", "mcp",
+        "--dir", "/Users/User/Documents/Allo training/medhira-taxi-app/firebase.json"
+      ]
+    }
+  }
+}
