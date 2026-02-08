@@ -30,24 +30,13 @@ const nextConfig: NextConfig = {
     formats: ['image/webp'],
     minimumCacheTTL: 60,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // ESLint et TypeScript sont maintenant gérés séparément
   typescript: {
     ignoreBuildErrors: true,
   },
-  // Webpack optimizations
-  webpack: (config, { dev, isServer }) => {
-    if (!dev && !isServer) {
-      // Optimisations de production
-      config.optimization = {
-        ...config.optimization,
-        minimize: true,
-        usedExports: true,
-        sideEffects: false,
-      };
-    }
-    return config;
+  // Configuration Turbopack (Next.js 16+)
+  turbopack: {
+    // Configuration vide car les optimisations sont gérées automatiquement
   },
 };
 

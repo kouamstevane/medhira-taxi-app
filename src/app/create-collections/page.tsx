@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, listCollections, serverTimestamp, query, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, serverTimestamp, query, getDocs, limit } from 'firebase/firestore';
 
 export default function CreateCollectionsPage() {
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -163,38 +163,52 @@ export default function CreateCollectionsPage() {
         }
       ];
 
-      // Lister les collections existantes
-      log('📋 Récupération des collections existantes...', 'info');
-      const existingCollections = await listCollections(db);
-      const existingCollectionNames = existingCollections.map(col => col.id);
+      // Vérifier les collections existantes
+      log('📋 Vérification des collections existantes...', 'info');
+      const existingCollectionNames: string[] = [];
+      
+      for (const collectionConfig of collections) {
+        try {
+          // Essayer de lire un document pour vérifier si la collection existe
+          // Règle Section 4.1 : limit() obligatoire sur chaque requête
+          const testQuery = query(collection(db, collectionConfig.name), limit(1));
+          const snapshot = await getDocs(testQuery);
+          if (!snapshot.empty) {
+            existingCollectionNames.push(collectionConfig.name);
+          }
+        } catch (error) {
+          // La collection n'existe pas ou erreur d'accès
+          log(`⚠️  Collection "${collectionConfig.name}" non trouvée`, 'info');
+        }
+      }
       
       log(`Collections existantes: ${existingCollectionNames.join(', ')}`, 'info');
       log('');
 
       // Créer les collections manquantes
-      for (const collection of collections) {
-        log(`📝 Vérification de la collection "${collection.name}"...`, 'info');
+      for (const collectionConfig of collections) {
+        log(`📝 Vérification de la collection "${collectionConfig.name}"...`, 'info');
         
-        if (!existingCollectionNames.includes(collection.name)) {
-          log(`⚠️  Collection "${collection.name}" manquante`, 'info');
-          log(`📝 Création de la collection "${collection.name}"...`, 'info');
+        if (!existingCollectionNames.includes(collectionConfig.name)) {
+          log(`⚠️  Collection "${collectionConfig.name}" manquante`, 'info');
+          log(`📝 Création de la collection "${collectionConfig.name}"...`, 'info');
           
           try {
             // Créer un document vide pour créer la collection
-            const sampleDoc = collection.sampleDoc;
-            const docRef = await addDoc(collection(db, collection.name), sampleDoc);
-            log(`✅ Collection "${collection.name}" créée avec succès (document ID: ${docRef.id})`, 'success');
+            const sampleDoc = collectionConfig.sampleDoc;
+            const docRef = await addDoc(collection(db, collectionConfig.name), sampleDoc);
+            log(`✅ Collection "${collectionConfig.name}" créée avec succès (document ID: ${docRef.id})`, 'success');
             
             // Supprimer immédiatement le document de test
-            await deleteDoc(doc(db, collection.name, docRef.id));
-            log(`🗑️  Document de test supprimé de "${collection.name}"`, 'info');
+            await deleteDoc(doc(db, collectionConfig.name, docRef.id));
+            log(`🗑️  Document de test supprimé de "${collectionConfig.name}"`, 'info');
             log('');
           } catch (error: any) {
-            log(`❌ Erreur lors de la création de "${collection.name}": ${error.message}`, 'error');
+            log(`❌ Erreur lors de la création de "${collectionConfig.name}": ${error.message}`, 'error');
             log('');
           }
         } else {
-          log(`✅ Collection "${collection.name}" existe déjà`, 'success');
+          log(`✅ Collection "${collectionConfig.name}" existe déjà`, 'success');
           log('');
         }
       }
@@ -202,7 +216,8 @@ export default function CreateCollectionsPage() {
       // Vérifier les sous-collections de bookings
       log('🔍 Vérification des sous-collections de bookings...', 'info');
       
-      const bookingsQuery = query(collection(db, 'bookings'));
+      // Règle Section 4.1 : limit() obligatoire sur chaque requête
+      const bookingsQuery = query(collection(db, 'bookings'), limit(1));
       const bookingsSnapshot = await getDocs(bookingsQuery);
       
       if (bookingsSnapshot.empty) {
@@ -255,8 +270,21 @@ export default function CreateCollectionsPage() {
 
       // Vérification finale
       log('🔍 Vérification finale des collections...', 'info');
-      const finalCollections = await listCollections(db);
-      const finalCollectionNames = finalCollections.map(col => col.id);
+      const finalCollectionNames: string[] = [];
+      
+      for (const collectionConfig of collections) {
+        try {
+          // Essayer de lire un document pour vérifier si la collection existe
+          // Règle Section 4.1 : limit() obligatoire sur chaque requête
+          const testQuery = query(collection(db, collectionConfig.name), limit(1));
+          const snapshot = await getDocs(testQuery);
+          if (!snapshot.empty) {
+            finalCollectionNames.push(collectionConfig.name);
+          }
+        } catch (error) {
+          // La collection n'existe pas ou erreur d'accès
+        }
+      }
       
       log(`Collections finales: ${finalCollectionNames.join(', ')}`, 'info');
       log('');
@@ -307,13 +335,27 @@ export default function CreateCollectionsPage() {
       const app = initializeApp(firebaseConfig);
       const db = getFirestore(app);
 
-      const existingCollections = await listCollections(db);
-      const existingCollectionNames = existingCollections.map(col => col.id);
+      // Vérifier les collections existantes
+      const existingCollectionNames: string[] = [];
+      const expectedCollections = ['users', 'drivers', 'wallets', 'transactions', 'bookings', 'admins', 'carTypes', 'ratings', 'parcels'];
+      
+      for (const collectionName of expectedCollections) {
+        try {
+          // Essayer de lire un document pour vérifier si la collection existe
+          // Règle Section 4.1 : limit() obligatoire sur chaque requête
+          const testQuery = query(collection(db, collectionName), limit(1));
+          const snapshot = await getDocs(testQuery);
+          if (!snapshot.empty) {
+            existingCollectionNames.push(collectionName);
+          }
+        } catch (error) {
+          // La collection n'existe pas ou erreur d'accès
+        }
+      }
       
       log(`Collections existantes: ${existingCollectionNames.join(', ')}`, 'info');
       log('');
       
-      const expectedCollections = ['users', 'drivers', 'wallets', 'transactions', 'bookings', 'admins', 'carTypes', 'ratings', 'parcels'];
       const missingCollections = expectedCollections.filter(c => !existingCollectionNames.includes(c));
       
       if (missingCollections.length === 0) {
