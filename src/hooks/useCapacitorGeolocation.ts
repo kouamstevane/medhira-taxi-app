@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Geolocation, Position } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// ✅ Retiré eslint-disable @typescript-eslint/no-explicit-any (medJira.md #116)
 export interface Location {
     lat: number;
     lng: number;
@@ -97,8 +97,11 @@ export const useCapacitorGeolocation = () => {
                         break;
                     }
                     
-                } catch (err: any) {
-                    console.warn(`[Geolocation] Échec tentative ${i + 1} (${err.code}):`, err.message);
+                } catch (err: unknown) {
+                    // ✅ Typage correct de l'erreur (medJira.md #116)
+                    const errorCode = (err as { code?: number })?.code;
+                    const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+                    console.warn(`[Geolocation] Échec tentative ${i + 1} (${errorCode}):`, errorMessage);
                     // On continue à la prochaine stratégie
                 }
             }
@@ -144,11 +147,12 @@ export const useCapacitorGeolocation = () => {
             return preciseLocation;
 
          
-        } catch (err: any) {
+        } catch (err: unknown) {
+            // ✅ Typage correct de l'erreur (medJira.md #116)
             console.error('[Geolocation] Erreur:', err);
             let errorMessage = 'Impossible d\'obtenir la position';
 
-            if (err.message) {
+            if (err instanceof Error && err.message) {
                 errorMessage = err.message;
             }
 
@@ -166,9 +170,16 @@ export const useCapacitorGeolocation = () => {
 
     /**
      * Watch position (pour le suivi en temps réel avec precision)
+     * ✅ Ajout throttling pour optimiser la batterie (medJira.md #67)
      */
-    const watchPosition = useCallback((callback: (location: PreciseLocation) => void) => {
+    const watchPosition = useCallback((
+        callback: (location: PreciseLocation) => void,
+        options?: { throttleMs?: number; maxFrequencyHz?: number }
+    ) => {
+        // ✅ Configuration du throttling (medJira.md #67)
+        const { throttleMs = 1000, maxFrequencyHz = 1 } = options || {};
         let watchId: string | null = null;
+        let lastCallbackTime = 0;
 
         const startWatch = async () => {
             try {
@@ -176,7 +187,7 @@ export const useCapacitorGeolocation = () => {
                     {
                         enableHighAccuracy: true,
                         timeout: 10000,
-                        maximumAge: 0 // Toujours une position fraîche
+                        maximumAge: throttleMs / 1000 // ✅ Accepte cache récent pour réduire fréquence
                     },
                     (position, err) => {
                         if (err) {
@@ -184,21 +195,29 @@ export const useCapacitorGeolocation = () => {
                             return;
                         }
                         if (position) {
-                            const preciseLocation: PreciseLocation = {
-                                lat: position.coords.latitude,
-                                lng: position.coords.longitude,
-                                accuracy: position.coords.accuracy,
-                                altitude: position.coords.altitude,
-                                heading: position.coords.heading,
-                                speed: position.coords.speed,
-                                timestamp: position.timestamp,
-                            };
-                            callback(preciseLocation);
+                            const now = Date.now();
+                            const timeSinceLastCallback = now - lastCallbackTime;
+                            
+                            // ✅ Throttling à maxFrequencyHz (medJira.md #67)
+                            if (timeSinceLastCallback >= throttleMs) {
+                                lastCallbackTime = now;
+                                const preciseLocation: PreciseLocation = {
+                                    lat: position.coords.latitude,
+                                    lng: position.coords.longitude,
+                                    accuracy: position.coords.accuracy,
+                                    altitude: position.coords.altitude,
+                                    heading: position.coords.heading,
+                                    speed: position.coords.speed,
+                                    timestamp: position.timestamp,
+                                };
+                                callback(preciseLocation);
+                            }
                         }
                     }
                 );
-            } catch (err) {
-                console.error('Erreur démarrage watch:', err);
+            } catch (err: unknown) {
+                // ✅ Typage correct de l'erreur (medJira.md #116)
+                console.error('Erreur démarrage watch:', err instanceof Error ? err.message : err);
             }
         };
 

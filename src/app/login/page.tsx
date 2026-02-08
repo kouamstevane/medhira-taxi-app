@@ -103,7 +103,15 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Vérifier si l'email est vérifié
+      if (!userCredential.user.emailVerified) {
+        await auth.signOut();
+        setError('Veuillez vérifier votre adresse email avant de vous connecter. Un email de vérification a été envoyé.');
+        return;
+      }
+      
       router.push('/dashboard');
     } catch (error: unknown) {
       handleAuthError(error);
@@ -465,6 +473,17 @@ export default function LoginPage() {
                   Mot de passe oublié ?
                 </Link>
               </div>
+
+              {error && error.includes('vérifier votre adresse email') && (
+                <div className="mt-4 text-center">
+                  <Link
+                    href="/auth/verify-email"
+                    className="text-sm text-[#f29200] hover:underline font-medium"
+                  >
+                    Renvoyer l&apos;email de vérification
+                  </Link>
+                </div>
+              )}
             </form>
           )}
 

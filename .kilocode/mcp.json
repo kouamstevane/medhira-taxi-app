@@ -1,23 +1,48 @@
 {
-  "mcpServers": {
-    "google-maps-platform-code-assist": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@googlemaps/code-assist-mcp@latest"
-      ],
-      "alwaysAllow": [
-        "retrieve-instructions",
-        "retrieve-google-maps-platform-docs"
-      ]
-    },
-    "firebase": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "firebase-tools@latest", "mcp",
-        "--dir", "/Users/User/Documents/Allo training/medhira-taxi-app/firebase.json"
-      ]
+    "mcpServers": {
+        "google-maps-platform-code-assist": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@googlemaps/code-assist-mcp@latest"
+            ],
+            "alwaysAllow": [
+                "retrieve-instructions",
+                "retrieve-google-maps-platform-docs"
+            ]
+        },
+        "firebase": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "firebase-tools@latest",
+                "mcp",
+                "--dir",
+                "C:/Users/User/Documents/Allo training/medhira-taxi-app"
+            ],
+            "alwaysAllow": [
+                "firebase_get_project",
+                "firebase_get_security_rules",
+                "auth_update_user",
+                "auth_get_users",
+                "firestore_list_collections",
+                "firestore_query_collection",
+                "firebase_get_environment",
+                "realtimedatabase_set_data",
+                "firebase_get_sdk_config"
+            ],
+            "disabled": false
+        },
+        "firebase-admin": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@gannonh/firebase-mcp"
+            ],
+        "env": {
+            "SERVICE_ACCOUNT_KEY_PATH": "C:/Users/User/Documents/Allo training/medhira-taxi-app/src/config/keys/serviceAccountKey.json",
+            "FIREBASE_STORAGE_BUCKET": "medjira-service.appspot.com"
+        }
     }
-  }
+    }
 }

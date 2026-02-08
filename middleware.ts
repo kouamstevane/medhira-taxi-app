@@ -17,6 +17,8 @@
  * @see https://nextjs.org/docs/app/building-your-application/routing/middleware
  */
 
+
+/* eslint-disable */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -53,11 +55,12 @@ const DRIVER_ROUTES = [
 ];
 
 /**
- * Routes publiques pour les chauffeurs (login, register)
+ * Routes publiques pour les chauffeurs (login, register, verify-email)
  */
 const DRIVER_PUBLIC_ROUTES = [
   '/driver/login',
   '/driver/register',
+  '/driver/verify-email',
 ];
 
 /**

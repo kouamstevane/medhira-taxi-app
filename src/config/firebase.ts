@@ -1,15 +1,21 @@
 /**
  * Configuration Firebase - Point d'entrée unique pour tous les services Firebase
- * 
+ *
  * Ce fichier centralise l'initialisation de Firebase et exporte les services
  * nécessaires (Auth, Firestore, Storage) pour toute l'application.
- * 
+ *
  * @module config/firebase
  */
 
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
+import {
+  getFirestore,
+  Firestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager
+} from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
 /**
@@ -43,7 +49,28 @@ if (!getApps().length) {
  * Exportées pour être utilisées dans toute l'application
  */
 export const auth: Auth = getAuth(app);
-export const db: Firestore = getFirestore(app);
+
+// ✅ Activer la persistance locale pour offline-first (medJira.md #3)
+let firestoreInstance: Firestore;
+if (typeof window !== 'undefined') {
+  try {
+    initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    });
+    firestoreInstance = getFirestore(app);
+  } catch (e) {
+    // Fallback si déjà initialisé
+    console.warn('Firestore déjà initialisé, utilisation getFirestore');
+    firestoreInstance = getFirestore(app);
+  }
+} else {
+  firestoreInstance = getFirestore(app);
+}
+
+// ✅ Export de l'instance Firestore
+export const db: Firestore = firestoreInstance;
 export const storage: FirebaseStorage = getStorage(app);
 
 /**

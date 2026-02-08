@@ -13,10 +13,9 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  ConfirmationResult,
   User,
+  sendEmailVerification,
+  reload,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
@@ -29,6 +28,13 @@ import { SocialLogin } from '@capgo/capacitor-social-login';
  */
 export const signInWithEmail = async (email: string, password: string): Promise<User> => {
   const result = await signInWithEmailAndPassword(auth, email, password);
+  
+  // Vérifier si l'email est vérifié
+  if (!result.user.emailVerified) {
+    await signOut();
+    throw new Error('Veuillez vérifier votre adresse email avant de vous connecter');
+  }
+  
   return result.user;
 };
 
@@ -52,9 +58,46 @@ export const signUpWithEmail = async (
     userType,
   });
 
+  // Envoyer l'email de vérification
+  try {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medjira-taxi.firebaseapp.com';
+    await sendEmailVerification(result.user, {
+      url: `${origin}/auth/verify-email`,
+      handleCodeInApp: true,
+    });
+  } catch (error) {
+    console.error('Erreur lors de l\'envoi de l\'email de vérification:', error);
+    // On continue quand même, l'utilisateur peut renvoyer l'email plus tard
+  }
+
   return result.user;
 };
 
+/**
+ * Envoyer un email de vérification
+ */
+export const sendVerificationEmail = async (user: User): Promise<void> => {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medjira-taxi.firebaseapp.com';
+  await sendEmailVerification(user, {
+    url: `${origin}/auth/verify-email`,
+    handleCodeInApp: true,
+  });
+};
+
+/**
+ * Vérifier si l'email de l'utilisateur est vérifié
+ */
+export const checkEmailVerified = async (user: User): Promise<boolean> => {
+  await reload(user);
+  return user.emailVerified || false;
+};
+
+/**
+ * Recharger les données utilisateur
+ */
+export const reloadUser = async (user: User): Promise<void> => {
+  await reload(user);
+};
 
 /**
  * Connexion avec Google
@@ -125,53 +168,6 @@ export const signInWithGoogle = async (): Promise<User> => {
   }
 
   return user;
-};
-
-/**
- * Configuration du reCAPTCHA pour l'authentification par téléphone
- */
-export const setupRecaptcha = (containerId: string): RecaptchaVerifier => {
-  return new RecaptchaVerifier(auth, containerId, {
-    size: 'invisible',
-    callback: () => {
-      // reCAPTCHA résolu
-    },
-  });
-};
-
-/**
- * Envoi du code de vérification par SMS
- */
-export const sendVerificationCode = async (
-  phoneNumber: string,
-  recaptchaVerifier: RecaptchaVerifier
-): Promise<ConfirmationResult> => {
-  return await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
-};
-
-/**
- * Vérification du code SMS et connexion
- */
-export const verifyCode = async (
-  confirmationResult: ConfirmationResult,
-  code: string
-): Promise<User> => {
-  const result = await confirmationResult.confirm(code);
-
-  // Vérifier si l'utilisateur existe dans Firestore
-  const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-
-  if (!userDoc.exists()) {
-    // Créer le document utilisateur s'il n'existe pas
-    await createUserDocument(result.user.uid, {
-      phoneNumber: result.user.phoneNumber || '',
-      firstName: '',
-      lastName: '',
-      userType: 'client',
-    });
-  }
-
-  return result.user;
 };
 
 /**

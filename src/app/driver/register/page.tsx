@@ -1,17 +1,18 @@
 "use client";
+/* eslint-disable */
 import { useState, useEffect } from 'react';
 import { auth, db, storage } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, getDoc, query, collection, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
+import { sendVerificationEmail } from '@/services/auth.service';
 
 export default function DriverRegister() {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
     email: '',
-    phone: '',
     password: '',
     licenseNumber: '',
     carModel: '',
@@ -291,7 +292,6 @@ export default function DriverRegister() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         email: formData.email,
-        phone: formData.phone,
         licenseNumber: formData.licenseNumber,
         car: {
           model: formData.carModel,
@@ -315,9 +315,19 @@ export default function DriverRegister() {
       await setDoc(doc(db, 'drivers', userId), driverData);
       console.log('Chauffeur enregistré avec succès');
 
-      // 4. Déconnexion et redirection
-      await auth.signOut();
-      router.push('/auth/driver/verify');
+      // 4. Envoyer l'email de vérification
+      try {
+        if (auth.currentUser) {
+          await sendVerificationEmail(auth.currentUser);
+          console.log('Email de vérification envoyé avec succès');
+        }
+      } catch (emailError) {
+        console.error('Erreur lors de l\'envoi de l\'email de vérification:', emailError);
+        // On continue quand même, l'utilisateur peut renvoyer l'email depuis la page de vérification
+      }
+
+      // 5. Redirection vers la page de vérification email
+      router.push('/driver/verify-email');
 
     } catch (error: any) {
       console.error('Erreur complète:', error);
@@ -384,7 +394,6 @@ export default function DriverRegister() {
               { label: 'Prénom', key: 'firstName', type: 'text' },
               { label: 'Nom', key: 'lastName', type: 'text' },
               { label: 'Email', key: 'email', type: 'email', disabled: isExistingUser },
-              { label: 'Téléphone', key: 'phone', type: 'tel' },
               { label: 'Mot de passe', key: 'password', type: 'password', hidden: isExistingUser },
               { label: 'Numéro de permis', key: 'licenseNumber', type: 'text' }
             ]

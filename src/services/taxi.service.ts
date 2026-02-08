@@ -1,17 +1,16 @@
 /**
  * Service de Gestion des Taxis
- * 
+ *
  * Gère les réservations, le calcul de prix,
  * et la recherche de chauffeurs.
- * 
+ *
  * @module services/taxi
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// ✅ Retiré eslint-disable @typescript-eslint/no-explicit-any (medJira.md #116)
 
 import { logger } from '@/utils/logger';
 import {
   collection,
-
   doc,
   getDoc,
   getDocs,
@@ -23,6 +22,7 @@ import {
   limit,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
@@ -77,9 +77,10 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
           driversNotified: result.driversNotified,
           finalPerimeter: result.finalPerimeter,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Ne pas bloquer la création si le matching échoue
-        logger.warn('Erreur lors du matching automatique', { error, bookingId: newBookingRef.id });
+        const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+        logger.warn('Erreur lors du matching automatique', { error: errorMessage, bookingId: newBookingRef.id });
       }
     })();
   }
@@ -127,7 +128,8 @@ export const updateBookingStatus = async (
 ): Promise<void> => {
   const bookingRef = doc(db, 'bookings', bookingId);
 
-  const updateData: any = {
+  // ✅ Utilisation de Record<string, unknown> pour plus de flexibilité avec serverTimestamp()
+  const updateData: Record<string, unknown> = {
     status,
     updatedAt: serverTimestamp(),
     ...additionalData,
@@ -155,12 +157,14 @@ export const cancelBooking = async (bookingId: string, reason?: string): Promise
  */
 export const getCarTypes = async (): Promise<CarType[]> => {
   const carTypesRef = collection(db, 'carTypes');
-  const querySnapshot = await getDocs(carTypesRef);
+  // ✅ Ajout limit(50) pour optimiser les coûts Firestore (medJira.md #57)
+  const q = query(carTypesRef, limit(50));
+  const querySnapshot = await getDocs(q);
 
   return querySnapshot.docs
     .map(doc => ({
       ...doc.data(),
-      id: doc.data().id || doc.id, // Utiliser l'ID du document si pas présent dans les données
+      id: doc.data().id || doc.id,
     } as CarType))
     .sort((a, b) => (a.order || 0) - (b.order || 0));
 };
@@ -262,9 +266,10 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
 
       distance = leg.distance.value / 1000; // Convertir en km
       duration = Math.ceil(leg.duration.value / 60); // Convertir en minutes
-    } catch (directionsError: any) {
+    } catch (directionsError: unknown) {
       // Si Directions API échoue, essayer avec Geocoding pour obtenir les coordonnées
-      logger.warn('Directions API échoué, tentative avec Geocoding', { error: directionsError });
+      const errorMessage = directionsError instanceof Error ? directionsError.message : 'Erreur inconnue';
+      logger.warn('Directions API échoué, tentative avec Geocoding', { error: errorMessage });
 
       try {
         const geocoder = new window.google.maps.Geocoder();
@@ -303,13 +308,15 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
         // Calculer avec la formule de Haversine
         distance = calculateDistance(fromLocation, toLocation);
         duration = Math.ceil((distance / 40) * 60); // Estimation: 40 km/h moyenne
-      } catch (geocodingError: any) {
+      } catch (geocodingError: unknown) {
         // On utilise l'erreur de géocodage pour enrichir le log
-        logger.error('Le Geocoding de secours a aussi échoué', { error: geocodingError });
-        console.log("Le Geocoding de secours a aussi échoué", { error: geocodingError });
+        const geoErrorMessage = geocodingError instanceof Error ? geocodingError.message : 'Erreur inconnue';
+        logger.error('Le Geocoding de secours a aussi échoué', { error: geoErrorMessage });
+        console.log("Le Geocoding de secours a aussi échoué", { error: geoErrorMessage });
 
         // Si tout échoue, relancer l'erreur originale
-        throw new Error(`Impossible de calculer l'itinéraire: ${directionsError.message}. Vérifiez que les adresses sont correctes et que l'API Directions est activée.`);
+        const directionsErrorMessage = directionsError instanceof Error ? directionsError.message : 'Erreur inconnue';
+        throw new Error(`Impossible de calculer l'itinéraire: ${directionsErrorMessage}. Vérifiez que les adresses sont correctes et que l'API Directions est activée.`);
       }
     }
   } else if (typeof from === 'object' && typeof to === 'object') {
@@ -344,10 +351,11 @@ export const findNearbyDrivers = async (
   // Note: Cette implémentation simplifiée devrait utiliser GeoFirestore
   // pour une recherche géographique efficace
   const driversRef = collection(db, 'drivers');
+  // ✅ Ajout limit(50) pour optimiser les coûts Firestore (medJira.md #57)
   const q = query(
     driversRef,
     where('status', '==', 'available'),
-    limit(10)
+    limit(50)
   );
 
   const querySnapshot = await getDocs(q);
@@ -363,6 +371,7 @@ export const findNearbyDrivers = async (
 
 /**
  * Assigner un chauffeur à une réservation
+ * ✅ Utilisation de batch write pour transaction atomique (medJira.md #60)
  */
 export const assignDriver = async (bookingId: string, driverId: string): Promise<void> => {
   const driverRef = doc(db, 'drivers', driverId);
@@ -374,20 +383,27 @@ export const assignDriver = async (bookingId: string, driverId: string): Promise
 
   const driver = driverSnap.data() as Driver;
 
-  await updateBookingStatus(bookingId, 'accepted', {
+  // ✅ Utilisation d'un batch pour garantir la cohérence (medJira.md #60)
+  const batch = writeBatch(db);
+  
+  const bookingRef = doc(db, 'bookings', bookingId);
+  batch.update(bookingRef, {
+    status: 'accepted',
     driverId,
     driverName: `${driver.firstName} ${driver.lastName}`,
     driverPhone: driver.phoneNumber,
     carModel: driver.carModel,
     carColor: driver.carColor,
     carPlate: driver.carPlate,
+    updatedAt: serverTimestamp(),
   });
 
-  // Mettre à jour le statut du chauffeur
-  await updateDoc(driverRef, {
+  batch.update(driverRef, {
     status: 'busy',
     updatedAt: serverTimestamp(),
   });
+
+  await batch.commit();
 };
 
 /**

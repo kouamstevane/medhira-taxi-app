@@ -1,6 +1,6 @@
 /**
  * Composant NewRideForm
- * 
+ *
  * Formulaire pour créer une nouvelle course de taxi
  * Gère la sélection du départ, destination, type de véhicule et estimation
  */
@@ -8,6 +8,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { z } from 'zod'; // ✅ Ajout validation Zod (medJira.md #85)
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'; // ✅ Ajout haptic (medJira.md #93)
+import { Capacitor } from '@capacitor/core';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
@@ -20,12 +23,44 @@ import { FareSummary } from './FareSummary';
 import { BonusSelector } from './BonusSelector';
 import { logger } from '@/utils/logger';
 
+// ✅ Schéma Zod de validation pour la création de course (medJira.md #85)
+const BookingSchema = z.object({
+  userId: z.string().min(1, 'UID utilisateur requis'),
+  userEmail: z.string().email('Email invalide'),
+  pickup: z.string().min(5, 'Adresse de départ trop courte (min 5 caractères)'),
+  destination: z.string().min(5, 'Adresse de destination trop courte (min 5 caractères)'),
+  pickupLocation: z.object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+  }).optional(),
+  pickupLocationAccuracy: z.number().optional(),
+  destinationLocation: z.object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+  }).optional(),
+  distance: z.number().positive('Distance doit être positive'),
+  duration: z.number().positive('Durée doit être positive'),
+  price: z.number().positive('Prix doit être positif'),
+  carType: z.string().min(1, 'Type de véhicule requis'),
+  bonus: z.number().min(0).optional(),
+});
+
 interface NewRideFormProps {
   onBookingCreated?: (bookingId: string, pickup: string, destination: string, autoSearch?: boolean) => void;
   onSearchDriver?: () => void;
 }
 
 export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormProps) => {
+  // ✅ Fonction pour déclencher le haptic feedback (medJira.md #93)
+  const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Light) => {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Haptics.impact({ style });
+      } catch (error) {
+        console.warn('Haptic feedback non disponible:', error);
+      }
+    }
+  };
   const [currentUser, setCurrentUser] = useState<{ uid: string; email: string | null } | null>(null);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [pickupAddress, setPickupAddress] = useState('');
@@ -270,7 +305,8 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }, [pickupAddress, destinationAddress, selectedCarType, mapsLoaded, calculateEstimate, isCompleteAddress]);
 
-  const handlePickupSelect = (suggestion: PlaceSuggestion) => {
+  const handlePickupSelect = async (suggestion: PlaceSuggestion) => {
+    await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
     setPickupAddress(suggestion.description);
     setError(null); // Réinitialiser l'erreur
     // Obtenir les coordonnées depuis place_id pour une meilleure précision
@@ -287,7 +323,8 @@ useEffect(() => {
     }
   };
 
-  const handleDestinationSelect = (suggestion: PlaceSuggestion) => {
+  const handleDestinationSelect = async (suggestion: PlaceSuggestion) => {
+    await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
     setDestinationAddress(suggestion.description);
     setError(null); // Réinitialiser l'erreur
     // Obtenir les coordonnées depuis place_id pour une meilleure précision
@@ -344,6 +381,34 @@ useEffect(() => {
     setError(null);
 
     try {
+      // ✅ Validation structurée avec Zod (medJira.md #85)
+      const bookingData = {
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
+        pickup: pickupAddress,
+        destination: destinationAddress,
+        pickupLocation: pickupLocation || undefined,
+        pickupLocationAccuracy: pickupAccuracy || undefined,
+        destinationLocation: destinationLocation || undefined,
+        distance: estimate.distance,
+        duration: estimate.duration,
+        price: estimate.price,
+        carType: selectedCarType.name,
+        bonus: bonus > 0 ? bonus : undefined,
+      };
+
+      try {
+        const validatedData = BookingSchema.parse(bookingData);
+        console.log('✅ [NewRideForm] Données validées avec succès');
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          console.error('❌ [NewRideForm] Erreur de validation:', error.issues);
+          setError(error.issues[0].message);
+          setLoading(false);
+          return;
+        }
+      }
+
       const bookingId = await createBooking({
         userId: currentUser.uid,
         userEmail: currentUser.email,
@@ -372,6 +437,15 @@ useEffect(() => {
       
       console.log(`📍 [Booking] Course créée avec précision GPS: ${pickupAccuracy ? pickupAccuracy.toFixed(0) + 'm' : 'N/A'}`);
 
+      // ✅ Haptic feedback succès (medJira.md #93)
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await Haptics.notification({ type: NotificationType.Success });
+        } catch (error) {
+          console.warn('Haptic notification non disponible:', error);
+        }
+      }
+
       logger.info('Course créée', { bookingId });
       setShowConfirmModal(false);
 
@@ -383,8 +457,19 @@ useEffect(() => {
         onSearchDriver();
       }
     } catch (err: unknown) {
+      // ✅ Typage correct de l'erreur (medJira.md #116)
       logger.error('Erreur création course', { error: err });
-      setError((err as Error).message || 'Erreur lors de la création de la course');
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la création de la course';
+      setError(errorMessage);
+      
+      // ✅ Haptic feedback erreur (medJira.md #93)
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await Haptics.notification({ type: NotificationType.Error });
+        } catch (error) {
+          console.warn('Haptic notification non disponible:', error);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -483,7 +568,10 @@ useEffect(() => {
                   key={carType.id}
                   carType={carType}
                   selected={selectedCarType?.id === carType.id}
-                  onSelect={setSelectedCarType}
+                  onSelect={async (carType) => {
+                    await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
+                    setSelectedCarType(carType);
+                  }}
                   disabled={false}
                 />
               ))}

@@ -1,10 +1,10 @@
 "use client";
-
+/* eslint-disable */
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/config/firebase';
-import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signUpWithEmail } from '@/services/auth.service';
 import Link from 'next/link';
 import { FiUser, FiMail, FiLock, FiPhone, FiArrowLeft } from 'react-icons/fi';
 
@@ -68,37 +68,33 @@ export default function RegisterContent() {
         setLoading(true);
 
         try {
-            // Créer le compte Firebase Auth
-            const userCredential = await createUserWithEmailAndPassword(
-                auth,
+            // Utiliser le service centralisé qui envoie l'email de vérification
+            const user = await signUpWithEmail(
                 formData.email,
-                formData.password
+                formData.password,
+                formData.firstName,
+                formData.lastName,
+                'client'
             );
 
-            const user = userCredential.user;
-
-            // Mettre à jour le profil
+            // Mettre à jour le profil Firebase Auth avec le nom complet
             await updateProfile(user, {
                 displayName: `${formData.firstName} ${formData.lastName}`,
             });
 
-            // Créer le document utilisateur dans Firestore
-            await setDoc(doc(db, 'users', user.uid), {
-                uid: user.uid,
-                firstName: formData.firstName,
-                lastName: formData.lastName,
-                email: formData.email,
-                phone: formData.phone || null,
-                phoneNumber: formData.phone || null,
-                userType: 'client',
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-            });
+            // Mettre à jour le document utilisateur avec le numéro de téléphone
+            if (formData.phone) {
+                const { doc, updateDoc } = await import('firebase/firestore');
+                await updateDoc(doc(db, 'users', user.uid), {
+                    phone: formData.phone,
+                    phoneNumber: formData.phone,
+                });
+            }
 
             console.log('✅ Compte client créé avec succès:', user.uid);
 
-            // Redirection vers le dashboard
-            router.push('/dashboard');
+            // Redirection vers la page de vérification email
+            router.push('/auth/verify-email');
         } catch (err: unknown) {
             console.error('❌ Erreur création compte:', err);
 

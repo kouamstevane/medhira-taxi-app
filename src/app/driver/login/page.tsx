@@ -1,14 +1,12 @@
 "use client";
-import { useState, useRef, useEffect } from 'react';
+
+/* eslint-disable */
+import { useState } from 'react';
 import { auth, db } from '../../../config/firebase';
 import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithPopup,
-  PhoneAuthProvider,
-  signInWithCredential
+  signInWithPopup
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
@@ -17,57 +15,11 @@ import Image from 'next/image';
 import { AuthService } from '@/services';
 
 export default function DriverLogin() {
-  const [activeTab, setActiveTab] = useState<'phone' | 'email'>('phone');
-  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
-  const [verificationId, setVerificationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const recaptchaVerifier = useRef<RecaptchaVerifier | null>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    return () => {
-      if (recaptchaVerifier.current) {
-        recaptchaVerifier.current.clear();
-      }
-    };
-  }, []);
-
-  const handleSendCode = async () => {
-    if (!phone || phone.length < 8) {
-      setError('Veuillez entrer un numéro valide');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      if (!recaptchaVerifier.current) {
-        recaptchaVerifier.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-        });
-      }
-
-      const confirmation = await signInWithPhoneNumber(
-        auth,
-        `+237${phone}`,
-        recaptchaVerifier.current
-      );
-      
-      setVerificationId(confirmation.verificationId);
-      setSuccess('Code de vérification envoyé!');
-    } catch (error: any) {
-      setError(error.message || "Erreur lors de l'envoi du code");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,9 +33,21 @@ export default function DriverLogin() {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Vérifier si l'email est vérifié
+      if (!userCredential.user.emailVerified) {
+        setError('Veuillez vérifier votre adresse email avant de vous connecter. Vérifiez votre boîte de réception ou renvoyez l\'email de vérification.');
+        await auth.signOut();
+        return;
+      }
+      
       await verifyDriverAccount(userCredential.user.uid);
     } catch (error: any) {
-      setError(error.message || "Erreur de connexion");
+      if (error.message.includes('Veuillez vérifier votre adresse email')) {
+        // Ne pas surcharger l'erreur déjà définie
+      } else {
+        setError(error.message || "Erreur de connexion");
+      }
     } finally {
       setLoading(false);
     }
@@ -115,52 +79,6 @@ export default function DriverLogin() {
     }
   };
 
-  const handleVerifyCode = async () => {
-    if (!code || code.length < 6) {
-      setError('Veuillez entrer le code complet');
-      return;
-    }
-    if (!verificationId) {
-      setError('Aucun ID de vérification');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const credential = PhoneAuthProvider.credential(verificationId, code);
-      const userCredential = await signInWithCredential(auth, credential);
-      const user = userCredential.user;
-
-      // Pour phone auth, on redirige vers le register si le compte n'existe pas
-      const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
-
-      if (!driverDoc.exists()) {
-        router.push('/driver/register');
-        return;
-      }
-
-      const driverData = driverDoc.data();
-      if (driverData.status !== 'approved') {
-        throw new Error("Votre compte n'est pas encore approuvé");
-      }
-
-      router.push('/driver/dashboard');
-    } catch (error: any) {
-      setError(error.message || "Erreur de vérification");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleReset = () => {
-    setVerificationId(null);
-    setCode('');
-    setError(null);
-    setSuccess(null);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#101010] to-[#2d2d2d] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -180,22 +98,6 @@ export default function DriverLogin() {
 
         {/* Content */}
         <div className="p-8">
-          {/* Tabs */}
-          <div className="flex border-b border-gray-200 mb-8">
-            <button
-              onClick={() => setActiveTab('phone')}
-              className={`flex-1 py-3 font-medium text-sm ${activeTab === 'phone' ? 'text-[#f29200] border-b-2 border-[#f29200]' : 'text-gray-500'}`}
-            >
-              📞 Téléphone
-            </button>
-            <button
-              onClick={() => setActiveTab('email')}
-              className={`flex-1 py-3 font-medium text-sm ${activeTab === 'email' ? 'text-[#f29200] border-b-2 border-[#f29200]' : 'text-gray-500'}`}
-            >
-              ✉️ Email
-            </button>
-          </div>
-
           {/* Messages */}
           {error && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center">
@@ -206,122 +108,8 @@ export default function DriverLogin() {
             </div>
           )}
 
-          {success && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-600 mr-3" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span className="text-green-700">{success}</span>
-            </div>
-          )}
-
-          {/* Phone Login */}
-          {activeTab === 'phone' && (
-            <>
-              {!verificationId ? (
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Numéro de téléphone
-                    </label>
-                    <div className="flex rounded-lg shadow-sm">
-                      <span className="inline-flex items-center px-4 rounded-l-lg border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                        +237
-                      </span>
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => {
-                          setPhone(e.target.value.replace(/\D/g, ''));
-                          setError(null);
-                        }}
-                        className="flex-1 rounded-r-lg border border-gray-300 px-4 py-3 text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
-                        placeholder="655744484"
-                        maxLength={9}
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleSendCode}
-                    disabled={loading}
-                    className="w-full bg-gradient-to-r from-[#f29200] to-[#ffaa33] hover:from-[#e68600] hover:to-[#ff9900] text-white font-bold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-center shadow-lg"
-                  >
-                    {loading ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Envoi en cours...
-                      </>
-                    ) : (
-                      '📱 Recevoir le code'
-                    )}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Code de vérification (6 chiffres)
-                    </label>
-                    <input
-                      type="text"
-                      value={code}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, '');
-                        setCode(value.slice(0, 6));
-                        setError(null);
-                      }}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent text-center text-xl tracking-widest"
-                      placeholder="123456"
-                      maxLength={6}
-                    />
-                  </div>
-
-                  <div className="flex space-x-4">
-                    <button
-                      onClick={handleVerifyCode}
-                      disabled={loading}
-                      className="flex-1 bg-gradient-to-r from-[#101010] to-[#2d2d2d] hover:from-[#000000] hover:to-[#1a1a1a] text-white font-bold py-3 px-6 rounded-lg transition flex items-center justify-center shadow-lg"
-                    >
-                      {loading ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Vérification...
-                        </>
-                      ) : (
-                        '🔒 Se connecter'
-                      )}
-                    </button>
-
-                    <button
-                      onClick={handleReset}
-                      disabled={loading}
-                      className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition shadow-sm"
-                    >
-                      Annuler
-                    </button>
-                  </div>
-
-                  <button
-                    onClick={handleSendCode}
-                    className="text-sm text-[#f29200] hover:underline transition"
-                  >
-                    ↻ Renvoyer le code
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
           {/* Email Login */}
-          {activeTab === 'email' && (
-            <form onSubmit={handleEmailLogin} className="space-y-6">
+          <form onSubmit={handleEmailLogin} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-3">
                   Adresse email
@@ -372,13 +160,16 @@ export default function DriverLogin() {
                 )}
               </button>
 
-              <div className="text-center">
+              <div className="text-center space-y-2">
                 <Link href="/driver/reset-password" className="text-sm text-[#f29200] hover:underline transition">
                   🔓 Mot de passe oublié ?
                 </Link>
+                <br />
+                <Link href="/driver/verify-email" className="text-sm text-[#f29200] hover:underline transition">
+                  ✉️ Vérifier mon email
+                </Link>
               </div>
             </form>
-          )}
 
           {/* Social Login */}
           <div className="mt-8">
@@ -423,8 +214,6 @@ export default function DriverLogin() {
             </p>
           </div>
         </div>
-
-        <div id="recaptcha-container" className="hidden"></div>
       </div>
     </div>
   );

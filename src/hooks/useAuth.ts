@@ -9,8 +9,8 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import { useState, useEffect, useCallback } from 'react';
+import { User, onAuthStateChanged, reload } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { UserData } from '@/types';
@@ -20,6 +20,8 @@ interface UseAuthReturn {
   userData: UserData | null;
   loading: boolean;
   error: string | null;
+  isEmailVerified: boolean;
+  reloadUser: () => Promise<void>;
 }
 
 /**
@@ -35,6 +37,7 @@ export const useAuth = (): UseAuthReturn => {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   useEffect(() => {
     // Écouter les changements d'état d'authentification
@@ -64,6 +67,9 @@ export const useAuth = (): UseAuthReturn => {
           } else {
             setUserData(null);
           }
+
+          // Mettre à jour le statut de vérification email
+          setIsEmailVerified(user.emailVerified || false);
         } catch (err) {
           console.error('Erreur lors de la récupération des données utilisateur:', err);
           setError('Erreur lors du chargement des données utilisateur');
@@ -71,6 +77,7 @@ export const useAuth = (): UseAuthReturn => {
         }
       } else {
         setUserData(null);
+        setIsEmailVerified(false);
       }
 
       setLoading(false);
@@ -79,5 +86,17 @@ export const useAuth = (): UseAuthReturn => {
     return () => unsubscribe();
   }, []);
 
-  return { currentUser, userData, loading, error };
+  // Fonction pour recharger les données utilisateur
+  const reloadUser = useCallback(async () => {
+    if (currentUser) {
+      try {
+        await reload(currentUser);
+        setIsEmailVerified(currentUser.emailVerified || false);
+      } catch (err) {
+        console.error('Erreur lors du rechargement de l\'utilisateur:', err);
+      }
+    }
+  }, [currentUser]);
+
+  return { currentUser, userData, loading, error, isEmailVerified, reloadUser };
 };

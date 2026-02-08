@@ -1,6 +1,6 @@
 /**
  * Page Taxi - Nouvelle version avec NewRideForm
- * 
+ *
  * Page principale pour demander une course de taxi
  * Utilise le composant NewRideForm pour une meilleure séparation des responsabilités
  */
@@ -9,6 +9,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Capacitor } from '@capacitor/core';
 import { NewRideForm } from './components/NewRideForm';
 import { DriverFoundView } from './components/DriverFoundView';
 import { SearchingDriverBottomSheet } from './components/SearchingDriverBottomSheet';
@@ -24,6 +26,17 @@ type Step = 'form' | 'searching' | 'driver_found' | 'completed' | 'failed';
 export default function TaxiPage() {
   const router = useRouter();
   const { currentUser } = useAuth();
+  
+  // ✅ Fonction pour déclencher le haptic feedback (medJira.md #93)
+  const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Medium) => {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Haptics.impact({ style });
+      } catch (error) {
+        console.warn('Haptic feedback non disponible:', error);
+      }
+    }
+  };
   const [step, setStep] = useState<Step>('form');
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number>(60);
@@ -100,7 +113,8 @@ export default function TaxiPage() {
     }
   };
 
-  const handleSearchDriver = () => {
+  const handleSearchDriver = async () => {
+    await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
     logger.info('Recherche de chauffeur démarrée', { bookingId });
   };
 
@@ -350,6 +364,7 @@ export default function TaxiPage() {
                 onClick={async () => {
                   if (!bookingId) return;
 
+                  await triggerHaptic(ImpactStyle.Medium); // ✅ Haptic feedback (medJira.md #93)
                   console.log('[RETRY] Début du réessai pour bookingId:', bookingId);
 
                   try {
@@ -418,7 +433,8 @@ export default function TaxiPage() {
 
               {/* Bouton retour à l'accueil */}
               <button
-                onClick={() => {
+                onClick={async () => {
+                  await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
                   setStep('form');
                   setBookingId(null);
                   router.push('/dashboard');
@@ -458,7 +474,8 @@ export default function TaxiPage() {
                 Merci d&apos;avoir utilisé Medjira Taxi
               </p>
               <button
-                onClick={() => {
+                onClick={async () => {
+                  await triggerHaptic(ImpactStyle.Medium); // ✅ Haptic feedback (medJira.md #93)
                   setStep('form');
                   setBookingId(null);
                   setPickupAddress('');

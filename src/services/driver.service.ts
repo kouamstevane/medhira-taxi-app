@@ -17,6 +17,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
@@ -128,10 +129,12 @@ export const toggleDriverOnline = async (
  */
 export const getAvailableDrivers = async (): Promise<Driver[]> => {
   const driversRef = collection(db, 'drivers');
+  // ✅ Ajout limit(50) pour optimiser les coûts Firestore (medJira.md #57)
   const q = query(
     driversRef,
     where('status', '==', 'available'),
-    where('verified', '==', true)
+    where('verified', '==', true),
+    limit(50)
   );
 
   const querySnapshot = await getDocs(q);
@@ -171,9 +174,14 @@ export const addRating = async (
 /**
  * Calculer et mettre à jour la note moyenne d'un chauffeur
  */
+// ✅ Ajout limit(100) - 100 notes max suffisent pour calculer la moyenne (medJira.md #57)
 const updateDriverRating = async (driverId: string): Promise<void> => {
   const ratingsRef = collection(db, 'ratings');
-  const q = query(ratingsRef, where('driverId', '==', driverId));
+  const q = query(
+    ratingsRef,
+    where('driverId', '==', driverId),
+    limit(100)
+  );
 
   const querySnapshot = await getDocs(q);
   const ratings = querySnapshot.docs.map(doc => doc.data().rating as number);
@@ -245,10 +253,12 @@ export const incrementDriverDeclinedTrips = async (driverId: string): Promise<vo
  */
 export const getDriverRatings = async (driverId: string): Promise<Rating[]> => {
   const ratingsRef = collection(db, 'ratings');
+  // ✅ Ajout limit(20) - 20 dernières notes suffisent (medJira.md #57)
   const q = query(
     ratingsRef,
     where('driverId', '==', driverId),
-    orderBy('createdAt', 'desc')
+    orderBy('createdAt', 'desc'),
+    limit(20)
   );
 
   const querySnapshot = await getDocs(q);

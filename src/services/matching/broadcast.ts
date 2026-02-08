@@ -17,6 +17,8 @@ import {
   where,
   getDocs,
   onSnapshot,
+  orderBy,
+  limit,
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
@@ -101,6 +103,7 @@ export const broadcastRideRequest = async (
     return driverIds;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    // ✅ Typage correct de l'erreur (medJira.md #116)
     console.error('[BROADCAST] Erreur lors du broadcast:', errorMessage);
     throw new Error(`Erreur lors du broadcast: ${errorMessage}`);
   }
@@ -150,7 +153,8 @@ export const markCandidateAccepted = async (
 
     console.log('[BROADCAST] Candidature acceptée', { rideId, driverId });
     return true;
-  } catch (error) {
+  } catch (error: unknown) {
+    // ✅ Typage correct de l'erreur (medJira.md #116)
     const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
     console.error('[BROADCAST] Erreur lors de l\'acceptation:', errorMsg);
     return false;
@@ -179,7 +183,8 @@ export const markCandidateDeclined = async (
     });
 
     console.log('[BROADCAST] Candidature refusée', { rideId, driverId });
-  } catch (error) {
+  } catch (error: unknown) {
+    // ✅ Typage correct de l'erreur (medJira.md #116)
     const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
     console.error('[BROADCAST] Erreur lors du refus:', errorMsg);
   }
@@ -193,9 +198,11 @@ export const expireAllPendingCandidates = async (
 ): Promise<void> => {
   try {
     const candidatesRef = collection(db, 'bookings', rideId, 'candidates');
+    // ✅ Ajout limit(100) pour optimiser les coûts Firestore (medJira.md #57)
     const pendingQuery = query(
       candidatesRef,
-      where('status', '==', 'pending')
+      where('status', '==', 'pending'),
+      limit(100)
     );
 
     const pendingSnapshot = await getDocs(pendingQuery);
@@ -213,7 +220,8 @@ export const expireAllPendingCandidates = async (
       rideId,
       count: pendingSnapshot.size,
     });
-  } catch (error) {
+  } catch (error: unknown) {
+    // ✅ Typage correct de l'erreur (medJira.md #116)
     const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
     console.error('[BROADCAST] Erreur lors de l\'expiration:', errorMsg);
   }
@@ -227,9 +235,12 @@ export const subscribeToDriverRideRequests = (
   callback: (requests: Array<{ rideId: string; candidate: RideCandidate }>) => void
 ): (() => void) => {
   const bookingsRef = collection(db, 'bookings');
+  // ✅ Ajout limit(50) + orderBy pour pagination (medJira.md #57, #61)
   const pendingRidesQuery = query(
     bookingsRef,
-    where('status', '==', 'pending')
+    where('status', '==', 'pending'),
+    orderBy('createdAt', 'desc'),
+    limit(50)
   );
 
   const unsubscribe = onSnapshot(
@@ -259,7 +270,8 @@ export const subscribeToDriverRideRequests = (
 
       callback(requests);
     },
-    (error) => {
+    (error: unknown) => {
+      // ✅ Typage correct de l'erreur (medJira.md #116)
       const errorCode = (error as { code?: string }).code;
       const errorMessage = (error as { message?: string }).message;
       console.error('[BROADCAST] Erreur lors de l\'écoute:', errorCode, errorMessage);
@@ -277,9 +289,12 @@ export const getPendingCandidatesForDriver = async (
 ): Promise<Array<{ rideId: string; candidate: RideCandidate }>> => {
   try {
     const bookingsRef = collection(db, 'bookings');
+    // ✅ Ajout limit(50) + orderBy pour pagination (medJira.md #57, #61)
     const pendingRidesQuery = query(
       bookingsRef,
-      where('status', '==', 'pending')
+      where('status', '==', 'pending'),
+      orderBy('createdAt', 'desc'),
+      limit(50)
     );
 
     const ridesSnapshot = await getDocs(pendingRidesQuery);
@@ -306,7 +321,8 @@ export const getPendingCandidatesForDriver = async (
     }
 
     return requests;
-  } catch (error) {
+  } catch (error: unknown) {
+    // ✅ Typage correct de l'erreur (medJira.md #116)
     const errorCode = (error as { code?: string }).code;
     const errorMessage = (error as { message?: string }).message;
     console.error('[BROADCAST] Erreur récupération candidatures:', errorCode, errorMessage);

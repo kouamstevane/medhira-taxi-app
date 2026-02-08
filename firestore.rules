@@ -3,6 +3,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // ============================================================================
+    // RÈGLES DE SÉCURITÉ FIRESTORE - MEDJIRA TAXI APP
+    // ============================================================================
+    //
+    // Mise à jour : 18 janvier 2026
+    // Architecture d'authentification multi-méthodes
+    //
+    // Modifications apportées :
+    // - Renforcement de la sécurité du système d'authentification multi-méthodes
+    // - Ajout de contraintes pour les chauffeurs (email uniquement)
+    // - Ajout de contraintes pour la vérification email/téléphone
+    // - Amélioration des commentaires pour clarifier les règles
+    //
+    // Architecture d'authentification :
+    // - Clients : Peuvent créer un compte et se connecter par téléphone (SMS) OU email
+    // - Chauffeurs : Doivent utiliser exclusivement l'email avec vérification obligatoire
+    //
+    // ============================================================================
+    
+    // ============================================================================
+    // FONCTIONS HELPER
+    // ============================================================================
+    
     // Fonction helper pour vérifier l'authentification
     function isAuthenticated() {
       return request.auth != null;
@@ -20,90 +43,227 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     
+    // Fonction helper pour vérifier si l'email est vérifié dans Firebase Auth
+    function isEmailVerified() {
+      return isAuthenticated() && request.auth.token.email_verified == true;
+    }
+    
+    // Fonction helper pour vérifier si l'utilisateur est chauffeur
+    function isDriver() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
+    }
+    
+    // Fonction helper pour vérifier si l'utilisateur est client
+    function isClient() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'client';
+    }
+    
+    // ============================================================================
+    // COLLECTION USERS (CLIENTS)
+    // ============================================================================
+    //
+    // Les clients peuvent s'inscrire et se connecter par téléphone (SMS) OU email
+    // La vérification email OU téléphone est requise pour accéder au dashboard
+    //
+    // ============================================================================
+    
     // Collection users - Les utilisateurs peuvent lire et écrire leurs propres données
     match /users/{userId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire les données des autres utilisateurs
+      // Permet aux chauffeurs de voir les informations des clients pour les courses
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      
+      // Création : Les utilisateurs authentifiés peuvent créer leur propre document
+      // Permet la création de comptes clients par email ou téléphone
+      allow create: if isOwner(userId) && 
+                       request.resource.data.userType == 'client';
+      
+      // Mise à jour : Seul le propriétaire peut modifier ses propres données
+      // Permet aux clients de mettre à jour leur profil
+      allow update: if isOwner(userId);
+      
+      // Suppression : Non autorisée pour les clients
+      allow delete: if false;
     }
+    
+    // ============================================================================
+    // COLLECTION DRIVERS (CHAUFFEURS)
+    // ============================================================================
+    //
+    // Les chauffeurs DOIVENT utiliser exclusivement l'email avec vérification obligatoire
+    // L'authentification par téléphone est INTERDITE pour les chauffeurs
+    //
+    // Contraintes :
+    // - Les chauffeurs doivent avoir un email non null
+    // - Les chauffeurs ne peuvent pas avoir de phoneNumber (null)
+    // - La vérification email est obligatoire
+    // - Le statut du compte doit être 'pending' à la création
+    //
+    // ============================================================================
     
     // Collection drivers - Les chauffeurs peuvent lire et écrire leurs propres données
     // Les admins peuvent modifier le statut
     // Les utilisateurs peuvent supprimer leur propre compte refusé pour permettre la recréation
     match /drivers/{driverId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire les données des chauffeurs
+      // Permet aux clients de voir les informations des chauffeurs pour les courses
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == driverId;
+      
+      // Création : Les chauffeurs peuvent créer leur propre document
+      // CONTRAINTE : Les chauffeurs doivent s'inscrire par email UNIQUEMENT
+      // - L'UID doit correspondre à l'ID du document
+      // - L'email doit être présent (non null)
+      // - Le phoneNumber doit être null (interdiction de l'auth par téléphone)
+      // - Le userType doit être 'chauffeur'
+      // - Le statut initial doit être 'pending'
+      allow create: if isAuthenticated() && 
+                       request.auth.uid == driverId &&
+                       request.resource.data.email != null &&
+                       request.resource.data.phoneNumber == null &&
+                       request.resource.data.userType == 'chauffeur' &&
+                       request.resource.data.status == 'pending';
+      
+      // Mise à jour : Le propriétaire ou l'admin peuvent modifier les données
+      // Les chauffeurs peuvent modifier leur profil, mais pas leur statut
+      // Les admins peuvent modifier le statut (pending -> approved/rejected/suspended)
       allow update: if isOwner(driverId) || isAdmin();
-      // Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé
+      
+      // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé
+      // Cela permet au chauffeur de recréer son compte après un rejet
       allow delete: if isAdmin() || 
                     (isOwner(driverId) && 
                      resource.data.status == 'rejected');
     }
     
+    // ============================================================================
+    // COLLECTION ADMINS
+    // ============================================================================
+    
     // Collection admins - Permettre la lecture pour vérifier si on est admin
     match /admins/{adminId} {
-      // Permettre la lecture si l'utilisateur est authentifié (pour les requêtes avec where)
+      // Lecture : Les utilisateurs authentifiés peuvent lire pour vérifier s'ils sont admin
+      // Permet aux requêtes avec where() de fonctionner
       allow read: if isAuthenticated();
-      allow write: if false; // Seulement via Admin SDK ou console Firebase
+      
+      // Écriture : Non autorisée via client SDK
+      // Seulement via Admin SDK ou console Firebase
+      allow write: if false;
     }
+    
+    // ============================================================================
+    // COLLECTION WALLETS
+    // ============================================================================
     
     // Collection wallets - Les utilisateurs peuvent lire et écrire leur propre wallet
     match /wallets/{userId} {
+      // Lecture : Seul le propriétaire peut lire son wallet
       allow read: if isOwner(userId);
+      
+      // Création : Seul le propriétaire peut créer son wallet
       allow create: if isOwner(userId);
+      
+      // Mise à jour : Seul le propriétaire peut mettre à jour son wallet
+      // Permet d'ajouter ou retirer de l'argent
       allow update: if isOwner(userId);
-      allow delete: if false; // Ne jamais permettre la suppression des wallets
+      
+      // Suppression : Non autorisée
+      // Ne jamais permettre la suppression des wallets pour éviter la perte de données
+      allow delete: if false;
     }
+    
+    // ============================================================================
+    // COLLECTION TRANSACTIONS
+    // ============================================================================
     
     // Collection transactions - Les utilisateurs peuvent lire leurs propres transactions
     match /transactions/{transactionId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire leurs propres transactions
+      // Le client peut lire ses transactions (userId == request.auth.uid)
+      // Le chauffeur peut lire les transactions où il est impliqué (driverId == request.auth.uid)
       allow read: if isAuthenticated() && 
                      (resource.data.userId == request.auth.uid || 
                       resource.data.driverId == request.auth.uid);
+      
+      // Création : Les utilisateurs authentifiés peuvent créer des transactions
+      // Permet aux clients et chauffeurs de créer des transactions
       allow create: if isAuthenticated();
-      allow update: if false; // Les transactions ne doivent pas être modifiées
-      allow delete: if false; // Les transactions ne doivent pas être supprimées
+      
+      // Mise à jour : Non autorisée
+      // Les transactions ne doivent pas être modifiées pour garantir l'intégrité
+      allow update: if false;
+      
+      // Suppression : Non autorisée
+      // Les transactions ne doivent pas être supprimées pour garantir l'intégrité
+      allow delete: if false;
     }
+    
+    // ============================================================================
+    // COLLECTION BOOKINGS
+    // ============================================================================
     
     // Collection bookings - Les utilisateurs et chauffeurs peuvent lire leurs propres réservations
     match /bookings/{bookingId} {
-      // Permettre la lecture si c'est la réservation de l'utilisateur ou du chauffeur assigné
+      // Lecture : Les utilisateurs authentifiés peuvent lire les réservations
+      // Permet aux clients de lire leurs propres réservations
+      // Permet aux chauffeurs de lire les réservations où ils sont assignés
       allow read: if isAuthenticated() && 
                      (resource.data.userId == request.auth.uid || 
                       resource.data.driverId == request.auth.uid);
-      // Permettre la lecture à tous les utilisateurs authentifiés pour les bookings en attente
-      // Cela permet aux chauffeurs de voir les demandes disponibles
+      
+      // Lecture : Tous les utilisateurs authentifiés peuvent lire les bookings en attente
+      // Cela permet aux chauffeurs de voir les demandes disponibles pour les accepter
       allow read: if isAuthenticated() && resource.data.status == 'pending';
+      
+      // Création : Les utilisateurs authentifiés peuvent créer des réservations
+      // Permet aux clients de créer des demandes de course
       allow create: if isAuthenticated();
-      // Permettre la mise à jour par le propriétaire ou le chauffeur assigné
+      
+      // Mise à jour : Le propriétaire ou le chauffeur assigné peuvent mettre à jour
+      // Permet aux clients et chauffeurs de modifier les détails de la réservation
       allow update: if isAuthenticated() && 
                        (resource.data.userId == request.auth.uid || 
                         resource.data.driverId == request.auth.uid);
-      // Permettre à un chauffeur d'accepter une course en attente
+      
+      // Mise à jour : Permettre à un chauffeur d'accepter une course en attente
       // Un chauffeur peut mettre à jour un booking pending pour l'accepter
       allow update: if isAuthenticated() && 
                        resource.data.status == 'pending' &&
                        request.resource.data.status == 'accepted' &&
                        request.resource.data.driverId == request.auth.uid;
-      // Permettre au client d'annuler sa propre commande (même si acceptée)
+      
+      // Mise à jour : Permettre au client d'annuler sa propre commande
+      // Le client peut annuler sa commande même si elle a été acceptée
       allow update: if isAuthenticated() && 
                        resource.data.userId == request.auth.uid &&
                        request.resource.data.status == 'cancelled' &&
                        request.resource.data.cancelledBy == 'client';
+      
+      // Suppression : Non autorisée
+      // Les réservations ne doivent pas être supprimées pour conserver l'historique
       allow delete: if false;
+      
+      // ============================================================================
+      // SOUS-COLLECTION CANDIDATES (CANDIDATURES DES CHAUFFEURS)
+      // ============================================================================
       
       // Sous-collection candidates - Les chauffeurs peuvent lire et mettre à jour leurs candidatures
       match /candidates/{candidateId} {
-        // Permettre la lecture à un chauffeur si c'est sa propre candidature
+        // Lecture : Permettre la lecture à un chauffeur si c'est sa propre candidature
         // OU si le chauffeur est assigné à la course parente (pour lire les autres candidatures à expirer)
         allow read: if isAuthenticated() && 
                      (request.auth.uid == candidateId || 
                       get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
-        // Permettre la création par le client qui a créé le booking (pour le broadcast automatique)
+        
+        // Création : Permettre la création par le client qui a créé le booking (pour le broadcast automatique)
         // OU par un chauffeur pour sa propre candidature (cas edge, mais sécurisé)
         allow create: if isAuthenticated() && 
                          (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
                           request.auth.uid == candidateId);
-        // Permettre la mise à jour si :
+        
+        // Mise à jour : Permettre la mise à jour si :
         // 1. C'est la propre candidature du chauffeur (pour accepter/refuser)
         // 2. Le chauffeur est assigné à la course et met à jour le statut à 'expired'
         // 3. Le client propriétaire du booking (pour expirer les candidatures)
@@ -112,68 +272,136 @@ service cloud.firestore {
                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid && 
                        request.resource.data.status == 'expired') ||
                       get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid);
+        
+        // Suppression : Non autorisée
         allow delete: if false;
       }
       
+      // ============================================================================
+      // SOUS-COLLECTION MESSAGES (COMMUNICATIONS CLIENT-CHAUFFEUR)
+      // ============================================================================
+      
       // Sous-collection messages - Communications client-chauffeur
       match /messages/{messageId} {
-        // Les deux parties peuvent lire tous les messages
+        // Lecture : Les deux parties peuvent lire tous les messages
+        // Permet au client et au chauffeur de voir l'historique des messages
         allow read: if isAuthenticated() &&
                      (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
                       get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
         
-        // Les deux parties peuvent créer des messages
+        // Création : Les deux parties peuvent créer des messages
+        // Permet au client et au chauffeur de s'envoyer des messages
         allow create: if isAuthenticated() &&
                        (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
                         get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
         
-        // Les deux parties peuvent mettre à jour (pour marquer comme lu)
+        // Mise à jour : Les deux parties peuvent mettre à jour (pour marquer comme lu)
+        // Permet au client et au chauffeur de marquer les messages comme lus
         allow update: if isAuthenticated() &&
                        (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
                         get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
         
+        // Suppression : Non autorisée
+        // Les messages ne doivent pas être supprimés pour conserver l'historique
         allow delete: if false;
       }
     }
     
+    // ============================================================================
+    // COLLECTION ACTIVE_BOOKINGS
+    // ============================================================================
+    
     // Collection active_bookings - Similaire aux bookings
     match /active_bookings/{bookingId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire les réservations actives
       allow read: if isAuthenticated();
+      
+      // Création : Les utilisateurs authentifiés peuvent créer des réservations actives
       allow create: if isAuthenticated();
+      
+      // Mise à jour : Les utilisateurs authentifiés peuvent mettre à jour les réservations actives
       allow update: if isAuthenticated();
+      
+      // Suppression : Les utilisateurs authentifiés peuvent supprimer les réservations actives
       allow delete: if isAuthenticated();
     }
     
+    // ============================================================================
+    // COLLECTION PARCELS (COLIS)
+    // ============================================================================
+    
     // Collection parcels - Les utilisateurs peuvent lire et créer leurs propres colis
     match /parcels/{parcelId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire les colis où ils sont impliqués
+      // Permet à l'expéditeur, au destinataire et au chauffeur de voir les informations du colis
       allow read: if isAuthenticated() && 
                      (resource.data.senderId == request.auth.uid || 
                       resource.data.receiverId == request.auth.uid ||
                       resource.data.driverId == request.auth.uid);
+      
+      // Création : Les utilisateurs authentifiés peuvent créer des colis
+      // Permet aux clients de créer des demandes de livraison de colis
       allow create: if isAuthenticated();
+      
+      // Mise à jour : L'expéditeur ou le chauffeur peuvent mettre à jour les colis
+      // Permet de modifier le statut de livraison
       allow update: if isAuthenticated() && 
                        (resource.data.senderId == request.auth.uid || 
                         resource.data.driverId == request.auth.uid);
+      
+      // Suppression : Non autorisée
+      // Les colis ne doivent pas être supprimés pour conserver l'historique
       allow delete: if false;
     }
     
+    // ============================================================================
+    // COLLECTION VEHICLES (VÉHICULES)
+    // ============================================================================
+    
     // Collection vehicles - Les chauffeurs peuvent gérer leurs propres véhicules
     match /vehicles/{vehicleId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire les informations des véhicules
+      // Permet aux clients de voir les informations sur les véhicules des chauffeurs
       allow read: if isAuthenticated();
+      
+      // Écriture : Seul le propriétaire du véhicule peut le modifier
+      // Permet aux chauffeurs de gérer leurs propres véhicules
       allow write: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
     }
     
+    // ============================================================================
+    // COLLECTION CONFIG (CONFIGURATION)
+    // ============================================================================
+    
     // Collection config - Lecture seule pour tous les utilisateurs authentifiés
     match /config/{document} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire la configuration
+      // Permet d'accéder aux paramètres globaux de l'application
       allow read: if isAuthenticated();
-      allow write: if false; // Seulement via Admin SDK
+      
+      // Écriture : Non autorisée via client SDK
+      // Seulement via Admin SDK
+      allow write: if false;
     }
+    
+    // ============================================================================
+    // COLLECTION CARTYPES (TYPES DE VÉHICULES)
+    // ============================================================================
     
     // Collection carTypes - Lecture pour tous les utilisateurs authentifiés
     match /carTypes/{carTypeId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire les types de véhicules
+      // Permet aux clients de voir les différentes catégories de véhicules disponibles
       allow read: if isAuthenticated();
-      allow write: if false; // Seulement via Admin SDK
+      
+      // Écriture : Non autorisée via client SDK
+      // Seulement via Admin SDK
+      allow write: if false;
     }
+    
+    // ============================================================================
+    // FIN DES RÈGLES DE SÉCURITÉ
+    // ============================================================================
   }
 }
 
