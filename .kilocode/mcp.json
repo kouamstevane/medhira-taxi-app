@@ -18,7 +18,7 @@
                 "firebase-tools@latest",
                 "mcp",
                 "--dir",
-                "C:/Users/User/Documents/Allo training/medhira-taxi-app"
+                "C:/Users/User/Documents/AlloTraining/medhira-taxi-app"
             ],
             "alwaysAllow": [
                 "firebase_get_project",
@@ -40,7 +40,7 @@
                 "@gannonh/firebase-mcp"
             ],
         "env": {
-            "SERVICE_ACCOUNT_KEY_PATH": "C:/Users/User/Documents/Allo training/medhira-taxi-app/src/config/keys/serviceAccountKey.json",
+            "SERVICE_ACCOUNT_KEY_PATH": "C:/Users/User/Documents/AlloTraining/medhira-taxi-app/src/config/keys/serviceAccountKey.json",
             "FIREBASE_STORAGE_BUCKET": "medjira-service.appspot.com"
         }
     }

@@ -13,6 +13,8 @@ config/keys/serviceAccountKey.json
 /.next/
 /out/
 
+/medhira-taxi-app/.kilocode/*
+
 # Production builds
 /build
 /dist
