@@ -13,7 +13,9 @@ config/keys/serviceAccountKey.json
 /.next/
 /out/
 
-/medhira-taxi-app/.kilocode/*
+# Kilocode
+.kilocode/
+.kilocode/mcp.json
 
 # Production builds
 /build

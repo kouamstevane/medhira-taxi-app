@@ -2,55 +2,81 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { promisify } from 'util';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const sleep = promisify(setTimeout);
 
 const apiDir = path.join(__dirname, '../src/app/api');
-const tempApiDir = path.join(__dirname, '../src/app/_api_hidden');
+let modifiedFiles = [];
 
-// Fonction pour restaurer le dossier API en cas d'erreur ou de succès
-function restoreApi() {
-    if (fs.existsSync(tempApiDir)) {
-        if (fs.existsSync(apiDir)) {
-            // Si le dossier API a été recréé entre temps (peu probable), on le supprime
-            fs.rmSync(apiDir, { recursive: true, force: true });
+function getAllRouteFiles(dir, fileList = []) {
+    if (!fs.existsSync(dir)) return fileList;
+    const files = fs.readdirSync(dir);
+    files.forEach(file => {
+        const filePath = path.join(dir, file);
+        if (fs.statSync(filePath).isDirectory()) {
+            getAllRouteFiles(filePath, fileList);
+        } else if (file === 'route.ts' || file === 'route.js') {
+            fileList.push(filePath);
         }
-        fs.renameSync(tempApiDir, apiDir);
-        console.log('✅ Dossier API restauré.');
-    }
-}
-
-try {
-    console.log('🚀 Démarrage du build mobile...');
-
-    // 1. Masquer le dossier API pour éviter les erreurs "API Routes not supported in static export"
-    if (fs.existsSync(apiDir)) {
-        console.log('🙈 Masquage temporaire des routes API...');
-        fs.renameSync(apiDir, tempApiDir);
-    } else {
-        console.log('⚠️ Aucun dossier API trouvé, continuation...');
-    }
-
-    // 2. Exécuter le build avec la variable d'environnement
-    console.log('📦 Compilation Next.js (Static Export)...');
-    // Sur Windows, on doit gérer les variables d'env différemment si on n'utilise pas cross-env
-    // Mais ici on est dans un script Node, donc on peut passer l'env à execSync
-    execSync('next build', {
-        stdio: 'inherit',
-        env: { ...process.env, MOBILE_BUILD: 'true' }
     });
-
-    // 3. Sync Capacitor
-    console.log('📱 Synchronisation Capacitor...');
-    execSync('npx cap sync', { stdio: 'inherit' });
-
-    console.log('✅ Build mobile terminé avec succès !');
-
-} catch (error) {
-    console.error('❌ Erreur pendant le build:', error);
-    process.exit(1);
-} finally {
-    // 4. Toujours restaurer le dossier API
-    restoreApi();
+    return fileList;
 }
+
+async function restoreFiles() {
+    console.log('🔄 Restauration des fichiers API...');
+    for (const { original, temp } of modifiedFiles) {
+        if (fs.existsSync(temp)) {
+            try {
+                if (fs.existsSync(original)) {
+                    fs.unlinkSync(original);
+                }
+                fs.renameSync(temp, original);
+                console.log(`✅ Restauré : ${path.relative(apiDir, original)}`);
+            } catch (err) {
+                console.error(`❌ Erreur lors de la restauration de ${original}: ` + err.message);
+            }
+        }
+    }
+}
+
+async function runBuild() {
+    try {
+        console.log('🚀 Démarrage du build mobile...');
+        if (fs.existsSync(apiDir)) {
+            console.log('🙈 Masquage temporaire des routes API (renommage chirurgical)...');
+            const routeFiles = getAllRouteFiles(apiDir);
+            for (const file of routeFiles) {
+                const tempFile = file + '.tmp_build';
+                try {
+                    fs.renameSync(file, tempFile);
+                    modifiedFiles.push({ original: file, temp: tempFile });
+                    console.log(`🙈 Masqué : ${path.relative(apiDir, file)}`);
+                } catch (err) {
+                    console.error(`❌ Impossible de masquer ${file}: ` + err.message);
+                    throw err;
+                }
+            }
+        }
+
+        console.log('📦 Compilation Next.js (Static Export)...');
+        // On utilise npx pour être sûr de trouver l'exécutable local
+        execSync('npx next build', {
+            stdio: 'inherit',
+            env: { ...process.env, MOBILE_BUILD: 'true' }
+        });
+
+        console.log('📱 Synchronisation Capacitor...');
+        execSync('npx cap sync', { stdio: 'inherit' });
+
+        console.log('✅ Build mobile terminé avec succès !');
+    } catch (error) {
+        console.error('❌ Erreur pendant le build:', error.message);
+    } finally {
+        await restoreFiles();
+    }
+}
+
+runBuild();

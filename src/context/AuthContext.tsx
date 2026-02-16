@@ -18,10 +18,13 @@ import { AuthContextType, UserData } from '@/types';
 /**
  * Contexte d'authentification avec valeurs par défaut
  */
-const AuthContext = createContext<AuthContextType>({
+export const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   loading: true,
   userData: null,
+  error: null,
+  isEmailVerified: false,
+  reloadUser: async () => {},
 });
 
 /**
@@ -36,6 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   useEffect(() => {
     // Écouter les changements d'état d'authentification Firebase
@@ -79,8 +84,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  // Fonction pour recharger les données utilisateur
+  const reloadUser = async () => {
+    if (auth.currentUser) {
+      try {
+        await auth.currentUser.reload();
+        setIsEmailVerified(auth.currentUser.emailVerified || false);
+      } catch (err) {
+        console.error('Erreur lors du rechargement de l\'utilisateur:', err);
+      }
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ currentUser, loading, userData }}>
+    <AuthContext.Provider value={{ currentUser, loading, userData, error, isEmailVerified, reloadUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,0 +1,16 @@
+
+> medjira-taxi-app@0.1.0 test
+> jest --watch --watchAll=false 
+
+ReferenceError: require is not defined in ES module scope, you can use import instead
+This file is being treated as an ES module because it has a '.js' file extension and 'C:\Users\User\Documents\AlloTraining\medhira-taxi-app\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+    at file:///C:/Users/User/Documents/AlloTraining/medhira-taxi-app/jest.config.js:9:18
+    at ModuleJobSync.runSync (node:internal/modules/esm/module_job:517:37)
+    at ModuleLoader.importSyncForRequire (node:internal/modules/esm/loader:388:47)
+    at loadESMFromCJS (node:internal/modules/cjs/loader:1578:24)
+    at Module._compile (node:internal/modules/cjs/loader:1743:5)
+    at Object..js (node:internal/modules/cjs/loader:1893:10)
+    at Module.load (node:internal/modules/cjs/loader:1481:32)
+    at Module._load (node:internal/modules/cjs/loader:1300:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)

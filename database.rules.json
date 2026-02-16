@@ -1,0 +1,58 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "driver_locations": {
+      "$driverId": {
+        ".write": "auth != null && auth.uid == $driverId",
+        ".read": "auth != null",
+        ".validate": "newData.hasChildren(['lat', 'lng', 'accuracy', 'speed', 'heading', 'timestamp'])",
+        "lat": {
+          ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+        },
+        "lng": {
+          ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+        },
+        "accuracy": {
+          ".validate": "newData.isNumber() && newData.val() >= 0"
+        },
+        "speed": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+        },
+        "heading": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 360"
+        },
+        "timestamp": {
+          ".validate": "newData.isNumber() && newData.val() <= now && newData.val() >= now - 86400000"
+        },
+        "tripId": {
+          ".validate": "newData.isString() || !newData.exists()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "driver_status": {
+      "$driverId": {
+        ".write": "auth != null && auth.uid == $driverId",
+        ".read": "auth != null && auth.uid == $driverId",
+        ".validate": "newData.hasChildren(['status', 'lastUpdate'])",
+        "status": {
+          ".validate": "newData.val() == 'online' || newData.val() == 'offline' || newData.val() == 'on_trip'"
+        },
+        "lastUpdate": {
+          ".validate": "newData.isNumber() && newData.val() <= now"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    ".info": {
+      "connected": {
+        ".read": true
+      }
+    }
+  }
+}

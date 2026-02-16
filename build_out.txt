@@ -1,0 +1,61 @@
+
+> medjira-taxi-app@0.1.0 build
+> next build 
+
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 42s
+  Skipping validation of types
+  Collecting page data using 3 workers ...
+✅ Firebase Admin SDK initialisé
+  Generating static pages using 3 workers (0/30) ...
+⚠ metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase
+✅ Firebase Admin SDK initialisé
+⚠ metadataBase property in metadata export is not set for resolving social open graph or twitter images, using "http://localhost:3000". See https://nextjs.org/docs/app/api-reference/functions/generate-metadata#metadatabase
+  Generating static pages using 3 workers (7/30) 
+  Generating static pages using 3 workers (14/30) 
+🔍 [NewRideForm] geoError: null
+🔍 [NewRideForm] pickupAddress: 
+🔍 [NewRideForm] Condition (geoError || !pickupAddress): true
+  Generating static pages using 3 workers (22/30) 
+✓ Generating static pages using 3 workers (30/30) in 9.5s
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin/drivers
+├ ƒ /api/admin/manage-driver
+├ ƒ /api/admin/send-email
+├ ƒ /api/reverse-geocode
+├ ○ /auth/driver/verify
+├ ○ /auth/register
+├ ○ /auth/register/phone
+├ ○ /auth/reset-password
+├ ○ /auth/verify-email
+├ ○ /create-collections
+├ ○ /dashboard
+├ ○ /driver/dashboard
+├ ○ /driver/login
+├ ○ /driver/profile
+├ ○ /driver/register
+├ ○ /driver/verify
+├ ○ /driver/verify-email
+├ ○ /historique
+├ ○ /login
+├ ○ /profil
+├ ○ /taxi
+├ ○ /taxi/confirmation
+├ ○ /test-matching
+├ ○ /wallet
+├ ○ /wallet/historique
+└ ○ /wallet/recharger
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

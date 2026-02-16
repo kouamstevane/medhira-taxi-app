@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react';
 import { Geolocation, Position } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
-// ✅ Retiré eslint-disable @typescript-eslint/no-explicit-any (medJira.md #116)
+import { secureStorage } from '@/services/secureStorage.service';
+// ✅ Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
+
 export interface Location {
     lat: number;
     lng: number;
@@ -27,6 +29,36 @@ export interface GeolocationState {
 const MIN_ACCEPTABLE_ACCURACY = 50; // 50 mètres max
 const IDEAL_ACCURACY = 20; // Idéalement moins de 20 mètres
 
+// ✅ Modes adaptatifs selon medJiraV2.md §6.1
+export type GeolocationMode = 'tracking' | 'booking' | 'battery_critical';
+
+interface GeolocationModeConfig {
+    enableHighAccuracy: boolean;
+    timeout: number;
+    maximumAge: number;
+}
+
+const MODE_CONFIGS: Record<GeolocationMode, GeolocationModeConfig> = {
+    // Mode tracking (course active) : Haute précision, timeout 15s, distanceFilter 10m
+    tracking: {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0,
+    },
+    // Mode booking (recherche) : Précision standard, timeout 10s, cache 30s
+    booking: {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 30000,
+    },
+    // Mode batterie critique (<20%) : Basse précision, timeout 10s, distanceFilter 50m
+    battery_critical: {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 60000,
+    },
+};
+
 
 export const useCapacitorGeolocation = () => {
     const [state, setState] = useState<GeolocationState>({
@@ -38,14 +70,20 @@ export const useCapacitorGeolocation = () => {
     });
 
     /**
-     * Obtenir la position actuelle avec précision ultra-élevée
-     * Fait plusieurs tentatives si la précision est insuffisante
+     * Obtenir la position actuelle avec modes adaptatifs
+     * ✅ Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
+     * 
+     * @param mode Mode de géolocalisation (tracking, booking, battery_critical)
+     * @param fallbackToCache Si true, utilise le cache lastKnownPosition en cas d'échec
      */
-    const getCurrentPosition = useCallback(async () => {
+    const getCurrentPosition = useCallback(async (
+        mode: GeolocationMode = 'booking',
+        fallbackToCache = true
+    ) => {
         setState(prev => ({ ...prev, loading: true, error: null }));
 
         try {
-            console.log('[Geolocation] Démarrage de la géolocalisation HAUTE PRÉCISION...');
+            console.log(`[Geolocation] Démarrage géolocalisation mode: ${mode}`);
             
             // Vérifier les permissions
             const permissionStatus = await Geolocation.checkPermissions();
@@ -60,20 +98,23 @@ export const useCapacitorGeolocation = () => {
                 }
             }
 
-            // Stratégies de tentatives progressives pour éviter les timeouts
-            const strategies = [
-                // Tentative 1 : Haute précision, timeout 10s (rapide si GPS déjà chaud)
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-                // Tentative 2 : Haute précision, timeout 20s (laisser plus de temps au GPS pour fixer)
-                { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
-                // Tentative 3 : Haute précision, accepte cache récent (5s) et timeout très long
-                { enableHighAccuracy: true, timeout: 25000, maximumAge: 5000 },
-                // Tentative 4 : Mode standard (Wifi/Réseau), timeout court (fallback utile en intérieur)
-                { enableHighAccuracy: false, timeout: 10000, maximumAge: 10000 }
-            ];
+            // ✅ Utiliser la configuration selon le mode (medJiraV2.md §6.1)
+            const modeConfig = MODE_CONFIGS[mode];
+            console.log('[Geolocation] Configuration mode:', modeConfig);
 
             let bestPosition: Position | null = null;
             let bestAccuracy = Infinity;
+            const MAX_ATTEMPTS = 3; // ✅ Dégradation progressive après 3 échecs
+
+            // Stratégies de tentatives progressives
+            const strategies = [
+                // Tentative 1 : Configuration selon le mode
+                modeConfig,
+                // Tentative 2 : Fallback haute précision (si mode booking/battery)
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+                // Tentative 3 : Fallback basse précision (dernier recours)
+                { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
+            ];
 
             for (let i = 0; i < strategies.length; i++) {
                 try {
@@ -91,7 +132,7 @@ export const useCapacitorGeolocation = () => {
                         bestPosition = position;
                     }
 
-                    // Si la précision est acceptable (<= 50m), on s'arrête là pour ne pas faire attendre l'utilisateur
+                    // Si la précision est acceptable (<= 50m), on s'arrête là
                     if (accuracy <= MIN_ACCEPTABLE_ACCURACY) {
                         console.log('[Geolocation] Précision acceptable atteinte !');
                         break;
@@ -106,8 +147,50 @@ export const useCapacitorGeolocation = () => {
                 }
             }
 
+            // ✅ Dégradation progressive : Fallback lastKnownPosition après 3 échecs
+            if (!bestPosition && fallbackToCache) {
+                console.warn('[Geolocation] Échec GPS, tentative fallback lastKnownPosition...');
+                
+                const cachedPosition = await secureStorage.getLastKnownPosition();
+                
+                if (cachedPosition) {
+                    const age = Date.now() - cachedPosition.timestamp;
+                    const ageMinutes = Math.floor(age / 60000);
+                    
+                    console.log(`[Geolocation] Position cache trouvée (âge: ${ageMinutes}min)`);
+                    
+                    const preciseLocation: PreciseLocation = {
+                        lat: cachedPosition.lat,
+                        lng: cachedPosition.lng,
+                        accuracy: cachedPosition.accuracy,
+                        altitude: cachedPosition.altitude,
+                        heading: cachedPosition.heading,
+                        speed: cachedPosition.speed,
+                        timestamp: cachedPosition.timestamp,
+                    };
+
+                    setState({
+                        location: {
+                            lat: preciseLocation.lat,
+                            lng: preciseLocation.lng
+                        },
+                        preciseLocation,
+                        error: null,
+                        loading: false,
+                        accuracy: cachedPosition.accuracy,
+                    });
+
+                    // Indiquer que c'est une position en cache
+                    console.warn(`[Geolocation] Utilisation position cache (précision dégradée: ${cachedPosition.accuracy.toFixed(0)}m)`);
+                    
+                    return preciseLocation;
+                }
+                
+                console.error('[Geolocation] Aucune position cache disponible');
+            }
+
             if (!bestPosition) {
-                throw new Error("Impossible d'obtenir une localisation valide après plusieurs tentatives. Vérifiez que le GPS est activé.");
+                throw new Error("Impossible d'obtenir une localisation valide. Vérifiez que le GPS est activé.");
             }
 
             const preciseLocation: PreciseLocation = {
@@ -119,6 +202,14 @@ export const useCapacitorGeolocation = () => {
                 speed: bestPosition.coords.speed,
                 timestamp: bestPosition.timestamp,
             };
+
+            // ✅ Mettre en cache lastKnownPosition (medJiraV2.md §6.1)
+            await secureStorage.setLastKnownPosition({
+                lat: preciseLocation.lat,
+                lng: preciseLocation.lng,
+                accuracy: preciseLocation.accuracy,
+                timestamp: preciseLocation.timestamp,
+            });
 
             console.log('[Geolocation] Position FINALE:', {
                 lat: preciseLocation.lat.toFixed(6),

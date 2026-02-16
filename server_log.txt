@@ -1,0 +1,14 @@
+
+> medjira-taxi-app@0.1.0 dev
+> next dev --turbopack 
+
+⚠ Port 3000 is in use by process 14316, using available port 3001 instead.
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.195:3001
+- Environments: .env.local
+
+✓ Starting...
+⨯ Unable to acquire lock at c:\Users\User\Documents\AlloTraining\medhira-taxi-app\.next\dev\lock, is another instance of next dev running?
+  Suggestion: If you intended to restart next dev, terminate the other process, and then try again.
+[?25h

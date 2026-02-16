@@ -4,6 +4,7 @@ const isMobile = process.env.MOBILE_BUILD === 'true';
 
 const nextConfig: NextConfig = {
   output: isMobile ? 'export' : undefined,
+  trailingSlash: true,
   // Désactiver les source maps en production pour réduire la taille
   productionBrowserSourceMaps: false,
   // Optimisations agressives

@@ -51,7 +51,7 @@ interface MapViewProps {
     icon?: string;
   }>;
   /** Callback quand la carte est cliquée */
-  onMapClick?: (event: google.maps.MapMouseEvent) => void;
+  onMapClick?: (event: any) => void;
   /** Callback quand un marqueur est cliqué */
   onMarkerClick?: (markerId: string) => void;
   /** Afficher le bouton de recentrage */

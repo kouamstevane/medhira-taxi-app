@@ -10,7 +10,7 @@ import { Timestamp } from 'firebase/firestore';
 /**
  * Type d'utilisateur dans l'application
  */
-export type UserType = 'client' | 'chauffeur';
+export type UserType = 'client' | 'driver';
 
 /**
  * Données utilisateur stockées dans Firestore
@@ -34,7 +34,10 @@ export interface UserData {
 export interface AuthContextType {
   currentUser: FirebaseUser | null;
   loading: boolean;
-  userData?: UserData | null;
+  userData: UserData | null;
+  error: string | null;
+  isEmailVerified: boolean;
+  reloadUser: () => Promise<void>;
 }
 
 /**

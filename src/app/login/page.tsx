@@ -522,6 +522,11 @@ export default function LoginPage() {
                 S&apos;inscrire
               </Link>
             </p>
+            <p className="text-gray-600 mt-3">
+              <Link href="/auth/register/phone" className="text-[#f29200] font-medium hover:underline">
+                S&apos;inscrire par téléphone
+              </Link>
+            </p>
             <p className="text-gray-500 mt-3 text-xs sm:text-sm">
               Vous êtes un chauffeur ?{' '}
               <Link href="/driver/login" className="text-[#f29200] font-medium hover:underline touch-manipulation" style={{ minHeight: '44px', display: 'inline-flex', alignItems: 'center' }}>

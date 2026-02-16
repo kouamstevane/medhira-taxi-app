@@ -9,8 +9,16 @@ android {
 
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
+    implementation project(':capacitor-firebase-authentication')
+    implementation project(':capacitor-firebase-messaging')
+    implementation project(':capacitor-app')
+    implementation project(':capacitor-device')
     implementation project(':capacitor-geolocation')
     implementation project(':capacitor-google-maps')
+    implementation project(':capacitor-haptics')
+    implementation project(':capacitor-network')
+    implementation project(':capacitor-preferences')
+    implementation project(':capacitor-push-notifications')
     implementation project(':capgo-capacitor-social-login')
 
 }

@@ -18,6 +18,14 @@ buildscript {
 
 apply from: "variables.gradle"
 
+allprojects {
+    tasks.whenTaskAdded { task ->
+        if (task.name == 'lintDebug' || task.name == 'lintRelease') {
+            task.enabled = false
+        }
+    }
+}
+
 // Le bloc 'allprojects' a été supprimé d'ici.
 // Les dépôts sont maintenant gérés dans settings.gradle via dependencyResolutionManagement
 

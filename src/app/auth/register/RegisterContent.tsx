@@ -326,6 +326,35 @@ export default function RegisterContent() {
                             <div className="w-full border-t border-gray-300"></div>
                         </div>
                         <div className="relative flex justify-center text-sm">
+                            <span className="px-2 bg-white text-gray-500">Ou inscrire avec</span>
+                        </div>
+                    </div>
+
+                    {/* Option d'inscription par téléphone */}
+                    <div className="bg-[#f29200] border-l-4 border-[#f29200] p-4 rounded-lg">
+                        <div className="flex items-center">
+                            <FiPhone className="h-5 w-5 text-[#f29200] mr-3 flex-shrink-0" />
+                            <div className="flex-1">
+                                <h3 className="text-lg font-bold text-[#101010] mb-1">Inscription par téléphone</h3>
+                                <p className="text-sm text-gray-600 mb-3">
+                                    Recevez un code de vérification par SMS pour confirmer votre numéro
+                                </p>
+                                <Link
+                                    href="/auth/register/phone"
+                                    className="inline-flex items-center justify-center w-full bg-[#f29200] text-white font-semibold py-2 px-4 rounded-md hover:bg-[#e68600] transition-colors"
+                                >
+                                    S'inscrire par téléphone
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Séparateur */}
+                    <div className="relative my-6">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
                             <span className="px-2 bg-white text-gray-500">Ou continuer avec</span>
                         </div>
                     </div>

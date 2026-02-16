@@ -16,20 +16,13 @@
  */
 
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import LayoutClient from "./LayoutClient";
-
-/**
- * Configuration de la police principale (Inter)
- * Inter est une police fiable et toujours disponible sur Google Fonts
- */
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-inter",
-});
 
 /**
  * Configuration du viewport pour le responsive et PWA
@@ -81,7 +74,7 @@ export const metadata: Metadata = {
     description: "Commander un taxi ou faire livrer vos repas en quelques clics",
     images: [
       {
-        url: "/images/og-image.png",
+        url: "/images/og-image.webp",
         width: 1200,
         height: 630,
         alt: "Medjira - Service de taxi et livraison",
@@ -94,7 +87,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Medjira - Taxi et Livraison",
     description: "Commander un taxi ou faire livrer vos repas en quelques clics",
-    images: ["/images/twitter-image.png"],
+    images: ["/images/twitter-image.webp"],
     creator: "@medjira",
   },
 
@@ -129,17 +122,11 @@ export const metadata: Metadata = {
   // Vérification des propriétaires
   verification: {
     google: "votre-code-google-search-console",
-    // yandex: "votre-code-yandex",
-    // other: "votre-autre-verification",
   },
 };
 
 /**
  * Root Layout Component
- * 
- * Enveloppe toute l'application avec les providers nécessaires.
- * Le AuthProvider rend l'état d'authentification disponible dans tous les composants.
- * Le LayoutClient gère le header conditionnel et les éléments client-side.
  */
 export default function RootLayout({
   children,
@@ -150,8 +137,6 @@ export default function RootLayout({
     <html lang="fr" suppressHydrationWarning>
       <head>
         {/* Préconnexion aux domaines externes pour optimiser le chargement */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://maps.googleapis.com" />
         
         {/* DNS Prefetch pour Firebase */}
@@ -160,11 +145,9 @@ export default function RootLayout({
       </head>
       
       <body
-        className={`${inter.variable} antialiased bg-[#f5f5f5] min-h-screen`}
+        className="font-sans antialiased bg-[#f5f5f5] min-h-screen"
       >
-        {/* AuthProvider rend l'authentification disponible dans toute l'app */}
         <AuthProvider>
-          {/* LayoutClient gère les éléments conditionnels et client-side */}
           <LayoutClient>
             {children}
           </LayoutClient>

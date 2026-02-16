@@ -26,6 +26,7 @@ const NO_HEADER_ROUTES = [
   '/login',
   '/signup',
   '/auth/register',
+  '/auth/register/phone',
   '/auth/reset-password',
   '/driver/login',
   '/driver/register',

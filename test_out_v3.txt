@@ -1,0 +1,25 @@
+
+> medjira-taxi-app@0.1.0 test
+> jest --watch --watchAll=false 
+
+FAIL src/services/matching/__tests__/assignment.test.ts
+  ● Test suite failed to run
+
+    Cannot find module '../driver.service' from 'src/services/matching/__tests__/assignment.test.ts'
+
+    [0m [90m 21 |[39m }))[33m;[39m
+     [90m 22 |[39m
+    [31m[1m>[22m[39m[90m 23 |[39m jest[33m.[39mmock([32m'../driver.service'[39m[33m,[39m () [33m=>[39m ({
+     [90m    |[39m      [31m[1m^[22m[39m
+     [90m 24 |[39m   getDriverById[33m:[39m jest[33m.[39mfn()[33m,[39m
+     [90m 25 |[39m }))[33m;[39m
+     [90m 26 |[39m[0m
+
+      at Resolver._throwModNotFoundError (node_modules/jest-resolve/build/resolver.js:427:11)
+      at Object.mock (src/services/matching/__tests__/assignment.test.ts:23:6)
+
+Test Suites: 1 failed, 1 total
+Tests:       0 total
+Snapshots:   0 total
+Time:        7.513 s
+Ran all test suites.
