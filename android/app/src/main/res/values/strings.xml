@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Medhira Taxi</string>
     <string name="title_activity_main">Medhira Taxi</string>
-    <string name="package_name">com.medhira.taxi</string>
-    <string name="custom_url_scheme">com.medhira.taxi</string>
+    <string name="package_name">com.medjiraservice.medjiraserviceapp</string>
+    <string name="custom_url_scheme">com.medjiraservice.medjiraserviceapp</string>
     <string name="google_maps_key">AIzaSyDjXY4_ueKfpnmeAP3YI5_hQ4HQN2UtEj0</string>
 </resources>

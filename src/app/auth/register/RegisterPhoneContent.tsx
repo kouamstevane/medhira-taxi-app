@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable */
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -12,7 +11,7 @@ import {
   AuthErrorCodes,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { FiArrowLeft, FiUser, FiPhone, FiLock } from 'react-icons/fi';
+import { FiArrowLeft } from 'react-icons/fi';
 import { isValidPhoneNumber } from '@/lib/validation';
 
 // Liste des pays supportés avec codes, drapeaux et formats de numéro par défaut
@@ -45,9 +44,9 @@ export default function RegisterPhoneContent() {
   useEffect(() => {
     // Désactiver la vérification reCAPTCHA pour les tests en développement
     // Cela permet d'utiliser les numéros de test Firebase sans le widget
-    if (process.env.NODE_ENV === 'development') {
-      auth.settings.appVerificationDisabledForTesting = true;
-    }
+    // if (process.env.NODE_ENV === 'development') {
+    //   auth.settings.appVerificationDisabledForTesting = true;
+    // }
 
     return () => {
       if (recaptchaVerifier.current) {
@@ -106,8 +105,17 @@ export default function RegisterPhoneContent() {
     const cleanPhone = formData.phone.replace(/^0+/, '');
     const fullPhoneNumber = `${selectedCountry.dialCode}${cleanPhone}`;
 
-    if (!isValidPhoneNumber(fullPhoneNumber)) {
-      setError('Numéro de téléphone invalide pour ce pays');
+    // Mapping des longueurs attendues par indicatif pays
+    const countryLengths: Record<string, number> = {
+      '+237': 9,
+      '+33': 10,
+      '+32': 9,
+      '+1': 10,
+    };
+
+    if (!isValidPhoneNumber(fullPhoneNumber, selectedCountry.dialCode)) {
+      const expectedLength = countryLengths[selectedCountry.dialCode] || 9;
+      setError(`Numéro invalide pour ${selectedCountry.name}. Utilisez ${selectedCountry.dialCode} + ${expectedLength} chiffres`);
       return;
     }
 
@@ -116,25 +124,23 @@ export default function RegisterPhoneContent() {
     setSuccess(null);
 
     try {
+      // En développement, on peut désactiver la vérification pour les numéros de test
+      // En développement, on active reCAPTCHA pour supporter les vrais numéros
+      // if (process.env.NODE_ENV === 'development') {
+      //   auth.settings.appVerificationDisabledForTesting = false;
+      // }
+
       let appVerifier = recaptchaVerifier.current;
 
       if (!appVerifier) {
-        // En développement, on peut désactiver la vérification pour les numéros de test
-        if (process.env.NODE_ENV === 'development') {
-          auth.settings.appVerificationDisabledForTesting = true;
-          // Créer un verifier factice pour satisfaire TypeScript sans déclencher le widget
-          // Note: Cela ne fonctionnera QUE pour les numéros de test enregistrés dans Firebase Console
-          appVerifier = {
-            verify: () => Promise.resolve('dummy-token'),
-            type: 'invisible',
-            clear: () => {},
-          } as any;
-        } else {
-          appVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-            size: 'invisible',
-          });
-          recaptchaVerifier.current = appVerifier;
-        }
+        appVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+          size: "invisible", //invisible, normal
+
+          callback: (response: any) => {
+            // reCAPTCHA résolu
+          }
+        });
+        recaptchaVerifier.current = appVerifier;
       }
 
       const confirmation = await signInWithPhoneNumber(
@@ -146,19 +152,61 @@ export default function RegisterPhoneContent() {
       setVerificationId(confirmation.verificationId);
       setSuccess(`Code de vérification envoyé au ${fullPhoneNumber}`);
     } catch (error: unknown) {
-      // Ne pas clear le recaptcha en cas d'erreur pour permettre le retry
-      // si c'est une erreur liée au captcha, on le reset
-      if (error instanceof Error && error.message.includes('reCAPTCHA')) {
-        if (recaptchaVerifier.current && typeof recaptchaVerifier.current.clear === 'function') {
-          try {
-            recaptchaVerifier.current.clear();
-          } catch (e) {
-            // Ignorer si déjà clear
+      // Retry strategy for development environment with real numbers
+      const err = error as { code?: string };
+      if (process.env.NODE_ENV === 'development' && err.code === 'auth/captcha-check-failed') {
+        console.warn("Échec de la vérification test, nouvelle tentative avec vérification réelle...");
+        
+        try {
+          // Disable testing mode to force real captcha
+          auth.settings.appVerificationDisabledForTesting = false;
+          
+          // Clear existing verifier
+          if (recaptchaVerifier.current) {
+            try {
+              recaptchaVerifier.current.clear();
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+            recaptchaVerifier.current = null;
           }
-          recaptchaVerifier.current = null;
+
+          // Create new verifier
+          const newVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            size: 'invisible',
+          });
+          recaptchaVerifier.current = newVerifier;
+
+          // Retry sign-in
+          const confirmation = await signInWithPhoneNumber(
+            auth,
+            fullPhoneNumber,
+            newVerifier
+          );
+
+          setVerificationId(confirmation.verificationId);
+          setSuccess(`Code de vérification envoyé au ${fullPhoneNumber}`);
+          return; // Exit successfully
+        } catch (retryError) {
+          // If retry fails, handle as usual
+          console.error("Retry failed:", retryError);
+          handleAuthError(retryError);
         }
+      } else {
+        // Ne pas clear le recaptcha en cas d'erreur pour permettre le retry
+        // si c'est une erreur liée au captcha, on le reset
+        if (error instanceof Error && error.message.includes('reCAPTCHA')) {
+          if (recaptchaVerifier.current && typeof recaptchaVerifier.current.clear === 'function') {
+            try {
+              recaptchaVerifier.current.clear();
+            } catch (e) {
+              // Ignorer si déjà clear
+            }
+            recaptchaVerifier.current = null;
+          }
+        }
+        handleAuthError(error);
       }
-      handleAuthError(error);
     } finally {
       setLoading(false);
     }
@@ -253,8 +301,16 @@ export default function RegisterPhoneContent() {
       case 'auth/invalid-app-credential':
         errorMessage = "Configuration invalide. Vérifiez que localhost est autorisé dans la console Firebase et que la clé API est correcte.";
         break;
+      case 'auth/captcha-check-failed':
+        errorMessage = "La vérification reCAPTCHA a échoué. Veuillez réessayer.";
+        break;
       default:
-        errorMessage = err.message || "Erreur d'authentification";
+        // Gestion des erreurs techniques (comme "verifier?._reset is not a function")
+        if (err.message && (err.message.includes('verifier') || err.message.includes('_reset'))) {
+          errorMessage = "Erreur interne lors de l'initialisation du captcha. Veuillez rafraîchir la page.";
+        } else {
+          errorMessage = "Une erreur est survenue lors de l'authentification. Veuillez réessayer.";
+        }
     }
 
     setError(errorMessage);

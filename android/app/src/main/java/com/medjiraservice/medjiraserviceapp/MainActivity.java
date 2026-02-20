@@ -1,4 +1,4 @@
-package com.medhira.taxi;
+package com.medjiraservice.medjiraserviceapp;
 
 import android.content.Intent;
 import android.os.Bundle;

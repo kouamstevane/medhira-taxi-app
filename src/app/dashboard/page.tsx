@@ -44,7 +44,7 @@ export default function Dashboard() {
     firstName: string;
     lastName: string;
     profileImageUrl: string;
-    userType: 'client' | 'driver';
+    userType: 'client' | 'chauffeur';
   }>({
     phoneNumber: "",
     firstName: "",
@@ -148,7 +148,7 @@ export default function Dashboard() {
           // L'utilisateur est un chauffeur approuvé, mettre à jour son userType
           setUserData(prev => ({
             ...prev,
-            userType: 'driver'
+            userType: 'chauffeur'
           }));
         }
 
@@ -242,7 +242,7 @@ export default function Dashboard() {
 
         <div className="flex items-center space-x-2 sm:space-x-4">
                       {/* Link to Driver Space - Visible uniquement pour les chauffeurs */}
-                      {userData.userType === 'driver' && (
+                      {userData.userType === 'chauffeur' && (
                         <Link
                           href="/driver/dashboard"
                           className="flex items-center space-x-2 bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition duration-200 shadow-md touch-manipulation"
@@ -414,11 +414,11 @@ export default function Dashboard() {
                   <FiUser className="h-4 w-4 mr-2 text-[#f29200]" />
                   <span className="font-medium">Statut :</span>
                   <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
-                    userData.userType === 'driver'
+                    userData.userType === 'chauffeur'
                       ? 'bg-green-100 text-green-800'
                       : 'bg-blue-100 text-blue-800'
                   }`}>
-                    {userData.userType === 'driver' ? 'Chauffeur' : 'Client'}
+                    {userData.userType === 'chauffeur' ? 'Chauffeur' : 'Client'}
                   </span>
                 </p>
               </div>
@@ -492,7 +492,7 @@ export default function Dashboard() {
         </section>
 
         {/* Section chauffeur */}
-        {userData.userType === 'driver' && (
+        {userData.userType === 'chauffeur' && (
           <section className="mb-8">
             <h3 className="text-lg font-bold text-[#101010] mb-5 flex items-center">
               <FiUser className="h-5 w-5 mr-2 text-[#f29200]" />

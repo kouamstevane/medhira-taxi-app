@@ -1,0 +1,164 @@
+{
+  "suiteInfo": {
+    "name": "Suite de Tests - Inscription par Téléphone",
+    "version": "1.0.0",
+    "description": "Tests automatisés complets pour la fonctionnalité d'inscription par numéro de téléphone",
+    "author": "Équipe de développement Medhira Taxi",
+    "created": "2026-02-16",
+    "lastUpdated": "2026-02-16"
+  },
+  "testCategories": [
+    {
+      "name": "unit",
+      "displayName": "Tests Unitaires",
+      "description": "Tests de validation des numéros de téléphone",
+      "emoji": "📘",
+      "testFiles": [
+        "src/__tests__/unit/validation.test.ts"
+      ],
+      "estimatedTests": 15,
+      "estimatedDuration": "< 5s"
+    },
+    {
+      "name": "integration",
+      "displayName": "Tests d'Intégration",
+      "description": "Tests du composant RegisterPhoneContent et intégration Firebase",
+      "emoji": "📙",
+      "testFiles": [
+        "src/__tests__/integration/phone-registration.test.tsx"
+      ],
+      "estimatedTests": 20,
+      "estimatedDuration": "10-15s"
+    },
+    {
+      "name": "e2e",
+      "displayName": "Tests End-to-End",
+      "description": "Tests du flux complet d'inscription",
+      "emoji": "📗",
+      "testFiles": [
+        "src/__tests__/e2e/e2e-flow.test.tsx"
+      ],
+      "estimatedTests": 5,
+      "estimatedDuration": "8-12s"
+    },
+    {
+      "name": "performance",
+      "displayName": "Tests de Performance",
+      "description": "Tests de charge et de stress",
+      "emoji": "⚡",
+      "testFiles": [
+        "src/__tests__/performance/load-testing.test.ts"
+      ],
+      "estimatedTests": 8,
+      "estimatedDuration": "15-30s"
+    },
+    {
+      "name": "security",
+      "displayName": "Tests de Sécurité",
+      "description": "Tests de protection contre les attaques et vulnérabilités",
+      "emoji": "🔒",
+      "testFiles": [
+        "src/__tests__/security/security.test.ts"
+      ],
+      "estimatedTests": 15,
+      "estimatedDuration": "10-20s"
+    }
+  ],
+  "coverage": {
+    "targets": {
+      "lines": 80,
+      "functions": 80,
+      "branches": 75,
+      "statements": 80
+    },
+    "criticalFiles": [
+      "src/lib/validation.ts",
+      "src/app/auth/register/RegisterPhoneContent.tsx",
+      "src/services/auth.service.ts",
+      "src/context/AuthContext.tsx"
+    ]
+  },
+  "performanceTargets": {
+    "phoneValidation": {
+      "metric": "Temps de validation d'un numéro",
+      "target": "< 1ms",
+      "description": "Validation du format du numéro de téléphone"
+    },
+    "sendVerificationCode": {
+      "metric": "Envoi du code SMS",
+      "target": "< 3s",
+      "description": "Appel Firebase pour envoyer le code de vérification"
+    },
+    "verifyAndCreateAccount": {
+      "metric": "Vérification et création de compte",
+      "target": "< 2s",
+      "description": "Vérification du code et création du document Firestore"
+    },
+    "simultaneousRegistrations10": {
+      "metric": "10 inscriptions simultanées",
+      "target": "< 10s",
+      "description": "Performance lors de 10 inscriptions en parallèle"
+    },
+    "simultaneousRegistrations50": {
+      "metric": "50 inscriptions simultanées",
+      "target": "< 30s",
+      "description": "Performance lors de 50 inscriptions en parallèle"
+    }
+  },
+  "securityChecks": [
+    {
+      "name": "Brute Force Protection",
+      "description": "Vérification de la limitation des tentatives répétées",
+      "severity": "critical"
+    },
+    {
+      "name": "SQL Injection Prevention",
+      "description": "Validation stricte pour empêcher les injections SQL",
+      "severity": "critical"
+    },
+    {
+      "name": "XSS Prevention",
+      "description": "Sanitization des entrées pour prévenir les attaques XSS",
+      "severity": "high"
+    },
+    {
+      "name": "Rate Limiting",
+      "description": "Limitation du nombre de requêtes par IP/utilisateur",
+      "severity": "high"
+    },
+    {
+      "name": "Password Logging",
+      "description": "S'assurer que les mots de passe ne sont jamais loggés",
+      "severity": "critical"
+    },
+    {
+      "name": "Phone Number Masking",
+      "description": "Masquage partiel des numéros dans les logs",
+      "severity": "medium"
+    }
+  ],
+  "reportingConfig": {
+    "outputDirectory": "test-reports",
+    "formats": ["json", "html"],
+    "includeStackTraces": true,
+    "includePerformanceMetrics": true,
+    "includeScreenshots": false,
+    "severityLevels": ["low", "medium", "high", "critical"]
+  },
+  "cicdIntegration": {
+    "platforms": ["GitHub Actions", "GitLab CI"],
+    "failOnCoverageBelow": 75,
+    "failOnFailedTests": true,
+    "uploadReports": true,
+    "notifyOnFailure": true
+  },
+  "documentation": {
+    "mainGuide": "TESTING.md",
+    "quickStart": "README_TESTS.md",
+    "runScripts": {
+      "windows": "run-tests.bat",
+      "linux": "run-tests.sh",
+      "macos": "run-tests.sh"
+    }
+  }
+}

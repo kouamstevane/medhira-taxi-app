@@ -2,11 +2,11 @@
 /* eslint-disable */
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/config/firebase';
-import { updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { signUpWithEmail } from '@/services/auth.service';
+import { auth } from '@/config/firebase';
+import { updateProfile } from 'firebase/auth';
+import { signUpWithEmail, signInWithGoogle } from '@/services/auth.service';
 import Link from 'next/link';
-import { FiUser, FiMail, FiLock, FiPhone, FiArrowLeft } from 'react-icons/fi';
+import { FiUser, FiMail, FiLock, FiArrowLeft } from 'react-icons/fi';
 
 export default function RegisterContent() {
     const router = useRouter();
@@ -14,17 +14,16 @@ export default function RegisterContent() {
         firstName: '',
         lastName: '',
         email: '',
-        phone: '',
         password: '',
         confirmPassword: '',
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Vérifier si l'utilisateur est déjà connecté
+    // Rediriger si déjà connecté
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged((user) => {
-            if (user) {
+            if (user && user.emailVerified) {
                 router.push('/dashboard');
             }
         });
@@ -68,7 +67,7 @@ export default function RegisterContent() {
         setLoading(true);
 
         try {
-            // Utiliser le service centralisé qui envoie l'email de vérification
+            // Créer le compte avec email+password et créer le document Firestore
             const user = await signUpWithEmail(
                 formData.email,
                 formData.password,
@@ -82,15 +81,6 @@ export default function RegisterContent() {
                 displayName: `${formData.firstName} ${formData.lastName}`,
             });
 
-            // Mettre à jour le document utilisateur avec le numéro de téléphone
-            if (formData.phone) {
-                const { doc, updateDoc } = await import('firebase/firestore');
-                await updateDoc(doc(db, 'users', user.uid), {
-                    phone: formData.phone,
-                    phoneNumber: formData.phone,
-                });
-            }
-
             console.log('✅ Compte client créé avec succès:', user.uid);
 
             // Redirection vers la page de vérification email
@@ -98,14 +88,13 @@ export default function RegisterContent() {
         } catch (err: unknown) {
             console.error('❌ Erreur création compte:', err);
 
-            // Messages d'erreur personnalisés
             const error = err as { code?: string; message?: string };
             if (error.code === 'auth/email-already-in-use') {
                 setError('Cette adresse email est déjà utilisée');
             } else if (error.code === 'auth/invalid-email') {
                 setError('Adresse email invalide');
             } else if (error.code === 'auth/weak-password') {
-                setError('Mot de passe trop faible');
+                setError('Mot de passe trop faible (minimum 6 caractères)');
             } else if (error.code === 'auth/network-request-failed') {
                 setError('Erreur de connexion. Vérifiez votre connexion internet');
             } else {
@@ -121,11 +110,7 @@ export default function RegisterContent() {
         setLoading(true);
 
         try {
-            // Utilisation du service centralisé qui gère le natif et le web
-            const { signInWithGoogle } = await import('@/services/auth.service');
             await signInWithGoogle();
-
-            // Redirection vers le dashboard
             router.push('/dashboard');
         } catch (err: unknown) {
             console.error('❌ Erreur connexion Google:', err);
@@ -176,7 +161,7 @@ export default function RegisterContent() {
                     <p className="text-gray-600">Rejoignez Medjira dès aujourd&apos;hui</p>
                 </div>
 
-                {/* Formulaire */}
+                {/* Form */}
                 <div className="bg-white rounded-2xl shadow-xl p-8">
                     {error && (
                         <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded">
@@ -238,24 +223,7 @@ export default function RegisterContent() {
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f29200] focus:border-transparent transition text-[#101010]"
                                     placeholder="jean.dupont@example.com"
                                     required
-                                />
-                            </div>
-                        </div>
-
-                        {/* Téléphone */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Téléphone (optionnel)
-                            </label>
-                            <div className="relative">
-                                <FiPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                                <input
-                                    type="tel"
-                                    name="phone"
-                                    value={formData.phone}
-                                    onChange={handleChange}
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f29200] focus:border-transparent transition text-[#101010]"
-                                    placeholder="+237 6 XX XX XX XX"
+                                    autoComplete="email"
                                 />
                             </div>
                         </div>
@@ -276,6 +244,7 @@ export default function RegisterContent() {
                                     placeholder="••••••••"
                                     required
                                     minLength={6}
+                                    autoComplete="new-password"
                                 />
                             </div>
                             <p className="mt-1 text-xs text-gray-500">Minimum 6 caractères</p>
@@ -296,6 +265,7 @@ export default function RegisterContent() {
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#f29200] focus:border-transparent transition text-[#101010]"
                                     placeholder="••••••••"
                                     required
+                                    autoComplete="new-password"
                                 />
                             </div>
                         </div>
@@ -319,35 +289,6 @@ export default function RegisterContent() {
                             )}
                         </button>
                     </form>
-
-                    {/* Séparateur */}
-                    <div className="relative my-6">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-300"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm">
-                            <span className="px-2 bg-white text-gray-500">Ou inscrire avec</span>
-                        </div>
-                    </div>
-
-                    {/* Option d'inscription par téléphone */}
-                    <div className="bg-[#f29200] border-l-4 border-[#f29200] p-4 rounded-lg">
-                        <div className="flex items-center">
-                            <FiPhone className="h-5 w-5 text-[#f29200] mr-3 flex-shrink-0" />
-                            <div className="flex-1">
-                                <h3 className="text-lg font-bold text-[#101010] mb-1">Inscription par téléphone</h3>
-                                <p className="text-sm text-gray-600 mb-3">
-                                    Recevez un code de vérification par SMS pour confirmer votre numéro
-                                </p>
-                                <Link
-                                    href="/auth/register/phone"
-                                    className="inline-flex items-center justify-center w-full bg-[#f29200] text-white font-semibold py-2 px-4 rounded-md hover:bg-[#e68600] transition-colors"
-                                >
-                                    S'inscrire par téléphone
-                                </Link>
-                            </div>
-                        </div>
-                    </div>
 
                     {/* Séparateur */}
                     <div className="relative my-6">
@@ -391,7 +332,7 @@ export default function RegisterContent() {
                     <p>En créant un compte, vous acceptez nos</p>
                     <p className="mt-1">
                         <a href="#" className="text-[#f29200] hover:underline">Conditions d&apos;utilisation</a>
-                        {' '}&{' '}
+                        {' '}&amp;{' '}
                         <a href="#" className="text-[#f29200] hover:underline">Politique de confidentialité</a>
                     </p>
                 </div>

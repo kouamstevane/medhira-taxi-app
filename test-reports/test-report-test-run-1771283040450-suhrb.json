@@ -1,0 +1,56 @@
+{
+  "runId": "test-run-1771283040450-suhrb",
+  "startTime": "2026-02-16T23:04:00.450Z",
+  "totalTests": 20,
+  "passedTests": 20,
+  "failedTests": 0,
+  "skippedTests": 0,
+  "errors": [],
+  "performance": {
+    "totalDuration": 40,
+    "averageTestDuration": 2,
+    "slowestTests": [
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario nominal: envoi code → vérification → création compte",
+        "duration": 9
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Tests de sécurité Les mots de passe ne doivent jamais être loggés",
+        "duration": 5
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait rejeter un numéro trop court",
+        "duration": 4
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Appels Firebase - Envoi du code devrait pouvoir appeler signInWithPhoneNumber avec succès",
+        "duration": 4
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait accepter un numéro camerounais valide",
+        "duration": 3
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario d'erreur: erreur réseau → nouvelle tentative → succès",
+        "duration": 3
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Appels Firestore - Création du compte devrait créer un document utilisateur si il n'existe pas",
+        "duration": 2
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario d'erreur: code invalide → réessai → succès",
+        "duration": 2
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait accepter un numéro français valide",
+        "duration": 1
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait rejeter un numéro avec des caractères invalides",
+        "duration": 1
+      }
+    ]
+  },
+  "endTime": "2026-02-16T23:04:00.555Z"
+}

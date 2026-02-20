@@ -1,6 +1,6 @@
 /**
  * Types liés aux utilisateurs et à l'authentification
- * 
+ *
  * @module types/user
  */
 
@@ -9,8 +9,9 @@ import { Timestamp } from 'firebase/firestore';
 
 /**
  * Type d'utilisateur dans l'application
+ * ✅ CORRECTION : 'chauffeur' unifié avec les règles Firestore (était 'driver')
  */
-export type UserType = 'client' | 'driver';
+export type UserType = 'client' | 'chauffeur';
 
 /**
  * Données utilisateur stockées dans Firestore

@@ -1,0 +1,268 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapport de Tests - test-run-1771282941315-2sypmc</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      color: #333;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 2em;
+      margin-bottom: 10px;
+    }
+    .header p {
+      opacity: 0.9;
+      font-size: 1.1em;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      padding: 30px;
+      background: #f8f9fa;
+    }
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      text-align: center;
+    }
+    .stat-card h3 {
+      color: #666;
+      font-size: 0.9em;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .stat-card .value {
+      font-size: 2.5em;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .stat-card.success .value { color: #28a745; }
+    .stat-card.danger .value { color: #dc3545; }
+    .stat-card.warning .value { color: #ffc107; }
+    .stat-card.info .value { color: #17a2b8; }
+    .section {
+      padding: 30px;
+    }
+    .section h2 {
+      margin-bottom: 20px;
+      color: #667eea;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 10px;
+    }
+    .error-list {
+      list-style: none;
+    }
+    .error-item {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+    }
+    .error-item.critical {
+      background: #f8d7da;
+      border-left-color: #dc3545;
+    }
+    .error-item.high {
+      background: #fff3cd;
+      border-left-color: #fd7e14;
+    }
+    .error-item h4 {
+      margin-bottom: 8px;
+      color: #333;
+    }
+    .error-meta {
+      font-size: 0.85em;
+      color: #666;
+      margin-bottom: 10px;
+    }
+    .error-message {
+      background: rgba(0,0,0,0.05);
+      padding: 10px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+      margin-top: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .performance-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    .performance-table th,
+    .performance-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #dee2e6;
+    }
+    .performance-table th {
+      background: #667eea;
+      color: white;
+      font-weight: 600;
+    }
+    .performance-table tr:hover {
+      background: #f8f9fa;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75em;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .badge.success { background: #d4edda; color: #155724; }
+    .badge.danger { background: #f8d7da; color: #721c24; }
+    .badge.warning { background: #fff3cd; color: #856404; }
+    .badge.critical { background: #dc3545; color: white; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📊 Rapport de Tests - Inscription par Téléphone</h1>
+      <p>ID: test-run-1771282941315-2sypmc</p>
+      <p>Période: 2026-02-16T23:02:21.315Z - 2026-02-16T23:02:21.560Z</p>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card info">
+        <h3>Total Tests</h3>
+        <div class="value">20</div>
+      </div>
+      <div class="stat-card success">
+        <h3>Réussis</h3>
+        <div class="value">20</div>
+        <div class="badge success">100.00%</div>
+      </div>
+      <div class="stat-card danger">
+        <h3>Échoués</h3>
+        <div class="value">0</div>
+        <div class="badge danger">0.00%</div>
+      </div>
+      <div class="stat-card warning">
+        <h3>Ignorés</h3>
+        <div class="value">0</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>⚡ Performance</h2>
+      <p><strong>Durée totale:</strong> 0.08s</p>
+      <p><strong>Durée moyenne par test:</strong> 4.10ms</p>
+      
+      
+        <h3 style="margin-top: 20px;">Tests les plus lents</h3>
+        <table class="performance-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nom du Test</th>
+              <th>Durée</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+              <tr>
+                <td>1</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario nominal: envoi code → vérification → création compte</td>
+                <td>17ms</td>
+              </tr>
+            
+              <tr>
+                <td>2</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Tests de sécurité Les mots de passe ne doivent jamais être loggés</td>
+                <td>9ms</td>
+              </tr>
+            
+              <tr>
+                <td>3</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Appels Firebase - Envoi du code devrait pouvoir appeler signInWithPhoneNumber avec succès</td>
+                <td>7ms</td>
+              </tr>
+            
+              <tr>
+                <td>4</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario d'erreur: erreur réseau → nouvelle tentative → succès</td>
+                <td>7ms</td>
+              </tr>
+            
+              <tr>
+                <td>5</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait rejeter un numéro trop court</td>
+                <td>6ms</td>
+              </tr>
+            
+              <tr>
+                <td>6</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait accepter un numéro camerounais valide</td>
+                <td>5ms</td>
+              </tr>
+            
+              <tr>
+                <td>7</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait accepter un numéro belge valide</td>
+                <td>5ms</td>
+              </tr>
+            
+              <tr>
+                <td>8</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Appels Firebase - Vérification du code devrait pouvoir vérifier un code valide</td>
+                <td>5ms</td>
+              </tr>
+            
+              <tr>
+                <td>9</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Appels Firebase - Vérification du code devrait rejeter un code invalide</td>
+                <td>5ms</td>
+              </tr>
+            
+              <tr>
+                <td>10</td>
+                <td>Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario d'erreur: code invalide → réessai → succès</td>
+                <td>4ms</td>
+              </tr>
+            
+          </tbody>
+        </table>
+      
+    </div>
+
+    
+
+    
+  </div>
+</body>
+</html>
+    

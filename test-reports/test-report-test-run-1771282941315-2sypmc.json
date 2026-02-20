@@ -1,0 +1,56 @@
+{
+  "runId": "test-run-1771282941315-2sypmc",
+  "startTime": "2026-02-16T23:02:21.315Z",
+  "totalTests": 20,
+  "passedTests": 20,
+  "failedTests": 0,
+  "skippedTests": 0,
+  "errors": [],
+  "performance": {
+    "totalDuration": 82,
+    "averageTestDuration": 4.1,
+    "slowestTests": [
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario nominal: envoi code → vérification → création compte",
+        "duration": 17
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Tests de sécurité Les mots de passe ne doivent jamais être loggés",
+        "duration": 9
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Appels Firebase - Envoi du code devrait pouvoir appeler signInWithPhoneNumber avec succès",
+        "duration": 7
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario d'erreur: erreur réseau → nouvelle tentative → succès",
+        "duration": 7
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait rejeter un numéro trop court",
+        "duration": 6
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait accepter un numéro camerounais valide",
+        "duration": 5
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait accepter un numéro belge valide",
+        "duration": 5
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Appels Firebase - Vérification du code devrait pouvoir vérifier un code valide",
+        "duration": 5
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Appels Firebase - Vérification du code devrait rejeter un code invalide",
+        "duration": 5
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario d'erreur: code invalide → réessai → succès",
+        "duration": 4
+      }
+    ]
+  },
+  "endTime": "2026-02-16T23:02:21.522Z"
+}

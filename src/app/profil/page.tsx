@@ -3,9 +3,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { auth, db, storage } from '@/config/firebase';
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
 import { onAuthStateChanged, User } from "firebase/auth";
 
@@ -114,7 +114,7 @@ export default function ProfilPage() {
           ...userData,
           email: user.email,
           profileImageUrl: imageUrl,
-          updatedAt: new Date()
+          updatedAt: serverTimestamp()
         });
       } else {
         // Le document n'existe pas, on le crée
@@ -123,8 +123,8 @@ export default function ProfilPage() {
           email: user.email,
           phoneNumber: user.phoneNumber || `+237${userData.phone}`,
           profileImageUrl: imageUrl,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
           country: userData.country || 'Cameroun'
         });
       }

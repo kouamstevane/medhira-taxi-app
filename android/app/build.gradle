@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.medhira.taxi"
+    namespace "com.medjiraservice.medjiraserviceapp"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.medhira.taxi"
+        applicationId "com.medjiraservice.medjiraserviceapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -43,8 +43,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_21
-        targetCompatibility JavaVersion.VERSION_21
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     lint {
@@ -79,4 +79,16 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Force les versions AndroidX pour éviter les conflits de dépendances
+// entre Capacitor, Firebase Authentication et les plugins natifs
+// - androidx.core:core-ktx/core 1.15.0 : cohérent avec variables.gradle
+// - androidx.browser:browser 1.8.0 : requis pour Chrome Custom Tabs (OAuth)
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core-ktx:1.15.0'
+        force 'androidx.core:core:1.15.0'
+        force 'androidx.browser:browser:1.8.0'
+    }
 }

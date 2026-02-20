@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:113581657187:android:299bc2eaf222633124bc56",
         "android_client_info": {
-          "package_name": "com.medhira.taxi"
+          "package_name": "com.medjiraservice.medjiraserviceapp"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "113581657187-c6s6pp2h3gmr4v8pk9kdf526d2qk27hi.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.medhira.taxi",
+            "package_name": "com.medjiraservice.medjiraserviceapp",
             "certificate_hash": "aed627cbd4fdabd00008f6eaaf42fe161723a6e9"
           }
         },
@@ -29,6 +29,9 @@
       "api_key": [
         {
           "current_key": "AIzaSyDjXY4_ueKfpnmeAP3YI5_hQ4HQN2UtEj0"
+        },
+        {
+          "current_key": "AIzaSyCxq214HEUzKvTYIVR0pSECKd4LZrLWQoE"
         }
       ],
       "services": {
@@ -58,19 +61,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "113581657187-7kf42968p6ok0viaukcb5tsei292v1el.apps.googleusercontent.com",
+          "client_id": "113581657187-4h438o4gmi6ubghpbabj22a8s10gdohf.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.medjiraservice.medjiraservice",
-            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
-          }
-        },
-        {
-          "client_id": "113581657187-pf0rdotpdb8ibmvosj3iaqsf2tt4kh6e.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.medjiraservice.medjiraservice",
-            "certificate_hash": "a83fbde6650151552a29ffe8b49e8194e690ef3c"
+            "certificate_hash": "aed627cbd4fdabd00008f6eaaf42fe161723a6e9"
           }
         },
         {
@@ -81,6 +76,9 @@
       "api_key": [
         {
           "current_key": "AIzaSyDjXY4_ueKfpnmeAP3YI5_hQ4HQN2UtEj0"
+        },
+        {
+          "current_key": "AIzaSyCxq214HEUzKvTYIVR0pSECKd4LZrLWQoE"
         }
       ],
       "services": {
@@ -110,19 +108,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "113581657187-hk77buv2l3hmodcaspm2n9slcmm8jbqr.apps.googleusercontent.com",
+          "client_id": "113581657187-iaqfmpdsm9qri9spl1kqr150g3ogsfqi.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.medjiraservice.medjiraserviceapp",
-            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
-          }
-        },
-        {
-          "client_id": "113581657187-qagfjabakcv3jq6kifol6hautre5hoss.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.medjiraservice.medjiraserviceapp",
-            "certificate_hash": "1bd56247c58e17aa3427b040f4f04db572cb974a"
+            "certificate_hash": "aed627cbd4fdabd00008f6eaaf42fe161723a6e9"
           }
         },
         {
@@ -133,6 +123,9 @@
       "api_key": [
         {
           "current_key": "AIzaSyDjXY4_ueKfpnmeAP3YI5_hQ4HQN2UtEj0"
+        },
+        {
+          "current_key": "AIzaSyCxq214HEUzKvTYIVR0pSECKd4LZrLWQoE"
         }
       ],
       "services": {

@@ -311,19 +311,26 @@ service cloud.firestore {
     // COLLECTION ACTIVE_BOOKINGS
     // ============================================================================
     
-    // Collection active_bookings - Similaire aux bookings
+    // Collection active_bookings - Courses actuellement en cours
     match /active_bookings/{bookingId} {
-      // Lecture : Les utilisateurs authentifiés peuvent lire les réservations actives
-      allow read: if isAuthenticated();
+      // Lecture : Seul le client propriétaire ou le chauffeur assigné peut lire
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid ||
+                      resource.data.driverId == request.auth.uid);
       
-      // Création : Les utilisateurs authentifiés peuvent créer des réservations actives
-      allow create: if isAuthenticated();
+      // Création : Uniquement par un utilisateur authentifié pour sa propre course
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
       
-      // Mise à jour : Les utilisateurs authentifiés peuvent mettre à jour les réservations actives
-      allow update: if isAuthenticated();
+      // Mise à jour : Le propriétaire ou le chauffeur assigné peuvent mettre à jour
+      allow update: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        resource.data.driverId == request.auth.uid);
       
-      // Suppression : Les utilisateurs authentifiés peuvent supprimer les réservations actives
-      allow delete: if isAuthenticated();
+      // Suppression : Le propriétaire ou le chauffeur assigné peuvent supprimer
+      allow delete: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        resource.data.driverId == request.auth.uid);
     }
     
     // ============================================================================

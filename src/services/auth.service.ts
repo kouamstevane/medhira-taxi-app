@@ -1,9 +1,9 @@
 /**
  * Service d'Authentification
- * 
+ *
  * Gère toutes les opérations d'authentification Firebase et
  * les données utilisateur dans Firestore.
- * 
+ *
  * @module services/auth
  */
 
@@ -25,21 +25,23 @@ import { SocialLogin } from '@capgo/capacitor-social-login';
 
 /**
  * Connexion par email et mot de passe
+ * ✅ Vérifie la validation de l'email avant de laisser entrer
  */
 export const signInWithEmail = async (email: string, password: string): Promise<User> => {
   const result = await signInWithEmailAndPassword(auth, email, password);
-  
+
   // Vérifier si l'email est vérifié
   if (!result.user.emailVerified) {
     await signOut();
     throw new Error('Veuillez vérifier votre adresse email avant de vous connecter');
   }
-  
+
   return result.user;
 };
 
 /**
  * Inscription par email et mot de passe
+ * ✅ Crée le document Firestore et envoie l'email de vérification
  */
 export const signUpWithEmail = async (
   email: string,
@@ -60,10 +62,10 @@ export const signUpWithEmail = async (
 
   // Envoyer l'email de vérification
   try {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medjira-taxi.firebaseapp.com';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medjira-service.firebaseapp.com';
     await sendEmailVerification(result.user, {
-      url: `${origin}/auth/verify-email`,
-      handleCodeInApp: true,
+      url: `${origin}/login`,
+      handleCodeInApp: false,
     });
   } catch (error) {
     console.error('Erreur lors de l\'envoi de l\'email de vérification:', error);
@@ -77,15 +79,15 @@ export const signUpWithEmail = async (
  * Envoyer un email de vérification
  */
 export const sendVerificationEmail = async (user: User): Promise<void> => {
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medjira-taxi.firebaseapp.com';
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medjira-service.firebaseapp.com';
   await sendEmailVerification(user, {
-    url: `${origin}/auth/verify-email`,
-    handleCodeInApp: true,
+    url: `${origin}/login`,
+    handleCodeInApp: false,
   });
 };
 
 /**
- * Vérifier si l'email de l'utilisateur est vérifié
+ * Vérifier si l'email de l'utilisateur est vérifié (force un reload)
  */
 export const checkEmailVerified = async (user: User): Promise<boolean> => {
   await reload(user);
@@ -93,7 +95,7 @@ export const checkEmailVerified = async (user: User): Promise<boolean> => {
 };
 
 /**
- * Recharger les données utilisateur
+ * Recharger les données utilisateur depuis Firebase Auth
  */
 export const reloadUser = async (user: User): Promise<void> => {
   await reload(user);
@@ -101,20 +103,17 @@ export const reloadUser = async (user: User): Promise<void> => {
 
 /**
  * Connexion avec Google
+ * Gère les cas natif (Capacitor) et web (popup)
  */
 export const signInWithGoogle = async (): Promise<User> => {
   let user: User;
 
   if (Capacitor.isNativePlatform()) {
     try {
-      // Initialisation du plugin (nécessaire pour @capgo/capacitor-social-login)
-      // IMPORTANT: Remplacez par vos vrais IDs depuis la console Firebase/Google Cloud
       await SocialLogin.initialize({
         google: {
-          webClientId: '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com',
-          iOSClientId: '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com', // À remplacer par iOS Client ID
-          iOSServerClientId: '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com', // Même que webClientId
-          mode: 'online', // 'online' pour obtenir les données utilisateur
+          webClientId: process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID || '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com',
+          mode: 'online',
         },
       });
 
@@ -123,13 +122,11 @@ export const signInWithGoogle = async (): Promise<User> => {
         options: {},
       });
 
-      // Vérifier que nous sommes en mode online (avec idToken)
       if (response.result.responseType === 'offline' || !('idToken' in response.result)) {
-        throw new Error('Google Sign-In failed: No ID token received (mode offline?)');
+        throw new Error('Google Sign-In failed: No ID token received');
       }
 
       const credential = GoogleAuthProvider.credential(response.result.idToken);
-      // Sur mobile, on utilise signInWithCredential car on a déjà le token
       const { signInWithCredential } = await import('firebase/auth');
       const result = await signInWithCredential(auth, credential);
       user = result.user;
@@ -157,7 +154,7 @@ export const signInWithGoogle = async (): Promise<User> => {
       userType: 'client',
     });
   } else {
-    // Mettre à jour l'image de profil si l'utilisateur existe mais n'a pas d'image
+    // Mettre à jour l'image de profil si manquante
     const userData = userDoc.data();
     if (user.photoURL && !userData.profileImageUrl) {
       await updateDoc(doc(db, 'users', user.uid), {
@@ -179,6 +176,8 @@ export const signOut = async (): Promise<void> => {
 
 /**
  * Créer ou mettre à jour le document utilisateur dans Firestore
+ * ✅ CORRECTION BUG #5 : Utilise serverTimestamp() au lieu de new Date()
+ * ✅ CORRECTION BUG #3 : Inclut toujours le champ uid
  */
 export const createUserDocument = async (
   userId: string,
@@ -196,9 +195,9 @@ export const createUserDocument = async (
   } else {
     // Créer un nouveau document utilisateur
     await setDoc(userRef, {
-      uid: userId,
+      uid: userId,          // ✅ uid toujours présent
       ...data,
-      createdAt: serverTimestamp(),
+      createdAt: serverTimestamp(),  // ✅ serverTimestamp() au lieu de new Date()
       updatedAt: serverTimestamp(),
     });
   }

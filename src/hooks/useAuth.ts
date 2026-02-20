@@ -1,9 +1,9 @@
 /**
  * Hook useAuth
- * 
- * Hook personnalisé pour gérer l'authentification Firebase.
- * Fournit l'utilisateur courant et son état de chargement.
- * 
+ *
+ * Hook unique pour accéder au contexte d'authentification Firebase.
+ * Lance une erreur si utilisé en dehors du AuthProvider.
+ *
  * @hook
  */
 
@@ -12,14 +12,15 @@ import { AuthContext } from '@/context/AuthContext';
 import { AuthContextType } from '@/types';
 
 /**
- * Hook pour accéder à l'utilisateur authentifié et ses données Firestore
+ * Hook pour accéder à l'utilisateur authentifié et ses données Firestore.
  * Utilise le contexte global AuthContext pour assurer la cohérence.
- * 
+ *
  * @returns {AuthContextType} État d'authentification
+ * @throws {Error} Si utilisé hors d'un AuthProvider
  */
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (!context) {
+  if (context === null) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

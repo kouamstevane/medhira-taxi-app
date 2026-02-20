@@ -1,0 +1,56 @@
+{
+  "runId": "test-run-1771286461796-q61d4o",
+  "startTime": "2026-02-17T00:01:01.796Z",
+  "totalTests": 20,
+  "passedTests": 20,
+  "failedTests": 0,
+  "skippedTests": 0,
+  "errors": [],
+  "performance": {
+    "totalDuration": 369,
+    "averageTestDuration": 18.45,
+    "slowestTests": [
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait rejeter un numéro avec des caractères invalides",
+        "duration": 162
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario d'erreur: code invalide → réessai → succès",
+        "duration": 88
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario nominal: envoi code → vérification → création compte",
+        "duration": 18
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Flux d'inscription complet (intégration) Scénario d'erreur: erreur réseau → nouvelle tentative → succès",
+        "duration": 15
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait accepter un numéro camerounais valide",
+        "duration": 14
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Appels Firebase - Envoi du code devrait pouvoir appeler signInWithPhoneNumber avec succès",
+        "duration": 14
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Appels Firestore - Création du compte devrait créer un document utilisateur si il n'existe pas",
+        "duration": 13
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Validation des numéros de téléphone devrait rejeter un numéro trop court",
+        "duration": 11
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Tests de sécurité Les mots de passe ne doivent jamais être loggés",
+        "duration": 10
+      },
+      {
+        "name": "Tests d'Intégration - Inscription par Téléphone Appels Firebase - Vérification du code devrait pouvoir vérifier un code valide",
+        "duration": 8
+      }
+    ]
+  },
+  "endTime": "2026-02-17T00:01:02.343Z"
+}

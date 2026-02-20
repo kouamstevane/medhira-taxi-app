@@ -45,12 +45,42 @@ export const getPasswordCriteria = (password: string) => {
 
 /**
  * Validation de numéro de téléphone
- * Format international avec indicatif pays
+ * Format international avec indicatif pays et validation stricte par pays
  */
-export const isValidPhoneNumber = (phone: string): boolean => {
+const COUNTRY_RULES: Record<string, number> = {
+  '+237': 9,  // Cameroun
+  '+33': 10,  // France
+  '+32': 9,   // Belgique
+  '+1': 10,   // Canada/USA
+};
+
+export const isValidPhoneNumber = (phone: string, countryCode?: string): boolean => {
+  if (!phone) return false;
+
   // Accepte les formats: +237655744484, +33612345678, etc.
+  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
   const phoneRegex = /^\+[1-9]\d{1,14}$/;
-  return phoneRegex.test(phone.replace(/\s/g, ''));
+
+  if (!phoneRegex.test(cleanPhone)) {
+    return false;
+  }
+
+  // Validation stricte par pays si le code pays est fourni
+  if (countryCode && countryCode in COUNTRY_RULES) {
+    // Vérifier que le numéro commence par le code pays sélectionné
+    if (!cleanPhone.startsWith(countryCode)) {
+      return false;
+    }
+
+    // Extraire la partie nationale (sans le code pays)
+    const nationalPart = cleanPhone.slice(countryCode.length);
+    const expectedLength = COUNTRY_RULES[countryCode as keyof typeof COUNTRY_RULES];
+
+    // Vérifier la longueur exacte
+    return nationalPart.length === expectedLength;
+  }
+
+  return true;
 };
 
 /**

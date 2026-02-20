@@ -1,12 +1,12 @@
 // # Plugin Capacitor
-package com.medhira.taxi;
+package com.medjiraservice.medjiraserviceapp;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
-import android.content.Context;
+import android.content.Context; 
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.location.Location;
@@ -244,7 +244,7 @@ public class LocationForegroundService extends Service {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("MedHira - En course")
             .setContentText("Localisation active pour le suivi client")
-            .setSmallIcon(R.drawable.ic_notification) // À créer
+            .setSmallIcon(getApplicationInfo().icon) // Utilise l'icône de l'application par défaut
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
