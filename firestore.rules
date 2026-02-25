@@ -48,18 +48,6 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.email_verified == true;
     }
     
-    // Fonction helper pour vérifier si l'utilisateur est chauffeur
-    function isDriver() {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
-    }
-    
-    // Fonction helper pour vérifier si l'utilisateur est client
-    function isClient() {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'client';
-    }
     
     // ============================================================================
     // COLLECTION USERS (CLIENTS)
@@ -119,7 +107,8 @@ service cloud.firestore {
       // - Le phoneNumber doit être null (interdiction de l'auth par téléphone)
       // - Le userType doit être 'chauffeur'
       // - Le statut initial doit être 'pending'
-      allow create: if isAuthenticated() && 
+      // - L'email doit être vérifié (obligatoire pour les chauffeurs)
+      allow create: if isEmailVerified() &&
                        request.auth.uid == driverId &&
                        request.resource.data.email != null &&
                        request.resource.data.phoneNumber == null &&
@@ -129,7 +118,8 @@ service cloud.firestore {
       // Mise à jour : Le propriétaire ou l'admin peuvent modifier les données
       // Les chauffeurs peuvent modifier leur profil, mais pas leur statut
       // Les admins peuvent modifier le statut (pending -> approved/rejected/suspended)
-      allow update: if isOwner(driverId) || isAdmin();
+      // Le chauffeur doit avoir un email vérifié pour toute modification
+      allow update: if (isOwner(driverId) && isEmailVerified()) || isAdmin();
       
       // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé
       // Cela permet au chauffeur de recréer son compte après un rejet
@@ -433,8 +423,8 @@ service cloud.firestore {
         request.resource.data.calleeId is string &&
         request.resource.data.rideId is string &&
         request.resource.data.status == 'ringing' &&
-        request.resource.data.agoraChannel is string &&
-        request.resource.data.agoraToken is string &&
+        request.resource.data.channel is string &&
+        request.resource.data.token is string &&
         request.resource.data.callerMetadata is map &&
         request.resource.data.callerMetadata.uid == request.auth.uid;
       

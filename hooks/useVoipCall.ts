@@ -187,8 +187,8 @@ export function useVoipCall() {
 
       // Rejoindre le channel Agora
       await agoraService.joinChannel(
-        call.agoraChannel,
-        call.agoraToken,
+        call.channel,
+        call.token,
         currentUser!.uid
       );
 
@@ -228,8 +228,8 @@ export function useVoipCall() {
         rideId: params.rideId,
         status: 'ringing',
         startTime: { seconds: Date.now() / 1000, nanoseconds: 0 } as any,
-        agoraChannel: result.agoraChannel,
-        agoraToken: result.agoraToken,
+        channel: result.channel,
+        token: result.token,
         callerMetadata: {
           name: currentUser.displayName || 'Vous',
           avatar: currentUser.photoURL || undefined,
@@ -305,8 +305,8 @@ export function useVoipCall() {
 
       // Rejoindre le channel Agora
       await agoraService.joinChannel(
-        call.agoraChannel,
-        call.agoraToken,
+        call.channel,
+        call.token,
         currentUser!.uid
       );
 

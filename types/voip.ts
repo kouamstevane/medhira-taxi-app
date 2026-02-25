@@ -56,10 +56,10 @@ export interface VoipCall {
   endTime?: FirebaseFirestore.Timestamp;
   /** Raison de fin/échec (optionnel) */
   reason?: CallEndReason;
-  /** Channel unique Agora pour cet appel */
-  agoraChannel: string;
-  /** Token temporaire Agora (validité 1h) */
-  agoraToken: string;
+  /** Channel unique pour cet appel (Agora, ZEGOCLOUD, etc.) */
+  channel: string;
+  /** Token temporaire pour authentification (validité 1h) */
+  token: string;
   /** Métadonnées de l'appelant */
   callerMetadata: CallerMetadata;
 }
@@ -80,10 +80,10 @@ export interface CreateCallParams {
 export interface CreateCallResult {
   /** ID du document d'appel créé */
   callId: string;
-  /** Channel Agora pour rejoindre l'appel */
-  agoraChannel: string;
-  /** Token Agora pour authentification */
-  agoraToken: string;
+  /** Channel pour rejoindre l'appel (Agora, ZEGOCLOUD, etc.) */
+  channel: string;
+  /** Token pour authentification */
+  token: string;
 }
 
 /**

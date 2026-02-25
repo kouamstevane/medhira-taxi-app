@@ -37,14 +37,14 @@ export class SignalingService {
 
       const data = result.data as any;
 
-      if (!data.callId || !data.agoraChannel || !data.agoraToken) {
+      if (!data.callId || !data.channel || !data.token) {
         throw new Error('Invalid response from createCall function');
       }
 
       return {
         callId: data.callId,
-        agoraChannel: data.agoraChannel,
-        agoraToken: data.agoraToken
+        channel: data.channel,
+        token: data.token
       };
     } catch (error: any) {
       console.error('[SignalingService] Error creating call:', error);
