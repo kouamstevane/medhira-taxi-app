@@ -13,6 +13,7 @@ import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
+import { VoipCallProvider } from '@/context/VoipCallProvider';
 
 interface LayoutClientProps {
   children: React.ReactNode;
@@ -70,7 +71,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   }, [pathname, currentUser, loading]);
 
   return (
-    <>
+    <VoipCallProvider>
       {/* Header conditionnel */}
       {showHeader && <Header userData={userData} />}
       
@@ -78,7 +79,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       <main className={showHeader ? '' : ''}>
         {children}
       </main>
-    </>
+    </VoipCallProvider>
   );
 }
 

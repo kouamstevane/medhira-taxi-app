@@ -104,12 +104,19 @@ export const reloadUser = async (user: User): Promise<void> => {
 /**
  * Connexion avec Google
  * Gère les cas natif (Capacitor) et web (popup)
+ * ✅ AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
  */
 export const signInWithGoogle = async (): Promise<User> => {
+  console.log('[AuthService] signInWithGoogle appelé', {
+    platform: Capacitor.isNativePlatform() ? 'native' : 'web'
+  });
+
   let user: User;
 
   if (Capacitor.isNativePlatform()) {
     try {
+      console.log('[AuthService] Initialisation SocialLogin natif');
+
       await SocialLogin.initialize({
         google: {
           webClientId: process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID || '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com',
@@ -117,9 +124,16 @@ export const signInWithGoogle = async (): Promise<User> => {
         },
       });
 
+      console.log('[AuthService] SocialLogin.initialized, tentative login');
+
       const response = await SocialLogin.login({
         provider: 'google',
         options: {},
+      });
+
+      console.log('[AuthService] SocialLogin.login réponse reçue', {
+        responseType: response.result.responseType,
+        hasIdToken: 'idToken' in response.result
       });
 
       if (response.result.responseType === 'offline' || !('idToken' in response.result)) {
@@ -130,22 +144,56 @@ export const signInWithGoogle = async (): Promise<User> => {
       const { signInWithCredential } = await import('firebase/auth');
       const result = await signInWithCredential(auth, credential);
       user = result.user;
+
+      console.log('[AuthService] Connexion Google native réussie', {
+        uid: user.uid,
+        email: user.email,
+        emailVerified: user.emailVerified
+      });
     } catch (error) {
-      console.error('Native Google Sign-In Error:', error);
+      console.error('[AuthService] Erreur Google Sign-In natif:', {
+        error,
+        errorMessage: (error as Error).message
+      });
       throw error;
     }
   } else {
     // Web: Utilisation standard de la popup
+    console.log('[AuthService] Connexion Google web (popup)');
+
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
     user = result.user;
+
+    console.log('[AuthService] Connexion Google web réussie', {
+      uid: user.uid,
+      email: user.email,
+      emailVerified: user.emailVerified
+    });
   }
 
   // Vérifier si l'utilisateur existe dans Firestore
+  // ✅ AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
+  console.log('[AuthService] Vérification document utilisateur', {
+    uid: user.uid,
+    email: user.email,
+    emailVerified: user.emailVerified
+  });
+
   const userDoc = await getDoc(doc(db, 'users', user.uid));
+
+  console.log('[AuthService] Document utilisateur récupéré', {
+    exists: userDoc.exists(),
+    uid: user.uid
+  });
 
   if (!userDoc.exists()) {
     // Créer le document utilisateur s'il n'existe pas
+    console.log('[AuthService] Création document utilisateur', {
+      uid: user.uid,
+      email: user.email
+    });
+
     await createUserDocument(user.uid, {
       email: user.email,
       firstName: user.displayName?.split(' ')[0] || '',
@@ -153,13 +201,26 @@ export const signInWithGoogle = async (): Promise<User> => {
       profileImageUrl: user.photoURL || undefined,
       userType: 'client',
     });
+
+    console.log('[AuthService] Document utilisateur créé avec succès');
   } else {
     // Mettre à jour l'image de profil si manquante
     const userData = userDoc.data();
     if (user.photoURL && !userData.profileImageUrl) {
+      console.log('[AuthService] Mise à jour image de profil', {
+        uid: user.uid
+      });
+
       await updateDoc(doc(db, 'users', user.uid), {
         profileImageUrl: user.photoURL,
         updatedAt: serverTimestamp(),
+      });
+
+      console.log('[AuthService] Image de profil mise à jour avec succès');
+    } else {
+      console.log('[AuthService] Document utilisateur déjà à jour', {
+        uid: user.uid,
+        hasProfileImage: !!userData.profileImageUrl
       });
     }
   }
@@ -178,28 +239,68 @@ export const signOut = async (): Promise<void> => {
  * Créer ou mettre à jour le document utilisateur dans Firestore
  * ✅ CORRECTION BUG #5 : Utilise serverTimestamp() au lieu de new Date()
  * ✅ CORRECTION BUG #3 : Inclut toujours le champ uid
+ * ✅ AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
  */
 export const createUserDocument = async (
   userId: string,
   data: Partial<UserData>
 ): Promise<void> => {
-  const userRef = doc(db, 'users', userId);
-  const userSnap = await getDoc(userRef);
+  console.log('[AuthService] createUserDocument appelé', {
+    userId,
+    dataKeys: Object.keys(data),
+    hasEmail: !!data.email
+  });
 
-  if (userSnap.exists()) {
-    // Mettre à jour l'utilisateur existant
-    await updateDoc(userRef, {
-      ...data,
-      updatedAt: serverTimestamp(),
+  const userRef = doc(db, 'users', userId);
+  
+  try {
+    const userSnap = await getDoc(userRef);
+
+    console.log('[AuthService] Document utilisateur vérifié', {
+      userId,
+      exists: userSnap.exists()
     });
-  } else {
-    // Créer un nouveau document utilisateur
-    await setDoc(userRef, {
-      uid: userId,          // ✅ uid toujours présent
-      ...data,
-      createdAt: serverTimestamp(),  // ✅ serverTimestamp() au lieu de new Date()
-      updatedAt: serverTimestamp(),
+
+    if (userSnap.exists()) {
+      // Mettre à jour l'utilisateur existant
+      console.log('[AuthService] Mise à jour document utilisateur existant', {
+        userId
+      });
+
+      await updateDoc(userRef, {
+        ...data,
+        updatedAt: serverTimestamp(),
+      });
+
+      console.log('[AuthService] Document utilisateur mis à jour avec succès', {
+        userId
+      });
+    } else {
+      // Créer un nouveau document utilisateur
+      console.log('[AuthService] Création nouveau document utilisateur', {
+        userId,
+        userType: data.userType
+      });
+
+      await setDoc(userRef, {
+        uid: userId,          // ✅ uid toujours présent
+        ...data,
+        createdAt: serverTimestamp(),  // ✅ serverTimestamp() au lieu de new Date()
+        updatedAt: serverTimestamp(),
+      });
+
+      console.log('[AuthService] Nouveau document utilisateur créé avec succès', {
+        userId
+      });
+    }
+  } catch (error) {
+    console.error('[AuthService] Erreur lors de la création/mise à jour du document utilisateur', {
+      error,
+      userId,
+      errorCode: (error as { code?: string }).code,
+      errorMessage: (error as { message?: string }).message
     });
+    throw error;
   }
 };
 

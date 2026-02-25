@@ -17,3 +17,6 @@ export * as WalletService from './wallet.service';
 
 // Services de chauffeur
 export * as DriverService from './driver.service';
+
+// Service VoIP
+export { voipService as VoipService } from './voip.service';

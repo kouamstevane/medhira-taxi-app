@@ -3,22 +3,26 @@
 import { useState, useEffect, useRef } from 'react';
 import { FiSend, FiX, FiPhone, FiCheck } from 'react-icons/fi';
 import { Message } from '@/types/chat';
-import { subscribeToMessages, sendMessage, markMessagesAsRead, initiateCall } from '@/services/chat.service';
+import { subscribeToMessages, sendMessage, markMessagesAsRead, sendSystemMessage } from '@/services/chat.service';
+import { useVoipCall } from '@/hooks/useVoipCall';
 import { useAuth } from '@/hooks/useAuth';
 
 interface ChatModalProps {
   bookingId: string;
   driverName: string;
   driverId?: string; // Optionnel car non utilisé actuellement
-  userType: 'client' | 'driver';
+  userType: 'client' | 'chauffeur';
   onClose: () => void;
 }
 
-export function ChatModal({ bookingId, driverName, userType, onClose }: ChatModalProps) {
+export function ChatModal({ bookingId, driverName, driverId, userType, onClose }: ChatModalProps) {
   const { currentUser } = useAuth();
+  const { startCall, callState } = useVoipCall();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [initiatingCall, setInitiatingCall] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -38,12 +42,6 @@ export function ChatModal({ bookingId, driverName, userType, onClose }: ChatModa
   // Marquer les messages comme lus quand ils arrivent et que le modal est ouvert
   useEffect(() => {
     if (currentUser && messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      // Si le dernier message n'est pas de moi et n'est pas lu
-      if (lastMessage.senderId !== currentUser.uid && !lastMessage.read) {
-        markMessagesAsRead(bookingId, currentUser.uid, userType);
-      }
-      // Ou si on ouvre le modal et qu'il y a des messages non lus
       const hasUnread = messages.some(m => m.senderId !== currentUser.uid && !m.read);
       if (hasUnread) {
         markMessagesAsRead(bookingId, currentUser.uid, userType);
@@ -70,26 +68,39 @@ export function ChatModal({ bookingId, driverName, userType, onClose }: ChatModa
       setNewMessage('');
     } catch (error) {
       console.error('Erreur envoi message:', error);
-      alert('❌ Erreur lors de l\'envoi du message');
+      setToast({ message: '❌ Erreur lors de l\'envoi du message', type: 'error' });
+      setTimeout(() => setToast(null), 3000);
     } finally {
       setSending(false);
     }
   };
 
   const handleCall = async () => {
-    if (!currentUser) return;
+    if (!driverId || !currentUser || initiatingCall) return;
 
+    setInitiatingCall(true);
     try {
-      await initiateCall(
+      await startCall(
         bookingId,
-        currentUser.uid,
-        currentUser.displayName || 'Utilisateur',
-        userType
+        {
+          uid: currentUser.uid,
+          name: currentUser.displayName || 'Moi',
+          role: userType
+        },
+        {
+          uid: driverId,
+          name: driverName,
+          role: userType === 'client' ? 'chauffeur' : 'client'
+        }
       );
-      alert('📞 Appel initié ! Le ' + (userType === 'client' ? 'chauffeur' : 'client') + ' a été notifié.');
+      setToast({ message: '📞 Appel initié ! Le ' + (userType === 'client' ? 'chauffeur' : 'client') + ' a été notifié.', type: 'success' });
+      setTimeout(() => setToast(null), 4000);
     } catch (error) {
-      console.error('Erreur initiation appel:', error);
-      alert('❌ Erreur lors de l\'initiation de l\'appel');
+      console.error('Erreur lors du lancement de l\'appel:', error);
+      setToast({ message: '❌ Impossible de lancer l\'appel', type: 'error' });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setInitiatingCall(false);
     }
   };
 
@@ -99,6 +110,14 @@ export function ChatModal({ bookingId, driverName, userType, onClose }: ChatModa
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
+      {/* Toast notification */}
+      {toast && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all animate-[fadeIn_0.2s_ease-in] ${
+          toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+        }`}>
+          {toast.message}
+        </div>
+      )}
       <div className="bg-white w-full sm:max-w-md sm:mx-4 h-[90vh] sm:h-[600px] sm:rounded-2xl shadow-2xl flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#f29200] to-[#e68600] text-white p-4 flex items-center justify-between sm:rounded-t-2xl">
@@ -108,16 +127,23 @@ export function ChatModal({ bookingId, driverName, userType, onClose }: ChatModa
             </div>
             <div>
               <h3 className="font-bold">{getOtherPartyName()}</h3>
-              <p className="text-xs text-white/80">En ligne</p>
+              <p className="text-xs text-white/80">Conversation active</p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
             <button
               onClick={handleCall}
-              className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition"
-              title="Appeler"
+              disabled={initiatingCall}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                initiatingCall ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-[#f29200] hover:bg-[#e68600] text-white'
+              }`}
+              aria-label="Appeler"
             >
-              <FiPhone className="w-5 h-5" />
+              {initiatingCall ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <FiPhone className="text-lg" />
+              )}
             </button>
             <button
               onClick={onClose}
@@ -214,7 +240,7 @@ export function ChatModal({ bookingId, driverName, userType, onClose }: ChatModa
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !sending && handleSendMessage()}
+              onKeyDown={(e) => e.key === 'Enter' && !sending && handleSendMessage()}
               placeholder="Écrivez votre message..."
               className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] bg-gray-50 text-gray-900 placeholder-gray-500 shadow-sm"
               disabled={sending}

@@ -195,7 +195,7 @@ export function CurrentTripCard({
           bookingId={trip.id}
           driverName="Client" // Le nom du client n'est pas toujours dispo ici, on met "Client" par défaut
           driverId={trip.userId} // C'est l'ID de l'autre partie
-          userType="driver"
+          userType="chauffeur"
           onClose={() => setShowChat(false)}
         />
       )}

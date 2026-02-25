@@ -28,7 +28,7 @@ export const sendMessage = async (
   bookingId: string,
   senderId: string,
   senderName: string,
-  senderType: 'client' | 'driver',
+  senderType: 'client' | 'chauffeur',
   content: string,
   type: MessageType = 'text'
 ): Promise<string> => {
@@ -49,6 +49,7 @@ export const sendMessage = async (
     const docRef = await addDoc(messagesRef, messageData);
     
     // Mettre à jour le compteur de messages non lus
+    // Note: Les champs Firestore utilisent encore 'driver' pour la compatibilité
     const bookingRef = doc(db, 'bookings', bookingId);
     const unreadField = senderType === 'client' 
       ? 'unreadMessages.driver' 
@@ -102,14 +103,14 @@ export const subscribeToMessages = (
 export const markMessagesAsRead = async (
   bookingId: string,
   userId: string,
-  userType: 'client' | 'driver'
+  userType: 'client' | 'chauffeur'
 ): Promise<void> => {
   try {
     const messagesRef = collection(db, 'bookings', bookingId, 'messages');
     const q = query(
       messagesRef,
       where('read', '==', false),
-      where('senderType', '==', userType === 'client' ? 'driver' : 'client')
+      where('senderType', '==', userType === 'client' ? 'chauffeur' : 'client')
     );
 
     const snapshot = await getDocs(q);
@@ -120,6 +121,7 @@ export const markMessagesAsRead = async (
     await Promise.all(updatePromises);
 
     // Réinitialiser le compteur
+    // Note: Les champs Firestore utilisent encore 'driver' pour la compatibilité
     const bookingRef = doc(db, 'bookings', bookingId);
     const unreadField = userType === 'client' 
       ? 'unreadMessages.client' 
@@ -142,7 +144,7 @@ export const initiateCall = async (
   bookingId: string,
   callerId: string,
   callerName: string,
-  callerType: 'client' | 'driver'
+  callerType: 'client' | 'chauffeur'
 ): Promise<void> => {
   try {
     await sendMessage(
@@ -163,27 +165,25 @@ export const initiateCall = async (
 
 /**
  * Envoyer un message système automatique
+ * ⚠️ Utilise une Cloud Function car les security rules Firestore
+ * ne permettent pas d'écrire avec senderId='system'
  */
 export const sendSystemMessage = async (
   bookingId: string,
   content: string,
-  recipient: 'client' | 'driver' = 'client' // Par défaut, on notifie le client
+  recipient: 'client' | 'chauffeur' = 'client'
 ): Promise<void> => {
   try {
-    // Si le destinataire est le client, l'émetteur simulé doit être 'driver' pour incrémenter le compteur du client
-    // Si le destinataire est le chauffeur, l'émetteur simulé doit être 'client' pour incrémenter le compteur du chauffeur
-    const simulatedSenderType = recipient === 'client' ? 'driver' : 'client';
-
-    await sendMessage(
-      bookingId,
-      'system',
-      'Système',
-      simulatedSenderType,
-      content,
-      'system'
-    );
+    const { getFunctions, httpsCallable } = await import('firebase/functions');
+    const functions = getFunctions();
+    const sendSystemMsg = httpsCallable(functions, 'sendSystemMessage');
     
-    logger.info('Message système envoyé', { bookingId, content, recipient });
+    // Mapper 'chauffeur' vers 'driver' pour la Cloud Function (compatibilité backend)
+    const recipientForBackend = recipient === 'chauffeur' ? 'driver' : recipient;
+    
+    await sendSystemMsg({ bookingId, content, recipient: recipientForBackend });
+    
+    logger.info('Message système envoyé via Cloud Function', { bookingId, content, recipient });
   } catch (error) {
     logger.error('Erreur message système', { error, bookingId });
   }

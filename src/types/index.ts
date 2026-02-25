@@ -69,6 +69,13 @@ export type {
   MatchingMetrics,
 } from './matching';
 
-// ==================== Re-export Firebase Types ====================
+// ==================== VoIP & Appels ====================
+export type {
+  CallStatus,
+  CallDirection,
+  CallParticipant,
+  VoipCallState,
+} from './voip';
+
 export type { Timestamp };
 

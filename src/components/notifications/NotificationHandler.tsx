@@ -22,7 +22,7 @@ import { Haptics, NotificationType } from '@capacitor/haptics';
 export function NotificationHandler() {
     const router = useRouter();
     const { currentUser, userData } = useAuth();
-    const userType: 'client' | 'driver' | undefined = userData?.userType;
+    const userType: 'client' | 'chauffeur' | undefined = userData?.userType;
     
     const {
         isInitialized,
@@ -90,7 +90,7 @@ export function NotificationHandler() {
      * Met à jour le statut du conducteur selon son état actuel
      */
     useEffect(() => {
-        if (!isInitialized || userType !== 'driver') {
+        if (!isInitialized || userType !== 'chauffeur') {
             return;
         }
 

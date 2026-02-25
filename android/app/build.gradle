@@ -68,6 +68,9 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    
+    // Agora RTC SDK pour appels VoIP
+    implementation 'io.agora.rtc:full-sdk:4.2.0'
 }
 
 apply from: 'capacitor.build.gradle'

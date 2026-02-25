@@ -407,6 +407,53 @@ service cloud.firestore {
     }
     
     // ============================================================================
+    // COLLECTION CALLS (APPELS VOIP)
+    // ============================================================================
+    //
+    // Gestion des appels vocaux entre clients et chauffeurs via Agora RTC
+    //
+    // ============================================================================
+    
+    match /calls/{callId} {
+      // Lecture : Seuls les participants (caller ou callee) peuvent lire l'appel
+      allow read: if isAuthenticated() &&
+        (resource.data.callerId == request.auth.uid ||
+         resource.data.calleeId == request.auth.uid);
+      
+      // Création : L'appelant peut créer un appel
+      // Validation :
+      // - L'appelant doit être authenticated
+      // - L'appelant doit être le callerId
+      // - Les champs requis doivent être présents
+      // - Le status initial doit être 'ringing'
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.callerId &&
+        // NEW: Validate callee exists
+        exists(/databases/$(database)/documents/users/$(request.resource.data.calleeId)) &&
+        request.resource.data.calleeId is string &&
+        request.resource.data.rideId is string &&
+        request.resource.data.status == 'ringing' &&
+        request.resource.data.agoraChannel is string &&
+        request.resource.data.agoraToken is string &&
+        request.resource.data.callerMetadata is map &&
+        request.resource.data.callerMetadata.uid == request.auth.uid;
+      
+      // Mise à jour :
+      // - Le callee peut changer le statut (answer/decline)
+      // - Le caller peut changer le statut (end call)
+      // - Seuls certains champs sont modifiables
+      allow update: if isAuthenticated() &&
+        (request.auth.uid == resource.data.calleeId ||
+         request.auth.uid == resource.data.callerId) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'answerTime', 'endTime', 'reason']) &&
+        request.resource.data.status in ['accepted', 'declined', 'ended', 'failed'];
+      
+      // Suppression : Interdite (cleanup automatique via Cloud Function après 24h)
+      allow delete: if false;
+    }
+    
+    // ============================================================================
     // FIN DES RÈGLES DE SÉCURITÉ
     // ============================================================================
   }

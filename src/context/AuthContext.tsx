@@ -34,13 +34,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Charger les données utilisateur depuis Firestore
+   * ✅ AJOUT LOGS : Capture détaillée des erreurs pour diagnostic
    */
   const fetchUserData = async (user: User): Promise<void> => {
     try {
+      console.log('[AuthContext] Début chargement données utilisateur', {
+        uid: user.uid,
+        email: user.email,
+        emailVerified: user.emailVerified
+      });
+
       const userDoc = await getDoc(doc(db, 'users', user.uid));
+
+      console.log('[AuthContext] Document utilisateur récupéré', {
+        exists: userDoc.exists(),
+        uid: user.uid
+      });
 
       if (userDoc.exists()) {
         const data = userDoc.data();
+        console.log('[AuthContext] Données utilisateur chargées avec succès', {
+          uid: user.uid,
+          userType: data.userType,
+          firstName: data.firstName
+        });
+
         setUserData({
           uid: user.uid,
           email: user.email,
@@ -54,10 +72,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           updatedAt: data.updatedAt,
         });
       } else {
+        console.warn('[AuthContext] Document utilisateur inexistant', {
+          uid: user.uid,
+          email: user.email
+        });
         setUserData(null);
       }
     } catch (err) {
-      console.error('Erreur lors du chargement des données utilisateur:', err);
+      console.error('[AuthContext] Erreur lors du chargement des données utilisateur:', {
+        error: err,
+        uid: user.uid,
+        errorCode: (err as { code?: string }).code,
+        errorMessage: (err as { message?: string }).message,
+        errorName: (err as { name?: string }).name
+      });
       setUserData(null);
     }
   };

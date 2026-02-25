@@ -2,7 +2,7 @@ import { PushNotifications, ActionPerformed, Token } from '@capacitor/push-notif
 import { Capacitor } from '@capacitor/core';
 import { getAuth } from 'firebase/auth';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { initializeApp } from 'firebase/app';
+import app from '@/config/firebase';
 import { z } from 'zod';
 
 /**
@@ -18,8 +18,14 @@ import { z } from 'zod';
 
 // Validation Zod des données de notification (§8.2)
 const NotificationDataSchema = z.object({
-    type: z.enum(['booking_request', 'trip_started', 'trip_completed', 'driver_arrived', 'payment_received', 'alert']),
+    type: z.enum(['booking_request', 'trip_started', 'trip_completed', 'driver_arrived', 'payment_received', 'alert', 'incoming_call']),
     tripId: z.string().optional(),
+    rideId: z.string().optional(), // Alias pour tripId utilisé dans VoIP
+    callId: z.string().optional(),
+    callerId: z.string().optional(),
+    callerName: z.string().optional(),
+    callerAvatar: z.string().optional(),
+    callerRole: z.string().optional(),
     driverId: z.string().optional(),
     passengerId: z.string().optional(),
     timestamp: z.number(),
@@ -35,15 +41,7 @@ export const NOTIFICATION_TOPICS = {
     ACTIVE_TRIPS: 'active_trips',
 } as const;
 
-// Configuration Firebase
-const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
+
 
 class PushNotificationService {
     private isInitialized = false;
@@ -133,7 +131,7 @@ class PushNotificationService {
             
             // Valider les données avec Zod (§8.2)
             try {
-                const data = NotificationDataSchema.parse(notification.notification.data);
+                NotificationDataSchema.parse(notification.notification.data);
                 this.handleNotificationActionPerformed(notification);
             } catch (error) {
                 console.error('[PushNotifications] Données de notification invalides:', error);
@@ -180,6 +178,13 @@ class PushNotificationService {
             const userRef = doc(db, collectionName, user.uid);
             
             await setDoc(userRef, {
+                fcmToken: token,
+                tokenUpdatedAt: new Date(),
+            }, { merge: true });
+
+            // Aussi sauvegarder dans la collection users pour que les Cloud Functions VoIP
+            // puissent toujours trouver le token
+            await setDoc(doc(db, 'users', user.uid), {
                 fcmToken: token,
                 tokenUpdatedAt: new Date(),
             }, { merge: true });
@@ -347,7 +352,6 @@ class PushNotificationService {
         
         // Si pas de token, essayer de le récupérer via Firebase Messaging
         try {
-            const app = initializeApp(firebaseConfig);
             const messaging = getMessaging(app);
             const token = await getToken(messaging);
             this.token = token;
