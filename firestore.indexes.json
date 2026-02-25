@@ -131,16 +131,6 @@
       ]
     },
     {
-      "collectionGroup": "calls",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "endTime",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "messages",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
