@@ -22,7 +22,7 @@ export interface UserData {
   phoneNumber?: string | null;
   firstName: string;
   lastName: string;
-  profileImageUrl?: string;
+  profileImageUrl?: string|null;
   userType: UserType;
   country?: string;
   createdAt: Date | Timestamp;

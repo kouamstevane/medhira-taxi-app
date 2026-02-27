@@ -4,9 +4,7 @@
 import { useState } from 'react';
 import { auth, db } from '../../../config/firebase';
 import {
-  signInWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup
+  signInWithEmailAndPassword
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';

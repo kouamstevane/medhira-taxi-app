@@ -90,7 +90,7 @@ export const deleteDriverOnAccountDelete = functions.auth.user().onDelete(
 // ============================================================================
 export const scheduleTripDataAnonymization = onDocumentUpdated(
   {
-    document: 'trips/{tripId}',
+    document: 'bookings/{bookingId}',
     region: 'europe-west1',
   },
   async (event) => {
@@ -99,14 +99,17 @@ export const scheduleTripDataAnonymization = onDocumentUpdated(
     
     if (!beforeData || !afterData) return;
     
+    const beforeStatus = (beforeData as any).status;
+    const afterStatus = (afterData as any).status;
+
     // Vérification transition vers "completed"
-    if (beforeData.status !== 'completed' && afterData.status === 'completed') {
-      const tripId = event.params.tripId;
+    if (beforeStatus !== 'completed' && afterStatus === 'completed') {
+      const bookingId = event.params.bookingId;
       const driverId = afterData.driverId;
       const completedAt = afterData.completedAt;
       
       if (!completedAt) {
-        console.warn(`Trip ${tripId} completed without timestamp`);
+        console.warn(`Booking ${bookingId} completed without timestamp`);
         return;
       }
       
@@ -115,14 +118,14 @@ export const scheduleTripDataAnonymization = onDocumentUpdated(
       
       await admin.firestore().collection('anonymization_tasks').add({
         type: 'TRIP_LOCATIONS',
-        tripId,
+        bookingId,
         driverId,
         anonymizeAt,
         status: 'scheduled',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       
-      console.log(`Scheduled anonymization for trip ${tripId}`);
+      console.log(`Scheduled anonymization for booking ${bookingId}`);
     }
   }
 );
@@ -157,11 +160,28 @@ export const processAnonymizationTasks = onSchedule(
     let processedCount = 0;
     
     for (const doc of snapshot.docs) {
-      const task = doc.data();
+      const data = doc.data();
+      const task = {
+        type: data.type as string,
+        driverId: data.driverId as string,
+        bookingId: data.bookingId as string,
+        status: data.status as string,
+      };
       
       try {
         if (task.type === 'TRIP_LOCATIONS') {
-          await admin.database().ref(`driver_locations/${task.driverId}`).remove();
+          // ✅ Protection: Ne pas supprimer si le chauffeur est actuellement en ligne (medJira.md #115)
+          const driverId = task.driverId; // Ensure driverId is defined from task
+          const driverRef = admin.firestore().collection('drivers').doc(driverId);
+          const driverSnap = await driverRef.get();
+          const driverData = driverSnap.data();
+          
+          if (driverData && (driverData.status === 'available' || driverData.status === 'busy')) {
+            console.log(`Anonymisation sautée pour le chauffeur actif: ${driverId}`);
+            continue;
+          }
+
+          await admin.database().ref(`locations/${driverId}`).remove();
           
           batch.update(doc.ref, {
             status: 'completed',

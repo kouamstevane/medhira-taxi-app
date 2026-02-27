@@ -3,8 +3,9 @@
  * Gère la création, réponse et fin des appels via Agora RTC
  */
 
-import * as functions from 'firebase-functions';
+import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 // Initialiser Firebase Admin si pas déjà fait
 if (!admin.apps.length) {
@@ -29,7 +30,7 @@ async function validateRideAccess(rideId: string, userId: string): Promise<boole
     return false;
   }
 
-  const rideData = rideDoc.data();
+  const rideData = rideDoc.data() as { userId: string; driverId: string } | undefined;
   return rideData?.userId === userId || rideData?.driverId === userId;
 }
 
@@ -80,8 +81,6 @@ function generateAgoraToken(channel: string, uid: string): string {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { RtcTokenBuilder, RtcRole } = require('agora-token');
     const expirationTimeInSeconds = 3600; // 1 heure
     const currentTimestamp = Math.floor(Date.now() / 1000);
     const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
@@ -93,7 +92,8 @@ function generateAgoraToken(channel: string, uid: string): string {
       channel,
       0, // UID 0 = wildcard
       RtcRole.PUBLISHER,
-      privilegeExpiredTs
+      privilegeExpiredTs,
+      privilegeExpiredTs // Token expire time (même que privilegeExpiredTs)
     );
   } catch (error) {
     console.error('[VoIP] Erreur génération token Agora:', error);
@@ -105,45 +105,46 @@ function generateAgoraToken(channel: string, uid: string): string {
 /**
  * Crée un nouvel appel VoIP
  */
-export const createCall = functions.https.onCall(async (data: any, context: any) => {
+export const createCall = onCall(async (request: CallableRequest) => {
   // 1. Vérifier l'authentification
-  if (!context?.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Utilisateur non authentifié');
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
 
-  const callerId = context.auth.uid;
+  const callerId = request.auth.uid;
+  const data = request.data as { calleeId?: string; rideId?: string };
   const { calleeId, rideId } = data;
 
   // 2. Valider les paramètres
   if (!calleeId || !rideId) {
-    throw new functions.https.HttpsError('invalid-argument', 'Paramètres manquants');
+    throw new HttpsError('invalid-argument', 'Paramètres manquants');
   }
 
   // 3. Valider l'accès à la course
   const hasAccess = await validateRideAccess(rideId, callerId);
   if (!hasAccess) {
-    throw new functions.https.HttpsError('permission-denied', 'Accès non autorisé à cette course');
+    throw new HttpsError('permission-denied', 'Accès non autorisé à cette course');
   }
 
   // 3.5. Valider que le destinataire existe
   const calleeDoc = await db.collection('users').doc(calleeId).get();
   if (!calleeDoc.exists) {
-    throw new functions.https.HttpsError('not-found', 'Destinataire introuvable');
+    throw new HttpsError('not-found', 'Destinataire introuvable');
   }
 
   // 4. Vérifier qu'il n'y a pas déjà un appel en cours
   const hasActiveCall = await hasActiveCallForRide(rideId);
   if (hasActiveCall) {
-    throw new functions.https.HttpsError('already-exists', 'Un appel est déjà en cours pour cette course');
+    throw new HttpsError('already-exists', 'Un appel est déjà en cours pour cette course');
   }
 
   // 5. Récupérer les métadonnées de l'appelant
   const callerDoc = await db.collection('users').doc(callerId).get();
-  const callerData = callerDoc.data();
+  const callerData = callerDoc.data() as { displayName?: string; photoURL?: string; name?: string } | undefined;
   
   // Déterminer le rôle de l'appelant
   const rideDoc = await db.collection('bookings').doc(rideId).get();
-  const rideData = rideDoc.data();
+  const rideData = rideDoc.data() as { userId: string; driverId: string } | undefined;
   const callerRole = rideData?.userId === callerId ? 'client' : 'chauffeur';
 
   // 6. Générer le channel et token Agora
@@ -240,33 +241,33 @@ export const createCall = functions.https.onCall(async (data: any, context: any)
 /**
  * Répond à un appel entrant
  */
-export const answerCall = functions.https.onCall(async (data: any, context: any) => {
-  if (!context?.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Utilisateur non authentifié');
+export const answerCall = onCall(async (request: CallableRequest) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
 
-  const { callId } = data;
-  const userId = context.auth.uid;
+  const { callId } = request.data as { callId?: string };
+  const userId = request.auth.uid;
 
   if (!callId) {
-    throw new functions.https.HttpsError('invalid-argument', 'callId manquant');
+    throw new HttpsError('invalid-argument', 'callId manquant');
   }
 
   const callRef = db.collection('calls').doc(callId);
   const callDoc = await callRef.get();
 
   if (!callDoc.exists) {
-    throw new functions.https.HttpsError('not-found', 'Appel non trouvé');
+    throw new HttpsError('not-found', 'Appel non trouvé');
   }
 
-  const callData = callDoc.data();
+  const callData = callDoc.data() as { callerId: string; calleeId: string; status: string; answerTime?: admin.firestore.Timestamp; rideId?: string } | undefined;
 
   if (callData?.calleeId !== userId) {
-    throw new functions.https.HttpsError('permission-denied', 'Cet appel ne vous est pas destiné');
+    throw new HttpsError('permission-denied', 'Cet appel ne vous est pas destiné');
   }
 
   if (callData?.status !== 'ringing') {
-    throw new functions.https.HttpsError('failed-precondition', 'Cet appel n\'est plus disponible');
+    throw new HttpsError('failed-precondition', 'Cet appel n\'est plus disponible');
   }
 
   await callRef.update({
@@ -290,29 +291,29 @@ export const answerCall = functions.https.onCall(async (data: any, context: any)
 /**
  * Termine un appel
  */
-export const endCall = functions.https.onCall(async (data: any, context: any) => {
-  if (!context?.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Utilisateur non authentifié');
+export const endCall = onCall(async (request: CallableRequest) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
 
-  const { callId, reason } = data;
-  const userId = context.auth.uid;
+  const { callId, reason } = request.data as { callId?: string; reason?: string };
+  const userId = request.auth.uid;
 
   if (!callId) {
-    throw new functions.https.HttpsError('invalid-argument', 'callId manquant');
+    throw new HttpsError('invalid-argument', 'callId manquant');
   }
 
   const callRef = db.collection('calls').doc(callId);
   const callDoc = await callRef.get();
 
   if (!callDoc.exists) {
-    throw new functions.https.HttpsError('not-found', 'Appel non trouvé');
+    throw new HttpsError('not-found', 'Appel non trouvé');
   }
 
-  const callData = callDoc.data();
+  const callData = callDoc.data() as { callerId: string; calleeId: string; status: string; answerTime?: admin.firestore.Timestamp; rideId?: string } | undefined;
 
   if (callData?.callerId !== userId && callData?.calleeId !== userId) {
-    throw new functions.https.HttpsError('permission-denied', 'Vous n\'êtes pas participant à cet appel');
+    throw new HttpsError('permission-denied', 'Vous n\'êtes pas participant à cet appel');
   }
 
   const endTime = admin.firestore.Timestamp.now();
@@ -343,75 +344,32 @@ export const endCall = functions.https.onCall(async (data: any, context: any) =>
   return { success: true, duration: Math.floor(duration / 1000) };
 });
 
-/**
- * Nettoie les anciens appels (RGPD - après 24h)
- * Note: Pour Firebase Functions v2, utiliser onSchedule avec pubsub
- */
-export const cleanupOldCalls = functions.https.onRequest(async (req, res) => {
-  // Note: Cette fonction devrait être déployée comme scheduled function
-  // Utiliser plutôt: firebase-functions/v2/pubsub ou deploy via gcloud scheduler
-  const cutoff = admin.firestore.Timestamp.fromDate(
-    new Date(Date.now() - 24 * 60 * 60 * 1000)  // 24h
-  );
-
-  const oldCalls = await db.collection('calls')
-    .where('endTime', '<', cutoff)
-    .limit(500)
-    .get();
-
-  if (oldCalls.empty) {
-    console.log('No old calls to clean up');
-    res.json({ success: true, deletedCount: 0 });
-    return;
-  }
-
-  const batch = db.batch();
-  oldCalls.docs.forEach(doc => {
-    batch.delete(doc.ref);
-  });
-
-  await batch.commit();
-  
-  console.log(`Cleaned up ${oldCalls.size} old calls (RGPD compliance)`);
-  
-  res.json({ success: true, deletedCount: oldCalls.size });
-});
-
-/**
- * Trigger: Auto-annulation des appels sans réponse après 30s
- * Note: Pour Firebase Functions v2, utiliser onDocumentCreated
- * Pour l'instant, cette logique est gérée côté client via timeout
- */
-export const handleCallTimeout = functions.https.onRequest(async (req, res) => {
-  res.json({ success: true, message: 'Timeout handled client-side' });
-  return;
-});
 
 /**
  * Envoie un message système dans une conversation de course
  * Utilise Admin SDK pour contourner les security rules (senderId='system')
  */
-export const sendSystemMessage = functions.https.onCall(async (data: any, context: any) => {
-  if (!context?.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Utilisateur non authentifié');
+export const sendSystemMessage = onCall(async (request: CallableRequest) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
 
-  const { bookingId, content, recipient } = data;
+  const { bookingId, content, recipient } = request.data as { bookingId?: string; content?: string; recipient?: string };
 
   if (!bookingId || !content) {
-    throw new functions.https.HttpsError('invalid-argument', 'bookingId et content requis');
+    throw new HttpsError('invalid-argument', 'bookingId et content requis');
   }
 
   // Vérifier que l'appelant est participant à la course
   const bookingDoc = await db.collection('bookings').doc(bookingId).get();
   if (!bookingDoc.exists) {
-    throw new functions.https.HttpsError('not-found', 'Course non trouvée');
+    throw new HttpsError('not-found', 'Course non trouvée');
   }
 
-  const bookingData = bookingDoc.data();
-  const userId = context.auth.uid;
+  const bookingData = bookingDoc.data() as { userId: string; driverId: string } | undefined;
+  const userId = request.auth.uid;
   if (bookingData?.userId !== userId && bookingData?.driverId !== userId) {
-    throw new functions.https.HttpsError('permission-denied', 'Vous n\'êtes pas participant à cette course');
+    throw new HttpsError('permission-denied', 'Vous n\'êtes pas participant à cette course');
   }
 
   // Le senderType simulé pour incrémenter le bon compteur

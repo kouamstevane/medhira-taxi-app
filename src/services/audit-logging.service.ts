@@ -1,0 +1,369 @@
+/**
+ * Service d'Audit Logging - Sécurité et Conformité RGPD
+ * 
+ * Ce service enregistre toutes les opérations sensibles sur les données personnelles
+ * conformément aux exigences RGPD et aux meilleures pratiques de sécurité.
+ * 
+ * Types d'événements audités:
+ * - Accès aux données SSN/NIR
+ * - Opérations bancaires (chiffrement, validation)
+ * - Modifications de données sensibles
+ * - Tentatives d'accès non autorisées
+ * - Échecs de validation
+ * 
+ * @module AuditLoggingService
+ */
+
+import { db, auth } from '../config/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+
+/**
+ * Types d'événements d'audit
+ */
+export enum AuditEventType {
+  // Données personnelles
+  SSN_ENCRYPTED = 'SSN_ENCRYPTED',
+  SSN_DECRYPT_ATTEMPT = 'SSN_DECRYPT_ATTEMPT',
+  SSN_ACCESS = 'SSN_ACCESS',
+  
+  // Données bancaires
+  BANK_DATA_ENCRYPTED = 'BANK_DATA_ENCRYPTED',
+  BANK_DATA_VALIDATED = 'BANK_DATA_VALIDATED',
+  BANK_DATA_VALIDATION_FAILED = 'BANK_DATA_VALIDATION_FAILED',
+  
+  // Documents
+  DOCUMENT_UPLOADED = 'DOCUMENT_UPLOADED',
+  DOCUMENT_DELETED = 'DOCUMENT_DELETED',
+  DOCUMENT_ACCESS = 'DOCUMENT_ACCESS',
+  
+  // Sécurité
+  UNAUTHORIZED_ACCESS_ATTEMPT = 'UNAUTHORIZED_ACCESS_ATTEMPT',
+  AUTHENTICATION_FAILED = 'AUTHENTICATION_FAILED',
+  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+  
+  // Inscription chauffeur
+  DRIVER_REGISTRATION_STARTED = 'DRIVER_REGISTRATION_STARTED',
+  DRIVER_REGISTRATION_COMPLETED = 'DRIVER_REGISTRATION_COMPLETED',
+  DRIVER_REGISTRATION_FAILED = 'DRIVER_REGISTRATION_FAILED',
+  DRIVER_DRAFT_SAVED = 'DRIVER_DRAFT_SAVED',
+}
+
+/**
+ * Niveaux de gravité pour les logs
+ */
+export enum AuditLogLevel {
+  INFO = 'info',
+  WARNING = 'warning',
+  ERROR = 'error',
+  CRITICAL = 'critical',
+}
+
+/**
+ * Interface pour les entrées d'audit
+ */
+export interface AuditLogEntry {
+  eventType: AuditEventType;
+  userId: string;
+  level: AuditLogLevel;
+  action: string;
+  details?: Record<string, any>;
+  ipAddress?: string;
+  userAgent?: string;
+  success: boolean;
+  errorMessage?: string;
+  timestamp: any; // serverTimestamp from Firestore
+}
+
+/**
+ * Configuration du service d'audit
+ */
+const AUDIT_CONFIG = {
+  collectionName: 'audit_logs',
+  maxRetentionPolicy: 365, // jours (conformité RGPD)
+  anonymizeAfterDays: 90, // Anonymisation des IPs après 90 jours
+};
+
+/**
+ * Service d'Audit Logging
+ */
+class AuditLoggingService {
+  private collectionName = AUDIT_CONFIG.collectionName;
+
+  /**
+   * Enregistre un événement d'audit
+   * 
+   * @param entry - Les données de l'événement à logger
+   * @returns Promise<void>
+   */
+  async log(entry: Omit<AuditLogEntry, 'timestamp'>): Promise<void> {
+    try {
+      const currentUser = auth.currentUser;
+      
+      // Si pas d'utilisateur connecté, utiliser l'userId fourni ou 'anonymous'
+      const userId = entry.userId || currentUser?.uid || 'anonymous';
+      
+      // Récupérer les informations de contexte (IP, User Agent)
+      const context = this.getContext();
+
+      // Créer l'entrée d'audit
+      const auditEntry: AuditLogEntry = {
+        eventType: entry.eventType,
+        userId,
+        level: entry.level,
+        action: entry.action,
+        details: this.sanitizeDetails(entry.details),
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+        success: entry.success,
+        errorMessage: entry.errorMessage,
+        timestamp: serverTimestamp(),
+      };
+
+      // Ajouter à Firestore
+      await addDoc(collection(db, this.collectionName), auditEntry);
+    } catch (error) {
+      // En cas d'erreur de logging, on ne veut pas interrompre le flux principal
+      // mais on doit quand même logger l'erreur dans la console
+      console.error('Erreur lors de l\'audit logging:', error);
+      
+      // En production, on pourrait envoyer à un service externe (Sentry, etc.)
+    }
+  }
+
+  /**
+   * Logger un événement de chiffrement SSN
+   */
+  async logSSNEncryption(userId: string, success: boolean, error?: string): Promise<void> {
+    await this.log({
+      eventType: AuditEventType.SSN_ENCRYPTED,
+      userId,
+      level: success ? AuditLogLevel.INFO : AuditLogLevel.ERROR,
+      action: 'Chiffrement du SSN/NIR',
+      success,
+      errorMessage: error,
+      details: {
+        dataCategory: 'personal_identifiable_information',
+        encryptionMethod: 'AES-256-GCM',
+      },
+    });
+  }
+
+  /**
+   * Logger un événement de validation bancaire
+   */
+  async logBankValidation(
+    userId: string,
+    success: boolean,
+    errors?: Record<string, string>
+  ): Promise<void> {
+    await this.log({
+      eventType: success 
+        ? AuditEventType.BANK_DATA_VALIDATED 
+        : AuditEventType.BANK_DATA_VALIDATION_FAILED,
+      userId,
+      level: success ? AuditLogLevel.INFO : AuditLogLevel.WARNING,
+      action: 'Validation des coordonnées bancaires',
+      success,
+      details: {
+        dataCategory: 'banking_information',
+        validationErrors: errors,
+      },
+    });
+  }
+
+  /**
+   * Logger un événement de chiffrement bancaire
+   */
+  async logBankEncryption(userId: string, success: boolean, error?: string): Promise<void> {
+    await this.log({
+      eventType: AuditEventType.BANK_DATA_ENCRYPTED,
+      userId,
+      level: success ? AuditLogLevel.INFO : AuditLogLevel.ERROR,
+      action: 'Chiffrement des données bancaires',
+      success,
+      errorMessage: error,
+      details: {
+        dataCategory: 'banking_information',
+        encryptionMethod: 'AES-256-GCM',
+      },
+    });
+  }
+
+  /**
+   * Logger un événement d'upload de document
+   */
+  async logDocumentUpload(
+    userId: string,
+    documentType: string,
+    success: boolean,
+    error?: string
+  ): Promise<void> {
+    await this.log({
+      eventType: AuditEventType.DOCUMENT_UPLOADED,
+      userId,
+      level: success ? AuditLogLevel.INFO : AuditLogLevel.ERROR,
+      action: `Upload de document: ${documentType}`,
+      success,
+      errorMessage: error,
+      details: {
+        documentType,
+        dataCategory: 'document',
+      },
+    });
+  }
+
+  /**
+   * Logger une tentative d'accès non autorisée
+   */
+  async logUnauthorizedAccess(
+    userId: string,
+    resource: string,
+    reason: string
+  ): Promise<void> {
+    await this.log({
+      eventType: AuditEventType.UNAUTHORIZED_ACCESS_ATTEMPT,
+      userId,
+      level: AuditLogLevel.CRITICAL,
+      action: 'Tentative d\'accès non autorisée',
+      success: false,
+      errorMessage: reason,
+      details: {
+        resource,
+        severity: 'high',
+      },
+    });
+  }
+
+  /**
+   * Logger un événement de dépassement de rate limit
+   */
+  async logRateLimitExceeded(userId: string, operation: string): Promise<void> {
+    await this.log({
+      eventType: AuditEventType.RATE_LIMIT_EXCEEDED,
+      userId,
+      level: AuditLogLevel.WARNING,
+      action: `Rate limit dépassé pour: ${operation}`,
+      success: false,
+      details: {
+        operation,
+        severity: 'medium',
+      },
+    });
+  }
+
+  /**
+   * Logger le début d'une inscription chauffeur
+   */
+  async logDriverRegistrationStarted(userId: string): Promise<void> {
+    await this.log({
+      eventType: AuditEventType.DRIVER_REGISTRATION_STARTED,
+      userId,
+      level: AuditLogLevel.INFO,
+      action: 'Début inscription chauffeur',
+      success: true,
+      details: {
+        registrationFlow: 'driver_onboarding',
+      },
+    });
+  }
+
+  /**
+   * Logger la sauvegarde d'un brouillon
+   */
+  async logDriverDraftSaved(userId: string, step: number): Promise<void> {
+    await this.log({
+      eventType: AuditEventType.DRIVER_DRAFT_SAVED,
+      userId,
+      level: AuditLogLevel.INFO,
+      action: `Sauvegarde brouillon - Étape ${step}`,
+      success: true,
+      details: {
+        registrationFlow: 'driver_onboarding',
+        step,
+      },
+    });
+  }
+
+  /**
+   * Logger la complétion d'une inscription
+   */
+  async logDriverRegistrationCompleted(userId: string): Promise<void> {
+    await this.log({
+      eventType: AuditEventType.DRIVER_REGISTRATION_COMPLETED,
+      userId,
+      level: AuditLogLevel.INFO,
+      action: 'Inscription chauffeur complétée',
+      success: true,
+      details: {
+        registrationFlow: 'driver_onboarding',
+        status: 'pending_verification',
+      },
+    });
+  }
+
+  /**
+   * Logger un échec d'inscription
+   */
+  async logDriverRegistrationFailed(
+    userId: string,
+    error: string,
+    step?: number
+  ): Promise<void> {
+    await this.log({
+      eventType: AuditEventType.DRIVER_REGISTRATION_FAILED,
+      userId,
+      level: AuditLogLevel.ERROR,
+      action: `Échec inscription${step ? ` - Étape ${step}` : ''}`,
+      success: false,
+      errorMessage: error,
+      details: {
+        registrationFlow: 'driver_onboarding',
+        step,
+      },
+    });
+  }
+
+  /**
+   * Récupère le contexte de la requête (IP, User Agent)
+   * Note: Côté client, l'IP n'est pas disponible directement
+   * Cette méthode devrait être enrichie côté serveur
+   */
+  private getContext(): { ipAddress?: string; userAgent?: string } {
+    if (typeof window !== 'undefined') {
+      return {
+        userAgent: navigator.userAgent,
+        // IP address sera ajoutée côté serveur via Cloud Function
+      };
+    }
+    return {};
+  }
+
+  /**
+   * Nettoie les détails pour ne pas logger d'informations sensibles
+   * 
+   * @param details - Les détails à nettoyer
+   * @returns Les détails nettoyés
+   */
+  private sanitizeDetails(details?: Record<string, any>): Record<string, any> | undefined {
+    if (!details) return undefined;
+
+    const sanitized = { ...details };
+    
+    // Liste des champs sensibles à masquer
+    const sensitiveFields = ['ssn', 'nir', 'iban', 'bic', 'accountHolder', 'password'];
+    
+    for (const field of sensitiveFields) {
+      if (field in sanitized) {
+        sanitized[field] = '[REDACTED]';
+      }
+    }
+
+    return sanitized;
+  }
+}
+
+// Export du singleton
+export const auditLoggingService = new AuditLoggingService();
+
+// Export par défaut
+export default auditLoggingService;

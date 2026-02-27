@@ -48,6 +48,43 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.email_verified == true;
     }
     
+    // Fonction helper pour valider le format des données chiffrées
+    // Vérifie que les données chiffrées ont la structure attendue {data, iv, salt}
+    function isValidEncryptedData(field) {
+      return field != null &&
+             field.data is string &&
+             field.data.length > 0 &&
+             field.iv is string &&
+             field.iv.length > 0 &&
+             field.salt is string &&
+             field.salt.length > 0;
+    }
+    
+    // Fonction helper pour valider la transition vers 'pending'
+    // Vérifie que seuls les champs autorisés sont modifiés lors de la soumission
+    // ET que les champs sensibles sont correctement chiffrés
+    function isValidPendingTransition() {
+      // VALIDATION DU STATUT ET DES CHAMPS REQUIS
+      // Vérifier que le statut passe bien à 'pending'
+      // ET que tous les champs requis sont présents et non null
+      return request.resource.data.status == 'pending'
+        && request.resource.data.firstName != null
+        && request.resource.data.lastName != null
+        && request.resource.data.dob != null
+        && request.resource.data.nationality != null
+        && request.resource.data.address != null
+        && request.resource.data.city != null
+        && request.resource.data.zipCode != null
+        && request.resource.data.phone != null
+        && request.resource.data.car != null
+        && request.resource.data.documents != null
+        // VALIDATIONS SUPPLÉMENTAIRES POUR LES CHAMPS SENSIBLES
+        // Si le champ SSN est présent, il doit être chiffré
+        && (!('ssn' in request.resource.data) || request.resource.data.ssn == null || isValidEncryptedData(request.resource.data.ssn))
+        // Si le champ bank est présent, il doit être chiffré
+        && (!('bank' in request.resource.data) || request.resource.data.bank == null || isValidEncryptedData(request.resource.data.bank));
+    }
+    
     
     // ============================================================================
     // COLLECTION USERS (CLIENTS)
@@ -106,26 +143,31 @@ service cloud.firestore {
       // - L'email doit être présent (non null)
       // - Le phoneNumber doit être null (interdiction de l'auth par téléphone)
       // - Le userType doit être 'chauffeur'
-      // - Le statut initial doit être 'pending'
+      // - Le statut initial doit être 'draft' ou 'pending'
       // - L'email doit être vérifié (obligatoire pour les chauffeurs)
       allow create: if isEmailVerified() &&
                        request.auth.uid == driverId &&
                        request.resource.data.email != null &&
                        request.resource.data.phoneNumber == null &&
                        request.resource.data.userType == 'chauffeur' &&
-                       request.resource.data.status == 'pending';
+                       (request.resource.data.status == 'draft' || request.resource.data.status == 'pending');
       
       // Mise à jour : Le propriétaire ou l'admin peuvent modifier les données
-      // Les chauffeurs peuvent modifier leur profil, mais pas leur statut
+      // Les chauffeurs peuvent modifier leur profil, mais pas leur statut (sauf pour passer de draft/action_required à pending)
       // Les admins peuvent modifier le statut (pending -> approved/rejected/suspended)
       // Le chauffeur doit avoir un email vérifié pour toute modification
-      allow update: if (isOwner(driverId) && isEmailVerified()) || isAdmin();
+      // Lors de la transition vers 'pending', seuls certains champs sont autorisés (sécurité renforcée)
+      allow update: if (isOwner(driverId) && isEmailVerified() &&
+                        (request.resource.data.status == resource.data.status ||
+                         ((resource.data.status in ['draft', 'action_required', 'rejected']) &&
+                          isValidPendingTransition())))
+                    || isAdmin();
       
-      // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé
-      // Cela permet au chauffeur de recréer son compte après un rejet
+      // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé ou en brouillon
+      // Cela permet au chauffeur de recommencer son inscription
       allow delete: if isAdmin() || 
                     (isOwner(driverId) && 
-                     resource.data.status == 'rejected');
+                     resource.data.status in ['rejected', 'draft']);
     }
     
     // ============================================================================

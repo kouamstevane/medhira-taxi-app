@@ -161,161 +161,9 @@ export default function AdminDriversPage() {
     }
   }, [isAdmin, loadDrivers]);
 
-  const handleApprove = async (driverId: string, driverEmail: string, driverName: string) => {
-    if (!currentUser) {
-      setError('Vous devez être connecté pour effectuer cette action');
-      return;
-    }
-
-    try {
-      setProcessing(driverId);
-      setError(null);
-      setSuccess(null);
-
-      // Mettre à jour le statut dans Firestore
-      const driverRef = doc(db, 'drivers', driverId);
-      await updateDoc(driverRef, {
-        status: 'approved',
-        isAvailable: true, // Rendre le chauffeur disponible automatiquement
-        updatedAt: new Date(),
-        approvedAt: new Date(),
-        approvedBy: currentUser.uid
-      });
-
-      // Envoyer l'email d'approbation
-      await sendApprovalEmail(driverEmail, driverName);
-
-      setSuccess(`Le compte de ${driverName} a été supprimé avec succès`);
-      setSelectedDriver(null);
-      loadDrivers();
-    } catch (err: unknown) {
-      console.error('Erreur suppression:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      setError(`Erreur lors de la suppression: ${errorMessage}`);
-    } finally {
-      setProcessing(null);
-    }
-  };
-
-  const handleReject = async (driverId: string, driverEmail: string, driverName: string) => {
-    if (!rejectionReason.trim()) {
-      setError('Veuillez indiquer la raison du refus');
-      return;
-    }
-
-    if (!currentUser) {
-      setError('Vous devez être connecté pour effectuer cette action');
-      return;
-    }
-
-    try {
-      setProcessing(driverId);
-      setError(null);
-      setSuccess(null);
-
-      // Envoyer l'email de refus AVANT la suppression
-      await sendRejectionEmail(driverEmail, driverName, rejectionReason.trim());
-
-      // Supprimer complètement le compte de la base de données
-      // Cela permet à l'utilisateur de soumettre une nouvelle demande
-      const driverRef = doc(db, 'drivers', driverId);
-      
-      try {
-        await deleteDoc(driverRef);
-        console.log(`✅ Compte chauffeur ${driverId} supprimé après refus`);
-      } catch (deleteError: unknown) {
-        console.error('Erreur lors de la suppression du compte:', deleteError);
-        const errorMessage = deleteError instanceof Error ? deleteError.message : 'Erreur inconnue';
-        // Si la suppression échoue, on marque quand même le compte comme refusé
-        // pour éviter qu'il ne soit pas traité
-        await updateDoc(driverRef, {
-          status: 'rejected',
-          rejectionReason: rejectionReason.trim(),
-          rejectedAt: new Date(),
-          rejectedBy: currentUser.uid,
-          updatedAt: new Date(),
-        });
-        throw new Error(`Le compte a été marqué comme refusé, mais la suppression a échoué: ${errorMessage}. Veuillez supprimer manuellement le compte ${driverId}.`);
-      }
-
-      // Afficher le succès même si l'email a échoué (l'erreur est déjà gérée dans sendRejectionEmail)
-      setSuccess(`Le compte de ${driverName} a été refusé et supprimé. L'utilisateur peut soumettre une nouvelle demande.`);
-      setSelectedDriver(null);
-      setRejectionReason('');
-      loadDrivers();
-    } catch (err: unknown) {
-      console.error('Erreur refus:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      setError(`Erreur lors du refus: ${errorMessage}`);
-    } finally {
-      setProcessing(null);
-    }
-  };
-
-  const sendApprovalEmail = async (email: string, name: string) => {
-    try {
-      const response = await fetch('/api/admin/send-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: email,
-          type: 'approval',
-          driverName: name,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || data.details || 'Erreur lors de l\'envoi de l\'email');
-      }
-
-      console.log('✅ Email d\'approbation envoyé avec succès:', data);
-    } catch (err: unknown) {
-      console.error('❌ Erreur envoi email d\'approbation:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      // Afficher l'erreur à l'utilisateur mais ne pas bloquer l'approbation
-      setError(`Le compte a été approuvé, mais l'email n'a pas pu être envoyé: ${errorMessage}`);
-      // Ne pas bloquer l'approbation si l'email échoue
-    }
-  };
-
-  const sendRejectionEmail = async (email: string, name: string, reason: string) => {
-    try {
-      const response = await fetch('/api/admin/send-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: email,
-          type: 'rejection',
-          driverName: name,
-          reason: reason,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || data.details || 'Erreur lors de l\'envoi de l\'email');
-      }
-
-      console.log('✅ Email de refus envoyé avec succès:', data);
-    } catch (err: unknown) {
-      console.error('❌ Erreur envoi email de refus:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      // Afficher l'erreur à l'utilisateur mais ne pas bloquer le refus
-      setError(`Le compte a été refusé, mais l'email n'a pas pu être envoyé: ${errorMessage}`);
-      // Ne pas bloquer le refus si l'email échoue
-    }
-  };
-
-  // Gestion des actions administratives (suspend, deactivate, delete)
+  // Gestion des actions administratives (approve, reject, suspend, etc.)
   const handleAdminAction = async (
-    action: 'suspend' | 'unsuspend' | 'deactivate' | 'reactivate' | 'delete',
+    action: 'approve' | 'reject' | 'suspend' | 'unsuspend' | 'deactivate' | 'reactivate' | 'delete',
     driverId: string,
     reason?: string
   ) => {
@@ -348,13 +196,19 @@ export default function AdminDriversPage() {
         throw new Error(data.error || data.details || 'Erreur lors de l\'action');
       }
 
-      setSuccess(data.message);
+      setSuccess(data.message || 'Action effectuée avec succès');
+      
+      // Fermer les modals si ouverts
       setActionModal({ show: false, action: null, driver: null, reason: '' });
+      setSelectedDriver(null);
+      setRejectionReason('');
+      
+      // Recharger la liste
       loadDrivers();
     } catch (err: unknown) {
       console.error(`Erreur ${action}:`, err);
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      setError(`Erreur lors de l'action: ${errorMessage}`);
+      setError(`Erreur lors de l'action (${action}): ${errorMessage}`);
     } finally {
       setProcessing(null);
     }
@@ -539,7 +393,7 @@ export default function AdminDriversPage() {
                         {driver.status === 'pending' && (
                           <>
                             <button
-                              onClick={() => handleApprove(driver.id, driver.email, `${driver.firstName} ${driver.lastName}`)}
+                              onClick={() => handleAdminAction('approve', driver.id)}
                               disabled={processing === driver.id}
                               className="text-green-600 hover:text-green-900 mr-2 disabled:opacity-50"
                             >
@@ -755,7 +609,7 @@ export default function AdminDriversPage() {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
                   <div className="flex gap-4">
                     <button
-                      onClick={() => handleApprove(selectedDriver.id, selectedDriver.email, `${selectedDriver.firstName} ${selectedDriver.lastName}`)}
+                      onClick={() => handleAdminAction('approve', selectedDriver.id)}
                       disabled={processing === selectedDriver.id}
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition disabled:opacity-50"
                     >
@@ -770,7 +624,7 @@ export default function AdminDriversPage() {
                         rows={3}
                       />
                       <button
-                        onClick={() => handleReject(selectedDriver.id, selectedDriver.email, `${selectedDriver.firstName} ${selectedDriver.lastName}`)}
+                        onClick={() => handleAdminAction('reject', selectedDriver.id, rejectionReason.trim())}
                         disabled={processing === selectedDriver.id || !rejectionReason.trim()}
                         className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition disabled:opacity-50"
                       >

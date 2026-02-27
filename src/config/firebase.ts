@@ -22,7 +22,7 @@ import { getStorage, FirebaseStorage } from "firebase/storage";
  * Configuration Firebase récupérée depuis les variables d'environnement
  * Pour la production, utilisez des variables d'environnement sécurisées
  */
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,

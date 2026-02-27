@@ -1,44 +1,47 @@
 /**
  * API Route : Gestion administrative des chauffeurs
- * 
- * Actions disponibles :
- * - suspend : Suspendre un chauffeur
- * - unsuspend : Réactiver un chauffeur suspendu
- * - deactivate : Désactiver définitivement
- * - reactivate : Réactiver un compte désactivé
- * - delete : Supprimer définitivement
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/config/firebase-admin';
+import { sendDriverStatusEmail } from '@/lib/email-service';
+import { z } from 'zod';
+
+// Schéma de validation pour les actions admin
+const ManageDriverSchema = z.object({
+  action: z.enum(['approve', 'reject', 'suspend', 'unsuspend', 'deactivate', 'reactivate', 'delete']),
+  driverId: z.string().min(1),
+  adminUid: z.string().min(1),
+  reason: z.string().optional(),
+});
 
 export async function POST(request: NextRequest) {
   try {
     // Vérifier que Firebase Admin est initialisé
     if (!adminDb) {
       return NextResponse.json(
-        { error: 'Firebase Admin SDK non configuré. Contactez l\'administrateur.' },
+        { error: 'Firebase Admin SDK non configuré.' },
         { status: 503 }
       );
     }
 
     const body = await request.json();
-    const { action, driverId, reason, adminUid } = body;
-
-    // Validation
-    if (!action || !driverId || !adminUid) {
+    
+    // Validation Zod
+    const result = ManageDriverSchema.safeParse(body);
+    if (!result.success) {
       return NextResponse.json(
-        { error: 'Paramètres manquants: action, driverId et adminUid sont requis' },
+        { error: 'Données invalides', details: result.error.format() },
         { status: 400 }
       );
     }
 
-    // Vérifier que l'utilisateur est bien un admin
-    const adminRef = adminDb.collection('admins').doc(adminUid);
-    const adminDoc = await adminRef.get();
+    const { action, driverId, reason, adminUid } = result.data;
 
+    // Vérifier que l'utilisateur est bien un admin
+    const adminDoc = await adminDb.collection('admins').doc(adminUid).get();
+    
     if (!adminDoc.exists) {
-      // Fallback: chercher par userId
       const adminSnapshot = await adminDb.collection('admins')
         .where('userId', '==', adminUid)
         .limit(1)
@@ -46,17 +49,15 @@ export async function POST(request: NextRequest) {
 
       if (adminSnapshot.empty) {
         return NextResponse.json(
-          { error: 'Accès non autorisé. Vous devez être administrateur.' },
+          { error: 'Accès non autorisé.' },
           { status: 403 }
         );
       }
     }
 
     const driverRef = adminDb.collection('drivers').doc(driverId);
-    const timestamp = new Date();
-
-    // Récupérer les informations du chauffeur pour l'email
     const driverDoc = await driverRef.get();
+    
     if (!driverDoc.exists) {
       return NextResponse.json(
         { error: 'Chauffeur introuvable' },
@@ -64,48 +65,59 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const timestamp = new Date();
     const driverData = driverDoc.data();
     const driverEmail = driverData?.email;
     const driverName = `${driverData?.firstName || ''} ${driverData?.lastName || ''}`.trim() || 'Chauffeur';
 
-    // Fonction helper pour envoyer un email
-    const sendEmail = async (type: string, reason?: string) => {
-      if (!driverEmail) {
-        console.warn('⚠️ Pas d\'email pour le chauffeur, notification non envoyée');
-        return;
-      }
-
+    /**
+     * Helper pour notifier le chauffeur par email
+     */
+    const notifyDriver = async (type: 'approval' | 'rejection' | 'suspension' | 'deactivation' | 'reactivation', emailReason?: string) => {
+      if (!driverEmail) return;
       try {
-        const emailResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/admin/send-email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: driverEmail,
-            type,
-            driverName,
-            reason,
-          }),
+        await sendDriverStatusEmail({
+          to: driverEmail,
+          driverName,
+          type,
+          reason: emailReason
         });
-
-        if (!emailResponse.ok) {
-          console.error('❌ Erreur envoi email:', await emailResponse.text());
-        } else {
-          console.log(`✅ Email de ${type} envoyé à ${driverEmail}`);
-        }
-      } catch (emailError) {
-        console.error('❌ Erreur envoi email:', emailError);
-        // Ne pas bloquer l'action si l'email échoue
+      } catch (error) {
+        console.error(`❌ Erreur notification email (${type}):`, error);
       }
     };
 
     switch (action) {
+      case 'approve':
+        await driverRef.update({
+          status: 'approved',
+          isAvailable: true,
+          isActive: true, // S'assurer qu'il est actif par défaut
+          approvedAt: timestamp,
+          approvedBy: adminUid,
+          updatedAt: timestamp,
+        });
+
+        await notifyDriver('approval');
+        return NextResponse.json({ success: true, message: 'Chauffeur approuvé avec succès' });
+
+      case 'reject':
+        if (!reason) return NextResponse.json({ error: 'Raison requise pour le refus' }, { status: 400 });
+        
+        await driverRef.update({
+          status: 'rejected',
+          rejectionReason: reason,
+          rejectedAt: timestamp,
+          rejectedBy: adminUid,
+          updatedAt: timestamp,
+        });
+
+        await notifyDriver('rejection', reason);
+        return NextResponse.json({ success: true, message: 'Chauffeur refusé' });
+
       case 'suspend':
-        if (!reason) {
-          return NextResponse.json(
-            { error: 'La raison de la suspension est requise' },
-            { status: 400 }
-          );
-        }
+        if (!reason) return NextResponse.json({ error: 'Raison requise' }, { status: 400 });
+        
         await driverRef.update({
           isSuspended: true,
           suspensionReason: reason,
@@ -116,13 +128,8 @@ export async function POST(request: NextRequest) {
           updatedAt: timestamp,
         });
 
-        // Envoyer email de notification
-        await sendEmail('suspension', reason);
-
-        return NextResponse.json({
-          success: true,
-          message: 'Chauffeur suspendu avec succès'
-        });
+        await notifyDriver('suspension', reason);
+        return NextResponse.json({ success: true, message: 'Chauffeur suspendu' });
 
       case 'unsuspend':
         await driverRef.update({
@@ -133,21 +140,12 @@ export async function POST(request: NextRequest) {
           updatedAt: timestamp,
         });
 
-        // Envoyer email de réactivation
-        await sendEmail('reactivation');
-
-        return NextResponse.json({
-          success: true,
-          message: 'Chauffeur réactivé avec succès'
-        });
+        await notifyDriver('reactivation');
+        return NextResponse.json({ success: true, message: 'Chauffeur réactivé' });
 
       case 'deactivate':
-        if (!reason) {
-          return NextResponse.json(
-            { error: 'La raison de la désactivation est requise' },
-            { status: 400 }
-          );
-        }
+        if (!reason) return NextResponse.json({ error: 'Raison requise' }, { status: 400 });
+        
         await driverRef.update({
           isActive: false,
           isSuspended: true,
@@ -159,13 +157,8 @@ export async function POST(request: NextRequest) {
           updatedAt: timestamp,
         });
 
-        // Envoyer email de désactivation
-        await sendEmail('deactivation', reason);
-
-        return NextResponse.json({
-          success: true,
-          message: 'Chauffeur désactivé définitivement'
-        });
+        await notifyDriver('deactivation', reason);
+        return NextResponse.json({ success: true, message: 'Chauffeur désactivé' });
 
       case 'reactivate':
         await driverRef.update({
@@ -177,48 +170,20 @@ export async function POST(request: NextRequest) {
           updatedAt: timestamp,
         });
 
-        // Envoyer email de réactivation
-        await sendEmail('reactivation');
-
-        return NextResponse.json({
-          success: true,
-          message: 'Chauffeur réactivé avec succès'
-        });
+        await notifyDriver('reactivation');
+        return NextResponse.json({ success: true, message: 'Chauffeur réactivé' });
 
       case 'delete':
-        // Pas d'email pour la suppression (le compte sera supprimé)
         await driverRef.delete();
-
-        // Optionnel : Supprimer aussi l'utilisateur Firebase Auth
-        // Décommentez si vous voulez supprimer complètement l'accès
-        /*
-        try {
-          const driverDoc = await driverRef.get();
-          const driverData = driverDoc.data();
-          if (driverData?.userId) {
-            await adminAuth.deleteUser(driverData.userId);
-          }
-        } catch (authError) {
-          console.error('Erreur suppression auth:', authError);
-        }
-        */
-
-        return NextResponse.json({
-          success: true,
-          message: 'Chauffeur supprimé définitivement'
-        });
+        return NextResponse.json({ success: true, message: 'Chauffeur supprimé' });
 
       default:
-        return NextResponse.json(
-          { error: `Action inconnue: ${action}` },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: 'Action non supportée' }, { status: 400 });
     }
-  } catch (error: unknown) {
-    console.error('Erreur API manage-driver:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+  } catch (error: any) {
+    console.error('❌ Erreur API manage-driver:', error);
     return NextResponse.json(
-      { error: 'Erreur serveur', details: errorMessage },
+      { error: 'Erreur serveur', details: error.message },
       { status: 500 }
     );
   }

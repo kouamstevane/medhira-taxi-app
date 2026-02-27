@@ -2,527 +2,574 @@
 /* eslint-disable */
 import { useState, useEffect } from 'react';
 import { auth, db, storage } from '../../../config/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, getDoc, query, collection, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, sendEmailVerification } from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
-import { sendVerificationEmail } from '@/services/auth.service';
+import { AuthService } from '@/services';
+import { serverEncryptionService } from '../../../services/server-encryption.service';
+import { auditLoggingService } from '../../../services/audit-logging.service';
 
-export default function DriverRegister() {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    licenseNumber: '',
-    carModel: '',
-    carPlate: '',
-    carColor: ''
-  });
-  const [licensePhoto, setLicensePhoto] = useState<File | null>(null);
-  const [carRegistration, setCarRegistration] = useState<File | null>(null);
-  const [insurancePhoto, setInsurancePhoto] = useState<File | null>(null);
+// Import des étapes
+import Step1Intent, { Step1FormData } from './components/Step1Intent';
+import Step2Identity, { Step2FormData } from './components/Step2Identity';
+import Step3Vehicle, { Step3FormData } from './components/Step3Vehicle';
+import Step4Compliance, { Step4Files } from './components/Step4Compliance';
+import Step5Monetization, { Step5FormData } from './components/Step5Monetization';
+import { AlertCircle, FileEdit, LogOut, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/ui/Toast';
+
+export default function DriverRegisterWizard() {
+  const router = useRouter();
+  const { toasts, removeToast } = useToast();
+
+  // ----- ÉTATS DU WIZARD -----
+  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExistingUser, setIsExistingUser] = useState(false);
-  const [needsAuthentication, setNeedsAuthentication] = useState(false);
-  const router = useRouter();
 
-  // Vérifier si l'utilisateur est déjà connecté
+  // ----- DONNÉES ACCUMULÉES -----
+  const [step1Data, setStep1Data] = useState<Partial<Step1FormData>>({});
+  const [step2Data, setStep2Data] = useState<Partial<Step2FormData>>({});
+  const [biometricsPhoto, setBiometricsPhoto] = useState<File | null>(null);
+  
+  const [step3Data, setStep3Data] = useState<Partial<Step3FormData>>({});
+  const [vehicleFiles, setVehicleFiles] = useState<{ registration?: File; insurance?: File; techControl?: File; interiorPhoto?: File; exteriorPhoto?: File }>({});
+  
+  const [complianceFiles, setComplianceFiles] = useState<{ idFront?: File; idBack?: File; licenseFront?: File; licenseBack?: File }>({});
+
+  const [rejectionCode, setRejectionCode] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+
+  // Vérifier si l'utilisateur est déjà connecté (pour l'étape 1)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setIsExistingUser(true);
-        
-        // Pré-remplir les champs avec les données de l'utilisateur
-        setFormData(prev => ({
+        setStep1Data(prev => ({
           ...prev,
           email: user.email || '',
-          firstName: user.displayName?.split(' ')[0] || '',
-          lastName: user.displayName?.split(' ')[1] || '',
         }));
         
-        // Vérifier si l'utilisateur est déjà chauffeur
+        // Vérifier si un brouillon ou un rejet existe déjà
         const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
         if (driverDoc.exists()) {
-          const driverData = driverDoc.data();
-          // Si le compte est refusé, permettre la recréation
-          if (driverData.status === 'rejected') {
-            console.log('Compte refusé détecté, suppression pour permettre la recréation');
-            await deleteDoc(doc(db, 'drivers', user.uid));
+          const data = driverDoc.data();
+          if (data.status === 'action_required' || data.status === 'rejected') {
+             // Handle Rejections
+             setRejectionCode(data.rejectionCode || 'R000');
+             setRejectionReason(data.rejectionReason || data.rejectionMessage || 'Votre dossier nécessite une action de votre part.');
+          } else if (data.status === 'draft') {
+            // Reprendre au bon endroit en fonction des données existantes ?
+            // Pour simplifier on le laisse à l'étape 2 (Identité) avec pré-remplissage si possible
+            // NOTE: Le SSN est maintenant chiffré, on ne peut pas le pré-remplir pour l'affichage
+            // L'utilisateur devra le saisir à nouveau s'il revient sur cette étape
+             setStep2Data({
+                 firstName: data.firstName || '',
+                 lastName: data.lastName || '',
+                 dob: data.dob || '',
+                 nationality: data.nationality || 'FR',
+                 ssn: '', // SSN chiffré non affiché par sécurité (l'utilisateur doit le resaisir)
+                 address: data.address || '',
+                 city: data.city || '',
+                 zipCode: data.zipCode || '',
+             });
+             setCurrentStep(2);
           } else {
-          setError('Vous êtes déjà enregistré comme chauffeur');
-          setTimeout(() => router.push('/driver/login'), 2000);
-            return;
+             setError('Votre dossier est en cours de traitement ou déjà validé.');
+             setTimeout(() => router.push('/driver/dashboard'), 2000);
           }
         }
       } else {
         setIsExistingUser(false);
       }
     });
-    
     return () => unsubscribe();
   }, [router]);
 
-  const handleFileChange = (
-    setter: React.Dispatch<React.SetStateAction<File | null>>,
-    e: React.ChangeEvent<HTMLInputElement>,
-    maxSizeMB: number = 5
-  ) => {
-    const file = e.target.files?.[0] || null;
-    
-    if (file && file.size > maxSizeMB * 1024 * 1024) {
-      setError(`Le fichier ne doit pas dépasser ${maxSizeMB}MB`);
-      return;
-    }
-    
-    setter(file);
-    setError(null);
-  };
+  // ----- HANDLERS ÉTAPE PAR ÉTAPE -----
 
-  const uploadFile = async (file: File | null, fileType: string, userId?: string) => {
-    if (!file) throw new Error('Fichier manquant');
-    
-    // Utiliser l'userId fourni ou celui de l'utilisateur actuel
-    const targetUserId = userId || auth.currentUser?.uid;
-    if (!targetUserId) throw new Error('Utilisateur non authentifié');
-    
-    const timestamp = Date.now();
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${fileType}_${timestamp}.${fileExtension}`;
-    
-    const storageRef = ref(storage, `drivers/${targetUserId}/${fileName}`);
-    
-    try {
-      const snapshot = await uploadBytes(storageRef, file);
-      return await getDownloadURL(snapshot.ref);
-    } catch (error: any) {
-      console.error('Erreur upload:', error);
-      throw new Error(`Échec de l'upload du ${fileType}: ${error.message}`);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
-
-    // Validation des fichiers
-    if (!licensePhoto || !carRegistration) {
-      setError('Veuillez uploader tous les documents requis');
-      setLoading(false);
-      return;
-    }
-
-    // Validation du mot de passe seulement si l'utilisateur n'est pas connecté
-    if (!isExistingUser && !formData.password) {
-      setError('Veuillez entrer un mot de passe');
-      setLoading(false);
-      return;
-    }
-
     try {
-      let userId: string;
-      let userCredential: any = null;
+      const user = await AuthService.signInWithGoogle();
       
-      // 1. Gérer l'authentification
-      if (isExistingUser && auth.currentUser) {
-        // L'utilisateur est déjà connecté, utiliser son compte existant
-        userId = auth.currentUser.uid;
-        
-        // Vérifier si déjà chauffeur
-        const driverCheck = await getDoc(doc(db, 'drivers', userId));
-        if (driverCheck.exists()) {
-          const driverData = driverCheck.data();
-          // Si le compte est refusé, permettre la recréation en le supprimant
-          if (driverData.status === 'rejected') {
-            console.log('Compte refusé détecté, suppression pour permettre la recréation');
-            await deleteDoc(doc(db, 'drivers', userId));
-          } else {
-          setError('Vous êtes déjà enregistré comme chauffeur');
-          router.push('/driver/login');
-          return;
-          }
-        }
-      } else {
-        // L'utilisateur n'est pas connecté
-        // Vérifier d'abord si un compte chauffeur refusé existe avec cet email
-        // (même si l'utilisateur n'est pas connecté, on peut avoir un compte refusé)
-        try {
-          const emailQuery = query(
-            collection(db, 'drivers'),
-            where('email', '==', formData.email),
-            where('status', '==', 'rejected')
-          );
-          const emailQuerySnapshot = await getDocs(emailQuery);
-          
-          // Supprimer tous les comptes refusés avec cet email
-          if (!emailQuerySnapshot.empty) {
-            console.log(`Comptes refusés trouvés pour ${formData.email}, suppression...`);
-            const deletePromises = emailQuerySnapshot.docs.map(driverDoc => {
-              // Note: La suppression nécessite que l'utilisateur soit connecté
-              // On va d'abord créer/connecter l'utilisateur, puis supprimer
-              return driverDoc.ref;
-            });
-            // On supprimera après la connexion/création du compte
-          }
-        } catch (queryError: any) {
-          console.warn('Erreur lors de la recherche de comptes refusés:', queryError);
-          // Continuer même si la requête échoue
-        }
+      const names = user.displayName?.split(' ') || [];
+      const first = names[0] || '';
+      const last = names.length > 1 ? names.slice(1).join(' ') : '';
+      
+      setStep1Data({ email: user.email || '' });
+      setStep2Data(prev => ({ ...prev, firstName: first, lastName: last }));
+      
+      // La vérification d'existant est gérée par onAuthStateChanged dans tous les cas
+      setCurrentStep(2);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error(error);
+      setError("Erreur : " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        // Vérifier d'abord si le compte existe en tentant de se connecter
-        try {
-          console.log('Tentative de connexion avec:', formData.email);
-          const signInResult = await signInWithEmailAndPassword(
-            auth,
-            formData.email,
-            formData.password
-          );
-          userId = signInResult.user.uid;
-          userCredential = signInResult;
-          console.log('Connexion réussie, userId:', userId);
-          
-          // Vérifier si déjà chauffeur
-          const driverCheck = await getDoc(doc(db, 'drivers', userId));
-          if (driverCheck.exists()) {
-            const driverData = driverCheck.data();
-            // Si le compte est refusé, permettre la recréation en le supprimant
-            if (driverData.status === 'rejected') {
-              console.log('Compte refusé détecté, suppression pour permettre la recréation');
-              try {
-                await deleteDoc(doc(db, 'drivers', userId));
-                console.log('✅ Compte refusé supprimé avec succès');
-              } catch (deleteError: any) {
-                console.error('Erreur lors de la suppression du compte refusé:', deleteError);
-                // Si la suppression échoue (permissions), on continue quand même
-                // L'admin devra le supprimer manuellement
-                setError('Un compte refusé existe. Veuillez contacter l\'administrateur pour le supprimer.');
-                setLoading(false);
-                return;
-              }
-            } else {
-            setError('Vous êtes déjà enregistré comme chauffeur');
-            router.push('/driver/login');
-            return;
-            }
-          }
-          
-          // Supprimer aussi les autres comptes refusés avec le même email (si l'utilisateur a plusieurs comptes)
-          try {
-            const emailQuery = query(
-              collection(db, 'drivers'),
-              where('email', '==', formData.email),
-              where('status', '==', 'rejected')
-            );
-            const emailQuerySnapshot = await getDocs(emailQuery);
-            if (!emailQuerySnapshot.empty) {
-              console.log(`Suppression de ${emailQuerySnapshot.size} compte(s) refusé(s) avec le même email`);
-              // Note: On ne peut supprimer que notre propre compte, les autres nécessitent l'admin
-              // Mais on peut au moins essayer
-              for (const driverDoc of emailQuerySnapshot.docs) {
-                if (driverDoc.id === userId) {
-                  // Déjà supprimé ci-dessus
-                  continue;
-                }
-                // Pour les autres comptes, on ne peut pas les supprimer sans être admin
-                // Mais on peut les ignorer car on va créer un nouveau compte
-              }
-            }
-          } catch (queryError: any) {
-            console.warn('Erreur lors de la recherche de comptes refusés:', queryError);
-          }
-        } catch (signInError: any) {
-          console.log('Erreur de connexion:', signInError.code, signInError.message);
-          if (signInError.code === 'auth/user-not-found' || signInError.code === 'auth/wrong-password' || signInError.code === 'auth/invalid-credential') {
-            // Le compte n'existe pas, créer un nouveau compte
-            console.log('Création d\'un nouveau compte pour:', formData.email);
-            try {
-              userCredential = await createUserWithEmailAndPassword(
-              auth,
-              formData.email,
-              formData.password
-            );
-            userId = userCredential.user.uid;
-              console.log('Compte créé avec succès, userId:', userId);
-              
-              // Attendre un peu pour s'assurer que Firebase Auth est bien synchronisé
-              await new Promise(resolve => setTimeout(resolve, 1000));
-              
-              // Après création, vérifier s'il y a des comptes refusés avec le même email
-              // (peu probable mais possible si l'email a été utilisé avant)
-              try {
-                const emailQuery = query(
-                  collection(db, 'drivers'),
-                  where('email', '==', formData.email),
-                  where('status', '==', 'rejected')
-                );
-                const emailQuerySnapshot = await getDocs(emailQuery);
-                if (!emailQuerySnapshot.empty) {
-                  console.log(`⚠️ ${emailQuerySnapshot.size} compte(s) refusé(s) trouvé(s) avec le même email`);
-                  // Ces comptes ne peuvent pas être supprimés car ils appartiennent à d'autres utilisateurs
-                  // Mais on peut créer un nouveau compte quand même
-                }
-              } catch (queryError: any) {
-                console.warn('Erreur lors de la recherche de comptes refusés:', queryError);
-              }
-            } catch (createError: any) {
-              console.error('Erreur lors de la création du compte:', createError);
-              throw createError;
-            }
-          } else {
-            throw signInError;
-          }
-        }
+  const handleStep1Next = async (data: Step1FormData) => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (!isExistingUser) {
+        // Create user
+        await createUserWithEmailAndPassword(auth, data.email, data.password);
       }
-
-      console.log('Upload des documents pour userId:', userId);
       
-      // 2. Upload des documents (passer userId explicitement)
-      const [licenseUrl, registrationUrl, insuranceUrl] = await Promise.all([
-        uploadFile(licensePhoto, 'license', userId),
-        uploadFile(carRegistration, 'registration', userId),
-        insurancePhoto ? uploadFile(insurancePhoto, 'insurance', userId) : Promise.resolve(null)
-      ]);
-
-      console.log('Documents uploadés avec succès');
-
-      // 3. Enregistrer dans la collection drivers
-      const driverData = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        licenseNumber: formData.licenseNumber,
-        car: {
-          model: formData.carModel,
-          plate: formData.carPlate,
-          color: formData.carColor
-        },
-        documents: {
-          licensePhoto: licenseUrl,
-          carRegistration: registrationUrl,
-          ...(insuranceUrl && { insurance: insuranceUrl })
-        },
-        status: 'pending',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        isAvailable: false,
-        rating: 0,
-        tripsCompleted: 0
-      };
-
-      console.log('Enregistrement du chauffeur dans Firestore...');
-      await setDoc(doc(db, 'drivers', userId), driverData);
-      console.log('Chauffeur enregistré avec succès');
-
-      // 4. Envoyer l'email de vérification
-      try {
-        if (auth.currentUser) {
-          await sendVerificationEmail(auth.currentUser);
-          console.log('Email de vérification envoyé avec succès');
+      // Vérification explicite de l'email avant de continuer
+      const user = auth.currentUser;
+      if (!user?.emailVerified) {
+        setError("Veuillez vérifier votre email avant de continuer.");
+        if (user) {
+          await sendEmailVerification(user);
         }
-      } catch (emailError) {
-        console.error('Erreur lors de l\'envoi de l\'email de vérification:', emailError);
-        // On continue quand même, l'utilisateur peut renvoyer l'email depuis la page de vérification
+        return;
       }
-
-      // 5. Redirection vers la page de vérification email
-      router.push('/driver/verify-email');
-
-    } catch (error: any) {
-      console.error('Erreur complète:', error);
-      console.error('Code erreur:', error.code);
-      console.error('Message erreur:', error.message);
       
-      // Gestion d'erreurs spécifiques
-      if (error.code === 'auth/email-already-in-use') {
-        setError('Cet email est déjà utilisé. Si vous avez déjà un compte, veuillez vous connecter d\'abord.');
-      } else if (error.code === 'auth/weak-password') {
-        setError('Le mot de passe doit contenir au moins 6 caractères');
-      } else if (error.code === 'auth/wrong-password') {
-        setError('Mot de passe incorrect. Veuillez réessayer.');
-      } else if (error.code === 'auth/network-request-failed') {
-        setError('Erreur de connexion réseau. Veuillez vérifier votre connexion Internet et réessayer.');
-      } else if (error.code === 'auth/invalid-email') {
-        setError('Adresse email invalide. Veuillez vérifier et réessayer.');
-      } else if (error.code === 'auth/operation-not-allowed') {
-        setError('L\'inscription par email/mot de passe n\'est pas activée. Contactez l\'administrateur.');
-      } else if (error.message.includes('upload')) {
-        setError(error.message);
+      setStep1Data(data);
+      setCurrentStep(2);
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/email-already-in-use') {
+        setError("Cet email est déjà utilisé. Essayez de vous connecter.");
       } else {
-        setError(`Erreur lors de l'inscription: ${error.message || error.code || 'Erreur inconnue'}`);
+        setError(err.message);
       }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleStep2Next = async (data: Step2FormData, photo: File | null) => {
+    setLoading(true);
+    setError(null);
+    try {
+       setStep2Data(data);
+       setBiometricsPhoto(photo);
+
+       const user = auth.currentUser;
+       const userId = user?.uid;
+       if (!userId) throw new Error("Utilisateur non connecté");
+
+       // Vérifier que l'email est toujours vérifié avant de sauvegarder le brouillon
+       if (!user.emailVerified) {
+           setError("Votre email doit être vérifié avant de continuer. Veuillez vérifier votre boîte mail.");
+           // Renvoyer l'email de vérification si nécessaire
+           await sendEmailVerification(user);
+           return;
+       }
+
+       // SÉCURITÉ RGPD: Chiffrer immédiatement le SSN, même pour le brouillon
+       // Le SSN ne doit JAMAIS être stocké en clair, même temporairement
+       let encryptedSsn = null;
+       if (data.ssn) {
+           try {
+               encryptedSsn = await serverEncryptionService.encryptSSN(data.ssn);
+               // Audit logging: SSN chiffré avec succès
+               await auditLoggingService.logSSNEncryption(userId, true);
+           } catch (encryptError: any) {
+               console.error('Erreur lors du chiffrement du SSN:', encryptError);
+               // Audit logging: Échec du chiffrement SSN
+               await auditLoggingService.logSSNEncryption(userId, false, encryptError.message);
+               setError(encryptError.message || "Erreur lors de la sécurisation de vos données. Veuillez réessayer.");
+               return;
+           }
+       }
+
+       // Sauvegarde en brouillon avec SSN CHIFFRÉ (conformité RGPD)
+       const draftData = {
+           firstName: data.firstName,
+           lastName: data.lastName,
+           email: step1Data.email || user.email || '',
+           phone: step1Data.phone || '',
+           dob: data.dob,
+           nationality: data.nationality,
+           address: data.address,
+           city: data.city,
+           zipCode: data.zipCode,
+           ssn: encryptedSsn, // SSN chiffré immédiatement (conformité RGPD)
+           status: 'draft',
+           createdAt: new Date(),
+           updatedAt: new Date()
+       };
+
+       await setDoc(doc(db, 'drivers', userId), draftData, { merge: true });
+       
+       // Audit logging: Brouillon sauvegardé
+       await auditLoggingService.logDriverDraftSaved(userId, 2);
+       
+       setCurrentStep(3);
+
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error(error);
+      setError("Erreur finale : " + error.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const handleStep3Next = (data: Step3FormData, files: any) => {
+    setStep3Data(data);
+    setVehicleFiles(files);
+    setCurrentStep(4);
+  };
+
+  const handleStep4Next = (files: Step4Files) => {
+    setComplianceFiles(files);
+    setCurrentStep(5);
+  };
+
+  // ----- UPLOAD HELPER -----
+  const uploadFile = async (file: File | null, fileCategory: string, userId: string) => {
+    if (!file) return null;
+    const extension = file.name.split('.').pop() || 'tmp';
+    const storageRef = ref(storage, `drivers/${userId}/${fileCategory}/${Date.now()}.${extension}`);
+    const snapshot = await uploadBytes(storageRef, file);
+    return getDownloadURL(snapshot.ref);
+  };
+
+  const handleStep5FinalSubmit = async (data: Step5FormData) => {
+    setLoading(true);
+    setError(null);
+
+    // Tracker pour les fichiers uploadés (pour nettoyage en cas d'erreur)
+    const uploadedFiles: string[] = [];
+
+    // Déclarer userId avant le bloc try pour qu'il soit accessible dans le bloc catch
+    const user = auth.currentUser;
+    const userId = user?.uid;
+    if (!userId) throw new Error("Utilisateur non connecté");
+
+    try {
+
+        // Vérification explicite de l'email avant soumission finale
+        if (!user?.emailVerified) {
+            setError("Veuillez vérifier votre email avant de soumettre votre dossier.");
+            await sendEmailVerification(user);
+            return;
+        }
+
+        // 1. Upload tous les fichiers lourds (Vehicle + Compliance + Biometric)
+        // Utiliser Promise.allSettled pour continuer même si certains uploads échouent
+        const uploadResults = await Promise.allSettled([
+            uploadFile(biometricsPhoto, 'biometrics', userId),
+            uploadFile(vehicleFiles.registration!, 'documents', userId),
+            uploadFile(vehicleFiles.insurance || null, 'documents', userId),
+            uploadFile(vehicleFiles.techControl!, 'documents', userId),
+            uploadFile(vehicleFiles.exteriorPhoto!, 'vehicle_photos', userId),
+            uploadFile(vehicleFiles.interiorPhoto!, 'vehicle_photos', userId),
+            uploadFile(complianceFiles.idFront!, 'compliance', userId),
+            uploadFile(complianceFiles.idBack!, 'compliance', userId),
+            uploadFile(complianceFiles.licenseFront!, 'compliance', userId),
+            uploadFile(complianceFiles.licenseBack!, 'compliance', userId),
+        ]);
+
+        // Vérifier les résultats et extraire les URLs
+        const [
+            bioResult, regResult, insResult, techResult, extResult, intResult,
+            idFrontResult, idBackResult, licFrontResult, licBackResult
+        ] = uploadResults;
+
+        // Si un upload a échoué, nettoyer les fichiers réussis et retourner une erreur
+        const failedUploads = uploadResults.filter(r => r.status === 'rejected');
+        if (failedUploads.length > 0) {
+            // Nettoyer les fichiers uploadés avec succès
+            const successfulUrls = uploadResults
+                .filter(r => r.status === 'fulfilled' && r.value)
+                .map(r => (r as PromiseFulfilledResult<string>).value);
+
+            // Nettoyer les fichiers via la Cloud Function avec droits admin
+            if (successfulUrls.length > 0) {
+                try {
+                    const { getFunctions, httpsCallable } = await import('firebase/functions');
+                    const functions = getFunctions();
+                    const cleanupFailedUploads = httpsCallable(functions, 'cleanupFailedUploads');
+                    
+                    await cleanupFailedUploads({ fileUrls: successfulUrls });
+                    console.log('Fichiers uploadés nettoyés après échec:', successfulUrls.length);
+                } catch (cleanupError: any) {
+                    console.error('Erreur lors du nettoyage des fichiers:', cleanupError);
+                    // On continue quand même, l'erreur de nettoyage ne doit pas bloquer
+                }
+            }
+
+            setError("Erreur lors de l'upload de certains fichiers. Veuillez réessayer.");
+            return;
+        }
+
+        // Extraire les URLs des uploads réussis
+        const bioUrl = bioResult.status === 'fulfilled' ? bioResult.value : null;
+        const regUrl = regResult.status === 'fulfilled' ? regResult.value : null;
+        const insUrl = insResult.status === 'fulfilled' ? insResult.value : null;
+        const techUrl = techResult.status === 'fulfilled' ? techResult.value : null;
+        const extUrl = extResult.status === 'fulfilled' ? extResult.value : null;
+        const intUrl = intResult.status === 'fulfilled' ? intResult.value : null;
+        const idFrontUrl = idFrontResult.status === 'fulfilled' ? idFrontResult.value : null;
+        const idBackUrl = idBackResult.status === 'fulfilled' ? idBackResult.value : null;
+        const licFrontUrl = licFrontResult.status === 'fulfilled' ? licFrontResult.value : null;
+        const licBackUrl = licBackResult.status === 'fulfilled' ? licBackResult.value : null;
+
+        // NOTE: Le SSN est déjà chiffré depuis l'étape 2 (brouillon)
+        // Pas besoin de le rechiffrer ici, on utilise directement la valeur du brouillon
+        
+        // 2.5. Valider les données bancaires avant chiffrement (Cloud Function)
+        let encryptedBank = null;
+        if (data.accountHolder && data.iban && data.bic) {
+            try {
+                // Importer les fonctions Firebase
+                const { getFunctions, httpsCallable } = await import('firebase/functions');
+                const functions = getFunctions();
+                
+                // Valider les données bancaires côté serveur
+                const validateBankDetails = httpsCallable(functions, 'validateBankDetails');
+                const validationResult = await validateBankDetails({
+                    accountHolder: data.accountHolder,
+                    iban: data.iban,
+                    bic: data.bic
+                });
+
+                // Vérifier le résultat de la validation avec typage correct
+                const result = validationResult.data as { isValid: boolean; errors: { [key: string]: string } };
+                if (!result.isValid) {
+                    const errorMessages = Object.values(result.errors).join(', ');
+                    // Audit logging: Échec validation bancaire
+                    await auditLoggingService.logBankValidation(userId, false, result.errors);
+                    setError(`Coordonnées bancaires invalides: ${errorMessages}`);
+                    return;
+                }
+
+                // Audit logging: Validation bancaire réussie
+                await auditLoggingService.logBankValidation(userId, true);
+
+                // Si la validation réussit, chiffrer les données bancaires
+                try {
+                    encryptedBank = await serverEncryptionService.encryptBankData(
+                        data.accountHolder,
+                        data.iban,
+                        data.bic
+                    );
+                    // Audit logging: Chiffrement bancaire réussi
+                    await auditLoggingService.logBankEncryption(userId, true);
+                } catch (bankEncryptError: any) {
+                    // Audit logging: Échec chiffrement bancaire
+                    await auditLoggingService.logBankEncryption(userId, false, bankEncryptError.message);
+                    throw bankEncryptError;
+                }
+            } catch (encryptError: any) {
+                console.error('Erreur lors du traitement des données bancaires:', encryptError);
+                // Gérer les erreurs spécifiques
+                if (encryptError.code === 'resource-exhausted') {
+                    await auditLoggingService.logRateLimitExceeded(userId, 'bank_validation');
+                    setError('Trop de tentatives. Veuillez réessayer dans une minute.');
+                } else if (encryptError.code === 'unauthenticated') {
+                    await auditLoggingService.logUnauthorizedAccess(userId, 'bank_validation', 'User not authenticated');
+                    setError('Vous devez être connecté pour effectuer cette action.');
+                } else {
+                    setError(encryptError.message || "Erreur lors du traitement de vos données bancaires. Veuillez réessayer.");
+                }
+                return;
+            }
+        }
+
+        // 3. Mettre à jour Firestore avec le statut pending
+        const finalDriverData = {
+           // Données précédentes (Identity) ont déjà été sauvegardées en "merge", mais on les remet au cas où
+           firstName: step2Data.firstName,
+           lastName: step2Data.lastName,
+           email: step1Data.email || auth.currentUser?.email || '',
+           phone: step1Data.phone || '',
+           dob: step2Data.dob,
+           nationality: step2Data.nationality,
+           address: step2Data.address,
+           city: step2Data.city,
+           zipCode: step2Data.zipCode,
+           ssn: step2Data.ssn, // SSN déjà chiffré depuis l'étape 2
+
+           // Nouveautés Étape 3 (Véhicule)
+           car: {
+               brand: step3Data.carBrand,
+               model: step3Data.carModel,
+               year: step3Data.productionYear,
+               color: step3Data.carColor,
+               seats: step3Data.passengerSeats,
+               fuelType: step3Data.fuelType,
+               mileage: step3Data.mileage,
+               techControlDate: step3Data.techControlDate
+           },
+
+           // Identité Bancaire (Étape 5) - CHIFFRÉE
+           bank: encryptedBank, // { data, iv, salt } - Données bancaires chiffrées
+
+           // URLs des documents uploadés
+           documents: {
+               biometricPhoto: bioUrl,
+               carRegistration: regUrl,
+               insurance: insUrl || null,
+               techControl: techUrl,
+               vehicleExterior: extUrl,
+               vehicleInterior: intUrl,
+               idFront: idFrontUrl,
+               idBack: idBackUrl,
+               licenseFront: licFrontUrl,
+               licenseBack: licBackUrl
+           },
+
+           status: 'pending', // Passe de draft à pending
+           updatedAt: new Date(),
+           isAvailable: false,
+           rating: 0,
+           tripsCompleted: 0
+        };
+
+        await setDoc(doc(db, 'drivers', userId), finalDriverData, { merge: true });
+
+        // Audit logging: Inscription chauffeur complétée
+        await auditLoggingService.logDriverRegistrationCompleted(userId);
+
+        // Redirection vers vérification email (comme dans l'ancien flux)
+        router.push('/driver/verify-email');
+
+    } catch (err: any) {
+        console.error(err);
+        // Audit logging: Échec inscription
+        await auditLoggingService.logDriverRegistrationFailed(userId, err.message);
+        setError("Erreur finale d'inscription: " + err.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  // ----- REJECTIONS UI HANDLERS -----
+  const handleFixRejection = () => {
+      if (rejectionCode === 'R001' || rejectionCode === 'R004') {
+          // Documents illisibles (ID)
+          setRejectionCode(null);
+          setCurrentStep(4);
+      } else if (rejectionCode === 'R002' || rejectionCode === 'R003') {
+          // Vehicule expiré ou problème
+          setRejectionCode(null);
+          setCurrentStep(3);
+      } else {
+          // Par defaut, on rouvre le wizard à l'étape 2 (profile) 
+          setRejectionCode(null);
+          setCurrentStep(2);
+      }
+  }
+
+  const handleLogout = async () => {
+     await auth.signOut();
+     router.push('/');
+  }
+
+  if (rejectionCode) {
+      return (
+         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+             <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-8 text-center border-t-4 border-red-500">
+                  <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
+                      <AlertCircle className="h-8 w-8 text-red-500" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-[#101010] mb-2">Action Requise</h2>
+                  <p className="text-gray-600 mb-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                      <span className="font-mono text-xs text-red-500 block mb-1">Code: {rejectionCode}</span>
+                      {rejectionReason}
+                  </p>
+
+                  <div className="space-y-3 mt-8">
+                       {rejectionCode !== 'R005' && ( // R005 = Casier (Definitif)
+                           <button onClick={handleFixRejection} className="w-full flex items-center justify-center bg-[#f29200] text-white py-4 rounded-xl font-bold hover:bg-[#e68600] transition-colors">
+                               <FileEdit className="mr-2" size={20} /> Mettre à jour mon dossier
+                           </button>
+                       )}
+                       
+                       {rejectionCode === 'R006' && ( // Liste d'attente
+                            <p className="text-sm text-gray-500 italic mb-4">Nous vous recontacterons dès qu'une place se libérera dans votre zone.</p>
+                       )}
+
+                       <button onClick={handleLogout} className="w-full flex items-center justify-center bg-white border border-gray-300 text-gray-700 py-4 rounded-xl font-bold hover:bg-gray-50 transition-colors">
+                           <LogOut className="mr-2" size={20} /> Se déconnecter
+                       </button>
+                  </div>
+             </div>
+         </div>
+      );
+  }
+
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-md w-full max-w-2xl overflow-hidden">
-        <div className="bg-[#101010] p-6 text-center text-white">
-          <h1 className="text-2xl font-bold">Devenir Chauffeur Medjira</h1>
-          <p className="mt-2">Remplissez le formulaire pour postuler</p>
+      {/* Toast Container */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} position="top-right" />
+      
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
+        
+        {/* PROGRESS BAR */}
+        <div className="h-2 w-full bg-gray-200">
+             <div
+                className="h-full bg-[#f29200] transition-all duration-300"
+                style={{ width: `${(currentStep / 6) * 100}%` }}
+             ></div>
         </div>
 
-        {isExistingUser && (
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 m-6 mb-0">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-blue-700">
-                  Vous êtes déjà connecté. Pas besoin de saisir votre mot de passe.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          {/* Colonne gauche - Informations personnelles */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg text-[#101010] border-b pb-2">
-              Informations personnelles
-            </h3>
-            
-            {[
-              { label: 'Prénom', key: 'firstName', type: 'text' },
-              { label: 'Nom', key: 'lastName', type: 'text' },
-              { label: 'Email', key: 'email', type: 'email', disabled: isExistingUser },
-              { label: 'Mot de passe', key: 'password', type: 'password', hidden: isExistingUser },
-              { label: 'Numéro de permis', key: 'licenseNumber', type: 'text' }
-            ]
-            .filter(field => !field.hidden)
-            .map((field) => (
-              <div key={field.key}>
-                <label className="block text-sm font-medium text-[#101010] mb-1">
-                  {field.label}
-                </label>
-                <input
-                  type={field.type}
-                  value={formData[field.key as keyof typeof formData]}
-                  onChange={(e) => setFormData({
-                    ...formData, 
-                    [field.key]: e.target.value
-                  })}
-                  disabled={field.disabled}
-                  className={`w-full p-3 border border-gray-300 rounded-lg text-[#101010] placeholder-gray-400 focus:ring-2 focus:ring-[#f29200] focus:border-transparent ${field.disabled ? 'bg-gray-100 cursor-not-allowed text-gray-500' : 'bg-white'}`}
-                  required={field.key !== 'password' || !isExistingUser}
-                  minLength={field.type === 'password' ? 6 : undefined}
-                  placeholder={field.label}
-                />
-              </div>
-            ))}
-          </div>
-
-          {/* Colonne droite - Informations véhicule et documents */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-lg text-[#101010] border-b pb-2">
-              Informations véhicule
-            </h3>
-            
-            {[
-              { label: 'Modèle de voiture', key: 'carModel', type: 'text' },
-              { label: 'Plaque d\'immatriculation', key: 'carPlate', type: 'text' },
-              { label: 'Couleur du véhicule', key: 'carColor', type: 'text' }
-            ].map((field) => (
-              <div key={field.key}>
-                <label className="block text-sm font-medium text-[#101010] mb-1">
-                  {field.label}
-                </label>
-                <input
-                  type={field.type}
-                  value={formData[field.key as keyof typeof formData]}
-                  onChange={(e) => setFormData({
-                    ...formData, 
-                    [field.key]: e.target.value
-                  })}
-                  className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
-                  required
-                  placeholder={field.label}
-                />
-              </div>
-            ))}
-
-            {/* Upload des documents */}
-            <div className="space-y-4 pt-4">
-              <h4 className="font-semibold text-[#101010]">Documents requis</h4>
-              
-              {[
-                {
-                  label: 'Photo du permis de conduire',
-                  accept: 'image/*,.pdf',
-                  setter: setLicensePhoto,
-                  required: true
-                },
-                {
-                  label: 'Carte grise du véhicule',
-                  accept: 'image/*,.pdf',
-                  setter: setCarRegistration,
-                  required: true
-                },
-                {
-                  label: 'Assurance (optionnel)',
-                  accept: 'image/*,.pdf',
-                  setter: setInsurancePhoto,
-                  required: false
-                }
-              ].map((doc, index) => (
-                <div key={index}>
-                  <label className="block text-sm font-medium text-[#101010] mb-1">
-                    {doc.label} {doc.required && '*'}
-                  </label>
-                  <input
-                    type="file"
-                    onChange={(e) => handleFileChange(doc.setter, e)}
-                    className="w-full p-2 border border-gray-300 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#f29200] file:text-white hover:file:bg-[#e68600]"
-                    accept={doc.accept}
-                    required={doc.required}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Bouton de soumission */}
-          <div className="md:col-span-2 pt-6 border-t">
+        <div className="p-8">
             {error && (
-              <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-lg flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+              <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex border border-red-200">
+                <svg className="w-5 h-5 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 {error}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#f29200] hover:bg-[#e68600] text-white font-bold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Traitement en cours...
-                </>
-              ) : (
-                'Soumettre ma candidature'
-              )}
-            </button>
+            {currentStep === 1 && (
+                <Step1Intent 
+                    onNext={handleStep1Next} 
+                    onGoogleSignIn={handleGoogleSignIn}
+                    loading={loading}
+                    initialData={step1Data}
+                />
+            )}
+            
+            {currentStep === 2 && (
+                <Step2Identity
+                    onNext={handleStep2Next}
+                    onBack={() => setCurrentStep(1)}
+                    loading={loading}
+                    initialData={step2Data}
+                />
+            )}
 
-            <p className="text-sm text-gray-600 mt-4 text-center">
-              * Les documents seront vérifiés par notre équipe sous 48h
-            </p>
-          </div>
-        </form>
+            {currentStep === 3 && (
+                <Step3Vehicle
+                    onNext={handleStep3Next}
+                    onBack={() => setCurrentStep(2)}
+                    loading={loading}
+                    initialData={step3Data}
+                />
+            )}
+
+            {currentStep === 4 && (
+                <Step4Compliance 
+                    onNext={handleStep4Next} 
+                    onBack={() => setCurrentStep(3)}
+                    loading={loading}
+                />
+            )}
+
+            {currentStep === 5 && (
+                 <Step5Monetization 
+                     onSubmitFinal={handleStep5FinalSubmit} 
+                     onBack={() => setCurrentStep(4)}
+                     loading={loading}
+                 />
+            )}
+            
+        </div>
       </div>
     </div>
   );

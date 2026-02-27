@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename);
 const sleep = promisify(setTimeout);
 
 const apiDir = path.join(__dirname, '../src/app/api');
+const middlewareFile = path.join(__dirname, '../middleware.ts');
 let modifiedFiles = [];
 
 function getAllRouteFiles(dir, fileList = []) {
@@ -53,11 +54,23 @@ async function runBuild() {
                 try {
                     fs.renameSync(file, tempFile);
                     modifiedFiles.push({ original: file, temp: tempFile });
-                    console.log(`🙈 Masqué : ${path.relative(apiDir, file)}`);
+                    console.log(`� Masqué : ${path.relative(apiDir, file)}`);
                 } catch (err) {
                     console.error(`❌ Impossible de masquer ${file}: ` + err.message);
                     throw err;
                 }
+            }
+        }
+
+        if (fs.existsSync(middlewareFile)) {
+            console.log('🙈 Masquage temporaire du middleware...');
+            const tempMiddleware = middlewareFile + '.tmp_build';
+            try {
+                fs.renameSync(middlewareFile, tempMiddleware);
+                modifiedFiles.push({ original: middlewareFile, temp: tempMiddleware });
+            } catch (err) {
+                console.error(`❌ Impossible de masquer le middleware: ` + err.message);
+                throw err;
             }
         }
 

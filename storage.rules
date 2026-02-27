@@ -7,25 +7,34 @@ service firebase.storage {
     // Images de profil des utilisateurs
     match /profile_images/{userId} {
       allow read: if true; // Les images de profil sont publiques
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null
+                    && request.auth.uid == userId
+                    && resource.contentType.matches('image/.*'); // Validation MIME type
     }
     
     // Documents des chauffeurs (permis, carte grise, etc.)
+    // SÉCURITÉ: Restreint l'accès en lecture au propriétaire uniquement
     match /drivers/{driverId}/{document} {
-      allow read: if request.auth != null; // Seulement les utilisateurs authentifiés
-      allow write: if request.auth != null && request.auth.uid == driverId;
+      allow read: if request.auth != null && request.auth.uid == driverId;
+      allow write: if request.auth != null
+                    && request.auth.uid == driverId
+                    && resource.contentType.matches('image/.*'); // Validation MIME type
     }
     
     // Documents généraux liés aux chauffeurs
+    // SÉCURITÉ: Restreint l'accès en lecture au propriétaire uniquement
     match /driver_documents/{driverId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == driverId;
+      allow read: if request.auth != null && request.auth.uid == driverId;
+      allow write: if request.auth != null
+                    && request.auth.uid == driverId
+                    && resource.contentType.matches('image/.*'); // Validation MIME type
     }
     
     // Images des véhicules
     match /vehicles/{vehicleId}/{allPaths=**} {
       allow read: if true; // Les images de véhicules sont publiques
-      allow write: if request.auth != null;
+      allow write: if request.auth != null
+                    && resource.contentType.matches('image/.*'); // Validation MIME type
     }
     
     // Documents de transaction/factures

@@ -250,6 +250,14 @@ export const createUserDocument = async (
     dataKeys: Object.keys(data),
     hasEmail: !!data.email
   });
+  
+  // ✅ NETTOYAGE : Supprimer les champs undefined pour éviter les erreurs Firestore
+  const cleanData = Object.entries(data).reduce((acc, [key, value]) => {
+    if (value !== undefined) {
+      acc[key as keyof UserData] = value as any;
+    }
+    return acc;
+  }, {} as Partial<UserData>);
 
   const userRef = doc(db, 'users', userId);
   
@@ -268,7 +276,7 @@ export const createUserDocument = async (
       });
 
       await updateDoc(userRef, {
-        ...data,
+        ...cleanData,
         updatedAt: serverTimestamp(),
       });
 
@@ -284,7 +292,7 @@ export const createUserDocument = async (
 
       await setDoc(userRef, {
         uid: userId,          // ✅ uid toujours présent
-        ...data,
+        ...cleanData,
         createdAt: serverTimestamp(),  // ✅ serverTimestamp() au lieu de new Date()
         updatedAt: serverTimestamp(),
       });
