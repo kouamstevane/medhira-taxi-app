@@ -16,6 +16,12 @@ const config: CapacitorConfig = {
     plugins: {
         Geolocation: {
             saveToGallery: false
+        },
+        SocialLogin: {
+            google: {
+                webClientId: '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com',
+                offlineAccess: true
+            }
         }
     }
 };

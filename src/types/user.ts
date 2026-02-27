@@ -25,6 +25,7 @@ export interface UserData {
   profileImageUrl?: string|null;
   userType: UserType;
   country?: string;
+  status?: string; // Optionnel : utilisé pour les chauffeurs ('draft', 'pending', 'approved')
   createdAt: Date | Timestamp;
   updatedAt: Date | Timestamp;
 }

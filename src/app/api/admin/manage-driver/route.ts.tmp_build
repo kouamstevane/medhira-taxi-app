@@ -174,8 +174,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, message: 'Chauffeur réactivé' });
 
       case 'delete':
-        await driverRef.delete();
-        return NextResponse.json({ success: true, message: 'Chauffeur supprimé' });
+        const { driverDeletionService } = await import('@/utils/driver-deletion.service');
+        const deletionResult = await driverDeletionService.deleteDriverCompletely(driverId, adminUid);
+        
+        if (!deletionResult.success) {
+          return NextResponse.json({ 
+            success: false, 
+            message: 'Erreur lors de la suppression complète',
+            errors: deletionResult.errors 
+          }, { status: 500 });
+        }
+        
+        return NextResponse.json({ success: true, message: 'Chauffeur et toutes ses données supprimés avec succès' });
 
       default:
         return NextResponse.json({ error: 'Action non supportée' }, { status: 400 });

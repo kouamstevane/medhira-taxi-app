@@ -127,6 +127,7 @@ const encryptionLimiter = new RateLimiter(20, 60 * 1000); // 20 requêtes / minu
  * });
  */
 export const validateBankDetails = onCall(
+  { cors: true },
   async (request: CallableRequest) => {
     // Vérifier que l'utilisateur est authentifié
     if (!request.auth) {
@@ -195,6 +196,7 @@ export const validateBankDetails = onCall(
  * });
  */
 export const encryptSensitiveData = onCall(
+  { cors: true },
   async (request: CallableRequest) => {
     // Vérifier que l'utilisateur est authentifié
     if (!request.auth) {
@@ -264,6 +266,7 @@ export const encryptSensitiveData = onCall(
  * });
  */
 export const cleanupFailedUploads = onCall(
+  { cors: true },
   async (request: CallableRequest) => {
     // Vérifier que l'utilisateur est authentifié
     if (!request.auth) {
@@ -356,6 +359,7 @@ export const cleanupFailedUploads = onCall(
  * // firebase functions:config:set scheduler.interval="0 2 * * *" # 2h du matin
  */
 export const cleanupOrphanedFiles = onCall(
+  { cors: true },
   async (request: CallableRequest) => {
     // Cette fonction nécessite des droits admin
     // Vérifier que l'appelant est authentifié et est admin

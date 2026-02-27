@@ -8,6 +8,7 @@
 
 // Services d'authentification
 export * as AuthService from './auth.service';
+export { signInWithGoogleForDriver } from './auth.service';
 
 // Services de taxi et réservation
 export * as TaxiService from './taxi.service';

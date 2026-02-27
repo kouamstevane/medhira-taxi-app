@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:113581657187:android:299bc2eaf222633124bc56",
         "android_client_info": {
-          "package_name": "com.medjiraservice.medjiraserviceapp"
+          "package_name": "com.medhira.taxi"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "113581657187-c6s6pp2h3gmr4v8pk9kdf526d2qk27hi.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.medjiraservice.medjiraserviceapp",
+            "package_name": "com.medhira.taxi",
             "certificate_hash": "aed627cbd4fdabd00008f6eaaf42fe161723a6e9"
           }
         },

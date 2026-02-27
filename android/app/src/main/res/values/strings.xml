@@ -4,4 +4,5 @@
     <string name="package_name">com.medjiraservice.medjiraserviceapp</string>
     <string name="custom_url_scheme">com.medjiraservice.medjiraserviceapp</string>
     <string name="google_maps_key">AIzaSyDjXY4_ueKfpnmeAP3YI5_hQ4HQN2UtEj0</string>
+    <string name="google_web_client_id">113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com</string>
 </resources>

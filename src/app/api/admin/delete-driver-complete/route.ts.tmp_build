@@ -1,0 +1,137 @@
+/**
+ * API Route : Suppression Définitive Complète des Chauffeurs
+ * 
+ * Cette route gère la suppression définitive et irréversible d'un chauffeur,
+ * incluant toutes les données associées dans Firestore et Firebase Storage.
+ * 
+ * Conformité RGPD : Droit à l'oubli
+ * 
+ * @module api/admin/delete-driver-complete
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { adminDb, adminAuth } from '@/config/firebase-admin';
+import { driverDeletionService } from '@/utils/driver-deletion.service';
+import { z } from 'zod';
+
+// Schéma de validation pour la suppression complète
+// Note: adminUid n'est plus nécessaire dans le corps car il sera extrait du token
+const DeleteDriverCompleteSchema = z.object({
+  driverId: z.string().min(1, 'L\'ID du chauffeur est requis'),
+});
+
+/**
+ * POST /api/admin/delete-driver-complete
+ *
+ * Supprime complètement un chauffeur et toutes ses données associées
+ *
+ * Headers requis:
+ * - Authorization: Bearer <firebase_id_token>
+ *
+ * Corps de la requête:
+ * - driverId: string - L'ID du chauffeur à supprimer
+ */
+export async function POST(request: NextRequest) {
+  try {
+    // 1. Vérifier que Firebase Admin est initialisé
+    if (!adminDb || !adminAuth) {
+      return NextResponse.json(
+        { error: 'Firebase Admin SDK non configuré.' },
+        { status: 503 }
+      );
+    }
+
+    // 2. Extraire et vérifier le token Firebase Auth depuis l'en-tête Authorization
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: 'Non authentifié. En-tête Authorization manquant ou invalide.' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    let decodedToken: any;
+
+    try {
+      decodedToken = await adminAuth.verifyIdToken(token);
+    } catch (tokenError) {
+      console.error('❌ Token verification failed:', tokenError);
+      return NextResponse.json(
+        { error: 'Token d\'authentification invalide ou expiré.' },
+        { status: 401 }
+      );
+    }
+
+    const adminUid = decodedToken.uid;
+
+    // 3. Validation du corps de la requête avec Zod
+    const body = await request.json();
+    const result = DeleteDriverCompleteSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json(
+        { error: 'Données invalides', details: result.error.format() },
+        { status: 400 }
+      );
+    }
+
+    const { driverId } = result.data;
+
+    // 4. Vérifier que l'utilisateur est bien un admin
+    // ✅ CORRECTION: Utiliser une méthode cohérente de vérification admin
+    // On cherche un document admin où le champ 'userId' correspond à l'UID du token
+    const adminSnapshot = await adminDb.collection('admins')
+      .where('userId', '==', adminUid)
+      .limit(1)
+      .get();
+
+    if (adminSnapshot.empty) {
+      console.warn(`⚠️ Tentative de suppression par un non-admin: ${adminUid}`);
+      return NextResponse.json(
+        { error: 'Accès non autorisé. Seuls les administrateurs peuvent supprimer des chauffeurs.' },
+        { status: 403 }
+      );
+    }
+
+    // 5. Vérifier que le chauffeur existe
+    const driverDoc = await adminDb.collection('drivers').doc(driverId).get();
+
+    if (!driverDoc.exists) {
+      return NextResponse.json(
+        { error: 'Chauffeur introuvable' },
+        { status: 404 }
+      );
+    }
+
+    // 6. Effectuer la suppression complète
+    const deletionResult = await driverDeletionService.deleteDriverCompletely(
+      driverId,
+      adminUid
+    );
+
+    if (!deletionResult.success) {
+      return NextResponse.json(
+        {
+          error: 'Erreur lors de la suppression',
+          details: deletionResult.errors,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ...deletionResult,
+      success: true,
+      message: 'Chauffeur supprimé définitivement avec succès',
+    });
+  } catch (error: any) {
+    console.error('❌ Erreur API delete-driver-complete:', error);
+    return NextResponse.json(
+      {
+        error: 'Erreur serveur lors de la suppression',
+        details: error.message
+      },
+      { status: 500 }
+    );
+  }
+}

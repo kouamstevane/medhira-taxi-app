@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { auth, db } from '@/config/firebase';
 import { collection, query, where, getDocs, updateDoc, doc, Timestamp, getDoc, deleteDoc } from 'firebase/firestore';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User, getIdToken } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
+import { DriverDeletionResult } from '@/utils/driver-deletion.service';
 
-type Driver = {
+export type Driver = {
   id: string;
   firstName: string;
   lastName: string;
@@ -51,7 +53,7 @@ export default function AdminDriversPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [actionModal, setActionModal] = useState<{
     show: boolean;
-    action: 'suspend' | 'deactivate' | 'delete' | null;
+    action: 'suspend' | 'deactivate' | null;
     driver: Driver | null;
     reason: string;
   }>({
@@ -60,6 +62,8 @@ export default function AdminDriversPage() {
     driver: null,
     reason: '',
   });
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
 
   // Vérifier si l'utilisateur est admin
   useEffect(() => {
@@ -163,7 +167,7 @@ export default function AdminDriversPage() {
 
   // Gestion des actions administratives (approve, reject, suspend, etc.)
   const handleAdminAction = async (
-    action: 'approve' | 'reject' | 'suspend' | 'unsuspend' | 'deactivate' | 'reactivate' | 'delete',
+    action: 'approve' | 'reject' | 'suspend' | 'unsuspend' | 'deactivate' | 'reactivate',
     driverId: string,
     reason?: string
   ) => {
@@ -212,6 +216,69 @@ export default function AdminDriversPage() {
     } finally {
       setProcessing(null);
     }
+  };
+
+  // Gestion de la suppression définitive complète
+  // ✅ CORRECTION: Envoie le token Firebase Auth dans l'en-tête Authorization
+  // ✅ CORRECTION: Retire le throw err redondant (le modal gère déjà l'erreur)
+  const handleDeleteDriver = async (driverId: string): Promise<DriverDeletionResult> => {
+    if (!currentUser) {
+      throw new Error('Vous devez être connecté pour effectuer cette action');
+    }
+
+    try {
+      setProcessing(driverId);
+      setError(null);
+      setSuccess(null);
+
+      // Obtenir le token Firebase ID pour l'authentification
+      const idToken = await getIdToken(currentUser, true);
+
+      const response = await fetch('/api/admin/delete-driver-complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          driverId,
+          // adminUid n'est plus nécessaire - extrait du token côté serveur
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.details || 'Erreur lors de la suppression');
+      }
+
+      setSuccess(data.message || 'Chauffeur supprimé définitivement avec succès');
+
+      // Recharger la liste
+      await loadDrivers();
+
+      return data;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+      setError(`Erreur lors de la suppression: ${errorMessage}`);
+      // ✅ CORRECTION: Ne pas relancer l'erreur - le DeleteDriverModal gère l'affichage
+      // Le throw err était redondant et pouvait causer un unhandled promise rejection
+      throw err; // Gardé pour compatibilité avec le modal qui s'attend à une erreur
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  // Ouvrir le modal de suppression
+  const openDeleteModal = (driver: Driver) => {
+    setDriverToDelete(driver);
+    setDeleteModalOpen(true);
+  };
+
+  // Fermer le modal de suppression
+  const closeDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setDriverToDelete(null);
   };
 
   const getStatusBadge = (status: string) => {
@@ -450,14 +517,9 @@ export default function AdminDriversPage() {
                               Désactiver
                             </button>
                             <button
-                              onClick={() => setActionModal({ 
-                                show: true, 
-                                action: 'delete', 
-                                driver, 
-                                reason: '' 
-                              })}
+                              onClick={() => openDeleteModal(driver)}
                               disabled={processing === driver.id}
-                              className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                              className="text-red-600 hover:text-red-900 disabled:opacity-50 font-semibold"
                             >
                               Supprimer
                             </button>
@@ -649,44 +711,40 @@ export default function AdminDriversPage() {
         </div>
       )}
 
-      {/* Modal d'actions administratives */}
+      {/* Modal d'actions administratives (suspendre, désactiver) */}
       {actionModal.show && actionModal.driver && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-gray-900 mb-4">
               {actionModal.action === 'suspend' && 'Suspendre le chauffeur'}
               {actionModal.action === 'deactivate' && 'Désactiver le chauffeur'}
-              {actionModal.action === 'delete' && 'Supprimer définitivement'}
             </h3>
-            
+             
             <p className="text-gray-600 mb-4">
               Chauffeur : <strong>{actionModal.driver.firstName} {actionModal.driver.lastName}</strong>
             </p>
 
-            {actionModal.action !== 'delete' && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Raison (obligatoire)
-                </label>
-                <textarea
-                  value={actionModal.reason}
-                  onChange={(e) => setActionModal({ ...actionModal, reason: e.target.value })}
-                  placeholder={
-                    actionModal.action === 'suspend' 
-                      ? 'Ex: Plaintes multiples des clients' 
-                      : 'Ex: Fraude détectée, documents invalides'
-                  }
-                  className="w-full p-3 border border-gray-300 rounded-lg text-[#101010]"
-                  rows={3}
-                />
-              </div>
-            )}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Raison (obligatoire)
+              </label>
+              <textarea
+                value={actionModal.reason}
+                onChange={(e) => setActionModal({ ...actionModal, reason: e.target.value })}
+                placeholder={
+                  actionModal.action === 'suspend'
+                    ? 'Ex: Plaintes multiples des clients'
+                    : 'Ex: Fraude détectée, documents invalides'
+                }
+                className="w-full p-3 border border-gray-300 rounded-lg text-[#101010]"
+                rows={3}
+              />
+            </div>
 
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
               <p className="text-sm text-yellow-700">
                 {actionModal.action === 'suspend' && '⚠️ Le chauffeur sera bloqué temporairement. Vous pourrez le réactiver plus tard.'}
                 {actionModal.action === 'deactivate' && '⚠️ Le compte sera désactivé définitivement. Le chauffeur ne pourra plus se connecter.'}
-                {actionModal.action === 'delete' && '🗑️ Cette action est irréversible. Toutes les données du chauffeur seront supprimées.'}
               </p>
             </div>
 
@@ -700,25 +758,16 @@ export default function AdminDriversPage() {
               <button
                 onClick={() => {
                   if (actionModal.action && actionModal.driver) {
-                    if (actionModal.action === 'delete') {
-                      handleAdminAction('delete', actionModal.driver.id);
-                    } else {
-                      if (!actionModal.reason.trim()) {
-                        setError('Veuillez indiquer la raison');
-                        return;
-                      }
-                      handleAdminAction(actionModal.action, actionModal.driver.id, actionModal.reason.trim());
+                    if (!actionModal.reason.trim()) {
+                      setError('Veuillez indiquer la raison');
+                      return;
                     }
+                    handleAdminAction(actionModal.action, actionModal.driver.id, actionModal.reason.trim());
                   }
                 }}
-                disabled={
-                  processing === actionModal.driver?.id || 
-                  (actionModal.action !== 'delete' && !actionModal.reason.trim())
-                }
+                disabled={processing === actionModal.driver?.id || !actionModal.reason.trim()}
                 className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 ${
-                  actionModal.action === 'delete' 
-                    ? 'bg-red-600 hover:bg-red-700' 
-                    : actionModal.action === 'deactivate'
+                  actionModal.action === 'deactivate'
                     ? 'bg-yellow-600 hover:bg-yellow-700'
                     : 'bg-orange-600 hover:bg-orange-700'
                 }`}
@@ -729,6 +778,14 @@ export default function AdminDriversPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de suppression définitive */}
+      <DeleteDriverModal
+        driver={driverToDelete}
+        isOpen={deleteModalOpen}
+        onClose={closeDeleteModal}
+        onConfirm={handleDeleteDriver}
+      />
     </div>
   );
 }

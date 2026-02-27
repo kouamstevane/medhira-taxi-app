@@ -8,6 +8,22 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
 import { onAuthStateChanged, User } from "firebase/auth";
+import { ChevronLeft, Camera, Loader2 } from 'lucide-react';
+import { InputField } from '@/components/forms/InputField';
+import { SelectField } from '@/components/forms/SelectField';
+import { useToast } from '@/hooks/useToast';
+import { useForm } from 'react-hook-form';
+import { getFirestoreErrorMessage, logFirestoreError } from '@/utils/firestore-error-handler';
+
+interface ProfileFormData {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  city: string;
+  country: string;
+  bio: string;
+}
 
 export default function ProfilPage() {
   const [userData, setUserData] = useState({
@@ -29,56 +45,69 @@ export default function ProfilPage() {
   const router = useRouter();
   const { currentUser } = useAuth();
 
+  // Initialize form with default values
+  const form = useForm<ProfileFormData>({
+    defaultValues: {
+      firstName: '',
+      lastName: '',
+      phone: '',
+      address: '',
+      city: '',
+      country: 'Cameroun',
+      bio: '',
+    }
+  });
+
+  // Update form values when userData changes
   useEffect(() => {
-    const fetchUserData = async (user: User) => {
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
+    if (editing) {
+      form.reset({
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phone: userData.phone,
+        address: userData.address,
+        city: userData.city,
+        country: userData.country,
+        bio: userData.bio,
+      });
+    }
+  }, [userData, editing, form]);
+
+  // Reliance on AuthContext for authentication and document existence check.
+  // AuthContext now handles signing out if the Firestore document is deleted.
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (currentUser) {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          const data = userDocSnap.data();
           setUserData({
             firstName: data.firstName || '',
             lastName: data.lastName || '',
-            email: user.email || '',
-            phone: data.phone || user.phoneNumber?.replace('+237', '') || '',
+            email: currentUser.email || '',
+            phone: data.phone || '',
             address: data.address || '',
             city: data.city || '',
             country: data.country || 'Cameroun',
             bio: data.bio || ''
           });
           setProfileImageUrl(data.profileImageUrl || '');
+          fetchHistory(currentUser.uid);
         } else {
-          console.warn("Aucun document utilisateur trouvé pour l'ID:", user.uid);
-          setUserData({
-            firstName: '',
-            lastName: '',
-            email: user.email || '',
-            phone: user.phoneNumber?.replace('+237', '') || '',
-            address: '',
-            city: '',
-            country: 'Cameroun',
-            bio: ''
-          });
-          setProfileImageUrl('');
+          // Document does not exist, AuthContext should handle sign out
+          // and redirection. For safety, we can also redirect here.
+          router.push("/login");
         }
-      } catch (error) {
-        console.error("Erreur chargement profil:", error);
-        setError("Erreur lors du chargement du profil");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        fetchUserData(user);
-        fetchHistory(user.uid);
-      } else {
+      } else if (!currentUser && !loading) {
         router.push("/login");
       }
-    });
+      setLoading(false);
+    };
 
-    return () => unsubscribe();
-  }, [router]);
+    fetchUserData();
+  }, [currentUser, loading, router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -96,50 +125,9 @@ export default function ProfilPage() {
     }
   };
 
-  const updateFirestoreData = async (imageUrl: string) => {
-    const user = auth.currentUser;
-    if (!user) {
-      setError("Aucun utilisateur connecté");
-      return;
-    }
+  const { showSuccess, showError } = useToast();
 
-    try {
-      // Utiliser setDoc avec merge pour créer le document s'il n'existe pas
-      const userRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userRef);
-      
-      if (userDoc.exists()) {
-        // Le document existe, on met à jour
-        await updateDoc(userRef, {
-          ...userData,
-          email: user.email,
-          profileImageUrl: imageUrl,
-          updatedAt: serverTimestamp()
-        });
-      } else {
-        // Le document n'existe pas, on le crée
-        await setDoc(userRef, {
-          ...userData,
-          email: user.email,
-          phoneNumber: user.phoneNumber || `+237${userData.phone}`,
-          profileImageUrl: imageUrl,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          country: userData.country || 'Cameroun'
-        });
-      }
-      
-      setEditing(false);
-      setError(null);
-    } catch (error) {
-      console.error("Erreur Firestore:", error);
-      setError("Erreur lors de la mise à jour des données");
-      throw error;
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (data: ProfileFormData) => {
     setError(null);
     setLoading(true);
 
@@ -150,10 +138,30 @@ export default function ProfilPage() {
         const snapshot = await uploadBytes(storageRef, profileImage);
         imageUrl = await getDownloadURL(snapshot.ref);
       }
-      await updateFirestoreData(imageUrl);
+      
+      const user = auth.currentUser;
+      if (!user) throw new Error("No user");
+
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        ...data,
+        email: user.email,
+        profileImageUrl: imageUrl,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      // Update local state
+      setUserData(prev => ({ ...prev, ...data }));
+      setEditing(false);
+      showSuccess("Profil mis à jour avec succès");
     } catch (error) {
-      console.error("Erreur mise à jour profil:", error);
-      setError("Une erreur est survenue lors de la mise à jour du profil");
+      // Logger les détails de l'erreur pour le debugging
+      logFirestoreError(error, "mise à jour du profil client");
+      
+      // Afficher un message d'erreur explicite à l'utilisateur
+      const errorMessage = getFirestoreErrorMessage(error, "mise à jour de votre profil");
+      showError(errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -208,14 +216,14 @@ export default function ProfilPage() {
 
   if (loading && !editing) {
     return (
-      <div className="min-h-screen bg-[#FFF9E6] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#FDBC01]"></div>
+      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f29200]"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FFF9E6] p-4 sm:p-6">
+    <div className="min-h-screen bg-[#F8F9FA] p-4 sm:p-6">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center mb-6">
           <Link href="/dashboard" className="mr-4 p-2 rounded-full hover:bg-[#E8D9A5] transition">
@@ -281,75 +289,92 @@ export default function ProfilPage() {
             </div>
 
             {editing ? (
-              <form onSubmit={handleSubmit} className="space-y-4">
-
-                {/* Email (lecture seule) */}
-                <div>
-                  <label className="block text-sm font-medium text-[#5A4A1A] mb-1">
-                    Email
-                  </label>
-                  <input
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                
+                <InputField
                     type="email"
-                    name="email"
+                    label="Email"
                     value={userData.email}
                     disabled
-                    className="w-full bg-gray-100 cursor-not-allowed rounded-md border border-[#E8D9A5] p-2"
+                    helperText="L'adresse email ne peut pas être modifiée."
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <InputField 
+                    {...form.register('firstName')} 
+                    label="Prénom"
+                    placeholder="Prénom"
+                    required 
+                  />
+                  <InputField 
+                    {...form.register('lastName')} 
+                    label="Nom"
+                    placeholder="Nom"
+                    required 
                   />
                 </div>
 
-                {/* Prénom et Nom */}
+                <div className="flex">
+                   <InputField 
+                    type="tel" 
+                    {...form.register('phone')} 
+                    label="Numéro de téléphone"
+                    placeholder="6XXXXXXXX"
+                    helperText="Format sans le code pays (+237)."
+                    required 
+                  />
+                </div>
+
+                <InputField 
+                    type="text" 
+                    {...form.register('address')} 
+                    label="Adresse"
+                    placeholder="Votre adresse actuelle" 
+                />
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Prénom *</label>
-                    <input type="text" name="firstName" value={userData.firstName} onChange={handleInputChange} required className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Nom *</label>
-                    <input type="text" name="lastName" value={userData.lastName} onChange={handleInputChange} required className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
-                  </div>
+                  <InputField 
+                    type="text" 
+                    {...form.register('city')} 
+                    label="Ville"
+                    placeholder="Votre ville" 
+                  />
+                  <SelectField 
+                    {...form.register('country')} 
+                    label="Pays"
+                    options={countries.map(c => ({ value: c, label: c }))}
+                  />
                 </div>
 
-                {/* Téléphone */}
                 <div>
-                  <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Numéro de téléphone *</label>
-                  <div className="flex">
-                    <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-[#E8D9A5] bg-gray-50 text-gray-500">+237</span>
-                    <input type="tel" name="phone" value={userData.phone} onChange={handleInputChange} required className="flex-1 rounded-r-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">À propos de moi</label>
+                  <textarea 
+                    {...form.register('bio')} 
+                    rows={4} 
+                    className="w-full rounded-xl border border-gray-200 p-4 text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] outline-none shadow-sm transition-all" 
+                    placeholder="Parlez-nous un peu de vous..." 
+                  />
                 </div>
 
-                {/* Adresse */}
-                <div>
-                  <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Adresse</label>
-                  <input type="text" name="address" value={userData.address} onChange={handleInputChange} className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
-                </div>
-
-                {/* Ville et Pays */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Ville</label>
-                    <input type="text" name="city" value={userData.city} onChange={handleInputChange} className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-[#5A4A1A] mb-1">Pays</label>
-                    <select name="country" value={userData.country} onChange={handleInputChange} className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] bg-white">
-                      {countries.map(country => (
-                        <option key={country} value={country}>{country}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Bio */}
-                <div>
-                  <label className="block text-sm font-medium text-[#5A4A1A] mb-1">À propos de moi</label>
-                  <textarea name="bio" value={userData.bio} onChange={handleInputChange} rows={3} className="w-full rounded-md border border-[#E8D9A5] p-2 text-[#101010] placeholder-gray-400 bg-white" placeholder="Parlez-nous un peu de vous..." />
-                </div>
-
-                {/* Boutons */}
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button type="button" onClick={() => { setEditing(false); setError(null); }} className="px-4 py-2 border border-[#E8D9A5] rounded-md">Annuler</button>
-                  <button type="submit" disabled={loading} className="px-4 py-2 bg-[#FDBC01] hover:bg-[#E6A900] text-[#2E2307] font-bold rounded-md">{loading ? "Enregistrement..." : "Enregistrer"}</button>
+                <div className="flex justify-end space-x-3 pt-6 border-t">
+                  <button 
+                    type="button" 
+                    onClick={() => { 
+                      setEditing(false); 
+                      setError(null);
+                      form.reset();
+                    }} 
+                    className="px-6 py-3 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all active:scale-[0.98]"
+                  >
+                    Annuler
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={loading} 
+                    className="px-8 py-3 bg-[#f29200] hover:bg-[#d98300] text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center gap-2"
+                  >
+                    {loading ? <Loader2 className="animate-spin" size={20} /> : "Enregistrer"}
+                  </button>
                 </div>
               </form>
             ) : (

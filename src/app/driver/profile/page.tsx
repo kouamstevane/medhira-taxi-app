@@ -3,7 +3,10 @@ import { useState, useEffect } from 'react';
 import { auth, db, storage } from '@/config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { sendEmailVerification } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
+import { getFirestoreErrorMessage, logFirestoreError } from '@/utils/firestore-error-handler';
 
 interface DriverData {
   firstName: string;
@@ -32,7 +35,9 @@ export default function DriverProfile() {
   const [formData, setFormData] = useState<Partial<DriverData>>({});
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [verificationEmailSent, setVerificationEmailSent] = useState(false);
   const router = useRouter();
+  const { isEmailVerified, reloadUser } = useAuth();
 
   useEffect(() => {
     const fetchDriverData = async () => {
@@ -75,6 +80,12 @@ export default function DriverProfile() {
   const handleUpdateProfile = async () => {
     if (!auth.currentUser || !formData) return;
 
+    // Vérifier que l'email est vérifié avant de permettre la modification
+    if (!isEmailVerified) {
+      setError("Vous devez vérifier votre email avant de pouvoir modifier votre profil.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -93,7 +104,12 @@ export default function DriverProfile() {
       setDriver(prev => ({ ...prev!, ...updates }));
       setEditMode(false);
     } catch (error) {
-      setError("Erreur lors de la mise à jour");
+      // Logger les détails de l'erreur pour le debugging
+      logFirestoreError(error, "mise à jour du profil chauffeur");
+      
+      // Afficher un message d'erreur explicite à l'utilisateur
+      const errorMessage = getFirestoreErrorMessage(error, "mise à jour de votre profil");
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -108,7 +124,29 @@ export default function DriverProfile() {
       });
       setDriver(prev => ({ ...prev!, isAvailable: !prev!.isAvailable }));
     } catch (error) {
-      setError("Erreur lors du changement de statut");
+      // Logger les détails de l'erreur pour le debugging
+      logFirestoreError(error, "changement de disponibilité");
+      
+      // Afficher un message d'erreur explicite à l'utilisateur
+      const errorMessage = getFirestoreErrorMessage(error, "changement de statut");
+      setError(errorMessage);
+    }
+  };
+
+  const handleResendVerificationEmail = async () => {
+    if (!auth.currentUser) return;
+
+    try {
+      await sendEmailVerification(auth.currentUser);
+      setVerificationEmailSent(true);
+      
+      // Recharger l'utilisateur pour vérifier si l'email a été vérifié
+      setTimeout(async () => {
+        await reloadUser();
+      }, 2000);
+    } catch (error) {
+      logFirestoreError(error, "envoi de l'email de vérification");
+      setError("Erreur lors de l'envoi de l'email de vérification. Veuillez réessayer.");
     }
   };
 
@@ -153,6 +191,37 @@ export default function DriverProfile() {
       </div>
 
       <div className="container mx-auto p-4">
+        {/* Bannière d'avertissement si l'email n'est pas vérifié */}
+        {!isEmailVerified && (
+          <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6 rounded-lg shadow-sm">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <svg className="w-6 h-6 text-yellow-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <p className="font-bold text-lg">Email non vérifié</p>
+                </div>
+                <p className="text-sm mt-1">
+                  Vous devez vérifier votre email avant de pouvoir modifier votre profil.
+                  {verificationEmailSent && " Un nouvel email de vérification vous a été envoyé."}
+                </p>
+              </div>
+              <button
+                onClick={handleResendVerificationEmail}
+                disabled={verificationEmailSent}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  verificationEmailSent
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-yellow-500 hover:bg-yellow-600 text-white shadow-md hover:shadow-lg'
+                }`}
+              >
+                {verificationEmailSent ? 'Email envoyé ✓' : 'Renvoyer l\'email'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
@@ -167,8 +236,20 @@ export default function DriverProfile() {
               </div>
 
               <button
-                onClick={() => setEditMode(!editMode)}
-                className="bg-[#f29200] text-white px-4 py-2 rounded hover:bg-[#e68600] transition"
+                onClick={() => {
+                  if (!isEmailVerified) {
+                    setError("Vous devez vérifier votre email avant de pouvoir modifier votre profil.");
+                    return;
+                  }
+                  setEditMode(!editMode);
+                }}
+                disabled={!isEmailVerified}
+                className={`px-4 py-2 rounded transition ${
+                  !isEmailVerified
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-[#f29200] hover:bg-[#e68600] text-white'
+                }`}
+                title={!isEmailVerified ? "Vérifiez votre email pour modifier votre profil" : undefined}
               >
                 {editMode ? 'Annuler' : 'Modifier'}
               </button>

@@ -7,6 +7,8 @@ import { Camera as CapacitorCamera, CameraResultType, CameraSource } from '@capa
 import { Capacitor } from '@capacitor/core';
 import { Loader2, Camera } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
+import { InputField } from '@/components/forms/InputField';
+import { SelectField } from '@/components/forms/SelectField';
 
 // Validation de l'âge minimum (18 ans)
 const minDate = new Date();
@@ -231,52 +233,60 @@ export default function Step2Identity({ onNext, onBack, initialData, loading }: 
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
             <h3 className="text-lg font-semibold text-[#101010] border-b pb-2">Identité</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prénom</label>
-                <input {...register('firstName')} onInput={handleNameInput} className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] focus:ring-2 focus:ring-[#f29200] outline-none" />
-                {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName.message}</p>}
-                </div>
-                <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nom</label>
-                <input {...register('lastName')} onInput={handleNameInput} className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] focus:ring-2 focus:ring-[#f29200] outline-none" />
-                {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName.message}</p>}
-                </div>
+                <InputField 
+                    {...register('firstName')} 
+                    label="Prénom"
+                    onInput={handleNameInput} 
+                    error={errors.firstName?.message}
+                    required
+                />
+                <InputField 
+                    {...register('lastName')} 
+                    label="Nom"
+                    onInput={handleNameInput} 
+                    error={errors.lastName?.message}
+                    required
+                />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date de naissance</label>
-                <input type="date" {...register('dob')} className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] focus:ring-2 focus:ring-[#f29200] outline-none" />
-                {errors.dob && <p className="text-red-500 text-xs mt-1">{errors.dob.message}</p>}
-                </div>
-                <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nationalité</label>
-                <select {...register('nationality')} className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] focus:ring-2 focus:ring-[#f29200] outline-none">
-                    <option value="FR">France</option>
-                    <option value="BE">Belgique</option>
-                    <option value="CH">Suisse</option>
-                    {/* Add more ISO codes here */}
-                </select>
-                {errors.nationality && <p className="text-red-500 text-xs mt-1">{errors.nationality.message}</p>}
-                </div>
-            </div>
-            <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Numéro de Téléphone</label>
-                <input 
-                  type="tel" 
-                  placeholder="+33 6 00 00 00 00" 
-                  {...register('phone')} 
-                  className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] focus:ring-2 focus:ring-[#f29200] outline-none" 
+                <InputField 
+                    type="date" 
+                    {...register('dob')} 
+                    label="Date de naissance"
+                    error={errors.dob?.message}
+                    required
                 />
-                {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
+                <SelectField 
+                    {...register('nationality')} 
+                    label="Nationalité"
+                    options={[
+                        { value: 'FR', label: 'France' },
+                        { value: 'BE', label: 'Belgique' },
+                        { value: 'CH', label: 'Suisse' },
+                    ]}
+                    error={errors.nationality?.message}
+                    required
+                />
             </div>
+            
+            <InputField 
+                type="tel" 
+                label="Numéro de Téléphone"
+                placeholder="+33 6 00 00 00 00" 
+                {...register('phone')} 
+                error={errors.phone?.message}
+                required
+            />
 
-             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Numéro de Sécurité Sociale (NIR)</label>
-                {/* Masked input concept: in a real app, use a dedicated lib or simple format like 1-22-33-44-555-666 77 */}
-                <input type="password" placeholder="Masqué par défaut" {...register('ssn')} className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] focus:ring-2 focus:ring-[#f29200] outline-none" />
-                {errors.ssn && <p className="text-red-500 text-xs mt-1">{errors.ssn.message}</p>}
-            </div>
+            <InputField 
+                type="password" 
+                label="Numéro de Sécurité Sociale (NIR)"
+                placeholder="Masqué par défaut" 
+                {...register('ssn')} 
+                error={errors.ssn?.message}
+                required
+            />
         </div>
 
         {/* Card 2: Adresse */}
@@ -284,45 +294,49 @@ export default function Step2Identity({ onNext, onBack, initialData, loading }: 
             <h3 className="text-lg font-semibold text-[#101010] border-b pb-2">Adresse Postale</h3>
             
             <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Recherche d'adresse</label>
-                <input 
+                <InputField 
                     type="text" 
+                    label="Recherche d'adresse"
                     value={addressInput} 
                     onChange={(e) => {
                       setAddressInput(e.target.value);
                       setValue('address', e.target.value, { shouldValidate: true });
                     }} 
                     placeholder="Commencez à taper votre adresse..."
-                    className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] focus:ring-2 focus:ring-[#f29200] outline-none" 
+                    error={errors.address?.message}
+                    required
                 />
                 {/* Predictions Dropdown */}
                 {predictions.length > 0 && (
-                    <ul className="absolute z-10 w-full bg-white border border-gray-300 mt-1 rounded-md shadow-lg max-h-60 overflow-auto">
+                    <ul className="absolute z-10 w-full bg-white border border-gray-300 mt-1 rounded-xl shadow-xl max-h-60 overflow-auto">
                         {predictions.map(prediction => (
                             <li 
                                 key={prediction.place_id} 
                                 onClick={() => handlePlaceSelect(prediction.place_id, prediction.description)}
-                                className="p-3 hover:bg-gray-100 cursor-pointer text-sm"
+                                className="p-3 hover:bg-gray-50 cursor-pointer text-sm transition-colors border-b last:border-b-0"
                             >
                                 {prediction.description}
                             </li>
                         ))}
                     </ul>
                 )}
-                {/* Hidden field for react-hook-form validation */}
-                <input type="hidden" {...register('address')} />
-                 {errors.address && <p className="text-red-500 text-xs mt-1">{errors.address.message}</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
-                    <input type="text" {...register('city')} className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] focus:ring-2 focus:ring-[#f29200] outline-none" />
-                </div>
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Code Postal</label>
-                    <input type="text" {...register('zipCode')} className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] focus:ring-2 focus:ring-[#f29200] outline-none" />
-                </div>
+                <InputField 
+                    type="text" 
+                    label="Ville"
+                    {...register('city')} 
+                    error={errors.city?.message}
+                    required
+                />
+                <InputField 
+                    type="text" 
+                    label="Code Postal"
+                    {...register('zipCode')} 
+                    error={errors.zipCode?.message}
+                    required
+                />
             </div>
         </div>
 

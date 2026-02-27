@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { AuthService } from '@/services';
+import { InputField } from '@/components/forms/InputField';
 
 export default function DriverLogin() {
   const [email, setEmail] = useState('');
@@ -108,37 +109,29 @@ export default function DriverLogin() {
 
           {/* Email Login */}
           <form onSubmit={handleEmailLogin} className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Adresse email
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setError(null);
-                  }}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
-                  placeholder="votre@email.com"
-                />
-              </div>
+              <InputField
+                label="Adresse email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError(null);
+                }}
+                placeholder="votre@email.com"
+                required
+              />
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Mot de passe
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setError(null);
-                  }}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent"
-                  placeholder="••••••••"
-                />
-              </div>
+              <InputField
+                label="Mot de passe"
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError(null);
+                }}
+                placeholder="••••••••"
+                required
+              />
 
               <button
                 type="submit"

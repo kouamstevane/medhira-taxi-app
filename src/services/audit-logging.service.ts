@@ -67,10 +67,10 @@ export interface AuditLogEntry {
   level: AuditLogLevel;
   action: string;
   details?: Record<string, any>;
-  ipAddress?: string;
-  userAgent?: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
   success: boolean;
-  errorMessage?: string;
+  errorMessage?: string | null;
   timestamp: any; // serverTimestamp from Firestore
 }
 
@@ -112,10 +112,10 @@ class AuditLoggingService {
         level: entry.level,
         action: entry.action,
         details: this.sanitizeDetails(entry.details),
-        ipAddress: context.ipAddress,
-        userAgent: context.userAgent,
+        ipAddress: context.ipAddress || undefined,
+        userAgent: context.userAgent || undefined,
         success: entry.success,
-        errorMessage: entry.errorMessage,
+        errorMessage: entry.errorMessage || undefined,
         timestamp: serverTimestamp(),
       };
 

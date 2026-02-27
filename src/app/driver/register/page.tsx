@@ -6,7 +6,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthState
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
-import { AuthService } from '@/services';
+import { AuthService, signInWithGoogleForDriver } from '@/services';
 import { serverEncryptionService } from '../../../services/server-encryption.service';
 import { auditLoggingService } from '../../../services/audit-logging.service';
 
@@ -95,7 +95,10 @@ export default function DriverRegisterWizard() {
     setLoading(true);
     setError(null);
     try {
-      const user = await AuthService.signInWithGoogle();
+      // ✅ CORRECTION : Utiliser signInWithGoogleForDriver() au lieu de AuthService.signInWithGoogle()
+      // Cela crée le document approprié avec userType: 'chauffeur' dans la collection users
+      // et un document dans la collection drivers avec le statut 'draft'
+      const user = await signInWithGoogleForDriver();
       
       const names = user.displayName?.split(' ') || [];
       const first = names[0] || '';

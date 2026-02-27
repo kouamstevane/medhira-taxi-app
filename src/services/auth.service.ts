@@ -104,11 +104,15 @@ export const reloadUser = async (user: User): Promise<void> => {
 /**
  * Connexion avec Google
  * Gère les cas natif (Capacitor) et web (popup)
+ * ✅ AJOUT PARAMÈTRE : intendedUserType pour spécifier le type d'utilisateur
  * ✅ AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
  */
-export const signInWithGoogle = async (): Promise<User> => {
+export const signInWithGoogle = async (
+  intendedUserType: UserType = 'client'
+): Promise<User> => {
   console.log('[AuthService] signInWithGoogle appelé', {
-    platform: Capacitor.isNativePlatform() ? 'native' : 'web'
+    platform: Capacitor.isNativePlatform() ? 'native' : 'web',
+    intendedUserType
   });
 
   let user: User;
@@ -150,11 +154,20 @@ export const signInWithGoogle = async (): Promise<User> => {
         email: user.email,
         emailVerified: user.emailVerified
       });
-    } catch (error) {
-      console.error('[AuthService] Erreur Google Sign-In natif:', {
-        error,
-        errorMessage: (error as Error).message
+    } catch (error: any) {
+      console.error('[AuthService] Erreur Google Sign-In natif détaillée:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        stack: error.stack,
+        fullName: error.constructor?.name
       });
+      
+      // Analyse spécifique de l'erreur "cancelled"
+      if (error.message?.includes('cancelled')) {
+        console.warn('[AuthService] L\'activité a été annulée. Vérifiez SHA-1 ET Web Client ID dans Firebase.');
+      }
+
       throw error;
     }
   } else {
@@ -172,15 +185,15 @@ export const signInWithGoogle = async (): Promise<User> => {
     });
   }
 
-  // Vérifier si l'utilisateur existe dans Firestore
-  // ✅ AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
-  console.log('[AuthService] Vérification document utilisateur', {
+  // Vérifier si l'utilisateur existe dans l'une des collections
+  // ✅ CORRECTION : Vérifier la collection correspondante au type attendu
+  const collectionName = intendedUserType === 'chauffeur' ? 'drivers' : 'users';
+  console.log(`[AuthService] Vérification document dans la collection: ${collectionName}`, {
     uid: user.uid,
-    email: user.email,
-    emailVerified: user.emailVerified
+    intendedUserType
   });
 
-  const userDoc = await getDoc(doc(db, 'users', user.uid));
+  const userDoc = await getDoc(doc(db, collectionName, user.uid));
 
   console.log('[AuthService] Document utilisateur récupéré', {
     exists: userDoc.exists(),
@@ -189,9 +202,11 @@ export const signInWithGoogle = async (): Promise<User> => {
 
   if (!userDoc.exists()) {
     // Créer le document utilisateur s'il n'existe pas
+    // ✅ CORRECTION : Utiliser le paramètre intendedUserType au lieu de hardcoder 'client'
     console.log('[AuthService] Création document utilisateur', {
       uid: user.uid,
-      email: user.email
+      email: user.email,
+      userType: intendedUserType
     });
 
     await createUserDocument(user.uid, {
@@ -199,19 +214,24 @@ export const signInWithGoogle = async (): Promise<User> => {
       firstName: user.displayName?.split(' ')[0] || '',
       lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
       profileImageUrl: user.photoURL || undefined,
-      userType: 'client',
+      userType: intendedUserType,
+      ...(intendedUserType === 'chauffeur' ? { status: 'draft' } : {}),
     });
 
-    console.log('[AuthService] Document utilisateur créé avec succès');
+    console.log('[AuthService] Document utilisateur créé avec succès', {
+      userType: intendedUserType,
+      collection: collectionName
+    });
   } else {
     // Mettre à jour l'image de profil si manquante
     const userData = userDoc.data();
     if (user.photoURL && !userData.profileImageUrl) {
       console.log('[AuthService] Mise à jour image de profil', {
-        uid: user.uid
+        uid: user.uid,
+        collection: collectionName
       });
 
-      await updateDoc(doc(db, 'users', user.uid), {
+      await updateDoc(doc(db, collectionName, user.uid), {
         profileImageUrl: user.photoURL,
         updatedAt: serverTimestamp(),
       });
@@ -233,6 +253,91 @@ export const signInWithGoogle = async (): Promise<User> => {
  */
 export const signOut = async (): Promise<void> => {
   await firebaseSignOut(auth);
+};
+
+/**
+ * Connexion avec Google pour les chauffeurs
+ *
+ * Cette fonction spécialisée gère l'inscription des chauffeurs via Google OAuth.
+ * Contrairement à signInWithGoogle() standard, elle crée les documents appropriés
+ * dans les collections 'users' (userType: 'chauffeur') et 'drivers' (status: 'draft').
+ *
+ * Comportement "Best Effort" :
+ * - La connexion Google est obligatoire et échouera si elle ne réussit pas
+ * - La création du document chauffeur est "best effort" : si elle échoue,
+ *   la fonction retourne quand même l'utilisateur connecté
+ * - Le document chauffeur sera créé lors de la soumission du formulaire d'inscription
+ *
+ * Collections affectées :
+ * - users/{uid} : Document utilisateur avec userType='chauffeur' (créé par signInWithGoogle)
+ * - drivers/{uid} : Document chauffeur avec status='draft' (créé par cette fonction)
+ *
+ * @returns {Promise<User>} L'utilisateur Firebase connecté avec les documents appropriés
+ *
+ * @throws {Error} Si la connexion Google échoue (authentification requise)
+ *
+ * @example
+ * ```ts
+ * try {
+ *   const user = await signInWithGoogleForDriver();
+ *   // Rediriger vers le formulaire d'inscription chauffeur
+ *   router.push('/driver/register');
+ * } catch (error) {
+ *   console.error('Erreur de connexion:', error);
+ * }
+ * ```
+ *
+ * @see signInWithGoogle pour la fonction de connexion Google générique
+ */
+export const signInWithGoogleForDriver = async (): Promise<User> => {
+  console.log('[AuthService] signInWithGoogleForDriver appelé');
+
+  // 1. Se connecter avec Google en spécifiant 'chauffeur' comme userType
+  const user = await signInWithGoogle('chauffeur');
+
+  console.log('[AuthService] Connexion Google réussie pour chauffeur', {
+    uid: user.uid,
+    email: user.email
+  });
+
+  // 2. Vérifier si un document existe déjà dans la collection drivers
+  const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
+
+  if (!driverDoc.exists()) {
+    // 3. Créer le document dans la collection drivers avec le statut 'draft'
+    console.log('[AuthService] Création document chauffeur (draft)', {
+      uid: user.uid,
+      email: user.email
+    });
+
+    try {
+      await setDoc(doc(db, 'drivers', user.uid), {
+        uid: user.uid,
+        email: user.email,
+        firstName: user.displayName?.split(' ')[0] || '',
+        lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+        profileImageUrl: user.photoURL || null,
+        userType: 'chauffeur',
+        status: 'draft', // Statut initial pour les chauffeurs
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      console.log('[AuthService] Document chauffeur créé avec succès');
+    } catch (error) {
+      console.error('[AuthService] Erreur lors de la création du document chauffeur:', error);
+      // ⚠️ COMPORTEMENT "BEST EFFORT" : On ne lance pas d'erreur pour permettre à l'utilisateur de continuer
+      // Le document sera créé lors de la soumission du formulaire d'inscription
+      // Cela évite de bloquer l'utilisateur si une erreur temporaire survient
+    }
+  } else {
+    console.log('[AuthService] Document chauffeur existe déjà', {
+      uid: user.uid,
+      status: driverDoc.data()?.status
+    });
+  }
+
+  return user;
 };
 
 /**
@@ -259,7 +364,9 @@ export const createUserDocument = async (
     return acc;
   }, {} as Partial<UserData>);
 
-  const userRef = doc(db, 'users', userId);
+  // ✅ DÉTERMINER LA COLLECTION : 'drivers' pour les chauffeurs, 'users' pour les clients
+  const collectionName = data.userType === 'chauffeur' ? 'drivers' : 'users';
+  const userRef = doc(db, collectionName, userId);
   
   try {
     const userSnap = await getDoc(userRef);
@@ -316,11 +423,15 @@ export const createUserDocument = async (
  * Récupérer les données utilisateur depuis Firestore
  */
 export const getUserData = async (userId: string): Promise<UserData | null> => {
-  const userRef = doc(db, 'users', userId);
-  const userSnap = await getDoc(userRef);
-
-  if (userSnap.exists()) {
-    return userSnap.data() as UserData;
+  // ✅ RECHERCHE MULTI-COLLECTION : Un utilisateur peut être dans 'users' (client) ou 'drivers' (chauffeur)
+  const collections = ['users', 'drivers'];
+  
+  for (const coll of collections) {
+    const userRef = doc(db, coll, userId);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      return userSnap.data() as UserData;
+    }
   }
 
   return null;
@@ -333,7 +444,17 @@ export const updateUserProfile = async (
   userId: string,
   updates: Partial<UserData>
 ): Promise<void> => {
-  const userRef = doc(db, 'users', userId);
+  // Déterminer la collection d'après le userType si fourni, sinon chercher
+  let collectionName = updates.userType === 'chauffeur' ? 'drivers' : 'users';
+  
+  if (!updates.userType) {
+    const data = await getUserData(userId);
+    if (data) {
+      collectionName = data.userType === 'chauffeur' ? 'drivers' : 'users';
+    }
+  }
+
+  const userRef = doc(db, collectionName, userId);
   await updateDoc(userRef, {
     ...updates,
     updatedAt: serverTimestamp(),

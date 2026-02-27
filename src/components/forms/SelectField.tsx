@@ -44,10 +44,11 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
     ref
   ) => {
     const baseSelectClasses = `
-      w-full px-4 py-3 border rounded-lg outline-none transition-all duration-200
+      w-full px-4 py-3 border rounded-xl outline-none transition-all duration-200
       bg-white text-gray-900 appearance-none cursor-pointer
       focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]
       disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-500
+      shadow-sm active:scale-[0.99]
     `;
 
     const errorClasses = error

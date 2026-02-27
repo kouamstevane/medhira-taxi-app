@@ -145,7 +145,7 @@ service cloud.firestore {
       // - Le userType doit être 'chauffeur'
       // - Le statut initial doit être 'draft' ou 'pending'
       // - L'email doit être vérifié (obligatoire pour les chauffeurs)
-      allow create: if isEmailVerified() &&
+      allow create: if (isEmailVerified() || request.resource.data.status == 'draft') &&
                        request.auth.uid == driverId &&
                        request.resource.data.email != null &&
                        request.resource.data.phoneNumber == null &&
@@ -483,6 +483,24 @@ service cloud.firestore {
       
       // Suppression : Interdite (cleanup automatique via Cloud Function après 24h)
       allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION AUDIT_LOGS (CONFORMITÉ RGPD)
+    // ============================================================================
+    
+    match /audit_logs/{logId} {
+      // Lecture : Réservée aux admins
+      allow read: if isAdmin();
+      
+      // Création : Tout utilisateur authentifié peut enregistrer un log d'audit
+      allow create: if isAuthenticated();
+      
+      // Mise à jour : Interdite pour garantir l'intégrité de l'audit
+      allow update: if false;
+      
+      // Suppression : Réservée aux admins (pour le nettoyage RGPD)
+      allow delete: if isAdmin();
     }
     
     // ============================================================================

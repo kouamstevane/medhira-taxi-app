@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { FcGoogle } from 'react-icons/fc';
+import { InputField } from '@/components/forms/InputField';
 
 const step1Schema = z.object({
   email: z.string().email("Adresse email invalide"),
@@ -43,7 +44,7 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
           type="button"
           onClick={onGoogleSignIn}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-xl p-4 text-[#101010] font-semibold hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-xl p-4 text-[#101010] font-semibold hover:bg-gray-50 transition-colors shadow-sm active:scale-[0.98]"
         >
           <FcGoogle size={24} />
           Continuer avec Google
@@ -60,38 +61,32 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
 
         {/* Option B: Manuel */}
         <form onSubmit={handleSubmit(onNext)} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              {...register('email')}
-              type="email"
-              placeholder="votre@email.com"
-              className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent outline-none"
-            />
-            {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
-          </div>
+          <InputField
+            {...register('email')}
+            type="email"
+            label="Email"
+            placeholder="votre@email.com"
+            error={errors.email?.message}
+            required
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-            <input
-              {...register('phone')}
-              type="tel"
-              placeholder="+33612345678"
-              className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent outline-none"
-            />
-            {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone.message}</p>}
-          </div>
+          <InputField
+            {...register('phone')}
+            type="tel"
+            label="Téléphone"
+            placeholder="+33612345678"
+            error={errors.phone?.message}
+            required
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
-            <input
-              {...register('password')}
-              type="password"
-              placeholder="••••••••"
-              className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent outline-none"
-            />
-            {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>}
-          </div>
+          <InputField
+            {...register('password')}
+            type="password"
+            label="Mot de passe"
+            placeholder="••••••••"
+            error={errors.password?.message}
+            required
+          />
 
           <button
             type="submit"

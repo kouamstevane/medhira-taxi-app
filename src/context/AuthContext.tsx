@@ -44,19 +44,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         emailVerified: user.emailVerified
       });
 
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      // Essayer de trouver l'utilisateur dans 'users' puis 'drivers'
+      const collections = ['users', 'drivers'];
+      let userDoc = null;
+      let collectionName = '';
+
+      for (const coll of collections) {
+        const docRef = doc(db, coll, user.uid);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          userDoc = docSnap;
+          collectionName = coll;
+          break;
+        }
+      }
 
       console.log('[AuthContext] Document utilisateur récupéré', {
-        exists: userDoc.exists(),
-        uid: user.uid
+        exists: userDoc !== null,
+        uid: user.uid,
+        collection: collectionName
       });
 
-      if (userDoc.exists()) {
-        const data = userDoc.data();
+      if (userDoc) {
+        const data = userDoc.data() as UserData; // Cast explicite pour TypeScript
         console.log('[AuthContext] Données utilisateur chargées avec succès', {
           uid: user.uid,
           userType: data.userType,
-          firstName: data.firstName
+          collection: collectionName
         });
 
         setUserData({
@@ -66,17 +80,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           firstName: data.firstName || '',
           lastName: data.lastName || '',
           profileImageUrl: data.profileImageUrl || user.photoURL || '',
-          userType: data.userType || 'client',
+          userType: data.userType || (collectionName === 'drivers' ? 'chauffeur' : 'client'),
+          status: data.status,
           country: data.country,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
         });
       } else {
-        console.warn('[AuthContext] Document utilisateur inexistant', {
+        console.warn('[AuthContext] Document utilisateur inexistant. Déconnexion automatique.', {
           uid: user.uid,
           email: user.email
         });
+        
+        // S'assurer que le logout ne tourne pas en boucle si on est déjà en cours de déconnexion
+        // On attend un peu pour laisser les autres états se stabiliser si nécessaire
         setUserData(null);
+        await auth.signOut();
+        console.log('[AuthContext] Déconnexion effectuée car le document Firestore est manquant');
       }
     } catch (err) {
       console.error('[AuthContext] Erreur lors du chargement des données utilisateur:', {

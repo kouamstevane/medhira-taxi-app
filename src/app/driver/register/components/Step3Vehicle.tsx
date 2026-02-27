@@ -6,6 +6,8 @@ import * as z from 'zod';
 import { Loader2, UploadCloud, X } from 'lucide-react';
 import { imageCompressionService } from '@/services/image-compression.service';
 import { useToast } from '@/hooks/useToast';
+import { InputField } from '@/components/forms/InputField';
+import { SelectField } from '@/components/forms/SelectField';
 
 const step3Schema = z.object({
   carBrand: z.string().min(2, "Marque requise"),
@@ -201,59 +203,73 @@ export default function Step3Vehicle({ onNext, onBack, initialData, loading }: S
         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
             <h3 className="text-lg font-semibold text-[#101010] border-b pb-2">Détails Véhicule</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Marque</label>
-                  <input {...register('carBrand')} placeholder="ex: Toyota" className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] outline-none focus:ring-2 focus:ring-[#f29200]" />
-                  {errors.carBrand && <p className="text-red-500 text-xs mt-1">{errors.carBrand.message}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Modèle</label>
-                  <input {...register('carModel')} placeholder="ex: Prius" className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] outline-none focus:ring-2 focus:ring-[#f29200]" />
-                  {errors.carModel && <p className="text-red-500 text-xs mt-1">{errors.carModel.message}</p>}
-                </div>
+                <InputField 
+                    {...register('carBrand')} 
+                    label="Marque"
+                    placeholder="ex: Toyota" 
+                    error={errors.carBrand?.message}
+                    required
+                />
+                <InputField 
+                    {...register('carModel')} 
+                    label="Modèle"
+                    placeholder="ex: Prius" 
+                    error={errors.carModel?.message}
+                    required
+                />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Année</label>
-                  <input type="number" {...register('productionYear')} placeholder="YYYY" className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] outline-none focus:ring-2 focus:ring-[#f29200]" />
-                  {errors.productionYear && <p className="text-red-500 text-xs mt-1">{errors.productionYear.message}</p>}
-                </div>
-                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Couleur</label>
+                <InputField 
+                    type="number" 
+                    {...register('productionYear')} 
+                    label="Année"
+                    placeholder="YYYY" 
+                    error={errors.productionYear?.message}
+                    required
+                />
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Couleur</label>
                   <div className="flex items-center space-x-2">
-                      <input type="color" {...register('carColor')} className="h-12 w-16 p-1 border border-gray-300 rounded-lg cursor-pointer" />
+                      <input type="color" {...register('carColor')} className="h-11 w-16 p-1 border border-gray-300 rounded-lg cursor-pointer shadow-sm" />
                       <span className="text-sm font-mono text-gray-500 uppercase">{watch('carColor')}</span>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Carburant</label>
-                  <select {...register('fuelType')} className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] outline-none focus:ring-2 focus:ring-[#f29200]">
-                    <option value="Essence">Essence</option>
-                    <option value="Diesel">Diesel</option>
-                    <option value="Électrique">Électrique</option>
-                    <option value="Hybride">Hybride</option>
-                  </select>
-                </div>
+                <SelectField 
+                    {...register('fuelType')} 
+                    label="Carburant"
+                    options={[
+                        { value: 'Essence', label: 'Essence' },
+                        { value: 'Diesel', label: 'Diesel' },
+                        { value: 'Électrique', label: 'Électrique' },
+                        { value: 'Hybride', label: 'Hybride' },
+                    ]}
+                    required
+                />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Places Passagers: {seats}</label>
+                 <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">Places Passagers: {seats}</label>
                     <input type="range" min="1" max="9" step="1" {...register('passengerSeats', { valueAsNumber: true })} className="w-full accent-[#f29200]" />
                      {errors.passengerSeats && <p className="text-red-500 text-xs mt-1">{errors.passengerSeats.message}</p>}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Kilométrage</label>
-                  <input type="number" {...register('mileage', { valueAsNumber: true })} placeholder="ex: 50000" className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] outline-none focus:ring-2 focus:ring-[#f29200]" />
-                  {errors.mileage && <p className="text-red-500 text-xs mt-1">{errors.mileage.message}</p>}
-                </div>
+                <InputField 
+                    type="number" 
+                    {...register('mileage', { valueAsNumber: true })} 
+                    label="Kilométrage"
+                    placeholder="ex: 50000" 
+                    error={errors.mileage?.message}
+                    required
+                />
             </div>
-             <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date prochain contrôle technique</label>
-                  <input type="date" {...register('techControlDate')} className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] outline-none focus:ring-2 focus:ring-[#f29200]" />
-                  {errors.techControlDate && <p className="text-red-500 text-xs mt-1">{errors.techControlDate.message}</p>}
-             </div>
+            <InputField 
+                type="date" 
+                {...register('techControlDate')} 
+                label="Date prochain contrôle technique"
+                error={errors.techControlDate?.message}
+                required
+            />
         </div>
 
         {/* Card 2: Documents */}
