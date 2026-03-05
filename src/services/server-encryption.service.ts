@@ -1,15 +1,16 @@
 /**
  * Service client pour le chiffrement côté serveur
- * 
+ *
  * Ce service appelle la Cloud Function Firebase pour chiffrer les données sensibles.
  * Le chiffrement est effectué côté serveur avec une clé stockée dans Firebase Secret Manager.
- * 
+ *
  * @module ServerEncryptionService
  */
 
 import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
-import { initializeApp } from 'firebase/app';
-import { firebaseConfig } from '../config/firebase';
+// ✅ CORRECTIF : Importer l'app Firebase déjà initialisée plutôt que d'appeler initializeApp()
+// Rappeler initializeApp() cause "Firebase App named '[DEFAULT]' already exists"
+import { app } from '../config/firebase';
 
 // Type pour les données chiffrées retournées par le serveur
 export interface EncryptedData {
@@ -24,7 +25,7 @@ export interface EncryptionResult {
 
 /**
  * Service de chiffrement côté serveur
- * 
+ *
  * Ce service remplace encryption.service.ts pour le chiffrement des données sensibles.
  * Toutes les opérations de chiffrement sont effectuées par la Cloud Function Firebase.
  */
@@ -32,9 +33,9 @@ class ServerEncryptionService {
   private functions: Functions;
 
   constructor() {
-    // Initialiser Firebase Functions
-    const app = initializeApp(firebaseConfig);
-    this.functions = getFunctions(app, 'europe-west1'); // Région par défaut
+    // ✅ Utiliser l'instance Firebase déjà initialisée (évite "app already exists")
+    // ✅ CORRECTIF CORS : fonctions déployées en us-central1, pas europe-west1
+    this.functions = getFunctions(app, 'us-central1');
   }
 
   /**

@@ -35,18 +35,19 @@ interface Step2IdentityProps {
   onNext: (data: Step2FormData, biometricsPhoto: File | null) => void;
   onBack: () => void;
   initialData?: Partial<Step2FormData>;
+  initialPhoto?: File | null;
   loading?: boolean;
 }
 
-export default function Step2Identity({ onNext, onBack, initialData, loading }: Step2IdentityProps) {
-  const { showError, showWarning } = useToast();
+export default function Step2Identity({ onNext, onBack, initialData, initialPhoto, loading }: Step2IdentityProps) {
+  const { showError } = useToast();
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<Step2FormData>({
     resolver: zodResolver(step2Schema),
     defaultValues: {
       firstName: initialData?.firstName || '',
       lastName: initialData?.lastName || '',
       dob: initialData?.dob || '',
-      nationality: initialData?.nationality || 'FR',
+      nationality: initialData?.nationality || 'CM',
       phone: initialData?.phone || '',
       ssn: initialData?.ssn || '',
       address: initialData?.address || '',
@@ -56,8 +57,16 @@ export default function Step2Identity({ onNext, onBack, initialData, loading }: 
   });
 
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(initialPhoto || null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+
+  // Gérer la photo initiale pour la preview
+  useEffect(() => {
+    if (initialPhoto && !photoDataUrl) {
+      const url = URL.createObjectURL(initialPhoto);
+      setPhotoDataUrl(url);
+    }
+  }, [initialPhoto]);
   const [addressInput, setAddressInput] = useState(initialData?.address || '');
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const autocompleteService = useRef<google.maps.places.AutocompleteService | null>(null);
@@ -118,8 +127,8 @@ export default function Step2Identity({ onNext, onBack, initialData, loading }: 
       autocompleteService.current.getPlacePredictions({
         input: addressInput,
         sessionToken: sessionToken.current,
-        // Limiter potentiellement à la France ou aux pays cibles
-        componentRestrictions: { country: "fr" }
+        // Limitée au Cameroun (zone cible de l'application Medjira)
+        componentRestrictions: { country: "cm" }
       }, (results, status) => {
         if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
           setPredictions(results);
@@ -170,41 +179,83 @@ export default function Step2Identity({ onNext, onBack, initialData, loading }: 
   };
 
 
-  const takePhoto = async () => {
-    setPhotoError(null); // Réinitialiser l'erreur
-    try {
-      const image = await CapacitorCamera.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: CameraResultType.DataUrl,
-        source: CameraSource.Camera, // Force la caméra, bloque la galerie
-      });
+  // useRef pour suivre l'URL courante même au démontage (évite la stale closure)
+  const photoDataUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    photoDataUrlRef.current = photoDataUrl;
+  }, [photoDataUrl]);
 
-      if (image.dataUrl) {
-         setPhotoDataUrl(image.dataUrl);
-         // Convert DataUrl to File
-         const res = await fetch(image.dataUrl);
-         const blob = await res.blob();
-         const file = new File([blob], "biophoto.jpeg", { type: "image/jpeg" });
-         setPhotoFile(file);
+  // Révoquer l'URL objet au démontage du composant (via ref, pas via closure stale)
+  useEffect(() => {
+    return () => {
+      if (photoDataUrlRef.current && photoDataUrlRef.current.startsWith('blob:')) {
+        URL.revokeObjectURL(photoDataUrlRef.current);
       }
-    } catch (error: any) {
-      console.error("Erreur lors de la prise de photo:", error);
-      
-      // Gestion contextuelle des erreurs
-      if (error?.message?.includes('User cancelled') || error?.message?.includes('cancelled')) {
-        // L'utilisateur a annulé, ce n'est pas une erreur critique
-        setPhotoError(null);
-      } else if (error?.message?.includes('Permission') || error?.message?.includes('permission')) {
-        setPhotoError("Permission caméra refusée. Veuillez autoriser l'accès à la caméra dans les paramètres de votre appareil.");
-      } else if (error?.message?.includes('Camera') || error?.message?.includes('Unavailable')) {
-        setPhotoError("Caméra non disponible. Vérifiez que votre appareil dispose d'une caméra fonctionnelle.");
-      } else {
-        setPhotoError("Impossible de prendre la photo. Veuillez réessayer ou utiliser un autre appareil.");
+    };
+  }, []);
+
+  const takePhoto = async () => {
+    setPhotoError(null);
+
+    // Sur plateforme native (Android/iOS compilé), utiliser Capacitor Camera
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const image = await CapacitorCamera.getPhoto({
+          quality: 90,
+          allowEditing: false,
+          resultType: CameraResultType.DataUrl,
+          source: CameraSource.Camera,
+        });
+
+        if (image.dataUrl) {
+          setPhotoDataUrl(image.dataUrl);
+          const res = await fetch(image.dataUrl);
+          const blob = await res.blob();
+          const file = new File([blob], "biophoto.jpeg", { type: "image/jpeg" });
+          setPhotoFile(file);
+        }
+      } catch (error: any) {
+        console.error("Erreur lors de la prise de photo:", error);
+        if (error?.message?.includes('User cancelled') || error?.message?.includes('cancelled')) {
+          return; // Annulation volontaire, pas d'erreur affichée
+        } else if (error?.message?.includes('permission')) {
+          setPhotoError("Permission caméra refusée. Veuillez l'autoriser dans les paramètres.");
+        } else {
+          setPhotoError("Impossible de prendre la photo. Veuillez réessayer.");
+        }
       }
+    } else {
+      // Fallback web : déclencher l'input file caché
+      const input = document.getElementById('web-camera-fallback') as HTMLInputElement;
+      if (input) input.click();
     }
   };
 
+  const handleWebPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPhotoError("Seules les images sont acceptées.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setPhotoError("Image trop lourde (Max 10Mo).");
+      return;
+    }
+
+    setPhotoError(null);
+
+    // Révoquer l'ancienne URL objet pour libérer la mémoire
+    setPhotoDataUrl(prev => {
+      if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+      return null; // sera remplacé juste après
+    });
+
+    const url = URL.createObjectURL(file);
+    setPhotoDataUrl(url);
+    setPhotoFile(file);
+  };
   const onSubmit = (data: Step2FormData) => {
     if (!photoFile) {
       // La photo biométrique est obligatoire sur toutes les plateformes
@@ -261,7 +312,12 @@ export default function Step2Identity({ onNext, onBack, initialData, loading }: 
                     {...register('nationality')} 
                     label="Nationalité"
                     options={[
+                        { value: 'CM', label: 'Cameroun' },
                         { value: 'FR', label: 'France' },
+                        { value: 'SN', label: 'Sénégal' },
+                        { value: 'CI', label: "Côte d'Ivoire" },
+                        { value: 'GA', label: 'Gabon' },
+                        { value: 'CG', label: 'Congo' },
                         { value: 'BE', label: 'Belgique' },
                         { value: 'CH', label: 'Suisse' },
                     ]}
@@ -273,7 +329,7 @@ export default function Step2Identity({ onNext, onBack, initialData, loading }: 
             <InputField 
                 type="tel" 
                 label="Numéro de Téléphone"
-                placeholder="+33 6 00 00 00 00" 
+                placeholder="+237 6 00 00 00 00" 
                 {...register('phone')} 
                 error={errors.phone?.message}
                 required
@@ -345,6 +401,16 @@ export default function Step2Identity({ onNext, onBack, initialData, loading }: 
              <h3 className="text-lg font-semibold text-[#101010] border-b pb-2">Photo de profil</h3>
              <p className="text-sm text-gray-500">Prenez un selfie sur le vif. Assurez-vous d'être bien éclairé et de cadrer votre visage et cou dans l'ovale virtuel.</p>
              
+             {/* Input file caché — fallback web uniquement (invisible sur natif) */}
+             <input
+               id="web-camera-fallback"
+               type="file"
+               accept="image/*"
+               capture="user"
+               className="hidden"
+               onChange={handleWebPhotoChange}
+             />
+
              <div className="flex flex-col items-center justify-center py-4">
                  {photoDataUrl ? (
                      <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-[#f29200]">

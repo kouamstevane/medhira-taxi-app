@@ -1,6 +1,10 @@
-import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
-import * as functions from 'firebase-functions/v1';
+import { onSchedule, ScheduledEvent } from 'firebase-functions/v2/scheduler';
+import { onDocumentUpdated, FirestoreEvent, Change, QueryDocumentSnapshot } from 'firebase-functions/v2/firestore';
+// NOTE: firebase-functions/v2/identity n'expose PAS de déclencheur de suppression.
+// "beforeUserDeleted" n'existe pas en v2 — seuls beforeUserCreated et beforeUserSignIn
+// sont disponibles (fonctions bloquantes). Pour la suppression, on utilise le SDK v1
+// qui est la seule API Firebase qui supporte ce déclencheur.
+import * as functionsV1 from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 
 admin.initializeApp();
@@ -15,7 +19,7 @@ export const anonymizeDriverData = onSchedule(
     region: 'europe-west1', // Adaptez selon votre région
     memory: '256MiB',
   },
-  async (event) => {
+  async (_event: ScheduledEvent) => {
     const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
     const thirtyDaysAgo = Date.now() - thirtyDaysInMs;
     
@@ -60,9 +64,13 @@ export const anonymizeDriverData = onSchedule(
 
 // ============================================================================
 // Déclencheur : suppression compte utilisateur
+// Utilise le SDK v1 — firebase-functions/v2/identity ne propose pas
+// de déclencheur de suppression (uniquement des fonctions bloquantes).
 // ============================================================================
-export const deleteDriverOnAccountDelete = functions.auth.user().onDelete(
-  async (user: admin.auth.UserRecord, context: functions.EventContext) => {
+export const deleteDriverOnAccountDelete = functionsV1
+  .region('europe-west1')
+  .auth.user()
+  .onDelete(async (user: admin.auth.UserRecord) => {
     const driverId = user.uid;
     const db = admin.database();
     
@@ -82,8 +90,7 @@ export const deleteDriverOnAccountDelete = functions.auth.user().onDelete(
       console.error(`Error deleting data for driver ${driverId}:`, error);
       throw error;
     }
-  }
-);
+  });
 
 // ============================================================================
 // Déclencheur : course terminée → planification anonymisation
@@ -93,7 +100,7 @@ export const scheduleTripDataAnonymization = onDocumentUpdated(
     document: 'bookings/{bookingId}',
     region: 'europe-west1',
   },
-  async (event) => {
+  async (event: FirestoreEvent<Change<QueryDocumentSnapshot> | undefined, { bookingId: string }>) => {
     const beforeData = event.data?.before.data();
     const afterData = event.data?.after.data();
     
@@ -140,7 +147,7 @@ export const processAnonymizationTasks = onSchedule(
     region: 'europe-west1',
     memory: '256MiB',
   },
-  async (event) => {
+  async (_event: ScheduledEvent) => {
     const db = admin.firestore();
     const now = Date.now();
     

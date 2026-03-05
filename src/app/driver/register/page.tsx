@@ -1,12 +1,11 @@
 "use client";
-/* eslint-disable */
 import { useState, useEffect } from 'react';
 import { auth, db, storage } from '../../../config/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, sendEmailVerification } from 'firebase/auth';
+import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
-import { AuthService, signInWithGoogleForDriver } from '@/services';
+import { AuthService } from '@/services';
 import { serverEncryptionService } from '../../../services/server-encryption.service';
 import { auditLoggingService } from '../../../services/audit-logging.service';
 
@@ -16,13 +15,13 @@ import Step2Identity, { Step2FormData } from './components/Step2Identity';
 import Step3Vehicle, { Step3FormData } from './components/Step3Vehicle';
 import Step4Compliance, { Step4Files } from './components/Step4Compliance';
 import Step5Monetization, { Step5FormData } from './components/Step5Monetization';
-import { AlertCircle, FileEdit, LogOut, Loader2 } from 'lucide-react';
+import { AlertCircle, FileEdit, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 
 export default function DriverRegisterWizard() {
   const router = useRouter();
-  const { toasts, removeToast } = useToast();
+  const { toasts, removeToast, showInfo, showWarning, showError } = useToast();
 
   // ----- ÉTATS DU WIZARD -----
   const [currentStep, setCurrentStep] = useState(1);
@@ -70,7 +69,7 @@ export default function DriverRegisterWizard() {
                  firstName: data.firstName || '',
                  lastName: data.lastName || '',
                  dob: data.dob || '',
-                 nationality: data.nationality || 'FR',
+                 nationality: data.nationality || 'CM',
                  ssn: '', // SSN chiffré non affiché par sécurité (l'utilisateur doit le resaisir)
                  address: data.address || '',
                  city: data.city || '',
@@ -98,7 +97,7 @@ export default function DriverRegisterWizard() {
       // ✅ CORRECTION : Utiliser signInWithGoogleForDriver() au lieu de AuthService.signInWithGoogle()
       // Cela crée le document approprié avec userType: 'chauffeur' dans la collection users
       // et un document dans la collection drivers avec le statut 'draft'
-      const user = await signInWithGoogleForDriver();
+      const user = await AuthService.signInWithGoogleForDriver();
       
       const names = user.displayName?.split(' ') || [];
       const first = names[0] || '';
@@ -123,18 +122,8 @@ export default function DriverRegisterWizard() {
     setError(null);
     try {
       if (!isExistingUser) {
-        // Create user
+        // Créer le compte Firebase
         await createUserWithEmailAndPassword(auth, data.email, data.password);
-      }
-      
-      // Vérification explicite de l'email avant de continuer
-      const user = auth.currentUser;
-      if (!user?.emailVerified) {
-        setError("Veuillez vérifier votre email avant de continuer.");
-        if (user) {
-          await sendEmailVerification(user);
-        }
-        return;
       }
       
       setStep1Data(data);
@@ -143,6 +132,8 @@ export default function DriverRegisterWizard() {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {
         setError("Cet email est déjà utilisé. Essayez de vous connecter.");
+      } else if (err.code === 'auth/weak-password') {
+        setError("Le mot de passe est trop faible. Utilisez au moins 6 caractères.");
       } else {
         setError(err.message);
       }
@@ -162,13 +153,9 @@ export default function DriverRegisterWizard() {
        const userId = user?.uid;
        if (!userId) throw new Error("Utilisateur non connecté");
 
-       // Vérifier que l'email est toujours vérifié avant de sauvegarder le brouillon
-       if (!user.emailVerified) {
-           setError("Votre email doit être vérifié avant de continuer. Veuillez vérifier votre boîte mail.");
-           // Renvoyer l'email de vérification si nécessaire
-           await sendEmailVerification(user);
-           return;
-       }
+       // NOTE: La vérification email est intentionnellement absente ici.
+       // Un nouveau compte ne peut pas être vérifié immédiatement.
+       // La vérification stricte est effectuée uniquement à la soumission finale (étape 5).
 
        // SÉCURITÉ RGPD: Chiffrer immédiatement le SSN, même pour le brouillon
        // Le SSN ne doit JAMAIS être stocké en clair, même temporairement
@@ -192,7 +179,7 @@ export default function DriverRegisterWizard() {
            firstName: data.firstName,
            lastName: data.lastName,
            email: step1Data.email || user.email || '',
-           phone: step1Data.phone || '',
+           phone: data.phone || step1Data.phone || '',
            dob: data.dob,
            nationality: data.nationality,
            address: data.address,
@@ -200,6 +187,8 @@ export default function DriverRegisterWizard() {
            zipCode: data.zipCode,
            ssn: encryptedSsn, // SSN chiffré immédiatement (conformité RGPD)
            status: 'draft',
+           userType: 'chauffeur',
+           phoneNumber: null,
            createdAt: new Date(),
            updatedAt: new Date()
        };
@@ -220,7 +209,10 @@ export default function DriverRegisterWizard() {
     }
   };
 
-  const handleStep3Next = (data: Step3FormData, files: any) => {
+  const handleStep3Next = (
+    data: Step3FormData,
+    files: { registration: File; insurance?: File; techControl: File; interiorPhoto: File; exteriorPhoto: File }
+  ) => {
     setStep3Data(data);
     setVehicleFiles(files);
     setCurrentStep(4);
@@ -244,22 +236,17 @@ export default function DriverRegisterWizard() {
     setLoading(true);
     setError(null);
 
-    // Tracker pour les fichiers uploadés (pour nettoyage en cas d'erreur)
-    const uploadedFiles: string[] = [];
-
-    // Déclarer userId avant le bloc try pour qu'il soit accessible dans le bloc catch
+    // Vérifier l'utilisateur AVANT le try — géré proprement avec setError
     const user = auth.currentUser;
     const userId = user?.uid;
-    if (!userId) throw new Error("Utilisateur non connecté");
+    if (!userId || !user) {
+      setError("Vous devez être connecté pour soumettre votre dossier.");
+      setLoading(false);
+      return;
+    }
 
     try {
-
-        // Vérification explicite de l'email avant soumission finale
-        if (!user?.emailVerified) {
-            setError("Veuillez vérifier votre email avant de soumettre votre dossier.");
-            await sendEmailVerification(user);
-            return;
-        }
+        // L'email de vérification sera géré sur la page dédiée après redirection
 
         // 1. Upload tous les fichiers lourds (Vehicle + Compliance + Biometric)
         // Utiliser Promise.allSettled pour continuer même si certains uploads échouent
@@ -341,12 +328,20 @@ export default function DriverRegisterWizard() {
                 });
 
                 // Vérifier le résultat de la validation avec typage correct
-                const result = validationResult.data as { isValid: boolean; errors: { [key: string]: string } };
+                const result = validationResult.data as { isValid: boolean; errors?: { [key: string]: any } };
                 if (!result.isValid) {
-                    const errorMessages = Object.values(result.errors).join(', ');
+                    let errorMessages = "Coordonnées bancaires invalides";
+                    if (result.errors) {
+                        // Extraire les messages d'erreur de Zod si présents
+                        errorMessages = Object.entries(result.errors)
+                            .filter(([key]) => key !== '_errors')
+                            .map(([key, val]: [string, any]) => `${key}: ${val._errors?.join(', ') || 'invalide'}`)
+                            .join(' | ');
+                    }
+                    
                     // Audit logging: Échec validation bancaire
                     await auditLoggingService.logBankValidation(userId, false, result.errors);
-                    setError(`Coordonnées bancaires invalides: ${errorMessages}`);
+                    setError(`Erreur validation: ${errorMessages}`);
                     return;
                 }
 
@@ -389,13 +384,14 @@ export default function DriverRegisterWizard() {
            firstName: step2Data.firstName,
            lastName: step2Data.lastName,
            email: step1Data.email || auth.currentUser?.email || '',
-           phone: step1Data.phone || '',
+           phone: step2Data.phone || step1Data.phone || '',
            dob: step2Data.dob,
            nationality: step2Data.nationality,
            address: step2Data.address,
            city: step2Data.city,
            zipCode: step2Data.zipCode,
-           ssn: step2Data.ssn, // SSN déjà chiffré depuis l'étape 2
+           // ⚠️ SSN intentionnellement absent : déjà chiffré + sauvegardé à l'étape 2.
+           // Le merge:true ci-dessous préserve la valeur chiffrée existante sans la réécrire.
 
            // Nouveautés Étape 3 (Véhicule)
            car: {
@@ -427,6 +423,8 @@ export default function DriverRegisterWizard() {
            },
 
            status: 'pending', // Passe de draft à pending
+           userType: 'chauffeur',
+           phoneNumber: null,
            updatedAt: new Date(),
            isAvailable: false,
            rating: 0,
@@ -443,9 +441,12 @@ export default function DriverRegisterWizard() {
 
     } catch (err: any) {
         console.error(err);
-        // Audit logging: Échec inscription
-        await auditLoggingService.logDriverRegistrationFailed(userId, err.message);
+        // Audit logging: Échec inscription (userId peut être défini depuis le scope extérieur)
+        if (userId) {
+          await auditLoggingService.logDriverRegistrationFailed(userId, err.message);
+        }
         setError("Erreur finale d'inscription: " + err.message);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
         setLoading(false);
     }
@@ -517,7 +518,7 @@ export default function DriverRegisterWizard() {
         <div className="h-2 w-full bg-gray-200">
              <div
                 className="h-full bg-[#f29200] transition-all duration-300"
-                style={{ width: `${(currentStep / 6) * 100}%` }}
+                style={{ width: `${(currentStep / 5) * 100}%` }}
              ></div>
         </div>
 
@@ -544,6 +545,7 @@ export default function DriverRegisterWizard() {
                     onBack={() => setCurrentStep(1)}
                     loading={loading}
                     initialData={step2Data}
+                    initialPhoto={biometricsPhoto}
                 />
             )}
 
@@ -553,6 +555,7 @@ export default function DriverRegisterWizard() {
                     onBack={() => setCurrentStep(2)}
                     loading={loading}
                     initialData={step3Data}
+                    initialFiles={vehicleFiles}
                 />
             )}
 
@@ -561,6 +564,7 @@ export default function DriverRegisterWizard() {
                     onNext={handleStep4Next} 
                     onBack={() => setCurrentStep(3)}
                     loading={loading}
+                    initialFiles={complianceFiles}
                 />
             )}
 

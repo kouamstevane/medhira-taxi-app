@@ -157,10 +157,17 @@ service cloud.firestore {
       // Les admins peuvent modifier le statut (pending -> approved/rejected/suspended)
       // Le chauffeur doit avoir un email vérifié pour toute modification
       // Lors de la transition vers 'pending', seuls certains champs sont autorisés (sécurité renforcée)
-      allow update: if (isOwner(driverId) && isEmailVerified() &&
-                        (request.resource.data.status == resource.data.status ||
-                         ((resource.data.status in ['draft', 'action_required', 'rejected']) &&
-                          isValidPendingTransition())))
+      allow update: if (isOwner(driverId) && 
+                        (
+                          // Autoriser la modification du profil/docs si en draft ou si l'email est déjà vérifié
+                          (request.resource.data.status == resource.data.status && 
+                           (isEmailVerified() || resource.data.status in ['draft', 'action_required'])) ||
+                          
+                          // Autoriser le passage à 'pending' (soumission) même si l'email n'est pas encore vérifié
+                          // Cela permet au chauffeur de soumettre et de vérifier son email juste après
+                          ((resource.data.status in ['draft', 'action_required', 'rejected']) &&
+                           isValidPendingTransition())
+                        ))
                     || isAdmin();
       
       // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé ou en brouillon

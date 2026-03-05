@@ -21,10 +21,11 @@ export type Step4Files = z.infer<typeof step4Schema>;
 interface Step4ComplianceProps {
   onNext: (files: Step4Files) => void;
   onBack: () => void;
+  initialFiles?: Partial<Step4Files>;
   loading?: boolean;
 }
 
-export default function Step4Compliance({ onNext, onBack, loading }: Step4ComplianceProps) {
+export default function Step4Compliance({ onNext, onBack, initialFiles, loading }: Step4ComplianceProps) {
   const { showError, showWarning } = useToast();
   
   const [files, setFiles] = useState<{
@@ -33,13 +34,30 @@ export default function Step4Compliance({ onNext, onBack, loading }: Step4Compli
     licenseFront: File | null;
     licenseBack: File | null;
   }>({
-    idFront: null,
-    idBack: null,
-    licenseFront: null,
-    licenseBack: null,
+    idFront: initialFiles?.idFront || null,
+    idBack: initialFiles?.idBack || null,
+    licenseFront: initialFiles?.licenseFront || null,
+    licenseBack: initialFiles?.licenseBack || null,
   });
 
   const [previews, setPreviews] = useState<Record<string, string>>({});
+
+  // Gérer les previews pour les fichiers initiaux
+  React.useEffect(() => {
+    if (initialFiles) {
+        const newPreviews: Record<string, string> = {};
+        Object.entries(initialFiles).forEach(([key, file]) => {
+            if (file instanceof File) {
+                if (file.type.startsWith('image/')) {
+                    newPreviews[key] = URL.createObjectURL(file);
+                } else if (file.type === 'application/pdf') {
+                    newPreviews[key] = 'pdf';
+                }
+            }
+        });
+        setPreviews(newPreviews);
+    }
+  }, [initialFiles]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, key: keyof typeof files) => {
     const file = e.target.files?.[0];

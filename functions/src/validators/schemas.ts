@@ -5,8 +5,12 @@ import { z } from 'zod';
  */
 export const BankDetailsSchema = z.object({
   accountHolder: z.string().min(2, "Le nom du titulaire doit contenir au moins 2 caractères"),
-  iban: z.string().regex(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/, "Format IBAN invalide"),
-  bic: z.string().regex(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/, "Format BIC/SWIFT invalide"),
+  iban: z.string()
+    .transform(v => v.replace(/[\s-]/g, '').toUpperCase())
+    .pipe(z.string().regex(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/, "Format IBAN invalide")),
+  bic: z.string()
+    .transform(v => v.replace(/\s+/g, '').toUpperCase())
+    .pipe(z.string().regex(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/, "Format BIC/SWIFT invalide")),
 });
 
 /**

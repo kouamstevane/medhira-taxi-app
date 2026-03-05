@@ -26,10 +26,11 @@ interface Step3VehicleProps {
   onNext: (data: Step3FormData, files: { registration: File; insurance?: File; techControl: File; interiorPhoto: File; exteriorPhoto: File }) => void;
   onBack: () => void;
   initialData?: Partial<Step3FormData>;
+  initialFiles?: { registration?: File; insurance?: File; techControl?: File; interiorPhoto?: File; exteriorPhoto?: File };
   loading?: boolean;
 }
 
-export default function Step3Vehicle({ onNext, onBack, initialData, loading }: Step3VehicleProps) {
+export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles, loading }: Step3VehicleProps) {
   const { showInfo, showError } = useToast();
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<Step3FormData>({
     resolver: zodResolver(step3Schema),
@@ -52,11 +53,11 @@ export default function Step3Vehicle({ onNext, onBack, initialData, loading }: S
     interiorPhoto: File | null;
     exteriorPhoto: File | null;
   }>({
-    registration: null,
-    insurance: null,
-    techControl: null,
-    interiorPhoto: null,
-    exteriorPhoto: null,
+    registration: initialFiles?.registration || null,
+    insurance: initialFiles?.insurance || null,
+    techControl: initialFiles?.techControl || null,
+    interiorPhoto: initialFiles?.interiorPhoto || null,
+    exteriorPhoto: initialFiles?.exteriorPhoto || null,
   });
 
   const [compressionLoading, setCompressionLoading] = useState<string | null>(null);
@@ -137,7 +138,7 @@ export default function Step3Vehicle({ onNext, onBack, initialData, loading }: S
 
   const onSubmit = (data: Step3FormData) => {
     if (!files.registration || !files.techControl || !files.interiorPhoto || !files.exteriorPhoto) {
-      alert("Veuillez fournir tous les documents obligatoires.");
+      showError("Veuillez fournir tous les documents obligatoires (Carte grise, Contrôle technique, Photos intérieur et extérieur).");
       return;
     }
     onNext(data, files as { registration: File; insurance?: File; techControl: File; interiorPhoto: File; exteriorPhoto: File });

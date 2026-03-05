@@ -87,16 +87,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           updatedAt: data.updatedAt,
         });
       } else {
-        console.warn('[AuthContext] Document utilisateur inexistant. Déconnexion automatique.', {
+        console.info('[AuthContext] Document utilisateur inexistant (peut être en cours de création)', {
           uid: user.uid,
           email: user.email
         });
         
-        // S'assurer que le logout ne tourne pas en boucle si on est déjà en cours de déconnexion
-        // On attend un peu pour laisser les autres états se stabiliser si nécessaire
         setUserData(null);
-        await auth.signOut();
-        console.log('[AuthContext] Déconnexion effectuée car le document Firestore est manquant');
       }
     } catch (err) {
       console.error('[AuthContext] Erreur lors du chargement des données utilisateur:', {

@@ -76,4 +76,5 @@ export const storage: FirebaseStorage = getStorage(app);
 /**
  * Export de l'app Firebase pour des cas d'usage avancés
  */
+export { app };
 export default app;

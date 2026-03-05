@@ -14,11 +14,11 @@ service firebase.storage {
     
     // Documents des chauffeurs (permis, carte grise, etc.)
     // SÉCURITÉ: Restreint l'accès en lecture au propriétaire uniquement
-    match /drivers/{driverId}/{document} {
+    match /drivers/{driverId}/{allPaths=**} {
       allow read: if request.auth != null && request.auth.uid == driverId;
       allow write: if request.auth != null
                     && request.auth.uid == driverId
-                    && resource.contentType.matches('image/.*'); // Validation MIME type
+                    && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
     }
     
     // Documents généraux liés aux chauffeurs
@@ -27,7 +27,7 @@ service firebase.storage {
       allow read: if request.auth != null && request.auth.uid == driverId;
       allow write: if request.auth != null
                     && request.auth.uid == driverId
-                    && resource.contentType.matches('image/.*'); // Validation MIME type
+                    && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
     }
     
     // Images des véhicules

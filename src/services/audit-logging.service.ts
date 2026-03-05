@@ -106,27 +106,34 @@ class AuditLoggingService {
       const context = this.getContext();
 
       // Créer l'entrée d'audit
-      const auditEntry: AuditLogEntry = {
+      const auditEntry: any = {
         eventType: entry.eventType,
         userId,
         level: entry.level,
         action: entry.action,
-        details: this.sanitizeDetails(entry.details),
-        ipAddress: context.ipAddress || undefined,
-        userAgent: context.userAgent || undefined,
+        details: this.sanitizeDetails(entry.details) ?? null,
+        ipAddress: context.ipAddress ?? null,
+        userAgent: context.userAgent ?? null,
         success: entry.success,
-        errorMessage: entry.errorMessage || undefined,
+        errorMessage: entry.errorMessage ?? null,
         timestamp: serverTimestamp(),
       };
+
+      // ✅ NETTOYAGE CRITIQUE : Supprimer les valeurs `undefined` car Firestore ne les accepte pas
+      // On convertit les `undefined` récursifs en `null` dans `details`
+      if (auditEntry.details) {
+        Object.keys(auditEntry.details).forEach(key => {
+          if (auditEntry.details[key] === undefined) {
+            auditEntry.details[key] = null;
+          }
+        });
+      }
 
       // Ajouter à Firestore
       await addDoc(collection(db, this.collectionName), auditEntry);
     } catch (error) {
       // En cas d'erreur de logging, on ne veut pas interrompre le flux principal
-      // mais on doit quand même logger l'erreur dans la console
       console.error('Erreur lors de l\'audit logging:', error);
-      
-      // En production, on pourrait envoyer à un service externe (Sentry, etc.)
     }
   }
 

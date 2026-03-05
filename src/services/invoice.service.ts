@@ -331,7 +331,7 @@ export const generateInvoicePDF = (data: InvoiceData): void => {
   y += 8;
   doc.setFont("helvetica", "normal");
   doc.text(
-    "Cette facture a été générée automatiquement par Medhira Taxi.",
+    "Cette facture a été générée automatiquement par Medjira.",
     pageWidth / 2,
     y,
     { align: "center" }
@@ -343,7 +343,7 @@ export const generateInvoicePDF = (data: InvoiceData): void => {
   doc.line(20, 280, pageWidth - 20, 280);
 
   doc.setFontSize(8);
-  doc.text("© Medhira Taxi - Tous droits réservés", pageWidth / 2, 287, {
+  doc.text("© Medjira - Tous droits réservés", pageWidth / 2, 287, {
     align: "center",
   });
 

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { auth, db, storage } from '@/config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { sendEmailVerification } from 'firebase/auth';
+import { AuthService } from '@/services';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { getFirestoreErrorMessage, logFirestoreError } from '@/utils/firestore-error-handler';
@@ -137,7 +137,7 @@ export default function DriverProfile() {
     if (!auth.currentUser) return;
 
     try {
-      await sendEmailVerification(auth.currentUser);
+      await AuthService.sendVerificationEmail(auth.currentUser);
       setVerificationEmailSent(true);
       
       // Recharger l'utilisateur pour vérifier si l'email a été vérifié

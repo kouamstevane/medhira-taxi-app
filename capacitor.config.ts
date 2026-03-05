@@ -2,7 +2,7 @@ import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
     appId: 'com.medjiraservice.medjiraserviceapp',
-    appName: 'Medhira Taxi',
+    appName: 'Medjira',
     webDir: 'out',
     server: {
         androidScheme: 'https',

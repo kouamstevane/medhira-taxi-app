@@ -8,12 +8,20 @@ import * as admin from 'firebase-admin';
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
 
 // Initialiser Firebase Admin si pas déjà fait
-if (!admin.apps.length) {
-  admin.initializeApp();
+function getAdmin() {
+  if (!admin.apps.length) {
+    admin.initializeApp();
+  }
+  return admin;
 }
 
-const db = admin.firestore();
-const fcm = admin.messaging();
+function getDb() {
+  return getAdmin().firestore();
+}
+
+function getMessaging() {
+  return getAdmin().messaging();
+}
 
 // Configuration Agora depuis les variables d'environnement Firebase
 // Note: functions.config() est déprécié dans v2, utiliser process.env
@@ -24,7 +32,7 @@ const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || '';
  * Valide que l'appartient à l'utilisateur
  */
 async function validateRideAccess(rideId: string, userId: string): Promise<boolean> {
-  const rideDoc = await db.collection('bookings').doc(rideId).get();
+  const rideDoc = await getDb().collection('bookings').doc(rideId).get();
   
   if (!rideDoc.exists) {
     return false;
@@ -38,7 +46,7 @@ async function validateRideAccess(rideId: string, userId: string): Promise<boole
  * Vérifie si un appel est déjà en cours pour cette course
  */
 async function hasActiveCallForRide(bookingId: string): Promise<boolean> {
-  const snapshot = await db.collection('calls')
+  const snapshot = await getDb().collection('calls')
     .where('rideId', '==', bookingId)
     .where('status', 'in', ['ringing', 'accepted'])
     .limit(1)
@@ -51,11 +59,11 @@ async function hasActiveCallForRide(bookingId: string): Promise<boolean> {
  * Récupère le token FCM d'un utilisateur depuis users ou drivers
  */
 async function getUserFcmToken(userId: string): Promise<string | undefined> {
-  const userDoc = await db.collection('users').doc(userId).get();
+  const userDoc = await getDb().collection('users').doc(userId).get();
   let fcmToken = userDoc.data()?.fcmToken;
   
   if (!fcmToken) {
-    const driverDoc = await db.collection('drivers').doc(userId).get();
+    const driverDoc = await getDb().collection('drivers').doc(userId).get();
     fcmToken = driverDoc.data()?.fcmToken;
   }
   
@@ -127,7 +135,7 @@ export const createCall = onCall(async (request: CallableRequest) => {
   }
 
   // 3.5. Valider que le destinataire existe
-  const calleeDoc = await db.collection('users').doc(calleeId).get();
+  const calleeDoc = await getDb().collection('users').doc(calleeId).get();
   if (!calleeDoc.exists) {
     throw new HttpsError('not-found', 'Destinataire introuvable');
   }
@@ -139,11 +147,11 @@ export const createCall = onCall(async (request: CallableRequest) => {
   }
 
   // 5. Récupérer les métadonnées de l'appelant
-  const callerDoc = await db.collection('users').doc(callerId).get();
+  const callerDoc = await getDb().collection('users').doc(callerId).get();
   const callerData = callerDoc.data() as { displayName?: string; photoURL?: string; name?: string } | undefined;
   
   // Déterminer le rôle de l'appelant
-  const rideDoc = await db.collection('bookings').doc(rideId).get();
+  const rideDoc = await getDb().collection('bookings').doc(rideId).get();
   const rideData = rideDoc.data() as { userId: string; driverId: string } | undefined;
   const callerRole = rideData?.userId === callerId ? 'client' : 'chauffeur';
 
@@ -152,12 +160,12 @@ export const createCall = onCall(async (request: CallableRequest) => {
   const token = generateAgoraToken(channel, callerId);
 
   // 7. Créer le document d'appel
-  const callRef = await db.collection('calls').add({
+  const callRef = await getDb().collection('calls').add({
     callerId,
     calleeId,
     rideId,
     status: 'ringing',
-    startTime: admin.firestore.FieldValue.serverTimestamp(),
+    startTime: getAdmin().firestore.FieldValue.serverTimestamp(),
     channel,
     token,
     callerMetadata: {
@@ -210,7 +218,7 @@ export const createCall = onCall(async (request: CallableRequest) => {
     };
 
     try {
-      await fcm.send(message);
+      await getMessaging().send(message);
     } catch (error) {
       console.error('Error sending FCM:', error);
       // Ne pas échouer la fonction si la notification échoue
@@ -253,7 +261,7 @@ export const answerCall = onCall(async (request: CallableRequest) => {
     throw new HttpsError('invalid-argument', 'callId manquant');
   }
 
-  const callRef = db.collection('calls').doc(callId);
+  const callRef = getDb().collection('calls').doc(callId);
   const callDoc = await callRef.get();
 
   if (!callDoc.exists) {
@@ -272,7 +280,7 @@ export const answerCall = onCall(async (request: CallableRequest) => {
 
   await callRef.update({
     status: 'accepted',
-    answerTime: admin.firestore.FieldValue.serverTimestamp()
+    answerTime: getAdmin().firestore.FieldValue.serverTimestamp()
   });
 
   // Logger analytics (optionnel)
@@ -303,7 +311,7 @@ export const endCall = onCall(async (request: CallableRequest) => {
     throw new HttpsError('invalid-argument', 'callId manquant');
   }
 
-  const callRef = db.collection('calls').doc(callId);
+  const callRef = getDb().collection('calls').doc(callId);
   const callDoc = await callRef.get();
 
   if (!callDoc.exists) {
@@ -316,7 +324,7 @@ export const endCall = onCall(async (request: CallableRequest) => {
     throw new HttpsError('permission-denied', 'Vous n\'êtes pas participant à cet appel');
   }
 
-  const endTime = admin.firestore.Timestamp.now();
+  const endTime = getAdmin().firestore.Timestamp.now();
   
   await callRef.update({
     status: 'ended',
@@ -361,7 +369,7 @@ export const sendSystemMessage = onCall(async (request: CallableRequest) => {
   }
 
   // Vérifier que l'appelant est participant à la course
-  const bookingDoc = await db.collection('bookings').doc(bookingId).get();
+  const bookingDoc = await getDb().collection('bookings').doc(bookingId).get();
   if (!bookingDoc.exists) {
     throw new HttpsError('not-found', 'Course non trouvée');
   }
@@ -376,7 +384,7 @@ export const sendSystemMessage = onCall(async (request: CallableRequest) => {
   const simulatedSenderType = recipient === 'client' ? 'driver' : 'client';
 
   // Écrire le message avec Admin SDK (pas de restrictions security rules)
-  await db.collection('bookings').doc(bookingId).collection('messages').add({
+  await getDb().collection('bookings').doc(bookingId).collection('messages').add({
     bookingId,
     senderId: 'system',
     senderName: 'Système',
@@ -384,7 +392,7 @@ export const sendSystemMessage = onCall(async (request: CallableRequest) => {
     type: 'system',
     content,
     read: false,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: getAdmin().firestore.FieldValue.serverTimestamp(),
   });
 
   // Mettre à jour le compteur de messages non lus
@@ -392,10 +400,10 @@ export const sendSystemMessage = onCall(async (request: CallableRequest) => {
     ? 'unreadMessages.driver'
     : 'unreadMessages.client';
 
-  await db.collection('bookings').doc(bookingId).update({
+  await getDb().collection('bookings').doc(bookingId).update({
     lastMessage: content,
-    lastMessageAt: admin.firestore.FieldValue.serverTimestamp(),
-    [unreadField]: admin.firestore.FieldValue.increment(1),
+    lastMessageAt: getAdmin().firestore.FieldValue.serverTimestamp(),
+    [unreadField]: getAdmin().firestore.FieldValue.increment(1),
   });
 
   return { success: true };

@@ -80,6 +80,12 @@ export const signUpWithEmail = async (
  */
 export const sendVerificationEmail = async (user: User): Promise<void> => {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medjira-service.firebaseapp.com';
+  console.log('[AuthService] Envoi de l\'email de vérification', {
+    uid: user.uid,
+    email: user.email,
+    url: `${origin}/login`
+  });
+  
   await sendEmailVerification(user, {
     url: `${origin}/login`,
     handleCodeInApp: false,
@@ -318,6 +324,7 @@ export const signInWithGoogleForDriver = async (): Promise<User> => {
         lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
         profileImageUrl: user.photoURL || null,
         userType: 'chauffeur',
+        phoneNumber: null, // ✅ REQUIS : les règles Firestore exigent phoneNumber == null pour les chauffeurs
         status: 'draft', // Statut initial pour les chauffeurs
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -400,6 +407,9 @@ export const createUserDocument = async (
       await setDoc(userRef, {
         uid: userId,          // ✅ uid toujours présent
         ...cleanData,
+        // ✅ CORRECTIF : Firestore Security Rules exigent phoneNumber == null pour les chauffeurs
+        // L'absence du champ est interprétée différemment de null par les règles
+        ...(collectionName === 'drivers' && !cleanData.phoneNumber ? { phoneNumber: null } : {}),
         createdAt: serverTimestamp(),  // ✅ serverTimestamp() au lieu de new Date()
         updatedAt: serverTimestamp(),
       });

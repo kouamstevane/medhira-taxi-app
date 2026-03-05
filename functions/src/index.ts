@@ -15,6 +15,7 @@
  */
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
 import {
   validateBankData as validateBankDataValidator,
@@ -24,6 +25,14 @@ import {
   encryptSensitiveData as encryptData,
 } from './utils/encryption.js';
 import { BankDetailsSchema, EncryptionRequestSchema } from './validators/schemas.js';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { Resend } from "resend";
+import { render } from "@react-email/render";
+import * as React from "react";
+import { DriverWelcomeEmail } from "./emails/DriverWelcome";
+
+// Initialiser Resend avec la clé API fournie par l'utilisateur
+const resend = new Resend('re_DiHPVbBk_3U6FJGV8oouVr937FGZGUNM6');
 
 // Initialiser Firebase Admin (vérifier si déjà initialisé pour éviter les erreurs)
 if (!admin.apps.length) {
@@ -148,10 +157,16 @@ export const validateBankDetails = onCall(
     }
 
     const data = request.data;
+    console.log(`[validateBankDetails] Validation request from ${identifier}:`, {
+      accountHolder: data.accountHolder,
+      iban: data.iban ? `${data.iban.substring(0, 4)}... (length: ${data.iban.length})` : 'missing',
+      bic: data.bic
+    });
 
     // Validation Zod
     const result = BankDetailsSchema.safeParse(data);
     if (!result.success) {
+      console.warn(`[validateBankDetails] Zod validation failed for ${identifier}:`, result.error.format());
       throw new HttpsError(
         'invalid-argument',
         'Données bancaires invalides',
@@ -346,50 +361,61 @@ export const cleanupFailedUploads = onCall(
 );
 
 /**
- * Cloud Function: cleanupOrphanedFiles
+ * Cloud Function: cleanupOrphanedFiles (Scheduler)
  *
- * Nettoie automatiquement les fichiers orphelins (sans document Firestore associé)
- * Cette fonction est destinée à être appelée par un scheduler périodique.
- *
- * @param request - Requête vide (appelée par scheduler)
- * @returns Rapport de nettoyage
- *
- * @example
- * // Déployer avec le scheduler:
- * // firebase functions:config:set scheduler.interval="0 2 * * *" # 2h du matin
+ * Nettoie automatiquement les fichiers Storage sans document Firestore associé.
+ * Exécutée chaque nuit à 3h du matin (Africa/Douala).
  */
-export const cleanupOrphanedFiles = onCall(
-  { cors: true },
-  async (request: CallableRequest) => {
-    // Cette fonction nécessite des droits admin
-    // Vérifier que l'appelant est authentifié et est admin
-    if (!request.auth) {
-      throw new HttpsError(
-        'unauthenticated',
-        'Authentification requise.'
-      );
+export const cleanupOrphanedFiles = onSchedule(
+  {
+    schedule: '0 3 * * *', // 3h du matin chaque nuit
+    timeZone: 'Africa/Douala',
+    region: 'europe-west1',
+    memory: '512MiB',
+  },
+  async (_event) => {
+    console.log('Démarrage du nettoyage des fichiers orphelins...');
+
+    const db = admin.firestore();
+    const bucket = admin.storage().bucket();
+
+    // Lister les fichiers dans le dossier drivers/
+    const [files] = await bucket.getFiles({ prefix: 'drivers/' });
+
+    let deletedCount = 0;
+    const errors: string[] = [];
+
+    for (const file of files) {
+      try {
+        // Extraire l'uid depuis le chemin : drivers/{uid}/...
+        const parts = file.name.split('/');
+        if (parts.length < 3) continue;
+
+        const uid = parts[1];
+
+        // Vérifier si un document driver existe pour cet uid
+        const driverDoc = await db.collection('drivers').doc(uid).get();
+
+        if (!driverDoc.exists) {
+          await file.delete();
+          deletedCount++;
+          console.log(`Fichier orphelin supprimé : ${file.name}`);
+
+          // Audit log
+          await db.collection('audit_logs').add({
+            action: 'DELETE_ORPHANED_FILE',
+            filePath: file.name,
+            uid,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      } catch (err: any) {
+        console.error(`Erreur sur ${file.name}:`, err);
+        errors.push(file.name);
+      }
     }
 
-    // TODO: Vérifier que l'utilisateur est admin via une custom claim
-    // const isAdmin = request.auth.token.admin === true;
-    // if (!isAdmin) {
-    //   throw new functions.https.HttpsError(
-    //     'permission-denied',
-    //     'Droits admin requis.'
-    //   );
-    // }
-
-    // Cette fonction est un placeholder pour implémentation future
-    // Elle nécessiterait:
-    // 1. Lister tous les fichiers dans drivers/ et driver_documents/
-    // 2. Pour chaque fichier, vérifier s'il est référencé dans un document driver
-    // 3. Supprimer les fichiers orphelins
-    // 4. Logger les suppressions pour audit
-
-    return {
-      message: 'Fonction non implémentée. À développer avec un scheduler Cloud Tasks.',
-      note: 'Nécessite une implémentation avec pagination pour gérer un grand nombre de fichiers.',
-    };
+    console.log(`Nettoyage terminé : ${deletedCount} fichier(s) supprimé(s), ${errors.length} erreur(s).`);
   }
 );
 
@@ -398,4 +424,44 @@ export const cleanupOrphanedFiles = onCall(
 // ============================================================================
 // Ces fonctions gèrent les appels via Agora RTC pour la fonctionnalité d'appel
 // entre passagers et chauffeurs.
-export { createCall, answerCall, endCall, sendSystemMessage } from './voip';
+export { createCall, answerCall, endCall, sendSystemMessage } from './voip/index.js';
+
+export const onDriverRegistration = onDocumentWritten("drivers/{driverId}", async (event) => {
+  const beforeData = event.data?.before.data();
+  const afterData = event.data?.after.data();
+
+  if (!afterData) return;
+
+  // L'e-mail est envoyé uniquement quand le statut devient 'pending' (soumission finale)
+  const wasPending = beforeData?.status === 'pending';
+  const isPending = afterData.status === 'pending';
+
+  if (isPending && !wasPending) {
+    const email = afterData.email;
+    const firstName = afterData.firstName || "Chauffeur";
+
+    if (!email) {
+      console.warn("Aucun email trouvé pour le chauffeur:", event.params.driverId);
+      return;
+    }
+
+    try {
+      const emailHtml = await render(
+        React.createElement(DriverWelcomeEmail, {
+          firstName: firstName,
+        })
+      );
+
+      await resend.emails.send({
+        from: "MedJira <onboarding@resend.dev>",
+        to: email,
+        subject: "Bienvenue chez MedJira - Candidature reçue",
+        html: emailHtml,
+      });
+
+      console.log(`Email de confirmation envoyé avec succès à ${email} via Resend.`);
+    } catch (error) {
+      console.error("Erreur lors de l'envoi de l'email via Resend:", error);
+    }
+  }
+});
