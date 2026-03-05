@@ -151,9 +151,8 @@ export default function HomePage() {
 
         {/* Footer */}
         <footer className="mt-12 text-center text-sm text-gray-500 relative z-10">
-          <p>🇨🇲 Service disponible au Cameroun</p>
-          {/* <p className="mt-2">Douala • Yaoundé • Bafoussam</p> */}
-          <p className="mt-2">Quelqu&apos;en soit votre region</p>
+          <p>🇨🇦 Service disponible au Canada</p>
+          <p className="mt-2">Toronto • Ottawa • Montréal</p>
         </footer>
       </div>
     );

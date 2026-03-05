@@ -67,7 +67,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
           const newWallet: Wallet = {
             userId: currentUser.uid,
             balance: 0,
-            currency: 'FCFA',
+            currency: 'CAD',
             updatedAt: new Date(),
           };
           
@@ -80,7 +80,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
         setWallet({
           userId: currentUser.uid,
           balance: 0,
-          currency: 'FCFA',
+          currency: 'CAD',
           updatedAt: new Date(),
         });
       } finally {
@@ -95,7 +95,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
    * Formater le montant avec séparateurs de milliers
    */
   const formatAmount = (amount: number): string => {
-    return new Intl.NumberFormat('fr-FR').format(amount);
+    return new Intl.NumberFormat('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   };
 
   if (!currentUser || loading) {
@@ -153,7 +153,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
             <p className="text-lg font-bold text-gray-900 dark:text-white">
               {formatAmount(wallet?.balance || 0)}{' '}
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {wallet?.currency || 'FCFA'}
+                {wallet?.currency || 'CAD'}
               </span>
             </p>
           </div>
@@ -175,8 +175,8 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
           </svg>
         </div>
 
-        {/* Badge "Recharger" si solde faible */}
-        {(wallet?.balance || 0) < 1000 && (
+        {/* Badge "Recharger" si solde faible (inférieur à 5 CAD) */}
+        {(wallet?.balance || 0) < 5 && (
           <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse">
             Recharger
           </div>

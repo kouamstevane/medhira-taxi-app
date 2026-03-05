@@ -335,7 +335,7 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
     price,
     distance,
     duration,
-    currency: 'FCFA',
+    currency: 'CAD', // CORRECTION FCFA→CAD #5: Correction de la devise de FCFA à CAD
   };
 };
 
@@ -593,7 +593,7 @@ export const completeTrip = async (bookingId: string): Promise<void> => {
   // Envoyer la facture détaillée
   try {
     const { sendSystemMessage } = await import('@/services/chat.service');
-    const invoice = `🏁 Course terminée !\n\n📋 Facture détaillée :\n• Tarif de base : ${carType.basePrice} FCFA\n• Distance (${booking.distance.toFixed(2)} km) : ${(booking.distance * carType.pricePerKm).toFixed(0)} FCFA\n• Durée (${durationMinutes} min) : ${(durationMinutes * carType.pricePerMinute).toFixed(0)} FCFA\n\n💰 Total : ${finalPrice.toFixed(0)} FCFA\n\nMerci pour votre confiance ! 🙏`;
+    const invoice = `🏁 Course terminée !\n\n📋 Facture détaillée :\n• Tarif de base : ${carType.basePrice} CAD\n• Distance (${booking.distance.toFixed(2)} km) : ${(booking.distance * carType.pricePerKm).toFixed(2)} CAD\n• Durée (${durationMinutes} min) : ${(durationMinutes * carType.pricePerMinute).toFixed(2)} CAD\n\n💰 Total : ${finalPrice.toFixed(2)} CAD\n\nMerci pour votre confiance ! 🙏`;
     await sendSystemMessage(bookingId, invoice);
   } catch (error) {
     logger.error('Erreur envoi facture', { error, bookingId });
@@ -627,6 +627,6 @@ export const calculateCancellationPenalty = async (bookingId: string): Promise<n
   // Pénalité = 50% du tarif de base + temps x tarif minute
   const penalty = (carType.basePrice * 0.5) + (elapsedMinutes * carType.pricePerMinute);
   
-  return Math.max(penalty, 500); // Minimum 500 FCFA
+  return Math.round(Math.max(penalty, 2) * 100) / 100; // Minimum 2 CAD
 };
 

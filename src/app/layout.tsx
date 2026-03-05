@@ -41,17 +41,18 @@ export const viewport: Viewport = {
  */
 export const metadata: Metadata = {
   title: {
-    default: "Medjira - Taxi et Livraison au Cameroun",
+    default: "Medjira - Taxi et Livraison au Canada",
     template: "%s | Medjira",
   },
   description: 
-    "Application de mobilité et livraison au Cameroun. Commander un taxi ou faire livrer vos repas en quelques clics. Service rapide, fiable et sécurisé.",
+    "Application de mobilité et livraison au Canada. Commander un taxi ou faire livrer vos repas en quelques clics. Service rapide, fiable et sécurisé.",
   keywords: [
     "taxi",
     "livraison",
-    "cameroun",
-    "douala",
-    "yaoundé",
+    "canada",
+    "toronto",
+    "ottawa",
+    "montréal",
     "transport",
     "medjira",
     "mobilité",
@@ -67,10 +68,10 @@ export const metadata: Metadata = {
   // Open Graph (Facebook, LinkedIn, etc.)
   openGraph: {
     type: "website",
-    locale: "fr_FR",
+    locale: "fr_CA",
     url: "https://medjira.com",
     siteName: "Medjira",
-    title: "Medjira - Taxi et Livraison au Cameroun",
+    title: "Medjira - Taxi et Livraison au Canada",
     description: "Commander un taxi ou faire livrer vos repas en quelques clics",
     images: [
       {

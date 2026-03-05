@@ -45,11 +45,11 @@ const toDate = (value: Date | Timestamp | undefined): Date | undefined => {
 };
 
 /**
- * Formater une date en français
+ * Formater une date en français (Canada)
  */
 const formatDate = (date: Date | undefined): string => {
   if (!date) return "N/A";
-  return date.toLocaleDateString("fr-FR", {
+  return date.toLocaleDateString("fr-CA", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -75,16 +75,14 @@ export const extractInvoiceData = (booking: Booking): InvoiceData => {
   const createdAt = toDate(booking.createdAt) || new Date();
   const completedAt = toDate(booking.completedAt);
 
-  // Estimation des prix par composante (basée sur les tarifs standards)
-  // Ces valeurs sont approximatives car les vrais tarifs sont dans Firestore
-  const estimatedBasePrice = 500;
-  const estimatedPricePerKm = 200;
-  const estimatedPricePerMin = 50;
+  // Estimation des prix par composante pour le Canada
+  const estimatedBasePrice = 3.50;
+  const estimatedPricePerKm = 1.75;
+  const estimatedPricePerMin = 0.45;
 
-  const distancePrice = Math.round(booking.distance * estimatedPricePerKm);
+  const distancePrice = Math.round(booking.distance * estimatedPricePerKm * 100) / 100;
   const durationPrice = Math.round(
-    (booking.actualDuration || booking.duration) * estimatedPricePerMin
-  );
+    (booking.actualDuration || booking.duration) * estimatedPricePerMin * 100) / 100;
   const basePrice = estimatedBasePrice;
 
   return {
@@ -284,15 +282,15 @@ export const generateInvoicePDF = (data: InvoiceData): void => {
   const rows = [
     {
       label: "Tarif de base",
-      value: `${data.basePrice.toLocaleString("fr-FR")} FCFA`,
+      value: `${data.basePrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`,
     },
     {
       label: `Distance (${data.distance.toFixed(2)} km)`,
-      value: `${data.distancePrice.toLocaleString("fr-FR")} FCFA`,
+      value: `${data.distancePrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`,
     },
     {
       label: `Durée (${data.duration} min)`,
-      value: `${data.durationPrice.toLocaleString("fr-FR")} FCFA`,
+      value: `${data.durationPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`,
     },
   ];
 
@@ -314,7 +312,7 @@ export const generateInvoicePDF = (data: InvoiceData): void => {
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
   doc.text("TOTAL", col1, y + 4);
-  doc.text(`${data.finalPrice.toLocaleString("fr-FR")} FCFA`, col2, y + 4, {
+  doc.text(`${data.finalPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`, col2, y + 4, {
     align: "right",
   });
 
@@ -376,16 +374,12 @@ export const getInvoiceText = (booking: Booking): string => {
 📍 Vers: ${data.destination}
 
 📊 Détails:
-• Tarif de base: ${data.basePrice.toLocaleString("fr-FR")} FCFA
-• Distance (${data.distance.toFixed(
-    2
-  )} km): ${data.distancePrice.toLocaleString("fr-FR")} FCFA
-• Durée (${data.duration} min): ${data.durationPrice.toLocaleString(
-    "fr-FR"
-  )} FCFA
+• Tarif de base: ${data.basePrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD
+• Distance (${data.distance.toFixed(2)} km): ${data.distancePrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD
+• Durée (${data.duration} min): ${data.durationPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD
 
 ━━━━━━━━━━━━━━━━━━━━━
-💰 TOTAL: ${data.finalPrice.toLocaleString("fr-FR")} FCFA
+💰 TOTAL: ${data.finalPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD
 
 Merci pour votre confiance ! 🙏`;
 };

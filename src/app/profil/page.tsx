@@ -33,7 +33,7 @@ export default function ProfilPage() {
     phone: '',
     address: '',
     city: '',
-    country: 'Cameroun',
+    country: 'Canada',
     bio: ''
   });
   const [profileImage, setProfileImage] = useState<File | null>(null);
@@ -53,7 +53,7 @@ export default function ProfilPage() {
       phone: '',
       address: '',
       city: '',
-      country: 'Cameroun',
+      country: 'Canada',
       bio: '',
     }
   });
@@ -90,7 +90,7 @@ export default function ProfilPage() {
             phone: data.phone || '',
             address: data.address || '',
             city: data.city || '',
-            country: data.country || 'Cameroun',
+            country: data.country || 'Canada',
             bio: data.bio || ''
           });
           setProfileImageUrl(data.profileImageUrl || '');
@@ -212,7 +212,7 @@ export default function ProfilPage() {
   };
 
 
-  const countries = ['Cameroun', 'Sénégal', "Côte d'Ivoire", 'Gabon', 'Autre'];
+  const countries = ['Canada', 'France', 'Belgique', 'Cameroun', 'Autre'];
 
   if (loading && !editing) {
     return (
@@ -319,8 +319,8 @@ export default function ProfilPage() {
                     type="tel" 
                     {...form.register('phone')} 
                     label="Numéro de téléphone"
-                    placeholder="6XXXXXXXX"
-                    helperText="Format sans le code pays (+237)."
+                    placeholder="514XXXXXXX"
+                    helperText="Format sans le code pays (+1)."
                     required 
                   />
                 </div>
@@ -393,7 +393,7 @@ export default function ProfilPage() {
                 </div>
                 <div>
                   <p className="text-sm text-[#5A4A1A]">Téléphone</p>
-                  <p className="font-medium text-[#2E2307]">{userData.phone ? `+237 ${userData.phone}` : 'Non renseigné'}</p>
+                  <p className="font-medium text-[#2E2307]">{userData.phone ? `+1 ${userData.phone}` : 'Non renseigné'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-[#5A4A1A]">Adresse</p>
@@ -444,7 +444,7 @@ export default function ProfilPage() {
                     <div>
                       <p className="font-semibold text-gray-800">{type} - {destination || description}</p>
                       <p className="text-sm text-gray-500">
-                        {new Date(timestamp).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {price} FCFA
+                        {new Date(timestamp).toLocaleDateString('fr-CA', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' })} • {price?.toLocaleString('fr-CA', { minimumFractionDigits: 2 })} CAD
                       </p>
                     </div>
                     <span className={`px-3 py-1 text-xs font-medium rounded-full ${status === 'completed' || status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>

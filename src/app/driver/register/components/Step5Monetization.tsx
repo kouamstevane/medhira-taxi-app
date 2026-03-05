@@ -8,11 +8,11 @@ import { Loader2, ShieldCheck } from 'lucide-react';
 const step5Schema = z.object({
   accountHolder: z.string().min(2, "Nom du titulaire requis"),
   iban: z.string()
-    .transform(v => v.replace(/\s+/g, '').toUpperCase())
-    .pipe(z.string().regex(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/, "Format IBAN invalide")),
+    .transform(v => v.replace(/[\s]/g, '').toUpperCase())
+    .pipe(z.string().regex(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/, "IBAN invalide")),
   bic: z.string()
-    .transform(v => v.replace(/\s+/g, '').toUpperCase())
-    .pipe(z.string().regex(/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/, "Format BIC/SWIFT invalide")),
+    .transform(v => v.replace(/[\s]/g, '').toUpperCase())
+    .pipe(z.string().regex(/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/, "BIC/SWIFT invalide")),
 });
 
 export type Step5FormData = z.infer<typeof step5Schema>;

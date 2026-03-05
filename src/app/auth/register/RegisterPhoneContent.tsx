@@ -16,10 +16,10 @@ import { isValidPhoneNumber } from '@/lib/validation';
 
 // Liste des pays supportés avec codes, drapeaux et formats de numéro par défaut
 const countries = [
-  { code: 'CM', dialCode: '+237', name: 'Cameroun', flag: '🇨🇲', defaultNumber: '655744484' },
+  { code: 'CA', dialCode: '+1', name: 'Canada', flag: '🇨🇦', defaultNumber: '5550123456' },
   { code: 'FR', dialCode: '+33', name: 'France', flag: '🇫🇷', defaultNumber: '612345678' },
   { code: 'BE', dialCode: '+32', name: 'Belgique', flag: '🇧🇪', defaultNumber: '470123456' },
-  { code: 'CA', dialCode: '+1', name: 'Canada', flag: '🇨🇦', defaultNumber: '5550123456' },
+  { code: 'CM', dialCode: '+237', name: 'Cameroun', flag: '🇨🇲', defaultNumber: '655744484' },
 ];
 
 export default function RegisterPhoneContent() {
@@ -107,10 +107,10 @@ export default function RegisterPhoneContent() {
 
     // Mapping des longueurs attendues par indicatif pays
     const countryLengths: Record<string, number> = {
+      '+1': 10,
       '+237': 9,
       '+33': 10,
       '+32': 9,
-      '+1': 10,
     };
 
     if (!isValidPhoneNumber(fullPhoneNumber, selectedCountry.dialCode)) {

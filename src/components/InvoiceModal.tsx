@@ -38,7 +38,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
   };
   
   const formatPrice = (price: number): string => {
-    return price.toLocaleString('fr-FR');
+    return price.toLocaleString('fr-CA', { minimumFractionDigits: 2 });
   };
 
   return (
@@ -106,15 +106,15 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Tarif de base</span>
-                <span className="font-medium">{formatPrice(invoiceData.basePrice)} FCFA</span>
+                <span className="font-medium">{formatPrice(invoiceData.basePrice)} CAD</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Distance ({invoiceData.distance.toFixed(2)} km)</span>
-                <span className="font-medium">{formatPrice(invoiceData.distancePrice)} FCFA</span>
+                <span className="font-medium">{formatPrice(invoiceData.distancePrice)} CAD</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Durée ({invoiceData.duration} min)</span>
-                <span className="font-medium">{formatPrice(invoiceData.durationPrice)} FCFA</span>
+                <span className="font-medium">{formatPrice(invoiceData.durationPrice)} CAD</span>
               </div>
             </div>
             
@@ -123,7 +123,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold text-gray-900">Total</span>
                 <span className="text-2xl font-bold text-[#f29200]">
-                  {formatPrice(invoiceData.finalPrice)} FCFA
+                  {formatPrice(invoiceData.finalPrice)} CAD
                 </span>
               </div>
             </div>

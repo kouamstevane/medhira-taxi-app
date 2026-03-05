@@ -97,7 +97,7 @@ export const broadcastRideRequest = async (
     console.log('[BROADCAST] Broadcast terminé', {
       rideId,
       driversNotified: driverIds.length,
-      bonus: bonus > 0 ? `${bonus} FCFA` : 'Aucun',
+      bonus: bonus > 0 ? `${bonus} CAD` : 'Aucun',
     });
 
     return driverIds;

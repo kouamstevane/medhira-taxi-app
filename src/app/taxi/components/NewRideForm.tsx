@@ -249,7 +249,7 @@ useEffect(() => {
   // Vérifier si une adresse est complète (contient une virgule, signe d'une adresse complète)
   const isCompleteAddress = useCallback((address: string): boolean => {
     if (!address || address.length < 5) return false;
-    // Une adresse complète contient généralement une virgule (ex: "Lycée de Makepe, Douala, Cameroun")
+    // Une adresse complète contient généralement une virgule (ex: "CN Tower, Toronto, Canada")
     // Ou au moins 3 mots séparés par des espaces
     return address.includes(',') || address.split(' ').length >= 3;
   }, []);

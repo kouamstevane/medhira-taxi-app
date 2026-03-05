@@ -9,6 +9,7 @@
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { UserData, Booking, Transaction, Wallet } from '@/types';
+import { DEFAULT_PRICING } from '@/utils/constants';
 
 /**
  * Crée ou met à jour un document utilisateur dans Firestore
@@ -74,7 +75,7 @@ export const isPeakHour = (): boolean => {
  * @param basePrice - Prix de base
  * @param pricePerKm - Prix par km
  * @param pricePerMinute - Prix par minute
- * @returns Prix calculé arrondi à la centaine supérieure
+ * @returns Prix calculé arrondi à 2 décimales
  */
 export const calculateTripPrice = (
   distance: number,
@@ -86,12 +87,13 @@ export const calculateTripPrice = (
   let price = basePrice + (distance * pricePerKm) + (duration * pricePerMinute);
 
   // Appliquer le multiplicateur d'heure de pointe si applicable
+  // CORRECTION FCFA→CAD #1: Utiliser DEFAULT_PRICING.PEAK_HOUR_MULTIPLIER (1.25) au lieu de 1.2 codé en dur
   if (isPeakHour()) {
-    price *= 1.2;
+    price *= DEFAULT_PRICING.PEAK_HOUR_MULTIPLIER;
   }
 
-  // Arrondir à la centaine supérieure
-  return Math.ceil(price / 100) * 100;
+  // Arrondir à 2 décimales (centimes)
+  return Math.round(price * 100) / 100;
 };
 
 /**
@@ -134,7 +136,7 @@ export const getOrCreateWallet = async (userId: string): Promise<Wallet> => {
   const newWallet: Wallet = {
     userId,
     balance: 0,
-    currency: 'FCFA',
+    currency: 'CAD',
     updatedAt: serverTimestamp() as any,
   };
 

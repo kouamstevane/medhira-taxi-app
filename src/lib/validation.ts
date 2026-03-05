@@ -48,16 +48,16 @@ export const getPasswordCriteria = (password: string) => {
  * Format international avec indicatif pays et validation stricte par pays
  */
 const COUNTRY_RULES: Record<string, number> = {
-  '+237': 9,  // Cameroun
+  '+1': 10,   // Canada/USA
   '+33': 10,  // France
   '+32': 9,   // Belgique
-  '+1': 10,   // Canada/USA
+  '+237': 9,  // Cameroun (Fallback)
 };
 
 export const isValidPhoneNumber = (phone: string, countryCode?: string): boolean => {
   if (!phone) return false;
 
-  // Accepte les formats: +237655744484, +33612345678, etc.
+  // Accepte les formats: +15551234567, +33612345678, etc.
   const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
   const phoneRegex = /^\+[1-9]\d{1,14}$/;
 
@@ -114,12 +114,19 @@ export const isValidName = (name: string): boolean => {
 };
 
 /**
- * Validation de plaque d'immatriculation (format Cameroun)
+ * Validation de plaque d'immatriculation (format canadien standard)
+ * 
+ * Accepte les formats provinciaux canadiens:
+ * - Ontario: ABCD 123 ou 123 ABC
+ * - Québec: ABC 123 ou 123 ABC-123
+ * - Alberta: ABC-0123
+ * - Etc.
  */
 export const isValidLicensePlate = (plate: string): boolean => {
-  // Format: XX 1234 XX ou XX-1234-XX
-  const plateRegex = /^[A-Z]{2}[\s-]?\d{4}[\s-]?[A-Z]{2}$/i;
-  return plateRegex.test(plate);
+  // CORRECTION FCFA→CAD #3: Regex flexible pour formats canadiens variés
+  // Accepte: 3-8 caractères alphanumériques avec espaces/tirets optionnels
+  const plateRegex = /^[A-Z0-9]{2,4}[\s-]?[A-Z0-9]{2,4}$/i;
+  return plateRegex.test(plate.trim());
 };
 
 /**

@@ -38,13 +38,13 @@ export const VehicleOption = ({ carType, selected, onSelect, disabled = false }:
           </p>
           <div className="mt-2 flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
             <span className="text-gray-600">
-              Base: <span className="font-medium text-gray-900">{carType.basePrice} FCFA</span>
+              Base: <span className="font-medium text-gray-900">{carType.basePrice} CAD</span> {/* CORRECTION FCFA→CAD #6: Affichage en CAD */}
             </span>
             <span className="text-gray-600">
-              Par km: <span className="font-medium text-gray-900">{carType.pricePerKm} FCFA</span>
+              Par km: <span className="font-medium text-gray-900">{carType.pricePerKm} CAD</span> {/* CORRECTION FCFA→CAD #7: Affichage en CAD */}
             </span>
             <span className="text-gray-600">
-              Par min: <span className="font-medium text-gray-900">{carType.pricePerMinute} FCFA</span>
+              Par min: <span className="font-medium text-gray-900">{carType.pricePerMinute} CAD</span> {/* CORRECTION FCFA→CAD #8: Affichage en CAD */}
             </span>
           </div>
         </div>

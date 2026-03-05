@@ -70,11 +70,11 @@ export interface Booking {
   cancelledAt?: Date | Timestamp;
   startedAt?: Date | Timestamp; // Début de la course
   actualDuration?: number; // Durée réelle en minutes
-  cancellationFee?: number; // Frais d'annulation en FCFA
+  cancellationFee?: number; // Frais d'annulation (en CAD) // CORRECTION FCFA→CAD #9
   reason?: string;
 
   // Système de bonus (Plan B)
-  bonus?: number; // Montant du bonus en FCFA
+  bonus?: number; // Montant du bonus (en CAD) // CORRECTION FCFA→CAD #10
   bonusActivatedAt?: Date | Timestamp; // Date d'activation du bonus
 
   // Messagerie In-App

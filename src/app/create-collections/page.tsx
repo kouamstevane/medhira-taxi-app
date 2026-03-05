@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, serverTimestamp, query, getDocs, limit } from 'firebase/firestore';
+import { DEFAULT_PRICING } from '@/utils/constants'; // CORRECTION FCFA→CAD #1: Import des constantes de prix CAD
 
 export default function CreateCollectionsPage() {
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -116,9 +117,9 @@ export default function CreateCollectionsPage() {
           sampleDoc: {
             name: 'Standard',
             description: 'Voiture standard',
-            baseFare: 500,
-            pricePerKm: 100,
-            pricePerMinute: 20,
+            baseFare: DEFAULT_PRICING.BASE_PRICE, // CORRECTION FCFA→CAD #2: Utilisation du prix de base CAD (3.5)
+            pricePerKm: DEFAULT_PRICING.PRICE_PER_KM, // CORRECTION FCFA→CAD #3: Utilisation du prix au km CAD (1.75)
+            pricePerMinute: DEFAULT_PRICING.PRICE_PER_MINUTE, // CORRECTION FCFA→CAD #4: Utilisation du prix par minute CAD (0.45)
             imageUrl: '',
             isActive: true,
             createdAt: serverTimestamp(),

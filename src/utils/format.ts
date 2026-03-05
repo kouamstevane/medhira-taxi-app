@@ -7,16 +7,20 @@
  */
 
 /**
- * Formate un montant en FCFA avec séparateurs de milliers
+ * Formate un montant en CAD ($)
  * 
  * @param amount - Montant à formater
- * @returns Montant formaté avec séparateurs
+ * @returns Montant formaté avec symbole $
  * 
  * @example
- * formatCurrency(1500000) // "1 500 000 FCFA"
+ * formatCurrency(15.5) // "15,50 $"
  */
 export const formatCurrency = (amount: number): string => {
-  return `${amount.toLocaleString('fr-FR')} FCFA`;
+  return amount.toLocaleString('fr-CA', {
+    style: 'currency',
+    currency: 'CAD',
+    currencyDisplay: 'symbol'
+  });
 };
 
 /**
@@ -26,13 +30,22 @@ export const formatCurrency = (amount: number): string => {
  * @returns Numéro formaté
  * 
  * @example
- * formatPhoneNumber("+237655744484") // "+237 6 55 74 44 84"
+ * formatPhoneNumber("+15550123456") // "+1 (555) 012-3456"
  */
 export const formatPhoneNumber = (phone: string): string => {
-  // Ajouter des espaces pour la lisibilité
-  if (phone.startsWith('+237')) {
-    return phone.replace(/(\+237)(\d)(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5 $6');
+  // Supprimer tout ce qui n'est pas chiffre ou +
+  const clean = phone.replace(/[^\d+]/g, '');
+  
+  // Format Canada (+1)
+  if (clean.startsWith('+1') && clean.length === 12) {
+    return clean.replace(/(\+1)(\d{3})(\d{3})(\d{4})/, '$1 ($2) $3-$4');
   }
+  
+  // Format Cameroun (+237)
+  if (clean.startsWith('+237')) {
+    return clean.replace(/(\+237)(\d)(\d{2})(\d{2})(\d{2})(\d{2})/, '$1 $2 $3 $4 $5 $6');
+  }
+  
   return phone;
 };
 
@@ -79,7 +92,7 @@ export const formatDuration = (minutes: number): string => {
  * formatDate(new Date()) // "4 novembre 2025"
  */
 export const formatDate = (date: Date): string => {
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat('fr-CA', {
     day: 'numeric',
     month: 'long',
     year: 'numeric'
@@ -96,7 +109,7 @@ export const formatDate = (date: Date): string => {
  * formatDateTime(new Date()) // "4 novembre 2025 à 13:45"
  */
 export const formatDateTime = (date: Date): string => {
-  return new Intl.DateTimeFormat('fr-FR', {
+  return new Intl.DateTimeFormat('fr-CA', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',

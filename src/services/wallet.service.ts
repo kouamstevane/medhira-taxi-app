@@ -47,7 +47,7 @@ export const getOrCreateWallet = async (userId: string): Promise<Wallet> => {
   const newWallet: Wallet = {
     userId,
     balance: 0,
-    currency: 'FCFA',
+    currency: 'CAD',
     updatedAt: serverTimestamp() as Timestamp,
   };
 
@@ -96,7 +96,7 @@ export const rechargeWallet = async (
     userId,
     type: 'deposit',
     amount: request.amount,
-    currency: 'FCFA',
+    currency: 'CAD',
     method: request.method,
     description: `Rechargement via ${request.method}`,
   });
@@ -165,7 +165,7 @@ export const payBooking = async (
     userId,
     type: 'payment',
     amount: -amount,
-    currency: 'FCFA',
+    currency: 'CAD',
     description: 'Paiement de course',
     bookingId,
   });

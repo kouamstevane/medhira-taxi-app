@@ -24,8 +24,8 @@ const containerStyle = {
 };
 
 const defaultCenter = {
-  lat: 4.0511, // Douala
-  lng: 9.7679
+  lat: 43.6532, // Toronto
+  lng: -79.3832
 };
 
 export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps) {
@@ -161,7 +161,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
         const { calculateCancellationPenalty } = await import('@/services/taxi.service');
         cancellationFee = await calculateCancellationPenalty(bookingId);
         
-        const confirmMsg = `⚠️ Attention !\n\nVous êtes sur le point d'annuler une course en cours.\n\nPénalité d'annulation : ${cancellationFee.toFixed(0)} FCFA\n\nVoulez-vous vraiment continuer ?`;
+        const confirmMsg = `⚠️ Attention !\n\nVous êtes sur le point d'annuler une course en cours.\n\nPénalité d'annulation : ${cancellationFee.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD\n\nVoulez-vous vraiment continuer ?`;
         
         if (!confirm(confirmMsg)) {
           setCancelling(false);
@@ -180,7 +180,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       setShowCancelModal(false);
       
       if (cancellationFee > 0) {
-        alert(`✅ Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toFixed(0)} FCFA ont été appliqués à votre compte.`);
+        alert(`✅ Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD ont été appliqués à votre compte.`);
       } else {
         alert('✅ Commande annulée avec succès.');
       }
@@ -457,15 +457,14 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                   // Utiliser la distance parcourue (distance initiale - distance restante)
                   const distanceTraveled = Math.max(0, booking.distance - realTimeDistance);
                   
-                  // Estimation basée sur le type de véhicule
-                  // Note: Les tarifs sont récupérés côté serveur, on fait une estimation simple ici
-                  const basePrice = 500; // Prix de base estimé
-                  const pricePerKm = 200; // Prix par km estimé
-                  const pricePerMin = 50; // Prix par minute estimé
+                  // Estimation basée sur le type de véhicule pour le Canada
+                  const basePrice = 3.50; 
+                  const pricePerKm = 1.75;
+                  const pricePerMin = 0.45;
                   
                   const estimatedPrice = basePrice + (distanceTraveled * pricePerKm) + (elapsedMinutes * pricePerMin);
                   
-                  return `${Math.round(estimatedPrice)} FCFA`;
+                  return `${estimatedPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`;
                 })()}
               </p>
               <p className="text-xs text-gray-500 mt-1">

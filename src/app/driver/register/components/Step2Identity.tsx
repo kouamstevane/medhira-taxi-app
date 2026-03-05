@@ -47,7 +47,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
       firstName: initialData?.firstName || '',
       lastName: initialData?.lastName || '',
       dob: initialData?.dob || '',
-      nationality: initialData?.nationality || 'CM',
+      nationality: initialData?.nationality || 'CA',
       phone: initialData?.phone || '',
       ssn: initialData?.ssn || '',
       address: initialData?.address || '',
@@ -127,8 +127,8 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
       autocompleteService.current.getPlacePredictions({
         input: addressInput,
         sessionToken: sessionToken.current,
-        // Limitée au Cameroun (zone cible de l'application Medjira)
-        componentRestrictions: { country: "cm" }
+        // Limitée au Canada
+        componentRestrictions: { country: "ca" }
       }, (results, status) => {
         if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
           setPredictions(results);
@@ -312,14 +312,12 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                     {...register('nationality')} 
                     label="Nationalité"
                     options={[
-                        { value: 'CM', label: 'Cameroun' },
+                        { value: 'CA', label: 'Canada' },
                         { value: 'FR', label: 'France' },
+                        { value: 'BE', label: 'Belgique' },
+                        { value: 'CM', label: 'Cameroun' },
                         { value: 'SN', label: 'Sénégal' },
                         { value: 'CI', label: "Côte d'Ivoire" },
-                        { value: 'GA', label: 'Gabon' },
-                        { value: 'CG', label: 'Congo' },
-                        { value: 'BE', label: 'Belgique' },
-                        { value: 'CH', label: 'Suisse' },
                     ]}
                     error={errors.nationality?.message}
                     required
@@ -329,15 +327,15 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
             <InputField 
                 type="tel" 
                 label="Numéro de Téléphone"
-                placeholder="+237 6 00 00 00 00" 
+                placeholder="+1 514 000 0000" 
                 {...register('phone')} 
-                error={errors.phone?.message}
+                helperText="Format international (+1 pour le Canada)"
                 required
             />
 
             <InputField 
                 type="password" 
-                label="Numéro de Sécurité Sociale (NIR)"
+                label="Numéro d'Assurance Sociale (NAS)"
                 placeholder="Masqué par défaut" 
                 {...register('ssn')} 
                 error={errors.ssn?.message}

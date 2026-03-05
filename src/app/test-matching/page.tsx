@@ -18,8 +18,8 @@ export default function TestMatchingPage() {
     setResults([]);
     
     try {
-      // Test avec une localisation à Douala
-      const testLocation = { lat: 4.0511, lng: 9.7679 }; // Douala
+      // Test avec une localisation à Toronto
+      const testLocation = { lat: 43.6532, lng: -79.3832 }; // Toronto
       
       logger.info('Test recherche de chauffeurs', { location: testLocation });
       

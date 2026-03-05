@@ -31,11 +31,11 @@ const containerStyle = {
 };
 
 /**
- * Position par défaut (Douala, Cameroun)
+ * Position par défaut (Toronto, Canada)
  */
 const defaultCenter = {
-  lat: 4.0511,
-  lng: 9.7679,
+  lat: 43.6532,
+  lng: -79.3832,
 };
 
 interface MapViewProps {

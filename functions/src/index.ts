@@ -159,7 +159,7 @@ export const validateBankDetails = onCall(
     const data = request.data;
     console.log(`[validateBankDetails] Validation request from ${identifier}:`, {
       accountHolder: data.accountHolder,
-      iban: data.iban ? `${data.iban.substring(0, 4)}... (length: ${data.iban.length})` : 'missing',
+      iban: data.iban ? `${data.iban.substring(0, 8)}...` : 'missing',
       bic: data.bic
     });
 
@@ -465,3 +465,10 @@ export const onDriverRegistration = onDocumentWritten("drivers/{driverId}", asyn
     }
   }
 });
+
+// ============================================================================
+// CORRECTION FCFA→CAD #6: Export des fonctions de migration de devise
+// ============================================================================
+// Ces fonctions permettent de migrer toutes les données existantes de FCFA (Cameroun)
+// vers CAD (Canada) avec un taux de conversion de ~285 FCFA/CAD
+export { migrateCurrencyToCAD, migrateCurrencyToCADHTTP } from './migrateCurrency.js';

@@ -7,7 +7,7 @@ import { db } from "@/config/firebase";
 import { LoadScript, GoogleMap, Marker, DirectionsRenderer } from "@react-google-maps/api";
 
 const mapContainerStyle = { width: "100%", height: "200px" };
-const defaultCenter = { lat: 3.848, lng: 11.5021 }; // Yaoundé
+const defaultCenter = { lat: 43.6532, lng: -79.3832 }; // Toronto
 
 // Composant principal qui utilise useSearchParams
 function ConfirmationContent() {
@@ -262,7 +262,7 @@ function ConfirmationContent() {
             <div className="text-center py-6">
               <div className="text-green-500 text-4xl mb-2">🎉</div>
               <h3 className="text-lg font-semibold">Course terminée</h3>
-              <p className="text-2xl font-bold text-[#f29200] mt-2">{finalPrice} FCFA</p>
+              <p className="text-2xl font-bold text-[#f29200] mt-2">{finalPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD</p>
               <p className="text-gray-600 mt-1">Merci d'avoir utilisé Medjira Taxi</p>
             </div>
           )}
@@ -291,7 +291,7 @@ function ConfirmationContent() {
               </div>
               <div className="flex justify-between font-bold">
                 <span>Prix initial</span>
-                <span>{booking?.price} FCFA</span>
+                <span>{booking?.price?.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD</span>
               </div>
             </div>
           </div>

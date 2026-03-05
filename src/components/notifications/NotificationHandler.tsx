@@ -64,7 +64,7 @@ export function NotificationHandler() {
             console.log('[NotificationHandler] Paiement reçu:', amount);
             
             // Notification toast
-            showNotification(`Paiement de ${amount} FCFA reçu !`, 'success');
+            showNotification(`Paiement de ${amount} CAD reçu !`, 'success');
         },
         onAlert: (message) => {
             console.log('[NotificationHandler] Alerte:', message);

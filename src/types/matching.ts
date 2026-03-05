@@ -26,7 +26,7 @@ export interface RideCandidate {
 
     // Nouveau : Temps de trajet et bonus
     travelTimeMinutes?: number; // Temps de trajet estimé en minutes
-    bonus?: number; // Montant du bonus pour cette course (en FCFA)
+    bonus?: number; // Montant du bonus pour cette course (en CAD) // CORRECTION FCFA→CAD #11
 
     // Timestamps d'actions
     acceptedAt?: Timestamp;
