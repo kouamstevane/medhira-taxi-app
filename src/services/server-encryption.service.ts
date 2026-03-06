@@ -1,6 +1,7 @@
 /**
  * Service client pour le chiffrement côté serveur
  *
+ * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * Ce service appelle la Cloud Function Firebase pour chiffrer les données sensibles.
  * Le chiffrement est effectué côté serveur avec une clé stockée dans Firebase Secret Manager.
  *
@@ -26,6 +27,7 @@ export interface EncryptionResult {
 /**
  * Service de chiffrement côté serveur
  *
+ * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * Ce service remplace encryption.service.ts pour le chiffrement des données sensibles.
  * Toutes les opérations de chiffrement sont effectuées par la Cloud Function Firebase.
  */
@@ -40,7 +42,9 @@ class ServerEncryptionService {
 
   /**
    * Chiffre une donnée sensible côté serveur
-   * 
+   *
+   * ✅ CHIFFREMENT RÉACTIVÉ
+   *
    * @param plainText - Le texte en clair à chiffrer
    * @returns Les données chiffrées avec IV et salt
    * @throws Error si le chiffrement échoue
@@ -99,7 +103,9 @@ class ServerEncryptionService {
 
   /**
    * Chiffre les données bancaires pour la soumission
-   * 
+   *
+   * ✅ CHIFFREMENT RÉACTIVÉ
+   *
    * @param accountHolder - Titulaire du compte
    * @param iban - IBAN
    * @param bic - BIC/SWIFT
@@ -121,7 +127,9 @@ class ServerEncryptionService {
 
   /**
    * Chiffre le SSN/NIR pour la soumission
-   * 
+   *
+   * ✅ CHIFFREMENT RÉACTIVÉ
+   *
    * @param ssn - Numéro de sécurité sociale
    * @returns Les données chiffrées
    */

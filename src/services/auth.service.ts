@@ -265,20 +265,23 @@ export const signOut = async (): Promise<void> => {
  * Connexion avec Google pour les chauffeurs
  *
  * Cette fonction spécialisée gère l'inscription des chauffeurs via Google OAuth.
- * Contrairement à signInWithGoogle() standard, elle crée les documents appropriés
- * dans les collections 'users' (userType: 'chauffeur') et 'drivers' (status: 'draft').
+ * Contrairement à signInWithGoogle() standard, elle crée uniquement le document
+ * dans la collection 'users' avec userType='chauffeur'.
  *
- * Comportement "Best Effort" :
+ * ⚠️ IMPORTANT : Le document chauffeur dans la collection 'drivers' N'EST PAS créé
+ * par cette fonction. Il sera créé uniquement lors de la soumission finale du
+ * formulaire d'inscription (étape 5 - "Soumettre ma candidature").
+ *
+ * Comportement :
  * - La connexion Google est obligatoire et échouera si elle ne réussit pas
- * - La création du document chauffeur est "best effort" : si elle échoue,
- *   la fonction retourne quand même l'utilisateur connecté
- * - Le document chauffeur sera créé lors de la soumission du formulaire d'inscription
+ * - Le document utilisateur est créé dans la collection 'users' avec userType='chauffeur'
+ * - AUCUN document n'est créé dans la collection 'drivers' à ce stade
  *
  * Collections affectées :
  * - users/{uid} : Document utilisateur avec userType='chauffeur' (créé par signInWithGoogle)
- * - drivers/{uid} : Document chauffeur avec status='draft' (créé par cette fonction)
+ * - drivers/{uid} : PAS de document créé (sera créé à l'étape 5)
  *
- * @returns {Promise<User>} L'utilisateur Firebase connecté avec les documents appropriés
+ * @returns {Promise<User>} L'utilisateur Firebase connecté avec le document utilisateur approprié
  *
  * @throws {Error} Si la connexion Google échoue (authentification requise)
  *
@@ -299,6 +302,7 @@ export const signInWithGoogleForDriver = async (): Promise<User> => {
   console.log('[AuthService] signInWithGoogleForDriver appelé');
 
   // 1. Se connecter avec Google en spécifiant 'chauffeur' comme userType
+  // Cela crée le document dans la collection 'users' avec userType='chauffeur'
   const user = await signInWithGoogle('chauffeur');
 
   console.log('[AuthService] Connexion Google réussie pour chauffeur', {
@@ -307,40 +311,19 @@ export const signInWithGoogleForDriver = async (): Promise<User> => {
   });
 
   // 2. Vérifier si un document existe déjà dans la collection drivers
+  // (pour les chauffeurs qui reviennent compléter leur inscription)
   const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
 
-  if (!driverDoc.exists()) {
-    // 3. Créer le document dans la collection drivers avec le statut 'draft'
-    console.log('[AuthService] Création document chauffeur (draft)', {
+    if (driverDoc.exists()) {
+        const status = driverDoc.data()?.status;
+        console.log('[AuthService] Document chauffeur existe déjà', {
+            uid: user.uid,
+            status
+    });
+  } else {
+    console.log('[AuthService] Aucun document chauffeur (normal, sera créé à l\'étape 5)', {
       uid: user.uid,
       email: user.email
-    });
-
-    try {
-      await setDoc(doc(db, 'drivers', user.uid), {
-        uid: user.uid,
-        email: user.email,
-        firstName: user.displayName?.split(' ')[0] || '',
-        lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
-        profileImageUrl: user.photoURL || null,
-        userType: 'chauffeur',
-        phoneNumber: null, // ✅ REQUIS : les règles Firestore exigent phoneNumber == null pour les chauffeurs
-        status: 'draft', // Statut initial pour les chauffeurs
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      console.log('[AuthService] Document chauffeur créé avec succès');
-    } catch (error) {
-      console.error('[AuthService] Erreur lors de la création du document chauffeur:', error);
-      // ⚠️ COMPORTEMENT "BEST EFFORT" : On ne lance pas d'erreur pour permettre à l'utilisateur de continuer
-      // Le document sera créé lors de la soumission du formulaire d'inscription
-      // Cela évite de bloquer l'utilisateur si une erreur temporaire survient
-    }
-  } else {
-    console.log('[AuthService] Document chauffeur existe déjà', {
-      uid: user.uid,
-      status: driverDoc.data()?.status
     });
   }
 

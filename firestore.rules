@@ -144,9 +144,8 @@ service cloud.firestore {
       // - Le phoneNumber doit être null (interdiction de l'auth par téléphone)
       // - Le userType doit être 'chauffeur'
       // - Le statut initial doit être 'draft' ou 'pending'
-      // - L'email doit être vérifié (obligatoire pour les chauffeurs)
-      allow create: if (isEmailVerified() || request.resource.data.status == 'draft') &&
-                       request.auth.uid == driverId &&
+      // ✅ FIX: L'email vérifié N'EST PAS requis lors de l'inscription (vérification après inscription)
+      allow create: if request.auth.uid == driverId &&
                        request.resource.data.email != null &&
                        request.resource.data.phoneNumber == null &&
                        request.resource.data.userType == 'chauffeur' &&

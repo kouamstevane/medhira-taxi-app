@@ -215,6 +215,9 @@ function deriveKey(masterKey: Buffer, salt: Buffer): Buffer {
 /**
  * Chiffre une donnée sensible côté serveur
  * 
+ * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
+ * Les données sensibles (SSN, coordonnées bancaires) sont chiffrées avec AES-256-GCM.
+ * 
  * @param plainText - Le texte en clair à chiffrer
  * @returns Les données chiffrées avec IV et salt
  * @throws Error si le chiffrement échoue
@@ -267,14 +270,30 @@ export async function encryptSensitiveData(plainText: string): Promise<Encrypted
 /**
  * Déchiffre une donnée sensible côté serveur
  * 
+ * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
+ * Les données sensibles sont déchiffrées avec AES-256-GCM.
+ * 
  * @param encryptedData - Les données chiffrées avec IV et salt
  * @returns Le texte en clair
  * @throws Error si le déchiffrement échoue
  */
 export async function decryptSensitiveData(encryptedData: EncryptedData): Promise<string> {
-  if (!encryptedData || !encryptedData.data || !encryptedData.iv || !encryptedData.salt) {
-    throw new Error('Données chiffrées invalides');
-  }
+    if (!encryptedData) {
+        throw new Error('Données chiffrées manquantes');
+    }
+
+    if (!encryptedData.data) {
+        throw new Error('Données chiffrées invalides: champ data manquant');
+    }
+
+    if (!encryptedData.iv) {
+        throw new Error('Données chiffrées invalides: IV manquant');
+    }
+
+    if (!encryptedData.salt) {
+        throw new Error('Données chiffrées invalides: salt manquant');
+    }
+
   
   try {
     // Récupérer la clé maîtresse

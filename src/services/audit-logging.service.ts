@@ -46,6 +46,10 @@ export enum AuditEventType {
   DRIVER_REGISTRATION_COMPLETED = 'DRIVER_REGISTRATION_COMPLETED',
   DRIVER_REGISTRATION_FAILED = 'DRIVER_REGISTRATION_FAILED',
   DRIVER_DRAFT_SAVED = 'DRIVER_DRAFT_SAVED',
+  
+  // Email de vérification
+  EMAIL_VERIFICATION_SENT = 'EMAIL_VERIFICATION_SENT',
+  EMAIL_VERIFICATION_FAILED = 'EMAIL_VERIFICATION_FAILED',
 }
 
 /**
@@ -99,8 +103,18 @@ class AuditLoggingService {
     try {
       const currentUser = auth.currentUser;
       
-      // Si pas d'utilisateur connecté, utiliser l'userId fourni ou 'anonymous'
+      // ✅ PRIORITÉ: Utiliser l'userId fourni en paramètre d'abord, puis currentUser.uid
+      // Cela garantit que l'userId est disponible même si auth.currentUser est temporairement null
       const userId = entry.userId || currentUser?.uid || 'anonymous';
+      
+      // ✅ VALIDATION CRITIQUE: Si pas d'userId valide, logger en console seulement
+      // pour éviter les erreurs Firestore "Missing or insufficient permissions"
+      if (!userId || userId === 'anonymous') {
+          console.warn('[AuditLogging] Pas d\'userId valide, logging en console seulement:', entry);
+          return;
+      }
+
+
       
       // Récupérer les informations de contexte (IP, User Agent)
       const context = this.getContext();
@@ -131,9 +145,20 @@ class AuditLoggingService {
 
       // Ajouter à Firestore
       await addDoc(collection(db, this.collectionName), auditEntry);
-    } catch (error) {
+    } catch (error: any) {
       // En cas d'erreur de logging, on ne veut pas interrompre le flux principal
-      console.error('Erreur lors de l\'audit logging:', error);
+      // Logger l'erreur en console pour debugging
+      console.error('[AuditLogging] Erreur lors de l\'écriture dans Firestore:', {
+        message: error.message,
+        code: error.code,
+        entry: entry.eventType
+      });
+      
+      // Si l'erreur est "Missing or insufficient permissions", c'est probablement
+      // que l'utilisateur n'est pas authentifié. On ne bloque pas le flux principal.
+      if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
+        console.warn('[AuditLogging] Permission refusée - l\'utilisateur est peut-être déconnecté');
+      }
     }
   }
 
