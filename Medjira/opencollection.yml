@@ -1,0 +1,29 @@
+opencollection: 1.0.0
+
+info:
+  name: Medjira
+config:
+  proxy:
+    inherit: true
+    config:
+      protocol: http
+      hostname: ""
+      port: ""
+      auth:
+        username: ""
+        password: ""
+      bypassProxy: ""
+
+request:
+  auth:
+    type: bearer
+    token: eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJuYW1lIjoic3RldmFuZSIsInBpY3R1cmUiOiIiLCJlbWFpbCI6InN0ZXZhbmVudG91bmdzaTk5QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJhdXRoX3RpbWUiOjE3NzI4MDc2OTMsInVzZXJfaWQiOiI0bVdQN3VMeWFpR1JMRDNDQ1g5Z0gzZVJxRHltIiwiZmlyZWJhc2UiOnsiaWRlbnRpdGllcyI6eyJlbWFpbCI6WyJzdGV2YW5lbnRvdW5nc2k5OUBnbWFpbC5jb20iXX0sInNpZ25faW5fcHJvdmlkZXIiOiJwYXNzd29yZCJ9LCJpYXQiOjE3NzI4MDc2OTMsImV4cCI6MTc3MjgxMTI5MywiYXVkIjoibWVkamlyYS1zZXJ2aWNlIiwiaXNzIjoiaHR0cHM6Ly9zZWN1cmV0b2tlbi5nb29nbGUuY29tL21lZGppcmEtc2VydmljZSIsInN1YiI6IjRtV1A3dUx5YWlHUkxEM0NDWDlnSDNlUnFEeW0ifQ.
+  variables:
+    - name: baseUrlMedjira
+      value: http://127.0.0.1:5001/medjira-service
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

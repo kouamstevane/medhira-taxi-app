@@ -9,6 +9,7 @@ import { AuthService } from '@/services';
 import { serverEncryptionService } from '../../../services/server-encryption.service';
 import { auditLoggingService, AuditEventType, AuditLogLevel } from '../../../services/audit-logging.service';
 import { secureStorage } from '../../../services/secureStorage.service';
+import { emailVerificationService } from '../../../services/email-verification.service';
 
 // Import des étapes
 import Step1Intent, { Step1FormData } from './components/Step1Intent';
@@ -46,6 +47,23 @@ export default function DriverRegisterWizard() {
   // ----- EMAIL VERIFICATION RETRY -----
   // Compteur de tentatives pour l'envoi de l'email de vérification
   const [emailVerificationAttempts, setEmailVerificationAttempts] = useState(0);
+  
+  // ✅ FIX: Stocker le timer ID pour le nettoyer et éviter les memory leaks
+  const emailRetryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // ✅ FIX: Suivre si le composant est monté pour éviter les mises à jour d'état après démontage
+  const isMountedRef = useRef(true);
+  
+  // ✅ FIX: Nettoyer le timer lors du démontage du composant
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      if (emailRetryTimerRef.current) {
+        clearTimeout(emailRetryTimerRef.current);
+        emailRetryTimerRef.current = null;
+      }
+    };
+  }, []);
   
   // ----- DEBOUNCING POUR LA SAUVEGARDE AUTOMATIQUE -----
   // Ref pour le timeout de debouncing de la sauvegarde de progression
@@ -724,25 +742,32 @@ export default function DriverRegisterWizard() {
         await safeAuditLog(() => auditLoggingService.logDriverRegistrationCompleted(userId), 'inscription complétée');
 
         // ✅ CRITIQUE: Envoyer l'email de vérification IMMÉDIATEMENT après la création du document
+        // ✅ FIX: Utiliser Resend au lieu de Firebase Auth pour une meilleure délivrabilité
         // Cela garantit que l'email est envoyé même si l'utilisateur est redirigé
-        console.log('[DriverRegistration] Envoi de l\'email de vérification...');
+        console.log('[DriverRegistration] Envoi de l\'email de vérification via Resend...');
         try {
-          const { sendEmailVerification } = await import('firebase/auth');
-          await sendEmailVerification(auth.currentUser!, {
-            url: typeof window !== 'undefined' ? `${window.location.origin}/driver/verify-email` : 'https://medjira-service.firebaseapp.com/driver/verify-email',
-            handleCodeInApp: false,
+          // Utiliser le service Resend avec template react-email
+          const result = await emailVerificationService.sendVerificationEmail(
+            auth.currentUser?.email || '',
+            step2Data.firstName || auth.currentUser?.displayName || undefined
+          );
+          
+          console.log('[DriverRegistration] ✅ Email de vérification envoyé avec succès via Resend', {
+            to: auth.currentUser?.email,
+            messageId: result.messageId
           });
-          console.log('[DriverRegistration] ✅ Email de vérification envoyé avec succès à', auth.currentUser?.email);
           
           // Audit logging: Email de vérification envoyé
           await safeAuditLog(() => auditLoggingService.log({
             eventType: AuditEventType.EMAIL_VERIFICATION_SENT,
             userId,
             level: AuditLogLevel.INFO,
-            action: 'Email de vérification envoyé après inscription',
+            action: 'Email de vérification envoyé après inscription (via Resend)',
             success: true,
             details: {
               email: auth.currentUser?.email,
+              messageId: result.messageId,
+              provider: 'resend',
               timestamp: new Date().toISOString()
             }
           }), 'email verification sent');
@@ -755,49 +780,74 @@ export default function DriverRegisterWizard() {
           });
           
           // ✅ FIX: Réessayer automatiquement jusqu'à 3 fois avec délai exponentiel
+          // ✅ FIX: Utiliser Resend au lieu de Firebase Auth pour une meilleure délivrabilité
           if (emailVerificationAttempts < 3) {
             const delay = Math.pow(2, emailVerificationAttempts) * 1000; // 1s, 2s, 4s
-            console.log(`[DriverRegistration] Nouvelle tentative dans ${delay}ms...`);
+            console.log(`[DriverRegistration] Nouvelle tentative via Resend dans ${delay}ms...`);
             
-            setTimeout(async () => {
+            // ✅ FIX: Nettoyer le timer précédent s'il existe
+            if (emailRetryTimerRef.current) {
+              clearTimeout(emailRetryTimerRef.current);
+            }
+            
+            emailRetryTimerRef.current = setTimeout(async () => {
               try {
+                // ✅ FIX: Vérifier IMMÉDIATEMENT si le composant est toujours monté
+                // Cela évite toute opération inutile si le composant a été démonté
+                if (!isMountedRef.current) {
+                  console.log('[DriverRegistration] Composant démonté, annulation du retry d\'email');
+                  return;
+                }
+                
                 setEmailVerificationAttempts(prev => prev + 1);
-                const { sendEmailVerification } = await import('firebase/auth');
-                await sendEmailVerification(auth.currentUser!, {
-                  url: typeof window !== 'undefined' ? `${window.location.origin}/driver/verify-email` : 'https://medjira-service.firebaseapp.com/driver/verify-email',
-                  handleCodeInApp: false,
+                
+                // Utiliser Resend au lieu de Firebase Auth
+                const result = await emailVerificationService.sendVerificationEmail(
+                  auth.currentUser?.email || '',
+                  step2Data.firstName || auth.currentUser?.displayName || undefined
+                );
+                
+                console.log('[DriverRegistration] ✅ Email de vérification envoyé avec succès au retry via Resend', {
+                  to: auth.currentUser?.email,
+                  messageId: result.messageId,
+                  attempt: emailVerificationAttempts + 1
                 });
-                console.log('[DriverRegistration] ✅ Email de vérification envoyé avec succès au retry', auth.currentUser?.email);
                 
                 // Audit logging: Email de vérification envoyé après retry
                 await safeAuditLog(() => auditLoggingService.log({
                   eventType: AuditEventType.EMAIL_VERIFICATION_SENT,
                   userId,
                   level: AuditLogLevel.INFO,
-                  action: 'Email de vérification envoyé après retry',
+                  action: 'Email de vérification envoyé après retry (via Resend)',
                   success: true,
                   details: {
                     email: auth.currentUser?.email,
+                    messageId: result.messageId,
+                    provider: 'resend',
                     attempt: emailVerificationAttempts + 1,
                     timestamp: new Date().toISOString()
                   }
                 }), 'email verification retry success');
                 
-                setEmailVerificationAttempts(0); // Reset le compteur
+                // ✅ FIX: Vérifier si le composant est toujours monté avant de reset le compteur
+                if (isMountedRef.current) {
+                  setEmailVerificationAttempts(0); // Reset le compteur
+                }
               } catch (retryError: any) {
-                console.error('[DriverRegistration] ❌ Retry échoué', retryError);
+                console.error('[DriverRegistration] ❌ Retry échoué via Resend', retryError);
                 
                 // Logger l'erreur de retry
                 await safeAuditLog(() => auditLoggingService.log({
                   eventType: AuditEventType.EMAIL_VERIFICATION_FAILED,
                   userId,
                   level: AuditLogLevel.WARNING,
-                  action: 'Échec de l\'envoi de l\'email de vérification (retry)',
+                  action: 'Échec de l\'envoi de l\'email de vérification (retry via Resend)',
                   success: false,
                   errorMessage: retryError.message,
                   details: {
                     email: auth.currentUser?.email,
                     errorCode: retryError.code,
+                    provider: 'resend',
                     attempt: emailVerificationAttempts + 1,
                     timestamp: new Date().toISOString()
                   }

@@ -18,6 +18,13 @@
  */
 
 import * as crypto from 'crypto';
+import { defineSecret } from 'firebase-functions/params';
+
+/**
+ * Secret de chiffrement maître (migré depuis process.env)
+ * Défini à l'aide de l'API Firebase Functions v2 defineSecret
+ */
+export const encryptionMasterKey = defineSecret('ENCRYPTION_MASTER_KEY');
 
 /**
  * Configuration du chiffrement
@@ -172,26 +179,26 @@ export interface EncryptedData {
  *
  * @returns La clé de chiffrement principale
  */
-async function getMasterKey(): Promise<Buffer> {
-  // ═══════════════════════════════════════════════════════════════════════════════
-  // ⚠️ ATTENTION: Code actuel pour DÉVELOPPEMENT uniquement
-  // ═══════════════════════════════════════════════════════════════════════════════
-  // Pour migrer vers Secret Manager, suivez les étapes détaillées ci-dessus.
-  
-  // Pour le développement, utiliser une variable d'environnement
-  const envKey = process.env.ENCRYPTION_MASTER_KEY;
-  
-  if (!envKey) {
+/**
+ * Récupère la clé de chiffrement principale depuis Firebase Secret Manager
+ * 
+ * ✅ FIX: La clé maître est passée en paramètre pour éviter les dépendances
+ * implicites sur defineSecret().value() en dehors du contexte de la Cloud Function.
+ * 
+ * @param keyValue - La valeur du secret (base64)
+ * @returns La clé de chiffrement principale
+ */
+async function getMasterKey(keyValue: string): Promise<Buffer> {
+  if (!keyValue) {
     throw new Error(
       'ENCRYPTION_MASTER_KEY non définie. ' +
-      'En production, configurez Firebase Secret Manager (voir documentation ci-dessus). ' +
-      'En développement, définissez ENCRYPTION_MASTER_KEY dans .env ' +
-      'Utilisez: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"'
+      'Configurez le secret dans Firebase Secret Manager ou via firebase functions:secrets:set. ' +
+      'Pour le développement, utilisez l\'émulateur avec .env.local'
     );
   }
   
   // La clé doit être en base64 et faire 32 bytes (256 bits)
-  return Buffer.from(envKey, 'base64');
+  return Buffer.from(keyValue, 'base64');
 }
 
 /**
@@ -218,18 +225,25 @@ function deriveKey(masterKey: Buffer, salt: Buffer): Buffer {
  * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * Les données sensibles (SSN, coordonnées bancaires) sont chiffrées avec AES-256-GCM.
  * 
+ * ✅ FIX: La clé maître est passée en paramètre pour éviter les dépendances
+ * implicites sur defineSecret().value() en dehors du contexte de la Cloud Function.
+ * 
  * @param plainText - Le texte en clair à chiffrer
+ * @param masterKeyValue - La valeur du secret de chiffrement maître (base64)
  * @returns Les données chiffrées avec IV et salt
  * @throws Error si le chiffrement échoue
  */
-export async function encryptSensitiveData(plainText: string): Promise<EncryptedData> {
+export async function encryptSensitiveData(
+  plainText: string,
+  masterKeyValue: string
+): Promise<EncryptedData> {
   if (!plainText || plainText.length === 0) {
     throw new Error('Le texte à chiffrer ne peut pas être vide');
   }
   
   try {
     // Récupérer la clé maîtresse
-    const masterKey = await getMasterKey();
+    const masterKey = await getMasterKey(masterKeyValue);
     
     // Générer un salt unique pour ce chiffrement
     const salt = crypto.randomBytes(ENCRYPTION_CONFIG.saltLength);
@@ -273,11 +287,18 @@ export async function encryptSensitiveData(plainText: string): Promise<Encrypted
  * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * Les données sensibles sont déchiffrées avec AES-256-GCM.
  * 
+ * ✅ FIX: La clé maître est passée en paramètre pour éviter les dépendances
+ * implicites sur defineSecret().value() en dehors du contexte de la Cloud Function.
+ * 
  * @param encryptedData - Les données chiffrées avec IV et salt
+ * @param masterKeyValue - La valeur du secret de chiffrement maître (base64)
  * @returns Le texte en clair
  * @throws Error si le déchiffrement échoue
  */
-export async function decryptSensitiveData(encryptedData: EncryptedData): Promise<string> {
+export async function decryptSensitiveData(
+  encryptedData: EncryptedData,
+  masterKeyValue: string
+): Promise<string> {
     if (!encryptedData) {
         throw new Error('Données chiffrées manquantes');
     }
@@ -297,7 +318,7 @@ export async function decryptSensitiveData(encryptedData: EncryptedData): Promis
   
   try {
     // Récupérer la clé maîtresse
-    const masterKey = await getMasterKey();
+    const masterKey = await getMasterKey(masterKeyValue);
     
     // Décoder les données
     const combined = Buffer.from(encryptedData.data, 'base64');

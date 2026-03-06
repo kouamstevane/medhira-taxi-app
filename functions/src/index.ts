@@ -23,16 +23,10 @@ import {
 } from './validators/bank.validator.js';
 import {
   encryptSensitiveData as encryptData,
+  encryptionMasterKey,
 } from './utils/encryption.js';
 import { BankDetailsSchema, EncryptionRequestSchema } from './validators/schemas.js';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { Resend } from "resend";
-import { render } from "@react-email/render";
-import * as React from "react";
-import { DriverWelcomeEmail } from "./emails/DriverWelcome";
-
-// Initialiser Resend avec la clé API fournie par l'utilisateur
-const resend = new Resend('re_DiHPVbBk_3U6FJGV8oouVr937FGZGUNM6');
 
 // Initialiser Firebase Admin (vérifier si déjà initialisé pour éviter les erreurs)
 if (!admin.apps.length) {
@@ -211,7 +205,10 @@ export const validateBankDetails = onCall(
  * });
  */
 export const encryptSensitiveData = onCall(
-  { cors: true },
+  { 
+    cors: true,
+    secrets: [encryptionMasterKey],
+  },
   async (request: CallableRequest) => {
     // Vérifier que l'utilisateur est authentifié
     if (!request.auth) {
@@ -245,7 +242,8 @@ export const encryptSensitiveData = onCall(
 
     try {
       // Chiffrer les données côté serveur
-      const encrypted = await encryptData(data.plaintext);
+      // ✅ FIX: Passer la valeur du secret explicitement pour éviter les dépendances implicites
+      const encrypted = await encryptData(data.plaintext, encryptionMasterKey.value());
 
       // Retourner les données chiffrées
       return {
@@ -438,31 +436,16 @@ export const onDriverRegistration = onDocumentWritten("drivers/{driverId}", asyn
 
   if (isPending && !wasPending) {
     const email = afterData.email;
-    const firstName = afterData.firstName || "Chauffeur";
 
     if (!email) {
       console.warn("Aucun email trouvé pour le chauffeur:", event.params.driverId);
       return;
     }
 
-    try {
-      const emailHtml = await render(
-        React.createElement(DriverWelcomeEmail, {
-          firstName: firstName,
-        })
-      );
-
-      await resend.emails.send({
-        from: "MedJira <onboarding@resend.dev>",
-        to: email,
-        subject: "Bienvenue chez MedJira - Candidature reçue",
-        html: emailHtml,
-      });
-
-      console.log(`Email de confirmation envoyé avec succès à ${email} via Resend.`);
-    } catch (error) {
-      console.error("Erreur lors de l'envoi de l'email via Resend:", error);
-    }
+    // L'email de bienvenue est envoyé automatiquement par la Cloud Function sendVerificationEmail
+    // lors de l'inscription du chauffeur via le client.
+    // Ce trigger ne fait que logger la transition vers l'état 'pending'.
+    console.log(`[DriverRegistration] Chauffeur ${event.params.driverId} passé à l'état 'pending'. Email: ${email}`);
   }
 });
 
@@ -472,3 +455,10 @@ export const onDriverRegistration = onDocumentWritten("drivers/{driverId}", asyn
 // Ces fonctions permettent de migrer toutes les données existantes de FCFA (Cameroun)
 // vers CAD (Canada) avec un taux de conversion de ~285 FCFA/CAD
 export { migrateCurrencyToCAD, migrateCurrencyToCADHTTP } from './migrateCurrency.js';
+
+// ============================================================================
+// Export des fonctions d'envoi d'emails via Resend
+// ============================================================================
+// Ces fonctions utilisent Resend + react-email pour envoyer des emails avec
+// une excellente délivrabilité (SPF/DKIM configuré)
+export { sendVerificationEmail, sendVerificationEmailHttp } from './emails/send-verification-email.js';

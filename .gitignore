@@ -65,6 +65,7 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+temp_diff.txt
 .cache/
 
 # Optional npm cache directory

@@ -4,8 +4,13 @@
  */
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
+
+// Secrets Agora - migrés depuis functions.config() / process.env
+const agoraAppId = defineSecret('AGORA_APP_ID');
+const agoraAppCertificate = defineSecret('AGORA_APP_CERTIFICATE');
 
 // Initialiser Firebase Admin si pas déjà fait
 function getAdmin() {
@@ -23,10 +28,6 @@ function getMessaging() {
   return getAdmin().messaging();
 }
 
-// Configuration Agora depuis les variables d'environnement Firebase
-// Note: functions.config() est déprécié dans v2, utiliser process.env
-const AGORA_APP_ID = process.env.AGORA_APP_ID || '';
-const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE || '';
 
 /**
  * Valide que l'appartient à l'utilisateur
@@ -80,9 +81,18 @@ function generateAgoraChannel(rideId: string): string {
 /**
  * Génère un token Agora signé pour un channel et un uid
  * En dev (sans certificat), retourne '' (Agora autorise les tests sans token)
+ * 
+ * ✅ FIX: Les valeurs des secrets sont passées en paramètres pour éviter
+ * les dépendances implicites sur defineSecret().value() en dehors du contexte
+ * de la Cloud Function.
  */
-function generateAgoraToken(channel: string, uid: string): string {
-  if (!AGORA_APP_CERTIFICATE) {
+function generateAgoraToken(
+  channel: string,
+  uid: string,
+  appId: string,
+  appCertificate: string
+): string {
+  if (!appCertificate) {
     // Mode développement: Agora permet les tests sans token si App Certificate est désactivé
     console.warn('[VoIP] AGORA_APP_CERTIFICATE non configuré — token vide (mode dev uniquement)');
     return '';
@@ -95,8 +105,8 @@ function generateAgoraToken(channel: string, uid: string): string {
 
     // Utiliser 0 comme UID int pour permettre à n'importe quel UID string de rejoindre
     return RtcTokenBuilder.buildTokenWithUid(
-      AGORA_APP_ID,
-      AGORA_APP_CERTIFICATE,
+      appId,
+      appCertificate,
       channel,
       0, // UID 0 = wildcard
       RtcRole.PUBLISHER,
@@ -113,7 +123,9 @@ function generateAgoraToken(channel: string, uid: string): string {
 /**
  * Crée un nouvel appel VoIP
  */
-export const createCall = onCall(async (request: CallableRequest) => {
+export const createCall = onCall(
+  { secrets: [agoraAppId, agoraAppCertificate] },
+  async (request: CallableRequest) => {
   // 1. Vérifier l'authentification
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
@@ -157,7 +169,12 @@ export const createCall = onCall(async (request: CallableRequest) => {
 
   // 6. Générer le channel et token Agora
   const channel = generateAgoraChannel(rideId);
-  const token = generateAgoraToken(channel, callerId);
+  const token = generateAgoraToken(
+    channel,
+    callerId,
+    agoraAppId.value(),
+    agoraAppCertificate.value()
+  );
 
   // 7. Créer le document d'appel
   const callRef = await getDb().collection('calls').add({
@@ -249,7 +266,9 @@ export const createCall = onCall(async (request: CallableRequest) => {
 /**
  * Répond à un appel entrant
  */
-export const answerCall = onCall(async (request: CallableRequest) => {
+export const answerCall = onCall(
+  { secrets: [] },
+  async (request: CallableRequest) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
@@ -299,7 +318,9 @@ export const answerCall = onCall(async (request: CallableRequest) => {
 /**
  * Termine un appel
  */
-export const endCall = onCall(async (request: CallableRequest) => {
+export const endCall = onCall(
+  { secrets: [] },
+  async (request: CallableRequest) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
@@ -357,7 +378,9 @@ export const endCall = onCall(async (request: CallableRequest) => {
  * Envoie un message système dans une conversation de course
  * Utilise Admin SDK pour contourner les security rules (senderId='system')
  */
-export const sendSystemMessage = onCall(async (request: CallableRequest) => {
+export const sendSystemMessage = onCall(
+  { secrets: [] },
+  async (request: CallableRequest) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
