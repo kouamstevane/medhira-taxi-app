@@ -3,11 +3,13 @@ import {
   onSnapshot, 
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { db } from '@/config/firebase';
 import { VoipCallState, CallStatus, CallParticipant, IVoipEngine } from '@/types/voip';
 import { logger } from '@/utils/logger';
 import { AgoraVoipEngine } from './voip/engines/agora.engine';
+
+const VoipForeground = registerPlugin<any>('VoipForeground');
 
 class VoipService {
   private engine: IVoipEngine;
@@ -154,6 +156,18 @@ class VoipService {
         throw new Error('Permission microphone requise');
       }
 
+      // Start Android foreground service
+      if (Capacitor.getPlatform() === 'android') {
+        try {
+          await VoipForeground.startService({
+            callerName: callee.name || 'Client',
+            callId: callId
+          });
+        } catch (e) {
+          logger.warn('Failed to start foreground service', { e });
+        }
+      }
+
       // Rejoindre le channel via l'engine
       await this.engine.join(channel, token, caller.uid);
       
@@ -185,6 +199,18 @@ class VoipService {
       if (!hasPermission) {
         this.endCall('failed');
         throw new Error('Permission microphone requise');
+      }
+
+      // Start Android foreground service
+      if (Capacitor.getPlatform() === 'android') {
+        try {
+          await VoipForeground.startService({
+            callerName: this.state.caller?.name || 'Appelant',
+            callId: this.state.callId
+          });
+        } catch (e) {
+          logger.warn('Failed to start foreground service', { e });
+        }
       }
 
       if (this.state.channel && this.state.token && this.state.callee) {
@@ -277,6 +303,14 @@ class VoipService {
     if (this.callDocUnsubscribe) {
       this.callDocUnsubscribe();
       this.callDocUnsubscribe = null;
+    }
+
+    if (Capacitor.getPlatform() === 'android') {
+      try {
+        await VoipForeground.stopService();
+      } catch (e) {
+        logger.warn('Failed to stop foreground service', { e });
+      }
     }
 
     await this.engine.leave();

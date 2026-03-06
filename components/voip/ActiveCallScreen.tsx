@@ -5,8 +5,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { MdMic, MdMicOff, MdVolumeUp, MdVolumeOff, MdCallEnd } from 'react-icons/md';
+import { Haptics } from '@capacitor/haptics';
 import { useVoipCall } from '../../hooks/useVoipCall';
-import { VoipCall } from '../../types/voip';
+import { VoipCall } from '../../src/types/voip';
 
 interface ActiveCallScreenProps {
   /** Document d'appel actif */
@@ -47,31 +48,21 @@ export function ActiveCallScreen({ call, metadata }: ActiveCallScreenProps) {
     }
   };
 
-  /**
-   * Gérer le toggle mute avec feedback haptique
-   */
   const handleToggleMute = async () => {
     try {
       await toggleMute();
       // Feedback haptique
-      if ('vibrate' in navigator) {
-        navigator.vibrate(50);
-      }
+      await Haptics.vibrate({ duration: 50 });
     } catch (error) {
       console.error('[ActiveCallScreen] Error toggling mute:', error);
     }
   };
 
-  /**
-   * Gérer le toggle haut-parleur avec feedback haptique
-   */
   const handleToggleSpeaker = async () => {
     try {
       await toggleSpeaker();
       // Feedback haptique
-      if ('vibrate' in navigator) {
-        navigator.vibrate(50);
-      }
+      await Haptics.vibrate({ duration: 50 });
     } catch (error) {
       console.error('[ActiveCallScreen] Error toggling speaker:', error);
     }

@@ -20,7 +20,7 @@
     <!-- Android 12+ permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!-- Notifications push -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -96,7 +96,7 @@
             android:name=".VoipForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection"
+            android:foregroundServiceType="microphone"
             android:stopWithTask="false" />
 
         <provider

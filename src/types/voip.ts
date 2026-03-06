@@ -41,3 +41,74 @@ export interface IVoipEngine {
   onRemoteUserLeft: (uid: string) => void;
   onError: (message: string) => void;
 }
+
+export type CallEndReason = 'user_ended' | 'no_answer' | 'declined' | 'failed' | 'timeout' | 'connection_failed';
+
+export interface CallerMetadata {
+  name: string;
+  avatar?: string;
+  role: 'client' | 'driver' | 'chauffeur';
+  uid: string;
+}
+
+export interface VoipCall {
+  id: string;
+  callerId: string;
+  calleeId: string;
+  rideId: string;
+  status: CallStatus;
+  startTime: { seconds: number; nanoseconds: number } | Date;
+  channel: string;
+  token: string | null;
+  callerMetadata: CallerMetadata;
+}
+
+export interface CreateCallParams {
+  calleeId: string;
+  rideId: string;
+}
+
+export interface CreateCallResult {
+  callId: string;
+  channel: string;
+  token: string;
+}
+
+export interface LocalCallState {
+  isMuted: boolean;
+  isSpeaker: boolean;
+  isInCall: boolean;
+  duration: number;
+}
+
+export interface AgoraConfig {
+  mode: string;
+  codec: string;
+  audioScenario?: string;
+  enableAudioVolumeIndication?: boolean;
+  cpuUsage?: string;
+}
+
+export interface CallQualityMetrics {
+  delay: number;
+  packetLoss: number;
+}
+
+export interface CallLifecycleEvent {
+  type: string;
+  timestamp: number;
+  payload?: any;
+}
+
+export const DEFAULT_CALL_TIMEOUTS = {
+  ringTimeout: 30000, // 30 seconds
+  connectionTimeout: 15000 // 15 seconds
+};
+
+export interface VoipPermissions {
+  microphone: boolean;
+  camera: boolean;
+}
+
+export type VoipPermissionStatus = 'granted' | 'denied' | 'prompt';
+

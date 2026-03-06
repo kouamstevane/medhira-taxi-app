@@ -21,21 +21,16 @@ export type {
   AgoraConfig,
   CallQualityMetrics,
   CallLifecycleEvent,
-  CallTimeoutConfig,
   VoipPermissions,
   VoipPermissionStatus
-} from '../../types/voip';
+} from '../../src/types/voip';
 
 // Hooks
 export { useVoipCall } from '../../hooks/useVoipCall';
 export type { UseVoipCallReturn } from '../../hooks/useVoipCall';
 
 // Services
-export { agoraService } from '../../services/voip/AgoraService';
-export { AgoraService } from '../../services/voip/AgoraService';
-
-export { signalingService } from '../../services/voip/SignalingService';
-export { SignalingService } from '../../services/voip/SignalingService';
+export { voipService } from '../../src/services/voip.service';
 
 // Constantes
-export { DEFAULT_CALL_TIMEOUTS } from '../../types/voip';
+export { DEFAULT_CALL_TIMEOUTS } from '../../src/types/voip';

@@ -7,7 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { MdPhone, MdCallEnd } from 'react-icons/md';
 import { Haptics } from '@capacitor/haptics';
 import { useVoipCall } from '../../hooks/useVoipCall';
-import { VoipCall } from '../../types/voip';
+import { VoipCall } from '../../src/types/voip';
 
 interface IncomingCallModalProps {
   /** Document d'appel entrant */
@@ -16,7 +16,7 @@ interface IncomingCallModalProps {
   metadata: {
     name: string;
     avatar?: string;
-    role: 'client' | 'driver';
+    role: 'client' | 'driver' | 'chauffeur';
   };
   /** Fonction pour fermer le modal */
   onClose?: () => void;

@@ -41,7 +41,11 @@ public class VoipForegroundService extends Service {
         Notification notification = createCallNotification();
 
         // Démarrer le service en mode foreground
-        startForeground(NOTIFICATION_ID, notification);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+        } else {
+            startForeground(NOTIFICATION_ID, notification);
+        }
 
         // Le service ne doit pas être redémarré s'il est tué par le système
         return START_NOT_STICKY;

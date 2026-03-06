@@ -7,7 +7,7 @@ import React, { useEffect } from 'react';
 import { useVoipCall } from '../../hooks/useVoipCall';
 import { IncomingCallModal } from './IncomingCallModal';
 import { ActiveCallScreen } from './ActiveCallScreen';
-import { VoipCall } from '../../types/voip';
+import { VoipCall } from '../../src/types/voip';
 
 interface VoipProviderProps {
   children: React.ReactNode;
