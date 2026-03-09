@@ -156,6 +156,7 @@ service cloud.firestore {
       // Les admins peuvent modifier le statut (pending -> approved/rejected/suspended)
       // Le chauffeur doit avoir un email vérifié pour toute modification
       // Lors de la transition vers 'pending', seuls certains champs sont autorisés (sécurité renforcée)
+      // ✅ EXCEPTION : Le champ 'isAvailable' peut être modifié sans vérification d'email (fonctionnalité critique)
       allow update: if (isOwner(driverId) && 
                         (
                           // Autoriser la modification du profil/docs si en draft ou si l'email est déjà vérifié
@@ -165,15 +166,53 @@ service cloud.firestore {
                           // Autoriser le passage à 'pending' (soumission) même si l'email n'est pas encore vérifié
                           // Cela permet au chauffeur de soumettre et de vérifier son email juste après
                           ((resource.data.status in ['draft', 'action_required', 'rejected']) &&
-                           isValidPendingTransition())
+                           isValidPendingTransition()) ||
+                          
+                          // ✅ NOUVEAU : Autoriser la modification de 'isAvailable' sans vérification d'email
+                          // C'est une fonctionnalité critique pour le fonctionnement de l'application
+                          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailable', 'updatedAt']))
                         ))
-                    || isAdmin();
+                     || isAdmin();
       
       // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé ou en brouillon
       // Cela permet au chauffeur de recommencer son inscription
       allow delete: if isAdmin() || 
                     (isOwner(driverId) && 
                      resource.data.status in ['rejected', 'draft']);
+    }
+    
+    // ============================================================================
+    // COLLECTION DRIVER_REQUESTS
+    // ============================================================================
+    //
+    // Collection optimisée pour les demandes de courses destinées aux chauffeurs
+    // Architecture hybride : bookings (source de vérité) + driver_requests (vue optimisée)
+    //
+    // Cette collection évite les requêtes collection group sur tous les bookings
+    // et simplifie les règles de sécurité pour les chauffeurs
+    //
+    // ============================================================================
+    
+    // Collection driver_requests - Demandes de courses pour les chauffeurs
+    match /driver_requests/{driverId} {
+      // Sous-collection requests - Demandes individuelles pour un chauffeur
+      match /requests/{requestId} {
+        // Lecture : Seul le chauffeur concerné peut lire ses demandes
+        // Permet aux chauffeurs de voir uniquement leurs propres demandes
+        allow read: if isAuthenticated() && request.auth.uid == driverId;
+        
+        // Création : Les utilisateurs authentifiés peuvent créer des demandes
+        // Permet au système de broadcast de créer des demandes pour les chauffeurs
+        allow create: if isAuthenticated();
+        
+        // Mise à jour : Le chauffeur peut mettre à jour ses propres demandes
+        // Permet aux chauffeurs d'accepter/refuser les demandes
+        allow update: if isAuthenticated() && request.auth.uid == driverId;
+        
+        // Suppression : Non autorisée via client SDK
+        // Les demandes expirées sont nettoyées par Cloud Functions
+        allow delete: if false;
+      }
     }
     
     // ============================================================================

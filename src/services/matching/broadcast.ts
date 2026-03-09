@@ -91,6 +91,20 @@ export const broadcastRideRequest = async (
       };
 
       await setDoc(candidateRef, candidate);
+      
+      // ✅ NOUVEAU : Créer aussi une demande dans driver_requests pour optimiser les requêtes
+      // Cela évite les requêtes collection group sur tous les bookings
+      const driverRequestRef = doc(db, 'driver_requests', driver.driverId, 'requests', rideId);
+      await setDoc(driverRequestRef, {
+        rideId,
+        status: 'pending',
+        expiresAt: Timestamp.fromDate(expiresAt),
+        createdAt: serverTimestamp(),
+        distance: driver.distance,
+        travelTimeMinutes: driver.travelTimeMinutes,
+        bonus: bonus,
+      });
+      
       driverIds.push(driver.driverId);
     }
 
@@ -229,42 +243,46 @@ export const expireAllPendingCandidates = async (
 
 /**
  * S'abonner aux demandes de course pour un chauffeur
+ * ✅ NOUVELLE ARCHITECTURE : Utilise driver_requests au lieu de collection group sur bookings
+ * Cela évite les erreurs de permissions et améliore les performances
  */
 export const subscribeToDriverRideRequests = (
   driverId: string,
   callback: (requests: Array<{ rideId: string; candidate: RideCandidate }>) => void
 ): (() => void) => {
-  const bookingsRef = collection(db, 'bookings');
-  // ✅ Ajout limit(50) + orderBy pour pagination (medJira.md #57, #61)
-  const pendingRidesQuery = query(
-    bookingsRef,
+  // ✅ Utiliser driver_requests/{driverId}/requests au lieu de collection group sur bookings
+  const requestsRef = collection(db, 'driver_requests', driverId, 'requests');
+  const pendingRequestsQuery = query(
+    requestsRef,
     where('status', '==', 'pending'),
     orderBy('createdAt', 'desc'),
     limit(50)
   );
 
   const unsubscribe = onSnapshot(
-    pendingRidesQuery,
-    async (snapshot) => {
+    pendingRequestsQuery,
+    (snapshot) => {
       const requests: Array<{ rideId: string; candidate: RideCandidate }> = [];
 
-      for (const rideDoc of snapshot.docs) {
-        const rideId = rideDoc.id;
-        const candidateRef = doc(db, 'bookings', rideId, 'candidates', driverId);
-        const candidateSnap = await getDoc(candidateRef);
-
-        if (candidateSnap.exists()) {
-          const candidateData = candidateSnap.data() as RideCandidate;
-
-          if (candidateData.status === 'pending') {
-            const expiresAt = candidateData.expiresAt?.toDate();
-            if (!expiresAt || expiresAt > new Date()) {
-              requests.push({
-                rideId,
-                candidate: candidateData,
-              });
-            }
-          }
+      for (const doc of snapshot.docs) {
+        const requestData = doc.data();
+        const expiresAt = requestData.expiresAt?.toDate();
+        
+        // Vérifier que la demande n'a pas expiré
+        if (!expiresAt || expiresAt > new Date()) {
+          requests.push({
+            rideId: doc.id,
+            candidate: {
+              rideId: doc.id,
+              driverId,
+              status: requestData.status,
+              expiresAt: requestData.expiresAt,
+              createdAt: requestData.createdAt,
+              distance: requestData.distance,
+              travelTimeMinutes: requestData.travelTimeMinutes,
+              bonus: requestData.bonus,
+            } as RideCandidate,
+          });
         }
       }
 
@@ -274,7 +292,7 @@ export const subscribeToDriverRideRequests = (
       // ✅ Typage correct de l'erreur (medJira.md #116)
       const errorCode = (error as { code?: string }).code;
       const errorMessage = (error as { message?: string }).message;
-      console.error('[BROADCAST] Erreur lors de l\'écoute:', errorCode, errorMessage);
+      console.error('[BROADCAST] Erreur lors de l\'écoute des demandes:', errorCode, errorMessage);
     }
   );
 
@@ -283,40 +301,43 @@ export const subscribeToDriverRideRequests = (
 
 /**
  * Récupérer les candidatures en attente pour un chauffeur
+ * ✅ NOUVELLE ARCHITECTURE : Utilise driver_requests au lieu de collection group sur bookings
  */
 export const getPendingCandidatesForDriver = async (
   driverId: string
 ): Promise<Array<{ rideId: string; candidate: RideCandidate }>> => {
   try {
-    const bookingsRef = collection(db, 'bookings');
-    // ✅ Ajout limit(50) + orderBy pour pagination (medJira.md #57, #61)
-    const pendingRidesQuery = query(
-      bookingsRef,
+    // ✅ Utiliser driver_requests/{driverId}/requests au lieu de collection group sur bookings
+    const requestsRef = collection(db, 'driver_requests', driverId, 'requests');
+    const pendingRequestsQuery = query(
+      requestsRef,
       where('status', '==', 'pending'),
       orderBy('createdAt', 'desc'),
       limit(50)
     );
 
-    const ridesSnapshot = await getDocs(pendingRidesQuery);
+    const requestsSnapshot = await getDocs(pendingRequestsQuery);
     const requests: Array<{ rideId: string; candidate: RideCandidate }> = [];
 
-    for (const rideDoc of ridesSnapshot.docs) {
-      const rideId = rideDoc.id;
-      const candidateRef = doc(db, 'bookings', rideId, 'candidates', driverId);
-      const candidateSnap = await getDoc(candidateRef);
-
-      if (candidateSnap.exists()) {
-        const candidateData = candidateSnap.data() as RideCandidate;
-
-        if (candidateData.status === 'pending') {
-          const expiresAt = candidateData.expiresAt?.toDate();
-          if (!expiresAt || expiresAt > new Date()) {
-            requests.push({
-              rideId,
-              candidate: candidateData,
-            });
-          }
-        }
+    for (const doc of requestsSnapshot.docs) {
+      const requestData = doc.data();
+      const expiresAt = requestData.expiresAt?.toDate();
+      
+      // Vérifier que la demande n'a pas expiré
+      if (!expiresAt || expiresAt > new Date()) {
+        requests.push({
+          rideId: doc.id,
+          candidate: {
+            rideId: doc.id,
+            driverId,
+            status: requestData.status,
+            expiresAt: requestData.expiresAt,
+            createdAt: requestData.createdAt,
+            distance: requestData.distance,
+            travelTimeMinutes: requestData.travelTimeMinutes,
+            bonus: requestData.bonus,
+          } as RideCandidate,
+        });
       }
     }
 
@@ -325,7 +346,7 @@ export const getPendingCandidatesForDriver = async (
     // ✅ Typage correct de l'erreur (medJira.md #116)
     const errorCode = (error as { code?: string }).code;
     const errorMessage = (error as { message?: string }).message;
-    console.error('[BROADCAST] Erreur récupération candidatures:', errorCode, errorMessage);
+    console.error('[BROADCAST] Erreur récupération des demandes:', errorCode, errorMessage);
     return [];
   }
 };
