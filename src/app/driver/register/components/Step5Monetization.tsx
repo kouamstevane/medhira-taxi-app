@@ -9,22 +9,37 @@ const step5Schema = z.object({
   accountHolder: z.string().min(2, "Nom du titulaire requis"),
   iban: z.string()
     .transform(v => v.replace(/[\s]/g, '').toUpperCase())
-    .pipe(z.string().regex(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/, "IBAN invalide")),
+    .pipe(z.string().regex(/^[A-Z0-9]{5,34}$/, "Numéro de compte / IBAN invalide")),
   bic: z.string()
     .transform(v => v.replace(/[\s]/g, '').toUpperCase())
-    .pipe(z.string().regex(/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/, "BIC/SWIFT invalide")),
+    .pipe(z.string().regex(/^[A-Z0-9]{3,15}$/, "Code banque / BIC invalide")),
 });
 
 export type Step5FormData = z.infer<typeof step5Schema>;
 
+/**
+ * Props pour le composant Step5Monetization
+ * @property onSubmitFinal - Callback appelé lors de la soumission finale du formulaire
+ * @property onBack - Callback pour revenir à l'étape précédente
+ * @property initialData - Données initiales pour pré-remplir le formulaire
+ * @property loading - État de chargement pour désactiver les boutons pendant les opérations asynchrones
+ * @property disabled - État de désactivation supplémentaire (ex: après soumission réussie)
+ */
 interface Step5MonetizationProps {
   onSubmitFinal: (data: Step5FormData) => void;
   onBack: () => void;
   initialData?: Partial<Step5FormData>;
   loading?: boolean;
+  disabled?: boolean;
 }
 
-export default function Step5Monetization({ onSubmitFinal, onBack, initialData, loading }: Step5MonetizationProps) {
+export default function Step5Monetization({ 
+  onSubmitFinal, 
+  onBack, 
+  initialData, 
+  loading = false,
+  disabled = false 
+}: Step5MonetizationProps) {
   const { register, handleSubmit, formState: { errors } } = useForm<Step5FormData>({
     resolver: zodResolver(step5Schema),
     defaultValues: {
@@ -66,21 +81,21 @@ export default function Step5Monetization({ onSubmitFinal, onBack, initialData, 
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">IBAN / Numéro de compte</label>
               <input 
                 {...register('iban')} 
                 type="text"
-                placeholder="FR76 1234 5678 9012 3456 7890 123" 
+                placeholder="Ex: FR76 1234... ou 0123456789" 
                 className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] outline-none focus:ring-2 focus:ring-[#f29200] font-mono tracking-wider" 
               />
               {errors.iban && <p className="text-red-500 text-xs mt-1">{errors.iban.message}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">BIC/SWIFT</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">BIC / SWIFT / Code banque</label>
               <input 
                 {...register('bic')} 
-                placeholder="BKPAFR2X" 
+                placeholder="Ex: BKPAFR2X ou 12345" 
                 className="w-full p-3 border border-gray-300 rounded-lg text-[#101010] outline-none focus:ring-2 focus:ring-[#f29200] font-mono tracking-wider uppercase" 
               />
               {errors.bic && <p className="text-red-500 text-xs mt-1">{errors.bic.message}</p>}
@@ -88,10 +103,29 @@ export default function Step5Monetization({ onSubmitFinal, onBack, initialData, 
         </div>
 
         <div className="flex gap-4 pt-4">
-           <button type="button" onClick={onBack} disabled={loading} className="w-1/3 bg-gray-200 text-[#101010] font-bold py-4 rounded-xl hover:bg-gray-300 transition-colors">
+           {/* 
+             Bouton Retour : Désactivé si chargement en cours ou si le formulaire est désactivé
+             Touch target minimum 44x44px respecté (py-4 = ~48px de hauteur)
+           */}
+           <button 
+            type="button" 
+            onClick={onBack} 
+            disabled={loading || disabled}
+            className="w-1/3 bg-gray-200 text-[#101010] font-bold py-4 rounded-xl hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             Retour
           </button>
-          <button type="submit" disabled={loading} className="w-2/3 bg-green-600 text-white font-bold py-4 rounded-xl hover:bg-green-700 transition-colors flex justify-center items-center shadow-lg hover:shadow-green-600/20">
+          
+          {/* 
+             Bouton Soumettre : Désactivé si chargement en cours ou si le formulaire est désactivé
+             Affiche un spinner pendant le chargement
+             Touch target minimum 44x44px respecté (py-4 = ~48px de hauteur)
+           */}
+          <button 
+            type="submit" 
+            disabled={loading || disabled}
+            className="w-2/3 bg-green-600 text-white font-bold py-4 rounded-xl hover:bg-green-700 transition-colors flex justify-center items-center shadow-lg hover:shadow-green-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
              {loading ? <Loader2 className="animate-spin mr-2" /> : null} Soumettre ma candidature
           </button>
         </div>

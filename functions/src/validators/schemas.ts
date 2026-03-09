@@ -7,10 +7,10 @@ export const BankDetailsSchema = z.object({
   accountHolder: z.string().min(2, "Le nom du titulaire doit contenir au moins 2 caractères"),
   iban: z.string()
     .transform(v => v.replace(/[\s]/g, ''))
-    .pipe(z.string().regex(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/, "IBAN invalide")),
+    .pipe(z.string().regex(/^[a-zA-Z0-9]{5,34}$/, "Numéro de compte / IBAN invalide")),
   bic: z.string()
     .transform(v => v.replace(/[\s]/g, ''))
-    .pipe(z.string().regex(/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/, "BIC/SWIFT invalide")),
+    .pipe(z.string().regex(/^[a-zA-Z0-9]{3,15}$/, "Code banque / BIC invalide")),
 });
 
 /**

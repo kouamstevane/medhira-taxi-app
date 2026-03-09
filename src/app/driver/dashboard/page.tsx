@@ -13,7 +13,7 @@ import {
   getDocs,
   orderBy
 } from 'firebase/firestore';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import Link from 'next/link';
 import { 
@@ -30,9 +30,11 @@ import { RideCandidate } from '@/types';
 import { assignDriver } from '@/services/matching/assignment';
 import { incrementDriverAcceptedTrips, incrementDriverDeclinedTrips } from '@/services/driver.service';
 import { updateDriverLocation, calculateFinalFare, markDriverArrived, startTrip, completeTrip } from '@/services/taxi.service';
+import { resendVerificationEmail } from '@/services/auth.service';
 import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
 import { StatsCard } from './components/StatsCard';
+import { getDriverDashboardInfoMessage } from '@/utils/driver.utils';
 
 interface CarInfo {
   model?: string;
@@ -93,13 +95,17 @@ interface RideRequest {
 
 export default function DriverDashboard() {
   const [driver, setDriver] = useState<DriverData | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [availableTrips, setAvailableTrips] = useState<Trip[]>([]);
   const [currentTrip, setCurrentTrip] = useState<Trip | null>(null);
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
   const [dailyHistory, setDailyHistory] = useState<Trip[]>([]);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const getInitials = (firstName?: string, lastName?: string): string => {
     const firstChar = firstName?.[0] || 'D';
@@ -111,12 +117,51 @@ export default function DriverDashboard() {
     return value ?? defaultValue;
   };
 
+  /**
+   * Fonction pour renvoyer l'email de vérification au chauffeur
+   * Utilise la même logique que la page verify-email
+   */
+  const handleResendVerificationEmail = async () => {
+    if (!currentUser) {
+      setError("Utilisateur non connecté");
+      return;
+    }
+
+    setSendingEmail(true);
+    setError(null);
+
+    try {
+      await resendVerificationEmail(
+        currentUser,
+        (message) => {
+          setInfoMessage(message);
+          // Masquer le message après 5 secondes
+          setTimeout(() => {
+            setInfoMessage(null);
+          }, 5000);
+        },
+        (errorMessage) => {
+          setError(errorMessage);
+        }
+      );
+    } catch (err: unknown) {
+      const error = err as { code?: string; message?: string };
+      console.error('[DriverDashboard] Erreur lors de l\'envoi de l\'email de vérification:', error);
+      setError(error.message || 'Erreur lors de l\'envoi de l\'email de vérification');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
       if (!user) {
         router.push('/driver/login');
         return;
       }
+
+      // Mettre à jour l'état de l'utilisateur actuel
+      setCurrentUser(user);
 
       try {
         const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
@@ -145,18 +190,32 @@ export default function DriverDashboard() {
           return;
         }
 
-        // Vérifier si le compte est approuvé
-        if (driverData.status === 'pending') {
-          router.push('/driver/verify');
-          return;
-        }
-
         if (driverData.status === 'rejected') {
           alert('Votre demande a été rejetée. Vous pouvez soumettre une nouvelle demande.');
           router.push('/driver/register');
           return;
         }
         
+        const submissionParam = searchParams.get('submission');
+        const emailVerifiedParam = searchParams.get('emailVerified');
+        const userEmailVerified = Boolean(user.emailVerified);
+
+        // Utiliser la fonction utilitaire pour déterminer le message d'information
+        const infoMessage = getDriverDashboardInfoMessage(
+          submissionParam,
+          emailVerifiedParam,
+          userEmailVerified,
+          driverData.status
+        );
+
+        if (infoMessage) {
+          setInfoMessage(infoMessage);
+          // Nettoyer les paramètres URL pour éviter de réafficher le message au rechargement
+          if (submissionParam === '1' || emailVerifiedParam === '1') {
+            router.replace('/driver/dashboard');
+          }
+        }
+
         const safeDriverData: DriverData = {
           firstName: driverData.firstName || 'Chauffeur',
           lastName: driverData.lastName || '',
@@ -612,6 +671,25 @@ export default function DriverDashboard() {
       </header>
 
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
+        {infoMessage && (
+          <div className="mb-4 sm:mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 text-blue-700 rounded">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm sm:text-base flex-1">{infoMessage}</p>
+              {/* Afficher le bouton "Renvoyer l'email" uniquement si l'email n'est pas vérifié */}
+              {currentUser && !currentUser.emailVerified && (!driver || driver.status === 'pending') && (
+                <button
+                  onClick={handleResendVerificationEmail}
+                  disabled={sendingEmail}
+                  className="self-start sm:self-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 touch-manipulation"
+                  style={{ minHeight: '44px' }}
+                >
+                  <FiRefreshCw className={`h-4 w-4 ${sendingEmail ? 'animate-spin' : ''}`} />
+                  <span>{sendingEmail ? 'Envoi en cours...' : 'Renvoyer l\'email'}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
           {[
             { label: "Courses", value: formatValue(driver.tripsCompleted, 0), icon: FiTruck, color: "bg-blue-100", iconColor: "text-blue-600" },

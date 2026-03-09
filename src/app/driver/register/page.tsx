@@ -1,15 +1,17 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { auth, db, storage } from '../../../config/firebase';
+import { auth, db, storage, app } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useRouter } from 'next/navigation';
 import { AuthService } from '@/services';
 import { serverEncryptionService } from '../../../services/server-encryption.service';
 import { auditLoggingService, AuditEventType, AuditLogLevel } from '../../../services/audit-logging.service';
 import { secureStorage } from '../../../services/secureStorage.service';
 import { emailVerificationService } from '../../../services/email-verification.service';
+import { StructuredLogger } from '@/utils/logger';
 
 // Import des étapes
 import Step1Intent, { Step1FormData } from './components/Step1Intent';
@@ -17,9 +19,202 @@ import Step2Identity, { Step2FormData } from './components/Step2Identity';
 import Step3Vehicle, { Step3FormData } from './components/Step3Vehicle';
 import Step4Compliance, { Step4Files } from './components/Step4Compliance';
 import Step5Monetization, { Step5FormData } from './components/Step5Monetization';
-import { AlertCircle, FileEdit, LogOut } from 'lucide-react';
+import { AlertCircle, FileEdit, LogOut, Wifi, WifiOff } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+
+// ==========================================
+// 1. MÉCANISME DE RETRY AVEC BACKOFF EXPONENTIEL
+// ==========================================
+
+/**
+ * Interface pour les options de retry
+ */
+interface RetryOptions {
+  maxAttempts?: number; // Nombre maximum de tentatives (défaut: 3)
+  baseDelay?: number; // Délai de base en ms (défaut: 1000ms)
+  maxDelay?: number; // Délai maximum en ms (défaut: 10000ms)
+  onRetry?: (attempt: number, error: Error) => void; // Callback à chaque tentative
+}
+
+/**
+ * Fonction générique de retry avec backoff exponentiel
+ * Implémente un délai exponentiel entre les tentatives : 1s, 2s, 4s, etc.
+ * 
+ * @param operation - L'opération async à retenter
+ * @param options - Options de configuration du retry
+ * @returns Le résultat de l'opération réussie
+ * @throws La dernière erreur si toutes les tentatives échouent
+ */
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  options: RetryOptions = {}
+): Promise<T> {
+  const {
+    maxAttempts = 3,
+    baseDelay = 1000,
+    maxDelay = 10000,
+    onRetry
+  } = options;
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      // Logger le début de la tentative
+      console.log(`[Retry] Tentative ${attempt}/${maxAttempts} à ${new Date().toISOString()}`);
+      
+      const result = await operation();
+      
+      // Succès : logger et retourner le résultat
+      console.log(`[Retry] ✅ Succès à la tentative ${attempt}/${maxAttempts}`);
+      return result;
+      
+    } catch (error) {
+      lastError = error as Error;
+      
+      // Logger l'erreur avec contexte
+      console.error(`[Retry] ❌ Erreur à la tentative ${attempt}/${maxAttempts}:`, {
+        message: lastError.message,
+        code: (lastError as any).code,
+        stack: lastError.stack
+      });
+
+      // Si ce n'est pas la dernière tentative, attendre avant de réessayer
+      if (attempt < maxAttempts) {
+        // Calculer le délai avec backoff exponentiel
+        const delay = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
+        
+        console.log(`[Retry] ⏳ Nouvelle tentative dans ${delay}ms...`);
+        
+        // Callback de retry pour logging externe
+        if (onRetry) {
+          onRetry(attempt, lastError);
+        }
+        
+        // Attendre avant la prochaine tentative
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  // Toutes les tentatives ont échoué
+  console.error(`[Retry] ❌ Toutes les ${maxAttempts} tentatives ont échoué`);
+  throw lastError;
+}
+
+// ==========================================
+// 2. VÉRIFICATION DE CONNECTIVITÉ
+// ==========================================
+
+/**
+ * Vérifie si le navigateur a une connexion réseau active
+ * Utilise l'API Navigator.onLine et des événements de connectivité
+ * 
+ * @returns true si connecté, false sinon
+ */
+function checkConnectivity(): boolean {
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  console.log(`[Connectivity] Statut de connexion: ${isOnline ? '✅ En ligne' : '❌ Hors ligne'}`);
+  return isOnline;
+}
+
+/**
+ * Hook pour surveiller les changements de connectivité
+ * Met à jour l'état de connexion et affiche des toasts appropriés
+ */
+function useConnectivityMonitor(showWarning: (message: string) => void) {
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    // Initialiser avec l'état actuel
+    setIsOnline(checkConnectivity());
+
+    const handleOnline = () => {
+      console.log('[Connectivity] ✅ Connexion rétablie');
+      setIsOnline(true);
+    };
+
+    const handleOffline = () => {
+      console.warn('[Connectivity] ❌ Connexion perdue');
+      setIsOnline(false);
+      showWarning('Connexion internet perdue. Veuillez vérifier votre connexion.');
+    };
+
+    // Ajouter les écouteurs d'événements
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [showWarning]);
+
+  return isOnline;
+}
+
+// ==========================================
+// 3. REDIRECTION DE SECOURS
+// ==========================================
+
+/**
+ * Effectue une redirection avec fallback automatique
+ * Tente d'abord router.push(), puis window.location.href() après 5 secondes
+ *
+ * @param router - Le router Next.js
+ * @param url - L'URL de destination
+ * @param logger - Le logger structuré pour tracer les tentatives
+ * @param isMountedRef - Ref pour vérifier si le composant est toujours monté
+ * @param redirectTimeoutRef - Ref pour stocker et nettoyer le timeout de redirection
+ */
+async function redirectWithFallback(
+  router: ReturnType<typeof useRouter>,
+  url: string,
+  logger: StructuredLogger,
+  isMountedRef: React.MutableRefObject<boolean>,
+  redirectTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>
+): Promise<void> {
+  logger.logStart('REDIRECTION', { url, method: 'router.push' });
+
+  try {
+    // Première tentative : utiliser router.push()
+    await router.push(url);
+    logger.logSuccess('REDIRECTION', { url, method: 'router.push' });
+
+    // Délai de sécurité pour vérifier que la redirection a fonctionné
+    // Si après 5 secondes on est toujours sur la page, utiliser le fallback
+    redirectTimeoutRef.current = setTimeout(() => {
+      // Vérifier si le composant est toujours monté avant d'exécuter le fallback
+      if (!isMountedRef.current) {
+        logger.logWarning('REDIRECTION', 'Composant démonté, annulation du fallback');
+        return;
+      }
+
+      if (typeof window !== 'undefined' && window.location.pathname.includes('/driver/register')) {
+        logger.logWarning('REDIRECTION', 'router.push() semble avoir échoué, utilisation du fallback', {
+          currentPath: window.location.pathname,
+          intendedUrl: url
+        });
+
+        console.warn('[Redirection] ⚠️ router.push() a échoué, utilisation de window.location.href()');
+        window.location.href = url;
+      }
+    }, 5000);
+
+  } catch (error) {
+    logger.logError('REDIRECTION', error as Error, { url, method: 'router.push' });
+    
+    // Fallback immédiat en cas d'erreur
+    console.warn('[Redirection] ⚠️ Erreur lors de router.push(), utilisation de window.location.href()');
+    window.location.href = url;
+  }
+}
+
+// ==========================================
+// COMPOSANT PRINCIPAL
+// ==========================================
 
 export default function DriverRegisterWizard() {
   const router = useRouter();
@@ -30,6 +225,14 @@ export default function DriverRegisterWizard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExistingUser, setIsExistingUser] = useState(false);
+
+  // ----- ÉTAT DE SOUMISSION -----
+  // Empêche la double soumission
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionSuccess, setSubmissionSuccess] = useState(false);
+
+  // ----- CONNECTIVITÉ -----
+  const isOnline = useConnectivityMonitor(showWarning);
 
   // ----- DONNÉES ACCUMULÉES -----
   const [step1Data, setStep1Data] = useState<Partial<Step1FormData>>({});
@@ -45,35 +248,48 @@ export default function DriverRegisterWizard() {
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   
   // ----- EMAIL VERIFICATION RETRY -----
-  // Compteur de tentatives pour l'envoi de l'email de vérification
   const [emailVerificationAttempts, setEmailVerificationAttempts] = useState(0);
-  
-  // ✅ FIX: Stocker le timer ID pour le nettoyer et éviter les memory leaks
   const emailRetryTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // ✅ FIX: Suivre si le composant est monté pour éviter les mises à jour d'état après démontage
   const isMountedRef = useRef(true);
   
-  // ✅ FIX: Nettoyer le timer lors du démontage du composant
+  // ----- DEBOUNCING POUR LA SAUVEGARDE AUTOMATIQUE -----
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ----- REDIRECTION TIMEOUT REF -----
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ----- LOGGER STRUCTURÉ -----
+  const loggerRef = useRef<StructuredLogger>(new StructuredLogger(null, 'DriverRegistration'));
+
+  // ----- CLEANUP EFFECT -----
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      
+      // Nettoyer le timer de retry email
       if (emailRetryTimerRef.current) {
         clearTimeout(emailRetryTimerRef.current);
         emailRetryTimerRef.current = null;
       }
+      
+      // Nettoyer le timer de redirection pour éviter les conditions de course
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+        redirectTimeoutRef.current = null;
+      }
+      
+      // Nettoyer le timer de sauvegarde automatique
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
     };
   }, []);
-  
-  // ----- DEBOUNCING POUR LA SAUVEGARDE AUTOMATIQUE -----
-  // Ref pour le timeout de debouncing de la sauvegarde de progression
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ----- STOCKAGE SÉCURISÉ (PERSISTENCE) -----
-  // ✅ FIX: Utiliser SecureStorage Capacitor au lieu de localStorage pour la conformité RGPD
-  // Les données sont chiffrées avec AES-256 et stockées de manière sécurisée
+  // ==========================================
+  // 5. SAUVEGARDE AUTOMATIQUE DE LA PROGRESSION
+  // ==========================================
 
-  // Interface pour les données de progression stockées
   interface RegistrationProgress {
     step1Data: Partial<Step1FormData>;
     step2Data: Partial<Step2FormData>; // SSN exclu pour la sécurité
@@ -82,125 +298,83 @@ export default function DriverRegisterWizard() {
     timestamp: string;
   }
 
-  // Sauvegarder la progression dans SecureStorage
-  // ⚠️ IMPORTANT: Le SSN est explicitement exclu de la sauvegarde pour la sécurité
+  /**
+   * Sauvegarde automatique de la progression à chaque étape
+   * Utilise Capacitor SecureStorage avec chiffrement AES-256
+   * Le SSN est explicitement exclu pour la sécurité RGPD
+   */
   const saveProgress = useCallback(async () => {
     try {
       const progress: RegistrationProgress = {
         step1Data,
-        // ✅ FIX: Exclure le SSN de la sauvegarde (données sensibles)
-        step2Data: { ...step2Data, ssn: undefined },
+        step2Data: { ...step2Data, ssn: undefined }, // SSN exclu
         step3Data,
         currentStep,
         timestamp: new Date().toISOString()
       };
       
-      // ✅ Utiliser SecureStorage avec chiffrement AES-256
       await secureStorage.setItem('driver_registration_progress', progress);
-      console.log('[DriverRegistration] Progression sauvegardée de manière sécurisée (SSN exclu)');
+      loggerRef.current.logSuccess('SAVE_PROGRESS', {
+        step: currentStep,
+        hasStep1Data: Object.keys(step1Data).length > 0,
+        hasStep2Data: Object.keys(step2Data).length > 0,
+        hasStep3Data: Object.keys(step3Data).length > 0
+      });
     } catch (error) {
-      console.warn('[DriverRegistration] Impossible de sauvegarder la progression:', error);
+      loggerRef.current.logError('SAVE_PROGRESS', error as Error, {
+        step: currentStep
+      });
     }
   }, [step1Data, step2Data, step3Data, currentStep]);
 
-  // Restaurer la progression depuis SecureStorage
-  // ✅ FIX: Valider la structure des données avant de les appliquer
+  /**
+   * Restauration de la progression depuis SecureStorage
+   * Valide la structure des données avant de les appliquer
+   */
   const restoreProgress = useCallback(async (): Promise<RegistrationProgress | null> => {
     try {
       const saved = await secureStorage.getItem<RegistrationProgress>('driver_registration_progress');
       
-      if (saved) {
-        // ✅ FIX: Validation de la structure des données
-        if (saved && typeof saved === 'object' && 'currentStep' in saved) {
-          console.log('[DriverRegistration] Progression restaurée depuis le stockage sécurisé:', saved);
-          return saved;
-        } else {
-          console.warn('[DriverRegistration] Données de progression invalides, ignorées');
-        }
+      if (saved && typeof saved === 'object' && 'currentStep' in saved) {
+        loggerRef.current.logSuccess('RESTORE_PROGRESS', {
+          step: saved.currentStep,
+          timestamp: saved.timestamp
+        });
+        return saved;
+      } else {
+        loggerRef.current.logWarning('RESTORE_PROGRESS', 'Données de progression invalides');
       }
     } catch (error) {
-      console.warn('[DriverRegistration] Impossible de restaurer la progression:', error);
+      loggerRef.current.logError('RESTORE_PROGRESS', error as Error);
     }
     return null;
   }, []);
 
-  // Nettoyer la progression (après soumission réussie ou erreur)
+  /**
+   * Nettoyage de la progression après soumission réussie
+   */
   const clearProgress = useCallback(async () => {
     try {
       await secureStorage.removeItem('driver_registration_progress');
-      console.log('[DriverRegistration] Progression nettoyée du stockage sécurisé');
+      loggerRef.current.logSuccess('CLEAR_PROGRESS', {});
     } catch (error) {
-      console.warn('[DriverRegistration] Impossible de nettoyer la progression:', error);
+      loggerRef.current.logError('CLEAR_PROGRESS', error as Error);
     }
   }, []);
 
-  // Vérifier si l'utilisateur est déjà connecté (pour l'étape 1)
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setIsExistingUser(true);
-        setStep1Data(prev => ({
-          ...prev,
-          email: user.email || '',
-        }));
-        
-        // Vérifier si un document chauffeur existe déjà (reprise d'inscription ou rejet)
-        const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
-        if (driverDoc.exists()) {
-          const data = driverDoc.data();
-          if (data.status === 'action_required' || data.status === 'rejected') {
-             // Gérer les rejets : l'utilisateur doit corriger son dossier
-             setRejectionCode(data.rejectionCode || 'R000');
-             setRejectionReason(data.rejectionReason || data.rejectionMessage || 'Votre dossier nécessite une action de votre part.');
-             
-             // Pré-remplir les données pour faciliter la correction
-             setStep2Data({
-                 firstName: data.firstName || '',
-                 lastName: data.lastName || '',
-                 dob: data.dob || '',
-                 nationality: data.nationality || 'CM',
-                 ssn: '', // SSN chiffré non affiché par sécurité (l'utilisateur doit le resaisir)
-                 address: data.address || '',
-                 city: data.city || '',
-                 zipCode: data.zipCode || '',
-             });
-             
-             // Afficher un message d'information pour le SSN à resaisir
-             showInfo('Pour des raisons de sécurité, veuillez resaisir votre numéro de sécurité sociale.');
-          } else if (data.status === 'pending' || data.status === 'approved' || data.status === 'active') {
-             // Dossier déjà en cours de traitement ou validé
-             setError('Votre dossier est en cours de traitement ou déjà validé.');
-             setTimeout(() => router.push('/driver/dashboard'), 2000);
-          }
-          // Note: Plus de gestion du statut 'draft' car nous ne créons plus de brouillon
-        }
-        // Si aucun document chauffeur n'existe, l'utilisateur commence une nouvelle inscription
-        // Les données seront stockées localement jusqu'à la soumission finale (étape 5)
-      } else {
-        setIsExistingUser(false);
-      }
-    });
-    return () => unsubscribe();
-  }, [router]);
-
-  // ----- SAUVEGARDE AUTOMATIQUE DE LA PROGRESSION -----
-  // Sauvegarder à chaque changement des données du formulaire avec debouncing
-  // ✅ FIX: Ajout d'un debouncing de 1 seconde pour éviter les sauvegardes trop fréquentes
+  // ----- SAUVEGARDE AUTOMATIQUE AVEC DEBOUNCING -----
   useEffect(() => {
     const user = auth.currentUser;
     if (!user) return;
     
-    // Annuler le timeout précédent
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
     
-    // Créer un nouveau timeout
     saveTimeoutRef.current = setTimeout(() => {
       saveProgress();
-    }, 1000); // Sauvegarder après 1 seconde d'inactivité
+    }, 1000);
     
-    // Cleanup
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -208,35 +382,74 @@ export default function DriverRegisterWizard() {
     };
   }, [step1Data, step2Data, step3Data, currentStep, saveProgress]);
 
-  // Restaurer la progression au chargement (uniquement pour les nouveaux utilisateurs)
+  // ----- RESTAURATION AU CHARGEMENT -----
   useEffect(() => {
     const user = auth.currentUser;
     if (user && !isExistingUser) {
-      // ✅ restoreProgress est maintenant async
       restoreProgress().then(saved => {
         if (saved && saved.step1Data) {
-          console.log('[DriverRegistration] Restauration de la progression sauvegardée');
           setStep1Data(saved.step1Data || {});
           setStep2Data(saved.step2Data || {});
           setStep3Data(saved.step3Data || {});
           setCurrentStep(saved.currentStep || 1);
-          
-          // Afficher un toast d'information
           showInfo('Votre progression a été restaurée. Vous pouvez continuer votre inscription.');
         }
       });
     }
   }, [isExistingUser, restoreProgress, showInfo]);
 
-  // ----- HANDLERS ÉTAPE PAR ÉTAPE -----
+  // ----- VÉRIFICATION UTILISATEUR EXISTANT -----
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        loggerRef.current.setUserId(user.uid);
+        setIsExistingUser(true);
+        setStep1Data(prev => ({
+          ...prev,
+          email: user.email || '',
+        }));
+        
+        const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
+        if (driverDoc.exists()) {
+          const data = driverDoc.data();
+          if (data.status === 'action_required' || data.status === 'rejected') {
+             setRejectionCode(data.rejectionCode || 'R000');
+             setRejectionReason(data.rejectionReason || data.rejectionMessage || 'Votre dossier nécessite une action de votre part.');
+             
+             setStep2Data({
+                 firstName: data.firstName || '',
+                 lastName: data.lastName || '',
+                 dob: data.dob || '',
+                 nationality: data.nationality || 'CM',
+                 ssn: '',
+                 address: data.address || '',
+                 city: data.city || '',
+                 zipCode: data.zipCode || '',
+             });
+             
+             showInfo('Pour des raisons de sécurité, veuillez resaisir votre numéro de sécurité sociale.');
+          } else if (data.status === 'pending' || data.status === 'approved' || data.status === 'active') {
+             setError('Votre dossier est en cours de traitement ou déjà validé.');
+             setTimeout(() => redirectWithFallback(router, '/driver/dashboard', loggerRef.current, isMountedRef, redirectTimeoutRef), 2000);
+          }
+        }
+      } else {
+        setIsExistingUser(false);
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
+
+  // ==========================================
+  // 6. HANDLERS ÉTAPE PAR ÉTAPE
+  // ==========================================
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
+    loggerRef.current.logStart('GOOGLE_SIGN_IN', {});
+
     try {
-      // ✅ CORRECTION : Utiliser signInWithGoogleForDriver() au lieu de AuthService.signInWithGoogle()
-      // Cela crée le document approprié avec userType: 'chauffeur' dans la collection users
-      // et un document dans la collection drivers avec le statut 'draft'
       const user = await AuthService.signInWithGoogleForDriver();
       
       const names = user.displayName?.split(' ') || [];
@@ -246,11 +459,11 @@ export default function DriverRegisterWizard() {
       setStep1Data({ email: user.email || '' });
       setStep2Data(prev => ({ ...prev, firstName: first, lastName: last }));
       
-      // La vérification d'existant est gérée par onAuthStateChanged dans tous les cas
+      loggerRef.current.logSuccess('GOOGLE_SIGN_IN', { email: user.email });
       setCurrentStep(2);
     } catch (err: unknown) {
       const error = err as Error;
-      console.error(error);
+      loggerRef.current.logError('GOOGLE_SIGN_IN', error);
       setError("Erreur : " + error.message);
     } finally {
       setLoading(false);
@@ -260,16 +473,18 @@ export default function DriverRegisterWizard() {
   const handleStep1Next = async (data: Step1FormData) => {
     setLoading(true);
     setError(null);
+    loggerRef.current.logStart('STEP1_NEXT', { email: data.email });
+
     try {
       if (!isExistingUser) {
-        // Créer le compte Firebase
         await createUserWithEmailAndPassword(auth, data.email, data.password);
       }
       
       setStep1Data(data);
+      loggerRef.current.logSuccess('STEP1_NEXT', {});
       setCurrentStep(2);
     } catch (err: any) {
-      console.error(err);
+      loggerRef.current.logError('STEP1_NEXT', err, { email: data.email });
       if (err.code === 'auth/email-already-in-use') {
         setError("Cet email est déjà utilisé. Essayez de vous connecter.");
       } else if (err.code === 'auth/weak-password') {
@@ -285,6 +500,12 @@ export default function DriverRegisterWizard() {
   const handleStep2Next = async (data: Step2FormData, photo: File | null) => {
     setLoading(true);
     setError(null);
+    loggerRef.current.logStart('STEP2_NEXT', { 
+      hasPhoto: !!photo, 
+      firstName: data.firstName,
+      lastName: data.lastName
+    });
+
     try {
        setStep2Data(data);
        setBiometricsPhoto(photo);
@@ -293,25 +514,12 @@ export default function DriverRegisterWizard() {
        const userId = user?.uid;
        if (!userId) throw new Error("Utilisateur non connecté");
 
-       // NOTE: La vérification email est intentionnellement absente ici.
-       // Un nouveau compte ne peut pas être vérifié immédiatement.
-       // La vérification stricte est effectuée uniquement à la soumission finale (étape 5).
-
-       // ⚠️ IMPORTANT : Le SSN sera chiffré et stocké uniquement à l'étape 5
-       // lors de la soumission finale. Ici, on stocke uniquement dans l'état local.
-       // Cela évite de créer un document chauffeur prématurément.
-
-       // PAS de sauvegarde en brouillon dans Firestore à ce stade
-       // Les données sont stockées uniquement dans l'état local du composant
-       // Le document chauffeur sera créé uniquement à l'étape 5 lors de la soumission finale
-       
-       console.log('[DriverRegistration] Étape 2 complétée - Données stockées localement uniquement');
-       
+       loggerRef.current.logSuccess('STEP2_NEXT', {});
        setCurrentStep(3);
 
     } catch (err: unknown) {
       const error = err as Error;
-      console.error(error);
+      loggerRef.current.logError('STEP2_NEXT', error);
       setError("Erreur : " + error.message);
     } finally {
         setLoading(false);
@@ -322,34 +530,37 @@ export default function DriverRegisterWizard() {
     data: Step3FormData,
     files: { registration: File; insurance?: File; techControl: File; interiorPhoto: File; exteriorPhoto: File }
   ) => {
+    loggerRef.current.logStart('STEP3_NEXT', {
+      carBrand: data.carBrand,
+      carModel: data.carModel
+    });
     setStep3Data(data);
     setVehicleFiles(files);
     setCurrentStep(4);
   };
 
   const handleStep4Next = (files: Step4Files) => {
+    loggerRef.current.logStart('STEP4_NEXT', {
+      hasIdFront: !!files.idFront,
+      hasIdBack: !!files.idBack,
+      hasLicenseFront: !!files.licenseFront,
+      hasLicenseBack: !!files.licenseBack
+    });
     setComplianceFiles(files);
     setCurrentStep(5);
   };
 
   // ----- AUDIT LOGGING HELPER -----
-  /**
-   * Helper pour l'audit logging non-bloquant
-   * Évite la duplication de code try-catch et ne bloque pas le flux principal
-   * ✅ FIX: Ajoute un compteur pour détecter les échecs répétés
-   * ✅ FIX: Utilise une closure pour protéger la variable contre les accès concurrents
-   */
   const createSafeAuditLog = () => {
     let auditLogFailures = 0;
     
     return async (logFunction: () => Promise<void>, context: string): Promise<void> => {
       try {
         await logFunction();
-        auditLogFailures = 0; // Reset on success
+        auditLogFailures = 0;
       } catch (auditError: any) {
         auditLogFailures++;
         console.error(`[AuditLogging] Erreur lors du logging ${context}:`, auditError);
-        // ✅ FIX: Alerter après plusieurs échecs consécutifs
         if (auditLogFailures > 5) {
           console.error(`[AuditLogging] ${auditLogFailures} échecs consécutifs - vérifier la configuration Firestore`);
         }
@@ -359,12 +570,22 @@ export default function DriverRegisterWizard() {
 
   const safeAuditLog = createSafeAuditLog();
 
-  // ----- UPLOAD HELPER -----
-  const uploadFile = async (file: File | null, fileCategory: string, userId: string) => {
+  // ==========================================
+  // 7. UPLOAD FICHIER AVEC RETRY
+  // ==========================================
+
+  /**
+   * Upload un fichier avec mécanisme de retry automatique
+   * Utilise retryWithBackoff pour gérer les erreurs transitoires
+   */
+  const uploadFileWithRetry = async (
+    file: File | null, 
+    fileCategory: string, 
+    userId: string
+  ): Promise<string | null> => {
     if (!file) return null;
     
-    try {
-      // ✅ CRITIQUE: Vérifier que l'utilisateur est toujours authentifié avant l'upload
+    const operation = async (): Promise<string> => {
       const user = auth.currentUser;
       if (!user || user.uid !== userId) {
         throw new Error('Utilisateur non authentifié ou UID mismatch');
@@ -374,93 +595,131 @@ export default function DriverRegisterWizard() {
       const storageRef = ref(storage, `drivers/${userId}/${fileCategory}/${Date.now()}.${extension}`);
       const snapshot = await uploadBytes(storageRef, file);
       return getDownloadURL(snapshot.ref);
-    } catch (uploadError: any) {
-      console.error(`[Upload] Erreur lors de l'upload du fichier ${fileCategory}:`, {
-        message: uploadError.message,
-        code: uploadError.code,
+    };
+
+    try {
+      return await retryWithBackoff(operation, {
+        maxAttempts: 3,
+        baseDelay: 1000,
+        onRetry: (attempt, error) => {
+          loggerRef.current.logWarning('UPLOAD_FILE', `Tentative ${attempt} échouée pour ${fileCategory}`, {
+            fileName: file.name,
+            errorMessage: error.message
+          });
+        }
+      });
+    } catch (error) {
+      loggerRef.current.logError('UPLOAD_FILE', error as Error, {
+        fileCategory,
         fileName: file.name
       });
-      throw uploadError; // Re-throw pour que Promise.allSettled puisse le gérer
+      throw error;
     }
   };
 
+  // ==========================================
+  // 8. SOUMISSION FINALE AVEC TOUTES LES AMÉLIORATIONS
+  // ==========================================
+
   const handleStep5FinalSubmit = async (data: Step5FormData) => {
+    // ----- PRÉVENTION DE LA DOUBLE SOUMISSION -----
+    if (isSubmitting) {
+      loggerRef.current.logWarning('SUBMISSION', 'Tentative de double soumission bloquée');
+      return;
+    }
+
+    setIsSubmitting(true);
     setLoading(true);
     setError(null);
 
-    // Vérifier l'utilisateur AVANT le try — géré proprement avec setError
+    // ----- VÉRIFICATION DE CONNECTIVITÉ -----
+    if (!checkConnectivity()) {
+      const errorMsg = "Vous n'êtes pas connecté à internet. Veuillez vérifier votre connexion avant de soumettre votre dossier.";
+      loggerRef.current.logWarning('SUBMISSION', errorMsg);
+      setError(errorMsg);
+      setLoading(false);
+      setIsSubmitting(false);
+      return;
+    }
+
     const user = auth.currentUser;
     const userId = user?.uid;
     if (!userId || !user) {
       setError("Vous devez être connecté pour soumettre votre dossier.");
       setLoading(false);
+      setIsSubmitting(false);
       return;
     }
 
+    loggerRef.current.setUserId(userId);
+    loggerRef.current.logStart('SUBMISSION', {
+      step: 'FINAL_SUBMIT',
+      hasBankData: !!(data.accountHolder && data.iban && data.bic)
+    });
+
     try {
-        // ✅ CRITIQUE: Rafraîchir le token avant les opérations critiques pour éviter les erreurs de permissions
+        // Rafraîchir le token avant les opérations critiques
         try {
-          await user.getIdToken(true); // forceRefresh = true
-          console.log('[DriverRegistration] Token rafraîchi avec succès');
+          await user.getIdToken(true);
+          loggerRef.current.logSuccess('TOKEN_REFRESH', {});
         } catch (tokenError: any) {
-          console.error('Erreur lors du rafraîchissement du token:', tokenError);
+          loggerRef.current.logError('TOKEN_REFRESH', tokenError);
           setError("Votre session a expiré. Veuillez vous reconnecter.");
           setLoading(false);
+          setIsSubmitting(false);
           return;
         }
 
-        // L'email de vérification sera géré sur la page dédiée après redirection
-        console.log('[DriverRegistration] Début de l\'upload des fichiers...');
-
-        // 1. Upload tous les fichiers lourds (Vehicle + Compliance + Biometric)
-        // Utiliser Promise.allSettled pour continuer même si certains uploads échouent
+        // 1. Upload tous les fichiers lourds avec retry automatique
+        loggerRef.current.logStart('UPLOAD_FILES', { fileCount: 10 });
+        
         const uploadResults = await Promise.allSettled([
-            uploadFile(biometricsPhoto, 'biometrics', userId),
-            uploadFile(vehicleFiles.registration!, 'documents', userId),
-            uploadFile(vehicleFiles.insurance || null, 'documents', userId),
-            uploadFile(vehicleFiles.techControl!, 'documents', userId),
-            uploadFile(vehicleFiles.exteriorPhoto!, 'vehicle_photos', userId),
-            uploadFile(vehicleFiles.interiorPhoto!, 'vehicle_photos', userId),
-            uploadFile(complianceFiles.idFront!, 'compliance', userId),
-            uploadFile(complianceFiles.idBack!, 'compliance', userId),
-            uploadFile(complianceFiles.licenseFront!, 'compliance', userId),
-            uploadFile(complianceFiles.licenseBack!, 'compliance', userId),
+            uploadFileWithRetry(biometricsPhoto, 'biometrics', userId),
+            uploadFileWithRetry(vehicleFiles.registration!, 'documents', userId),
+            uploadFileWithRetry(vehicleFiles.insurance || null, 'documents', userId),
+            uploadFileWithRetry(vehicleFiles.techControl!, 'documents', userId),
+            uploadFileWithRetry(vehicleFiles.exteriorPhoto!, 'vehicle_photos', userId),
+            uploadFileWithRetry(vehicleFiles.interiorPhoto!, 'vehicle_photos', userId),
+            uploadFileWithRetry(complianceFiles.idFront!, 'compliance', userId),
+            uploadFileWithRetry(complianceFiles.idBack!, 'compliance', userId),
+            uploadFileWithRetry(complianceFiles.licenseFront!, 'compliance', userId),
+            uploadFileWithRetry(complianceFiles.licenseBack!, 'compliance', userId),
         ]);
 
-        // Vérifier les résultats et extraire les URLs
         const [
             bioResult, regResult, insResult, techResult, extResult, intResult,
             idFrontResult, idBackResult, licFrontResult, licBackResult
         ] = uploadResults;
 
-        // Si un upload a échoué, nettoyer les fichiers réussis et retourner une erreur
         const failedUploads = uploadResults.filter(r => r.status === 'rejected');
         if (failedUploads.length > 0) {
-            // Nettoyer les fichiers uploadés avec succès
+            loggerRef.current.logError('UPLOAD_FILES', new Error(`${failedUploads.length} uploads ont échoué`), {
+              failedCount: failedUploads.length
+            });
+
             const successfulUrls = uploadResults
                 .filter(r => r.status === 'fulfilled' && r.value)
                 .map(r => (r as PromiseFulfilledResult<string>).value);
 
-            // Nettoyer les fichiers via la Cloud Function avec droits admin
             if (successfulUrls.length > 0) {
                 try {
-                    const { getFunctions, httpsCallable } = await import('firebase/functions');
-                    const functions = getFunctions();
+                    const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+                    const functions = getFunctions(app, functionsRegion);
                     const cleanupFailedUploads = httpsCallable(functions, 'cleanupFailedUploads');
                     
                     await cleanupFailedUploads({ fileUrls: successfulUrls });
-                    console.log('Fichiers uploadés nettoyés après échec:', successfulUrls.length);
+                    loggerRef.current.logSuccess('CLEANUP_UPLOADS', { fileCount: successfulUrls.length });
                 } catch (cleanupError: any) {
-                    console.error('Erreur lors du nettoyage des fichiers:', cleanupError);
-                    // On continue quand même, l'erreur de nettoyage ne doit pas bloquer
+                    loggerRef.current.logError('CLEANUP_UPLOADS', cleanupError);
                 }
             }
 
             setError("Erreur lors de l'upload de certains fichiers. Veuillez réessayer.");
+            setLoading(false);
+            setIsSubmitting(false);
             return;
         }
 
-        // Extraire les URLs des uploads réussis
         const bioUrl = bioResult.status === 'fulfilled' ? bioResult.value : null;
         const regUrl = regResult.status === 'fulfilled' ? regResult.value : null;
         const insUrl = insResult.status === 'fulfilled' ? insResult.value : null;
@@ -472,93 +731,120 @@ export default function DriverRegisterWizard() {
         const licFrontUrl = licFrontResult.status === 'fulfilled' ? licFrontResult.value : null;
         const licBackUrl = licBackResult.status === 'fulfilled' ? licBackResult.value : null;
 
-        console.log('[DriverRegistration] Upload des fichiers terminé avec succès');
+        loggerRef.current.logSuccess('UPLOAD_FILES', { fileCount: 10 });
 
-        // 2. Chiffrer le SSN (maintenant que toutes les données sont collectées)
-        // ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
-        // Le SSN est chiffré avec AES-256-GCM via la Cloud Function
+        // 2. Chiffrer le SSN avec retry
         let encryptedSsn = null;
         if (step2Data.ssn) {
             try {
-                console.log('✅ Chiffrement du SSN avec AES-256-GCM (RGPD article 32)');
-                encryptedSsn = await serverEncryptionService.encryptSSN(step2Data.ssn);
-                // Audit logging: SSN chiffré avec succès
+                loggerRef.current.logStart('SSN_ENCRYPTION', {});
+                encryptedSsn = await retryWithBackoff(
+                  () => serverEncryptionService.encryptSSN(step2Data.ssn!),
+                  {
+                    maxAttempts: 3,
+                    onRetry: (attempt, error) => {
+                      loggerRef.current.logWarning('SSN_ENCRYPTION', `Tentative ${attempt} échouée`, {
+                        errorMessage: error.message
+                      });
+                    }
+                  }
+                );
+                loggerRef.current.logSuccess('SSN_ENCRYPTION', {});
                 await safeAuditLog(() => auditLoggingService.logSSNEncryption(userId, true), 'SSN succès');
             } catch (encryptError: any) {
-                console.error('Erreur lors du chiffrement du SSN:', encryptError);
-                // Audit logging: Échec du chiffrement SSN
+                loggerRef.current.logError('SSN_ENCRYPTION', encryptError);
                 await safeAuditLog(() => auditLoggingService.logSSNEncryption(userId, false, encryptError.message), 'SSN échec');
                 setError(encryptError.message || "Erreur lors de la sécurisation de vos données. Veuillez réessayer.");
+                setLoading(false);
+                setIsSubmitting(false);
                 return;
             }
         }
 
-        // 3. Valider les données bancaires avant chiffrement (Cloud Function)
+        // 3. Valider et chiffrer les données bancaires avec retry
         let encryptedBank = null;
         if (data.accountHolder && data.iban && data.bic) {
             try {
-                // Importer les fonctions Firebase
-                const { getFunctions, httpsCallable } = await import('firebase/functions');
-                const functions = getFunctions();
-                
-                // Valider les données bancaires côté serveur
-                const validateBankDetails = httpsCallable(functions, 'validateBankDetails');
-                const validationResult = await validateBankDetails({
-                    accountHolder: data.accountHolder,
-                    iban: data.iban,
-                    bic: data.bic
-                });
+                loggerRef.current.logStart('BANK_VALIDATION', {});
 
-                // ✅ FIX: Valider la structure de la réponse avant utilisation
+                const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+                const functions = getFunctions(app, functionsRegion);
+                
+                const validateBankDetails = httpsCallable(functions, 'validateBankDetails');
+                const validationResult = await retryWithBackoff(
+                  () => validateBankDetails({
+                      accountHolder: data.accountHolder,
+                      iban: data.iban,
+                      bic: data.bic
+                  }),
+                  {
+                    maxAttempts: 3,
+                    onRetry: (attempt, error) => {
+                      loggerRef.current.logWarning('BANK_VALIDATION', `Tentative ${attempt} échouée`, {
+                        errorMessage: error.message
+                      });
+                    }
+                  }
+                );
+
                 const validationResultData = validationResult.data as { isValid?: boolean; errors?: { [key: string]: any } };
                 
-                // Vérifier que la structure est valide
                 if (!validationResultData || typeof validationResultData !== 'object' || typeof validationResultData.isValid !== 'boolean') {
-                    console.error('[DriverRegistration] Structure de réponse invalide', validationResultData);
+                    loggerRef.current.logError('BANK_VALIDATION', new Error('Structure de réponse invalide'));
                     setError('Erreur serveur lors de la validation des coordonnées bancaires.');
+                    setLoading(false);
+                    setIsSubmitting(false);
                     return;
                 }
-
 
                 const result = validationResultData;
                 if (!result.isValid) {
                     let errorMessages = "Coordonnées bancaires invalides";
                     if (result.errors) {
-                        // Extraire les messages d'erreur de Zod si présents
                         errorMessages = Object.entries(result.errors)
                             .filter(([key]) => key !== '_errors')
                             .map(([key, val]: [string, any]) => `${key}: ${val._errors?.join(', ') || 'invalide'}`)
                             .join(' | ');
                     }
                     
-                    // Audit logging: Échec validation bancaire
+                    loggerRef.current.logError('BANK_VALIDATION', new Error(errorMessages));
                     await safeAuditLog(() => auditLoggingService.logBankValidation(userId, false, result.errors), 'validation bancaire échec');
                     setError(`Erreur validation: ${errorMessages}`);
+                    setLoading(false);
+                    setIsSubmitting(false);
                     return;
                 }
 
-                // Audit logging: Validation bancaire réussie
+                loggerRef.current.logSuccess('BANK_VALIDATION', {});
                 await safeAuditLog(() => auditLoggingService.logBankValidation(userId, true), 'validation bancaire succès');
 
-                // Si la validation réussit, chiffrer les données bancaires
-                // ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
+                // Chiffrer les données bancaires avec retry
                 try {
-                    console.log('✅ Chiffrement des données bancaires avec AES-256-GCM (RGPD article 32)');
-                    encryptedBank = await serverEncryptionService.encryptBankData(
-                        data.accountHolder,
-                        data.iban,
-                        data.bic
+                    loggerRef.current.logStart('BANK_ENCRYPTION', {});
+                    encryptedBank = await retryWithBackoff(
+                      () => serverEncryptionService.encryptBankData(
+                          data.accountHolder,
+                          data.iban,
+                          data.bic
+                      ),
+                      {
+                        maxAttempts: 3,
+                        onRetry: (attempt, error) => {
+                          loggerRef.current.logWarning('BANK_ENCRYPTION', `Tentative ${attempt} échouée`, {
+                            errorMessage: error.message
+                          });
+                        }
+                      }
                     );
-                    // Audit logging: Chiffrement bancaire réussi
+                    loggerRef.current.logSuccess('BANK_ENCRYPTION', {});
                     await safeAuditLog(() => auditLoggingService.logBankEncryption(userId, true), 'chiffrement bancaire succès');
                 } catch (bankEncryptError: any) {
-                    // Audit logging: Échec chiffrement bancaire
+                    loggerRef.current.logError('BANK_ENCRYPTION', bankEncryptError);
                     await safeAuditLog(() => auditLoggingService.logBankEncryption(userId, false, bankEncryptError.message), 'chiffrement bancaire échec');
                     throw bankEncryptError;
                 }
             } catch (encryptError: any) {
-                console.error('Erreur lors du traitement des données bancaires:', encryptError);
-                // Gérer les erreurs spécifiques
+                loggerRef.current.logError('BANK_PROCESSING', encryptError);
                 if (encryptError.code === 'resource-exhausted') {
                     await safeAuditLog(() => auditLoggingService.logRateLimitExceeded(userId, 'bank_validation'), 'rate limit');
                     setError('Trop de tentatives. Veuillez réessayer dans une minute.');
@@ -568,65 +854,39 @@ export default function DriverRegisterWizard() {
                 } else {
                     setError(encryptError.message || "Erreur lors du traitement de vos données bancaires. Veuillez réessayer.");
                 }
+                setLoading(false);
+                setIsSubmitting(false);
                 return;
             }
         }
 
-        // 4. Créer le document chauffeur avec toutes les données
-        // ✅ DIAGNOSTIC: Logger toutes les données avant création pour identifier le problème
-        console.log('[DriverRegistration] Préparation des données pour création document chauffeur:', {
-           uid: userId,
-           email: step1Data.email || auth.currentUser?.email || '',
-           phone: step2Data.phone || step1Data.phone || '',
-           phoneType: typeof (step2Data.phone || step1Data.phone || ''),
-           hasFirstName: !!step2Data.firstName,
-           hasLastName: !!step2Data.lastName,
-           hasDob: !!step2Data.dob,
-           hasNationality: !!step2Data.nationality,
-           hasAddress: !!step2Data.address,
-           hasCity: !!step2Data.city,
-           hasZipCode: !!step2Data.zipCode,
-           hasSsn: !!encryptedSsn,
-           hasBank: !!encryptedBank,
-           status: 'pending',
-           userType: 'chauffeur',
-           emailVerified: auth.currentUser?.emailVerified,
-           currentUserId: auth.currentUser?.uid
-        });
+        // 4. Créer le document chauffeur avec retry
+        loggerRef.current.logStart('CREATE_DRIVER_PROFILE', {});
 
         const finalDriverData = {
            uid: userId,
-           // Données d'identité (Étape 2)
            firstName: step2Data.firstName,
            lastName: step2Data.lastName,
            email: step1Data.email || auth.currentUser?.email || '',
-           // ✅ FIX CRITIQUE: phoneNumber doit être null (pas chaîne vide) pour les règles Firestore
-           phoneNumber: null, // Toujours null pour les chauffeurs (auth par email uniquement)
-           phone: step2Data.phone || step1Data.phone || '', // Stocké dans un champ non-restreint
+           phoneNumber: null,
+           phone: step2Data.phone || step1Data.phone || '',
            dob: step2Data.dob,
            nationality: step2Data.nationality,
            address: step2Data.address,
            city: step2Data.city,
            zipCode: step2Data.zipCode,
-             // SSN chiffré (conformité RGPD) - ✅ CHIFFREMENT RÉACTIVÉ
-             ssn: encryptedSsn,
-
-             // Données véhicule (Étape 3)
-             car: {
-                 brand: step3Data.carBrand,
-                 model: step3Data.carModel,
-                 year: step3Data.productionYear,
-                 color: step3Data.carColor,
-                 seats: step3Data.passengerSeats,
-                 fuelType: step3Data.fuelType,
-                 mileage: step3Data.mileage,
-                 techControlDate: step3Data.techControlDate
-             },
-
-             // Identité Bancaire (Étape 5) - ✅ CHIFFREMENT RÉACTIVÉ
-             bank: encryptedBank, // { data, iv, salt } - Données bancaires chiffrées
-
-           // URLs des documents uploadés
+           ssn: encryptedSsn,
+           car: {
+               brand: step3Data.carBrand,
+               model: step3Data.carModel,
+               year: step3Data.productionYear,
+               color: step3Data.carColor,
+               seats: step3Data.passengerSeats,
+               fuelType: step3Data.fuelType,
+               mileage: step3Data.mileage,
+               techControlDate: step3Data.techControlDate
+           },
+           bank: encryptedBank,
            documents: {
                biometricPhoto: bioUrl,
                carRegistration: regUrl,
@@ -639,8 +899,7 @@ export default function DriverRegisterWizard() {
                licenseFront: licFrontUrl,
                licenseBack: licBackUrl
            },
-
-           status: 'pending', // Statut initial pour les nouvelles inscriptions
+           status: 'pending',
            userType: 'chauffeur',
            createdAt: new Date(),
            updatedAt: new Date(),
@@ -649,115 +908,75 @@ export default function DriverRegisterWizard() {
            tripsCompleted: 0
         };
 
-        console.log('[DriverRegistration] Création du document chauffeur avec statut pending...');
-        
-        // ✅ FIX RACE CONDITION : Gérer l'erreur de document déjà créé
-        // Essayer de créer sans merge d'abord, puis gérer le cas où le document existe déjà
         try {
-          // ✅ DIAGNOSTIC: Logger les détails de la requête Firestore
-          console.log('[DriverRegistration] Tentative de création document chauffeur:', {
-            driverId: userId,
-            authUid: auth.currentUser?.uid,
-            uidMatch: userId === auth.currentUser?.uid,
-            emailPresent: !!finalDriverData.email,
-            phoneNumberNull: finalDriverData.phoneNumber === null,
-            userType: finalDriverData.userType,
-            status: finalDriverData.status,
-            emailVerified: auth.currentUser?.emailVerified,
-            allRequiredFieldsPresent: !!(
-              finalDriverData.firstName &&
-              finalDriverData.lastName &&
-              finalDriverData.dob &&
-              finalDriverData.nationality &&
-              finalDriverData.address &&
-              finalDriverData.city &&
-              finalDriverData.zipCode &&
-              finalDriverData.phone &&
-              finalDriverData.car &&
-              finalDriverData.documents
-            )
-          });
+          const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+          const functions = getFunctions(app, functionsRegion);
+          const createDriverProfile = httpsCallable(functions, 'createDriverProfile');
           
-          // Vérifier si un document existe déjà (pour les chauffeurs qui resoumettent après un rejet)
-          const existingDriverDoc = await getDoc(doc(db, 'drivers', userId));
-          const shouldMerge = existingDriverDoc.exists() &&
-                             (existingDriverDoc.data()?.status === 'action_required' ||
-                              existingDriverDoc.data()?.status === 'rejected');
-          
-          if (shouldMerge) {
-            console.log('[DriverRegistration] Document existant détecté, utilisation de merge:true pour préserver les données de rejet');
-            // Préserver les champs de rejet qui ne sont pas dans finalDriverData
-            await setDoc(doc(db, 'drivers', userId), finalDriverData, { merge: true });
-          } else {
-            console.log('[DriverRegistration] Nouvelle inscription, création du document sans merge');
-            await setDoc(doc(db, 'drivers', userId), finalDriverData);
-          }
-          
-          console.log('[DriverRegistration] Document Firestore créé avec succès');
-        } catch (createError: any) {
-          // ✅ DIAGNOSTIC: Logger les détails de l'erreur Firestore
-          console.error('[DriverRegistration] Erreur lors de la création du document chauffeur:', {
-            errorCode: createError.code,
-            errorMessage: createError.message,
-            errorName: createError.name,
-            driverId: userId,
-            authUid: auth.currentUser?.uid,
-            emailVerified: auth.currentUser?.emailVerified,
-            isMissingOrInsufficientPermissions: createError.code === 'permission-denied' || createError.message?.includes('Missing or insufficient permissions'),
-            finalDriverDataKeys: Object.keys(finalDriverData),
-            finalDriverData: {
-              uid: finalDriverData.uid,
-              email: finalDriverData.email,
-              phoneNumber: finalDriverData.phoneNumber,
-              phone: finalDriverData.phone,
-              userType: finalDriverData.userType,
-              status: finalDriverData.status,
-              hasFirstName: !!finalDriverData.firstName,
-              hasLastName: !!finalDriverData.lastName,
-              hasDob: !!finalDriverData.dob,
-              hasNationality: !!finalDriverData.nationality,
-              hasAddress: !!finalDriverData.address,
-              hasCity: !!finalDriverData.city,
-              hasZipCode: !!finalDriverData.zipCode,
-              hasPhone: !!finalDriverData.phone,
-              hasCar: !!finalDriverData.car,
-              hasDocuments: !!finalDriverData.documents,
-              hasSsn: !!finalDriverData.ssn,
-              hasBank: !!finalDriverData.bank
+          await retryWithBackoff(
+            () => createDriverProfile({
+              driverId: userId,
+              driverData: finalDriverData
+            }),
+            {
+              maxAttempts: 3,
+              onRetry: (attempt, error) => {
+                loggerRef.current.logWarning('CREATE_DRIVER_PROFILE', `Tentative ${attempt} échouée`, {
+                  errorMessage: error.message
+                });
+              }
             }
-          });
-          
-          // ✅ FIX: Gérer le cas où deux soumissions concurrentes créent un document
-          if (createError.code === 'already-exists' || createError.message?.includes('already exists')) {
-            console.log('[DriverRegistration] Document déjà créé par une autre requête, mise à jour avec merge');
-            await setDoc(doc(db, 'drivers', userId), finalDriverData, { merge: true });
-          } else {
-            throw createError; // Re-throw les autres erreurs
-          }
-        }
-        
-        console.log('[DriverRegistration] Document Firestore créé avec succès');
-
-        // Audit logging: Inscription chauffeur complétée
-        await safeAuditLog(() => auditLoggingService.logDriverRegistrationCompleted(userId), 'inscription complétée');
-
-        // ✅ CRITIQUE: Envoyer l'email de vérification IMMÉDIATEMENT après la création du document
-        // ✅ FIX: Utiliser Resend au lieu de Firebase Auth pour une meilleure délivrabilité
-        // Cela garantit que l'email est envoyé même si l'utilisateur est redirigé
-        console.log('[DriverRegistration] Envoi de l\'email de vérification via Resend...');
-        try {
-          // Utiliser le service Resend avec template react-email
-          const result = await emailVerificationService.sendVerificationEmail(
-            auth.currentUser?.email || '',
-            step2Data.firstName || auth.currentUser?.displayName || undefined
           );
           
-          console.log('[DriverRegistration] ✅ Email de vérification envoyé avec succès via Resend', {
-            to: auth.currentUser?.email,
+          loggerRef.current.logSuccess('CREATE_DRIVER_PROFILE', {});
+        } catch (createError: any) {
+            loggerRef.current.logError('CREATE_DRIVER_PROFILE', createError);
+            
+            let userMessage = "Erreur lors de la création de votre profil. Veuillez réessayer.";
+            
+            if (createError.code === 'permission-denied' || createError.message?.includes('UID mismatch') || createError.message?.includes('Email mismatch')) {
+              userMessage = "Erreur de permission ou de correspondance des données. Veuillez vous reconnecter et réessayer.";
+            } else if (createError.code === 'resource-exhausted') {
+              userMessage = "Trop de tentatives. Veuillez attendre une minute avant de réessayer.";
+            } else if (createError.code === 'failed-precondition') {
+              userMessage = createError.message || "Données invalides. Veuillez vérifier vos informations.";
+            } else if (createError.code === 'invalid-argument') {
+              userMessage = "Données invalides. Veuillez vérifier que toutes les informations sont correctes.";
+            } else if (createError.code === 'unauthenticated') {
+              userMessage = "Vous n'êtes pas connecté. Veuillez vous reconnecter.";
+            }
+            
+            setError(userMessage);
+            setLoading(false);
+            setIsSubmitting(false);
+            return;
+        }
+
+        // 5. Envoyer l'email de vérification avec retry
+        loggerRef.current.logStart('SEND_VERIFICATION_EMAIL', {
+          email: auth.currentUser?.email
+        });
+
+        try {
+          const result = await retryWithBackoff(
+            () => emailVerificationService.sendVerificationEmail(
+              auth.currentUser?.email || '',
+              step2Data.firstName || auth.currentUser?.displayName || undefined
+            ),
+            {
+              maxAttempts: 3,
+              onRetry: (attempt, error) => {
+                loggerRef.current.logWarning('SEND_VERIFICATION_EMAIL', `Tentative ${attempt} échouée`, {
+                  errorMessage: error.message
+                });
+              }
+            }
+          );
+          
+          loggerRef.current.logSuccess('SEND_VERIFICATION_EMAIL', {
             messageId: result.messageId
           });
           
-          // Audit logging: Email de vérification envoyé
           await safeAuditLog(() => auditLoggingService.log({
             eventType: AuditEventType.EMAIL_VERIFICATION_SENT,
             userId,
@@ -772,95 +991,8 @@ export default function DriverRegisterWizard() {
             }
           }), 'email verification sent');
         } catch (emailError: any) {
-          console.error('[DriverRegistration] ❌ Erreur lors de l\'envoi de l\'email de vérification:', {
-            code: emailError.code,
-            message: emailError.message,
-            email: auth.currentUser?.email,
-            attempt: emailVerificationAttempts + 1
-          });
-          
-          // ✅ FIX: Réessayer automatiquement jusqu'à 3 fois avec délai exponentiel
-          // ✅ FIX: Utiliser Resend au lieu de Firebase Auth pour une meilleure délivrabilité
-          if (emailVerificationAttempts < 3) {
-            const delay = Math.pow(2, emailVerificationAttempts) * 1000; // 1s, 2s, 4s
-            console.log(`[DriverRegistration] Nouvelle tentative via Resend dans ${delay}ms...`);
+            loggerRef.current.logError('SEND_VERIFICATION_EMAIL', emailError);
             
-            // ✅ FIX: Nettoyer le timer précédent s'il existe
-            if (emailRetryTimerRef.current) {
-              clearTimeout(emailRetryTimerRef.current);
-            }
-            
-            emailRetryTimerRef.current = setTimeout(async () => {
-              try {
-                // ✅ FIX: Vérifier IMMÉDIATEMENT si le composant est toujours monté
-                // Cela évite toute opération inutile si le composant a été démonté
-                if (!isMountedRef.current) {
-                  console.log('[DriverRegistration] Composant démonté, annulation du retry d\'email');
-                  return;
-                }
-                
-                setEmailVerificationAttempts(prev => prev + 1);
-                
-                // Utiliser Resend au lieu de Firebase Auth
-                const result = await emailVerificationService.sendVerificationEmail(
-                  auth.currentUser?.email || '',
-                  step2Data.firstName || auth.currentUser?.displayName || undefined
-                );
-                
-                console.log('[DriverRegistration] ✅ Email de vérification envoyé avec succès au retry via Resend', {
-                  to: auth.currentUser?.email,
-                  messageId: result.messageId,
-                  attempt: emailVerificationAttempts + 1
-                });
-                
-                // Audit logging: Email de vérification envoyé après retry
-                await safeAuditLog(() => auditLoggingService.log({
-                  eventType: AuditEventType.EMAIL_VERIFICATION_SENT,
-                  userId,
-                  level: AuditLogLevel.INFO,
-                  action: 'Email de vérification envoyé après retry (via Resend)',
-                  success: true,
-                  details: {
-                    email: auth.currentUser?.email,
-                    messageId: result.messageId,
-                    provider: 'resend',
-                    attempt: emailVerificationAttempts + 1,
-                    timestamp: new Date().toISOString()
-                  }
-                }), 'email verification retry success');
-                
-                // ✅ FIX: Vérifier si le composant est toujours monté avant de reset le compteur
-                if (isMountedRef.current) {
-                  setEmailVerificationAttempts(0); // Reset le compteur
-                }
-              } catch (retryError: any) {
-                console.error('[DriverRegistration] ❌ Retry échoué via Resend', retryError);
-                
-                // Logger l'erreur de retry
-                await safeAuditLog(() => auditLoggingService.log({
-                  eventType: AuditEventType.EMAIL_VERIFICATION_FAILED,
-                  userId,
-                  level: AuditLogLevel.WARNING,
-                  action: 'Échec de l\'envoi de l\'email de vérification (retry via Resend)',
-                  success: false,
-                  errorMessage: retryError.message,
-                  details: {
-                    email: auth.currentUser?.email,
-                    errorCode: retryError.code,
-                    provider: 'resend',
-                    attempt: emailVerificationAttempts + 1,
-                    timestamp: new Date().toISOString()
-                  }
-                }), 'email verification retry failed');
-                
-                // Afficher un avertissement seulement après tous les essais
-                if (emailVerificationAttempts + 1 >= 3) {
-                  showWarning('Votre dossier a été soumis avec succès, mais l\'email de vérification n\'a pas pu être envoyé. Vous pourrez le renvoyer depuis la page suivante.');
-                }
-              }
-            }, delay);
-          } else {
-            // Logger l'erreur finale après tous les essais
             await safeAuditLog(() => auditLoggingService.log({
               eventType: AuditEventType.EMAIL_VERIFICATION_FAILED,
               userId,
@@ -871,41 +1003,52 @@ export default function DriverRegisterWizard() {
               details: {
                 email: auth.currentUser?.email,
                 errorCode: emailError.code,
-                attempts: emailVerificationAttempts + 1,
                 timestamp: new Date().toISOString()
               }
             }), 'email verification failed');
             
-            // Afficher un avertissement à l'utilisateur
-            showWarning('Votre dossier a été soumis avec succès, mais l\'email de vérification n\'a pas pu être envoyé. Vous pourrez le renvoyer depuis la page suivante.');
-          }
+            showWarning('Votre dossier a été soumis avec succès, mais l\'email de validation n\'a pas pu être envoyé. Vous pourrez le renvoyer depuis votre tableau de bord.');
         }
 
-        // Nettoyer la progression du stockage sécurisé après soumission réussie
+        // 6. Nettoyer la progression et marquer comme succès
         await clearProgress();
+        setSubmissionSuccess(true);
+        
+        loggerRef.current.logSuccess('SUBMISSION', {
+          status: 'SUCCESS',
+          redirectUrl: '/driver/dashboard?submission=1'
+        });
 
-        // Redirection vers vérification email (comme dans l'ancien flux)
-        router.push('/driver/verify-email');
+        // 7. REDIRECTION AVEC FALLBACK
+        await redirectWithFallback(router, '/driver/dashboard?submission=1', loggerRef.current, isMountedRef, redirectTimeoutRef);
 
     } catch (err: any) {
-        console.error('[DriverRegistration] Erreur lors de la soumission finale:', {
-          message: err.message,
+        loggerRef.current.logError('SUBMISSION', err, {
+          step: 'CATCH_ALL',
           code: err.code,
-          name: err.name,
-          stack: err.stack
+          name: err.name
         });
         
-        // Audit logging: Échec inscription
         if (userId) {
           await safeAuditLog(() => auditLoggingService.logDriverRegistrationFailed(userId, err.message), 'inscription échouée');
         }
         
-        // Message d'erreur plus spécifique selon le type d'erreur
+        // ==========================================
+        // 9. GESTION AMÉLIORÉE DES ERREURS
+        // ==========================================
+        
         let errorMessage = "Erreur lors de l'inscription. Veuillez réessayer.";
+        let actionButton: { text: string; onClick: () => void } | null = null;
+        
         if (err.code === 'permission-denied' || err.message?.includes('Missing or insufficient permissions')) {
           errorMessage = "Erreur de permissions. Votre session a peut-être expiré. Veuillez vous reconnecter.";
+          actionButton = { text: "Se reconnecter", onClick: () => router.push('/driver/login') };
         } else if (err.code === 'storage/unauthorized') {
           errorMessage = "Erreur lors de l'upload des fichiers. Veuillez vérifier votre connexion.";
+          actionButton = { text: "Réessayer", onClick: () => window.location.reload() };
+        } else if (err.message?.includes('réseau') || err.message?.includes('network')) {
+          errorMessage = "Erreur réseau. Veuillez vérifier votre connexion internet et réessayer.";
+          actionButton = { text: "Réessayer", onClick: () => handleStep5FinalSubmit(data) };
         } else if (err.message) {
           errorMessage = `Erreur: ${err.message}`;
         }
@@ -913,27 +1056,26 @@ export default function DriverRegisterWizard() {
         setError(errorMessage);
         window.scrollTo({ top: 0, behavior: 'smooth' });
         
-        // ✅ FIX: Nettoyer les données sensibles du stockage sécurisé même en cas d'erreur
-        // Avec SecureStorage, le SSN n'est jamais stocké, donc aucun nettoyage spécifique n'est nécessaire
-        // Les données sont déjà chiffrées avec AES-256
-        console.log('[DriverRegistration] Les données sensibles sont protégées par chiffrement AES-256');
+        // Afficher un bouton d'action si disponible
+        if (actionButton) {
+          showInfo(`${errorMessage} Cliquez ici pour ${actionButton.text.toLowerCase()}.`);
+        }
+        
     } finally {
         setLoading(false);
+        setIsSubmitting(false);
     }
   };
 
   // ----- REJECTIONS UI HANDLERS -----
   const handleFixRejection = () => {
       if (rejectionCode === 'R001' || rejectionCode === 'R004') {
-          // Documents illisibles (ID)
           setRejectionCode(null);
           setCurrentStep(4);
       } else if (rejectionCode === 'R002' || rejectionCode === 'R003') {
-          // Vehicule expiré ou problème
           setRejectionCode(null);
           setCurrentStep(3);
       } else {
-          // Par defaut, on rouvre le wizard à l'étape 2 (profile) 
           setRejectionCode(null);
           setCurrentStep(2);
       }
@@ -958,13 +1100,13 @@ export default function DriverRegisterWizard() {
                   </p>
 
                   <div className="space-y-3 mt-8">
-                       {rejectionCode !== 'R005' && ( // R005 = Casier (Definitif)
+                       {rejectionCode !== 'R005' && (
                            <button onClick={handleFixRejection} className="w-full flex items-center justify-center bg-[#f29200] text-white py-4 rounded-xl font-bold hover:bg-[#e68600] transition-colors">
                                <FileEdit className="mr-2" size={20} /> Mettre à jour mon dossier
                            </button>
                        )}
                        
-                       {rejectionCode === 'R006' && ( // Liste d'attente
+                       {rejectionCode === 'R006' && (
                             <p className="text-sm text-gray-500 italic mb-4">Nous vous recontacterons dès qu'une place se libérera dans votre zone.</p>
                        )}
 
@@ -982,6 +1124,21 @@ export default function DriverRegisterWizard() {
       {/* Toast Container */}
       <ToastContainer toasts={toasts} onRemove={removeToast} position="top-right" />
       
+      {/* Indicateur de connectivité */}
+      <div className="fixed top-4 right-4 z-50">
+        {isOnline ? (
+          <div className="flex items-center bg-green-100 text-green-700 px-3 py-2 rounded-lg shadow-md">
+            <Wifi className="w-4 h-4 mr-2" />
+            <span className="text-sm font-medium">En ligne</span>
+          </div>
+        ) : (
+          <div className="flex items-center bg-red-100 text-red-700 px-3 py-2 rounded-lg shadow-md">
+            <WifiOff className="w-4 h-4 mr-2" />
+            <span className="text-sm font-medium">Hors ligne</span>
+          </div>
+        )}
+      </div>
+      
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden">
         
         {/* PROGRESS BAR */}
@@ -996,7 +1153,10 @@ export default function DriverRegisterWizard() {
             {error && (
               <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg flex border border-red-200">
                 <svg className="w-5 h-5 mr-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                {error}
+                <div className="flex-1">
+                  <p className="font-medium">{error}</p>
+                  <p className="text-sm mt-1">Si le problème persiste, contactez le support technique.</p>
+                </div>
               </div>
             )}
 
@@ -1042,7 +1202,8 @@ export default function DriverRegisterWizard() {
                  <Step5Monetization 
                      onSubmitFinal={handleStep5FinalSubmit} 
                      onBack={() => setCurrentStep(4)}
-                     loading={loading}
+                     loading={loading || isSubmitting}
+                     disabled={isSubmitting || submissionSuccess}
                  />
             )}
             

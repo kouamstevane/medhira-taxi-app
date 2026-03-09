@@ -1,5 +1,8 @@
 # Dependencies
 node_modules/
+functions/package.json
+functions/node_modules/
+node_modulesOld-after/
 /.pnp
 .pnp.js
 

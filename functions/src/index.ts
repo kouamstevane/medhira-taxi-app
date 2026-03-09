@@ -16,6 +16,11 @@
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { setGlobalOptions } from 'firebase-functions/v2/options';
+import { defineSecret } from 'firebase-functions/params';
+
+// Définir la région par défaut pour toutes les fonctions v2
+setGlobalOptions({ region: 'europe-west1' });
 import * as admin from 'firebase-admin';
 import {
   validateBankData as validateBankDataValidator,
@@ -23,10 +28,13 @@ import {
 } from './validators/bank.validator.js';
 import {
   encryptSensitiveData as encryptData,
-  encryptionMasterKey,
 } from './utils/encryption.js';
 import { BankDetailsSchema, EncryptionRequestSchema } from './validators/schemas.js';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { isEncryptedData, hasRequiredFields } from './utils/validation.js';
+
+// Définir le secret de chiffrement depuis Firebase Secret Manager
+const encryptionMasterKey = defineSecret('ENCRYPTION_MASTER_KEY');
 
 // Initialiser Firebase Admin (vérifier si déjà initialisé pour éviter les erreurs)
 if (!admin.apps.length) {
@@ -108,6 +116,7 @@ class RateLimiter {
 // Initialiser les rate limiters
 const bankValidationLimiter = new RateLimiter(10, 60 * 1000); // 10 requêtes / minute
 const encryptionLimiter = new RateLimiter(20, 60 * 1000); // 20 requêtes / minute
+const driverCreationLimiter = new RateLimiter(5, 60 * 1000);
 
 /**
  * Cloud Function: validateBankDetails
@@ -255,6 +264,164 @@ export const encryptSensitiveData = onCall(
         'internal',
         'Erreur lors du chiffrement des données. Veuillez réessayer.'
       );
+    }
+  }
+);
+
+export const createDriverProfile = onCall(
+  { cors: true },
+  async (request: CallableRequest) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Vous devez être connecté pour effectuer cette action.');
+    }
+
+    if (!request.auth.uid) {
+      throw new HttpsError('unauthenticated', 'UID manquant. Vous devez être connecté.');
+    }
+
+    const identifier = request.auth.uid;
+    const allowed = await driverCreationLimiter.check(identifier, 'driver_profile_create');
+    if (!allowed) {
+      throw new HttpsError('resource-exhausted', 'Trop de tentatives. Réessayez dans une minute.');
+    }
+
+    const payload = request.data as {
+      driverId?: string;
+      driverData?: Record<string, unknown>;
+    };
+
+    if (!payload?.driverId || typeof payload.driverId !== 'string') {
+      throw new HttpsError('invalid-argument', 'driverId manquant ou invalide.');
+    }
+
+    if (!payload.driverData || typeof payload.driverData !== 'object') {
+      throw new HttpsError('invalid-argument', 'driverData manquant ou invalide.');
+    }
+
+    if (request.auth.uid !== payload.driverId) {
+      throw new HttpsError('permission-denied', 'UID mismatch.');
+    }
+
+    const authEmail = request.auth.token.email as string | undefined;
+    const driverData = payload.driverData;
+
+    if (!driverData.email) {
+      throw new HttpsError('invalid-argument', 'Email manquant dans les données du chauffeur.');
+    }
+    if (authEmail && driverData.email !== authEmail) {
+      throw new HttpsError('permission-denied', 'Email mismatch: L\'email fourni ne correspond pas à l\'email authentifié.');
+    }
+
+
+    if (driverData.phoneNumber !== null) {
+      throw new HttpsError('failed-precondition', 'phoneNumber doit être null.');
+    }
+
+    if (driverData.userType !== 'chauffeur') {
+      throw new HttpsError('failed-precondition', 'userType invalide.');
+    }
+    const allowedStatuses = ['pending', 'action_required', 'rejected'];
+    const status = driverData.status as string | undefined;
+    if (!status || !allowedStatuses.includes(status)) {
+      throw new HttpsError('failed-precondition', `status invalide. Attendu: ${allowedStatuses.join(', ')}, Reçu: ${status}`);
+    }
+
+    const requiredFields = [
+      'firstName',
+      'lastName',
+      'dob',
+      'nationality',
+      'address',
+      'city',
+      'zipCode',
+      'phone',
+      'car',
+      'documents',
+    ];
+
+    if (!hasRequiredFields(driverData, requiredFields)) {
+      throw new HttpsError('failed-precondition', 'Champs requis manquants.');
+    }
+
+    if (driverData.ssn != null && !isEncryptedData(driverData.ssn)) {
+      throw new HttpsError('failed-precondition', 'SSN non chiffré.');
+    }
+
+    if (driverData.bank != null && !isEncryptedData(driverData.bank)) {
+      throw new HttpsError('failed-precondition', 'Données bancaires non chiffrées.');
+    }
+
+    const driverRef = admin.firestore().collection('drivers').doc(payload.driverId);
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    // Utiliser une transaction pour éviter les race conditions
+    try {
+      const result = await admin.firestore().runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(driverRef);
+        const existingStatus = snapshot.exists ? (snapshot.data()?.status as string | undefined) : undefined;
+
+        if (existingStatus && !['draft', 'action_required', 'rejected', 'pending'].includes(existingStatus)) {
+          throw new HttpsError('failed-precondition', 'Compte déjà actif.');
+        }
+
+        const sanitizedData = {
+          ...driverData,
+          uid: payload.driverId,
+          email: driverData.email,
+          phoneNumber: null,
+          userType: 'chauffeur',
+          status: 'pending',
+          updatedAt: now,
+        };
+
+        if (snapshot.exists) {
+          // Préserver les champs de rejet importants lors du merge
+          const existingData = snapshot.data();
+          if (!existingData) {
+            // Si existingData est undefined, utiliser sanitizedData tel quel
+            transaction.set(driverRef, sanitizedData, { merge: true });
+            return { success: true, existed: true };
+          }
+          
+          const rejectionFieldsToPreserve = [
+            'rejectionReason',
+            'rejectionDate',
+            'rejectionDetails',
+            'rejectionCount',
+            'lastRejectionBy'
+          ];
+          
+          const preservedFields = rejectionFieldsToPreserve.reduce((acc, field) => {
+            if (field in existingData && existingData[field] !== null && existingData[field] !== undefined) {
+              acc[field] = existingData[field];
+            }
+            return acc;
+          }, {} as Record<string, unknown>);
+          
+          transaction.set(driverRef, {
+            ...sanitizedData,
+            ...preservedFields,
+          }, { merge: true });
+          
+          return { success: true, existed: true };
+        } else {
+          transaction.set(driverRef, {
+            ...sanitizedData,
+            createdAt: now,
+          });
+          
+          return { success: true, existed: false };
+        }
+      });
+      
+      return result;
+    } catch (transactionError: any) {
+      // Si l'erreur est déjà une HttpsError, la renvoyer telle quelle
+      if (transactionError instanceof HttpsError) {
+        throw transactionError;
+      }
+      // Sinon, envelopper l'erreur de transaction dans une HttpsError
+      throw new HttpsError('internal', 'Erreur lors de la création du profil chauffeur.');
     }
   }
 );

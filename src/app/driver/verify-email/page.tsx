@@ -25,7 +25,7 @@ export default function DriverVerifyEmailPage() {
       
       // Si l'email est déjà vérifié, rediriger vers le dashboard chauffeur
       if (user.emailVerified) {
-        router.push('/driver/dashboard');
+        router.push('/driver/dashboard?emailVerified=1');
       }
     } else {
       // Si aucun utilisateur n'est connecté, rediriger vers la page de connexion chauffeur
@@ -46,7 +46,7 @@ export default function DriverVerifyEmailPage() {
 
     try {
       await sendVerificationEmail(user);
-      setSuccess(`Un email de vérification a été envoyé à ${email}`);
+      setSuccess(`Un email de validation a été envoyé à ${email}.`);
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       setError(error.message || 'Erreur lors de l\'envoi de l\'email de vérification');
@@ -69,12 +69,12 @@ export default function DriverVerifyEmailPage() {
     try {
       await user.reload();
       if (user.emailVerified) {
-        setSuccess('Votre email a été vérifié avec succès ! Redirection en cours...');
+        setSuccess('Votre adresse email est validée. Redirection en cours...');
         setTimeout(() => {
-          router.push('/driver/dashboard');
+          router.push('/driver/dashboard?emailVerified=1');
         }, 1500);
       } else {
-        setError('Votre email n\'est pas encore vérifié. Veuillez vérifier votre boîte de réception.');
+        setError('Votre adresse email n’est pas encore validée. Merci de vérifier votre boîte de réception et vos spams.');
       }
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
@@ -117,8 +117,8 @@ export default function DriverVerifyEmailPage() {
             </div>
           </div>
 
-          <h1 className="text-3xl font-bold text-[#101010] mb-2">Vérifiez votre email</h1>
-          <p className="text-gray-600">Un email de vérification a été envoyé à votre adresse</p>
+          <h1 className="text-3xl font-bold text-[#101010] mb-2">Validation de votre adresse email</h1>
+          <p className="text-gray-600">Un email de validation a été envoyé à votre adresse</p>
         </div>
 
         {/* Formulaire */}

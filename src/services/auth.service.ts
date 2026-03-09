@@ -108,6 +108,46 @@ export const reloadUser = async (user: User): Promise<void> => {
 };
 
 /**
+ * Renvoyer un email de vérification avec gestion de l'état de chargement
+ * 
+ * Cette fonction est utilisée dans le dashboard chauffeur pour permettre
+ * aux utilisateurs de renvoyer l'email de vérification si nécessaire.
+ * 
+ * @param user - L'utilisateur Firebase Auth
+ * @param onSuccess - Callback optionnel appelé après l'envoi réussi
+ * @param onError - Callback optionnel appelé en cas d'erreur
+ * 
+ * @example
+ * try {
+ *   await resendVerificationEmail(user);
+ *   // Afficher un message de succès
+ * } catch (error) {
+ *   // Afficher un message d'erreur
+ * }
+ */
+export const resendVerificationEmail = async (
+  user: User,
+  onSuccess?: (message: string) => void,
+  onError?: (error: string) => void
+): Promise<void> => {
+  try {
+    await sendVerificationEmail(user);
+    const successMessage = "Un nouvel email de validation a été envoyé à votre adresse. Veuillez vérifier votre boîte de réception.";
+    if (onSuccess) {
+      onSuccess(successMessage);
+    }
+  } catch (err: unknown) {
+    const error = err as { code?: string; message?: string };
+    const errorMessage = error.message || 'Erreur lors de l\'envoi de l\'email de vérification';
+    console.error('[AuthService] Erreur lors de l\'envoi de l\'email de vérification:', error);
+    if (onError) {
+      onError(errorMessage);
+    }
+    throw error; // Re-throw pour permettre la gestion d'erreur externe si nécessaire
+  }
+};
+
+/**
  * Connexion avec Google
  * Gère les cas natif (Capacitor) et web (popup)
  * ✅ AJOUT PARAMÈTRE : intendedUserType pour spécifier le type d'utilisateur

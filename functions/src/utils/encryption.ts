@@ -18,13 +18,20 @@
  */
 
 import * as crypto from 'crypto';
-import { defineSecret } from 'firebase-functions/params';
 
 /**
- * Secret de chiffrement maître (migré depuis process.env)
- * Défini à l'aide de l'API Firebase Functions v2 defineSecret
+ * Secret de chiffrement maître
+ * 
+ * Pour le développement : utilise la variable d'environnement ENCRYPTION_MASTER_KEY
+ * Pour la production : utilisez Google Cloud Secret Manager
+ * 
+ * Pour définir la clé de développement :
+ * node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+ * 
+ * Puis ajoutez à votre fichier .env.local :
+ * ENCRYPTION_MASTER_KEY=votre_clé_en_base64
  */
-export const encryptionMasterKey = defineSecret('ENCRYPTION_MASTER_KEY');
+export const encryptionMasterKey = process.env.ENCRYPTION_MASTER_KEY || '';
 
 /**
  * Configuration du chiffrement

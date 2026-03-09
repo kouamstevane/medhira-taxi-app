@@ -71,6 +71,12 @@ const functionsRegion = defineString('FUNCTIONS_REGION', {
   description: 'Région de déploiement des fonctions Firebase (ex: europe-west1, us-central1)'
 });
 
+/** URL du logo pour les emails */
+const logoUrl = defineString('LOGO_URL', {
+  default: '',
+  description: 'URL du logo à afficher dans les emails (doit être une URL publique)'
+});
+
 /**
  * Obtenir le taux d\'échantillonnage comme nombre
  */
@@ -217,6 +223,7 @@ interface VerificationEmailProps {
   verificationUrl: string;
   appName: string;
   supportEmail: string;
+  logoUrl?: string;
 }
 
 const VerificationEmail = ({
@@ -224,12 +231,23 @@ const VerificationEmail = ({
   verificationUrl,
   appName = 'Medjira Service',
   supportEmail = 'noreply@medjira-service.firebaseapp.com',
+  logoUrl,
 }: VerificationEmailProps) => {
+  const headerChildren = [
+    logoUrl && React.createElement('img', {
+      key: 'logo',
+      src: logoUrl,
+      alt: appName,
+      style: { maxWidth: '150px', height: 'auto', display: 'block', margin: '0 auto 20px auto' },
+    }),
+    React.createElement('h1', { key: 'h1', style: { color: '#333', textAlign: 'center' } }, 'Vérifiez votre adresse email'),
+  ].filter(Boolean);
+
   return React.createElement(
     'div',
     { style: { fontFamily: 'Arial, sans-serif', maxWidth: '600px', margin: '0 auto', padding: '20px' } },
     [
-      React.createElement('h1', { key: 'h1', style: { color: '#333', textAlign: 'center' } }, 'Vérifiez votre adresse email'),
+      ...headerChildren,
       React.createElement('p', { key: 'greeting', style: { fontSize: '16px', lineHeight: '1.5' } }, `Bonjour ${displayName},`),
       React.createElement('p', { key: 'intro', style: { fontSize: '16px', lineHeight: '1.5' } }, 'Merci de vous être inscrit sur ' + appName + '. Pour compléter votre inscription, veuillez vérifier votre adresse email en cliquant sur le bouton ci-dessous:'),
       React.createElement(
@@ -337,6 +355,7 @@ async function sendEmailViaResend(
         verificationUrl,
         appName: 'Medjira Service',
         supportEmail: replyTo.value(),
+        logoUrl: logoUrl.value() || undefined,
       })
     );
 
@@ -345,7 +364,7 @@ async function sendEmailViaResend(
       to: email,
       subject: 'Vérifiez votre adresse email - Medjira Service',
       html: emailHtml,
-      reply_to: replyTo.value(),
+      replyTo: replyTo.value(),
     });
 
     await logEmailSend(email, true, result.data?.id);
@@ -387,7 +406,7 @@ export const sendVerificationEmail = onCall(
 
     const validationResult = SendVerificationEmailSchema.safeParse(request.data);
     if (!validationResult.success) {
-      throw new HttpsError('invalid-argument', validationResult.error.errors[0].message);
+      throw new HttpsError('invalid-argument', validationResult.error.issues[0].message);
     }
 
     const { email, displayName } = validationResult.data;
@@ -463,7 +482,7 @@ export const sendVerificationEmailHttp = onRequest(
 
       const validationResult = SendVerificationEmailSchema.safeParse(req.body);
       if (!validationResult.success) {
-        res.status(400).json({ error: validationResult.error.errors[0].message });
+        res.status(400).json({ error: validationResult.error.issues[0].message });
         return;
       }
 
