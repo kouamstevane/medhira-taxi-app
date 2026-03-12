@@ -6,7 +6,7 @@
  * @module utils/format
  */
 
-import { CURRENCY_CODE } from './constants';
+import { CURRENCY_CODE, CURRENCY_MAP, CURRENCY_LOCALE_MAP } from './constants';
 
 /**
  * Formate un montant avec le code de devise global
@@ -40,25 +40,8 @@ export const formatCurrencyWithCode = (amount: number): string => {
  * @see formatCurrencyWithCode pour les affichages financiers principaux
  */
 export const formatCurrency = (amount: number): string => {
-  // Mapping des codes de devise vers les codes ISO 4217
-  const currencyMap: Record<string, string> = {
-    'FCFA': 'XAF',  // Franc CFA d'Afrique Centrale
-    'CAD': 'CAD',   // Dollar canadien
-    'EUR': 'EUR',   // Euro
-    'USD': 'USD',   // Dollar américain
-    'XAF': 'XAF',   // Franc CFA d'Afrique Centrale
-  };
-
-  // Mapping des devises vers les locales appropriées
-  const localeMap: Record<string, string> = {
-    'XAF': 'fr-FR',   // Afrique centrale
-    'CAD': 'fr-CA',   // Canada
-    'EUR': 'fr-FR',   // Europe
-    'USD': 'en-US',   // États-Unis
-  };
-
-  const currency = currencyMap[CURRENCY_CODE] || 'CAD';
-  const locale = localeMap[currency] || 'fr-FR';
+  const currency = CURRENCY_MAP[CURRENCY_CODE] || 'CAD';
+  const locale = CURRENCY_LOCALE_MAP[currency] || 'fr-FR';
   
   // Pour FCFA, utiliser le code de devise au lieu du symbole (pas de symbole standard)
   const currencyDisplay = CURRENCY_CODE === 'FCFA' || CURRENCY_CODE === 'XAF' ? 'code' : 'symbol';

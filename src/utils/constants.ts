@@ -38,30 +38,42 @@ export const SUPPORTED_COUNTRIES: Country[] = [
     dialCode: '+1', 
     name: 'Canada', 
     flag: '🇨🇦', 
-    defaultNumber: '5550123456' 
+    defaultNumber: '5550123456',
+    phoneLength: 10
   },
   { 
     code: 'FR', 
     dialCode: '+33', 
     name: 'France', 
     flag: '🇫🇷', 
-    defaultNumber: '612345678' 
+    defaultNumber: '612345678',
+    phoneLength: 10
   },
   { 
     code: 'BE', 
     dialCode: '+32', 
     name: 'Belgique', 
     flag: '🇧🇪', 
-    defaultNumber: '470123456' 
+    defaultNumber: '470123456',
+    phoneLength: 9
   },
   { 
     code: 'CM', 
     dialCode: '+237', 
     name: 'Cameroun', 
     flag: '🇨🇲', 
-    defaultNumber: '655744484' 
+    defaultNumber: '655744484',
+    phoneLength: 9
   },
 ];
+
+// Validation de synchronisation: s'assurer que tous les pays ont une phoneLength définie
+const countriesWithoutPhoneLength = SUPPORTED_COUNTRIES.filter(c => !c.phoneLength);
+if (countriesWithoutPhoneLength.length > 0) {
+  console.error(
+    `Erreur de configuration: Les pays suivants n'ont pas de phoneLength définie: ${countriesWithoutPhoneLength.map(c => c.code).join(', ')}`
+  );
+}
 
 /**
  * Configuration de tarification par défaut (en FCFA)
@@ -131,4 +143,27 @@ export const ERROR_MESSAGES = {
   INVALID_PHONE: 'Numéro de téléphone invalide',
   INVALID_EMAIL: 'Adresse email invalide',
   REQUIRED_FIELDS: 'Veuillez remplir tous les champs obligatoires',
+};
+
+/**
+ * Mapping des codes de devise vers les codes ISO 4217
+ * Extrait de format.ts pour optimisation et réutilisation
+ */
+export const CURRENCY_MAP: Record<string, string> = {
+  'FCFA': 'XAF',  // Franc CFA d'Afrique Centrale
+  'CAD': 'CAD',   // Dollar canadien
+  'EUR': 'EUR',   // Euro
+  'USD': 'USD',   // Dollar américain
+  'XAF': 'XAF',   // Franc CFA d'Afrique Centrale
+};
+
+/**
+ * Mapping des devises vers les locales appropriées
+ * Extrait de format.ts pour optimisation et réutilisation
+ */
+export const CURRENCY_LOCALE_MAP: Record<string, string> = {
+  'XAF': 'fr-FR',   // Afrique centrale
+  'CAD': 'fr-CA',   // Canada
+  'EUR': 'fr-FR',   // Europe
+  'USD': 'en-US',   // États-Unis
 };

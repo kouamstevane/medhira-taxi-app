@@ -13,14 +13,7 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { FiArrowLeft } from 'react-icons/fi';
 import { isValidPhoneNumber } from '@/lib/validation';
-
-// Liste des pays supportés avec codes, drapeaux et formats de numéro par défaut
-const countries = [
-  { code: 'CA', dialCode: '+1', name: 'Canada', flag: '🇨🇦', defaultNumber: '5550123456' },
-  { code: 'FR', dialCode: '+33', name: 'France', flag: '🇫🇷', defaultNumber: '612345678' },
-  { code: 'BE', dialCode: '+32', name: 'Belgique', flag: '🇧🇪', defaultNumber: '470123456' },
-  { code: 'CM', dialCode: '+237', name: 'Cameroun', flag: '🇨🇲', defaultNumber: '655744484' },
-];
+import { SUPPORTED_COUNTRIES } from '@/utils/constants';
 
 export default function RegisterPhoneContent() {
   const router = useRouter();
@@ -32,7 +25,7 @@ export default function RegisterPhoneContent() {
     confirmPassword: '',
   });
   const [code, setCode] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState(countries[0]);
+  const [selectedCountry, setSelectedCountry] = useState(SUPPORTED_COUNTRIES[0]);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -75,7 +68,7 @@ export default function RegisterPhoneContent() {
     setError(null);
   };
 
-  const handleCountrySelect = (country: typeof countries[0]) => {
+  const handleCountrySelect = (country: typeof SUPPORTED_COUNTRIES[0]) => {
     setSelectedCountry(country);
     setIsCountryDropdownOpen(false);
   };
@@ -412,7 +405,7 @@ export default function RegisterPhoneContent() {
                       {isCountryDropdownOpen && (
                         <div className="absolute z-10 mt-1 w-64 max-h-60 overflow-y-auto bg-white border border-gray-300 rounded-md shadow-lg">
                           <div className="py-1">
-                            {countries.map((country) => (
+                            {SUPPORTED_COUNTRIES.map((country) => (
                               <button
                                 key={country.code}
                                 type="button"

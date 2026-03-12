@@ -51,6 +51,7 @@ export interface Country {
   name: string;
   flag: string;
   defaultNumber: string;
+  phoneLength: number; // Longueur du numéro national (sans indicatif)
 }
 
 /**

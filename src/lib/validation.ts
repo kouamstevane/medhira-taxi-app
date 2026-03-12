@@ -47,12 +47,7 @@ export const getPasswordCriteria = (password: string) => {
  * Validation de numéro de téléphone
  * Format international avec indicatif pays et validation stricte par pays
  */
-const COUNTRY_RULES: Record<string, number> = {
-  '+1': 10,   // Canada/USA
-  '+33': 10,  // France
-  '+32': 9,   // Belgique
-  '+237': 9,  // Cameroun (Fallback)
-};
+import { SUPPORTED_COUNTRIES } from '@/utils/constants';
 
 export const isValidPhoneNumber = (phone: string, countryCode?: string): boolean => {
   if (!phone) return false;
@@ -66,18 +61,20 @@ export const isValidPhoneNumber = (phone: string, countryCode?: string): boolean
   }
 
   // Validation stricte par pays si le code pays est fourni
-  if (countryCode && countryCode in COUNTRY_RULES) {
-    // Vérifier que le numéro commence par le code pays sélectionné
-    if (!cleanPhone.startsWith(countryCode)) {
-      return false;
+  if (countryCode) {
+    const country = SUPPORTED_COUNTRIES.find(c => c.dialCode === countryCode);
+    if (country) {
+      // Vérifier que le numéro commence par le code pays sélectionné
+      if (!cleanPhone.startsWith(countryCode)) {
+        return false;
+      }
+
+      // Extraire la partie nationale (sans le code pays)
+      const nationalPart = cleanPhone.slice(countryCode.length);
+
+      // Vérifier la longueur exacte en utilisant phoneLength du pays
+      return nationalPart.length === country.phoneLength;
     }
-
-    // Extraire la partie nationale (sans le code pays)
-    const nationalPart = cleanPhone.slice(countryCode.length);
-    const expectedLength = COUNTRY_RULES[countryCode as keyof typeof COUNTRY_RULES];
-
-    // Vérifier la longueur exacte
-    return nationalPart.length === expectedLength;
   }
 
   return true;
