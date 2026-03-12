@@ -87,7 +87,7 @@ export const calculateTripPrice = (
   let price = basePrice + (distance * pricePerKm) + (duration * pricePerMinute);
 
   // Appliquer le multiplicateur d'heure de pointe si applicable
-  // CORRECTION FCFA→CAD #1: Utiliser DEFAULT_PRICING.PEAK_HOUR_MULTIPLIER (1.25) au lieu de 1.2 codé en dur
+  // Utiliser DEFAULT_PRICING.PEAK_HOUR_MULTIPLIER (1.25) pour la cohérence
   if (isPeakHour()) {
     price *= DEFAULT_PRICING.PEAK_HOUR_MULTIPLIER;
   }

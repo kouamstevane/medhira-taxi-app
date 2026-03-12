@@ -617,10 +617,9 @@ export const onDriverRegistration = onDocumentWritten("drivers/{driverId}", asyn
 });
 
 // ============================================================================
-// CORRECTION FCFA→CAD #6: Export des fonctions de migration de devise
+// Export des fonctions de migration de devise
 // ============================================================================
-// Ces fonctions permettent de migrer toutes les données existantes de FCFA (Cameroun)
-// vers CAD (Canada) avec un taux de conversion de ~285 FCFA/CAD
+// Ces fonctions permettent de migrer toutes les données existantes d'un pays a un autre avec un taux de conversion.
 export { migrateCurrencyToCAD, migrateCurrencyToCADHTTP } from './migrateCurrency.js';
 
 // ============================================================================

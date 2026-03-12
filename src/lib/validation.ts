@@ -123,8 +123,9 @@ export const isValidName = (name: string): boolean => {
  * - Etc.
  */
 export const isValidLicensePlate = (plate: string): boolean => {
-  // CORRECTION FCFA→CAD #3: Regex flexible pour formats canadiens variés
+  // Regex flexible pour formats de plaques d'immatriculation internationaux variés
   // Accepte: 3-8 caractères alphanumériques avec espaces/tirets optionnels
+  // Fonctionne pour les formats: Cameroun, Canada, France, etc.
   const plateRegex = /^[A-Z0-9]{2,4}[\s-]?[A-Z0-9]{2,4}$/i;
   return plateRegex.test(plate.trim());
 };

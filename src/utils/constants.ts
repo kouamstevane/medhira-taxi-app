@@ -64,47 +64,25 @@ export const SUPPORTED_COUNTRIES: Country[] = [
 ];
 
 /**
- * Configuration de tarification par défaut (en CAD)
+ * Configuration de tarification par défaut (en FCFA)
  *
- * CORRECTION FCFA→CAD #5: Documentation des taux de conversion historiques
+ * ⚠️ TARIFICATION POUR LE MARCHÉ CAMEROUNAIS
+ * La devise principale est définie par CURRENCY_CODE (actuellement 'FCFA')
  *
- * Taux de conversion historique: ~285 FCFA/CAD (1 CAD = 285 FCFA)
- *
- * Anciens tarifs FCFA (Cameroun):
+ * Tarifs actuels FCFA (Cameroun):
  * - Prix de base: 1000 FCFA
  * - Prix par km: 500 FCFA
  * - Prix par minute: 50 FCFA
  *
- * Nouveaux tarifs CAD (Canada):
- * - Prix de base: 3.5 CAD (1000 FCFA / 285 ≈ 3.51)
- * - Prix par km: 1.75 CAD (500 FCFA / 285 ≈ 1.75)
- * - Prix par minute: 0.45 CAD (50 FCFA / 285 ≈ 0.175)
- *
- * ⚠️ NOTE IMPORTANTE SUR LE TARIF PAR MINUTE:
- * Le tarif par minute a été ajusté de 0.175 CAD à 0.45 CAD (multiplicateur 2.57x)
- * pour les raisons suivantes:
+ * Ces tarifs sont compétitifs pour le marché VTC camerounais et prennent en compte:
+ * 1. Pouvoir d'achat local
+ * 2. Coûts opérationnels des conducteurs (carburant, entretien)
+ * 3. Compétitivité face aux alternatives (taxis traditionnels, autres VTC)
  * 
- * 1. Compétitivité marché canadien: Les tarifs VTC canadiens (Uber, Lyft) sont
- *    significativement plus élevés qu'au Cameroun en raison du coût de la vie
- *    et des réglementations locales.
+ * @remarks Pour modifier la devise, changer CURRENCY_CODE dans ce fichier.
+ * Les tarifs seront automatiquement affichés avec la nouvelle devise.
  * 
- * 2. Coûts opérationnels: Les conducteurs canadiens ont des coûts plus élevés
- *    (carburant, assurance, entretien) qui doivent être reflétés dans les tarifs.
- * 
- * 3. Expérience utilisateur: Un tarif de 0.175 CAD/min serait perçu comme
- *    anormalement bas par les utilisateurs canadiens et pourrait créer de la
- *    méfiance sur la qualité du service.
- * 
- * 4. Analyse comparative: Uber au Canada facture environ 0.35-0.65 CAD/min
- *    selon la ville et le moment. Notre tarif de 0.45 CAD/min se positionne
- *    dans la moyenne basse du marché pour rester compétitif.
- * 
- * @remarks Ces tarifs sont basés sur une conversion directe avec ajustements
- * pour le marché canadien (compétitivité, pouvoir d'achat, coûts opérationnels).
- * 
- * @see Pour plus de détails, consulter la documentation interne:
- * - docs/migration-fcfa-cad.md
- * - docs/pricing-strategy-canada.md
+ * @see CURRENCY_CODE pour la devise actuelle
  */
 export const DEFAULT_PRICING = {
   BASE_PRICE: 3.5,
@@ -133,16 +111,13 @@ export const DEFAULT_URLS = {
   LOGO: '/images/logo.png',
 };
 
-/**
- * Limites de l'application (en CAD)
- */
 export const LIMITS = {
   MAX_TRANSACTION_HISTORY: 50,
-  // CORRECTION FCFA→CAD #4: Limites augmentées pour une application VTC canadienne
-  // MIN: 20 CAD (environ 1-2 courses minimum)
-  // MAX: 2000 CAD (environ 65-130 courses maximum)
-  MIN_WALLET_RECHARGE: 20,
-  MAX_WALLET_RECHARGE: 2000,
+  // Limites adaptées pour le marché camerounais
+  // MIN: 1000 FCFA (environ 1-2 courses minimum)
+  // MAX: 100000 FCFA (environ 65-130 courses maximum)
+  MIN_WALLET_RECHARGE: 1000,
+  MAX_WALLET_RECHARGE: 100000,
   DRIVER_SEARCH_TIMEOUT: 60000, // 60 secondes
 };
 

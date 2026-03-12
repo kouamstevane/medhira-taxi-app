@@ -34,16 +34,9 @@ export const formatCurrencyWithCode = (amount: number): string => {
  *
  * ⚠️ FONCTION SECONDAIRE pour les interfaces utilisateur compactes
  * Utilise le symbole de devise (ex: "$", "€") plutôt que le code
- * 
- * NOTE: Pour FCFA/XAF, cette fonction utilise le code de devise car il n'y a pas de symbole standard
- *
  * @param amount - Montant à formater
  * @returns Montant formaté avec symbole ou code de devise
  *
- * @example
- * formatCurrency(15.5) // "15,50 $" (si CURRENCY_CODE = 'CAD')
- * formatCurrency(1500) // "1 500 FCFA" (si CURRENCY_CODE = 'FCFA')
- * 
  * @see formatCurrencyWithCode pour les affichages financiers principaux
  */
 export const formatCurrency = (amount: number): string => {
@@ -58,7 +51,7 @@ export const formatCurrency = (amount: number): string => {
 
   // Mapping des devises vers les locales appropriées
   const localeMap: Record<string, string> = {
-    'XAF': 'fr-FR',   // Afrique centrale (FCFA)
+    'XAF': 'fr-FR',   // Afrique centrale
     'CAD': 'fr-CA',   // Canada
     'EUR': 'fr-FR',   // Europe
     'USD': 'en-US',   // États-Unis
