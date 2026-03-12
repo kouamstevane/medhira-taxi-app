@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FiClock, FiMapPin, FiArrowRight, FiCheckCircle, FiX, FiNavigation } from 'react-icons/fi';
 import { RideCandidate } from '@/types';
+import { CURRENCY_CODE } from '@/utils/constants';
 
 interface RideRequest {
   rideId: string;
@@ -129,7 +130,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
               <p className="text-sm sm:text-base font-bold">
                 {(request.bookingData.price + (request.candidate.bonus || 0)).toLocaleString('fr-FR')}
               </p>
-              <p className="text-xs opacity-75">FCFA</p>
+              <p className="text-xs opacity-75">{CURRENCY_CODE}</p>
             </div>
 
             {/* Badge Bonus */}

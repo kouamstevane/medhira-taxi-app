@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { FiMapPin, FiCheckCircle, FiPlay, FiMessageSquare, FiNavigation2 } from 'react-icons/fi';
 import { ChatModal } from '@/components/ChatModal';
+import { CURRENCY_CODE } from '@/utils/constants';
+import { formatCurrencyWithCode } from '@/utils/format';
 
 interface PreciseLocation {
   lat: number;
@@ -154,7 +156,7 @@ export function CurrentTripCard({
             </div>
           </div>
           <div className="flex justify-between">
-            <span className="text-lg font-bold text-gray-800">{trip.price} FCFA</span>
+            <span className="text-lg font-bold text-gray-800">{formatCurrencyWithCode(trip.price)}</span>
             <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
               {trip.status === 'accepted' && (
                 <button

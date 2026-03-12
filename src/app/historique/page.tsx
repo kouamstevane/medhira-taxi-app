@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { FiDownload } from 'react-icons/fi';
 import { downloadInvoiceFromBooking } from '@/services/invoice.service';
 import { Booking } from '@/types/booking';
+import { formatCurrencyWithCode } from '@/utils/format';
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'all';
 
@@ -277,7 +278,7 @@ export default function HistoriquePage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xl font-bold text-[#FDBC01]">{price?.toLocaleString('fr-FR')} FCFA</p>
+                      <p className="text-xl font-bold text-[#FDBC01]">{formatCurrencyWithCode(price || 0)}</p>
                     </div>
                   </div>
 

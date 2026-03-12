@@ -9,6 +9,27 @@
 import { Country } from '@/types';
 
 /**
+ * Configuration de la devise
+ *
+ * ⚠️ VARIABLE GLOBALE POUR LA DEVISE
+ * Modifiez cette constante pour changer la devise dans toute l'application
+ * Exemples: 'FCFA', 'CAD', 'EUR', 'USD', 'XAF', etc.
+ * 
+ * VALIDATION: Les codes de devise sont validés au runtime pour éviter les fautes de frappe
+ */
+const VALID_CURRENCY_CODES = ['FCFA', 'CAD', 'EUR', 'USD', 'XAF'] as const;
+type CurrencyCode = typeof VALID_CURRENCY_CODES[number];
+
+const CURRENCY_CODE_RAW: CurrencyCode = 'FCFA';
+
+// Validation au runtime avec assertion TypeScript
+if (!VALID_CURRENCY_CODES.includes(CURRENCY_CODE_RAW as any)) {
+  throw new Error(`Invalid currency code: ${CURRENCY_CODE_RAW}. Must be one of: ${VALID_CURRENCY_CODES.join(', ')}`);
+}
+
+export const CURRENCY_CODE = CURRENCY_CODE_RAW;
+
+/**
  * Liste des pays supportés par l'application
  */
 export const SUPPORTED_COUNTRIES: Country[] = [

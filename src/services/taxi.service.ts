@@ -27,6 +27,7 @@ import {
 import { db } from '@/config/firebase';
 import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
 import { calculateTripPrice } from '@/lib/firebase-helpers';
+import { CURRENCY_CODE } from '@/utils/constants';
 
 /**
  * Créer une nouvelle réservation
@@ -335,7 +336,7 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
     price,
     distance,
     duration,
-    currency: 'CAD', // CORRECTION FCFA→CAD #5: Correction de la devise de FCFA à CAD
+    currency: CURRENCY_CODE,
   };
 };
 

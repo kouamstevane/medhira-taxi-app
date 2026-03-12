@@ -22,6 +22,8 @@ import { VehicleOption } from './VehicleOption';
 import { FareSummary } from './FareSummary';
 import { BonusSelector } from './BonusSelector';
 import { logger } from '@/utils/logger';
+import { CURRENCY_CODE } from '@/utils/constants';
+import { formatCurrencyWithCode } from '@/utils/format';
 
 // ✅ Schéma Zod de validation pour la création de course (medJira.md #85)
 const BookingSchema = z.object({
@@ -693,12 +695,12 @@ useEffect(() => {
                 <div className="bg-gradient-to-r from-[#f29200] to-[#e68600] p-4 sm:p-5 rounded-lg shadow-lg">
                   <p className="text-xs sm:text-sm font-semibold text-white/90 mb-2">Prix estimé</p>
                   <p className="text-2xl sm:text-3xl font-bold text-white">
-                    {estimate.price ? estimate.price.toLocaleString('fr-FR') : '0'} {estimate.currency || 'FCFA'}
+                    {estimate.price ? formatCurrencyWithCode(estimate.price) : `0 ${CURRENCY_CODE}`}
                   </p>
                   {bonus > 0 && (
                     <div className="mt-1 pt-1 border-t border-white/20 flex justify-between items-center text-white/90 text-sm">
                       <span>+ Bonus chauffeur</span>
-                      <span className="font-bold">+{bonus} FCFA</span>
+                      <span className="font-bold">+{formatCurrencyWithCode(bonus)}</span>
                     </div>
                   )}
                   <p className="text-xs text-white/80 mt-2">* Le prix final peut varier selon le trafic</p>

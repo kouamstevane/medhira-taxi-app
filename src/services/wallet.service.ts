@@ -31,6 +31,7 @@ import {
   PaymentMethod,
   RechargeRequest,
 } from '@/types';
+import { CURRENCY_CODE } from '@/utils/constants';
 
 /**
  * Récupérer ou créer un portefeuille utilisateur
@@ -47,7 +48,7 @@ export const getOrCreateWallet = async (userId: string): Promise<Wallet> => {
   const newWallet: Wallet = {
     userId,
     balance: 0,
-    currency: 'CAD',
+    currency: CURRENCY_CODE,
     updatedAt: serverTimestamp() as Timestamp,
   };
 
@@ -96,7 +97,7 @@ export const rechargeWallet = async (
     userId,
     type: 'deposit',
     amount: request.amount,
-    currency: 'CAD',
+    currency: CURRENCY_CODE,
     method: request.method,
     description: `Rechargement via ${request.method}`,
   });
@@ -165,7 +166,7 @@ export const payBooking = async (
     userId,
     type: 'payment',
     amount: -amount,
-    currency: 'CAD',
+    currency: CURRENCY_CODE,
     description: 'Paiement de course',
     bookingId,
   });

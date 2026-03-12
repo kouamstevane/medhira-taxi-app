@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth, db } from '@/config/firebase';
 import { doc, runTransaction, collection, setDoc } from 'firebase/firestore';
+import { CURRENCY_CODE } from '@/utils/constants';
+import { formatCurrencyWithCode } from '@/utils/format';
 
 export default function RechargerPage() {
   const [amount, setAmount] = useState('');
@@ -27,7 +29,7 @@ export default function RechargerPage() {
       // Validation du montant
       const numericAmount = parseFloat(amount);
       if (isNaN(numericAmount) || numericAmount < 500) {
-        throw new Error('Le montant minimum est de 500 FCFA');
+        throw new Error(`Le montant minimum est de 500 ${CURRENCY_CODE}`);
       }
 
       // Simulation de l'appel API de paiement
@@ -40,7 +42,7 @@ export default function RechargerPage() {
       await processWalletUpdate(user.uid, numericAmount, paymentMethod);
 
       // Redirection avec message de succès
-      router.push(`/wallet?success=${numericAmount.toLocaleString()} FCFA ajoutés avec succès!`);
+      router.push(`/wallet?success=${formatCurrencyWithCode(numericAmount)} ajoutés avec succès!`);
       
     } catch (err) {
       console.error('Erreur de recharge:', err);
@@ -70,7 +72,7 @@ export default function RechargerPage() {
       if (!walletDoc.exists()) {
         transaction.set(walletRef, {
           balance: netAmount,
-          currency: 'FCFA',
+          currency: CURRENCY_CODE,
           updatedAt: new Date(),
         });
       } else {
@@ -128,7 +130,7 @@ export default function RechargerPage() {
             {/* Montant */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-[#5A4A1A] mb-2">
-                Montant à recharger (FCFA)
+                Montant à recharger ({CURRENCY_CODE})
               </label>
               <input
                 type="number"
@@ -226,7 +228,7 @@ export default function RechargerPage() {
 
         {/* Information supplémentaire */}
         <div className="mt-4 text-center text-sm text-[#5A4A1A]">
-          <p>Frais de recharge: 1% (min. 100 FCFA)</p>
+          <p>Frais de recharge: 1% (min. 100 {CURRENCY_CODE})</p>
           <p>Le solde sera crédité instantanément après paiement</p>
         </div>
       </div>

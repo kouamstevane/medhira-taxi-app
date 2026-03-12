@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { formatCurrencyWithCode } from '@/utils/format';
 
 // Données temporaires (à remplacer par Firestore)
 const tempTransactions = [
@@ -121,7 +122,7 @@ export default function HistoriquePage() {
                     <p className={`font-semibold ${
                       transaction.type === 'credit' ? 'text-green-600' : 'text-red-600'
                     }`}>
-                      {transaction.type === 'credit' ? '+' : '-'}{transaction.amount.toLocaleString()} FCFA
+                      {transaction.type === 'credit' ? '+' : '-'}{formatCurrencyWithCode(transaction.amount)}
                     </p>
                   </div>
                   {transaction.status === 'pending' && (
@@ -141,19 +142,17 @@ export default function HistoriquePage() {
           <div className="bg-green-50 p-4 rounded-lg">
             <p className="text-sm text-green-800">Total crédits</p>
             <p className="text-xl font-bold text-green-600">
-              {tempTransactions
-                .filter(t => t.type === 'credit')
-                .reduce((sum, t) => sum + t.amount, 0)
-                .toLocaleString()} FCFA
+              {formatCurrencyWithCode(tempTransactions
+                .filter(t => t.type === 'credit' && typeof t.amount === 'number')
+                .reduce((sum, t) => sum + t.amount, 0))}
             </p>
           </div>
           <div className="bg-red-50 p-4 rounded-lg">
             <p className="text-sm text-red-800">Total débits</p>
             <p className="text-xl font-bold text-red-600">
-              {tempTransactions
-                .filter(t => t.type === 'debit')
-                .reduce((sum, t) => sum + t.amount, 0)
-                .toLocaleString()} FCFA
+              {formatCurrencyWithCode(tempTransactions
+                .filter(t => t.type === 'debit' && typeof t.amount === 'number')
+                .reduce((sum, t) => sum + t.amount, 0))}
             </p>
           </div>
         </div>

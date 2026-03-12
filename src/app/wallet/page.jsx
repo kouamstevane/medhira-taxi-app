@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { auth, db } from "@/config/firebase";
 import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { CURRENCY_CODE } from '@/utils/constants';
+import { formatCurrencyWithCode } from '@/utils/format';
 
 export default function WalletPage() {
   const [balance, setBalance] = useState(0);
@@ -30,7 +32,7 @@ useEffect(() => {
         } else {
           await setDoc(walletRef, {
             balance: 0,
-            currency: 'FCFA',
+            currency: CURRENCY_CODE,
             updatedAt: new Date()
           });
           setBalance(0);
@@ -136,7 +138,7 @@ useEffect(() => {
                 <div className="animate-pulse h-8 w-32 bg-[#3D2F0A] rounded mt-1"></div>
               ) : (
                 <p className="text-3xl font-bold mt-1">
-                  {formatBalance(balance)} FCFA
+                  {formatCurrencyWithCode(balance)}
                 </p>
               )}
             </div>
@@ -216,7 +218,7 @@ useEffect(() => {
                   <p className={`font-semibold ${
                     transaction.type === 'deposit' ? 'text-green-600' : 'text-red-600'
                   }`}>
-                    {transaction.type === 'deposit' ? '+' : '-'}{formatBalance(transaction.netAmount || transaction.amount)} FCFA
+                    {transaction.type === 'deposit' ? '+' : '-'}{formatCurrencyWithCode(transaction.netAmount || transaction.amount)}
                   </p>
                 </div>
               ))}

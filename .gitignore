@@ -110,3 +110,21 @@ temp/
 **/*.spec.*clés
 "src/config/keys/serviceAccountKey.json" 
 src/config/keys/*.json
+
+# Android signing files (NE PAS COMMITTER - perte irréversible de l'app)
+android/keystore.properties
+android/*.keystore
+android/*.jks
+android/app/*.keystore
+android/app/*.jks
+
+# Android build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/.externalNativeBuild/
+android/.cxx/
+android/local.properties
+
+# APK pour le directeur (généré)
+apk-directeur/

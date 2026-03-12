@@ -16,18 +16,20 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import Link from 'next/link';
-import { 
-  FiTruck, FiDollarSign, FiStar, FiRefreshCw, 
+import {
+  FiTruck, FiDollarSign, FiStar, FiRefreshCw,
   FiLogOut, FiUser, FiMapPin, FiCheckCircle,
   FiArrowRight
 } from 'react-icons/fi';
-import { 
+import {
   getPendingCandidatesForDriver,
   subscribeToDriverRideRequests,
   markCandidateDeclined,
 } from '@/services/matching/broadcast';
 import { RideCandidate } from '@/types';
 import { assignDriver } from '@/services/matching/assignment';
+import { CURRENCY_CODE } from '@/utils/constants';
+import { formatCurrencyWithCode } from '@/utils/format';
 import { incrementDriverAcceptedTrips, incrementDriverDeclinedTrips } from '@/services/driver.service';
 import { updateDriverLocation, calculateFinalFare, markDriverArrived, startTrip, completeTrip } from '@/services/taxi.service';
 import { resendVerificationEmail } from '@/services/auth.service';
@@ -693,7 +695,7 @@ export default function DriverDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
           {[
             { label: "Courses", value: formatValue(driver.tripsCompleted, 0), icon: FiTruck, color: "bg-blue-100", iconColor: "text-blue-600" },
-            { label: "Revenus", value: `${(driver.earnings || 0).toLocaleString()} FCFA`, icon: FiDollarSign, color: "bg-green-100", iconColor: "text-green-600" },
+            { label: "Revenus", value: formatCurrencyWithCode(driver.earnings || 0), icon: FiDollarSign, color: "bg-green-100", iconColor: "text-green-600" },
             { label: "Note", value: `${formatValue(driver.rating, 0)}/5`, icon: FiStar, color: "bg-yellow-100", iconColor: "text-yellow-600" },
             { label: "Statut", value: formatValue(driver.status, 'actif'), icon: FiRefreshCw, color: "bg-purple-100", iconColor: "text-purple-600" }
           ].map((stat, i) => (
@@ -720,7 +722,7 @@ export default function DriverDashboard() {
                       <div>
                         <p className="font-semibold text-gray-800">Course #{trip.id.slice(-4)} - {trip.destination}</p>
                         <p className="text-sm text-gray-500">
-                          {new Date(trip.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {trip.price} FCFA
+                          {new Date(trip.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {formatCurrencyWithCode(trip.price)}
                         </p>
                       </div>
                       <span className="text-sm font-medium text-green-600">Complétée</span>
@@ -785,7 +787,7 @@ export default function DriverDashboard() {
                               </div>
                             </div>
                             <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold self-start sm:self-auto">
-                              {trip.price} FCFA
+                              {formatCurrencyWithCode(trip.price)}
                             </span>
                           </div>
                           <button

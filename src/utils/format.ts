@@ -1,25 +1,79 @@
 /**
  * Utilitaires de formatage
- * 
+ *
  * Fonctions pour formater les nombres, dates, prix, etc.
- * 
+ *
  * @module utils/format
  */
 
+import { CURRENCY_CODE } from './constants';
+
 /**
- * Formate un montant en CAD ($)
- * 
- * @param amount - Montant à formater
- * @returns Montant formaté avec symbole $
- * 
+ * Formate un montant avec le code de devise global
+ *
+ * ⚠️ FONCTION PRINCIPALE pour les affichages financiers et transactions
+ * Utilise le code de devise (ex: "FCFA") plutôt qu'un symbole pour plus de clarté
+ *
+ * @param amount - Montant à formater (doit être >= 0, sinon sera clampé à 0)
+ * @returns Montant formaté avec code de devise (ex: "1 500 000 FCFA")
+ *
  * @example
- * formatCurrency(15.5) // "15,50 $"
+ * formatCurrencyWithCode(1500000) // "1 500 000 FCFA"
+ * formatCurrencyWithCode(NaN) // "0 FCFA"
+ * formatCurrencyWithCode(-100) // "0 FCFA" (clampé pour sécurité)
+ */
+export const formatCurrencyWithCode = (amount: number): string => {
+  // Validation: NaN et montants négatifs sont clampés à 0
+  // Les montants négatifs dans une app VTC indiquent généralement une erreur ou fraude potentielle
+  const validAmount = typeof amount === 'number' && !isNaN(amount) && amount >= 0 ? amount : 0;
+  return `${validAmount.toLocaleString('fr-FR')} ${CURRENCY_CODE}`;
+};
+
+/**
+ * Formate un montant en devise locale avec symbole
+ *
+ * ⚠️ FONCTION SECONDAIRE pour les interfaces utilisateur compactes
+ * Utilise le symbole de devise (ex: "$", "€") plutôt que le code
+ * 
+ * NOTE: Pour FCFA/XAF, cette fonction utilise le code de devise car il n'y a pas de symbole standard
+ *
+ * @param amount - Montant à formater
+ * @returns Montant formaté avec symbole ou code de devise
+ *
+ * @example
+ * formatCurrency(15.5) // "15,50 $" (si CURRENCY_CODE = 'CAD')
+ * formatCurrency(1500) // "1 500 FCFA" (si CURRENCY_CODE = 'FCFA')
+ * 
+ * @see formatCurrencyWithCode pour les affichages financiers principaux
  */
 export const formatCurrency = (amount: number): string => {
-  return amount.toLocaleString('fr-CA', {
+  // Mapping des codes de devise vers les codes ISO 4217
+  const currencyMap: Record<string, string> = {
+    'FCFA': 'XAF',  // Franc CFA d'Afrique Centrale
+    'CAD': 'CAD',   // Dollar canadien
+    'EUR': 'EUR',   // Euro
+    'USD': 'USD',   // Dollar américain
+    'XAF': 'XAF',   // Franc CFA d'Afrique Centrale
+  };
+
+  // Mapping des devises vers les locales appropriées
+  const localeMap: Record<string, string> = {
+    'XAF': 'fr-FR',   // Afrique centrale (FCFA)
+    'CAD': 'fr-CA',   // Canada
+    'EUR': 'fr-FR',   // Europe
+    'USD': 'en-US',   // États-Unis
+  };
+
+  const currency = currencyMap[CURRENCY_CODE] || 'CAD';
+  const locale = localeMap[currency] || 'fr-FR';
+  
+  // Pour FCFA, utiliser le code de devise au lieu du symbole (pas de symbole standard)
+  const currencyDisplay = CURRENCY_CODE === 'FCFA' || CURRENCY_CODE === 'XAF' ? 'code' : 'symbol';
+  
+  return amount.toLocaleString(locale, {
     style: 'currency',
-    currency: 'CAD',
-    currencyDisplay: 'symbol'
+    currency: currency,
+    currencyDisplay: currencyDisplay
   });
 };
 

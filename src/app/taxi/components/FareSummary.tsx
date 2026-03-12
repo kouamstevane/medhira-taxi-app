@@ -1,10 +1,13 @@
 /**
  * Composant FareSummary
- * 
+ *
  * Résumé de l'estimation de tarif avec détails
  */
 
 'use client';
+
+import { CURRENCY_CODE } from '@/utils/constants';
+import { formatCurrencyWithCode } from '@/utils/format';
 
 interface FareSummaryProps {
   distance: number | null;
@@ -19,7 +22,7 @@ export const FareSummary = ({
   duration,
   price,
   loading = false,
-  currency = 'FCFA',
+  currency = CURRENCY_CODE,
 }: FareSummaryProps) => {
   if (loading) {
     return (
@@ -59,7 +62,7 @@ export const FareSummary = ({
         <div className="border-t border-white/30 pt-2 sm:pt-3 mt-2 sm:mt-3">
           <div className="flex justify-between items-center">
             <span className="text-base sm:text-lg font-semibold">Prix estimé</span>
-            <span className="text-xl sm:text-2xl font-bold">{price.toLocaleString('fr-FR')} {currency}</span>
+            <span className="text-xl sm:text-2xl font-bold">{formatCurrencyWithCode(price)}</span>
           </div>
         </div>
       </div>

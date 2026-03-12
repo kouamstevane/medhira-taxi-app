@@ -1,12 +1,13 @@
 /**
  * Composant VehicleOption
- * 
+ *
  * Option de sélection de type de véhicule (éco/confort/premium)
  */
 
 'use client';
 
 import { CarType } from '@/types';
+import { CURRENCY_CODE } from '@/utils/constants';
 
 interface VehicleOptionProps {
   carType: CarType;
@@ -38,13 +39,13 @@ export const VehicleOption = ({ carType, selected, onSelect, disabled = false }:
           </p>
           <div className="mt-2 flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
             <span className="text-gray-600">
-              Base: <span className="font-medium text-gray-900">{carType.basePrice} CAD</span> {/* CORRECTION FCFA→CAD #6: Affichage en CAD */}
+              Base: <span className="font-medium text-gray-900">{carType.basePrice} {CURRENCY_CODE}</span>
             </span>
             <span className="text-gray-600">
-              Par km: <span className="font-medium text-gray-900">{carType.pricePerKm} CAD</span> {/* CORRECTION FCFA→CAD #7: Affichage en CAD */}
+              Par km: <span className="font-medium text-gray-900">{carType.pricePerKm} {CURRENCY_CODE}</span>
             </span>
             <span className="text-gray-600">
-              Par min: <span className="font-medium text-gray-900">{carType.pricePerMinute} CAD</span> {/* CORRECTION FCFA→CAD #8: Affichage en CAD */}
+              Par min: <span className="font-medium text-gray-900">{carType.pricePerMinute} {CURRENCY_CODE}</span>
             </span>
           </div>
         </div>

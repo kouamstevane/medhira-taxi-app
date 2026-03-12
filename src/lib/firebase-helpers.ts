@@ -9,7 +9,7 @@
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { UserData, Booking, Transaction, Wallet } from '@/types';
-import { DEFAULT_PRICING } from '@/utils/constants';
+import { DEFAULT_PRICING, CURRENCY_CODE } from '@/utils/constants';
 
 /**
  * Crée ou met à jour un document utilisateur dans Firestore
@@ -136,7 +136,7 @@ export const getOrCreateWallet = async (userId: string): Promise<Wallet> => {
   const newWallet: Wallet = {
     userId,
     balance: 0,
-    currency: 'CAD',
+    currency: CURRENCY_CODE,
     updatedAt: serverTimestamp() as any,
   };
 

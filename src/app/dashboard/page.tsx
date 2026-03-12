@@ -16,11 +16,12 @@ import { useEffect, useState } from "react";
 import { auth, db } from "@/config/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
-import { 
-  FiCreditCard, FiBell, FiLogOut, FiPhone, FiUser, 
+import {
+  FiCreditCard, FiBell, FiLogOut, FiPhone, FiUser,
   FiTruck, FiPackage, FiCheckCircle,
   FiSettings, FiShield, FiFileText, FiUsers
 } from 'react-icons/fi';
+import { formatCurrencyWithCode } from '@/utils/format';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -569,7 +570,7 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 mt-1">
-                    {item.createdAt && new Date(item.createdAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {item.createdAt && new Date(item.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {item.price || item.amount || 'N/A'} FCFA
+                    {item.createdAt && new Date(item.createdAt.seconds * 1000).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {item.createdAt && new Date(item.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {formatCurrencyWithCode(item.price ?? item.amount ?? 0)}
                   </p>
                 </div>
               ))
