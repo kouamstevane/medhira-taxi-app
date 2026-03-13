@@ -382,23 +382,10 @@ export default function DriverRegisterWizard() {
     };
   }, [step1Data, step2Data, step3Data, currentStep, saveProgress]);
 
-  // ----- RESTAURATION AU CHARGEMENT -----
-  useEffect(() => {
-    const user = auth.currentUser;
-    if (user && !isExistingUser) {
-      restoreProgress().then(saved => {
-        if (saved && saved.step1Data) {
-          setStep1Data(saved.step1Data || {});
-          setStep2Data(saved.step2Data || {});
-          setStep3Data(saved.step3Data || {});
-          setCurrentStep(saved.currentStep || 1);
-          showInfo('Votre progression a été restaurée. Vous pouvez continuer votre inscription.');
-        }
-      });
-    }
-  }, [isExistingUser, restoreProgress, showInfo]);
+  // ----- PROGRESS RESTORATION REF -----
+  const hasRestoredProgressRef = useRef(false);
 
-  // ----- VÉRIFICATION UTILISATEUR EXISTANT -----
+  // ----- RESTAURATION AU CHARGEMENT & VÉRIFICATION UTILISATEUR EXISTANT -----
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -408,29 +395,53 @@ export default function DriverRegisterWizard() {
           ...prev,
           email: user.email || '',
         }));
+
+        if (!hasRestoredProgressRef.current) {
+          hasRestoredProgressRef.current = true;
+          restoreProgress().then(saved => {
+            if (saved && saved.step1Data) {
+              setStep1Data(prev => ({ ...prev, ...saved.step1Data }));
+              setStep2Data(saved.step2Data || {});
+              setStep3Data(saved.step3Data || {});
+              setCurrentStep(saved.currentStep || 1);
+              showInfo('Votre progression a été restaurée. Vous pouvez continuer votre inscription.');
+            }
+          });
+        }
         
-        const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
-        if (driverDoc.exists()) {
-          const data = driverDoc.data();
-          if (data.status === 'action_required' || data.status === 'rejected') {
-             setRejectionCode(data.rejectionCode || 'R000');
-             setRejectionReason(data.rejectionReason || data.rejectionMessage || 'Votre dossier nécessite une action de votre part.');
-             
-             setStep2Data({
-                 firstName: data.firstName || '',
-                 lastName: data.lastName || '',
-                 dob: data.dob || '',
-                 nationality: data.nationality || 'CM',
-                 ssn: '',
-                 address: data.address || '',
-                 city: data.city || '',
-                 zipCode: data.zipCode || '',
-             });
-             
-             showInfo('Pour des raisons de sécurité, veuillez resaisir votre numéro de sécurité sociale.');
-          } else if (data.status === 'pending' || data.status === 'approved' || data.status === 'active') {
-             setError('Votre dossier est en cours de traitement ou déjà validé.');
-             setTimeout(() => redirectWithFallback(router, '/driver/dashboard', loggerRef.current, isMountedRef, redirectTimeoutRef), 2000);
+        try {
+          const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
+          if (driverDoc.exists()) {
+            const data = driverDoc.data();
+            if (data.status === 'action_required' || data.status === 'rejected') {
+               setRejectionCode(data.rejectionCode || 'R000');
+               setRejectionReason(data.rejectionReason || data.rejectionMessage || 'Votre dossier nécessite une action de votre part.');
+               
+               setStep2Data(prev => ({
+                   ...prev,
+                   firstName: data.firstName || '',
+                   lastName: data.lastName || '',
+                   dob: data.dob || '',
+                   nationality: data.nationality || 'CM',
+                   ssn: '',
+                   address: data.address || '',
+                   city: data.city || '',
+                   zipCode: data.zipCode || '',
+               }));
+               
+               showInfo('Pour des raisons de sécurité, veuillez resaisir votre numéro de sécurité sociale.');
+            } else if (data.status === 'pending' || data.status === 'approved' || data.status === 'active') {
+               setError('Votre dossier est en cours de traitement ou déjà validé.');
+               setTimeout(() => redirectWithFallback(router, '/driver/dashboard', loggerRef.current, isMountedRef, redirectTimeoutRef), 2000);
+            }
+          }
+        } catch (error: any) {
+          if (error?.code === 'unavailable' || error?.message?.includes('offline')) {
+            loggerRef.current.logWarning('USER_CHECK', 'Impossible de récupérer le profil (hors ligne)', { error: error.message });
+            console.warn('[DriverRegistration] Erreur hors ligne (non bloquante) lors de la vérification du profil existant:', error);
+          } else {
+            loggerRef.current.logError('USER_CHECK', error);
+            console.error('[DriverRegistration] Erreur lors de la vérification du profil existant:', error);
           }
         }
       } else {
@@ -438,7 +449,7 @@ export default function DriverRegisterWizard() {
       }
     });
     return () => unsubscribe();
-  }, [router]);
+  }, [router, restoreProgress, showInfo]);
 
   // ==========================================
   // 6. HANDLERS ÉTAPE PAR ÉTAPE
@@ -860,7 +871,20 @@ export default function DriverRegisterWizard() {
             }
         }
 
-        // 4. Créer le document chauffeur avec retry
+        // 4. Rafraîchir le token explicitement avant d'appeler la Cloud Function
+        try {
+            if (auth.currentUser) {
+                await auth.currentUser.getIdToken(true);
+            }
+        } catch (tokenError: any) {
+            loggerRef.current.logError('TOKEN_REFRESH', tokenError);
+            setError("Votre session a expiré ou est invalide. Veuillez vous reconnecter pour finaliser l'inscription.");
+            setLoading(false);
+            setIsSubmitting(false);
+            return;
+        }
+
+        // 5. Créer le document chauffeur avec retry
         loggerRef.current.logStart('CREATE_DRIVER_PROFILE', {});
 
         const finalDriverData = {

@@ -36,8 +36,9 @@ class ServerEncryptionService {
 
   constructor() {
     // ✅ Utiliser l'instance Firebase déjà initialisée (évite "app already exists")
-    // ✅ CORRECTIF CORS : fonctions déployées en us-central1, pas europe-west1
-    this.functions = getFunctions(app, 'us-central1');
+    // ✅ CORRECTIF CORS : utiliser la variable d'environnement ou europe-west1 par défaut
+    const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+    this.functions = getFunctions(app, functionsRegion);
   }
 
   /**

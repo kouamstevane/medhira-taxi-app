@@ -22,7 +22,7 @@ const step2Schema = z.object({
     return date <= minDate;
   }, "Vous devez avoir au moins 18 ans"),
   nationality: z.string().min(2, "Nationalité requise"),
-  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Numéro de téléphone invalide"),
+  phone: z.string().regex(/^\+?[0-9\s\-()]{8,20}$/, "Numéro de téléphone invalide"),
   ssn: z.string().min(5, "Numéro de sécurité sociale requis"), // Modèle simplifié
   address: z.string().min(5, "Adresse requise"),
   city: z.string().min(2, "Ville requise"),
