@@ -20,7 +20,7 @@ import { Country } from '@/types';
 const VALID_CURRENCY_CODES = ['FCFA', 'CAD', 'EUR', 'USD', 'XAF'] as const;
 type CurrencyCode = typeof VALID_CURRENCY_CODES[number];
 
-const CURRENCY_CODE_RAW: CurrencyCode = 'FCFA';
+const CURRENCY_CODE_RAW: CurrencyCode = 'CAD';
 
 // Validation au runtime avec assertion TypeScript
 if (!VALID_CURRENCY_CODES.includes(CURRENCY_CODE_RAW as any)) {

@@ -20,7 +20,8 @@ import { notificationService } from '@/services/notification.service';
 import {
   FiCreditCard, FiBell, FiLogOut, FiPhone, FiUser,
   FiTruck, FiPackage, FiCheckCircle,
-  FiSettings, FiShield, FiFileText, FiUsers
+  FiSettings, FiShield, FiFileText, FiUsers,
+  FiShoppingBag
 } from 'react-icons/fi';
 import { formatCurrencyWithCode } from '@/utils/format';
 
@@ -460,7 +461,7 @@ export default function Dashboard() {
             <FiTruck className="h-5 w-5 mr-2 text-[#f29200]" />
             Nos Services
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             {/* Taxi */}
             <div
               onClick={() => router.push("/taxi")}
@@ -488,7 +489,23 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <h4 className="font-bold text-[#101010] group-hover:text-[#f29200] transition">Livraison express</h4>
-                  <p className="text-sm text-gray-600">Colis, repas, urgences</p>
+                  <p className="text-sm text-gray-600">Colis, urgences</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Repas */}
+            <div
+              onClick={() => router.push("/food")}
+              className="group p-5 bg-white rounded-xl shadow-md hover:shadow-xl border border-gray-200 transition-all duration-300 cursor-pointer transform hover:-translate-y-1"
+            >
+              <div className="flex items-center">
+                <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mr-4 group-hover:scale-110 transition">
+                  <FiShoppingBag className="h-7 w-7 text-red-500" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-[#101010] group-hover:text-red-500 transition">Livraison repas</h4>
+                  <p className="text-sm text-gray-600">Plats préférés</p>
                 </div>
               </div>
             </div>

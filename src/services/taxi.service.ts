@@ -27,7 +27,7 @@ import {
 import { db } from '@/config/firebase';
 import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
 import { calculateTripPrice } from '@/lib/firebase-helpers';
-import { CURRENCY_CODE } from '@/utils/constants';
+import { CURRENCY_CODE, DEFAULT_PRICING } from '@/utils/constants';
 
 /**
  * Créer une nouvelle réservation
@@ -158,15 +158,48 @@ export const cancelBooking = async (bookingId: string, reason?: string): Promise
  */
 export const getCarTypes = async (): Promise<CarType[]> => {
   const carTypesRef = collection(db, 'carTypes');
-  // ✅ Ajout limit(50) pour optimiser les coûts Firestore (medJira.md #57)
   const q = query(carTypesRef, limit(50));
   const querySnapshot = await getDocs(q);
 
   return querySnapshot.docs
-    .map(doc => ({
-      ...doc.data(),
-      id: doc.data().id || doc.id,
-    } as CarType))
+    .map(snapshot => {
+      const raw = snapshot.data() as Record<string, unknown>;
+
+      const basePrice =
+        typeof raw.basePrice === 'number'
+          ? raw.basePrice
+          : typeof raw.baseFare === 'number'
+            ? raw.baseFare
+            : DEFAULT_PRICING.BASE_PRICE;
+
+      const pricePerKm =
+        typeof raw.pricePerKm === 'number'
+          ? raw.pricePerKm
+          : typeof raw.price_per_km === 'number'
+            ? raw.price_per_km
+            : DEFAULT_PRICING.PRICE_PER_KM;
+
+      const pricePerMinute =
+        typeof raw.pricePerMinute === 'number'
+          ? raw.pricePerMinute
+          : typeof raw.price_per_minute === 'number'
+            ? raw.price_per_minute
+            : DEFAULT_PRICING.PRICE_PER_MINUTE;
+
+      const carType: CarType = {
+        id: (raw.id as string) || snapshot.id,
+        name: (raw.name as string) || 'Standard',
+        basePrice,
+        pricePerKm,
+        pricePerMinute,
+        image: (raw.image as string) || (raw.imageUrl as string) || '',
+        seats: (raw.seats as number) || (raw.capacity as number) || 4,
+        time: (raw.time as string) || '2-4 min',
+        order: (raw.order as number) ?? 0,
+      };
+
+      return carType;
+    })
     .sort((a, b) => (a.order || 0) - (b.order || 0));
 };
 
@@ -630,4 +663,3 @@ export const calculateCancellationPenalty = async (bookingId: string): Promise<n
   
   return Math.round(Math.max(penalty, 2) * 100) / 100; // Minimum 2 CAD
 };
-
