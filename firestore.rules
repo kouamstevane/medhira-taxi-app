@@ -505,8 +505,9 @@ service cloud.firestore {
       // - Le status initial doit être 'ringing'
       allow create: if isAuthenticated() &&
         request.auth.uid == request.resource.data.callerId &&
-        // NEW: Validate callee exists
-        exists(/databases/$(database)/documents/users/$(request.resource.data.calleeId)) &&
+        // FIX: Le callee peut être dans 'users' (clients) OU 'drivers' (chauffeurs)
+        (exists(/databases/$(database)/documents/users/$(request.resource.data.calleeId)) ||
+         exists(/databases/$(database)/documents/drivers/$(request.resource.data.calleeId))) &&
         request.resource.data.calleeId is string &&
         request.resource.data.rideId is string &&
         request.resource.data.status == 'ringing' &&
@@ -546,6 +547,151 @@ service cloud.firestore {
       
       // Suppression : Réservée aux admins (pour le nettoyage RGPD)
       allow delete: if isAdmin();
+    }
+    
+    // ============================================================================
+    // COLLECTION RESTAURANTS (LIVRAISON DE REPAS)
+    // ============================================================================
+    //
+    // Comptes restaurants partenaires pour le service de livraison de repas.
+    // Un restaurant n'est visible par les clients qu'après approbation admin (Règle 1).
+    //
+    // ============================================================================
+    
+    match /restaurants/{restaurantId} {
+      // Lecture : Tous les utilisateurs authentifiés peuvent lire
+      // Les clients ne verront que les restaurants approuvés (filtré côté client)
+      allow read: if isAuthenticated();
+      
+      // Création : Utilisateur authentifié peut créer un compte restaurant
+      // Le statut initial DOIT être 'pending_approval' (validation admin requise)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.ownerId == request.auth.uid &&
+                       request.resource.data.status == 'pending_approval' &&
+                       request.resource.data.commissionRate is number &&
+                       request.resource.data.name is string;
+      
+      // Mise à jour : Propriétaire (sauf statut) OU admin (tout)
+      allow update: if (isAuthenticated() && 
+                        resource.data.ownerId == request.auth.uid &&
+                        request.resource.data.status == resource.data.status) // Le proprio ne peut pas changer le statut
+                    || isAdmin();
+      
+      // Suppression : Admin uniquement
+      allow delete: if isAdmin();
+      
+      // Sous-collection menu_items — Plats du restaurant (Règle 2)
+      match /menu_items/{itemId} {
+        // Lecture : Tous les authentifiés (menus visibles instantanément)
+        allow read: if isAuthenticated();
+        
+        // Écriture : Seul le propriétaire du restaurant parent
+        // Modifications immédiatement visibles (Règle 2)
+        allow create, update, delete: if isAuthenticated() &&
+          get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
+      }
+    }
+    
+    // ============================================================================
+    // COLLECTION FOOD_ORDERS (COMMANDES DE REPAS)
+    // ============================================================================
+    //
+    // Commandes de livraison de repas.
+    // Une commande n'est validée qu'après paiement (Règle 3).
+    // Les chauffeurs proches sont notifiés automatiquement (Règle 4).
+    //
+    // ============================================================================
+    
+    match /food_orders/{orderId} {
+      // Lecture : Client, chauffeur assigné, ou propriétaire du restaurant
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || 
+                      resource.data.driverId == request.auth.uid ||
+                      exists(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)) &&
+                      get(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)).data.ownerId == request.auth.uid);
+      
+      // Création : Utilisateur authentifié avec paiement validé (Règle 3)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.paymentValidated == true &&
+                       request.resource.data.totalOrderPrice is number &&
+                       request.resource.data.orderItems is list &&
+                       request.resource.data.deliveryAddress is string;
+      
+      // Mise à jour : Client (annulation), chauffeur (statut livraison), ou admin
+      allow update: if isAuthenticated() && 
+                       (resource.data.userId == request.auth.uid || 
+                        resource.data.driverId == request.auth.uid)
+                    || isAdmin();
+      
+      // Suppression : Non autorisée (conserver l'historique)
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION RESTAURANT_REVIEWS (AVIS RESTAURANTS) — Règle 11
+    // ============================================================================
+    
+    match /restaurant_reviews/{reviewId} {
+      // Lecture : Tous les authentifiés
+      allow read: if isAuthenticated();
+      
+      // Création : L'auteur doit être l'utilisateur connecté
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.rating is number &&
+                       request.resource.data.rating >= 1 &&
+                       request.resource.data.rating <= 5 &&
+                       request.resource.data.restaurantId is string &&
+                       request.resource.data.orderId is string;
+      
+      // Mise à jour et suppression : Non autorisées (immutabilité des avis)
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION DELIVERY_REVIEWS (AVIS LIVREURS) — Règle 12
+    // ============================================================================
+    
+    match /delivery_reviews/{reviewId} {
+      // Lecture : Tous les authentifiés
+      allow read: if isAuthenticated();
+      
+      // Création : L'auteur doit être l'utilisateur connecté
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.rating is number &&
+                       request.resource.data.rating >= 1 &&
+                       request.resource.data.rating <= 5 &&
+                       request.resource.data.driverId is string &&
+                       request.resource.data.orderId is string;
+      
+      // Mise à jour et suppression : Non autorisées (immutabilité des avis)
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION NOTIFICATIONS
+    // ============================================================================
+    //
+    // Historique des notifications push pour affichage dans le centre de notifications
+    //
+    // ============================================================================
+    
+    match /notifications/{notificationId} {
+      // Lecture : Seul le destinataire de la notification peut la lire
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Création : Les systèmes backend OU les utilisateurs peuvent créer (ex: chat)
+      allow create: if isAuthenticated();
+      
+      // Mise à jour : Le propriétaire peut mettre à jour (ex: marquer comme lu)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Suppression : Le propriétaire ou l'admin
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
     }
     
     // ============================================================================

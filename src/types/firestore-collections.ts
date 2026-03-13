@@ -431,6 +431,336 @@ export interface AuditLogCollection {
 }
 
 /**
+ * Collection RESTAURANTS
+ * ----------------------
+ * Description : Comptes restaurants partenaires pour la livraison de repas
+ * 
+ * Règles de sécurité :
+ * - Read : Tous les utilisateurs authentifiés
+ * - Create : Utilisateurs authentifiés (status initial = 'pending_approval')
+ * - Update : Propriétaire (ownerId) OU admin
+ * - Delete : Admin uniquement
+ * 
+ * Statuts possibles :
+ * - 'pending_approval' : En attente de validation admin
+ * - 'approved' : Approuvé et visible
+ * - 'suspended' : Suspendu
+ * - 'rejected' : Rejeté
+ */
+export interface RestaurantCollection {
+  restaurantId: string;
+  ownerId: string;
+  name: string;
+  description: string;
+  address: string;
+  phone: string;
+  email: string;
+  cuisineType: string;
+  avgPricePerPerson: number;
+  commissionRate: number;
+  status: 'pending_approval' | 'approved' | 'suspended' | 'rejected';
+  rating: number;
+  totalReviews: number;
+  createdAt: Date;
+  updatedAt: Date;
+  approvedAt?: Date;
+  // SOUS-COLLECTION
+  menu_items?: MenuItemSubCollection[];
+}
+
+/**
+ * Sous-collection MENU_ITEMS (dans RESTAURANTS)
+ * ---------------------------------------------
+ * Description : Plats du menu d'un restaurant
+ * 
+ * Règles de sécurité :
+ * - Read : Tous les utilisateurs authentifiés
+ * - Create/Update/Delete : Propriétaire du restaurant parent uniquement
+ */
+export interface MenuItemSubCollection {
+  itemId: string;
+  restaurantId: string;
+  name: string;
+  description?: string;
+  price: number;
+  category: string;
+  imageUrl?: string;
+  isAvailable: boolean;
+  preparationTime?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Collection FOOD_ORDERS
+ * ----------------------
+ * Description : Commandes de livraison de repas
+ * 
+ * Règles de sécurité :
+ * - Read : Client (userId) OU Chauffeur (driverId) OU Restaurant (restaurantId owner)
+ * - Create : Authentifié (paymentValidated requis)
+ * - Update : Client OU chauffeur assigné OU admin
+ * - Delete : Non autorisé
+ * 
+ * Statuts possibles :
+ * - 'pending', 'confirmed', 'preparing', 'ready',
+ * - 'picked_up', 'delivering', 'delivered', 'cancelled'
+ */
+export interface FoodOrderCollection {
+  orderId: string;
+  userId: string;
+  restaurantId: string;
+  driverId?: string;
+  orderItems: { itemName: string; itemQuantity: number; itemPrice: number }[];
+  deliveryDistance: number;
+  isWeekend: boolean;
+  deliveryAddress: string;
+  basePrice: number;
+  deliveryCost: number;
+  totalOrderPrice: number;
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivering' | 'delivered' | 'cancelled';
+  pickupCode: string;
+  paymentValidated: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Collection RESTAURANT_REVIEWS
+ * -----------------------------
+ * Description : Avis des clients sur les restaurants
+ * 
+ * Règles de sécurité :
+ * - Read : Tous les utilisateurs authentifiés
+ * - Create : Authentifié (userId == request.auth.uid)
+ * - Update/Delete : Non autorisé
+ */
+export interface RestaurantReviewCollection {
+  reviewId: string;
+  userId: string;
+  restaurantId: string;
+  orderId: string;
+  rating: number;
+  comment?: string;
+  createdAt: Date;
+}
+
+/**
+ * Collection DELIVERY_REVIEWS
+ * ---------------------------
+ * Description : Avis des clients sur les livreurs
+ * 
+ * Règles de sécurité :
+ * - Read : Tous les utilisateurs authentifiés
+ * - Create : Authentifié (userId == request.auth.uid)
+ * - Update/Delete : Non autorisé
+ */
+export interface DeliveryReviewCollection {
+  reviewId: string;
+  userId: string;
+  driverId: string;
+  orderId: string;
+  rating: number;
+  comment?: string;
+  createdAt: Date;
+}
+
+/**
+ * Collection DRIVER_REQUESTS
+ * --------------------------
+ * Description : Demandes de courses destinées aux chauffeurs (vue optimisée)
+ * Architecture hybride : bookings (source de vérité) + driver_requests (vue optimisée)
+ * 
+ * Règles de sécurité :
+ * - Read : Chauffeur concerné uniquement
+ * - Create : Utilisateurs authentifiés
+ * - Update : Chauffeur concerné uniquement
+ * - Delete : Non autorisé (cleanup automatique via Cloud Functions)
+ */
+export interface DriverRequestCollection {
+  driverId: string;
+  
+  // SOUS-COLLECTION REQUESTS
+  requests?: DriverRequestSubCollection[];
+}
+
+/**
+ * Sous-collection REQUESTS (dans DRIVER_REQUESTS)
+ * -----------------------------------------------
+ * Description : Demandes individuelles pour un chauffeur
+ * 
+ * Règles de sécurité :
+ * - Read : Chauffeur concerné uniquement
+ * - Create : Utilisateurs authentifiés
+  callerMetadata: {
+    uid: string;
+    name: string;
+    avatar?: string;
+  };
+  startTime: Date;
+  answerTime?: Date;
+  endTime?: Date;
+  reason?: string;
+}
+
+/**
+ * Collection AUDIT_LOGS
+ * ---------------------
+ * Description : Logs d'audit pour conformité RGPD
+ * 
+ * Règles de sécurité :
+ * - Read : Admins uniquement
+ * - Create : Tous les utilisateurs authentifiés
+ * - Update : Non autorisé
+ * - Delete : Admins uniquement (pour nettoyage RGPD)
+ */
+export interface AuditLogCollection {
+  logId: string;
+  userId: string;
+  action: string;
+  resource: string;
+  details: any;
+  ipAddress?: string;
+  userAgent?: string;
+  timestamp: Date;
+}
+
+/**
+ * Collection RESTAURANTS
+ * ----------------------
+ * Description : Comptes restaurants partenaires pour la livraison de repas
+ * 
+ * Règles de sécurité :
+ * - Read : Tous les utilisateurs authentifiés
+ * - Create : Utilisateurs authentifiés (status initial = 'pending_approval')
+ * - Update : Propriétaire (ownerId) OU admin
+ * - Delete : Admin uniquement
+ * 
+ * Statuts possibles :
+ * - 'pending_approval' : En attente de validation admin
+ * - 'approved' : Approuvé et visible
+ * - 'suspended' : Suspendu
+ * - 'rejected' : Rejeté
+ */
+export interface RestaurantCollection {
+  restaurantId: string;
+  ownerId: string;
+  name: string;
+  description: string;
+  address: string;
+  phone: string;
+  email: string;
+  cuisineType: string;
+  avgPricePerPerson: number;
+  commissionRate: number;
+  status: 'pending_approval' | 'approved' | 'suspended' | 'rejected';
+  rating: number;
+  totalReviews: number;
+  createdAt: Date;
+  updatedAt: Date;
+  approvedAt?: Date;
+  // SOUS-COLLECTION
+  menu_items?: MenuItemSubCollection[];
+}
+
+/**
+ * Sous-collection MENU_ITEMS (dans RESTAURANTS)
+ * ---------------------------------------------
+ * Description : Plats du menu d'un restaurant
+ * 
+ * Règles de sécurité :
+ * - Read : Tous les utilisateurs authentifiés
+ * - Create/Update/Delete : Propriétaire du restaurant parent uniquement
+ */
+export interface MenuItemSubCollection {
+  itemId: string;
+  restaurantId: string;
+  name: string;
+  description?: string;
+  price: number;
+  category: string;
+  imageUrl?: string;
+  isAvailable: boolean;
+  preparationTime?: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Collection FOOD_ORDERS
+ * ----------------------
+ * Description : Commandes de livraison de repas
+ * 
+ * Règles de sécurité :
+ * - Read : Client (userId) OU Chauffeur (driverId) OU Restaurant (restaurantId owner)
+ * - Create : Authentifié (paymentValidated requis)
+ * - Update : Client OU chauffeur assigné OU admin
+ * - Delete : Non autorisé
+ * 
+ * Statuts possibles :
+ * - 'pending', 'confirmed', 'preparing', 'ready',
+ * - 'picked_up', 'delivering', 'delivered', 'cancelled'
+ */
+export interface FoodOrderCollection {
+  orderId: string;
+  userId: string;
+  restaurantId: string;
+  driverId?: string;
+  orderItems: { itemName: string; itemQuantity: number; itemPrice: number }[];
+  deliveryDistance: number;
+  isWeekend: boolean;
+  deliveryAddress: string;
+  basePrice: number;
+  deliveryCost: number;
+  totalOrderPrice: number;
+  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivering' | 'delivered' | 'cancelled';
+  pickupCode: string;
+  paymentValidated: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Collection RESTAURANT_REVIEWS
+ * -----------------------------
+ * Description : Avis des clients sur les restaurants
+ * 
+ * Règles de sécurité :
+ * - Read : Tous les utilisateurs authentifiés
+ * - Create : Authentifié (userId == request.auth.uid)
+ * - Update/Delete : Non autorisé
+ */
+export interface RestaurantReviewCollection {
+  reviewId: string;
+  userId: string;
+  restaurantId: string;
+  orderId: string;
+  rating: number;
+  comment?: string;
+  createdAt: Date;
+}
+
+/**
+ * Collection DELIVERY_REVIEWS
+ * ---------------------------
+ * Description : Avis des clients sur les livreurs
+ * 
+ * Règles de sécurité :
+ * - Read : Tous les utilisateurs authentifiés
+ * - Create : Authentifié (userId == request.auth.uid)
+ * - Update/Delete : Non autorisé
+ */
+export interface DeliveryReviewCollection {
+  reviewId: string;
+  userId: string;
+  driverId: string;
+  orderId: string;
+  rating: number;
+  comment?: string;
+  createdAt: Date;
+}
+
+/**
  * Collection DRIVER_REQUESTS
  * --------------------------
  * Description : Demandes de courses destinées aux chauffeurs (vue optimisée)
@@ -476,6 +806,28 @@ export interface DriverRequestSubCollection {
   respondedAt?: Date;
 }
 
+/**
+ * Collection NOTIFICATIONS
+ * ------------------------
+ * Description : Historique des notifications pour le centre de notifications
+ * 
+ * Règles de sécurité :
+ * - Read : Destinataire uniquement
+ * - Create : Utilisateurs authentifiés
+ * - Update : Destinataire (marquer comme lu)
+ * - Delete : Destinataire ou admin
+ */
+export interface NotificationCollection {
+  notificationId: string;
+  userId: string;
+  title: string;
+  body: string;
+  type: 'booking_request' | 'trip_started' | 'trip_completed' | 'driver_arrived' | 'payment_received' | 'food_order' | 'food_order_update' | 'alert' | 'info';
+  metadata?: any;
+  read: boolean;
+  createdAt: Date;
+}
+
 // ============================================================================
 // INDEXES FIRESTORE
 // ============================================================================
@@ -503,6 +855,9 @@ export interface DriverRequestSubCollection {
  * 
  * 5. requests (collectionGroup)
  *    - status ASC, createdAt DESC, __name__ DESC
+ * 
+ * 6. notifications (collectionGroup)
+ *    - userId ASC, createdAt DESC
  */
 
 // ============================================================================
@@ -524,12 +879,20 @@ export const FIRESTORE_COLLECTIONS = {
   CALLS: 'calls',
   AUDIT_LOGS: 'audit_logs',
   DRIVER_REQUESTS: 'driver_requests',
+  NOTIFICATIONS: 'notifications',
+  // Food Delivery Module
+  RESTAURANTS: 'restaurants',
+  FOOD_ORDERS: 'food_orders',
+  RESTAURANT_REVIEWS: 'restaurant_reviews',
+  DELIVERY_REVIEWS: 'delivery_reviews',
 } as const;
 
 export const FIRESTORE_SUBCOLLECTIONS = {
   CANDIDATES: 'candidates',
   MESSAGES: 'messages',
   REQUESTS: 'requests',
+  // Food Delivery Module
+  MENU_ITEMS: 'menu_items',
 } as const;
 
 export type FirestoreCollection = typeof FIRESTORE_COLLECTIONS[keyof typeof FIRESTORE_COLLECTIONS];

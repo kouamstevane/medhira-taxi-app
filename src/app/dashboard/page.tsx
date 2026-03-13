@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { auth, db } from "@/config/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { notificationService } from '@/services/notification.service';
 import {
   FiCreditCard, FiBell, FiLogOut, FiPhone, FiUser,
   FiTruck, FiPackage, FiCheckCircle,
@@ -25,7 +26,7 @@ import { formatCurrencyWithCode } from '@/utils/format';
 
 export default function Dashboard() {
   const router = useRouter();
-  const [notifCount, setNotifCount] = useState(2);
+  const [notifCount, setNotifCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true); // État de chargement de l'auth
@@ -174,6 +175,9 @@ export default function Dashboard() {
           setIsAdmin(false);
         }
 
+        // Écouter les notifications non lues via le service isolé
+        let unsubscribeNotifs = notificationService.listenUnreadCount(user.uid, setNotifCount);
+
         // Authentification terminée
         setIsAuthLoading(false);
       } else {
@@ -200,8 +204,7 @@ export default function Dashboard() {
   };
 
   const handleNotifications = () => {
-    alert("Voir les notifications");
-    setNotifCount(0);
+    router.push("/notifications");
   };
 
   // Écran de chargement pendant la vérification de l'authentification

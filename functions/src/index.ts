@@ -22,6 +22,7 @@ import { defineSecret } from 'firebase-functions/params';
 // Définir la région par défaut pour toutes les fonctions v2
 setGlobalOptions({ region: 'europe-west1' });
 import * as admin from 'firebase-admin';
+import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import {
   validateBankData as validateBankDataValidator,
   BankDataValidationResult,
@@ -29,6 +30,7 @@ import {
 import {
   encryptSensitiveData as encryptData,
 } from './utils/encryption.js';
+import { createBulkNotifications, createNotification } from './utils/notificationService.js';
 import { BankDetailsSchema, EncryptionRequestSchema } from './validators/schemas.js';
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { isEncryptedData, hasRequiredFields } from './utils/validation.js';
@@ -258,7 +260,7 @@ export const encryptSensitiveData = onCall(
       return {
         encrypted: encrypted,
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error('Erreur lors du chiffrement:', error);
       throw new HttpsError(
         'internal',
@@ -415,7 +417,7 @@ export const createDriverProfile = onCall(
       });
       
       return result;
-    } catch (transactionError: any) {
+    } catch (transactionError) {
       // Si l'erreur est déjà une HttpsError, la renvoyer telle quelle
       if (transactionError instanceof HttpsError) {
         throw transactionError;
@@ -510,7 +512,7 @@ export const cleanupFailedUploads = onCall(
 
         // Logging de suppression pour audit
         console.log(`Fichier supprimé (cleanup): ${filePath} par ${request.auth.uid}`);
-      } catch (error: any) {
+      } catch (error) {
         console.error(`Erreur lors de la suppression du fichier ${fileUrl}:`, error);
         errors.push(`Erreur suppression: ${fileUrl}`);
       }
@@ -574,7 +576,7 @@ export const cleanupOrphanedFiles = onSchedule(
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           });
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error(`Erreur sur ${file.name}:`, err);
         errors.push(file.name);
       }
@@ -628,3 +630,255 @@ export { migrateCurrencyToCAD, migrateCurrencyToCADHTTP } from './migrateCurrenc
 // Ces fonctions utilisent Resend + react-email pour envoyer des emails avec
 // une excellente délivrabilité (SPF/DKIM configuré)
 export { sendVerificationEmail, sendVerificationEmailHttp } from './emails/send-verification-email.js';
+
+// ============================================================================
+// Livraison de Repas — Notification Chauffeurs (Règle 4)
+// ============================================================================
+
+/**
+ * Cloud Function: onFoodOrderCreated
+ * 
+ * Déclenchée quand une nouvelle commande de livraison est créée.
+ * Notifie les chauffeurs disponibles proches du restaurant.
+ * 
+ * Règle 4 : Notification automatique des chauffeurs disponibles.
+ * Le code de récupération est inclus dans la notification.
+ */
+export const onFoodOrderCreated = onDocumentWritten('food_orders/{orderId}', async (event) => {
+  const beforeData = event.data?.before.data();
+  const afterData = event.data?.after.data();
+
+  // Ne traiter que les créations (pas les mises à jour)
+  if (beforeData || !afterData) return;
+
+  // Vérifier que le paiement est validé (Règle 3)
+  if (!afterData.paymentValidated) {
+    console.log(`[FoodOrder] Commande ${event.params.orderId} non validée, pas de notification.`);
+    return;
+  }
+
+  const restaurantId = afterData.restaurantId as string;
+  const pickupCode = afterData.pickupCode as string;
+  const restaurantName = afterData.restaurantName as string || 'Restaurant';
+  const totalOrderPrice = afterData.totalOrderPrice as number;
+
+  try {
+    // Récupérer les informations du restaurant pour la localisation
+    const restaurantDoc = await admin.firestore().collection('restaurants').doc(restaurantId).get();
+    if (!restaurantDoc.exists) {
+      console.warn(`[FoodOrder] Restaurant ${restaurantId} introuvable.`);
+      return;
+    }
+
+    // Récupérer les chauffeurs disponibles
+    // ✅ limit() appliqué pour éviter les surcharges (medJira §4.1)
+    const driversSnapshot = await admin.firestore()
+      .collection('drivers')
+      .where('status', '==', 'approved')
+      .where('isOnline', '==', true)
+      .where('currentRide', '==', null)
+      .limit(50)
+      .get();
+
+    if (driversSnapshot.empty) {
+      console.log(`[FoodOrder] Aucun chauffeur disponible pour la commande ${event.params.orderId}.`);
+      return;
+    }
+
+    // Préparer les notifications
+    const tokens: string[] = [];
+    driversSnapshot.docs.forEach((driverDoc) => {
+      const driverData = driverDoc.data();
+      if (driverData.fcmToken) {
+        tokens.push(driverData.fcmToken as string);
+      }
+    });
+
+    if (tokens.length === 0) {
+      console.log(`[FoodOrder] Aucun token FCM disponible pour les chauffeurs.`);
+      return;
+    }
+
+    // Envoyer les notifications push (Règle 4)
+    const message: admin.messaging.MulticastMessage = {
+      tokens,
+      notification: {
+        title: `🍔 Nouvelle commande — ${restaurantName}`,
+        body: `Livraison ${totalOrderPrice.toFixed(2)} CAD • Code: ${pickupCode}`,
+      },
+      data: {
+        type: 'food_order',
+        orderId: event.params.orderId,
+        restaurantId,
+        restaurantName,
+        pickupCode,
+        totalOrderPrice: String(totalOrderPrice),
+      },
+      android: {
+        priority: 'high' as const,
+        notification: {
+          channelId: 'food_orders',
+          sound: 'default',
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+    };
+
+    const response = await admin.messaging().sendEachForMulticast(message);
+    console.log(
+      `[FoodOrder] Notifications envoyées: ${response.successCount}/${tokens.length} pour commande ${event.params.orderId}`
+    );
+
+    // Persister les notifications dans Firestore pour la cloche de notifications
+    const driverIds = driversSnapshot.docs.map((d) => d.id);
+    await createBulkNotifications(driverIds, {
+      title: `🍔 Nouvelle commande — ${restaurantName}`,
+      body: `Livraison ${totalOrderPrice.toFixed(2)} CAD • Code: ${pickupCode}`,
+      type: 'food_order',
+      metadata: { orderId: event.params.orderId, restaurantId },
+    });
+
+    // Nettoyer les tokens invalides
+    const failedTokens: string[] = [];
+    response.responses.forEach((resp, idx) => {
+      if (!resp.success && resp.error?.code === 'messaging/invalid-registration-token') {
+        failedTokens.push(tokens[idx]);
+      }
+    });
+
+    if (failedTokens.length > 0) {
+      console.log(`[FoodOrder] ${failedTokens.length} tokens FCM invalides détectés.`);
+    }
+  } catch (error) {
+    console.error(`[FoodOrder] Erreur envoi notifications:`, error);
+  }
+});
+
+// ============================================================================
+// Livraison de Repas — Notification Client (Statut Commande)
+// ============================================================================
+
+/**
+ * Cloud Function: onFoodOrderStatusChanged
+ * 
+ * Déclenchée quand le statut d'une commande de livraison est mis à jour.
+ * Notifie le client pour le tenir informé en temps réel.
+ */
+export const onFoodOrderStatusChanged = onDocumentUpdated('food_orders/{orderId}', async (event) => {
+  const oldData = event.data?.before.data();
+  const newData = event.data?.after.data();
+
+  if (!oldData || !newData) {
+    console.log('[FoodOrderUpdate] Données manquantes, ignorance de l\'événement.');
+    return;
+  }
+
+  // Ne déclencher que si le statut a réellement changé
+  if (oldData.status === newData.status) {
+    return;
+  }
+
+  const clientId = newData.userId;
+  const newStatus = newData.status;
+  const restaurantName = newData.restaurantName || 'Le restaurant';
+
+  try {
+    // 1. Récupérer le token FCM du client
+    const userDoc = await admin.firestore().collection('users').doc(clientId).get();
+    
+    if (!userDoc.exists) {
+      console.log(`[FoodOrderUpdate] Utilisateur ${clientId} introuvable.`);
+      return;
+    }
+
+    const userData = userDoc.data();
+    const fcmToken = userData?.fcmToken;
+
+    if (!fcmToken) {
+      console.log(`[FoodOrderUpdate] Pas de token FCM pour le client ${clientId}.`);
+      return;
+    }
+
+    // 2. Préparer le message selon le nouveau statut
+    let title = 'Mise à jour de votre commande';
+    let body = `Votre commande chez ${restaurantName} a été mise à jour.`;
+
+    switch (newStatus) {
+      case 'confirmed':
+        title = 'Commande confirmée ! ✅';
+        body = `${restaurantName} a accepté votre commande et va bientôt la préparer.`;
+        break;
+      case 'preparing':
+        title = 'Préparation en cours 🍳';
+        body = `Votre repas est en cours de préparation chez ${restaurantName}.`;
+        break;
+      case 'ready':
+        title = 'Commande prête ! 🛍️';
+        body = `Votre commande est prête à être récupérée par le livreur. N'oubliez pas votre code: ${newData.pickupCode}`;
+        break;
+      case 'picked_up':
+        title = 'En route vers vous ! 🛵';
+        body = `Le livreur a récupéré votre commande et est en route !`;
+        break;
+      case 'delivering':
+        title = 'Livraison imminente 📍';
+        body = `Le livreur est presque arrivé avec votre commande.`;
+        break;
+      case 'delivered':
+        title = 'Bon appétit ! 🍽️';
+        body = `Votre commande a été livrée. N'hésitez pas à laisser un avis !`;
+        break;
+      case 'cancelled':
+        title = 'Commande annulée ❌';
+        body = `Votre commande chez ${restaurantName} a été annulée.`;
+        break;
+      default:
+        // On ne notifie pas pour 'pending' car c'est le statut initial
+        if (newStatus === 'pending') return;
+        break;
+    }
+
+    const message = {
+      notification: {
+        title,
+        body,
+      },
+      data: {
+        type: 'food_order_update',
+        orderId: event.params.orderId,
+        status: newStatus,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK', // Adapter selon Capacitor/Flutter
+      },
+      token: fcmToken,
+    };
+
+    // 3. Envoyer la notification
+    const response = await admin.messaging().send(message);
+    console.log(`[FoodOrderUpdate] Notification envoyée au client ${clientId} pour commande ${event.params.orderId}. ID: ${response}`);
+
+    // Persister dans Firestore pour la cloche de notifications
+    await createNotification({
+      userId: clientId,
+      title,
+      body,
+      type: 'food_order_update',
+      metadata: { orderId: event.params.orderId, status: newStatus },
+    });
+
+  } catch (error) {
+    const err = error as Record<string, unknown>;
+    if (err.code === 'messaging/invalid-registration-token' || err.code === 'messaging/registration-token-not-registered') {
+      console.log(`[FoodOrderUpdate] Token invalide pour le client ${clientId}. Nettoyage.`);
+      // Nettoyage: on pourrait retirer le token du doc user ici
+    } else {
+      console.error(`[FoodOrderUpdate] Erreur envoi notification:`, error);
+    }
+  }
+});

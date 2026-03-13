@@ -77,5 +77,20 @@ export type {
   VoipCallState,
 } from './voip';
 
+// ==================== Livraison de Repas ====================
+export type {
+  RestaurantStatus,
+  Restaurant,
+  MenuItem,
+  FoodOrderStatus,
+  OrderItem,
+  FoodOrder,
+  RestaurantReview,
+  DeliveryReview,
+  RestaurantFilters,
+  DeliveryPriceParams,
+  DeliveryPriceResult,
+} from './food-delivery';
+
 export type { Timestamp };
 
