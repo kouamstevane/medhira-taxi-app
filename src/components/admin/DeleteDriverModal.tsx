@@ -14,8 +14,8 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Driver } from '@/app/admin/drivers/page';
-import { DriverDeletionResult } from '@/utils/driver-deletion.service';
+import type { Driver } from '@/app/admin/drivers/page';
+import type { DriverDeletionResult } from '@/utils/driver-deletion.service';
 
 interface DeleteDriverModalProps {
   driver: Driver | null;

@@ -349,23 +349,36 @@ async function sendEmailViaResend(
     const resend = getResendInstance();
     const verificationUrl = await generateVerificationLink(email);
 
-    const emailHtml = await render(
-      React.createElement(VerificationEmail, {
-        displayName,
-        verificationUrl,
-        appName: 'Medjira Service',
-        supportEmail: replyTo.value(),
-        logoUrl: logoUrl.value() || undefined,
-      })
-    );
+    const emailElement = React.createElement(VerificationEmail, {
+      displayName,
+      verificationUrl,
+      appName: 'Medjira Service',
+      supportEmail: replyTo.value(),
+      logoUrl: logoUrl.value() || undefined,
+    });
+
+    const [emailHtml, emailText] = await Promise.all([
+      render(emailElement),
+      render(emailElement, { plainText: true }),
+    ]);
 
     const result = await resend.emails.send({
       from: `${fromName.value()} <${fromEmail.value()}>`,
       to: email,
       subject: 'Vérifiez votre adresse email - Medjira Service',
       html: emailHtml,
+      text: emailText,
       replyTo: replyTo.value(),
     });
+
+    if (result.error) {
+      console.error('[EmailVerification] Erreur Resend API:', result.error);
+      await logEmailSend(email, false, undefined, result.error.message);
+      return {
+        success: false,
+        error: result.error.message,
+      };
+    }
 
     await logEmailSend(email, true, result.data?.id);
 
@@ -397,6 +410,7 @@ export const sendVerificationEmail = onCall(
     region: functionsRegion,
     memory: '256MiB',
     maxInstances: 10,
+    cors: true,
     secrets: [resendApiKey],
   },
   async (request) => {

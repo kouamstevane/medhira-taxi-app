@@ -1,281 +1,285 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
-import { auth, db } from '@/config/firebase';
-import { collection, query, where, getDocs, updateDoc, doc, Timestamp, getDoc, deleteDoc } from 'firebase/firestore';
-import { onAuthStateChanged, User, getIdToken } from 'firebase/auth';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { 
+  collection, 
+  query, 
+  onSnapshot, 
+  doc, 
+  updateDoc, 
+  Timestamp, 
+  deleteDoc,
+  getDoc
+} from 'firebase/firestore';
+import { db, auth } from '@/config/firebase';
+import type { DriverDeletionResult } from '@/utils/driver-deletion.service';
+import Image from 'next/image';
+import { 
+  CheckCircle, 
+  XCircle, 
+  AlertTriangle, 
+  Clock, 
+  Search, 
+  Filter as FilterIcon,
+  User as UserIcon,
+  Car,
+  ChevronRight,
+  ShieldCheck,
+  FileText
+} from 'lucide-react';
 import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
-import { DriverDeletionResult } from '@/utils/driver-deletion.service';
 
-export type Driver = {
+export interface Driver {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
-  phoneNumber?: string; // Alias pour compatibilité
+  phoneNumber?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'available' | 'offline' | 'busy' | 'action_required';
   licenseNumber: string;
+  city: string;
   car: {
     model: string;
     plate: string;
     color: string;
+    brand?: string;
   };
-  carModel?: string; // Propriétés alternatives
+  carModel?: string;
   carPlate?: string;
   carColor?: string;
   documents: {
     licensePhoto: string;
+    licenseFront?: string;
+    licenseBack?: string;
+    idFront?: string;
+    idBack?: string;
     carRegistration: string;
     insurance?: string;
+    techControl?: string;
+    vehicleExterior?: string;
+    vehicleInterior?: string;
+    biometricPhoto?: string;
   };
-  status: 'pending' | 'approved' | 'rejected' | 'available' | 'offline' | 'busy';
-  isActive?: boolean;
+  createdAt: any;
+  rejectionReason?: string;
   isSuspended?: boolean;
   suspensionReason?: string;
-  createdAt: Timestamp | Date;
-  updatedAt?: Timestamp | Date;
-  rejectionReason?: string;
-};
+  isActive?: boolean;
+}
+
+const DriverSkeleton = () => (
+  <div className="space-y-4 animate-pulse p-4">
+    {[1, 2, 3, 4, 5].map((i) => (
+      <div key={i} className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl">
+        <div className="flex items-center gap-4">
+          <div className="h-10 w-10 rounded-full bg-white/10" />
+          <div className="space-y-2">
+            <div className="h-4 w-32 bg-white/10 rounded" />
+            <div className="h-3 w-24 bg-white/10 rounded" />
+          </div>
+        </div>
+        <div className="h-4 w-24 bg-white/10 rounded" />
+        <div className="h-4 w-16 bg-white/10 rounded" />
+      </div>
+    ))}
+  </div>
+);
 
 export default function AdminDriversPage() {
-  const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const router = useRouter();
+  
+  // States for administrative action modale
   const [actionModal, setActionModal] = useState<{
-    show: boolean;
-    action: 'suspend' | 'deactivate' | null;
-    driver: Driver | null;
-    reason: string;
+    show: boolean,
+    action: 'suspend' | 'unsuspend' | 'deactivate' | null,
+    driver: Driver | null,
+    reason: string
   }>({
     show: false,
     action: null,
     driver: null,
-    reason: '',
+    reason: ''
   });
+
+  // States for deletion modal
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
 
-  // Vérifier si l'utilisateur est admin
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setCurrentUser(user);
-        // Vérifier si l'utilisateur est admin
-        try {
-          // Essayer d'abord avec l'UID comme ID du document (plus efficace)
-          const adminDocRef = doc(db, 'admins', user.uid);
-          const adminDoc = await getDoc(adminDocRef);
-          
-          if (adminDoc.exists()) {
-            setIsAdmin(true);
-          } else {
-            // Fallback: chercher dans la collection où userId correspond à l'UID
-            const adminQuery = query(
-              collection(db, 'admins'),
-              where('userId', '==', user.uid)
-            );
-            const adminSnapshot = await getDocs(adminQuery);
-            const isUserAdmin = !adminSnapshot.empty;
-            setIsAdmin(isUserAdmin);
-            if (!isUserAdmin) {
-              router.push('/dashboard');
-            }
-          }
-        } catch (err) {
-          console.error('Erreur vérification admin:', err);
-          setIsAdmin(false);
-        }
-      } else {
+    const checkAdmin = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setIsAdmin(false);
         router.push('/login');
+        return;
       }
-    });
 
-    return () => unsubscribe();
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists() && userDoc.data().role === 'admin') {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+          router.push('/dashboard');
+        }
+      } catch (err) {
+        console.error('Error checking admin status:', err);
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdmin();
   }, [router]);
 
-  // Charger les chauffeurs
-  const loadDrivers = useCallback(async () => {
-    try {
-      setLoading(true);
-      const driversRef = collection(db, 'drivers');
-      let q;
+  useEffect(() => {
+    if (!isAdmin) return;
 
-      if (filter === 'all') {
-        // Charger TOUS les chauffeurs sans filtre
-        q = query(driversRef);
-      } else if (filter === 'approved') {
-        // Approuvés : inclure 'approved' ET les statuts actifs (available, offline, busy)
-        // On ne peut pas utiliser 'in' avec plusieurs valeurs ET d'autres filtres, donc on charge tout et filtre après
-        q = query(driversRef);
-      } else {
-        // Pour pending et rejected, filtrer normalement
-        q = query(driversRef, where('status', '==', filter));
-      }
+    setLoading(true);
+    const driversRef = collection(db, 'drivers');
+    let q = query(driversRef);
 
-      const querySnapshot = await getDocs(q);
-      let driversList: Driver[] = [];
-      
-      querySnapshot.forEach((doc) => {
-        driversList.push({
-          id: doc.id,
-          ...doc.data()
-        } as Driver);
-      });
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const driversData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Driver[];
 
-      // Filtrer côté client pour "Approuvés" (inclut tous les chauffeurs actifs)
-      if (filter === 'approved') {
-        driversList = driversList.filter(driver => 
-          driver.status === 'approved' || 
-          driver.status === 'available' || 
-          driver.status === 'offline' || 
-          driver.status === 'busy'
-        );
-      }
-
-      // Trier par date de création (plus récent en premier)
-      driversList.sort((a, b) => {
-        const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate() : new Date(a.createdAt);
-        const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate() : new Date(b.createdAt);
+      // Tri local (du plus récent au plus ancien)
+      const sortedDrivers = driversData.sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
+        const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
         return dateB.getTime() - dateA.getTime();
       });
 
-      setDrivers(driversList);
-      console.log(`📊 ${driversList.length} chauffeur(s) chargé(s) avec filtre "${filter}"`);
-    } catch (err) {
-      console.error('Erreur chargement chauffeurs:', err);
-      setError('Erreur lors du chargement des chauffeurs');
-    } finally {
+      // Filtrage
+      if (filter === 'all') {
+        setDrivers(sortedDrivers);
+      } else {
+        setDrivers(sortedDrivers.filter(d => d.status === filter));
+      }
       setLoading(false);
-    }
-  }, [filter]);
+    }, (err) => {
+      console.error('Error fetching drivers:', err);
+      setError('Erreur lors du chargement des chauffeurs');
+      setLoading(false);
+    });
 
-  useEffect(() => {
-    if (isAdmin) {
-      loadDrivers();
-    }
-  }, [isAdmin, loadDrivers]);
+    return () => unsubscribe();
+  }, [filter, isAdmin]);
 
-  // Gestion des actions administratives (approve, reject, suspend, etc.)
-  const handleAdminAction = async (
-    action: 'approve' | 'reject' | 'suspend' | 'unsuspend' | 'deactivate' | 'reactivate',
-    driverId: string,
-    reason?: string
-  ) => {
-    if (!currentUser) {
-      setError('Vous devez être connecté pour effectuer cette action');
-      return;
-    }
+  const handleAdminAction = async (action: string, driverId: string, reason?: string) => {
+    setProcessing(driverId);
+    setError(null);
+    setSuccess(null);
 
     try {
-      setProcessing(driverId);
-      setError(null);
-      setSuccess(null);
-
+      if (!auth.currentUser) throw new Error('Non authentifié');
+      const idToken = await auth.currentUser.getIdToken(true);
+      
       const response = await fetch('/api/admin/manage-driver', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
         },
         body: JSON.stringify({
           action,
           driverId,
           reason,
-          adminUid: currentUser.uid,
-        }),
+          adminUid: auth.currentUser.uid 
+        })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || data.details || 'Erreur lors de l\'action');
+        throw new Error(data.error || 'Erreur lors de l\'action');
       }
 
-      setSuccess(data.message || 'Action effectuée avec succès');
-      
-      // Fermer les modals si ouverts
-      setActionModal({ show: false, action: null, driver: null, reason: '' });
+      setSuccess(`Action "${action}" effectuée avec succès`);
       setSelectedDriver(null);
       setRejectionReason('');
-      
-      // Recharger la liste
-      loadDrivers();
-    } catch (err: unknown) {
-      console.error(`Erreur ${action}:`, err);
-      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      setError(`Erreur lors de l'action (${action}): ${errorMessage}`);
+      setActionModal({ show: false, action: null, driver: null, reason: '' });
+    } catch (err: any) {
+      console.error('Error performing admin action:', err);
+      setError(err.message || 'Erreur lors de la mise à jour du statut');
     } finally {
       setProcessing(null);
     }
   };
 
-  // Gestion de la suppression définitive complète
-  // ✅ CORRECTION: Envoie le token Firebase Auth dans l'en-tête Authorization
-  // ✅ CORRECTION: Retire le throw err redondant (le modal gère déjà l'erreur)
+
   const handleDeleteDriver = async (driverId: string): Promise<DriverDeletionResult> => {
-    if (!currentUser) {
-      throw new Error('Vous devez être connecté pour effectuer cette action');
-    }
+    setProcessing(driverId);
+    setError(null);
+    setSuccess(null);
+
+    const startTime = Date.now();
 
     try {
-      setProcessing(driverId);
-      setError(null);
-      setSuccess(null);
+      // 1. Obtenir le token ID de l'administrateur actuel
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('Vous devez être connecté pour effectuer cette action');
+      }
+      
+      const idToken = await currentUser.getIdToken();
 
-      // Obtenir le token Firebase ID pour l'authentification
-      const idToken = await getIdToken(currentUser, true);
-
+      // 2. Appeler l'API de suppression complète
       const response = await fetch('/api/admin/delete-driver-complete', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
+          'Authorization': `Bearer ${idToken}`
         },
-        body: JSON.stringify({
-          driverId,
-          // adminUid n'est plus nécessaire - extrait du token côté serveur
-        }),
+        body: JSON.stringify({ driverId })
       });
 
-      const data = await response.json();
+      const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || data.details || 'Erreur lors de la suppression');
+        throw new Error(result.error || 'Erreur lors de la suppression complète');
       }
 
-      setSuccess(data.message || 'Chauffeur supprimé définitivement avec succès');
-
-      // Recharger la liste
-      await loadDrivers();
-
-      return data;
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
-      setError(`Erreur lors de la suppression: ${errorMessage}`);
-      // ✅ CORRECTION: Ne pas relancer l'erreur - le DeleteDriverModal gère l'affichage
-      // Le throw err était redondant et pouvait causer un unhandled promise rejection
-      throw err; // Gardé pour compatibilité avec le modal qui s'attend à une erreur
+      setSuccess('Le compte chauffeur et toutes ses données ont été supprimés définitivement');
+      setDeleteModalOpen(false);
+      setDriverToDelete(null);
+      setSelectedDriver(null);
+      
+      return result as DriverDeletionResult;
+    } catch (err: any) {
+      console.error('Error deleting driver:', err);
+      const errorMessage = err.message || 'Erreur lors de la suppression du compte';
+      setError(errorMessage);
+      
+      return {
+        success: false,
+        deletedCollections: [],
+        deletedFiles: 0,
+        errors: [errorMessage],
+        duration: Date.now() - startTime
+      };
     } finally {
       setProcessing(null);
     }
   };
 
-  // Ouvrir le modal de suppression
   const openDeleteModal = (driver: Driver) => {
     setDriverToDelete(driver);
     setDeleteModalOpen(true);
   };
 
-  // Fermer le modal de suppression
   const closeDeleteModal = () => {
     setDeleteModalOpen(false);
     setDriverToDelete(null);
@@ -283,28 +287,40 @@ export default function AdminDriversPage() {
 
   const getStatusBadge = (status: string) => {
     const styles = {
-      pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      approved: 'bg-green-100 text-green-800 border-green-300',
-      rejected: 'bg-red-100 text-red-800 border-red-300',
+      pending: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+      approved: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+      rejected: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+      available: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
+      offline: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
+      busy: 'bg-sky-500/10 text-sky-500 border-sky-500/20',
+      action_required: 'bg-violet-500/10 text-violet-500 border-violet-500/20',
     };
 
     const labels = {
       pending: 'En attente',
       approved: 'Approuvé',
       rejected: 'Refusé',
+      available: 'Disponible',
+      offline: 'Hors ligne',
+      busy: 'En course',
+      action_required: 'Action requise',
     };
 
+    const statusKey = status as keyof typeof styles;
+    const style = styles[statusKey] || 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+    const label = labels[statusKey] || status;
+
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${styles[status as keyof typeof styles]}`}>
-        {labels[status as keyof typeof labels]}
+      <span className={`px-3 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold border backdrop-blur-sm ${style}`}>
+        {label}
       </span>
     );
   };
 
-  if (isAdmin === null || loading) {
+  if (isAdmin === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f29200]"></div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
       </div>
     );
   }
@@ -314,217 +330,179 @@ export default function AdminDriversPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50 text-slate-900">
+      {/* Premium Gradient Background */}
+      <div className="fixed inset-0 bg-[radial-gradient(circle_at_30%_20%,#ffffff_0%,#f8fafc_100%)] -z-10" />
+      
       {/* Header */}
-      <header className="bg-[#101010] text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">Administration - Gestion des Chauffeurs</h1>
-              <p className="text-gray-300 text-sm mt-1">Gérez les demandes d&apos;inscription des chauffeurs</p>
+      <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white/90 backdrop-blur-xl shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+              Gestion des Chauffeurs
+            </h1>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">Interface Administration Premium</p>
             </div>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition"
-            >
-              Retour au tableau de bord
-            </button>
           </div>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="group flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-slate-700 rounded-xl transition-all duration-300 shadow-sm"
+          >
+            <ChevronRight className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" />
+            <span className="text-sm font-medium">Tableau de bord</span>
+          </button>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Filtres */}
-        <div className="mb-6 flex gap-2">
+        {/* Statistics or Quick Filters Card */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
+              className={`relative overflow-hidden group p-4 rounded-2xl border transition-all duration-500 shadow-sm ${
                 filter === f
-                  ? 'bg-[#f29200] text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50'
+                  ? 'bg-amber-50 border-amber-200 shadow-amber-500/10'
+                  : 'bg-white border-gray-200 hover:border-gray-300'
               }`}
             >
-              {f === 'all' ? 'Tous' : f === 'pending' ? 'En attente' : f === 'approved' ? 'Approuvés' : 'Refusés'}
+              <div className="flex items-center justify-between">
+                <span className={`text-sm font-semibold capitalize transition-colors ${filter === f ? 'text-amber-600' : 'text-gray-600'}`}>
+                  {f === 'all' ? 'Tous' : f === 'pending' ? 'En attente' : f === 'approved' ? 'Approuvés' : 'Refusés'}
+                </span>
+                <div className={`p-2 rounded-lg transition-colors ${filter === f ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 text-gray-500'}`}>
+                  {f === 'all' ? <ShieldCheck className="w-4 h-4" /> : f === 'pending' ? <AlertTriangle className="w-4 h-4" /> : f === 'approved' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                </div>
+              </div>
+              {filter === f && <div className="absolute bottom-0 left-0 h-1 w-full bg-amber-500" />}
             </button>
           ))}
         </div>
 
-        {/* Messages */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded">
-            <p>{error}</p>
-            <button onClick={() => setError(null)} className="mt-2 text-red-500 hover:text-red-700">
-              Fermer
-            </button>
-          </div>
-        )}
+        {/* Global Messages */}
+        <div className="space-y-4 mb-6">
+          {error && (
+            <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <p className="text-sm font-medium flex-1">{error}</p>
+              <button onClick={() => setError(null)} className="p-1 hover:bg-rose-500/10 rounded-lg">
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          {success && (
+            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 shadow-sm">
+              <CheckCircle className="w-5 h-5 shrink-0" />
+              <p className="text-sm font-medium flex-1">{success}</p>
+              <button onClick={() => setSuccess(null)} className="p-1 hover:bg-emerald-500/10 rounded-lg">
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
 
-        {success && (
-          <div className="mb-4 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded">
-            <p>{success}</p>
-            <button onClick={() => setSuccess(null)} className="mt-2 text-green-500 hover:text-green-700">
-              Fermer
+        {/* Search & Action Bar */}
+        <div className="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between">
+          <div className="relative w-full md:w-96">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Rechercher un chauffeur..." 
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all shadow-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-600 transition shadow-sm">
+              <FilterIcon className="w-4 h-4" />
             </button>
           </div>
-        )}
+        </div>
 
         {/* Liste des chauffeurs */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          {drivers.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <p>Aucun chauffeur {filter === 'all' ? '' : filter === 'pending' ? 'en attente' : filter === 'approved' ? 'approuvé' : 'refusé'}</p>
+        <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
+          {loading ? (
+            <DriverSkeleton />
+          ) : drivers.length === 0 ? (
+            <div className="py-24 text-center">
+              <div className="inline-flex p-4 rounded-full bg-gray-50 mb-4 text-gray-400">
+                <UserIcon className="w-12 h-12" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Aucun chauffeur trouvé</h3>
+              <p className="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
+                Il n'y a aucun profil correspondant à votre filtre "{filter}" pour le moment.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Chauffeur
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Contact
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Véhicule
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Statut
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Chauffeur</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Contact</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Véhicule</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Statut</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Date</th>
+                    <th className="px-6 py-4 text-right text-[11px] font-bold text-gray-500 uppercase tracking-widest">Détails</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-200 bg-white">
                   {drivers.map((driver) => (
-                    <tr key={driver.id} className="hover:bg-gray-50">
+                    <tr key={driver.id} className="group hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
+                        <div className="flex items-center gap-4">
+                          <div className="h-10 w-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 font-bold">
+                            {(driver.firstName || 'U').charAt(0).toUpperCase()}
+                            {(driver.lastName || '').charAt(0).toUpperCase()}
+                          </div>
                           <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {driver.firstName} {driver.lastName}
+                            <div 
+                              className="text-sm font-semibold text-gray-900 group-hover:text-amber-600 transition-colors cursor-pointer" 
+                              onClick={() => setSelectedDriver(driver)}
+                            >
+                              {driver.firstName || 'Utilisateur'} {driver.lastName || ''}
                             </div>
-                            <div className="text-sm text-gray-500">
-                              Permis: {driver.licenseNumber || 'N/A'}
-                            </div>
+                            <div className="text-[11px] text-gray-500 font-medium">Permis: {driver.licenseNumber || 'N/A'}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{driver.email}</div>
-                        <div className="text-sm text-gray-500">{driver.phone || driver.phoneNumber}</div>
+                        <div className="text-sm text-gray-300">{driver.email}</div>
+                        <div className="text-[11px] text-gray-500">{driver.phone || driver.phoneNumber}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {driver.car?.model || driver.carModel || 'N/A'}
+                        <div className="flex items-center gap-2">
+                          <Car className="w-3 h-3 text-[#f29200]" />
+                          <div className="text-sm text-gray-300 font-medium">{driver.car?.model || driver.carModel || 'N/A'}</div>
                         </div>
-                        <div className="text-sm text-gray-500">
+                        <div className="text-[11px] text-gray-500 uppercase tracking-tighter opacity-70">
                           {driver.car?.plate || driver.carPlate || 'N/A'} • {driver.car?.color || driver.carColor || 'N/A'}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-1.5">
                           {getStatusBadge(driver.status)}
                           {driver.isSuspended && (
-                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-300">
-                              ⏸️ Suspendu
-                            </span>
-                          )}
-                          {driver.isActive === false && (
-                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-300">
-                              🚫 Désactivé
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20 uppercase tracking-tighter w-fit">
+                              <span className="h-1 w-1 rounded-full bg-orange-400 animate-pulse" /> Suspendu
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-[11px] font-medium text-gray-500">
                         {driver.createdAt instanceof Timestamp
-                          ? driver.createdAt.toDate().toLocaleDateString('fr-FR')
-                          : new Date(driver.createdAt).toLocaleDateString('fr-FR')}
+                          ? driver.createdAt.toDate().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+                          : new Date(driver.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button
                           onClick={() => setSelectedDriver(driver)}
-                          className="text-[#f29200] hover:text-[#e68600] mr-4"
+                          className="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-400 hover:text-white"
                         >
-                          Voir détails
+                          <ChevronRight className="w-5 h-5" />
                         </button>
-                        
-                        {/* Actions pour les chauffeurs en attente */}
-                        {driver.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => handleAdminAction('approve', driver.id)}
-                              disabled={processing === driver.id}
-                              className="text-green-600 hover:text-green-900 mr-2 disabled:opacity-50"
-                            >
-                              {processing === driver.id ? 'Traitement...' : 'Approuver'}
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedDriver(driver);
-                                setRejectionReason('');
-                              }}
-                              disabled={processing === driver.id}
-                              className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                            >
-                              Refuser
-                            </button>
-                          </>
-                        )}
-                        
-                        {/* Actions pour TOUS les chauffeurs approuvés ou existants */}
-                        {(driver.status === 'approved' || driver.status === 'available' || driver.status === 'offline' || driver.status === 'busy') && (
-                          <>
-                            {driver.isSuspended ? (
-                              <button
-                                onClick={() => handleAdminAction('unsuspend', driver.id)}
-                                disabled={processing === driver.id}
-                                className="text-green-600 hover:text-green-900 mr-2 disabled:opacity-50"
-                              >
-                                Réactiver
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => setActionModal({ 
-                                  show: true, 
-                                  action: 'suspend', 
-                                  driver, 
-                                  reason: '' 
-                                })}
-                                disabled={processing === driver.id}
-                                className="text-orange-600 hover:text-orange-900 mr-2 disabled:opacity-50"
-                              >
-                                Suspendre
-                              </button>
-                            )}
-                            <button
-                              onClick={() => setActionModal({ 
-                                show: true, 
-                                action: 'deactivate', 
-                                driver, 
-                                reason: '' 
-                              })}
-                              disabled={processing === driver.id}
-                              className="text-yellow-600 hover:text-yellow-900 mr-2 disabled:opacity-50"
-                            >
-                              Désactiver
-                            </button>
-                            <button
-                              onClick={() => openDeleteModal(driver)}
-                              disabled={processing === driver.id}
-                              className="text-red-600 hover:text-red-900 disabled:opacity-50 font-semibold"
-                            >
-                              Supprimer
-                            </button>
-                          </>
-                        )}
                       </td>
                     </tr>
                   ))}
@@ -535,258 +513,269 @@ export default function AdminDriversPage() {
         </div>
       </main>
 
-      {/* Modal de détails */}
+      {/* Modern Side Modal (Drawer style) for Details */}
       {selectedDriver && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Détails du chauffeur - {selectedDriver.firstName} {selectedDriver.lastName}
-                </h2>
-                <button
-                  onClick={() => {
-                    setSelectedDriver(null);
-                    setRejectionReason('');
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-end">
+          {/* Overlay */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 
+            onClick={() => { setSelectedDriver(null); setRejectionReason(''); }}
+          />
+          
+          {/* Content */}
+          <div className="relative h-full w-full max-w-2xl bg-[#0d0d0d] border-l border-white/10 shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-500">
+            <div className="sticky top-0 z-50 bg-[#0d0d0d]/80 backdrop-blur-xl border-b border-white/5 p-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-[#f29200] to-amber-400 flex items-center justify-center text-black font-black text-xl shadow-[0_0_20px_rgba(242,146,0,0.3)]">
+                  {selectedDriver.firstName[0]}{selectedDriver.lastName[0]}
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">{selectedDriver.firstName} {selectedDriver.lastName}</h2>
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(selectedDriver.status)}
+                    <span className="text-[10px] text-gray-500 font-mono">ID: {selectedDriver.id.substring(0, 8)}...</span>
+                  </div>
+                </div>
               </div>
+              <button
+                onClick={() => { setSelectedDriver(null); setRejectionReason(''); }}
+                className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors"
+              >
+                <XCircle className="w-6 h-6 text-gray-400" />
+              </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {/* Informations personnelles */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Informations personnelles</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Prénom</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedDriver.firstName}</p>
+            <div className="p-8 space-y-12">
+              {/* Informations Personnelles */}
+              <section>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-[#f29200]/10 rounded-lg text-[#f29200]">
+                    <UserIcon className="w-5 h-5" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Nom</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedDriver.lastName}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Email</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedDriver.email}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Téléphone</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedDriver.phone}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Numéro de permis</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedDriver.licenseNumber}</p>
-                  </div>
+                  <h3 className="text-lg font-bold">Informations Personnelles</h3>
                 </div>
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 p-6 bg-white/[0.02] border border-white/5 rounded-2xl">
+                  {[
+                    { label: 'Prénom', value: selectedDriver.firstName },
+                    { label: 'Nom', value: selectedDriver.lastName },
+                    { label: 'Email', value: selectedDriver.email },
+                    { label: 'Téléphone', value: (selectedDriver.phone || selectedDriver.phoneNumber) },
+                    { label: 'Numéro de permis', value: (selectedDriver.licenseNumber || 'Non renseigné') },
+                    { label: 'Ville', value: (selectedDriver.city || 'Non renseignée') },
+                  ].map((item, idx) => (
+                    <div key={idx}>
+                      <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">{item.label}</span>
+                      <p className="text-sm text-gray-200 font-medium">{item.value || 'N/A'}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
 
-              {/* Informations véhicule */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Informations véhicule</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Modèle</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedDriver.car.model}</p>
+              {/* Informations Véhicule */}
+              <section>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-[#f29200]/10 rounded-lg text-[#f29200]">
+                    <Car className="w-5 h-5" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Plaque</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedDriver.car.plate}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Couleur</label>
-                    <p className="mt-1 text-sm text-gray-900">{selectedDriver.car.color}</p>
-                  </div>
+                  <h3 className="text-lg font-bold">Véhicule</h3>
                 </div>
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 p-6 bg-white/[0.02] border border-white/5 rounded-2xl">
+                  {[
+                    { label: 'Marque/Modèle', value: (selectedDriver.car?.brand ? `${selectedDriver.car.brand} ${selectedDriver.car.model}` : (selectedDriver.car?.model || selectedDriver.carModel)) },
+                    { label: 'Plaque d\'immatriculation', value: (selectedDriver.car?.plate || selectedDriver.carPlate) },
+                    { label: 'Couleur', value: (selectedDriver.car?.color || selectedDriver.carColor) },
+                  ].map((item, idx) => (
+                    <div key={idx}>
+                      <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">{item.label}</span>
+                      <p className="text-sm text-gray-200 font-medium">{item.value || 'N/A'}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
 
               {/* Documents */}
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Documents</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Permis de conduire</label>
-                    <a
-                      href={selectedDriver.documents.licensePhoto}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block"
-                    >
-                      <Image
-                        src={selectedDriver.documents.licensePhoto}
-                        alt="Permis de conduire"
-                        width={400}
-                        height={192}
-                        className="w-full h-48 object-cover rounded-lg border border-gray-300 hover:border-[#f29200] transition"
-                      />
-                    </a>
+              <section>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-[#f29200]/10 rounded-lg text-[#f29200]">
+                    <FileText className="w-5 h-5" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Carte grise</label>
-                    <a
-                      href={selectedDriver.documents.carRegistration}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block"
-                    >
-                      <Image
-                        src={selectedDriver.documents.carRegistration}
-                        alt="Carte grise"
-                        width={400}
-                        height={192}
-                        className="w-full h-48 object-cover rounded-lg border border-gray-300 hover:border-[#f29200] transition"
-                      />
-                    </a>
-                  </div>
-                  {selectedDriver.documents.insurance && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Assurance</label>
-                      <a
-                        href={selectedDriver.documents.insurance}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block"
-                      >
-                        <Image
-                          src={selectedDriver.documents.insurance}
-                          alt="Assurance"
-                          width={400}
-                          height={192}
-                          className="w-full h-48 object-cover rounded-lg border border-gray-300 hover:border-[#f29200] transition"
-                        />
-                      </a>
-                    </div>
-                  )}
+                  <h3 className="text-lg font-bold">Documents Officiels</h3>
                 </div>
-              </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {[
+                    { label: 'Photo de profil', src: selectedDriver.documents.biometricPhoto, id: 'biometricPhoto' },
+                    { label: 'Permis (Recto)', src: selectedDriver.documents.licenseFront || selectedDriver.documents.licensePhoto, id: 'licensePhoto' },
+                    { label: 'Permis (Verso)', src: selectedDriver.documents.licenseBack, id: 'licenseBack' },
+                    { label: 'Identité (Recto)', src: selectedDriver.documents.idFront, id: 'idFront' },
+                    { label: 'Identité (Verso)', src: selectedDriver.documents.idBack, id: 'idBack' },
+                    { label: 'Carte grise', src: selectedDriver.documents.carRegistration, id: 'carRegistration' },
+                    { label: 'Assurance', src: selectedDriver.documents.insurance, id: 'insurance' },
+                    { label: 'Contrôle Technique', src: selectedDriver.documents.techControl, id: 'techControl' },
+                    { label: 'Véhicule (Extérieur)', src: selectedDriver.documents.vehicleExterior, id: 'vehicleExterior' },
+                    { label: 'Véhicule (Intérieur)', src: selectedDriver.documents.vehicleInterior, id: 'vehicleInterior' },
+                  ].map((doc, idx) => doc.src ? (
+                    <div key={idx} className="group flex flex-col gap-2">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{doc.label}</span>
+                      <div className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-white/5 ring-1 ring-white/5 hover:ring-[#f29200]/50 transition-all duration-300">
+                        <a href={doc.src} target="_blank" rel="noopener noreferrer" className="block h-full w-full">
+                          <Image
+                            src={doc.src}
+                            alt={doc.label}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[2px]">
+                            <span className="px-4 py-2 bg-white/10 backdrop-blur-md rounded-xl text-xs font-bold border border-white/20">Agrandir</span>
+                          </div>
+                        </a>
+                      </div>
+                    </div>
+                  ) : null)}
+                </div>
+                
+                {Object.values(selectedDriver.documents).every(v => !v) && (
+                  <div className="p-8 text-center bg-white/5 border border-white/10 rounded-2xl">
+                    <p className="text-gray-500 text-sm">Aucun document numérique disponible.</p>
+                  </div>
+                )}
+              </section>
 
-              {/* Actions si en attente */}
-              {selectedDriver.status === 'pending' && (
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Actions</h3>
-                  <div className="flex gap-4">
-                    <button
-                      onClick={() => handleAdminAction('approve', selectedDriver.id)}
-                      disabled={processing === selectedDriver.id}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition disabled:opacity-50"
-                    >
-                      {processing === selectedDriver.id ? 'Traitement...' : '✓ Approuver le compte'}
-                    </button>
-                    <div className="flex-1">
-                      <textarea
-                        value={rejectionReason}
-                        onChange={(e) => setRejectionReason(e.target.value)}
-                        placeholder="Raison du refus (obligatoire)"
-                        className="w-full p-3 border border-gray-300 rounded-lg mb-2 text-[#101010] placeholder-gray-400"
-                        rows={3}
-                      />
+              {/* Actions Section */}
+              <div className="pt-8 border-t border-white/10">
+                {selectedDriver.status === 'pending' ? (
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      < ShieldCheck className="w-5 h-5 text-emerald-500" />
+                      <h3 className="text-lg font-bold text-emerald-500">Validation Requise</h3>
+                    </div>
+                    
+                    <div className="flex flex-col gap-4">
+                      <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                        <p className="text-xs text-emerald-400 mb-4 font-medium italic">
+                          En approuvant ce chauffeur, il sera immédiatement autorisé à accepter des courses.
+                        </p>
+                        <button
+                          onClick={() => handleAdminAction('approve', selectedDriver.id)}
+                          disabled={processing === selectedDriver.id}
+                          className="w-full h-14 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-black font-black uppercase tracking-wider rounded-2xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
+                        >
+                          {processing === selectedDriver.id ? 'Traitement en cours...' : 'Approuver le profil'}
+                        </button>
+                      </div>
+
+                      <div className="p-4 bg-rose-500/5 border border-rose-500/10 rounded-2xl space-y-4">
+                        <textarea
+                          value={rejectionReason}
+                          onChange={(e) => setRejectionReason(e.target.value)}
+                          placeholder="Motif détaillé du refus..."
+                          className="w-full p-4 bg-black/40 border border-white/10 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/30 transition-all min-h-[100px]"
+                        />
+                        <button
+                          onClick={() => handleAdminAction('reject', selectedDriver.id, rejectionReason.trim())}
+                          disabled={processing === selectedDriver.id || !rejectionReason.trim()}
+                          className="w-full h-12 bg-white/5 hover:bg-rose-500/10 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 text-gray-400 font-bold uppercase text-xs tracking-widest rounded-2xl transition-all disabled:opacity-50"
+                        >
+                          {processing === selectedDriver.id ? 'Traitement...' : 'Refuser l\'inscription'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-bold">Options Administratives</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {selectedDriver.isSuspended ? (
+                        <button
+                          onClick={() => handleAdminAction('unsuspend', selectedDriver.id)}
+                          className="h-12 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all uppercase tracking-widest"
+                        >
+                          Lever la suspension
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setActionModal({ show: true, action: 'suspend', driver: selectedDriver, reason: '' })}
+                          className="h-12 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 rounded-xl text-xs font-bold transition-all uppercase tracking-widest"
+                        >
+                          Suspendre
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleAdminAction('reject', selectedDriver.id, rejectionReason.trim())}
-                        disabled={processing === selectedDriver.id || !rejectionReason.trim()}
-                        className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition disabled:opacity-50"
+                        onClick={() => openDeleteModal(selectedDriver)}
+                        className="h-12 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl text-xs font-bold transition-all uppercase tracking-widest"
                       >
-                        {processing === selectedDriver.id ? 'Traitement...' : '✗ Refuser le compte'}
+                        Suppression Définitive
                       </button>
                     </div>
                   </div>
-                </div>
-              )}
-
-              {/* Raison du refus si refusé */}
-              {selectedDriver.status === 'rejected' && selectedDriver.rejectionReason && (
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Raison du refus</h3>
-                  <p className="text-sm text-gray-700 bg-red-50 p-4 rounded-lg border border-red-200">
-                    {selectedDriver.rejectionReason}
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal d'actions administratives (suspendre, désactiver) */}
+      {/* Action Decision Modal */}
       {actionModal.show && actionModal.driver && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
-              {actionModal.action === 'suspend' && 'Suspendre le chauffeur'}
-              {actionModal.action === 'deactivate' && 'Désactiver le chauffeur'}
-            </h3>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setActionModal({ show: false, action: null, driver: null, reason: '' })} />
+          <div className="relative bg-[#1a1a1a] border border-white/10 rounded-3xl max-w-md w-full p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-red-500/10 rounded-2xl text-red-500">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold">
+                {actionModal.action === 'suspend' ? 'Suspendre' : 'Désactiver'} le chauffeur
+              </h3>
+            </div>
              
-            <p className="text-gray-600 mb-4">
-              Chauffeur : <strong>{actionModal.driver.firstName} {actionModal.driver.lastName}</strong>
+            <p className="text-gray-400 text-sm mb-6 leading-relaxed">
+              Vous êtes sur le point de {actionModal.action === 'suspend' ? 'suspendre temporairement' : 'désactiver définitivement'} le compte de 
+              <strong className="text-white ml-1">{actionModal.driver.firstName} {actionModal.driver.lastName}</strong>.
             </p>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Raison (obligatoire)
-              </label>
+            <div className="space-y-2 mb-8">
+              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Raison de l'action</label>
               <textarea
                 value={actionModal.reason}
                 onChange={(e) => setActionModal({ ...actionModal, reason: e.target.value })}
-                placeholder={
-                  actionModal.action === 'suspend'
-                    ? 'Ex: Plaintes multiples des clients'
-                    : 'Ex: Fraude détectée, documents invalides'
-                }
-                className="w-full p-3 border border-gray-300 rounded-lg text-[#101010]"
-                rows={3}
+                placeholder="Précisez la raison..."
+                className="w-full p-4 bg-black/40 border border-white/10 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f29200]/30 transition-all min-h-[100px]"
               />
             </div>
 
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-              <p className="text-sm text-yellow-700">
-                {actionModal.action === 'suspend' && '⚠️ Le chauffeur sera bloqué temporairement. Vous pourrez le réactiver plus tard.'}
-                {actionModal.action === 'deactivate' && '⚠️ Le compte sera désactivé définitivement. Le chauffeur ne pourra plus se connecter.'}
-              </p>
-            </div>
-
-            <div className="flex gap-3">
+            <div className="flex gap-4">
               <button
                 onClick={() => setActionModal({ show: false, action: null, driver: null, reason: '' })}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="flex-1 h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-bold uppercase transition-all"
               >
                 Annuler
               </button>
               <button
                 onClick={() => {
-                  if (actionModal.action && actionModal.driver) {
-                    if (!actionModal.reason.trim()) {
-                      setError('Veuillez indiquer la raison');
-                      return;
-                    }
-                    handleAdminAction(actionModal.action, actionModal.driver.id, actionModal.reason.trim());
+                  if (actionModal.action && actionModal.driver && actionModal.reason.trim()) {
+                    handleAdminAction(actionModal.action as any, actionModal.driver.id, actionModal.reason.trim());
                   }
                 }}
-                disabled={processing === actionModal.driver?.id || !actionModal.reason.trim()}
-                className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 ${
-                  actionModal.action === 'deactivate'
-                    ? 'bg-yellow-600 hover:bg-yellow-700'
-                    : 'bg-orange-600 hover:bg-orange-700'
-                }`}
+                disabled={!actionModal.reason.trim() || !!processing}
+                className="flex-1 h-12 bg-red-600 hover:bg-red-500 text-black font-black rounded-2xl text-xs font-bold uppercase transition-all shadow-[0_0_20px_rgba(220,38,38,0.2)] disabled:opacity-50"
               >
-                {processing === actionModal.driver?.id ? 'Traitement...' : 'Confirmer'}
+                Confirmer
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal de suppression définitive */}
-      <DeleteDriverModal
-        driver={driverToDelete}
-        isOpen={deleteModalOpen}
-        onClose={closeDeleteModal}
-        onConfirm={handleDeleteDriver}
-      />
+      {/* Delete Driver Modal Hook */}
+      {deleteModalOpen && driverToDelete && (
+        <DeleteDriverModal
+          isOpen={deleteModalOpen}
+          onClose={closeDeleteModal}
+          onConfirm={handleDeleteDriver}
+          driver={driverToDelete}
+        />
+      )}
     </div>
   );
 }
-
