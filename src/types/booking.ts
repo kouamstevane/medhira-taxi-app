@@ -61,6 +61,7 @@ export interface Booking {
   driverName?: string;
   driverPhone?: string;
   driverLocation?: Location;
+  passengerLocation?: Location;
   carModel?: string;
   carColor?: string;
   carPlate?: string;

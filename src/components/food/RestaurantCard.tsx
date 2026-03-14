@@ -52,7 +52,9 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) =>
             )}
           </div>
           
-          <p className="text-gray-500 text-sm mb-3">{restaurant.cuisineType}</p>
+          <p className="text-gray-500 text-sm mb-3">
+            {Array.isArray(restaurant.cuisineType) ? restaurant.cuisineType.join(', ') : restaurant.cuisineType}
+          </p>
           
           <div className="flex items-center gap-4 text-xs text-gray-500">
             <div className="flex items-center gap-1">

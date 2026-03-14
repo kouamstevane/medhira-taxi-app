@@ -81,6 +81,8 @@ interface Trip {
   pickupLocation?: PreciseLocation;
   pickupLocationAccuracy?: number; // Précision en mètres
   destinationLocation?: PreciseLocation;
+  driverLocation?: PreciseLocation;
+  passengerLocation?: PreciseLocation;
 }
 
 interface RideRequest {
@@ -259,7 +261,6 @@ export default function DriverDashboard() {
               destination: data.destination
             });
             
-            // Double vérification du statut
             if (data.status === 'cancelled') {
               console.log('[DRIVER] ⚠️ Course annulée détectée (ne devrait pas arriver), ignorée');
               setCurrentTrip(null);
@@ -278,7 +279,9 @@ export default function DriverDashboard() {
                 unreadMessages: data.unreadMessages,
                 pickupLocation: data.pickupLocation,
                 pickupLocationAccuracy: data.pickupLocationAccuracy,
-                destinationLocation: data.destinationLocation
+                destinationLocation: data.destinationLocation,
+                driverLocation: data.driverLocation,
+                passengerLocation: data.passengerLocation
               });
           } else {
             // Aucune course active, réinitialiser
@@ -400,10 +403,17 @@ export default function DriverDashboard() {
 
     console.log('[DRIVER] Démarrage du suivi GPS pour la course:', currentTrip.id);
 
+    const THROTTLE_MS = 2500;
+    let lastUpdateTime = 0;
+
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
+        const now = Date.now();
+        if (now - lastUpdateTime < THROTTLE_MS) {
+          return;
+        }
+        lastUpdateTime = now;
         const { latitude, longitude } = position.coords;
-        // Mettre à jour la position dans Firestore
         updateDriverLocation(currentTrip.id, { lat: latitude, lng: longitude })
           .catch(err => console.error('Erreur updateDriverLocation:', err));
       },
@@ -492,7 +502,9 @@ export default function DriverDashboard() {
           unreadMessages: bookingData.unreadMessages,
           pickupLocation: bookingData.pickupLocation,
           pickupLocationAccuracy: bookingData.pickupLocationAccuracy,
-          destinationLocation: bookingData.destinationLocation
+            destinationLocation: bookingData.destinationLocation,
+            driverLocation: bookingData.driverLocation,
+            passengerLocation: bookingData.passengerLocation
         });
       }
     } catch (err: any) {
@@ -550,7 +562,12 @@ export default function DriverDashboard() {
           price: bookingData.price,
           status: "accepted",
           createdAt: bookingData.createdAt,
-          unreadMessages: bookingData.unreadMessages
+          unreadMessages: bookingData.unreadMessages,
+          pickupLocation: bookingData.pickupLocation,
+          pickupLocationAccuracy: bookingData.pickupLocationAccuracy,
+          destinationLocation: bookingData.destinationLocation,
+          driverLocation: bookingData.driverLocation,
+          passengerLocation: bookingData.passengerLocation
         });
       }
     } catch (err: any) {

@@ -7,11 +7,12 @@ import { logger } from '@/utils/logger';
 import { FiMessageSquare, FiEdit2 } from 'react-icons/fi';
 import { Booking, Location, PlaceSuggestion } from '@/types/booking';
 import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api';
-import { updateDestination } from '@/services/taxi.service';
+import { updateDestination, updatePassengerLocation } from '@/services/taxi.service';
 import { AddressInput } from './AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { ChatModal } from '@/components/ChatModal';
 import { InvoiceModal } from '@/components/InvoiceModal';
+import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 
 interface DriverFoundViewProps {
   bookingId: string;
@@ -47,6 +48,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   const [map, setMap] = useState<google.maps.Map | null>(null);
 
   const { autocompleteService } = useGoogleMaps();
+  const { watchPosition } = useCapacitorGeolocation();
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -227,6 +229,28 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       });
     }
   };
+
+  useEffect(() => {
+    if (!booking) return;
+    if (!['accepted', 'driver_arrived', 'in_progress'].includes(booking.status)) return;
+
+    const currentBookingId = booking.id;
+    const stopWatch = watchPosition(
+      location => {
+        updatePassengerLocation(currentBookingId, {
+          lat: location.lat,
+          lng: location.lng,
+        }).catch(error => {
+          console.error('Erreur mise à jour position client:', error);
+        });
+      },
+      { throttleMs: 2500, maxFrequencyHz: 0.5 }
+    );
+
+    return () => {
+      stopWatch();
+    };
+  }, [booking, watchPosition]);
 
   useEffect(() => {
     const bookingRef = doc(db, 'bookings', bookingId);

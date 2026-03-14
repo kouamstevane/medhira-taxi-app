@@ -57,6 +57,29 @@ import { FIRESTORE_COLLECTIONS, FIRESTORE_SUBCOLLECTIONS } from '@/types/firesto
 // CONSTANTES
 // ============================================================================
 
+// ==================== SCHEMAS DE VALIDATION ====================
+
+const CreateRestaurantSchema = z.object({
+  ownerId: z.string().min(1, 'ID propriétaire requis'),
+  name: z.string().min(2, 'Le nom doit avoir au moins 2 caractères'),
+  description: z.string().min(10, 'La description doit avoir au moins 10 caractères'),
+  address: z.string().min(5, 'L\'adresse doit avoir au moins 5 caractères'),
+  phone: z.string().min(8, 'Le téléphone doit avoir au moins 8 caractères'),
+  email: z.string().email('Email invalide'),
+  cuisineType: z.union([z.string(), z.array(z.string())]),
+  avgPricePerPerson: z.number().positive().optional(),
+  commissionRate: z.number().min(0).max(100).optional(),
+  location: z.object({
+    lat: z.number(),
+    lng: z.number()
+  }).optional(),
+  openingHours: z.record(z.string(), z.object({
+    open: z.string(),
+    close: z.string(),
+    closed: z.boolean()
+  })).optional(),
+});
+
 /** Tarif de livraison par kilomètre (Règle 6) */
 const DELIVERY_RATE_PER_KM = 1.50;
 
@@ -165,9 +188,9 @@ export const getApprovedRestaurants = async (
     limit(limitCount),
   ];
 
-  // Règle 9 : Filtre par type de cuisine
+  // Règle 9 : Filtre par type de cuisine (supporte tableau)
   if (filters?.cuisineType) {
-    constraints.push(where('cuisineType', '==', filters.cuisineType));
+    constraints.push(where('cuisineType', 'array-contains', filters.cuisineType));
   }
 
   // Règle 10 : Filtre par prix moyen max
@@ -202,7 +225,9 @@ export const getApprovedRestaurants = async (
       (r) =>
         r.name.toLowerCase().includes(search) ||
         r.description.toLowerCase().includes(search) ||
-        r.cuisineType.toLowerCase().includes(search)
+        (Array.isArray(r.cuisineType) 
+          ? r.cuisineType.some(c => c.toLowerCase().includes(search))
+          : (r.cuisineType as string).toLowerCase().includes(search))
     );
   }
 
@@ -220,6 +245,24 @@ export const getRestaurantById = async (restaurantId: string): Promise<Restauran
     return { ...restaurantSnap.data(), id: restaurantSnap.id } as Restaurant;
   }
   return null;
+};
+
+/**
+ * Récupérer le restaurant appartenant à un utilisateur
+ */
+export const getRestaurantByOwner = async (ownerId: string): Promise<Restaurant | null> => {
+  const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
+  const q = query(
+    restaurantsRef,
+    where('ownerId', '==', ownerId),
+    limit(1)
+  );
+  
+  const querySnapshot = await getDocs(q);
+  if (querySnapshot.empty) return null;
+  
+  const docSnap = querySnapshot.docs[0];
+  return { ...docSnap.data(), id: docSnap.id } as Restaurant;
 };
 
 /**
@@ -254,6 +297,50 @@ export const getRestaurantMenu = async (
     ...docSnap.data(),
     id: docSnap.id,
   })) as MenuItem[];
+};
+
+/**
+ * Créer un nouveau restaurant
+ * 
+ * Règle 1 : Restaurant visible uniquement après approbation admin
+ * 
+ * @param restaurantData - Données du restaurant
+ * @returns ID du restaurant créé
+ */
+export const createRestaurant = async (
+  restaurantData: Omit<Restaurant, 'id' | 'status' | 'rating' | 'totalReviews' | 'createdAt' | 'updatedAt'>
+): Promise<string> => {
+  // Validation Zod
+  const validationResult = CreateRestaurantSchema.safeParse(restaurantData);
+  if (!validationResult.success) {
+    throw new Error(`Données de restaurant invalides: ${validationResult.error.message}`);
+  }
+
+  const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
+  const newRestaurantRef = doc(restaurantsRef);
+
+  const restaurant: Omit<Restaurant, 'createdAt' | 'updatedAt'> & {
+    createdAt: ReturnType<typeof serverTimestamp>;
+    updatedAt: ReturnType<typeof serverTimestamp>;
+  } = {
+    ...restaurantData,
+    id: newRestaurantRef.id,
+    status: 'pending_approval', // Règle 1
+    rating: 2.5, // Note par défaut (ou 0)
+    totalReviews: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  await setDoc(newRestaurantRef, restaurant);
+
+  logger.info('Demande de création de restaurant envoyée', {
+    restaurantId: newRestaurantRef.id,
+    ownerId: restaurantData.ownerId,
+    name: restaurantData.name,
+  });
+
+  return newRestaurantRef.id;
 };
 
 // ============================================================================
@@ -569,6 +656,52 @@ const updateRestaurantRating = async (restaurantId: string): Promise<void> => {
   });
 };
 
+/**
+ * Récupérer les restaurants en attente de validation (Administration)
+ * 
+ * ✅ limit() obligatoire (medJira §4.1)
+ */
+export const getPendingRestaurants = async (
+  limitCount: number = 50
+): Promise<Restaurant[]> => {
+  const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
+  const q = query(
+    restaurantsRef,
+    where('status', '==', 'pending_approval'),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount)
+  );
+
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map((docSnap) => ({
+    ...docSnap.data(),
+    id: docSnap.id,
+  })) as Restaurant[];
+};
+
+/**
+ * Mettre à jour le statut d'un restaurant (Approbation/Rejet/Suspension)
+ */
+export const updateRestaurantStatus = async (
+  restaurantId: string,
+  status: Restaurant['status'],
+  additionalData?: Partial<Restaurant>
+): Promise<void> => {
+  const restaurantRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId);
+  const updateData: any = {
+    status,
+    updatedAt: serverTimestamp(),
+    ...additionalData
+  };
+
+  if (status === 'approved') {
+    updateData.approvedAt = serverTimestamp();
+  }
+
+  await updateDoc(restaurantRef, updateData);
+  logger.info('Statut restaurant mis à jour par admin', { restaurantId, status });
+};
+
 export const FoodDeliveryService = {
   calculateDeliveryCost,
   calculateBasePrice,
@@ -578,7 +711,82 @@ export const FoodDeliveryService = {
   createFoodOrder,
   updateFoodOrderStatus,
   getUserFoodOrders,
-  assignDriverToOrder,
+  submitDeliveryReview,
   submitRestaurantReview,
-  submitDeliveryReview
+  createRestaurant,
+  getRestaurantByOwner,
+  getRestaurantById,
+  getPendingRestaurants,
+  updateRestaurantStatus,
+  
+  /**
+   * Récupérer le menu complet (incluant articles indisponibles pour le gérant)
+   */
+  getRestaurantMenuFull: async (restaurantId: string): Promise<MenuItem[]> => {
+    const menuRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS);
+    const q = query(menuRef, orderBy('category'), limit(100));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MenuItem));
+  },
+
+  /**
+   * Ajouter ou modifier un article du menu
+   */
+  upsertMenuItem: async (restaurantId: string, itemData: Partial<MenuItem>): Promise<string> => {
+    const menuRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS);
+    const itemId = itemData.id || doc(menuRef).id;
+    const itemDocRef = doc(menuRef, itemId);
+
+    const data = {
+      ...itemData,
+      id: itemId,
+      restaurantId,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (!itemData.id) {
+      (data as any).createdAt = serverTimestamp();
+    }
+
+    await setDoc(itemDocRef, data, { merge: true });
+    return itemId;
+  },
+
+  /**
+   * Supprimer un article du menu
+   */
+  deleteMenuItem: async (restaurantId: string, itemId: string): Promise<void> => {
+    const itemDocRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS, itemId);
+    await updateDoc(itemDocRef, { isAvailable: false, updatedAt: serverTimestamp() }); // Soft delete ou hard delete ? Les règles disent "Create/Update/Delete"
+    // Pour l'instant on garde le hard delete pour simplifier si autorisé
+    // await deleteDoc(itemDocRef); 
+  },
+
+  /**
+   * Récupérer les commandes d'un restaurant
+   */
+  getRestaurantOrders: async (restaurantId: string, status?: FoodOrderStatus[]): Promise<FoodOrder[]> => {
+    const ordersRef = collection(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS);
+    let q;
+    
+    if (status && status.length > 0) {
+      q = query(
+        ordersRef,
+        where('restaurantId', '==', restaurantId),
+        where('status', 'in', status),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
+    } else {
+      q = query(
+        ordersRef,
+        where('restaurantId', '==', restaurantId),
+        orderBy('createdAt', 'desc'),
+        limit(50)
+      );
+    }
+
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as FoodOrder));
+  },
 };

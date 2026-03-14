@@ -29,6 +29,7 @@ import {
   FileText
 } from 'lucide-react';
 import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
+import AdminHeader from '@/components/admin/AdminHeader';
 
 export interface Driver {
   id: string;
@@ -126,12 +127,24 @@ export default function AdminDriversPage() {
       }
 
       try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists() && userDoc.data().role === 'admin') {
+        const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+        if (adminDoc.exists()) {
           setIsAdmin(true);
         } else {
-          setIsAdmin(false);
-          router.push('/dashboard');
+          // Fallback: chercher dans la collection où userId correspond à l'UID
+          const { getDocs, where, collection } = await import('firebase/firestore');
+          const adminQuery = query(
+            collection(db, 'admins'),
+            where('userId', '==', user.uid)
+          );
+          const adminSnapshot = await getDocs(adminQuery);
+          
+          if (!adminSnapshot.empty) {
+            setIsAdmin(true);
+          } else {
+            setIsAdmin(false);
+            router.push('/dashboard');
+          }
         }
       } catch (err) {
         console.error('Error checking admin status:', err);
@@ -331,30 +344,10 @@ export default function AdminDriversPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 text-slate-900">
-      {/* Premium Gradient Background */}
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_30%_20%,#ffffff_0%,#f8fafc_100%)] -z-10" />
-      
-      {/* Header */}
-      <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white/90 backdrop-blur-xl shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Gestion des Chauffeurs
-            </h1>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">Interface Administration Premium</p>
-            </div>
-          </div>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="group flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-slate-700 rounded-xl transition-all duration-300 shadow-sm"
-          >
-            <ChevronRight className="w-4 h-4 rotate-180 group-hover:-translate-x-1 transition-transform" />
-            <span className="text-sm font-medium">Tableau de bord</span>
-          </button>
-        </div>
-      </header>
+      <AdminHeader 
+        title="Gestion des Chauffeurs" 
+        subtitle="Validation et suivi des chauffeurs" 
+      />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Statistics or Quick Filters Card */}

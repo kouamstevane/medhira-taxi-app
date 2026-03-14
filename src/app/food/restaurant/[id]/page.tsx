@@ -10,6 +10,10 @@ import { CartDrawer } from '@/components/food/CartDrawer';
 import { ArrowLeft, Star, Clock, MapPin, Loader2, Info } from 'lucide-react';
 import { CURRENCY_CODE } from '@/utils/constants';
 
+export function generateStaticParams() {
+  return [];
+}
+
 export default function RestaurantDetailsPage() {
   const params = useParams();
   const router = useRouter();

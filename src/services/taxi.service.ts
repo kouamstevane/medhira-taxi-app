@@ -477,6 +477,17 @@ export const updateDriverLocation = async (
   });
 };
 
+export const updatePassengerLocation = async (
+  bookingId: string,
+  location: Location
+): Promise<void> => {
+  const bookingRef = doc(db, 'bookings', bookingId);
+  await updateDoc(bookingRef, {
+    passengerLocation: location,
+    updatedAt: serverTimestamp(),
+  });
+};
+
 /**
  * Mettre à jour la destination (changement par le client)
  * Recalcule le prix estimé

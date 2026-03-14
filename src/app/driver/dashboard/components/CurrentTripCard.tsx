@@ -1,10 +1,11 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { FiMapPin, FiCheckCircle, FiPlay, FiMessageSquare, FiNavigation2 } from 'react-icons/fi';
 import { ChatModal } from '@/components/ChatModal';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
+import { MapView } from '@/components/ui';
 
 interface PreciseLocation {
   lat: number;
@@ -29,6 +30,7 @@ interface Trip {
   pickupLocation?: PreciseLocation;
   pickupLocationAccuracy?: number; // Précision en mètres
   destinationLocation?: PreciseLocation;
+  passengerLocation?: PreciseLocation;
 }
 
 interface CurrentTripCardProps {
@@ -45,6 +47,54 @@ export function CurrentTripCard({
   onCompleteTrip,
 }: CurrentTripCardProps) {
   const [showChat, setShowChat] = useState(false);
+
+  const passengerPosition = useMemo(() => {
+    if (trip.passengerLocation) {
+      return { lat: trip.passengerLocation.lat, lng: trip.passengerLocation.lng };
+    }
+    if (trip.pickupLocation) {
+      return { lat: trip.pickupLocation.lat, lng: trip.pickupLocation.lng };
+    }
+    return null;
+  }, [trip.passengerLocation, trip.pickupLocation]);
+
+  const destinationPosition = useMemo(() => {
+    if (trip.destinationLocation) {
+      return { lat: trip.destinationLocation.lat, lng: trip.destinationLocation.lng };
+    }
+    return null;
+  }, [trip.destinationLocation]);
+
+  const mapMarkers = useMemo(() => {
+    const markers: Array<{
+      id: string;
+      position: { lat: number; lng: number };
+      title?: string;
+      icon?: string;
+    }> = [];
+
+    if (passengerPosition) {
+      markers.push({
+        id: 'passenger',
+        position: passengerPosition,
+        title: 'Client',
+        icon: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+      });
+    }
+
+    if (destinationPosition) {
+      markers.push({
+        id: 'destination',
+        position: destinationPosition,
+        title: 'Destination',
+        icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+      });
+    }
+
+    return markers;
+  }, [passengerPosition, destinationPosition]);
+
+  const mapCenter = passengerPosition || destinationPosition || undefined;
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -63,6 +113,17 @@ export function CurrentTripCard({
     <div className="lg:col-span-2">
       <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
         <h2 className="text-xl font-bold mb-4">Course en cours</h2>
+        {mapCenter && (
+          <div className="mb-4 h-56 rounded-xl overflow-hidden">
+            <MapView
+              center={mapCenter}
+              zoom={14}
+              markers={mapMarkers}
+              showRecenterButton={false}
+              className="w-full h-full"
+            />
+          </div>
+        )}
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-4">
             <div>

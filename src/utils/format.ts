@@ -44,7 +44,7 @@ export const formatCurrency = (amount: number): string => {
   const locale = CURRENCY_LOCALE_MAP[currency] || 'fr-FR';
   
   // Pour FCFA, utiliser le code de devise au lieu du symbole (pas de symbole standard)
-  const currencyDisplay = CURRENCY_CODE === 'FCFA' || CURRENCY_CODE === 'XAF' ? 'code' : 'symbol';
+  const currencyDisplay = (CURRENCY_CODE as string) === 'FCFA' || (CURRENCY_CODE as string) === 'XAF' ? 'code' : 'symbol';
   
   return amount.toLocaleString(locale, {
     style: 'currency',

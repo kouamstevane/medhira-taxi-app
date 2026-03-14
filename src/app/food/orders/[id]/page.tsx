@@ -20,6 +20,10 @@ const STATUS_STEPS = [
   { id: 'delivered', icon: MapPin, label: 'Livrée' },
 ];
 
+export function generateStaticParams() {
+  return [];
+}
+
 export default function OrderTrackingPage() {
   const params = useParams();
   const router = useRouter();

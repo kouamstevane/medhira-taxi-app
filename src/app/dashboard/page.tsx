@@ -21,8 +21,10 @@ import {
   FiCreditCard, FiBell, FiLogOut, FiPhone, FiUser,
   FiTruck, FiPackage, FiCheckCircle,
   FiSettings, FiShield, FiFileText, FiUsers,
-  FiShoppingBag
+  FiShoppingBag, FiPlus
 } from 'react-icons/fi';
+import { FoodDeliveryService } from '@/services/food-delivery.service';
+import type { Restaurant } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 
 export default function Dashboard() {
@@ -47,7 +49,7 @@ export default function Dashboard() {
     firstName: string;
     lastName: string;
     profileImageUrl: string;
-    userType: 'client' | 'chauffeur';
+    userType: 'client' | 'chauffeur' | 'restaurateur';
   }>({
     phoneNumber: "",
     firstName: "",
@@ -55,6 +57,8 @@ export default function Dashboard() {
     profileImageUrl: "/images/default.webp",
     userType: "client"
   });
+  const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
+  const [isRestaurantLoading, setIsRestaurantLoading] = useState(false);
 
   const fetchHistory = async (userId: string) => {
     try {
@@ -140,6 +144,19 @@ export default function Dashboard() {
           profileImageUrl: userDataFromDB.profileImageUrl || user.photoURL || "/images/default.webp",
           userType: userDataFromDB.userType || "client"
         }));
+
+        // Si restaurateur, charger les infos du restaurant
+        if (userDataFromDB.userType === 'restaurateur') {
+          setIsRestaurantLoading(true);
+          try {
+            const restaurant = await FoodDeliveryService.getRestaurantByOwner(user.uid);
+            setRestaurantData(restaurant);
+          } catch (error) {
+            console.error("Erreur chargement restaurant:", error);
+          } finally {
+            setIsRestaurantLoading(false);
+          }
+        }
 
         // Charger l'historique des commandes
         fetchHistory(user.uid);
@@ -438,17 +455,34 @@ export default function Dashboard() {
               <FiShield className="h-5 w-5 mr-2 text-purple-600" />
               Administration
             </h3>
-            <div
-              onClick={() => router.push("/admin/drivers")}
-              className="group p-5 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl shadow-md hover:shadow-xl border-2 border-purple-200 transition-all duration-300 cursor-pointer transform hover:-translate-y-1"
-            >
-              <div className="flex items-center">
-                <div className="w-14 h-14 bg-purple-600 rounded-full flex items-center justify-center mr-4 group-hover:scale-110 transition">
-                  <FiUsers className="h-7 w-7 text-white" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div
+                onClick={() => router.push("/admin/drivers")}
+                className="group p-5 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl shadow-md hover:shadow-xl border-2 border-purple-200 transition-all duration-300 cursor-pointer transform hover:-translate-y-1"
+              >
+                <div className="flex items-center">
+                  <div className="w-14 h-14 bg-purple-600 rounded-full flex items-center justify-center mr-4 group-hover:scale-110 transition">
+                    <FiUsers className="h-7 w-7 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-[#101010] group-hover:text-purple-600 transition">Chauffeurs</h4>
+                    <p className="text-sm text-gray-600">Valider les inscriptions</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-bold text-[#101010] group-hover:text-purple-600 transition">Gérer les comptes chauffeurs</h4>
-                  <p className="text-sm text-gray-600">Valider ou refuser les demandes d&apos;inscription</p>
+              </div>
+
+              <div
+                onClick={() => router.push("/admin/users")}
+                className="group p-5 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl shadow-md hover:shadow-xl border-2 border-blue-200 transition-all duration-300 cursor-pointer transform hover:-translate-y-1"
+              >
+                <div className="flex items-center">
+                  <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center mr-4 group-hover:scale-110 transition">
+                    <FiUsers className="h-7 w-7 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-[#101010] group-hover:text-blue-600 transition">Utilisateurs</h4>
+                    <p className="text-sm text-gray-600">Gérer les rôles et accès</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -540,6 +574,92 @@ export default function Dashboard() {
                   15 courses ce mois
                 </div>
               </div>
+            </div>
+          </section>
+        )}
+
+        {/* Section Restaurateur - Visible uniquement pour les restaurateurs */}
+        {userData.userType === 'restaurateur' && (
+          <section className="mb-8">
+            <h3 className="text-lg font-bold text-[#101010] mb-5 flex items-center">
+              <FiShoppingBag className="h-5 w-5 mr-2 text-red-500" />
+              Espace Restaurateur
+            </h3>
+            <div className="grid grid-cols-1 gap-5">
+              {!restaurantData ? (
+                <div
+                  onClick={() => router.push("/food/create")}
+                  className="group p-6 bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl shadow-md hover:shadow-xl border-2 border-red-100 transition-all duration-300 cursor-pointer transform hover:-translate-y-1 relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-red-500 opacity-5 rounded-full -translate-y-8 translate-x-8"></div>
+                  <div className="flex items-center">
+                    <div className="w-16 h-16 bg-red-500 rounded-2xl flex items-center justify-center mr-5 shadow-lg group-hover:scale-110 transition duration-300">
+                      <FiShoppingBag className="h-8 w-8 text-white" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-[#101010] mb-1 group-hover:text-red-600 transition">Créer votre restaurant</h4>
+                      <p className="text-gray-600">Enregistrez votre établissement et commencez à vendre vos plats</p>
+                    </div>
+                    <div className="ml-auto">
+                      <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-red-500 group-hover:bg-red-500 group-hover:text-white transition duration-300">
+                        <span className="text-lg">→</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div
+                    onClick={() => router.push(`/food/portal/${restaurantData.id}`)}
+                    className="group p-6 bg-white rounded-2xl shadow-md hover:shadow-xl border-2 border-green-100 transition-all duration-300 cursor-pointer transform hover:-translate-y-1 relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-green-500 opacity-5 rounded-full -translate-y-8 translate-x-8"></div>
+                    <div className="flex items-center">
+                      <div className="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center mr-5 shadow-lg group-hover:scale-110 transition duration-300">
+                        <FiShoppingBag className="h-8 w-8 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-xl font-bold text-[#101010] group-hover:text-green-600 transition">{restaurantData.name}</h4>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            restaurantData.status === 'approved' ? 'bg-green-100 text-green-700' :
+                            restaurantData.status === 'pending_approval' ? 'bg-orange-100 text-orange-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {restaurantData.status === 'approved' ? 'Actif' : 
+                             restaurantData.status === 'pending_approval' ? 'En attente' : 'Inactif'}
+                          </span>
+                        </div>
+                        <p className="text-gray-600">Gérer mes menus, commandes et paramètres</p>
+                      </div>
+                      <div className="ml-auto">
+                        <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-green-500 group-hover:bg-green-500 group-hover:text-white transition duration-300">
+                          <span className="text-lg">→</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {restaurantData.status === 'approved' && (
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                       <button
+                        onClick={() => router.push(`/food/portal/${restaurantData.id}/menu`)}
+                        className="p-4 bg-white border border-gray-200 rounded-xl hover:border-red-500 transition flex flex-col items-center text-center group"
+                      >
+                        <FiPlus className="h-6 w-6 text-red-500 mb-2 group-hover:scale-110 transition" />
+                        <span className="text-sm font-bold">Gérer Menu</span>
+                      </button>
+                      <button
+                        onClick={() => router.push(`/food/portal/${restaurantData.id}/orders`)}
+                        className="p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-500 transition flex flex-col items-center text-center group"
+                      >
+                        <FiPackage className="h-6 w-6 text-blue-500 mb-2 group-hover:scale-110 transition" />
+                        <span className="text-sm font-bold">Commandes</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </section>
         )}

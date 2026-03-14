@@ -22,7 +22,7 @@ import { Haptics, NotificationType } from '@capacitor/haptics';
 export function NotificationHandler() {
     const router = useRouter();
     const { currentUser, userData } = useAuth();
-    const userType: 'client' | 'chauffeur' | undefined = userData?.userType;
+    const userType: 'client' | 'chauffeur' | 'restaurateur' | undefined = userData?.userType;
     
     const {
         isInitialized,

@@ -37,7 +37,7 @@ export interface Restaurant {
   email: string;
   imageUrl?: string;
   coverImageUrl?: string;
-  cuisineType: string; // Ex: "Italienne", "Indienne", "Japonaise" (Règle 9)
+  cuisineType: string[]; // Ex: ["Italienne", "Indienne"] (Règle 9)
   avgPricePerPerson: number; // Estimation du coût moyen (Règle 10)
   commissionRate: number; // Pourcentage reversé à la plateforme
   status: RestaurantStatus;
@@ -54,6 +54,7 @@ export interface Restaurant {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   approvedAt?: Timestamp;
+  rejectionReason?: string;
 }
 
 // ============================================================================
@@ -159,6 +160,9 @@ export interface FoodOrder {
   // Infos chauffeur (dénormalisées)
   driverName?: string;
   driverPhone?: string;
+  // Infos client (dénormalisées)
+  customerName?: string;
+  customerPhone?: string;
 }
 
 // ============================================================================

@@ -563,9 +563,10 @@ service cloud.firestore {
       // Les clients ne verront que les restaurants approuvés (filtré côté client)
       allow read: if isAuthenticated();
       
-      // Création : Utilisateur authentifié peut créer un compte restaurant
+      // Création : Utilisateur authentifié ayant le rôle 'restaurateur' peut créer un compte restaurant
       // Le statut initial DOIT être 'pending_approval' (validation admin requise)
       allow create: if isAuthenticated() &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'restaurateur' &&
                        request.resource.data.ownerId == request.auth.uid &&
                        request.resource.data.status == 'pending_approval' &&
                        request.resource.data.commissionRate is number &&
