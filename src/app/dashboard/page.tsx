@@ -281,7 +281,7 @@ export default function Dashboard() {
                         <button
                           onClick={() => router.push('/admin/drivers')}
                           className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg transition duration-200 shadow-md touch-manipulation"
-                          style={{ minHeight: '44px', minWidth: '44px' }} // ✅ Taille minimum 44x44px (medJira.md #90)
+                          style={{ minHeight: '44px', minWidth: '44px' }} //  Taille minimum 44x44px (medJira.md #90)
                           aria-label="Administration"
                         >
                           <FiShield className="h-5 w-5" />
@@ -293,7 +293,7 @@ export default function Dashboard() {
           <button
             onClick={() => router.push('/wallet')}
             className="flex items-center space-x-2 bg-[#f29200] hover:bg-[#e08800] text-white px-4 py-3 rounded-lg transition duration-200 shadow-md touch-manipulation"
-            style={{ minHeight: '44px', minWidth: '44px' }} // ✅ Taille minimum 44x44px (medJira.md #90)
+            style={{ minHeight: '44px', minWidth: '44px' }} //  Taille minimum 44x44px (medJira.md #90)
             aria-label="Portefeuille"
           >
             <FiCreditCard className="h-5 w-5" />
@@ -304,7 +304,7 @@ export default function Dashboard() {
           <button
             onClick={handleNotifications}
             className="relative p-3 rounded-full hover:bg-[#333] transition duration-200 group touch-manipulation"
-            style={{ minHeight: '44px', minWidth: '44px' }} // ✅ Taille minimum 44x44px (medJira.md #90)
+            style={{ minHeight: '44px', minWidth: '44px' }} //  Taille minimum 44x44px (medJira.md #90)
             aria-label="Notifications"
           >
             <FiBell className="h-6 w-6 text-white group-hover:text-[#f29200] transition" />
@@ -369,7 +369,7 @@ export default function Dashboard() {
                         router.push('/admin/drivers');
                       }}
                       className="block w-full text-left px-4 py-3 text-sm text-purple-600 hover:bg-purple-50 active:bg-purple-100 hover:text-purple-700 transition flex items-center touch-manipulation"
-                      style={{ minHeight: '44px', minWidth: '44px' }} // ✅ Taille minimum 44x44px (medJira.md #90)
+                      style={{ minHeight: '44px', minWidth: '44px' }} //  Taille minimum 44x44px (medJira.md #90)
                     >
                       <FiShield className="h-4 w-4 mr-2" />
                       Administration
@@ -381,7 +381,7 @@ export default function Dashboard() {
                       await logout();
                     }}
                     className="block w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 active:bg-red-100 hover:text-red-700 transition flex items-center touch-manipulation"
-                    style={{ minHeight: '44px', minWidth: '44px' }} // ✅ Taille minimum 44x44px (medJira.md #90)
+                    style={{ minHeight: '44px', minWidth: '44px' }} //  Taille minimum 44x44px (medJira.md #90)
                   >
                     <FiLogOut className="h-4 w-4 mr-2" />
                     Déconnexion

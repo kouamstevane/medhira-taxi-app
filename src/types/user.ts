@@ -9,7 +9,7 @@ import { Timestamp } from 'firebase/firestore';
 
 /**
  * Type d'utilisateur dans l'application
- * ✅ CORRECTION : 'chauffeur' unifié avec les règles Firestore (était 'driver')
+ *  CORRECTION : 'chauffeur' unifié avec les règles Firestore (était 'driver')
  */
 export type UserType = 'client' | 'chauffeur' | 'restaurateur';
 

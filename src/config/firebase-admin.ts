@@ -24,12 +24,12 @@ if (!admin.apps.length) {
         }),
         databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`,
       });
-      console.log('✅ Firebase Admin SDK initialisé');
+      console.log(' Firebase Admin SDK initialisé');
     } catch (error) {
-      console.error('❌ Erreur initialisation Firebase Admin SDK:', error);
+      console.error('Erreur initialisation Firebase Admin SDK:', error);
     }
   } else {
-    console.warn('⚠️  Firebase Admin SDK non initialisé (credentials manquants) - Les routes admin ne seront pas disponibles');
+    console.warn(' Firebase Admin SDK non initialisé (credentials manquants) - Les routes admin ne seront pas disponibles');
   }
 }
 

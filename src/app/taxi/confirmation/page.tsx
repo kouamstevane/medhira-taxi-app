@@ -209,7 +209,7 @@ function ConfirmationContent() {
         {/* Notification d'arrivée */}
         {showArrival && (
           <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded">
-            <p>✅ Votre chauffeur est arrivé !</p>
+            <p> Votre chauffeur est arrivé !</p>
           </div>
         )}
 
@@ -244,7 +244,7 @@ function ConfirmationContent() {
 
           {booking?.status === "arrived" && (
             <div className="text-center py-6">
-              <div className="text-green-500 text-4xl mb-2">✅</div>
+              <div className="text-green-500 text-4xl mb-2"></div>
               <h3 className="text-lg font-semibold">Chauffeur arrivé</h3>
               <p>Votre chauffeur vous attend au point de départ.</p>
             </div>

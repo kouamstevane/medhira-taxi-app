@@ -165,7 +165,7 @@ export const initiateCall = async (
 
 /**
  * Envoyer un message système automatique
- * ⚠️ Utilise une Cloud Function car les security rules Firestore
+ * Utilise une Cloud Function car les security rules Firestore
  * ne permettent pas d'écrire avec senderId='system'
  */
 export const sendSystemMessage = async (

@@ -42,7 +42,7 @@ async function verifyCollections() {
 
     for (const collectionName of expectedCollections) {
       const exists = existingCollectionNames.includes(collectionName);
-      const status = exists ? '✅' : '❌';
+      const status = exists ? '' : '❌';
       
       let docCount = 0;
       let hasInitDoc = false;
@@ -88,23 +88,23 @@ async function verifyCollections() {
     console.log('');
     
     if (missingCollections.length === 0) {
-      console.log('✅ SUCCÈS: Toutes les collections requises existent!\n');
+      console.log(' SUCCÈS: Toutes les collections requises existent!\n');
       console.log('📝 Note importante:');
       console.log('   - Firestore ne supporte pas les collections vides');
       console.log('   - Chaque collection contient un document de marqueur (_init: true)');
       console.log('   - Ces documents peuvent être supprimés une fois que la collection est utilisée');
       console.log('   - Les structures des collections correspondent à celles définies dans le code');
     } else {
-      console.log(`⚠️  ATTENTION: ${missingCollections.length} collection(s) manquante(s):`);
+      console.log(` ATTENTION: ${missingCollections.length} collection(s) manquante(s):`);
       missingCollections.forEach(col => {
         console.log(`   - ${col}`);
       });
     }
     
-    console.log('\n✅ Vérification terminée!');
+    console.log('\n Vérification terminée!');
 
   } catch (error) {
-    console.error('❌ Erreur lors de la vérification:', error);
+    console.error('Erreur lors de la vérification:', error);
   }
 }
 

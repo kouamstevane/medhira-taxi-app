@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error: any) {
-    console.error('❌ Erreur API manage-user:', error);
+    console.error('Erreur API manage-user:', error);
     return NextResponse.json(
       { error: 'Erreur serveur', details: error.message },
       { status: 500 }

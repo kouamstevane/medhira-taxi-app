@@ -172,10 +172,10 @@ async function createCollections() {
       // Note: Firebase CLI ne supporte pas directement la création de documents
       // Nous allons utiliser une autre approche
       
-      console.log(`✅ Collection "${collection.name}" prête à être créée`);
+      console.log(` Collection "${collection.name}" prête à être créée`);
       console.log(`   (La collection sera créée automatiquement lors de l'ajout du premier document)\n`);
     } catch (error) {
-      console.error(`❌ Erreur lors de la création de "${collection.name}":`, error.message);
+      console.error(`Erreur lors de la création de "${collection.name}":`, error.message);
       console.log();
     }
   }
@@ -190,15 +190,15 @@ async function createCollections() {
   collections.forEach(col => {
     console.log(`   - ${col.name}`);
   });
-  console.log('\n✅ Opération terminée');
+  console.log('\n Opération terminée');
 }
 
 createCollections()
   .then(() => {
-    console.log('\n✅ Script terminé avec succès');
+    console.log('\n Script terminé avec succès');
     process.exit(0);
   })
   .catch((error) => {
-    console.error('\n❌ Erreur:', error);
+    console.error('\nErreur:', error);
     process.exit(1);
   });

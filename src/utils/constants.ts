@@ -11,7 +11,7 @@ import { Country } from '@/types';
 /**
  * Configuration de la devise
  *
- * ⚠️ VARIABLE GLOBALE POUR LA DEVISE
+ * VARIABLE GLOBALE POUR LA DEVISE
  * Modifiez cette constante pour changer la devise dans toute l'application
  * Exemples: 'FCFA', 'CAD', 'EUR', 'USD', 'XAF', etc.
  * 
@@ -78,7 +78,7 @@ if (countriesWithoutPhoneLength.length > 0) {
 /**
  * Configuration de tarification par défaut (en FCFA)
  *
- * ⚠️ TARIFICATION POUR LE MARCHÉ CAMEROUNAIS
+ * TARIFICATION POUR LE MARCHÉ CAMEROUNAIS
  * La devise principale est définie par CURRENCY_CODE (actuellement 'FCFA')
  *
  * Tarifs actuels FCFA (Cameroun):

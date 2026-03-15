@@ -35,9 +35,9 @@ async function restoreFiles() {
                     fs.unlinkSync(original);
                 }
                 fs.renameSync(temp, original);
-                console.log(`✅ Restauré : ${path.relative(apiDir, original)}`);
+                console.log(` Restauré : ${path.relative(apiDir, original)}`);
             } catch (err) {
-                console.error(`❌ Erreur lors de la restauration de ${original}: ` + err.message);
+                console.error(`Erreur lors de la restauration de ${original}: ` + err.message);
             }
         }
     }
@@ -56,7 +56,7 @@ async function runBuild() {
                     modifiedFiles.push({ original: file, temp: tempFile });
                     console.log(`� Masqué : ${path.relative(apiDir, file)}`);
                 } catch (err) {
-                    console.error(`❌ Impossible de masquer ${file}: ` + err.message);
+                    console.error(`Impossible de masquer ${file}: ` + err.message);
                     throw err;
                 }
             }
@@ -69,7 +69,7 @@ async function runBuild() {
                 fs.renameSync(middlewareFile, tempMiddleware);
                 modifiedFiles.push({ original: middlewareFile, temp: tempMiddleware });
             } catch (err) {
-                console.error(`❌ Impossible de masquer le middleware: ` + err.message);
+                console.error(`Impossible de masquer le middleware: ` + err.message);
                 throw err;
             }
         }
@@ -84,9 +84,9 @@ async function runBuild() {
         console.log('📱 Synchronisation Capacitor...');
         execSync('npx cap sync', { stdio: 'inherit' });
 
-        console.log('✅ Build mobile terminé avec succès !');
+        console.log(' Build mobile terminé avec succès !');
     } catch (error) {
-        console.error('❌ Erreur pendant le build:', error.message);
+        console.error('Erreur pendant le build:', error.message);
     } finally {
         await restoreFiles();
     }

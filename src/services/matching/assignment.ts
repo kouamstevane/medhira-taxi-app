@@ -81,16 +81,11 @@ export const assignDriver = async (
       const candidateSnap = await transaction.get(candidateRef);
 
       if (!candidateSnap.exists()) {
-        // Si la candidature n'existe pas, la créer directement avec le statut 'accepted'
-        // (pour compatibilité avec l'ancien système où les candidatures n'existent pas)
-        logger.info('Candidature non trouvée, création automatique avec statut accepted', { rideId, driverId });
-        transaction.set(candidateRef, {
-          rideId,
-          driverId,
-          status: 'accepted',
-          createdAt: serverTimestamp(),
-          acceptedAt: serverTimestamp(),
-        });
+        // La candidature doit exister (créée par le broadcast) pour que le chauffeur puisse accepter.
+        // Sans candidature, l'attribution n'est pas possible car le chauffeur n'a pas consenti.
+        throw new Error(
+          'Candidature non trouvée. Le chauffeur doit recevoir une offre de course via le broadcast avant de pouvoir accepter.'
+        );
       } else {
         // Si la candidature existe, vérifier qu'elle est en attente
         const candidateData = candidateSnap.data();

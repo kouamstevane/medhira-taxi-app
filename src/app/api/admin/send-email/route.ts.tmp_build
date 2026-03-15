@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       reason,
     });
     
-    console.log('✅ Email envoyé via API:', {
+    console.log(' Email envoyé via API:', {
       messageId: info.messageId,
       to,
       type,
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       messageId: info.messageId,
     });
   } catch (error: any) {
-    console.error('❌ Erreur API send-email:', error);
+    console.error('Erreur API send-email:', error);
     
     // Messages d'erreur plus détaillés pour le debugging
     let errorMessage = 'Erreur lors de l\'envoi de l\'email';

@@ -4,7 +4,7 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Network } from '@capacitor/network';
 import { App } from '@capacitor/app';
 
-// ✅ Interfaces strictement typées (medJiraV2.md #2)
+//  Interfaces strictement typées (medJiraV2.md #2)
 interface MapClickEvent {
     latitude: number;
     longitude: number;
@@ -51,19 +51,19 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
     const lastClickRef = useRef<number>(0);
     const isMountedRef = useRef<boolean>(true);
     
-    // ✅ Refs pour stabiliser les callbacks sans déclencher recréation map
+    //  Refs pour stabiliser les callbacks sans déclencher recréation map
     const callbacksRef = useRef({
         onMapClick,
         onMarkerClick,
         onError
     });
 
-    // ✅ Mise à jour des refs à chaque render (toujours frais)
+    //  Mise à jour des refs à chaque render (toujours frais)
     useEffect(() => {
         callbacksRef.current = { onMapClick, onMarkerClick, onError };
     });
 
-    // ✅ Gestion réseau native Capacitor (medJiraV2.md #6.1, #11.2)
+    //  Gestion réseau native Capacitor (medJiraV2.md #6.1, #11.2)
     useEffect(() => {
         let networkCleanup: (() => void) | null = null;
         let appCleanup: (() => void) | null = null;
@@ -84,7 +84,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
                 });
                 networkCleanup = networkListener.remove;
 
-                // ✅ Gestion cycle de vie app (medJiraV2.md #5.2 - batterie)
+                //  Gestion cycle de vie app (medJiraV2.md #5.2 - batterie)
                 const appListener = await App.addListener('appStateChange', ({ isActive }) => {
                     setIsAppActive(isActive);
                     if (!isActive) {
@@ -120,7 +120,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
         };
     }, []);
 
-    // ✅ Throttling 500ms avec haptic (medJiraV2.md #5.1, #9.1)
+    //  Throttling 500ms avec haptic (medJiraV2.md #5.1, #9.1)
     const throttledAction = useCallback(async (action: () => void, hapticStyle: ImpactStyle) => {
         const now = Date.now();
         if (now - lastClickRef.current < 500) return;
@@ -134,7 +134,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
         action();
     }, []);
 
-    // ✅ Création map - DÉPENDANCES MINIMALES (medJiraV2.md #7.2)
+    //  Création map - DÉPENDANCES MINIMALES (medJiraV2.md #7.2)
     useEffect(() => {
         if (!mapRef.current || !isOnline || mapInstanceRef.current) return;
 
@@ -173,10 +173,10 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
 
                 mapInstanceRef.current = newMap;
 
-                // ✅ Localisation native (medJiraV2.md #5.2)
+                //  Localisation native (medJiraV2.md #5.2)
                 await newMap.enableCurrentLocation(true);
 
-                // ✅ Listeners avec accès aux refs fraîches (pas de recréation)
+                //  Listeners avec accès aux refs fraîches (pas de recréation)
                 await newMap.setOnMapClickListener((event) => {
                     if (!callbacksRef.current.onMapClick) return;
                     throttledAction(() => {
@@ -210,7 +210,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
 
         createMap();
 
-        // ✅ Cleanup destruction complète (medJiraV2.md #4.1)
+        //  Cleanup destruction complète (medJiraV2.md #4.1)
         return () => {
             if (mapInstanceRef.current) {
                 // Pas besoin de removeListeners, destroy() suffit
@@ -218,10 +218,10 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
                 mapInstanceRef.current = null;
             }
         };
-        // ✅ SEULEMENT apiKey et isOnline - jamais les callbacks
+        //  SEULEMENT apiKey et isOnline - jamais les callbacks
     }, [apiKey, isOnline]);
 
-    // ✅ Update camera avec debouncing et gestion background (medJiraV2.md #5.1)
+    //  Update camera avec debouncing et gestion background (medJiraV2.md #5.1)
     useEffect(() => {
         if (!mapInstanceRef.current || !isAppActive) return;
 
@@ -246,7 +246,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
         };
     }, [center.lat, center.lng, zoom, isAppActive]);
 
-    // ✅ Update markers avec debouncing (medJiraV2.md #5.1, #7.2)
+    //  Update markers avec debouncing (medJiraV2.md #5.1, #7.2)
     useEffect(() => {
         if (!mapInstanceRef.current || !isAppActive) return;
 
@@ -266,7 +266,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
 
                 if (markers.length === 0) return;
 
-                // ✅ Clustering >50 markers (medJiraV2.md #5.1)
+                //  Clustering >50 markers (medJiraV2.md #5.1)
                 const shouldCluster = enableClustering && markers.length > 50;
                 const markersToProcess = shouldCluster
                     ? markers.slice(0, 50)
@@ -277,7 +277,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
                     title: m.title?.slice(0, 50),
                     snippet: m.title?.slice(0, 100),
                     markerId: m.id,
-                    iconSize: { width: 44, height: 44 }, // ✅ Touch target 44px (medJiraV2.md #9.1)
+                    iconSize: { width: 44, height: 44 }, //  Touch target 44px (medJiraV2.md #9.1)
                     iconAnchor: { x: 22, y: 44 },
                 }));
 
@@ -305,7 +305,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
         };
     }, [markers, enableClustering, isAppActive]);
 
-    // ✅ Cleanup global (medJiraV2.md #2, #4.1)
+    //  Cleanup global (medJiraV2.md #2, #4.1)
     useEffect(() => {
         return () => {
             isMountedRef.current = false;
@@ -323,7 +323,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
         };
     }, []);
 
-    // ✅ Skeleton screen (medJiraV2.md #9.1)
+    //  Skeleton screen (medJiraV2.md #9.1)
     if (isLoading) {
         return (
             <div 
@@ -341,7 +341,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
         );
     }
 
-    // ✅ État offline (medJiraV2.md #11.2)
+    //  État offline (medJiraV2.md #11.2)
     if (!isOnline) {
         return (
             <div 
@@ -379,7 +379,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
         );
     }
 
-    // ✅ Container avec safe areas (medJiraV2.md #6.2)
+    //  Container avec safe areas (medJiraV2.md #6.2)
     return (
         <div 
             className={`relative w-full h-full overflow-hidden ${className}`}
@@ -399,7 +399,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
                 aria-label="Carte interactive"
             />
             
-            {/* ✅ Indicateur background si nécessaire */}
+            {/*  Indicateur background si nécessaire */}
             {!isAppActive && (
                 <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
                     App en pause

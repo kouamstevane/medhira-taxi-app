@@ -25,7 +25,7 @@ import { SocialLogin } from '@capgo/capacitor-social-login';
 
 /**
  * Connexion par email et mot de passe
- * ✅ Vérifie la validation de l'email avant de laisser entrer
+ *  Vérifie la validation de l'email avant de laisser entrer
  */
 export const signInWithEmail = async (email: string, password: string): Promise<User> => {
   const result = await signInWithEmailAndPassword(auth, email, password);
@@ -41,7 +41,7 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 
 /**
  * Inscription par email et mot de passe
- * ✅ Crée le document Firestore et envoie l'email de vérification
+ *  Crée le document Firestore et envoie l'email de vérification
  */
 export const signUpWithEmail = async (
   email: string,
@@ -150,8 +150,8 @@ export const resendVerificationEmail = async (
 /**
  * Connexion avec Google
  * Gère les cas natif (Capacitor) et web (popup)
- * ✅ AJOUT PARAMÈTRE : intendedUserType pour spécifier le type d'utilisateur
- * ✅ AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
+ *  AJOUT PARAMÈTRE : intendedUserType pour spécifier le type d'utilisateur
+ *  AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
  */
 export const signInWithGoogle = async (
   intendedUserType: UserType = 'client'
@@ -232,7 +232,7 @@ export const signInWithGoogle = async (
   }
 
   // Vérifier si l'utilisateur existe dans l'une des collections
-  // ✅ CORRECTION : Vérifier la collection correspondante au type attendu
+  //  CORRECTION : Vérifier la collection correspondante au type attendu
   const collectionName = intendedUserType === 'chauffeur' ? 'drivers' : 'users';
   console.log(`[AuthService] Vérification document dans la collection: ${collectionName}`, {
     uid: user.uid,
@@ -248,7 +248,7 @@ export const signInWithGoogle = async (
 
   if (!userDoc.exists()) {
     // Créer le document utilisateur s'il n'existe pas
-    // ✅ CORRECTION : Utiliser le paramètre intendedUserType au lieu de hardcoder 'client'
+    //  CORRECTION : Utiliser le paramètre intendedUserType au lieu de hardcoder 'client'
     console.log('[AuthService] Création document utilisateur', {
       uid: user.uid,
       email: user.email,
@@ -308,7 +308,7 @@ export const signOut = async (): Promise<void> => {
  * Contrairement à signInWithGoogle() standard, elle crée uniquement le document
  * dans la collection 'users' avec userType='chauffeur'.
  *
- * ⚠️ IMPORTANT : Le document chauffeur dans la collection 'drivers' N'EST PAS créé
+ * IMPORTANT : Le document chauffeur dans la collection 'drivers' N'EST PAS créé
  * par cette fonction. Il sera créé uniquement lors de la soumission finale du
  * formulaire d'inscription (étape 5 - "Soumettre ma candidature").
  *
@@ -372,9 +372,9 @@ export const signInWithGoogleForDriver = async (): Promise<User> => {
 
 /**
  * Créer ou mettre à jour le document utilisateur dans Firestore
- * ✅ CORRECTION BUG #5 : Utilise serverTimestamp() au lieu de new Date()
- * ✅ CORRECTION BUG #3 : Inclut toujours le champ uid
- * ✅ AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
+ *  CORRECTION BUG #5 : Utilise serverTimestamp() au lieu de new Date()
+ *  CORRECTION BUG #3 : Inclut toujours le champ uid
+ *  AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
  */
 export const createUserDocument = async (
   userId: string,
@@ -386,7 +386,7 @@ export const createUserDocument = async (
     hasEmail: !!data.email
   });
   
-  // ✅ NETTOYAGE : Supprimer les champs undefined pour éviter les erreurs Firestore
+  //  NETTOYAGE : Supprimer les champs undefined pour éviter les erreurs Firestore
   const cleanData = Object.entries(data).reduce((acc, [key, value]) => {
     if (value !== undefined) {
       acc[key as keyof UserData] = value as any;
@@ -394,7 +394,7 @@ export const createUserDocument = async (
     return acc;
   }, {} as Partial<UserData>);
 
-  // ✅ DÉTERMINER LA COLLECTION : 'drivers' pour les chauffeurs, 'users' pour les clients
+  //  DÉTERMINER LA COLLECTION : 'drivers' pour les chauffeurs, 'users' pour les clients
   const collectionName = data.userType === 'chauffeur' ? 'drivers' : 'users';
   const userRef = doc(db, collectionName, userId);
   
@@ -428,12 +428,12 @@ export const createUserDocument = async (
       });
 
       await setDoc(userRef, {
-        uid: userId,          // ✅ uid toujours présent
+        uid: userId,          //  uid toujours présent
         ...cleanData,
-        // ✅ CORRECTIF : Firestore Security Rules exigent phoneNumber == null pour les chauffeurs
+        //  CORRECTIF : Firestore Security Rules exigent phoneNumber == null pour les chauffeurs
         // L'absence du champ est interprétée différemment de null par les règles
         ...(collectionName === 'drivers' && !cleanData.phoneNumber ? { phoneNumber: null } : {}),
-        createdAt: serverTimestamp(),  // ✅ serverTimestamp() au lieu de new Date()
+        createdAt: serverTimestamp(),  //  serverTimestamp() au lieu de new Date()
         updatedAt: serverTimestamp(),
       });
 
@@ -456,7 +456,7 @@ export const createUserDocument = async (
  * Récupérer les données utilisateur depuis Firestore
  */
 export const getUserData = async (userId: string): Promise<UserData | null> => {
-  // ✅ RECHERCHE MULTI-COLLECTION : Un utilisateur peut être dans 'users' (client) ou 'drivers' (chauffeur)
+  //  RECHERCHE MULTI-COLLECTION : Un utilisateur peut être dans 'users' (client) ou 'drivers' (chauffeur)
   const collections = ['users', 'drivers'];
   
   for (const coll of collections) {

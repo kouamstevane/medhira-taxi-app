@@ -11,7 +11,7 @@ import { CURRENCY_CODE, CURRENCY_MAP, CURRENCY_LOCALE_MAP } from './constants';
 /**
  * Formate un montant avec le code de devise global
  *
- * ⚠️ FONCTION PRINCIPALE pour les affichages financiers et transactions
+ * FONCTION PRINCIPALE pour les affichages financiers et transactions
  * Utilise le code de devise (ex: "FCFA") plutôt qu'un symbole pour plus de clarté
  *
  * @param amount - Montant à formater (doit être >= 0, sinon sera clampé à 0)
@@ -32,7 +32,7 @@ export const formatCurrencyWithCode = (amount: number): string => {
 /**
  * Formate un montant en devise locale avec symbole
  *
- * ⚠️ FONCTION SECONDAIRE pour les interfaces utilisateur compactes
+ * FONCTION SECONDAIRE pour les interfaces utilisateur compactes
  * Utilise le symbole de devise (ex: "$", "€") plutôt que le code
  * @param amount - Montant à formater
  * @returns Montant formaté avec symbole ou code de devise

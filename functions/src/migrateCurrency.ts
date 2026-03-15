@@ -102,7 +102,7 @@ async function backupCollection(collectionName: string): Promise<void> {
     contentType: 'application/json'
   });
   
-  logger.info(`✅ Backup terminé: ${backupFileName} (${totalDocs} documents)`);
+  logger.info(` Backup terminé: ${backupFileName} (${totalDocs} documents)`);
 }
 
 /**
@@ -169,7 +169,7 @@ async function migrateWallets(stats: MigrationStats, conversionRate: number = CO
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Migration wallets terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Migration wallets terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
 }
 
 /**
@@ -251,7 +251,7 @@ async function migrateTransactions(stats: MigrationStats, conversionRate: number
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Migration transactions terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Migration transactions terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
 }
 
 /**
@@ -333,7 +333,7 @@ async function migrateBookings(stats: MigrationStats, conversionRate: number = C
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Migration bookings terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Migration bookings terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
 }
 
 /**
@@ -410,7 +410,7 @@ async function migrateCarTypes(stats: MigrationStats, conversionRate: number = C
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Migration carTypes terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Migration carTypes terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
 }
 
 /**
@@ -486,7 +486,7 @@ async function migrateDrivers(stats: MigrationStats, conversionRate: number = CO
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Migration drivers terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Migration drivers terminée: ${totalProcessed}/${stats.totalDocuments} documents`);
 }
 
 /**
@@ -618,7 +618,7 @@ export const migrateCurrencyToCAD = onCall(
       const totalFailed = allStats.reduce((sum, stat) => sum + stat.failedDocuments, 0);
       const duration = Date.now() - startTime;
       
-      logger.info('✅ Migration terminée avec succès!');
+      logger.info(' Migration terminée avec succès!');
       logger.info(`📊 Statistiques globales:`);
       logger.info(`   - Documents totaux: ${totalDocuments}`);
       logger.info(`   - Documents migrés: ${totalMigrated}`);
@@ -644,7 +644,7 @@ export const migrateCurrencyToCAD = onCall(
         }
       };
     } catch (error) {
-      logger.error('❌ Erreur lors de la migration:', error);
+      logger.error('Erreur lors de la migration:', error);
       throw new HttpsError(
         'internal',
         `Erreur lors de la migration: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -757,7 +757,7 @@ export const migrateCurrencyToCADHTTP = onRequest(
       const totalFailed = allStats.reduce((sum, stat) => sum + stat.failedDocuments, 0);
       const duration = Date.now() - startTime;
       
-      logger.info('✅ Migration terminée avec succès!');
+      logger.info(' Migration terminée avec succès!');
       
       res.status(200).json({
         success: true,
@@ -777,7 +777,7 @@ export const migrateCurrencyToCADHTTP = onRequest(
         }
       });
     } catch (error) {
-      logger.error('❌ Erreur lors de la migration:', error);
+      logger.error('Erreur lors de la migration:', error);
       res.status(500).json({
         error: 'Erreur lors de la migration',
         message: error instanceof Error ? error.message : 'Unknown error'
@@ -829,7 +829,7 @@ export const rollbackCurrencyMigration = onCall(
       );
     }
     
-    logger.info('⚠️ Démarrage du rollback CAD → FCFA...');
+    logger.info('Démarrage du rollback CAD → FCFA...');
     
     const allStats: MigrationStats[] = [];
     const startTime = Date.now();
@@ -862,7 +862,7 @@ export const rollbackCurrencyMigration = onCall(
       const totalFailed = allStats.reduce((sum, stat) => sum + stat.failedDocuments, 0);
       const duration = Date.now() - startTime;
       
-      logger.info('✅ Rollback terminé avec succès!');
+      logger.info(' Rollback terminé avec succès!');
       logger.info(`📊 Statistiques globales:`);
       logger.info(`   - Documents totaux: ${totalDocuments}`);
       logger.info(`   - Documents restaurés: ${totalRolledBack}`);
@@ -887,7 +887,7 @@ export const rollbackCurrencyMigration = onCall(
         }
       };
     } catch (error) {
-      logger.error('❌ Erreur lors du rollback:', error);
+      logger.error('Erreur lors du rollback:', error);
       throw new HttpsError(
         'internal',
         `Erreur lors du rollback: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -956,7 +956,7 @@ async function rollbackWallets(stats: MigrationStats): Promise<void> {
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Rollback wallets terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Rollback wallets terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
 }
 
 /**
@@ -1038,7 +1038,7 @@ async function rollbackTransactions(stats: MigrationStats): Promise<void> {
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Rollback transactions terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Rollback transactions terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
 }
 
 /**
@@ -1120,7 +1120,7 @@ async function rollbackBookings(stats: MigrationStats): Promise<void> {
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Rollback bookings terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Rollback bookings terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
 }
 
 /**
@@ -1197,7 +1197,7 @@ async function rollbackCarTypes(stats: MigrationStats): Promise<void> {
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Rollback carTypes terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Rollback carTypes terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
 }
 
 /**
@@ -1273,5 +1273,5 @@ async function rollbackDrivers(stats: MigrationStats): Promise<void> {
   stats.totalDocuments = totalProcessed + totalFailed;
   stats.migratedDocuments = totalProcessed;
   stats.failedDocuments = totalFailed;
-  logger.info(`✅ Rollback drivers terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
+  logger.info(` Rollback drivers terminé: ${totalProcessed}/${stats.totalDocuments} documents`);
 }

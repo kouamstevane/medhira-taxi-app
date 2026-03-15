@@ -8,8 +8,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { z } from 'zod'; // ✅ Ajout validation Zod (medJira.md #85)
-import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'; // ✅ Ajout haptic (medJira.md #93)
+import { z } from 'zod'; //  Ajout validation Zod (medJira.md #85)
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'; //  Ajout haptic (medJira.md #93)
 import { Capacitor } from '@capacitor/core';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -25,7 +25,7 @@ import { logger } from '@/utils/logger';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 
-// ✅ Schéma Zod de validation pour la création de course (medJira.md #85)
+//  Schéma Zod de validation pour la création de course (medJira.md #85)
 const BookingSchema = z.object({
   userId: z.string().min(1, 'UID utilisateur requis'),
   userEmail: z.string().email('Email invalide'),
@@ -53,7 +53,7 @@ interface NewRideFormProps {
 }
 
 export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormProps) => {
-  // ✅ Fonction pour déclencher le haptic feedback (medJira.md #93)
+  //  Fonction pour déclencher le haptic feedback (medJira.md #93)
   const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Light) => {
     if (Capacitor.isNativePlatform()) {
       try {
@@ -200,7 +200,7 @@ useEffect(() => {
     setPickupLocation(location);
 
     // Afficher temporairement les coordonnées avec la précision
-    const accuracyText = preciseLocation.accuracy <= 20 ? '📍 Précis' : preciseLocation.accuracy <= 50 ? '📍 OK' : '⚠️ Imprécis';
+    const accuracyText = preciseLocation.accuracy <= 20 ? '📍 Précis' : preciseLocation.accuracy <= 50 ? '📍 OK' : 'Imprécis';
     const coordsAddress = `${accuracyText} Ma position (±${Math.round(preciseLocation.accuracy)}m)`;
     setPickupAddress(coordsAddress);
     
@@ -308,7 +308,7 @@ useEffect(() => {
   }, [pickupAddress, destinationAddress, selectedCarType, mapsLoaded, calculateEstimate, isCompleteAddress]);
 
   const handlePickupSelect = async (suggestion: PlaceSuggestion) => {
-    await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
+    await triggerHaptic(ImpactStyle.Light); //  Haptic feedback (medJira.md #93)
     setPickupAddress(suggestion.description);
     setError(null); // Réinitialiser l'erreur
     // Obtenir les coordonnées depuis place_id pour une meilleure précision
@@ -326,7 +326,7 @@ useEffect(() => {
   };
 
   const handleDestinationSelect = async (suggestion: PlaceSuggestion) => {
-    await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
+    await triggerHaptic(ImpactStyle.Light); //  Haptic feedback (medJira.md #93)
     setDestinationAddress(suggestion.description);
     setError(null); // Réinitialiser l'erreur
     // Obtenir les coordonnées depuis place_id pour une meilleure précision
@@ -360,22 +360,8 @@ useEffect(() => {
   };
 
   const handleConfirmBooking = async () => {
-    console.log('🔍 [NewRideForm] handleConfirmBooking appelé');
-    console.log('🔍 [NewRideForm] État actuel:', {
-      currentUser: !!currentUser,
-      pickupAddress: !!pickupAddress,
-      destinationAddress: !!destinationAddress,
-      selectedCarType: !!selectedCarType,
-      estimate: !!estimate
-    });
-
     if (!currentUser || !pickupAddress || !destinationAddress || !selectedCarType || !estimate) {
-      console.error('❌ [NewRideForm] Données manquantes pour la confirmation');
-      if (!currentUser) console.error('❌ User manquant');
-      if (!pickupAddress) console.error('❌ Pickup manquant');
-      if (!destinationAddress) console.error('❌ Destination manquante');
-      if (!selectedCarType) console.error('❌ Type véhicule manquant');
-      if (!estimate) console.error('❌ Estimation manquante');
+      logger.warn('Données manquantes pour la confirmation de course');
       return;
     }
 
@@ -383,7 +369,7 @@ useEffect(() => {
     setError(null);
 
     try {
-      // ✅ Validation structurée avec Zod (medJira.md #85)
+      //  Validation structurée avec Zod (medJira.md #85)
       const bookingData = {
         userId: currentUser.uid,
         userEmail: currentUser.email,
@@ -400,11 +386,10 @@ useEffect(() => {
       };
 
       try {
-        const validatedData = BookingSchema.parse(bookingData);
-        console.log('✅ [NewRideForm] Données validées avec succès');
+        BookingSchema.parse(bookingData);
       } catch (error) {
         if (error instanceof z.ZodError) {
-          console.error('❌ [NewRideForm] Erreur de validation:', error.issues);
+          console.error('[NewRideForm] Erreur de validation:', error.issues);
           setError(error.issues[0].message);
           setLoading(false);
           return;
@@ -437,9 +422,9 @@ useEffect(() => {
         }),
       });
       
-      console.log(`📍 [Booking] Course créée avec précision GPS: ${pickupAccuracy ? pickupAccuracy.toFixed(0) + 'm' : 'N/A'}`);
+      logger.info('Course créée avec précision GPS', { accuracy: pickupAccuracy ? `${pickupAccuracy.toFixed(0)}m` : 'N/A' });
 
-      // ✅ Haptic feedback succès (medJira.md #93)
+      //  Haptic feedback succès (medJira.md #93)
       if (Capacitor.isNativePlatform()) {
         try {
           await Haptics.notification({ type: NotificationType.Success });
@@ -459,12 +444,12 @@ useEffect(() => {
         onSearchDriver();
       }
     } catch (err: unknown) {
-      // ✅ Typage correct de l'erreur (medJira.md #116)
+      //  Typage correct de l'erreur (medJira.md #116)
       logger.error('Erreur création course', { error: err });
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la création de la course';
       setError(errorMessage);
       
-      // ✅ Haptic feedback erreur (medJira.md #93)
+      //  Haptic feedback erreur (medJira.md #93)
       if (Capacitor.isNativePlatform()) {
         try {
           await Haptics.notification({ type: NotificationType.Error });
@@ -477,10 +462,6 @@ useEffect(() => {
     }
   };
 
-  // DEBUG : Afficher les valeurs pour comprendre pourquoi le message ne s'affiche pas
-  console.log('🔍 [NewRideForm] geoError:', geoError);
-  console.log('🔍 [NewRideForm] pickupAddress:', pickupAddress);
-  console.log('🔍 [NewRideForm] Condition (geoError || !pickupAddress):', (geoError || !pickupAddress));
 
   return (
     <div className="w-full max-w-2xl mx-auto px-2 sm:px-0">
@@ -571,7 +552,7 @@ useEffect(() => {
                   carType={carType}
                   selected={selectedCarType?.id === carType.id}
                   onSelect={async (carType) => {
-                    await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
+                    await triggerHaptic(ImpactStyle.Light); //  Haptic feedback (medJira.md #93)
                     setSelectedCarType(carType);
                   }}
                   disabled={false}
@@ -721,29 +702,6 @@ useEffect(() => {
                   onClick={handleConfirmBooking}
                   disabled={loading}
                   className="flex-1 bg-[#f29200] active:bg-[#d67a00] hover:bg-[#e68600] text-white font-bold py-3 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl touch-manipulation"
-                  style={{ minHeight: '48px' }}
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Création...
-                    </span>
-                  ) : (
-                    'Confirmer'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
                   style={{ minHeight: '48px' }}
                 >
                   {loading ? (

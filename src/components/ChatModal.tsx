@@ -68,7 +68,7 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
       setNewMessage('');
     } catch (error) {
       console.error('Erreur envoi message:', error);
-      setToast({ message: '❌ Erreur lors de l\'envoi du message', type: 'error' });
+      setToast({ message: 'Erreur lors de l\'envoi du message', type: 'error' });
       setTimeout(() => setToast(null), 3000);
     } finally {
       setSending(false);
@@ -97,7 +97,7 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
       setTimeout(() => setToast(null), 4000);
     } catch (error) {
       console.error('Erreur lors du lancement de l\'appel:', error);
-      setToast({ message: '❌ Impossible de lancer l\'appel', type: 'error' });
+      setToast({ message: 'Impossible de lancer l\'appel', type: 'error' });
       setTimeout(() => setToast(null), 4000);
     } finally {
       setInitiatingCall(false);

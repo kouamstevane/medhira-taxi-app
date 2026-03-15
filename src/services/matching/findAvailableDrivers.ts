@@ -128,7 +128,7 @@ export const findAvailableDrivers = async (
     const driversRef = collection(db, 'drivers');
 
     // Essayer d'abord avec isAvailable == true
-    // ✅ Ajout limit(50) déjà présent - OK (medJira.md #57)
+    //  Ajout limit(50) déjà présent - OK (medJira.md #57)
     let driversQuery = query(
       driversRef,
       where('status', '==', 'approved'),
@@ -140,7 +140,7 @@ export const findAvailableDrivers = async (
 
     if (driversSnapshot.empty) {
       logger.warn('Aucun chauffeur avec isAvailable=true, recherche sans ce filtre');
-      // ✅ Ajout limit(50) déjà présent - OK (medJira.md #57)
+      //  Ajout limit(50) déjà présent - OK (medJira.md #57)
       driversQuery = query(
         driversRef,
         where('status', '==', 'approved'),

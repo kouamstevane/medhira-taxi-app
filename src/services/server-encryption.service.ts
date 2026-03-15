@@ -1,7 +1,7 @@
 /**
  * Service client pour le chiffrement côté serveur
  *
- * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
+ *  CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * Ce service appelle la Cloud Function Firebase pour chiffrer les données sensibles.
  * Le chiffrement est effectué côté serveur avec une clé stockée dans Firebase Secret Manager.
  *
@@ -9,7 +9,7 @@
  */
 
 import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
-// ✅ CORRECTIF : Importer l'app Firebase déjà initialisée plutôt que d'appeler initializeApp()
+//  CORRECTIF : Importer l'app Firebase déjà initialisée plutôt que d'appeler initializeApp()
 // Rappeler initializeApp() cause "Firebase App named '[DEFAULT]' already exists"
 import { app } from '../config/firebase';
 
@@ -27,7 +27,7 @@ export interface EncryptionResult {
 /**
  * Service de chiffrement côté serveur
  *
- * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
+ *  CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * Ce service remplace encryption.service.ts pour le chiffrement des données sensibles.
  * Toutes les opérations de chiffrement sont effectuées par la Cloud Function Firebase.
  */
@@ -35,8 +35,8 @@ class ServerEncryptionService {
   private functions: Functions;
 
   constructor() {
-    // ✅ Utiliser l'instance Firebase déjà initialisée (évite "app already exists")
-    // ✅ CORRECTIF CORS : utiliser la variable d'environnement ou europe-west1 par défaut
+    //  Utiliser l'instance Firebase déjà initialisée (évite "app already exists")
+    //  CORRECTIF CORS : utiliser la variable d'environnement ou europe-west1 par défaut
     const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
     this.functions = getFunctions(app, functionsRegion);
   }
@@ -44,7 +44,7 @@ class ServerEncryptionService {
   /**
    * Chiffre une donnée sensible côté serveur
    *
-   * ✅ CHIFFREMENT RÉACTIVÉ
+   *  CHIFFREMENT RÉACTIVÉ
    *
    * @param plainText - Le texte en clair à chiffrer
    * @returns Les données chiffrées avec IV et salt
@@ -105,7 +105,7 @@ class ServerEncryptionService {
   /**
    * Chiffre les données bancaires pour la soumission
    *
-   * ✅ CHIFFREMENT RÉACTIVÉ
+   *  CHIFFREMENT RÉACTIVÉ
    *
    * @param accountHolder - Titulaire du compte
    * @param iban - IBAN
@@ -129,7 +129,7 @@ class ServerEncryptionService {
   /**
    * Chiffre le SSN/NIR pour la soumission
    *
-   * ✅ CHIFFREMENT RÉACTIVÉ
+   *  CHIFFREMENT RÉACTIVÉ
    *
    * @param ssn - Numéro de sécurité sociale
    * @returns Les données chiffrées

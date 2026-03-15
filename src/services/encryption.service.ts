@@ -2,7 +2,7 @@
  * Service de chiffrement pour les données sensibles (SSN/NIR, Données Bancaires)
  * Utilise l'API Web Crypto (SubtleCrypto) avec AES-256-GCM
  * 
- * ⚠️ IMPORTANT - NOTE DE SÉCURITÉ ⚠️
+ * IMPORTANT - NOTE DE SÉCURITÉ ⚠️
  * 
  * @deprecated CE SERVICE EST DÉPRÉCIÉ ET NE DOIT PLUS ÊTRE UTILISÉ.
  * 
@@ -67,7 +67,7 @@ class EncryptionService {
   /**
    * Initialise le service avec une clé dérivée de la passphrase
    * 
-   * ⚠️ IMPORTANT: En production, utiliser Firebase Cloud Functions
+   * IMPORTANT: En production, utiliser Firebase Cloud Functions
    * avec Firebase Secrets Manager pour stocker la passphrase de manière sécurisée.
    * 
    * @deprecated Utilisez serverEncryptionService à la place
@@ -76,7 +76,7 @@ class EncryptionService {
     // Afficher un avertissement de dépréciation une seule fois
     if (!this.deprecationWarningShown && typeof console !== 'undefined') {
       console.warn(
-        '⚠️ AVERTISSEMENT: encryption.service est déprécié.\n' +
+        'AVERTISSEMENT: encryption.service est déprécié.\n' +
         'Utilisez plutôt serverEncryptionService depuis src/services/server-encryption.service.ts\n' +
         'Le chiffrement côté serveur est plus sécurisé.'
       );
@@ -114,7 +114,7 @@ class EncryptionService {
   /**
    * Récupère la passphrase de chiffrement depuis les variables d'environnement
    * 
-   * ⚠️ SÉCURITÉ: En production, la passphrase ne doit JAMAIS être exposée côté client.
+   * SÉCURITÉ: En production, la passphrase ne doit JAMAIS être exposée côté client.
    * Utiliser Firebase Cloud Functions pour chiffrer les données côté serveur.
    */
   private getPassphrase(): string {
@@ -289,7 +289,7 @@ class EncryptionService {
 
   /**
    * Réinitialise le service (pour les tests ou changement de clé)
-   * ⚠️ ATTENTION: Réinitialiser le service rendra les données chiffrées précédemment illisibles
+   * ATTENTION: Réinitialiser le service rendra les données chiffrées précédemment illisibles
    * si le salt global change.
    */
   reset(): void {
@@ -300,7 +300,7 @@ class EncryptionService {
 
   /**
    * Efface le salt global (pour les tests ou migration)
-   * ⚠️ ATTENTION: Cela rendra toutes les données chiffrées illisibles
+   * ATTENTION: Cela rendra toutes les données chiffrées illisibles
    */
   clearGlobalSalt(): void {
     this.globalSalt = null;

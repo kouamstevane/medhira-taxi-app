@@ -13,7 +13,7 @@ export default function CreateCollectionsPage() {
 
   const log = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
-    const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '📝';
+    const prefix = type === 'error' ? '❌' : type === 'success' ? '' : '📝';
     setLogs(prev => [...prev, `[${timestamp}] ${prefix} ${message}`]);
   };
 
@@ -179,7 +179,7 @@ export default function CreateCollectionsPage() {
           }
         } catch (error) {
           // La collection n'existe pas ou erreur d'accès
-          log(`⚠️  Collection "${collectionConfig.name}" non trouvée`, 'info');
+          log(` Collection "${collectionConfig.name}" non trouvée`, 'info');
         }
       }
       
@@ -191,25 +191,25 @@ export default function CreateCollectionsPage() {
         log(`📝 Vérification de la collection "${collectionConfig.name}"...`, 'info');
         
         if (!existingCollectionNames.includes(collectionConfig.name)) {
-          log(`⚠️  Collection "${collectionConfig.name}" manquante`, 'info');
+          log(` Collection "${collectionConfig.name}" manquante`, 'info');
           log(`📝 Création de la collection "${collectionConfig.name}"...`, 'info');
           
           try {
             // Créer un document vide pour créer la collection
             const sampleDoc = collectionConfig.sampleDoc;
             const docRef = await addDoc(collection(db, collectionConfig.name), sampleDoc);
-            log(`✅ Collection "${collectionConfig.name}" créée avec succès (document ID: ${docRef.id})`, 'success');
+            log(` Collection "${collectionConfig.name}" créée avec succès (document ID: ${docRef.id})`, 'success');
             
             // Supprimer immédiatement le document de test
             await deleteDoc(doc(db, collectionConfig.name, docRef.id));
             log(`🗑️  Document de test supprimé de "${collectionConfig.name}"`, 'info');
             log('');
           } catch (error: any) {
-            log(`❌ Erreur lors de la création de "${collectionConfig.name}": ${error.message}`, 'error');
+            log(`Erreur lors de la création de "${collectionConfig.name}": ${error.message}`, 'error');
             log('');
           }
         } else {
-          log(`✅ Collection "${collectionConfig.name}" existe déjà`, 'success');
+          log(` Collection "${collectionConfig.name}" existe déjà`, 'success');
           log('');
         }
       }
@@ -222,7 +222,7 @@ export default function CreateCollectionsPage() {
       const bookingsSnapshot = await getDocs(bookingsQuery);
       
       if (bookingsSnapshot.empty) {
-        log('⚠️  Aucun document dans la collection bookings', 'info');
+        log(' Aucun document dans la collection bookings', 'info');
         log('📝 Création d\'un document de test pour créer les sous-collections...', 'info');
         
         try {
@@ -234,7 +234,7 @@ export default function CreateCollectionsPage() {
           });
           
           const bookingId = bookingRef.id;
-          log(`✅ Document de test créé dans bookings (ID: ${bookingId})`, 'success');
+          log(` Document de test créé dans bookings (ID: ${bookingId})`, 'success');
           
           // Créer la sous-collection candidates
           const candidateDoc = await addDoc(collection(db, 'bookings', bookingId, 'candidates'), {
@@ -243,7 +243,7 @@ export default function CreateCollectionsPage() {
             proposedPrice: 1000,
             createdAt: serverTimestamp()
           });
-          log(`✅ Sous-collection "candidates" créée`, 'success');
+          log(` Sous-collection "candidates" créée`, 'success');
           await deleteDoc(doc(db, 'bookings', bookingId, 'candidates', candidateDoc.id));
           
           // Créer la sous-collection messages
@@ -252,7 +252,7 @@ export default function CreateCollectionsPage() {
             message: 'Sample message',
             createdAt: serverTimestamp()
           });
-          log(`✅ Sous-collection "messages" créée`, 'success');
+          log(` Sous-collection "messages" créée`, 'success');
           await deleteDoc(doc(db, 'bookings', bookingId, 'messages', messageDoc.id));
           
           // Supprimer le document de test
@@ -260,11 +260,11 @@ export default function CreateCollectionsPage() {
           log(`🗑️  Document de test supprimé de bookings`, 'info');
           log('');
         } catch (error: any) {
-          log(`❌ Erreur lors de la création des sous-collections: ${error.message}`, 'error');
+          log(`Erreur lors de la création des sous-collections: ${error.message}`, 'error');
           log('');
         }
       } else {
-        log('✅ Collection bookings contient des documents', 'success');
+        log(' Collection bookings contient des documents', 'success');
         log('📝 Les sous-collections seront créées automatiquement lors de l\'utilisation', 'info');
         log('');
       }
@@ -295,11 +295,11 @@ export default function CreateCollectionsPage() {
       const missingCollections = expectedCollections.filter(c => !finalCollectionNames.includes(c));
       
       if (missingCollections.length === 0) {
-        log('✅ Toutes les collections requises existent maintenant!', 'success');
-        showStatus('✅ Toutes les collections requises existent maintenant!', 'success');
+        log(' Toutes les collections requises existent maintenant!', 'success');
+        showStatus(' Toutes les collections requises existent maintenant!', 'success');
       } else {
-        log(`⚠️  Collections toujours manquantes: ${missingCollections.join(', ')}`, 'error');
-        showStatus(`⚠️  Collections toujours manquantes: ${missingCollections.join(', ')}`, 'error');
+        log(` Collections toujours manquantes: ${missingCollections.join(', ')}`, 'error');
+        showStatus(` Collections toujours manquantes: ${missingCollections.join(', ')}`, 'error');
       }
       
       log('');
@@ -309,8 +309,8 @@ export default function CreateCollectionsPage() {
       log(`   Collections manquantes: ${missingCollections.length}`, 'info');
 
     } catch (error: any) {
-      log(`❌ Erreur générale: ${error.message}`, 'error');
-      showStatus(`❌ Erreur: ${error.message}`, 'error');
+      log(`Erreur générale: ${error.message}`, 'error');
+      showStatus(`Erreur: ${error.message}`, 'error');
     } finally {
       setIsCreating(false);
     }
@@ -360,11 +360,11 @@ export default function CreateCollectionsPage() {
       const missingCollections = expectedCollections.filter(c => !existingCollectionNames.includes(c));
       
       if (missingCollections.length === 0) {
-        log('✅ Toutes les collections requises existent!', 'success');
-        showStatus('✅ Toutes les collections requises existent!', 'success');
+        log(' Toutes les collections requises existent!', 'success');
+        showStatus(' Toutes les collections requises existent!', 'success');
       } else {
-        log(`⚠️  Collections manquantes: ${missingCollections.join(', ')}`, 'error');
-        showStatus(`⚠️  Collections manquantes: ${missingCollections.join(', ')}`, 'error');
+        log(` Collections manquantes: ${missingCollections.join(', ')}`, 'error');
+        showStatus(` Collections manquantes: ${missingCollections.join(', ')}`, 'error');
       }
       
       log('');
@@ -374,8 +374,8 @@ export default function CreateCollectionsPage() {
       log(`   Collections manquantes: ${missingCollections.length}`, 'info');
 
     } catch (error: any) {
-      log(`❌ Erreur lors de la vérification: ${error.message}`, 'error');
-      showStatus(`❌ Erreur: ${error.message}`, 'error');
+      log(`Erreur lors de la vérification: ${error.message}`, 'error');
+      showStatus(`Erreur: ${error.message}`, 'error');
     } finally {
       setIsVerifying(false);
     }

@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { logger } from '@/utils/logger';
 import { FiMessageSquare, FiEdit2 } from 'react-icons/fi';
-import { Booking, Location, PlaceSuggestion } from '@/types/booking';
+import { Booking, CarType, Location, PlaceSuggestion } from '@/types/booking';
 import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api';
-import { updateDestination, updatePassengerLocation } from '@/services/taxi.service';
+import { updateDestination, updatePassengerLocation, getCarTypes } from '@/services/taxi.service';
 import { AddressInput } from './AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { ChatModal } from '@/components/ChatModal';
@@ -42,10 +42,10 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   const [completedBooking, setCompletedBooking] = useState<Booking | null>(null);
   const [realTimeDistance, setRealTimeDistance] = useState<number>(0); // En km
   const [realTimeDuration, setRealTimeDuration] = useState<number>(0); // En minutes
-  
+  const [activeCarType, setActiveCarType] = useState<CarType | null>(null);
+
   const [cancelling, setCancelling] = useState(false);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
 
   const { autocompleteService } = useGoogleMaps();
   const { watchPosition } = useCapacitorGeolocation();
@@ -55,12 +55,12 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
   });
 
-  const onLoad = useCallback(function callback(map: google.maps.Map) {
-    setMap(map);
+  const onLoad = useCallback(function callback(_map: google.maps.Map) {
+    // Map instance available if needed
   }, []);
 
-  const onUnmount = useCallback(function callback(map: google.maps.Map) {
-    setMap(null);
+  const onUnmount = useCallback(function callback(_map: google.maps.Map) {
+    // Cleanup
   }, []);
 
   // Calculer l'itinéraire
@@ -149,49 +149,60 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
     try {
       const bookingRef = doc(db, 'bookings', bookingId);
       const bookingSnap = await getDoc(bookingRef);
-      
+
       if (!bookingSnap.exists()) {
-        alert('❌ Réservation introuvable.');
+        alert('Réservation introuvable.');
         return;
       }
-      
+
       const bookingData = bookingSnap.data();
       let cancellationFee = 0;
-      
+
       // Calculer les pénalités si la course est en cours
       if (bookingData.status === 'in_progress') {
         const { calculateCancellationPenalty } = await import('@/services/taxi.service');
         cancellationFee = await calculateCancellationPenalty(bookingId);
-        
-        const confirmMsg = `⚠️ Attention !\n\nVous êtes sur le point d'annuler une course en cours.\n\nPénalité d'annulation : ${cancellationFee.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD\n\nVoulez-vous vraiment continuer ?`;
-        
+
+        const confirmMsg = `Attention !\n\nVous êtes sur le point d'annuler une course en cours.\n\nPénalité d'annulation : ${cancellationFee.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD\n\nVoulez-vous vraiment continuer ?`;
+
         if (!confirm(confirmMsg)) {
           setCancelling(false);
           return;
         }
       }
-      
+
+      // Utiliser cancelBooking du service qui libère aussi le chauffeur
+      const { cancelBooking } = await import('@/services/taxi.service');
+      await cancelBooking(bookingId, 'Annulé par le client');
+
+      // Mettre à jour les champs supplémentaires
       await updateDoc(bookingRef, {
-        status: 'cancelled',
-        cancelledAt: serverTimestamp(),
         cancelledBy: 'client',
         cancellationFee: cancellationFee,
-        updatedAt: serverTimestamp(),
       });
-      
-      setShowCancelModal(false);
-      
-      if (cancellationFee > 0) {
-        alert(`✅ Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD ont été appliqués à votre compte.`);
-      } else {
-        alert('✅ Commande annulée avec succès.');
+
+      // Débiter la pénalité du portefeuille si applicable
+      if (cancellationFee > 0 && bookingData.userId) {
+        try {
+          const { debitCancellationPenalty } = await import('@/services/taxi.service');
+          await debitCancellationPenalty(bookingId, bookingData.userId, cancellationFee);
+        } catch (penaltyError) {
+          logger.error('Erreur débit pénalité', { error: penaltyError });
+        }
       }
-      
-      // Retourner proprement à la page de réservation sans rechargement complet
+
+      setShowCancelModal(false);
+
+      if (cancellationFee > 0) {
+        alert(`Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD ont été débités de votre portefeuille.`);
+      } else {
+        alert('Commande annulée avec succès.');
+      }
+
       onComplete();
     } catch (error) {
-      console.error('[CLIENT] ❌ Erreur lors de l\'annulation:', error);
-      alert('❌ Erreur lors de l\'annulation. Veuillez réessayer.');
+      logger.error('Erreur lors de l\'annulation', { error, bookingId });
+      alert('Erreur lors de l\'annulation. Veuillez réessayer.');
     } finally {
       setCancelling(false);
     }
@@ -206,10 +217,10 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       setShowEditDestModal(false);
       setNewDestination('');
       setNewDestLocation(null);
-      alert('✅ Destination mise à jour avec succès ! Le prix a été recalculé.');
+      alert('Destination mise à jour avec succès ! Le prix a été recalculé.');
     } catch (error) {
       console.error('Erreur mise à jour destination:', error);
-      alert('❌ Erreur lors de la mise à jour de la destination.');
+      alert('Erreur lors de la mise à jour de la destination.');
     } finally {
       setUpdatingDest(false);
     }
@@ -251,6 +262,15 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       stopWatch();
     };
   }, [booking, watchPosition]);
+
+  // Charger le CarType réel pour le calcul de prix en temps réel
+  useEffect(() => {
+    if (!booking?.carType) return;
+    getCarTypes().then(types => {
+      const matched = types.find(ct => ct.name === booking.carType) || types[0];
+      if (matched) setActiveCarType(matched);
+    }).catch(err => logger.error('Erreur chargement CarType', { error: err }));
+  }, [booking?.carType]);
 
   useEffect(() => {
     const bookingRef = doc(db, 'bookings', bookingId);
@@ -474,25 +494,31 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               <p className="text-xs text-gray-500 mb-1">Estimation tarifaire</p>
               <p className="text-xl font-bold text-green-600">
                 {(() => {
-                  // Calcul temps écoulé depuis le début
-                  const startTime = booking.startedAt instanceof Date ? booking.startedAt : new Date();
+                  // Convertir Timestamp Firestore correctement
+                  let startTime: Date;
+                  if (booking.startedAt && typeof (booking.startedAt as any).toDate === 'function') {
+                    startTime = (booking.startedAt as Timestamp).toDate();
+                  } else if (booking.startedAt instanceof Date) {
+                    startTime = booking.startedAt;
+                  } else {
+                    startTime = new Date();
+                  }
                   const elapsedMinutes = Math.ceil((new Date().getTime() - startTime.getTime()) / 60000);
-                  
-                  // Utiliser la distance parcourue (distance initiale - distance restante)
+
                   const distanceTraveled = Math.max(0, booking.distance - realTimeDistance);
-                  
-                  // Estimation basée sur le type de véhicule pour le Canada
-                  const basePrice = 3.50; 
-                  const pricePerKm = 1.75;
-                  const pricePerMin = 0.45;
-                  
+
+                  // Utiliser les vrais tarifs du CarType
+                  const basePrice = activeCarType?.basePrice ?? 3.50;
+                  const pricePerKm = activeCarType?.pricePerKm ?? 1.75;
+                  const pricePerMin = activeCarType?.pricePerMinute ?? 0.45;
+
                   const estimatedPrice = basePrice + (distanceTraveled * pricePerKm) + (elapsedMinutes * pricePerMin);
-                  
+
                   return `${estimatedPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`;
                 })()}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                ⚠️ Estimation basée sur le trajet en cours
+                Estimation basée sur le trajet en cours
               </p>
             </div>
           </div>
@@ -560,7 +586,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                 required
               />
               <p className="text-xs text-gray-500 mt-2">
-                ⚠️ Le prix sera recalculé en fonction de la nouvelle destination.
+                Le prix sera recalculé en fonction de la nouvelle destination.
               </p>
             </div>
 

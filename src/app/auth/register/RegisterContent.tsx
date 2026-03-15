@@ -81,12 +81,12 @@ export default function RegisterContent() {
                 displayName: `${formData.firstName} ${formData.lastName}`,
             });
 
-            console.log('✅ Compte client créé avec succès:', user.uid);
+            console.log(' Compte client créé avec succès:', user.uid);
 
             // Redirection vers la page de vérification email
             router.push('/auth/verify-email');
         } catch (err: unknown) {
-            console.error('❌ Erreur création compte:', err);
+            console.error('Erreur création compte:', err);
 
             const error = err as { code?: string; message?: string };
             if (error.code === 'auth/email-already-in-use') {
@@ -113,7 +113,7 @@ export default function RegisterContent() {
             await signInWithGoogle();
             router.push('/dashboard');
         } catch (err: unknown) {
-            console.error('❌ Erreur connexion Google:', err);
+            console.error('Erreur connexion Google:', err);
             const error = err as { code?: string; message?: string };
 
             if (error.code === 'auth/popup-closed-by-user' || error.message?.includes('cancelled')) {

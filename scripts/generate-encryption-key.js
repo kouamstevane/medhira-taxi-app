@@ -9,7 +9,7 @@
  * Ce script génère une clé de chiffrement aléatoire de 256 bits (32 bytes)
  * encodée en base64 pour une utilisation avec le service de chiffrement.
  * 
- * ⚠️ IMPORTANT: Utilisez cette clé UNIQUEMENT pour le développement.
+ * IMPORTANT: Utilisez cette clé UNIQUEMENT pour le développement.
  * En production, utilisez Firebase Secret Manager.
  */
 
@@ -23,11 +23,11 @@ console.log('=================================================\n');
 const key = crypto.randomBytes(32);
 const base64Key = key.toString('base64');
 
-console.log('✅ Clé générée avec succès!\n');
+console.log(' Clé générée avec succès!\n');
 console.log('Ajoutez cette clé à votre fichier .env.local:\n');
 console.log(`ENCRYPTION_MASTER_KEY=${base64Key}\n`);
 console.log('=================================================\n');
-console.log('⚠️  IMPORTANT:\n');
+console.log(' IMPORTANT:\n');
 console.log('1. NE COMMITTEZ JAMAIS cette clé dans le repository');
 console.log('2. Ajoutez .env.local à .gitignore');
 console.log('3. Utilisez Firebase Secret Manager en production');

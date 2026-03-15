@@ -28,10 +28,10 @@ function testValidation() {
   };
 
   const result1 = ManageDriverSchema.safeParse(validData);
-  console.log('Case 1 (Valid):', result1.success ? '✅ OK' : '❌ Failed');
+  console.log('Case 1 (Valid):', result1.success ? ' OK' : 'Failed');
 
   const result2 = ManageDriverSchema.safeParse(invalidData);
-  console.log('Case 2 (Invalid):', !result2.success ? '✅ OK (Correctement rejeté)' : '❌ Failed (Accepté indûment)');
+  console.log('Case 2 (Invalid):', !result2.success ? ' OK (Correctement rejeté)' : 'Failed (Accepté indûment)');
   
   if (!result2.success) {
     console.log('Erreurs attendues:', JSON.stringify(result2.error.format(), null, 2));

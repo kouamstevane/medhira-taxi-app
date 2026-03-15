@@ -5,8 +5,8 @@ Log initialized
 🙈 Masqué : admin\send-email\route.ts
 🙈 Masqué : reverse-geocode\route.ts
 📦 Compilation Next.js...
-❌ Erreur pendant le build: Command failed: next build
+Erreur pendant le build: Command failed: next build
 🔄 Restauration des fichiers API...
-✅ Restauré : admin\manage-driver\route.ts
-✅ Restauré : admin\send-email\route.ts
-✅ Restauré : reverse-geocode\route.ts
+ Restauré : admin\manage-driver\route.ts
+ Restauré : admin\send-email\route.ts
+ Restauré : reverse-geocode\route.ts

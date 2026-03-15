@@ -31,7 +31,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
       setTimeout(() => setDownloaded(false), 3000);
     } catch (error) {
       console.error('Erreur téléchargement facture:', error);
-      alert('❌ Erreur lors du téléchargement de la facture');
+      alert('Erreur lors du téléchargement de la facture');
     } finally {
       setDownloading(false);
     }

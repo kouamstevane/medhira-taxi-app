@@ -153,7 +153,7 @@ export function CurrentTripCard({
                       <FiNavigation2 className="h-3 w-3" />
                       GPS {(trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 20 ? '📍 Très précis' : 
                            (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 50 ? '📍 Précis' : 
-                           '⚠️ Approximatif'}
+                           'Approximatif'}
                       {trip.pickupLocationAccuracy && ` (±${Math.round(trip.pickupLocationAccuracy)}m)`}
                     </span>
                   )}

@@ -13,9 +13,9 @@ try {
   initializeApp({
     projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'medjira-service'
   });
-  console.log('✅ Firebase Admin initialisé avec succès');
+  console.log(' Firebase Admin initialisé avec succès');
 } catch (error) {
-  console.error('❌ Erreur lors de l\'initialisation de Firebase Admin:', error.message);
+  console.error('Erreur lors de l\'initialisation de Firebase Admin:', error.message);
   console.error('Veuillez configurer les identifiants Firebase Admin:');
   console.error('1. Définissez la variable d\'environnement GOOGLE_APPLICATION_CREDENTIALS');
   console.error('   ou');
@@ -163,25 +163,25 @@ async function createCollections() {
     const collectionRef = db.collection(collection.name);
     
     if (!existingCollectionNames.includes(collection.name)) {
-      console.log(`⚠️  Collection "${collection.name}" manquante`);
+      console.log(` Collection "${collection.name}" manquante`);
       console.log(`📝 Création de la collection "${collection.name}"...`);
       
       try {
         // Créer un document vide pour créer la collection
         const sampleDoc = collection.sampleDoc;
         const docRef = await collectionRef.add(sampleDoc);
-        console.log(`✅ Collection "${collection.name}" créée avec succès (document ID: ${docRef.id})`);
+        console.log(` Collection "${collection.name}" créée avec succès (document ID: ${docRef.id})`);
         
         // Supprimer immédiatement le document de test
         await docRef.delete();
         console.log(`🗑️  Document de test supprimé de "${collection.name}"`);
         console.log();
       } catch (error) {
-        console.error(`❌ Erreur lors de la création de "${collection.name}":`, error.message);
+        console.error(`Erreur lors de la création de "${collection.name}":`, error.message);
         console.log();
       }
     } else {
-      console.log(`✅ Collection "${collection.name}" existe déjà`);
+      console.log(` Collection "${collection.name}" existe déjà`);
       console.log();
     }
   }
@@ -192,7 +192,7 @@ async function createCollections() {
   const bookingsSnapshot = await db.collection('bookings').limit(1).get();
   
   if (bookingsSnapshot.empty) {
-    console.log('⚠️  Aucun document dans la collection bookings');
+    console.log(' Aucun document dans la collection bookings');
     console.log('📝 Création d\'un document de test pour créer les sous-collections...');
     
     try {
@@ -204,7 +204,7 @@ async function createCollections() {
       });
       
       const bookingId = bookingRef.id;
-      console.log(`✅ Document de test créé dans bookings (ID: ${bookingId})`);
+      console.log(` Document de test créé dans bookings (ID: ${bookingId})`);
       
       // Créer la sous-collection candidates
       const candidatesRef = bookingRef.collection('candidates');
@@ -214,7 +214,7 @@ async function createCollections() {
         proposedPrice: 1000,
         createdAt: new Date()
       });
-      console.log(`✅ Sous-collection "candidates" créée`);
+      console.log(` Sous-collection "candidates" créée`);
       await candidateDoc.delete();
       
       // Créer la sous-collection messages
@@ -224,7 +224,7 @@ async function createCollections() {
         message: 'Sample message',
         createdAt: new Date()
       });
-      console.log(`✅ Sous-collection "messages" créée`);
+      console.log(` Sous-collection "messages" créée`);
       await messageDoc.delete();
       
       // Supprimer le document de test
@@ -232,11 +232,11 @@ async function createCollections() {
       console.log(`🗑️  Document de test supprimé de bookings`);
       console.log();
     } catch (error) {
-      console.error(`❌ Erreur lors de la création des sous-collections:`, error.message);
+      console.error(`Erreur lors de la création des sous-collections:`, error.message);
       console.log();
     }
   } else {
-    console.log('✅ Collection bookings contient des documents');
+    console.log(' Collection bookings contient des documents');
     console.log('📝 Les sous-collections seront créées automatiquement lors de l\'utilisation');
     console.log();
   }
@@ -254,9 +254,9 @@ async function createCollections() {
   const missingCollections = expectedCollections.filter(c => !finalCollectionNames.includes(c));
   
   if (missingCollections.length === 0) {
-    console.log('✅ Toutes les collections requises existent maintenant!');
+    console.log(' Toutes les collections requises existent maintenant!');
   } else {
-    console.log('⚠️  Collections toujours manquantes:', missingCollections);
+    console.log(' Collections toujours manquantes:', missingCollections);
   }
   
   console.log('\n📊 Résumé:');
@@ -267,10 +267,10 @@ async function createCollections() {
 
 createCollections()
   .then(() => {
-    console.log('\n✅ Opération terminée avec succès');
+    console.log('\n Opération terminée avec succès');
     process.exit(0);
   })
   .catch((error) => {
-    console.error('\n❌ Erreur:', error);
+    console.error('\nErreur:', error);
     process.exit(1);
   });

@@ -85,21 +85,21 @@ async function createCollections() {
       console.log(`📝 Vérification de la collection "${collection.name}"...`);
       
       if (!existingCollectionNames.includes(collection.name)) {
-        console.log(`⚠️  Collection "${collection.name}" manquante`);
+        console.log(` Collection "${collection.name}" manquante`);
         console.log(`📝 Création de la collection "${collection.name}"...`);
         
         try {
           // Créer un document de marqueur pour créer la collection
           const docRef = await db.collection(collection.name).add(collection.sampleDoc);
           
-          console.log(`✅ Collection "${collection.name}" créée avec succès (document ID: ${docRef.id})`);
+          console.log(` Collection "${collection.name}" créée avec succès (document ID: ${docRef.id})`);
           console.log('');
         } catch (error) {
-          console.error(`❌ Erreur lors de la création de "${collection.name}":`, error.message);
+          console.error(`Erreur lors de la création de "${collection.name}":`, error.message);
           console.log('');
         }
       } else {
-        console.log(`✅ Collection "${collection.name}" existe déjà`);
+        console.log(` Collection "${collection.name}" existe déjà`);
         console.log('');
       }
     }
@@ -122,9 +122,9 @@ async function createCollections() {
     const missingCollections = expectedCollections.filter(c => !finalCollectionNames.includes(c));
     
     if (missingCollections.length === 0) {
-      console.log('✅ Toutes les collections requises existent maintenant!');
+      console.log(' Toutes les collections requises existent maintenant!');
     } else {
-      console.log(`⚠️  Collections toujours manquantes: ${missingCollections.join(', ')}`);
+      console.log(` Collections toujours manquantes: ${missingCollections.join(', ')}`);
     }
     
     console.log('');
@@ -138,10 +138,10 @@ async function createCollections() {
     console.log('   Chaque collection contient un document de marqueur (_init: true)');
     console.log('   Ces documents peuvent être supprimés une fois que la collection est utilisée.');
     console.log('');
-    console.log('✅ Opération terminée!');
+    console.log(' Opération terminée!');
 
   } catch (error) {
-    console.error('❌ Erreur générale:', error);
+    console.error('Erreur générale:', error);
   }
 }
 

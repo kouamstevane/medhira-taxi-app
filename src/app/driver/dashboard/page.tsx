@@ -262,7 +262,7 @@ export default function DriverDashboard() {
             });
             
             if (data.status === 'cancelled') {
-              console.log('[DRIVER] ⚠️ Course annulée détectée (ne devrait pas arriver), ignorée');
+              console.log('[DRIVER] Course annulée détectée (ne devrait pas arriver), ignorée');
               setCurrentTrip(null);
               return;
             }
@@ -296,7 +296,7 @@ export default function DriverDashboard() {
               // Mettre à jour l'état local
               setDriver(prev => prev ? { ...prev, isAvailable: true } : null);
             } catch (err) {
-              console.error('[DRIVER] ❌ Erreur mise à jour disponibilité:', err);
+              console.error('[DRIVER] Erreur mise à jour disponibilité:', err);
             }
           }
         });
@@ -583,7 +583,7 @@ export default function DriverDashboard() {
       // Le state se mettra à jour via onSnapshot
     } catch (error) {
       console.error('Erreur marquage arrivée:', error);
-      alert('❌ Erreur lors du marquage. Réessayez.');
+      alert('Erreur lors du marquage. Réessayez.');
     }
   };
 
@@ -594,7 +594,7 @@ export default function DriverDashboard() {
       // Le state se mettra à jour via onSnapshot
     } catch (error) {
       console.error('Erreur démarrage course:', error);
-      alert('❌ Erreur lors du démarrage. Réessayez.');
+      alert('Erreur lors du démarrage. Réessayez.');
     }
   };
 

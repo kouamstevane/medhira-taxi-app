@@ -16,7 +16,7 @@ function loadEnvFile() {
   const envPath = path.join(process.cwd(), '.env.local');
   
   if (!fs.existsSync(envPath)) {
-    console.error('❌ Fichier .env.local non trouvé!');
+    console.error('Fichier .env.local non trouvé!');
     console.log('📝 Créez un fichier .env.local avec les variables Firebase requises.\n');
     return false;
   }
@@ -68,7 +68,7 @@ function checkEnvironmentVariables() {
       allPresent = false;
     } else {
       const maskedValue = value.length > 20 ? `${value.substring(0, 20)}...` : value;
-      console.log(`✅ ${varName}: ${maskedValue}`);
+      console.log(` ${varName}: ${maskedValue}`);
     }
   }
 
@@ -102,10 +102,10 @@ function checkFirebaseConfig() {
     return;
   }
 
-  console.log(`✅ Project ID: ${firebaseConfig.projectId}`);
-  console.log(`✅ Auth Domain: ${firebaseConfig.authDomain}`);
-  console.log(`✅ App ID: ${firebaseConfig.appId}`);
-  console.log(`✅ Storage Bucket: ${firebaseConfig.storageBucket}`);
+  console.log(` Project ID: ${firebaseConfig.projectId}`);
+  console.log(` Auth Domain: ${firebaseConfig.authDomain}`);
+  console.log(` App ID: ${firebaseConfig.appId}`);
+  console.log(` Storage Bucket: ${firebaseConfig.storageBucket}`);
 
   addDiagnostic({
     status: 'success',
@@ -160,10 +160,10 @@ function checkPhoneAuthSetup() {
     }
   ];
 
-  console.log('⚠️  Les vérifications suivantes nécessitent une action dans Firebase Console:\n');
+  console.log(' Les vérifications suivantes nécessitent une action dans Firebase Console:\n');
 
   for (const check of checks) {
-    const icon = check.status === 'valid' ? '✅' : check.status === 'invalid' ? '❌' : '⚠️ ';
+    const icon = check.status === 'valid' ? '' : check.status === 'invalid' ? '❌' : '';
     console.log(`${icon} ${check.name}`);
     console.log(`   📍 ${check.consoleLocation}`);
     console.log(`   📋 Instructions:`);
@@ -191,7 +191,7 @@ function printDiagnostics() {
   let successCount = 0;
 
   for (const diagnostic of diagnostics) {
-    const icon = diagnostic.status === 'success' ? '✅' : diagnostic.status === 'error' ? '❌' : '⚠️ ';
+    const icon = diagnostic.status === 'success' ? '' : diagnostic.status === 'error' ? '❌' : '';
     console.log(`${icon} ${diagnostic.message}`);
 
     if (diagnostic.details) {
@@ -236,7 +236,7 @@ function main() {
     process.exit(1);
   }
 
-  console.log('✅ Variables d\'environnement chargées depuis .env.local\n');
+  console.log(' Variables d\'environnement chargées depuis .env.local\n');
 
   checkEnvironmentVariables();
   checkFirebaseConfig();

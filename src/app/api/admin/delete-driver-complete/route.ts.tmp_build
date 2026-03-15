@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     try {
       decodedToken = await adminAuth.verifyIdToken(token);
     } catch (tokenError) {
-      console.error('❌ Token verification failed:', tokenError);
+      console.error('Token verification failed:', tokenError);
       return NextResponse.json(
         { error: 'Token d\'authentification invalide ou expiré.' },
         { status: 401 }
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     const { driverId } = result.data;
 
     // 4. Vérifier que l'utilisateur est bien un admin
-    // ✅ CORRECTION: Utiliser une méthode cohérente de vérification admin
+    //  CORRECTION: Utiliser une méthode cohérente de vérification admin
     // On cherche un document admin où le champ 'userId' correspond à l'UID du token
     const adminSnapshot = await adminDb.collection('admins')
       .where('userId', '==', adminUid)
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       .get();
 
     if (adminSnapshot.empty) {
-      console.warn(`⚠️ Tentative de suppression par un non-admin: ${adminUid}`);
+      console.warn(`Tentative de suppression par un non-admin: ${adminUid}`);
       return NextResponse.json(
         { error: 'Accès non autorisé. Seuls les administrateurs peuvent supprimer des chauffeurs.' },
         { status: 403 }
@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       message: 'Chauffeur supprimé définitivement avec succès',
     });
   } catch (error: any) {
-    console.error('❌ Erreur API delete-driver-complete:', error);
+    console.error('Erreur API delete-driver-complete:', error);
     return NextResponse.json(
       {
         error: 'Erreur serveur lors de la suppression',

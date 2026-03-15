@@ -7,7 +7,7 @@ echo.
 REM Vérifier si Firebase CLI est installé
 where firebase >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
-    echo ❌ Firebase CLI n'est pas installé
+    echo Firebase CLI n'est pas installé
     echo 📦 Installation de Firebase CLI...
     call npm install -g firebase-tools
 )
@@ -22,7 +22,7 @@ echo 📤 Déploiement des règles Storage...
 call firebase deploy --only storage
 
 echo.
-echo ✅ Déploiement terminé !
+echo  Déploiement terminé !
 echo 🔄 Actualisez votre application pour voir les changements
 pause
 

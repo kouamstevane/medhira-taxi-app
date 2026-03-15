@@ -4,7 +4,7 @@
  * Ce module fournit des fonctions de chiffrement sécurisées pour les données sensibles
  * (SSN/NIR, coordonnées bancaires) utilisées dans les Cloud Functions.
  * 
- * ⚠️ IMPORTANT: Ce module est conçu pour être utilisé EXCLUSIVEMENT dans Cloud Functions.
+ * IMPORTANT: Ce module est conçu pour être utilisé EXCLUSIVEMENT dans Cloud Functions.
  * NE PAS utiliser ce code côté client.
  * 
  * Architecture:
@@ -57,13 +57,13 @@ export interface EncryptedData {
  * Récupère la clé de chiffrement principale depuis Firebase Secret Manager
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * ⚠️ MIGRATION VERS FIREBASE SECRET MANAGER - GUIDE COMPLET
+ * MIGRATION VERS FIREBASE SECRET MANAGER - GUIDE COMPLET
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * ÉTAT ACTUEL (DÉVELOPPEMENT):
  * - Utilise la variable d'environnement ENCRYPTION_MASTER_KEY
  * - Convenable pour le développement local et les tests
- * - ⚠️ NE PAS UTILISER EN PRODUCTION
+ * - NE PAS UTILISER EN PRODUCTION
  *
  * ÉTAT CIBLE (PRODUCTION):
  * - Utiliser Firebase Secret Manager pour stocker la clé maîtresse
@@ -145,22 +145,22 @@ export interface EncryptedData {
  * AVANTAGES DE SECRET MANAGER
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * ✅ Sécurité renforcée:
+ *  Sécurité renforcée:
  *    - Clés stockées chiffrées au repos
  *    - Contrôle d'accès basé sur IAM
  *    - Audit logging automatique
  *
- * ✅ Rotation des clés:
+ *  Rotation des clés:
  *    - Rotation automatique des secrets
  *    - Gestion des versions de secrets
  *    - Rollback facile en cas de problème
  *
- * ✅ Conformité:
+ *  Conformité:
  *    - Conforme RGPD (article 32)
  *    - Certifications SOC2, ISO 27001
  *    - Ready pour la certification HDS (données de santé)
  *
- * ✅ Opérationnel:
+ *  Opérationnel:
  *    - Centralisation des secrets
  *    - Gestion multi-environnements (dev, staging, prod)
  *    - Intégration native avec Cloud Functions
@@ -189,7 +189,7 @@ export interface EncryptedData {
 /**
  * Récupère la clé de chiffrement principale depuis Firebase Secret Manager
  * 
- * ✅ FIX: La clé maître est passée en paramètre pour éviter les dépendances
+ *  FIX: La clé maître est passée en paramètre pour éviter les dépendances
  * implicites sur defineSecret().value() en dehors du contexte de la Cloud Function.
  * 
  * @param keyValue - La valeur du secret (base64)
@@ -229,10 +229,10 @@ function deriveKey(masterKey: Buffer, salt: Buffer): Buffer {
 /**
  * Chiffre une donnée sensible côté serveur
  * 
- * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
+ *  CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * Les données sensibles (SSN, coordonnées bancaires) sont chiffrées avec AES-256-GCM.
  * 
- * ✅ FIX: La clé maître est passée en paramètre pour éviter les dépendances
+ *  FIX: La clé maître est passée en paramètre pour éviter les dépendances
  * implicites sur defineSecret().value() en dehors du contexte de la Cloud Function.
  * 
  * @param plainText - Le texte en clair à chiffrer
@@ -291,10 +291,10 @@ export async function encryptSensitiveData(
 /**
  * Déchiffre une donnée sensible côté serveur
  * 
- * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
+ *  CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * Les données sensibles sont déchiffrées avec AES-256-GCM.
  * 
- * ✅ FIX: La clé maître est passée en paramètre pour éviter les dépendances
+ *  FIX: La clé maître est passée en paramètre pour éviter les dépendances
  * implicites sur defineSecret().value() en dehors du contexte de la Cloud Function.
  * 
  * @param encryptedData - Les données chiffrées avec IV et salt
@@ -376,8 +376,8 @@ export function isValidEncryptedData(field: any): boolean {
 /**
  * Génère une clé de chiffrement aléatoire pour le développement
  * 
- * ⚠️ À UTILISER UNIQUEMENT POUR LE DÉVELOPPEMENT
- * ⚠️ EN PRODUCTION, UTILISER FIREBASE SECRET MANAGER
+ * À UTILISER UNIQUEMENT POUR LE DÉVELOPPEMENT
+ * EN PRODUCTION, UTILISER FIREBASE SECRET MANAGER
  * 
  * @returns Une clé de chiffrement aléatoire en base64
  */

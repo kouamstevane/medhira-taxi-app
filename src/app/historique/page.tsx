@@ -170,7 +170,7 @@ export default function HistoriquePage() {
       downloadInvoiceFromBooking(booking);
     } catch (error) {
       console.error('Erreur téléchargement facture:', error);
-      alert('❌ Erreur lors du téléchargement de la facture');
+      alert('Erreur lors du téléchargement de la facture');
     }
   };
 

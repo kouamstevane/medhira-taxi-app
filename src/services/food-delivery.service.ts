@@ -182,7 +182,7 @@ export const getApprovedRestaurants = async (
   const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
 
   // Construction dynamique de la requête Firestore
-  // ✅ limit() obligatoire sur chaque requête (medJira §4.1)
+  //  limit() obligatoire sur chaque requête (medJira §4.1)
   const constraints: Parameters<typeof query>[1][] = [
     where('status', '==', 'approved'),
     limit(limitCount),
@@ -285,7 +285,7 @@ export const getRestaurantMenu = async (
     FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS
   );
 
-  // ✅ limit() obligatoire (medJira §4.1)
+  //  limit() obligatoire (medJira §4.1)
   const q = query(
     menuRef,
     where('isAvailable', '==', true),
@@ -478,8 +478,8 @@ export const getFoodOrderById = async (orderId: string): Promise<FoodOrder | nul
 /**
  * Récupérer les commandes d'un utilisateur
  * 
- * ✅ limit() obligatoire (medJira §4.1)
- * ✅ Pagination cursor-based recommandée pour listes longues
+ *  limit() obligatoire (medJira §4.1)
+ *  Pagination cursor-based recommandée pour listes longues
  */
 export const getUserFoodOrders = async (
   userId: string,
@@ -616,7 +616,7 @@ export const submitDeliveryReview = async (
 
 /**
  * Récupérer les avis d'un restaurant
- * ✅ limit() obligatoire (medJira §4.1)
+ *  limit() obligatoire (medJira §4.1)
  */
 export const getRestaurantReviews = async (
   restaurantId: string,
@@ -659,7 +659,7 @@ const updateRestaurantRating = async (restaurantId: string): Promise<void> => {
 /**
  * Récupérer les restaurants en attente de validation (Administration)
  * 
- * ✅ limit() obligatoire (medJira §4.1)
+ *  limit() obligatoire (medJira §4.1)
  */
 export const getPendingRestaurants = async (
   limitCount: number = 50

@@ -24,4 +24,4 @@ global.console = {
   error: (...args) => console.error(...args),
 };
 
-console.log('✅ Setup Firestore Rules Tests initialisé');
+console.log(' Setup Firestore Rules Tests initialisé');

@@ -82,7 +82,7 @@ function generateAgoraChannel(rideId: string): string {
  * Génère un token Agora signé pour un channel et un uid
  * En dev (sans certificat), retourne '' (Agora autorise les tests sans token)
  * 
- * ✅ FIX: Les valeurs des secrets sont passées en paramètres pour éviter
+ *  FIX: Les valeurs des secrets sont passées en paramètres pour éviter
  * les dépendances implicites sur defineSecret().value() en dehors du contexte
  * de la Cloud Function.
  */

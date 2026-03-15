@@ -177,7 +177,7 @@ export const processAnonymizationTasks = onSchedule(
       
       try {
         if (task.type === 'TRIP_LOCATIONS') {
-          // ✅ Protection: Ne pas supprimer si le chauffeur est actuellement en ligne (medJira.md #115)
+          //  Protection: Ne pas supprimer si le chauffeur est actuellement en ligne (medJira.md #115)
           const driverId = task.driverId; // Ensure driverId is defined from task
           const driverRef = admin.firestore().collection('drivers').doc(driverId);
           const driverSnap = await driverRef.get();

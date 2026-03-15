@@ -20,10 +20,10 @@ Object.keys(interfaces).forEach(name => {
 
 console.log('\n📱 ÉTAPE 1 : Identifier votre adresse IP\n');
 if (ips.length === 0) {
-  console.log('❌ Aucune adresse IP locale trouvée');
+  console.log('Aucune adresse IP locale trouvée');
   console.log('   Vérifiez votre connexion réseau');
 } else {
-  console.log('✅ Adresses IP détectées :\n');
+  console.log(' Adresses IP détectées :\n');
   ips.forEach((iface, index) => {
     console.log(`   ${index + 1}. ${iface.name.padEnd(30)} → ${iface.address}`);
   });
@@ -81,7 +81,7 @@ if (process.platform === 'win32') {
 }
 
 console.log('\n━'.repeat(60));
-console.log('\n✅ CHECKLIST DE VÉRIFICATION\n');
+console.log('\n CHECKLIST DE VÉRIFICATION\n');
 
 const checklist = [
   'Mobile et PC sur le même réseau WiFi',

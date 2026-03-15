@@ -67,7 +67,7 @@ case "$1" in
         echo ""
         npm run test:coverage
         echo ""
-        echo "✅ Rapport de couverture généré dans coverage/lcov-report/index.html"
+        echo " Rapport de couverture généré dans coverage/lcov-report/index.html"
         ;;
     watch)
         echo "👁️  Exécution en mode WATCH..."
@@ -80,7 +80,7 @@ case "$1" in
         npm run test:ci
         ;;
     *)
-        echo "❌ Argument non reconnu: $1"
+        echo "Argument non reconnu: $1"
         echo ""
         echo "Arguments valides:"
         echo "  - unit         : Tests unitaires uniquement"

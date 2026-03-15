@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Charger les données utilisateur depuis Firestore
-   * ✅ AJOUT LOGS : Capture détaillée des erreurs pour diagnostic
+   *  AJOUT LOGS : Capture détaillée des erreurs pour diagnostic
    */
   const fetchUserData = async (user: User): Promise<void> => {
     try {
@@ -119,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setCurrentUser(user);
 
       if (user) {
-        // ✅ CORRECTION BUG #2 : Lire emailVerified directement depuis l'objet user
+        //  CORRECTION BUG #2 : Lire emailVerified directement depuis l'objet user
         setIsEmailVerified(user.emailVerified || false);
         await fetchUserData(user);
       } else {
@@ -136,7 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Recharger les données utilisateur (Auth + Firestore)
-   * ✅ CORRECTION BUG #4 : Recharge également les données Firestore
+   *  CORRECTION BUG #4 : Recharge également les données Firestore
    */
   const reloadUser = async () => {
     if (auth.currentUser) {

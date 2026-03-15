@@ -1,7 +1,7 @@
 /**
  * Service client pour l'envoi d'emails de vérification via Resend
  * 
- * ✅ SOLUTION ANTI-SPAM : Utilise Resend + react-email
+ *  SOLUTION ANTI-SPAM : Utilise Resend + react-email
  * - Remplace sendEmailVerification de Firebase Auth
  * - Meilleure délivrabilité avec SPF/DKIM configuré
  * - Templates React modernes et personnalisables
@@ -38,7 +38,7 @@ class EmailVerificationService {
   private functions: Functions;
 
   constructor() {
-    // ✅ FIX: Initialiser Firebase Functions avec la région spécifiée
+    //  FIX: Initialiser Firebase Functions avec la région spécifiée
     // La région peut être configurée via variable d'environnement NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION
     // Par défaut: europe-west1 (doit correspondre au déploiement des fonctions)
     const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';

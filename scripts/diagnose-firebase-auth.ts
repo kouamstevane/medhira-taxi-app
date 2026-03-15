@@ -58,7 +58,7 @@ function checkEnvironmentVariables(): void {
       });
       allPresent = false;
     } else {
-      console.log(`✅ ${varName}: ${value.substring(0, 20)}...`);
+      console.log(` ${varName}: ${value.substring(0, 20)}...`);
     }
   }
 
@@ -82,9 +82,9 @@ function checkFirebaseConfig(): void {
     return;
   }
 
-  console.log(`✅ Project ID: ${firebaseConfig.projectId}`);
-  console.log(`✅ Auth Domain: ${firebaseConfig.authDomain}`);
-  console.log(`✅ App ID: ${firebaseConfig.appId}`);
+  console.log(` Project ID: ${firebaseConfig.projectId}`);
+  console.log(` Auth Domain: ${firebaseConfig.authDomain}`);
+  console.log(` App ID: ${firebaseConfig.appId}`);
 
   addDiagnostic({
     status: 'success',
@@ -102,8 +102,8 @@ async function checkFirebaseConnection(): Promise<void> {
     // Test de connexion en essayant de récupérer les providers disponibles
     // Note: Ceci ne garantit pas que l'auth par téléphone est activée,
     // mais vérifie que la connexion Firebase fonctionne
-    console.log('✅ Connexion à Firebase établie');
-    console.log(`✅ Auth initialisé pour le projet: ${firebaseConfig.projectId}`);
+    console.log(' Connexion à Firebase établie');
+    console.log(` Auth initialisé pour le projet: ${firebaseConfig.projectId}`);
 
     addDiagnostic({
       status: 'success',
@@ -112,7 +112,7 @@ async function checkFirebaseConnection(): Promise<void> {
     });
 
   } catch (error: any) {
-    console.error('❌ Erreur de connexion Firebase:', error.message);
+    console.error('Erreur de connexion Firebase:', error.message);
 
     addDiagnostic({
       status: 'error',
@@ -145,10 +145,10 @@ function checkPhoneAuthSetup(): void {
     }
   ];
 
-  console.log('⚠️  Certaines vérifications nécessitent un accès à Firebase Console:\n');
+  console.log(' Certaines vérifications nécessitent un accès à Firebase Console:\n');
 
   for (const check of checks) {
-    const icon = check.status === 'valid' ? '✅' : check.status === 'invalid' ? '❌' : '⚠️ ';
+    const icon = check.status === 'valid' ? '' : check.status === 'invalid' ? '❌' : '';
     console.log(`${icon} ${check.name}`);
     console.log(`   → ${check.consoleLocation}\n`);
   }
@@ -171,7 +171,7 @@ function printDiagnostics(): void {
   let successCount = 0;
 
   for (const diagnostic of diagnostics) {
-    const icon = diagnostic.status === 'success' ? '✅' : diagnostic.status === 'error' ? '❌' : '⚠️ ';
+    const icon = diagnostic.status === 'success' ? '' : diagnostic.status === 'error' ? '❌' : '';
     console.log(`${icon} ${diagnostic.message}`);
 
     if (diagnostic.details) {

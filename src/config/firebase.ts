@@ -50,7 +50,7 @@ if (!getApps().length) {
  */
 export const auth: Auth = getAuth(app);
 
-// ✅ Activer la persistance locale pour offline-first (medJira.md #3)
+//  Activer la persistance locale pour offline-first (medJira.md #3)
 let firestoreInstance: Firestore;
 if (typeof window !== 'undefined') {
   try {
@@ -69,7 +69,7 @@ if (typeof window !== 'undefined') {
   firestoreInstance = getFirestore(app);
 }
 
-// ✅ Export de l'instance Firestore
+//  Export de l'instance Firestore
 export const db: Firestore = firestoreInstance;
 export const storage: FirebaseStorage = getStorage(app);
 

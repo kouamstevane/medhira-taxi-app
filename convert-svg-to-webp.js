@@ -25,7 +25,7 @@ const svgContent = fs.readFileSync(svgPath, 'utf8');
 const base64Match = svgContent.match(/data:image\/png;base64,([^"]+)/);
 
 if (base64Match) {
-  console.log('✅ Image PNG base64 trouvée dans le SVG');
+  console.log(' Image PNG base64 trouvée dans le SVG');
   
   // Convertir le base64 en buffer
   const imageBuffer = Buffer.from(base64Match[1], 'base64');
@@ -41,15 +41,15 @@ if (base64Match) {
       const newSize = info.size;
       const saved = ((originalSize - newSize) / originalSize * 100).toFixed(1);
       
-      console.log(`\n✅ Conversion réussie!`);
+      console.log(`\n Conversion réussie!`);
       console.log(`   Taille originale: ${(originalSize / 1024 / 1024).toFixed(2)} MB`);
       console.log(`   Taille WebP: ${(newSize / 1024 / 1024).toFixed(2)} MB`);
       console.log(`   Économie: ${saved}%`);
       console.log(`\n💡 Vous pouvez maintenant supprimer taxi-booking.svg et utiliser taxi-booking.webp`);
     })
     .catch(err => {
-      console.error('❌ Erreur lors de la conversion:', err);
+      console.error('Erreur lors de la conversion:', err);
     });
 } else {
-  console.log('❌ Aucune image base64 trouvée dans le SVG');
+  console.log('Aucune image base64 trouvée dans le SVG');
 }

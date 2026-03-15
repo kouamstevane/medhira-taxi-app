@@ -8,7 +8,7 @@ import CryptoJS from 'crypto-js';
  * Remplace @capacitor/secure-storage avec Preferences + Crypto-js
  * Conforme à medJiraV2.md §6.1, §8.2 (RGPD)
  * 
- * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
+ *  CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * 
  * Fonctionnalités:
  * - Chiffrement AES-256 pour toutes les données
@@ -142,13 +142,13 @@ interface StoredPosition {
 
 /**
  * Service de stockage sécurisé avec chiffrement AES-256
- * ✅ CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
+ *  CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * 🔒 Conforme à §8.2 (RGPD) et §12 (Anti-Patterns)
  */
 class SecureStorageService {
     /**
      * Chiffre une donnée avec AES-256 en utilisant la clé dérivée
-     * ✅ CHIFFREMENT RÉACTIVÉ
+     *  CHIFFREMENT RÉACTIVÉ
      */
     private async encrypt(data: string): Promise<string> {
         const encryptionKey = await getEncryptionKey();
@@ -157,7 +157,7 @@ class SecureStorageService {
 
     /**
      * Déchiffre une donnée en utilisant la clé dérivée
-     * ✅ CHIFFREMENT RÉACTIVÉ
+     *  CHIFFREMENT RÉACTIVÉ
      */
     private async decrypt(encryptedData: string): Promise<string> {
         const encryptionKey = await getEncryptionKey();

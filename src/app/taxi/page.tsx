@@ -27,7 +27,7 @@ export default function TaxiPage() {
   const router = useRouter();
   const { currentUser } = useAuth();
   
-  // ✅ Fonction pour déclencher le haptic feedback (medJira.md #93)
+  //  Fonction pour déclencher le haptic feedback (medJira.md #93)
   const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Medium) => {
     if (Capacitor.isNativePlatform()) {
       try {
@@ -114,7 +114,7 @@ export default function TaxiPage() {
   };
 
   const handleSearchDriver = async () => {
-    await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
+    await triggerHaptic(ImpactStyle.Light); //  Haptic feedback (medJira.md #93)
     logger.info('Recherche de chauffeur démarrée', { bookingId });
   };
 
@@ -364,7 +364,7 @@ export default function TaxiPage() {
                 onClick={async () => {
                   if (!bookingId) return;
 
-                  await triggerHaptic(ImpactStyle.Medium); // ✅ Haptic feedback (medJira.md #93)
+                  await triggerHaptic(ImpactStyle.Medium); //  Haptic feedback (medJira.md #93)
                   console.log('[RETRY] Début du réessai pour bookingId:', bookingId);
 
                   try {
@@ -434,7 +434,7 @@ export default function TaxiPage() {
               {/* Bouton retour à l'accueil */}
               <button
                 onClick={async () => {
-                  await triggerHaptic(ImpactStyle.Light); // ✅ Haptic feedback (medJira.md #93)
+                  await triggerHaptic(ImpactStyle.Light); //  Haptic feedback (medJira.md #93)
                   setStep('form');
                   setBookingId(null);
                   router.push('/dashboard');
@@ -475,7 +475,7 @@ export default function TaxiPage() {
               </p>
               <button
                 onClick={async () => {
-                  await triggerHaptic(ImpactStyle.Medium); // ✅ Haptic feedback (medJira.md #93)
+                  await triggerHaptic(ImpactStyle.Medium); //  Haptic feedback (medJira.md #93)
                   setStep('form');
                   setBookingId(null);
                   setPickupAddress('');

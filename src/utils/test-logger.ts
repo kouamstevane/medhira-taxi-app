@@ -551,8 +551,8 @@ ${error.stackTrace || 'Pas de stack trace disponible'}
 ║ Fin: ${(report.endTime || 'En cours...').padEnd(59)} ║
 ╠═══════════════════════════════════════════════════════════════════════╣
 ║ Total de tests: ${String(report.totalTests).padEnd(53)} ║
-║ ✅ Réussis: ${String(report.passedTests).padEnd(57)} ║
-║ ❌ Échoués: ${String(report.failedTests).padEnd(57)} ║
+║  Réussis: ${String(report.passedTests).padEnd(57)} ║
+║ Échoués: ${String(report.failedTests).padEnd(57)} ║
 ║ ⏭️  Ignorés: ${String(report.skippedTests).padEnd(57)} ║
 ║ 📈 Taux de réussite: ${(successRate + '%').padEnd(49)} ║
 ╠═══════════════════════════════════════════════════════════════════════╣

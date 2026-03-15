@@ -67,14 +67,14 @@ async function retryWithBackoff<T>(
       const result = await operation();
       
       // Succès : logger et retourner le résultat
-      console.log(`[Retry] ✅ Succès à la tentative ${attempt}/${maxAttempts}`);
+      console.log(`[Retry]  Succès à la tentative ${attempt}/${maxAttempts}`);
       return result;
       
     } catch (error) {
       lastError = error as Error;
       
       // Logger l'erreur avec contexte
-      console.error(`[Retry] ❌ Erreur à la tentative ${attempt}/${maxAttempts}:`, {
+      console.error(`[Retry] Erreur à la tentative ${attempt}/${maxAttempts}:`, {
         message: lastError.message,
         code: (lastError as any).code,
         stack: lastError.stack
@@ -99,7 +99,7 @@ async function retryWithBackoff<T>(
   }
 
   // Toutes les tentatives ont échoué
-  console.error(`[Retry] ❌ Toutes les ${maxAttempts} tentatives ont échoué`);
+  console.error(`[Retry] Toutes les ${maxAttempts} tentatives ont échoué`);
   throw lastError;
 }
 
@@ -115,7 +115,7 @@ async function retryWithBackoff<T>(
  */
 function checkConnectivity(): boolean {
   const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-  console.log(`[Connectivity] Statut de connexion: ${isOnline ? '✅ En ligne' : '❌ Hors ligne'}`);
+  console.log(`[Connectivity] Statut de connexion: ${isOnline ? ' En ligne' : 'Hors ligne'}`);
   return isOnline;
 }
 
@@ -131,12 +131,12 @@ function useConnectivityMonitor(showWarning: (message: string) => void) {
     setIsOnline(checkConnectivity());
 
     const handleOnline = () => {
-      console.log('[Connectivity] ✅ Connexion rétablie');
+      console.log('[Connectivity]  Connexion rétablie');
       setIsOnline(true);
     };
 
     const handleOffline = () => {
-      console.warn('[Connectivity] ❌ Connexion perdue');
+      console.warn('[Connectivity] Connexion perdue');
       setIsOnline(false);
       showWarning('Connexion internet perdue. Veuillez vérifier votre connexion.');
     };
@@ -198,7 +198,7 @@ async function redirectWithFallback(
           intendedUrl: url
         });
 
-        console.warn('[Redirection] ⚠️ router.push() a échoué, utilisation de window.location.href()');
+        console.warn('[Redirection] router.push() a échoué, utilisation de window.location.href()');
         window.location.href = url;
       }
     }, 5000);
@@ -207,7 +207,7 @@ async function redirectWithFallback(
     logger.logError('REDIRECTION', error as Error, { url, method: 'router.push' });
     
     // Fallback immédiat en cas d'erreur
-    console.warn('[Redirection] ⚠️ Erreur lors de router.push(), utilisation de window.location.href()');
+    console.warn('[Redirection] Erreur lors de router.push(), utilisation de window.location.href()');
     window.location.href = url;
   }
 }

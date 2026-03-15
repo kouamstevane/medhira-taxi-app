@@ -97,7 +97,7 @@ export const getSuspensionTemplate = (driverName: string, reason?: string) => `
   <body>
     <div class="container">
       <div class="header">
-        <h1 style="margin:0">⚠️ Suspension de compte</h1>
+        <h1 style="margin:0">Suspension de compte</h1>
       </div>
       <div class="content">
         <p>Bonjour <strong>${driverName}</strong>,</p>
@@ -107,7 +107,7 @@ export const getSuspensionTemplate = (driverName: string, reason?: string) => `
           <p style="margin: 10px 0 0 0;">${reason || 'Violation signalée des conditions d\'utilisation.'}</p>
         </div>
         <div class="warning">
-          <strong>⚠️ Action requise :</strong>
+          <strong>Action requise :</strong>
           <p style="margin: 5px 0 0 0;">Vous ne pourrez plus accepter de courses ni vous connecter à l'application pendant la durée de cette suspension.</p>
         </div>
         <p>Pour toute question ou pour faire appel de cette décision, veuillez contacter notre support à l'adresse suivante : <strong>support@medjira.com</strong></p>
@@ -181,13 +181,13 @@ export const getReactivationTemplate = (driverName: string) => `
   <body>
     <div class="container">
       <div class="header">
-        <h1 style="margin:0">✅ Votre compte est réactivé !</h1>
+        <h1 style="margin:0"> Votre compte est réactivé !</h1>
       </div>
       <div class="content">
         <p>Bonjour <strong>${driverName}</strong>,</p>
         <p>Bonne nouvelle ! Après examen de votre situation, votre compte chauffeur sur la plateforme Medjira a été <strong>réactivé</strong>.</p>
         <div class="success">
-          <strong>✅ Accès rétabli :</strong>
+          <strong> Accès rétabli :</strong>
           <p style="margin: 10px 0 0 0;">Vous pouvez à nouveau vous connecter et reprendre vos activités immédiatemment.</p>
         </div>
         <div style="text-align: center;">

@@ -32,9 +32,9 @@ jest.setTimeout(10000);
 // Le logger sera automatiquement intégré à tous les tests
 try {
   require('./src/__tests__/setup/test-logger-setup');
-  console.log('✅ Système de logging des tests initialisé');
+  console.log(' Système de logging des tests initialisé');
 } catch (error) {
-  console.warn('⚠️  Le système de logging des tests n\'a pas pu être chargé:', error.message);
+  console.warn(' Le système de logging des tests n\'a pas pu être chargé:', error.message);
 }
 
 // Mock de Firebase

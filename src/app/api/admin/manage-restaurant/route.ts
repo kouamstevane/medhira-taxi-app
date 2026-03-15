@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Action non supportée' }, { status: 400 });
     }
   } catch (error: any) {
-    console.error('❌ Erreur API manage-restaurant:', error);
+    console.error('Erreur API manage-restaurant:', error);
     return NextResponse.json(
       { error: 'Erreur serveur', details: error.message },
       { status: 500 }

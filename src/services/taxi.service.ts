@@ -6,7 +6,7 @@
  *
  * @module services/taxi
  */
-// ✅ Retiré eslint-disable @typescript-eslint/no-explicit-any (medJira.md #116)
+//  Retiré eslint-disable @typescript-eslint/no-explicit-any (medJira.md #116)
 
 import { logger } from '@/utils/logger';
 import {
@@ -22,10 +22,9 @@ import {
   limit,
   serverTimestamp,
   Timestamp,
-  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
+import { Booking, BookingStatus, CarType, Location } from '@/types';
 import { calculateTripPrice } from '@/lib/firebase-helpers';
 import { CURRENCY_CODE, DEFAULT_PRICING } from '@/utils/constants';
 
@@ -129,7 +128,7 @@ export const updateBookingStatus = async (
 ): Promise<void> => {
   const bookingRef = doc(db, 'bookings', bookingId);
 
-  // ✅ Utilisation de Record<string, unknown> pour plus de flexibilité avec serverTimestamp()
+  //  Utilisation de Record<string, unknown> pour plus de flexibilité avec serverTimestamp()
   const updateData: Record<string, unknown> = {
     status,
     updatedAt: serverTimestamp(),
@@ -147,9 +146,32 @@ export const updateBookingStatus = async (
 };
 
 /**
- * Annuler une réservation
+ * Annuler une réservation et libérer le chauffeur assigné
  */
 export const cancelBooking = async (bookingId: string, reason?: string): Promise<void> => {
+  // Récupérer le booking pour libérer le chauffeur
+  const bookingRef = doc(db, 'bookings', bookingId);
+  const bookingSnap = await getDoc(bookingRef);
+
+  if (bookingSnap.exists()) {
+    const booking = bookingSnap.data() as Booking;
+
+    // Libérer le chauffeur s'il y en a un assigné
+    if (booking.driverId) {
+      try {
+        const driverRef = doc(db, 'drivers', booking.driverId);
+        await updateDoc(driverRef, {
+          status: 'available',
+          isAvailable: true,
+          currentBookingId: null,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (error) {
+        logger.error('Erreur lors de la libération du chauffeur', { error, driverId: booking.driverId });
+      }
+    }
+  }
+
   await updateBookingStatus(bookingId, 'cancelled', { reason });
 };
 
@@ -385,7 +407,7 @@ export const findNearbyDrivers = async (
   // Note: Cette implémentation simplifiée devrait utiliser GeoFirestore
   // pour une recherche géographique efficace
   const driversRef = collection(db, 'drivers');
-  // ✅ Ajout limit(50) pour optimiser les coûts Firestore (medJira.md #57)
+  //  Ajout limit(50) pour optimiser les coûts Firestore (medJira.md #57)
   const q = query(
     driversRef,
     where('status', '==', 'available'),
@@ -403,42 +425,9 @@ export const findNearbyDrivers = async (
   });
 };
 
-/**
- * Assigner un chauffeur à une réservation
- * ✅ Utilisation de batch write pour transaction atomique (medJira.md #60)
- */
-export const assignDriver = async (bookingId: string, driverId: string): Promise<void> => {
-  const driverRef = doc(db, 'drivers', driverId);
-  const driverSnap = await getDoc(driverRef);
-
-  if (!driverSnap.exists()) {
-    throw new Error('Chauffeur introuvable');
-  }
-
-  const driver = driverSnap.data() as Driver;
-
-  // ✅ Utilisation d'un batch pour garantir la cohérence (medJira.md #60)
-  const batch = writeBatch(db);
-  
-  const bookingRef = doc(db, 'bookings', bookingId);
-  batch.update(bookingRef, {
-    status: 'accepted',
-    driverId,
-    driverName: `${driver.firstName} ${driver.lastName}`,
-    driverPhone: driver.phoneNumber,
-    carModel: driver.carModel,
-    carColor: driver.carColor,
-    carPlate: driver.carPlate,
-    updatedAt: serverTimestamp(),
-  });
-
-  batch.update(driverRef, {
-    status: 'busy',
-    updatedAt: serverTimestamp(),
-  });
-
-  await batch.commit();
-};
+// Note: L'assignation de chauffeur se fait via le service matching/assignment.ts
+// qui utilise une transaction Firestore atomique (runTransaction) pour éviter les conflits de concurrence.
+// Ne pas utiliser de doublon ici.
 
 /**
  * Calculer la distance entre deux points (formule de Haversine)
@@ -541,8 +530,7 @@ export const updateDestination = async (
 };
 
 /**
- * Calculer le prix final de la course
- * Appelé à la fin de la course par le chauffeur
+ * Calculer le prix final de la course basé sur la durée réelle
  */
 export const calculateFinalFare = async (bookingId: string): Promise<number> => {
   const bookingRef = doc(db, 'bookings', bookingId);
@@ -551,8 +539,32 @@ export const calculateFinalFare = async (bookingId: string): Promise<number> => 
   if (!bookingSnap.exists()) throw new Error('Réservation introuvable');
   const booking = bookingSnap.data() as Booking;
 
-  // Pour l'instant, on confirme le dernier prix calculé
-  return booking.price;
+  // Calculer la durée réelle depuis le début de la course
+  const startTime = booking.startedAt instanceof Timestamp
+    ? booking.startedAt.toDate()
+    : (booking.startedAt ? new Date(booking.startedAt as any) : null);
+
+  if (!startTime) {
+    // Course pas encore démarrée, retourner le prix estimé
+    return booking.price;
+  }
+
+  const endTime = new Date();
+  const durationMinutes = Math.max(1, Math.ceil((endTime.getTime() - startTime.getTime()) / 60000));
+
+  // Récupérer les tarifs du type de véhicule
+  const carTypes = await getCarTypes();
+  const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
+
+  if (!carType) return booking.price;
+
+  return calculateTripPrice(
+    booking.distance,
+    durationMinutes,
+    carType.basePrice,
+    carType.pricePerKm,
+    carType.pricePerMinute
+  );
 };
 
 /**
@@ -583,7 +595,7 @@ export const startTrip = async (bookingId: string): Promise<void> => {
   // Notification système
   try {
     const { sendSystemMessage } = await import('@/services/chat.service');
-    await sendSystemMessage(bookingId, '✅ Course démarrée ! Bon trajet !');
+    await sendSystemMessage(bookingId, ' Course démarrée ! Bon trajet !');
   } catch (error) {
     logger.error('Erreur envoi message système', { error, bookingId });
   }
@@ -671,6 +683,27 @@ export const calculateCancellationPenalty = async (bookingId: string): Promise<n
   
   // Pénalité = 50% du tarif de base + temps x tarif minute
   const penalty = (carType.basePrice * 0.5) + (elapsedMinutes * carType.pricePerMinute);
-  
+
   return Math.round(Math.max(penalty, 2) * 100) / 100; // Minimum 2 CAD
+};
+
+/**
+ * Débiter la pénalité d'annulation du portefeuille de l'utilisateur
+ * et libérer le chauffeur
+ */
+export const debitCancellationPenalty = async (
+  bookingId: string,
+  userId: string,
+  penalty: number
+): Promise<void> => {
+  if (penalty <= 0) return;
+
+  try {
+    const { payBooking } = await import('@/services/wallet.service');
+    await payBooking(userId, bookingId, penalty);
+    logger.info('Pénalité d\'annulation débitée', { bookingId, userId, penalty });
+  } catch (error) {
+    // Si le solde est insuffisant, on log mais on ne bloque pas l'annulation
+    logger.error('Erreur lors du débit de la pénalité d\'annulation', { error, bookingId, penalty });
+  }
 };

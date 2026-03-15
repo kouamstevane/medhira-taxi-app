@@ -253,7 +253,7 @@ export const encryptSensitiveData = onCall(
 
     try {
       // Chiffrer les données côté serveur
-      // ✅ FIX: Passer la valeur du secret explicitement pour éviter les dépendances implicites
+      //  FIX: Passer la valeur du secret explicitement pour éviter les dépendances implicites
       const encrypted = await encryptData(data.plaintext, encryptionMasterKey.value());
 
       // Retourner les données chiffrées
@@ -671,7 +671,7 @@ export const onFoodOrderCreated = onDocumentWritten('food_orders/{orderId}', asy
     }
 
     // Récupérer les chauffeurs disponibles
-    // ✅ limit() appliqué pour éviter les surcharges (medJira §4.1)
+    //  limit() appliqué pour éviter les surcharges (medJira §4.1)
     const driversSnapshot = await admin.firestore()
       .collection('drivers')
       .where('status', '==', 'approved')
@@ -812,7 +812,7 @@ export const onFoodOrderStatusChanged = onDocumentUpdated('food_orders/{orderId}
 
     switch (newStatus) {
       case 'confirmed':
-        title = 'Commande confirmée ! ✅';
+        title = 'Commande confirmée ! ';
         body = `${restaurantName} a accepté votre commande et va bientôt la préparer.`;
         break;
       case 'preparing':

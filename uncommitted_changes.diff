@@ -314,7 +314,7 @@ index 1e683f9..a999a61 100644
 +    }
 +
 +    // Récupérer les chauffeurs disponibles
-+    // ✅ limit() appliqué pour éviter les surcharges (medJira §4.1)
++    //  limit() appliqué pour éviter les surcharges (medJira §4.1)
 +    const driversSnapshot = await admin.firestore()
 +      .collection('drivers')
 +      .where('status', '==', 'approved')
@@ -446,7 +446,7 @@ index 1e683f9..a999a61 100644
 +
 +    switch (newStatus) {
 +      case 'confirmed':
-+        title = 'Commande confirmée ! ✅';
++        title = 'Commande confirmée ! ';
 +        body = `${restaurantName} a accepté votre commande et va bientôt la préparer.`;
 +        break;
 +      case 'preparing':

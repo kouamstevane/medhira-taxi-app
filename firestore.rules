@@ -144,7 +144,7 @@ service cloud.firestore {
       // - Le phoneNumber doit être null (interdiction de l'auth par téléphone)
       // - Le userType doit être 'chauffeur'
       // - Le statut initial doit être 'draft' ou 'pending'
-      // ✅ FIX: L'email vérifié N'EST PAS requis lors de l'inscription (vérification après inscription)
+      //  FIX: L'email vérifié N'EST PAS requis lors de l'inscription (vérification après inscription)
       allow create: if request.auth.uid == driverId &&
                        request.resource.data.email != null &&
                        request.resource.data.phoneNumber == null &&
@@ -156,7 +156,7 @@ service cloud.firestore {
       // Les admins peuvent modifier le statut (pending -> approved/rejected/suspended)
       // Le chauffeur doit avoir un email vérifié pour toute modification
       // Lors de la transition vers 'pending', seuls certains champs sont autorisés (sécurité renforcée)
-      // ✅ EXCEPTION : Le champ 'isAvailable' peut être modifié sans vérification d'email (fonctionnalité critique)
+      //  EXCEPTION : Le champ 'isAvailable' peut être modifié sans vérification d'email (fonctionnalité critique)
       allow update: if (isOwner(driverId) && 
                         (
                           // Autoriser la modification du profil/docs si en draft ou si l'email est déjà vérifié
@@ -168,7 +168,7 @@ service cloud.firestore {
                           ((resource.data.status in ['draft', 'action_required', 'rejected']) &&
                            isValidPendingTransition()) ||
                           
-                          // ✅ NOUVEAU : Autoriser la modification de 'isAvailable' sans vérification d'email
+                          //  NOUVEAU : Autoriser la modification de 'isAvailable' sans vérification d'email
                           // C'est une fonctionnalité critique pour le fonctionnement de l'application
                           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailable', 'updatedAt']))
                         ))

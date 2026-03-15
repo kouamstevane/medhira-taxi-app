@@ -92,7 +92,7 @@ export const broadcastRideRequest = async (
 
       await setDoc(candidateRef, candidate);
       
-      // ✅ NOUVEAU : Créer aussi une demande dans driver_requests pour optimiser les requêtes
+      //  NOUVEAU : Créer aussi une demande dans driver_requests pour optimiser les requêtes
       // Cela évite les requêtes collection group sur tous les bookings
       const driverRequestRef = doc(db, 'driver_requests', driver.driverId, 'requests', rideId);
       await setDoc(driverRequestRef, {
@@ -117,7 +117,7 @@ export const broadcastRideRequest = async (
     return driverIds;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
-    // ✅ Typage correct de l'erreur (medJira.md #116)
+    //  Typage correct de l'erreur (medJira.md #116)
     console.error('[BROADCAST] Erreur lors du broadcast:', errorMessage);
     throw new Error(`Erreur lors du broadcast: ${errorMessage}`);
   }
@@ -168,7 +168,7 @@ export const markCandidateAccepted = async (
     console.log('[BROADCAST] Candidature acceptée', { rideId, driverId });
     return true;
   } catch (error: unknown) {
-    // ✅ Typage correct de l'erreur (medJira.md #116)
+    //  Typage correct de l'erreur (medJira.md #116)
     const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
     console.error('[BROADCAST] Erreur lors de l\'acceptation:', errorMsg);
     return false;
@@ -198,7 +198,7 @@ export const markCandidateDeclined = async (
 
     console.log('[BROADCAST] Candidature refusée', { rideId, driverId });
   } catch (error: unknown) {
-    // ✅ Typage correct de l'erreur (medJira.md #116)
+    //  Typage correct de l'erreur (medJira.md #116)
     const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
     console.error('[BROADCAST] Erreur lors du refus:', errorMsg);
   }
@@ -212,7 +212,7 @@ export const expireAllPendingCandidates = async (
 ): Promise<void> => {
   try {
     const candidatesRef = collection(db, 'bookings', rideId, 'candidates');
-    // ✅ Ajout limit(100) pour optimiser les coûts Firestore (medJira.md #57)
+    //  Ajout limit(100) pour optimiser les coûts Firestore (medJira.md #57)
     const pendingQuery = query(
       candidatesRef,
       where('status', '==', 'pending'),
@@ -235,7 +235,7 @@ export const expireAllPendingCandidates = async (
       count: pendingSnapshot.size,
     });
   } catch (error: unknown) {
-    // ✅ Typage correct de l'erreur (medJira.md #116)
+    //  Typage correct de l'erreur (medJira.md #116)
     const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
     console.error('[BROADCAST] Erreur lors de l\'expiration:', errorMsg);
   }
@@ -243,14 +243,14 @@ export const expireAllPendingCandidates = async (
 
 /**
  * S'abonner aux demandes de course pour un chauffeur
- * ✅ NOUVELLE ARCHITECTURE : Utilise driver_requests au lieu de collection group sur bookings
+ *  NOUVELLE ARCHITECTURE : Utilise driver_requests au lieu de collection group sur bookings
  * Cela évite les erreurs de permissions et améliore les performances
  */
 export const subscribeToDriverRideRequests = (
   driverId: string,
   callback: (requests: Array<{ rideId: string; candidate: RideCandidate }>) => void
 ): (() => void) => {
-  // ✅ Utiliser driver_requests/{driverId}/requests au lieu de collection group sur bookings
+  //  Utiliser driver_requests/{driverId}/requests au lieu de collection group sur bookings
   const requestsRef = collection(db, 'driver_requests', driverId, 'requests');
   const pendingRequestsQuery = query(
     requestsRef,
@@ -289,7 +289,7 @@ export const subscribeToDriverRideRequests = (
       callback(requests);
     },
     (error: unknown) => {
-      // ✅ Typage correct de l'erreur (medJira.md #116)
+      //  Typage correct de l'erreur (medJira.md #116)
       const errorCode = (error as { code?: string }).code;
       const errorMessage = (error as { message?: string }).message;
       console.error('[BROADCAST] Erreur lors de l\'écoute des demandes:', errorCode, errorMessage);
@@ -301,13 +301,13 @@ export const subscribeToDriverRideRequests = (
 
 /**
  * Récupérer les candidatures en attente pour un chauffeur
- * ✅ NOUVELLE ARCHITECTURE : Utilise driver_requests au lieu de collection group sur bookings
+ *  NOUVELLE ARCHITECTURE : Utilise driver_requests au lieu de collection group sur bookings
  */
 export const getPendingCandidatesForDriver = async (
   driverId: string
 ): Promise<Array<{ rideId: string; candidate: RideCandidate }>> => {
   try {
-    // ✅ Utiliser driver_requests/{driverId}/requests au lieu de collection group sur bookings
+    //  Utiliser driver_requests/{driverId}/requests au lieu de collection group sur bookings
     const requestsRef = collection(db, 'driver_requests', driverId, 'requests');
     const pendingRequestsQuery = query(
       requestsRef,
@@ -343,7 +343,7 @@ export const getPendingCandidatesForDriver = async (
 
     return requests;
   } catch (error: unknown) {
-    // ✅ Typage correct de l'erreur (medJira.md #116)
+    //  Typage correct de l'erreur (medJira.md #116)
     const errorCode = (error as { code?: string }).code;
     const errorMessage = (error as { message?: string }).message;
     console.error('[BROADCAST] Erreur récupération des demandes:', errorCode, errorMessage);

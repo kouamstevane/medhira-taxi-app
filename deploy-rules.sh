@@ -8,7 +8,7 @@ echo ""
 # Vérifier si Firebase CLI est installé
 if ! command -v firebase &> /dev/null
 then
-    echo "❌ Firebase CLI n'est pas installé"
+    echo "Firebase CLI n'est pas installé"
     echo "📦 Installation de Firebase CLI..."
     npm install -g firebase-tools
 fi
@@ -23,6 +23,6 @@ echo "📤 Déploiement des règles Storage..."
 firebase deploy --only storage
 
 echo ""
-echo "✅ Déploiement terminé !"
+echo " Déploiement terminé !"
 echo "🔄 Actualisez votre application pour voir les changements"
 

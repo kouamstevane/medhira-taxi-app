@@ -144,7 +144,7 @@ export class StructuredLogger {
       case 'START':
         return '▶️';
       case 'SUCCESS':
-        return '✅';
+        return '';
       case 'ERROR':
         return '❌';
       case 'WARNING':

@@ -455,7 +455,7 @@ export const sendVerificationEmail = onCall(
 
 /**
  * HTTP Function: Envoi d'email de vérification via HTTP REST
- * ⚠️ Requiert un header Authorization: Bearer <firebase_id_token>
+ * Requiert un header Authorization: Bearer <firebase_id_token>
  */
 export const sendVerificationEmailHttp = onRequest(
   {

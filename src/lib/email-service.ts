@@ -28,7 +28,7 @@ export async function sendEmail({
   const smtpFrom = process.env.SMTP_FROM;
 
   if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
-    console.error('❌ Configuration SMTP manquante:', { 
+    console.error('Configuration SMTP manquante:', { 
       host: !!smtpHost, 
       port: !!smtpPort, 
       user: !!smtpUser, 
@@ -98,7 +98,7 @@ export async function sendDriverStatusEmail({
       html = getRejectionTemplate(driverName, reason);
       break;
     case 'suspension':
-      subject = '⚠️ Votre compte chauffeur Medjira a été suspendu';
+      subject = 'Votre compte chauffeur Medjira a été suspendu';
       html = getSuspensionTemplate(driverName, reason);
       break;
     case 'deactivation':
@@ -106,7 +106,7 @@ export async function sendDriverStatusEmail({
       html = getDeactivationTemplate(driverName, reason);
       break;
     case 'reactivation':
-      subject = '✅ Votre compte chauffeur Medjira a été réactivé';
+      subject = ' Votre compte chauffeur Medjira a été réactivé';
       html = getReactivationTemplate(driverName);
       break;
   }

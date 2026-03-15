@@ -35,7 +35,7 @@ try {
         .png()
         .toFile(path.join(publicPath, name));
       
-      console.log(`✅ ${name} généré avec succès!`);
+      console.log(` ${name} généré avec succès!`);
     }
     console.log('\n🎉 Toutes les icônes ont été générées!');
   }
@@ -43,7 +43,7 @@ try {
   generateIcons().catch(console.error);
 
 } catch {
-  console.log('⚠️  Sharp n\'est pas installé.');
+  console.log(' Sharp n\'est pas installé.');
   console.log('\nPour générer les icônes automatiquement:');
   console.log('1. Installez sharp: npm install --save-dev sharp');
   console.log('2. Exécutez: node scripts/generate-icons.js');

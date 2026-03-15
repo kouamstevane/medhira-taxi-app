@@ -191,8 +191,8 @@ export default function TestMatchingPage() {
                   <div>
                     <p className="font-semibold">{driver.name || driver.id}</p>
                     <p className="text-sm text-gray-600">
-                      Disponible: {driver.isAvailable ? '✅ Oui' : '❌ Non'} | 
-                      Localisation: {driver.hasLocation ? '✅ Oui' : '❌ Non'}
+                      Disponible: {driver.isAvailable ? ' Oui' : 'Non'} | 
+                      Localisation: {driver.hasLocation ? ' Oui' : 'Non'}
                     </p>
                   </div>
                   {!driver.isAvailable && (

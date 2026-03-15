@@ -65,7 +65,7 @@ if "%1"=="coverage" (
     echo.
     call npm run test:coverage
     echo.
-    echo ✅ Rapport de couverture généré dans coverage/lcov-report/index.html
+    echo  Rapport de couverture généré dans coverage/lcov-report/index.html
     goto :end
 )
 
@@ -84,7 +84,7 @@ if "%1"=="ci" (
 )
 
 REM Argument non reconnu
-echo ❌ Argument non reconnu: %1
+echo Argument non reconnu: %1
 echo.
 echo Arguments valides:
 echo   - unit         : Tests unitaires uniquement

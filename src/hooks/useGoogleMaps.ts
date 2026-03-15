@@ -136,7 +136,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     // Fallback sur la clé Browser si aucune clé n'est trouvée
     if (!apiKey) {
       apiKey = 'AIzaSyDMXeXZCFAVGeSFW_-3MYkrqV2bN1SXY-8'; // Clé Browser avec restrictions HTTP
-      console.log('⚠️ [useGoogleMaps] Utilisation de la clé fallback Browser');
+      console.log('[useGoogleMaps] Utilisation de la clé fallback Browser');
     }
 
     if (!apiKey) {

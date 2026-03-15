@@ -20,7 +20,7 @@ async function createAdmin() {
     const serviceAccountPath = path.join(process.cwd(), 'service-account-key.json');
     
     if (!fs.existsSync(serviceAccountPath)) {
-      console.error('❌ Erreur: Fichier service-account-key.json non trouvé');
+      console.error('Erreur: Fichier service-account-key.json non trouvé');
       console.log('📋 Instructions pour obtenir la clé de service:');
       console.log('1. Allez dans Firebase Console: https://console.firebase.google.com/');
       console.log('2. Sélectionnez votre projet');
@@ -46,10 +46,10 @@ async function createAdmin() {
     let userRecord;
     try {
       userRecord = await auth.getUserByEmail(ADMIN_EMAIL);
-      console.log(`✅ Utilisateur trouvé: ${userRecord.displayName} (${userRecord.uid})`);
+      console.log(` Utilisateur trouvé: ${userRecord.displayName} (${userRecord.uid})`);
     } catch (error) {
       if (error.code === 'auth/user-not-found') {
-        console.log(`⚠️  L'utilisateur n'existe pas dans Firebase Auth`);
+        console.log(` L'utilisateur n'existe pas dans Firebase Auth`);
         console.log(`📧 Création de l'utilisateur...`);
         
         // Créer l'utilisateur
@@ -59,7 +59,7 @@ async function createAdmin() {
           displayName: 'Admin Tewe Wilson',
         });
         
-        console.log(`✅ Utilisateur créé: ${userRecord.uid}`);
+        console.log(` Utilisateur créé: ${userRecord.uid}`);
       } else {
         throw error;
       }
@@ -69,7 +69,7 @@ async function createAdmin() {
     const adminDoc = await db.collection('admins').doc(userRecord.uid).get();
     
     if (adminDoc.exists) {
-      console.log(`⚠️  L'utilisateur est déjà admin`);
+      console.log(` L'utilisateur est déjà admin`);
       console.log(`📊 Données admin actuelles:`, adminDoc.data());
     } else {
       // Ajouter l'utilisateur à la collection admins avec l'UID comme ID du document
@@ -81,7 +81,7 @@ async function createAdmin() {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      console.log(`✅ Utilisateur ajouté comme admin avec succès!`);
+      console.log(` Utilisateur ajouté comme admin avec succès!`);
     }
 
     console.log('\n📋 Résumé:');
@@ -94,7 +94,7 @@ async function createAdmin() {
     console.log(`   exists(/databases/$(database)/documents/admins/${userRecord.uid})`);
 
   } catch (error) {
-    console.error('❌ Erreur lors de la création de l\'admin:', error);
+    console.error('Erreur lors de la création de l\'admin:', error);
     process.exit(1);
   } finally {
     process.exit(0);

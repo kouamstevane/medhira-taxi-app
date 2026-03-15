@@ -59,9 +59,9 @@ async function optimizeSVGs() {
       const newSize = Buffer.byteLength(result.data);
       const saved = ((originalSize - newSize) / originalSize * 100).toFixed(1);
       
-      console.log(`✅ ${file}: ${formatBytes(originalSize)} → ${formatBytes(newSize)} (${saved}% réduit)`);
+      console.log(` ${file}: ${formatBytes(originalSize)} → ${formatBytes(newSize)} (${saved}% réduit)`);
     } catch (error) {
-      console.error(`❌ Erreur avec ${file}:`, error.message);
+      console.error(`Erreur avec ${file}:`, error.message);
     }
   }
 }
@@ -84,12 +84,12 @@ async function convertPNGsToWebP() {
       
       const newSize = fs.statSync(webpPath).size;
       const saved = ((originalSize - newSize) / originalSize * 100).toFixed(1);
-      console.log(`✅ ${file} → ${file.replace('.png', '.webp')}: ${formatBytes(originalSize)} → ${formatBytes(newSize)} (${saved}% réduit)`);
+      console.log(` ${file} → ${file.replace('.png', '.webp')}: ${formatBytes(originalSize)} → ${formatBytes(newSize)} (${saved}% réduit)`);
       
       // Optionnel: supprimer l'ancien PNG pour gagner encore plus d'espace
       // fs.unlinkSync(filePath);
     } catch (error) {
-      console.error(`❌ Erreur avec ${file}:`, error.message);
+      console.error(`Erreur avec ${file}:`, error.message);
     }
   }
 }

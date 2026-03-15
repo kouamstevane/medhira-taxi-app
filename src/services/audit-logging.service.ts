@@ -103,11 +103,11 @@ class AuditLoggingService {
     try {
       const currentUser = auth.currentUser;
       
-      // ✅ PRIORITÉ: Utiliser l'userId fourni en paramètre d'abord, puis currentUser.uid
+      //  PRIORITÉ: Utiliser l'userId fourni en paramètre d'abord, puis currentUser.uid
       // Cela garantit que l'userId est disponible même si auth.currentUser est temporairement null
       const userId = entry.userId || currentUser?.uid || 'anonymous';
       
-      // ✅ VALIDATION CRITIQUE: Si pas d'userId valide, logger en console seulement
+      //  VALIDATION CRITIQUE: Si pas d'userId valide, logger en console seulement
       // pour éviter les erreurs Firestore "Missing or insufficient permissions"
       if (!userId || userId === 'anonymous') {
           console.warn('[AuditLogging] Pas d\'userId valide, logging en console seulement:', entry);
@@ -133,7 +133,7 @@ class AuditLoggingService {
         timestamp: serverTimestamp(),
       };
 
-      // ✅ NETTOYAGE CRITIQUE : Supprimer les valeurs `undefined` car Firestore ne les accepte pas
+      //  NETTOYAGE CRITIQUE : Supprimer les valeurs `undefined` car Firestore ne les accepte pas
       // On convertit les `undefined` récursifs en `null` dans `details`
       if (auditEntry.details) {
         Object.keys(auditEntry.details).forEach(key => {

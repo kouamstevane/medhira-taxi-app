@@ -39,7 +39,7 @@ try {
         .png()
         .toFile(outputPath);
       
-      console.log(`✅ ${output} généré avec succès!`);
+      console.log(` ${output} généré avec succès!`);
     }
     console.log('\n🎉 Toutes les images Open Graph ont été générées!');
   }
@@ -47,7 +47,7 @@ try {
   generateOGImages().catch(console.error);
 
 } catch (error) {
-  console.error('❌ Erreur:', error.message);
+  console.error('Erreur:', error.message);
 }
 
 

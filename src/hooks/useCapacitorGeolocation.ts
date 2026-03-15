@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { Geolocation, Position } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
 import { secureStorage } from '@/services/secureStorage.service';
-// ✅ Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
+//  Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
 
 export interface Location {
     lat: number;
@@ -29,7 +29,7 @@ export interface GeolocationState {
 const MIN_ACCEPTABLE_ACCURACY = 50; // 50 mètres max
 const IDEAL_ACCURACY = 20; // Idéalement moins de 20 mètres
 
-// ✅ Modes adaptatifs selon medJiraV2.md §6.1
+//  Modes adaptatifs selon medJiraV2.md §6.1
 export type GeolocationMode = 'tracking' | 'booking' | 'battery_critical';
 
 interface GeolocationModeConfig {
@@ -71,7 +71,7 @@ export const useCapacitorGeolocation = () => {
 
     /**
      * Obtenir la position actuelle avec modes adaptatifs
-     * ✅ Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
+     *  Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
      * 
      * @param mode Mode de géolocalisation (tracking, booking, battery_critical)
      * @param fallbackToCache Si true, utilise le cache lastKnownPosition en cas d'échec
@@ -98,13 +98,13 @@ export const useCapacitorGeolocation = () => {
                 }
             }
 
-            // ✅ Utiliser la configuration selon le mode (medJiraV2.md §6.1)
+            //  Utiliser la configuration selon le mode (medJiraV2.md §6.1)
             const modeConfig = MODE_CONFIGS[mode];
             console.log('[Geolocation] Configuration mode:', modeConfig);
 
             let bestPosition: Position | null = null;
             let bestAccuracy = Infinity;
-            const MAX_ATTEMPTS = 3; // ✅ Dégradation progressive après 3 échecs
+            const MAX_ATTEMPTS = 3; //  Dégradation progressive après 3 échecs
 
             // Stratégies de tentatives progressives
             const strategies = [
@@ -139,7 +139,7 @@ export const useCapacitorGeolocation = () => {
                     }
                     
                 } catch (err: unknown) {
-                    // ✅ Typage correct de l'erreur (medJira.md #116)
+                    //  Typage correct de l'erreur (medJira.md #116)
                     const errorCode = (err as { code?: number })?.code;
                     const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
                     console.warn(`[Geolocation] Échec tentative ${i + 1} (${errorCode}):`, errorMessage);
@@ -147,7 +147,7 @@ export const useCapacitorGeolocation = () => {
                 }
             }
 
-            // ✅ Dégradation progressive : Fallback lastKnownPosition après 3 échecs
+            //  Dégradation progressive : Fallback lastKnownPosition après 3 échecs
             if (!bestPosition && fallbackToCache) {
                 console.warn('[Geolocation] Échec GPS, tentative fallback lastKnownPosition...');
                 
@@ -203,7 +203,7 @@ export const useCapacitorGeolocation = () => {
                 timestamp: bestPosition.timestamp,
             };
 
-            // ✅ Mettre en cache lastKnownPosition (medJiraV2.md §6.1)
+            //  Mettre en cache lastKnownPosition (medJiraV2.md §6.1)
             await secureStorage.setLastKnownPosition({
                 lat: preciseLocation.lat,
                 lng: preciseLocation.lng,
@@ -239,7 +239,7 @@ export const useCapacitorGeolocation = () => {
 
          
         } catch (err: unknown) {
-            // ✅ Typage correct de l'erreur (medJira.md #116)
+            //  Typage correct de l'erreur (medJira.md #116)
             console.error('[Geolocation] Erreur:', err);
             let errorMessage = 'Impossible d\'obtenir la position';
 
@@ -261,13 +261,13 @@ export const useCapacitorGeolocation = () => {
 
     /**
      * Watch position (pour le suivi en temps réel avec precision)
-     * ✅ Ajout throttling pour optimiser la batterie (medJira.md #67)
+     *  Ajout throttling pour optimiser la batterie (medJira.md #67)
      */
     const watchPosition = useCallback((
         callback: (location: PreciseLocation) => void,
         options?: { throttleMs?: number; maxFrequencyHz?: number }
     ) => {
-        // ✅ Configuration du throttling (medJira.md #67)
+        //  Configuration du throttling (medJira.md #67)
         const { throttleMs = 1000, maxFrequencyHz = 1 } = options || {};
         let watchId: string | null = null;
         let lastCallbackTime = 0;
@@ -278,7 +278,7 @@ export const useCapacitorGeolocation = () => {
                     {
                         enableHighAccuracy: true,
                         timeout: 10000,
-                        maximumAge: throttleMs / 1000 // ✅ Accepte cache récent pour réduire fréquence
+                        maximumAge: throttleMs / 1000 //  Accepte cache récent pour réduire fréquence
                     },
                     (position, err) => {
                         if (err) {
@@ -289,7 +289,7 @@ export const useCapacitorGeolocation = () => {
                             const now = Date.now();
                             const timeSinceLastCallback = now - lastCallbackTime;
                             
-                            // ✅ Throttling à maxFrequencyHz (medJira.md #67)
+                            //  Throttling à maxFrequencyHz (medJira.md #67)
                             if (timeSinceLastCallback >= throttleMs) {
                                 lastCallbackTime = now;
                                 const preciseLocation: PreciseLocation = {
@@ -307,7 +307,7 @@ export const useCapacitorGeolocation = () => {
                     }
                 );
             } catch (err: unknown) {
-                // ✅ Typage correct de l'erreur (medJira.md #116)
+                //  Typage correct de l'erreur (medJira.md #116)
                 console.error('Erreur démarrage watch:', err instanceof Error ? err.message : err);
             }
         };

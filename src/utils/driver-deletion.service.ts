@@ -82,65 +82,65 @@ class DriverDeletionService {
     try {
       // 1. Supprimer le document principal du chauffeur
       await this.deleteDocument('drivers', driverId, stats);
-      console.log(`✅ Document principal 'drivers/${driverId}' supprimé`);
+      console.log(` Document principal 'drivers/${driverId}' supprimé`);
 
       // 2. Supprimer le document utilisateur associé
       await this.deleteDocument('users', driverId, stats);
-      console.log(`✅ Document 'users/${driverId}' supprimé`);
+      console.log(` Document 'users/${driverId}' supprimé`);
 
       // 3. Supprimer le portefeuille
       await this.deleteDocument('wallets', driverId, stats);
-      console.log(`✅ Document 'wallets/${driverId}' supprimé`);
+      console.log(` Document 'wallets/${driverId}' supprimé`);
 
       // 4. Supprimer les véhicules associés
       await this.deleteVehicles(driverId, stats);
-      console.log(`✅ Véhicules associés supprimés`);
+      console.log(` Véhicules associés supprimés`);
 
       // 5. Supprimer les transactions du chauffeur
       await this.deleteCollectionByField('transactions', 'driverId', driverId, stats);
-      console.log(`✅ Transactions du chauffeur supprimées`);
+      console.log(` Transactions du chauffeur supprimées`);
 
       // 6. Supprimer les réservations du chauffeur
       await this.deleteCollectionByField('bookings', 'driverId', driverId, stats);
-      console.log(`✅ Réservations du chauffeur supprimées`);
+      console.log(` Réservations du chauffeur supprimées`);
 
       // 7. Supprimer les livraisons du chauffeur
       await this.deleteCollectionByField('parcels', 'driverId', driverId, stats);
-      console.log(`✅ Livraisons du chauffeur supprimées`);
+      console.log(` Livraisons du chauffeur supprimées`);
 
       // 8. Supprimer les courses actives
       await this.deleteCollectionByField('active_bookings', 'driverId', driverId, stats);
-      console.log(`✅ Courses actives supprimées`);
+      console.log(` Courses actives supprimées`);
 
       // 9. Supprimer les appels VOIP où le chauffeur est impliqué
       await this.deleteCalls(driverId, stats);
-      console.log(`✅ Appels VOIP supprimés`);
+      console.log(` Appels VOIP supprimés`);
 
       // 10. Supprimer le document admin si le chauffeur est aussi admin
       await this.deleteDocument('admins', driverId, stats);
-      console.log(`✅ Document admin éventuel supprimé`);
+      console.log(` Document admin éventuel supprimé`);
 
       // 11. Supprimer les fichiers Storage
       await this.deleteDriverStorageFiles(driverId, stats);
-      console.log(`✅ Fichiers Storage supprimés (${stats.filesDeleted} fichiers)`);
+      console.log(` Fichiers Storage supprimés (${stats.filesDeleted} fichiers)`);
 
       // 12. Supprimer le compte Firebase Auth (RGPD)
       try {
         await admin.auth().deleteUser(driverId);
-        console.log(`✅ Compte Firebase Auth '${driverId}' supprimé`);
+        console.log(` Compte Firebase Auth '${driverId}' supprimé`);
       } catch (authError: any) {
         // Si l'utilisateur n'existe pas déjà dans Auth, ce n'est pas une erreur bloquante
         if (authError.code !== 'auth/user-not-found') {
           throw authError;
         }
-        console.warn(`⚠️ Compte Firebase Auth '${driverId}' non trouvé lors de la suppression`);
+        console.warn(`Compte Firebase Auth '${driverId}' non trouvé lors de la suppression`);
       }
 
       // 13. Logger l'audit
       await this.logDeletionAudit(driverId, adminId, stats);
 
       const duration = Date.now() - startTime;
-      console.log(`✅ Suppression complète terminée en ${duration}ms`);
+      console.log(` Suppression complète terminée en ${duration}ms`);
 
       return {
         success: stats.errors.length === 0,
@@ -152,7 +152,7 @@ class DriverDeletionService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       stats.errors.push(`Erreur critique: ${errorMessage}`);
-      console.error(`❌ Erreur lors de la suppression du chauffeur ${driverId}:`, error);
+      console.error(`Erreur lors de la suppression du chauffeur ${driverId}:`, error);
 
       // Logger l'échec
       await this.logDeletionAudit(driverId, adminId, stats, false, errorMessage);
@@ -180,7 +180,7 @@ class DriverDeletionService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       stats.errors.push(`${collectionName}/${documentId}: ${errorMessage}`);
-      console.warn(`⚠️  Erreur suppression ${collectionName}/${documentId}:`, error);
+      console.warn(` Erreur suppression ${collectionName}/${documentId}:`, error);
     }
   }
 
@@ -236,7 +236,7 @@ class DriverDeletionService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       stats.errors.push(`${collectionName} (${fieldName}=${value}): ${errorMessage}`);
-      console.warn(`⚠️  Erreur suppression collection ${collectionName}:`, error);
+      console.warn(` Erreur suppression collection ${collectionName}:`, error);
     }
   }
 
@@ -265,7 +265,7 @@ class DriverDeletionService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       stats.errors.push(`vehicles (ownerId=${driverId}): ${errorMessage}`);
-      console.warn(`⚠️  Erreur suppression véhicules:`, error);
+      console.warn(` Erreur suppression véhicules:`, error);
     }
   }
 
@@ -285,13 +285,13 @@ class DriverDeletionService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       stats.errors.push(`calls: ${errorMessage}`);
-      console.warn(`⚠️  Erreur suppression appels:`, error);
+      console.warn(` Erreur suppression appels:`, error);
     }
   }
 
   /**
    * Supprime tous les fichiers Storage associés au chauffeur
-   * ✅ CORRECTION: Ajoute vérification de l'accessibilité du bucket avant suppression
+   *  CORRECTION: Ajoute vérification de l'accessibilité du bucket avant suppression
    */
   private async deleteDriverStorageFiles(
     driverId: string,
@@ -303,7 +303,7 @@ class DriverDeletionService {
       `profile_images/${driverId}`,
     ];
 
-    // ✅ CORRECTION: Vérifier que le bucket Storage est accessible avant de traiter les fichiers
+    //  CORRECTION: Vérifier que le bucket Storage est accessible avant de traiter les fichiers
     let bucket: any = null;
     try {
       bucket = admin.storage().bucket();
@@ -311,7 +311,7 @@ class DriverDeletionService {
       // Tenter de récupérer les métadonnées du bucket pour vérifier l'accessibilité
       try {
         await bucket.getMetadata();
-        console.log('✅ Bucket Storage accessible');
+        console.log(' Bucket Storage accessible');
       } catch (metadataError) {
         const errorMsg = metadataError instanceof Error ? metadataError.message : 'Erreur inconnue';
         throw new Error(`Bucket Storage inaccessible: ${errorMsg}`);
@@ -319,8 +319,8 @@ class DriverDeletionService {
     } catch (bucketError) {
       const errorMessage = bucketError instanceof Error ? bucketError.message : 'Erreur inconnue';
       stats.errors.push(`Storage (initialisation): ${errorMessage}`);
-      console.error('❌ Erreur critique d\'accès au bucket Storage:', bucketError);
-      // ✅ CORRECTION: Re-lancer l'erreur pour signaler le problème critique
+      console.error('Erreur critique d\'accès au bucket Storage:', bucketError);
+      //  CORRECTION: Re-lancer l'erreur pour signaler le problème critique
       throw bucketError;
     }
 
@@ -338,13 +338,13 @@ class DriverDeletionService {
             await Promise.all(batch.map((file: any) => file.delete()));
             stats.filesDeleted += batch.length;
           }
-          console.log(`✅ ${files.length} fichier(s) supprimé(s) dans ${path}`);
+          console.log(` ${files.length} fichier(s) supprimé(s) dans ${path}`);
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
         stats.errors.push(`Storage (${path}): ${errorMessage}`);
-        console.warn(`⚠️  Erreur suppression Storage ${path}:`, error);
-        // ✅ CORRECTION: Re-lancer si c'est une erreur de permission critique
+        console.warn(` Erreur suppression Storage ${path}:`, error);
+        //  CORRECTION: Re-lancer si c'est une erreur de permission critique
         if (errorMessage.includes('permission') || errorMessage.includes('authorized')) {
           throw error;
         }
@@ -394,7 +394,7 @@ class DriverDeletionService {
         },
       });
     } catch (error) {
-      console.error('❌ Erreur lors du logging d\'audit:', error);
+      console.error('Erreur lors du logging d\'audit:', error);
     }
   }
 
@@ -434,7 +434,7 @@ class DriverDeletionService {
         const count = snapshot.data().count;
         collectionsCount[collection.name] = count;
       } catch (error) {
-        console.warn(`⚠️  Erreur comptage ${collection.name}:`, error);
+        console.warn(` Erreur comptage ${collection.name}:`, error);
         collectionsCount[collection.name] = 0;
       }
     }
@@ -453,7 +453,7 @@ class DriverDeletionService {
         estimatedFilesCount += files.length;
       }
     } catch (error) {
-      console.warn('⚠️  Erreur estimation fichiers Storage:', error);
+      console.warn(' Erreur estimation fichiers Storage:', error);
     }
 
     return {
