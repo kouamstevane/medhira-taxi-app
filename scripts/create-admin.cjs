@@ -1,8 +1,8 @@
 /**
  * Script pour créer un utilisateur admin dans Firestore
  * 
- * Usage: node scripts/create-admin.js <email>
- * Exemple: node scripts/create-admin.js tewewilson@gmail.com
+ * Usage: node scripts/create-admin.cjs <email>
+ * Exemple: node scripts/create-admin.cjs tewewilson@gmail.com
  */
 
 const admin = require('firebase-admin');
