@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { auth, db, storage, app } from '../../../config/firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp as firestoreServerTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useRouter } from 'next/navigation';
@@ -306,7 +306,7 @@ export default function DriverRegisterWizard() {
   const saveProgress = useCallback(async () => {
     try {
       const progress: RegistrationProgress = {
-        step1Data,
+        step1Data: { ...step1Data, password: undefined, confirmPassword: undefined }, // Mot de passe exclu
         step2Data: { ...step2Data, ssn: undefined }, // SSN exclu
         step3Data,
         currentStep,
@@ -488,9 +488,19 @@ export default function DriverRegisterWizard() {
 
     try {
       if (!isExistingUser) {
-        await createUserWithEmailAndPassword(auth, data.email, data.password);
+        const credential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+        // Créer immédiatement un document utilisateur pour éviter les comptes orphelins
+        // (auth créé mais pas de doc Firestore si l'inscription est abandonnée)
+        await setDoc(doc(db, 'users', credential.user.uid), {
+          uid: credential.user.uid,
+          email: data.email,
+          userType: 'chauffeur',
+          registrationStatus: 'incomplete',
+          createdAt: firestoreServerTimestamp(),
+          updatedAt: firestoreServerTimestamp(),
+        });
       }
-      
+
       setStep1Data(data);
       loggerRef.current.logSuccess('STEP1_NEXT', {});
       setCurrentStep(2);
@@ -925,8 +935,8 @@ export default function DriverRegisterWizard() {
            },
            status: 'pending',
            userType: 'chauffeur',
-           createdAt: new Date(),
-           updatedAt: new Date(),
+           createdAt: firestoreServerTimestamp(),
+           updatedAt: firestoreServerTimestamp(),
            isAvailable: false,
            rating: 0,
            tripsCompleted: 0

@@ -1,20 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/config/firebase-admin';
+import { adminDb, adminAuth } from '@/config/firebase-admin';
 import { z } from 'zod';
 
 const ManageUserSchema = z.object({
   userId: z.string().min(1),
   role: z.enum(['client', 'restaurateur', 'chauffeur', 'admin']),
-  adminUid: z.string().min(1),
 });
 
 export async function POST(request: NextRequest) {
   try {
-    if (!adminDb) {
+    if (!adminDb || !adminAuth) {
       return NextResponse.json(
         { error: 'Firebase Admin SDK non configuré.' },
         { status: 503 }
       );
+    }
+
+    // Vérifier le token d'authentification Firebase
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Token d\'authentification requis.' }, { status: 401 });
+    }
+    let adminUid: string;
+    try {
+      const decodedToken = await adminAuth.verifyIdToken(authHeader.slice(7));
+      adminUid = decodedToken.uid;
+    } catch {
+      return NextResponse.json({ error: 'Token invalide ou expiré.' }, { status: 401 });
     }
 
     const body = await request.json();
@@ -27,12 +39,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { userId, role, adminUid } = result.data;
+    const { userId, role } = result.data;
 
     // 1. Vérifier les permissions de l'admin
     const adminDoc = await adminDb.collection('admins').doc(adminUid).get();
     if (!adminDoc.exists) {
-      // Fallback check in case the doc uses a different ID but has a userId field
       const adminSnapshot = await adminDb.collection('admins')
         .where('userId', '==', adminUid)
         .limit(1)

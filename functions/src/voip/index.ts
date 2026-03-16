@@ -146,9 +146,12 @@ export const createCall = onCall(
     throw new HttpsError('permission-denied', 'Accès non autorisé à cette course');
   }
 
-  // 3.5. Valider que le destinataire existe
-  const calleeDoc = await getDb().collection('users').doc(calleeId).get();
-  if (!calleeDoc.exists) {
+  // 3.5. Valider que le destinataire existe (clients dans 'users', chauffeurs dans 'drivers')
+  const [calleeUserDoc, calleeDriverDoc] = await Promise.all([
+    getDb().collection('users').doc(calleeId).get(),
+    getDb().collection('drivers').doc(calleeId).get(),
+  ]);
+  if (!calleeUserDoc.exists && !calleeDriverDoc.exists) {
     throw new HttpsError('not-found', 'Destinataire introuvable');
   }
 
@@ -176,7 +179,9 @@ export const createCall = onCall(
     agoraAppCertificate.value()
   );
 
-  // 7. Créer le document d'appel
+  // 7. Créer le document d'appel — le token n'est PAS persisté en Firestore
+  // pour éviter qu'un tiers authentifié puisse le lire et accéder au canal audio.
+  // Le token est retourné uniquement à l'appelant via la réponse de la fonction.
   const callRef = await getDb().collection('calls').add({
     callerId,
     calleeId,
@@ -184,7 +189,6 @@ export const createCall = onCall(
     status: 'ringing',
     startTime: getAdmin().firestore.FieldValue.serverTimestamp(),
     channel,
-    token,
     callerMetadata: {
       name: callerData?.displayName || 'Utilisateur',
       avatar: callerData?.photoURL || null,
@@ -210,7 +214,8 @@ export const createCall = onCall(
         callId: callRef.id,
         rideId,
         channel,
-        token,
+        // Le token Agora n'est pas inclus dans FCM : le destinataire doit appeler
+        // la Cloud Function getCallToken(callId) pour obtenir son propre token sécurisé.
         callerName: callerDataForNotif?.displayName || callerDataForNotif?.name || 'Utilisateur',
         callerAvatar: callerDataForNotif?.photoURL || '',
         callerRole

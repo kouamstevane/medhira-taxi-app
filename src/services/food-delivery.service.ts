@@ -424,6 +424,8 @@ export const createFoodOrder = async (
   const ordersRef = collection(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS);
   const newOrderRef = doc(ordersRef);
 
+  const pickupCode = generatePickupCode();
+
   const order: Omit<FoodOrder, 'createdAt' | 'updatedAt'> & { createdAt: ReturnType<typeof serverTimestamp>; updatedAt: ReturnType<typeof serverTimestamp> } = {
     id: newOrderRef.id,
     userId: orderData.userId,
@@ -437,20 +439,40 @@ export const createFoodOrder = async (
     basePrice,
     deliveryCost,
     totalOrderPrice,
-    // Statut et tracking
-    status: 'confirmed', // Règle 3 : paiement validé = confirmed directement
-    pickupCode: generatePickupCode(), // Règle 4 : code unique
-    paymentValidated: true, // Règle 3
+    // Statut initial : en attente de paiement (Règle 3)
+    status: 'pending_payment',
+    pickupCode, // Règle 4 : code unique
+    paymentValidated: false,
     // Infos restaurant (dénormalisées)
     restaurantName: restaurant.name,
     restaurantImage: restaurant.imageUrl,
     // Timestamps
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    confirmedAt: serverTimestamp() as Timestamp,
   };
 
   await setDoc(newOrderRef, order);
+
+  // Règle 3 : débiter le wallet avant de confirmer la commande
+  try {
+    const { payBooking } = await import('@/services/wallet.service');
+    await payBooking(orderData.userId, newOrderRef.id, totalOrderPrice);
+    // Paiement validé : confirmer la commande
+    await updateDoc(newOrderRef, {
+      status: 'confirmed',
+      paymentValidated: true,
+      confirmedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (payError) {
+    // Paiement échoué : annuler la commande
+    await updateDoc(newOrderRef, {
+      status: 'cancelled',
+      cancellationReason: `Paiement échoué: ${(payError as Error).message}`,
+      updatedAt: serverTimestamp(),
+    });
+    throw new Error(`Paiement échoué: ${(payError as Error).message}`);
+  }
 
   logger.info('Commande de livraison créée', {
     orderId: newOrderRef.id,
@@ -584,7 +606,7 @@ export const submitRestaurantReview = async (
 
   // Mettre à jour la note moyenne du restaurant
   try {
-    await updateRestaurantRating(review.restaurantId);
+    await updateRestaurantRating(review.restaurantId, review.rating);
   } catch (error) {
     logger.warn('Erreur mise à jour rating restaurant', { error, restaurantId: review.restaurantId });
   }
@@ -638,21 +660,28 @@ export const getRestaurantReviews = async (
 };
 
 /**
- * Mettre à jour la note moyenne d'un restaurant
- * Appelé après chaque nouvel avis
+ * Mettre à jour la note moyenne d'un restaurant avec une moyenne incrémentale
+ * pour éviter de lire tous les avis à chaque mise à jour.
  */
-const updateRestaurantRating = async (restaurantId: string): Promise<void> => {
-  const reviews = await getRestaurantReviews(restaurantId, 50);
-
-  if (reviews.length === 0) return;
-
-  const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
-
+const updateRestaurantRating = async (restaurantId: string, newRating: number): Promise<void> => {
+  const { increment } = await import('firebase/firestore');
   const restaurantRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId);
-  await updateDoc(restaurantRef, {
-    rating: Math.round(avgRating * 10) / 10,
-    totalReviews: reviews.length,
-    updatedAt: serverTimestamp(),
+
+  await runTransaction(db, async (tx) => {
+    const restaurantSnap = await tx.get(restaurantRef);
+    if (!restaurantSnap.exists()) return;
+
+    const data = restaurantSnap.data();
+    const oldCount: number = data.totalReviews ?? 0;
+    const oldRating: number = data.rating ?? 0;
+    const newCount = oldCount + 1;
+    const newAvg = (oldRating * oldCount + newRating) / newCount;
+
+    tx.update(restaurantRef, {
+      rating: Math.round(newAvg * 10) / 10,
+      totalReviews: increment(1),
+      updatedAt: serverTimestamp(),
+    });
   });
 };
 

@@ -92,7 +92,6 @@ export const rechargeWallet = async (
   userId: string,
   request: RechargeRequest
 ): Promise<string> => {
-  // Créer la transaction de dépôt
   const transactionId = await createTransaction({
     userId,
     type: 'deposit',
@@ -102,11 +101,13 @@ export const rechargeWallet = async (
     description: `Rechargement via ${request.method}`,
   });
 
-  // Dans une vraie application, ici on intégrerait l'API de paiement
-  // (Orange Money, MTN Mobile Money, Stripe, PayPal, etc.)
-
-  // Pour l'instant, on simule un paiement réussi immédiatement
-  await completeTransaction(transactionId, userId, request.amount);
+  try {
+    // Dans une vraie application, ici on intégrerait l'API de paiement
+    await completeTransaction(transactionId, userId, request.amount);
+  } catch (error) {
+    await failTransaction(transactionId, `Échec rechargement: ${(error as Error).message}`);
+    throw error;
+  }
 
   return transactionId;
 };
@@ -148,31 +149,55 @@ export const completeTransaction = async (
 
 /**
  * Payer une course avec le portefeuille
+ * La vérification du solde est effectuée à l'intérieur de la transaction
+ * pour éviter les race conditions (double débit, solde négatif).
  */
 export const payBooking = async (
   userId: string,
   bookingId: string,
   amount: number
 ): Promise<string> => {
-  // Vérifier le solde
-  const balance = await getWalletBalance(userId);
-  
-  if (balance < amount) {
-    throw new Error('Solde insuffisant');
-  }
+  const transactionRef_outer = doc(collection(db, 'transactions'));
+  const transactionId = transactionRef_outer.id;
+  const walletRef = doc(db, 'wallets', userId);
 
-  // Créer la transaction de paiement
-  const transactionId = await createTransaction({
+  // Créer d'abord l'entrée pending
+  const transaction: Transaction = {
+    id: transactionId,
     userId,
     type: 'payment',
     amount: -amount,
     currency: CURRENCY_CODE,
     description: 'Paiement de course',
     bookingId,
-  });
+    status: 'pending',
+    createdAt: serverTimestamp() as Timestamp,
+    updatedAt: serverTimestamp() as Timestamp,
+  };
+  await setDoc(transactionRef_outer, transaction);
 
-  // Débiter le portefeuille
-  await completeTransaction(transactionId, userId, -amount);
+  try {
+    // Vérification du solde ET débit dans la même transaction atomique
+    await runTransaction(db, async (tx) => {
+      const walletDoc = await tx.get(walletRef);
+      if (!walletDoc.exists()) throw new Error('Portefeuille introuvable');
+
+      const currentBalance = walletDoc.data().balance;
+      if (currentBalance < amount) throw new Error('Solde insuffisant');
+
+      tx.update(walletRef, {
+        balance: currentBalance - amount,
+        updatedAt: serverTimestamp(),
+      });
+      tx.update(transactionRef_outer, {
+        status: 'completed',
+        updatedAt: serverTimestamp(),
+      });
+    });
+  } catch (error) {
+    await failTransaction(transactionId, (error as Error).message);
+    throw error;
+  }
 
   return transactionId;
 };

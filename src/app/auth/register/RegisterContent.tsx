@@ -2,8 +2,9 @@
 /* eslint-disable */
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth } from '@/config/firebase';
+import { auth, db } from '@/config/firebase';
 import { updateProfile } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { signUpWithEmail, signInWithGoogle } from '@/services/auth.service';
 import Link from 'next/link';
 import { FiUser, FiMail, FiLock, FiArrowLeft } from 'react-icons/fi';
@@ -20,11 +21,21 @@ export default function RegisterContent() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Rediriger si déjà connecté
+    // Rediriger si déjà connecté, vers le bon dashboard selon le rôle
     useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged((user) => {
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
             if (user && user.emailVerified) {
-                router.push('/dashboard');
+                try {
+                    const userDoc = await getDoc(doc(db, 'users', user.uid));
+                    const userType = userDoc.exists() ? userDoc.data().userType : 'client';
+                    if (userType === 'chauffeur') {
+                        router.push('/driver/dashboard');
+                    } else {
+                        router.push('/dashboard');
+                    }
+                } catch {
+                    router.push('/dashboard');
+                }
             }
         });
         return () => unsubscribe();

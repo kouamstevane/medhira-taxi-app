@@ -19,6 +19,8 @@ import {
   orderBy,
   limit,
   serverTimestamp,
+  runTransaction,
+  increment,
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -168,32 +170,31 @@ export const addRating = async (
   await setDoc(newRatingRef, ratingData);
 
   // Mettre à jour la note moyenne du chauffeur
-  await updateDriverRating(driverId);
+  await updateDriverRating(driverId, rating);
 };
 
 /**
- * Calculer et mettre à jour la note moyenne d'un chauffeur
+ * Mettre à jour la note moyenne du chauffeur avec une moyenne incrémentale.
+ * Évite de relire tous les avis à chaque mise à jour.
  */
-//  Ajout limit(100) - 100 notes max suffisent pour calculer la moyenne (medJira.md #57)
-const updateDriverRating = async (driverId: string): Promise<void> => {
-  const ratingsRef = collection(db, 'ratings');
-  const q = query(
-    ratingsRef,
-    where('driverId', '==', driverId),
-    limit(100)
-  );
-
-  const querySnapshot = await getDocs(q);
-  const ratings = querySnapshot.docs.map(doc => doc.data().rating as number);
-
-  if (ratings.length === 0) return;
-
-  const averageRating = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
-
+const updateDriverRating = async (driverId: string, newRating: number): Promise<void> => {
   const driverRef = doc(db, 'drivers', driverId);
-  await updateDoc(driverRef, {
-    rating: Math.round(averageRating * 10) / 10, // Arrondir à 1 décimale
-    updatedAt: serverTimestamp(),
+
+  await runTransaction(db, async (tx) => {
+    const driverSnap = await tx.get(driverRef);
+    if (!driverSnap.exists()) return;
+
+    const data = driverSnap.data();
+    const oldCount: number = data.totalRatings ?? 0;
+    const oldRating: number = data.rating ?? 0;
+    const newCount = oldCount + 1;
+    const newAvg = (oldRating * oldCount + newRating) / newCount;
+
+    tx.update(driverRef, {
+      rating: Math.round(newAvg * 10) / 10,
+      totalRatings: increment(1),
+      updatedAt: serverTimestamp(),
+    });
   });
 };
 

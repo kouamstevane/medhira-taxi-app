@@ -24,7 +24,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { Booking, BookingStatus, CarType, Location } from '@/types';
+import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
 import { calculateTripPrice } from '@/lib/firebase-helpers';
 import { CURRENCY_CODE, DEFAULT_PRICING } from '@/utils/constants';
 
@@ -631,13 +631,37 @@ export const completeTrip = async (bookingId: string): Promise<void> => {
     carType.pricePerMinute
   );
 
+  // Débiter le wallet du client avant de marquer la course comme terminée
+  if (booking.userId) {
+    try {
+      const { payBooking } = await import('@/services/wallet.service');
+      await payBooking(booking.userId, bookingId, finalPrice);
+    } catch (payError) {
+      logger.error('Erreur paiement course (solde insuffisant ?)', { error: payError, bookingId, finalPrice });
+      // On complète quand même la course mais on flag le paiement comme en attente
+      await updateBookingStatus(bookingId, 'completed', {
+        finalPrice,
+        price: finalPrice,
+        actualDuration: durationMinutes,
+        completedAt: serverTimestamp() as any,
+        paymentStatus: 'failed',
+      });
+      if (booking.driverId) {
+        const driverRef = doc(db, 'drivers', booking.driverId);
+        await updateDoc(driverRef, { status: 'available', currentBookingId: null });
+      }
+      return;
+    }
+  }
+
   await updateBookingStatus(bookingId, 'completed', {
     finalPrice: finalPrice,
     price: finalPrice,
     actualDuration: durationMinutes,
-    completedAt: serverTimestamp() as any
+    completedAt: serverTimestamp() as any,
+    paymentStatus: 'paid',
   });
-  
+
   // Libérer le chauffeur
   if (booking.driverId) {
     const driverRef = doc(db, 'drivers', booking.driverId);

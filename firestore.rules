@@ -97,9 +97,9 @@ service cloud.firestore {
     
     // Collection users - Les utilisateurs peuvent lire et écrire leurs propres données
     match /users/{userId} {
-      // Lecture : Les utilisateurs authentifiés peuvent lire les données des autres utilisateurs
-      // Permet aux chauffeurs de voir les informations des clients pour les courses
-      allow read: if isAuthenticated();
+      // Lecture : chaque utilisateur peut lire uniquement son propre document.
+      // Les données client nécessaires aux chauffeurs doivent être dénormalisées dans les bookings.
+      allow read: if isOwner(userId);
       
       // Création : Les utilisateurs authentifiés peuvent créer leur propre document
       // Permet la création de comptes clients par email ou téléphone

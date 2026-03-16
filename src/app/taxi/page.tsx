@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
@@ -46,7 +46,8 @@ export default function TaxiPage() {
   // État pour le bonus en cas d'échec
   const [retryBonus, setRetryBonus] = useState(0);
   const [isAutoSearching, setIsAutoSearching] = useState(false);
-  const [stopAutoSearch, setStopAutoSearch] = useState<(() => void) | null>(null);
+  // Stocké dans un ref pour ne pas déclencher de re-render ni invalider les useEffect
+  const stopAutoSearchRef = useRef<(() => void) | null>(null);
 
   // Récupérer la course active au chargement
   useEffect(() => {
@@ -109,7 +110,7 @@ export default function TaxiPage() {
     if (autoSearch) {
       setIsAutoSearching(true);
       const stopFn = startAutomaticSearch(id, { intervalSeconds: 60, maxAttempts: 10 });
-      setStopAutoSearch(() => stopFn);
+      stopAutoSearchRef.current = stopFn;
     }
   };
 
@@ -124,9 +125,9 @@ export default function TaxiPage() {
     logger.info('Annulation de la recherche', { bookingId });
 
     // Arrêter la recherche auto si active
-    if (stopAutoSearch) {
-      stopAutoSearch();
-      setStopAutoSearch(null);
+    if (stopAutoSearchRef.current) {
+      stopAutoSearchRef.current();
+      stopAutoSearchRef.current = null;
     }
     setIsAutoSearching(false);
 
@@ -279,11 +280,11 @@ export default function TaxiPage() {
     return () => {
       unsubscribe();
       clearInterval(timerInterval);
-      if (stopAutoSearch) {
-        stopAutoSearch();
+      if (stopAutoSearchRef.current) {
+        stopAutoSearchRef.current();
       }
     };
-  }, [bookingId, step, stopAutoSearch]);
+  }, [bookingId, step]);
 
   return (
     <div className="min-h-screen bg-gray-100">

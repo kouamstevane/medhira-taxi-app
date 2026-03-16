@@ -3,7 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/config/firebase-admin';
+import { adminDb, adminAuth } from '@/config/firebase-admin';
 import { sendDriverStatusEmail } from '@/lib/email-service';
 import { z } from 'zod';
 
@@ -11,22 +11,34 @@ import { z } from 'zod';
 const ManageDriverSchema = z.object({
   action: z.enum(['approve', 'reject', 'suspend', 'unsuspend', 'deactivate', 'reactivate', 'delete']),
   driverId: z.string().min(1),
-  adminUid: z.string().min(1),
   reason: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
   try {
     // Vérifier que Firebase Admin est initialisé
-    if (!adminDb) {
+    if (!adminDb || !adminAuth) {
       return NextResponse.json(
         { error: 'Firebase Admin SDK non configuré.' },
         { status: 503 }
       );
     }
 
+    // Vérifier le token d'authentification Firebase
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Token d\'authentification requis.' }, { status: 401 });
+    }
+    let adminUid: string;
+    try {
+      const decodedToken = await adminAuth.verifyIdToken(authHeader.slice(7));
+      adminUid = decodedToken.uid;
+    } catch {
+      return NextResponse.json({ error: 'Token invalide ou expiré.' }, { status: 401 });
+    }
+
     const body = await request.json();
-    
+
     // Validation Zod
     const result = ManageDriverSchema.safeParse(body);
     if (!result.success) {
@@ -36,11 +48,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { action, driverId, reason, adminUid } = result.data;
+    const { action, driverId, reason } = result.data;
 
     // Vérifier que l'utilisateur est bien un admin
     const adminDoc = await adminDb.collection('admins').doc(adminUid).get();
-    
+
     if (!adminDoc.exists) {
       const adminSnapshot = await adminDb.collection('admins')
         .where('userId', '==', adminUid)

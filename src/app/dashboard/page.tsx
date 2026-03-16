@@ -12,7 +12,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { auth, db } from "@/config/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
@@ -29,6 +29,8 @@ import { formatCurrencyWithCode } from '@/utils/format';
 
 export default function Dashboard() {
   const router = useRouter();
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const [notifCount, setNotifCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -59,6 +61,7 @@ export default function Dashboard() {
   });
   const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
   const [isRestaurantLoading, setIsRestaurantLoading] = useState(false);
+  const unsubscribeNotifsRef = useRef<(() => void) | null>(null);
 
   const fetchHistory = async (userId: string) => {
     try {
@@ -194,19 +197,24 @@ export default function Dashboard() {
         }
 
         // Écouter les notifications non lues via le service isolé
-        let unsubscribeNotifs = notificationService.listenUnreadCount(user.uid, setNotifCount);
+        unsubscribeNotifsRef.current?.();
+        unsubscribeNotifsRef.current = notificationService.listenUnreadCount(user.uid, setNotifCount);
 
         // Authentification terminée
         setIsAuthLoading(false);
       } else {
         // Pas d'utilisateur connecté - confirmer et rediriger
         setIsAuthLoading(false);
-        router.push("/login");
+        routerRef.current.push("/login");
       }
     });
 
-    return () => unsubscribe();
-  }, [router]);
+    return () => {
+      unsubscribe();
+      unsubscribeNotifsRef.current?.();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const logout = async () => {
     try {

@@ -148,6 +148,14 @@ export const assignDriver = async (
       logger.info('Mise à jour de la course avec les données:', { rideId, updateData });
       transaction.update(rideRef, updateData);
 
+      // Marquer le chauffeur comme indisponible dans la même transaction atomique
+      const driverRef = doc(db, 'drivers', driverId);
+      transaction.update(driverRef, {
+        isAvailable: false,
+        status: 'on_trip',
+        currentBookingId: rideId,
+        updatedAt: serverTimestamp(),
+      });
 
       return { success: true, rideId, driverId };
     });
@@ -189,6 +197,9 @@ export const cancelAssignment = async (
       throw new Error('Course non trouvée');
     }
 
+    const rideData = rideSnap.data();
+    const previousDriverId: string | null = rideData?.driverId ?? null;
+
     await updateDoc(rideRef, {
       status: 'pending',
       driverId: null,
@@ -202,6 +213,21 @@ export const cancelAssignment = async (
       cancellationReason: reason,
       updatedAt: serverTimestamp(),
     });
+
+    // Libérer le chauffeur précédemment assigné
+    if (previousDriverId) {
+      try {
+        const driverRef = doc(db, 'drivers', previousDriverId);
+        await updateDoc(driverRef, {
+          isAvailable: true,
+          status: 'available',
+          currentBookingId: null,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (driverError) {
+        logger.error('Erreur lors de la libération du chauffeur', { error: driverError, driverId: previousDriverId });
+      }
+    }
 
     logger.info('Attribution annulée', { rideId, reason });
   } catch (error: any) {

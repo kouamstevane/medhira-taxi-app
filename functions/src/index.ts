@@ -700,18 +700,19 @@ export const onFoodOrderCreated = onDocumentWritten('food_orders/{orderId}', asy
     }
 
     // Envoyer les notifications push (Règle 4)
+    // Le pickupCode est exclu des notifications FCM : il ne doit être visible
+    // que par le chauffeur assigné à la commande, pas par tous les candidats.
     const message: admin.messaging.MulticastMessage = {
       tokens,
       notification: {
         title: `🍔 Nouvelle commande — ${restaurantName}`,
-        body: `Livraison ${totalOrderPrice.toFixed(2)} CAD • Code: ${pickupCode}`,
+        body: `Livraison ${totalOrderPrice.toFixed(2)} CAD`,
       },
       data: {
         type: 'food_order',
         orderId: event.params.orderId,
         restaurantId,
         restaurantName,
-        pickupCode,
         totalOrderPrice: String(totalOrderPrice),
       },
       android: {
@@ -740,7 +741,7 @@ export const onFoodOrderCreated = onDocumentWritten('food_orders/{orderId}', asy
     const driverIds = driversSnapshot.docs.map((d) => d.id);
     await createBulkNotifications(driverIds, {
       title: `🍔 Nouvelle commande — ${restaurantName}`,
-      body: `Livraison ${totalOrderPrice.toFixed(2)} CAD • Code: ${pickupCode}`,
+      body: `Livraison ${totalOrderPrice.toFixed(2)} CAD`,
       type: 'food_order',
       metadata: { orderId: event.params.orderId, restaurantId },
     });
@@ -821,7 +822,7 @@ export const onFoodOrderStatusChanged = onDocumentUpdated('food_orders/{orderId}
         break;
       case 'ready':
         title = 'Commande prête ! 🛍️';
-        body = `Votre commande est prête à être récupérée par le livreur. N'oubliez pas votre code: ${newData.pickupCode}`;
+        body = `Votre commande est prête à être récupérée par le livreur.`;
         break;
       case 'picked_up':
         title = 'En route vers vous ! 🛵';
