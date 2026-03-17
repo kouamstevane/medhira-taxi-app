@@ -5,10 +5,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { FcGoogle } from 'react-icons/fc';
 import { InputField } from '@/components/forms/InputField';
+import { ERROR_MESSAGES } from '@/utils/constants';
 
 const step1Schema = z.object({
-  email: z.string().email("Adresse email invalide"),
-  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, "Numéro de téléphone invalide"),
+  email: z.string().email(ERROR_MESSAGES.INVALID_EMAIL),
+  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, ERROR_MESSAGES.INVALID_PHONE),
   password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
 });
 

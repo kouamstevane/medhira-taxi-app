@@ -26,7 +26,7 @@ import {
 import { db } from '@/config/firebase';
 import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
 import { calculateTripPrice } from '@/lib/firebase-helpers';
-import { CURRENCY_CODE, DEFAULT_PRICING } from '@/utils/constants';
+import { CURRENCY_CODE, DEFAULT_PRICING, LIMITS } from '@/utils/constants';
 
 /**
  * Créer une nouvelle réservation
@@ -180,7 +180,7 @@ export const cancelBooking = async (bookingId: string, reason?: string): Promise
  */
 export const getCarTypes = async (): Promise<CarType[]> => {
   const carTypesRef = collection(db, 'carTypes');
-  const q = query(carTypesRef, limit(50));
+  const q = query(carTypesRef, limit(LIMITS.DEFAULT_QUERY_LIMIT));
   const querySnapshot = await getDocs(q);
 
   return querySnapshot.docs
@@ -407,11 +407,11 @@ export const findNearbyDrivers = async (
   // Note: Cette implémentation simplifiée devrait utiliser GeoFirestore
   // pour une recherche géographique efficace
   const driversRef = collection(db, 'drivers');
-  //  Ajout limit(50) pour optimiser les coûts Firestore (medJira.md #57)
+  //  Ajout limit(DEFAULT_QUERY_LIMIT) pour optimiser les coûts Firestore (medJira.md #57)
   const q = query(
     driversRef,
     where('status', '==', 'available'),
-    limit(50)
+    limit(LIMITS.DEFAULT_QUERY_LIMIT)
   );
 
   const querySnapshot = await getDocs(q);
@@ -674,7 +674,7 @@ export const completeTrip = async (bookingId: string): Promise<void> => {
   // Envoyer la facture détaillée
   try {
     const { sendSystemMessage } = await import('@/services/chat.service');
-    const invoice = `🏁 Course terminée !\n\n📋 Facture détaillée :\n• Tarif de base : ${carType.basePrice} CAD\n• Distance (${booking.distance.toFixed(2)} km) : ${(booking.distance * carType.pricePerKm).toFixed(2)} CAD\n• Durée (${durationMinutes} min) : ${(durationMinutes * carType.pricePerMinute).toFixed(2)} CAD\n\n💰 Total : ${finalPrice.toFixed(2)} CAD\n\nMerci pour votre confiance ! 🙏`;
+    const invoice = `🏁 Course terminée !\n\n📋 Facture détaillée :\n• Tarif de base : ${carType.basePrice} ${CURRENCY_CODE}\n• Distance (${booking.distance.toFixed(2)} km) : ${(booking.distance * carType.pricePerKm).toFixed(2)} ${CURRENCY_CODE}\n• Durée (${durationMinutes} min) : ${(durationMinutes * carType.pricePerMinute).toFixed(2)} ${CURRENCY_CODE}\n\n💰 Total : ${finalPrice.toFixed(2)} ${CURRENCY_CODE}\n\nMerci pour votre confiance ! 🙏`;
     await sendSystemMessage(bookingId, invoice);
   } catch (error) {
     logger.error('Erreur envoi facture', { error, bookingId });
@@ -705,10 +705,10 @@ export const calculateCancellationPenalty = async (bookingId: string): Promise<n
   const carTypes = await getCarTypes();
   const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
   
-  // Pénalité = 50% du tarif de base + temps x tarif minute
-  const penalty = (carType.basePrice * 0.5) + (elapsedMinutes * carType.pricePerMinute);
+  // Pénalité = CANCELLATION_PENALTY_RATE du tarif de base + temps x tarif minute
+  const penalty = (carType.basePrice * DEFAULT_PRICING.CANCELLATION_PENALTY_RATE) + (elapsedMinutes * carType.pricePerMinute);
 
-  return Math.round(Math.max(penalty, 2) * 100) / 100; // Minimum 2 CAD
+  return Math.round(Math.max(penalty, LIMITS.MIN_CANCELLATION_PENALTY) * 100) / 100;
 };
 
 /**

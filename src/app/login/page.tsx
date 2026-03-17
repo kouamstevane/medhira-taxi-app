@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthService } from '@/services';
 import { FiArrowLeft, FiMail, FiLock } from 'react-icons/fi';
+import { ERROR_MESSAGES } from '@/utils/constants';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -32,7 +33,7 @@ export default function LoginPage() {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError('Veuillez remplir tous les champs');
+      setError(ERROR_MESSAGES.REQUIRED_FIELDS);
       return;
     }
 
@@ -79,7 +80,7 @@ export default function LoginPage() {
         errorMessage = "Trop de tentatives. Veuillez réessayer plus tard.";
         break;
       case AuthErrorCodes.INVALID_EMAIL:
-        errorMessage = "Adresse email invalide";
+        errorMessage = ERROR_MESSAGES.INVALID_EMAIL;
         break;
       case AuthErrorCodes.USER_DELETED:
       case AuthErrorCodes.INVALID_PASSWORD:
@@ -88,13 +89,13 @@ export default function LoginPage() {
         errorMessage = "Email ou mot de passe incorrect";
         break;
       case AuthErrorCodes.NETWORK_REQUEST_FAILED:
-        errorMessage = "Problème de connexion. Vérifiez votre réseau.";
+        errorMessage = ERROR_MESSAGES.NETWORK_ERROR;
         break;
       case 'auth/popup-closed-by-user':
         errorMessage = "Connexion Google annulée";
         break;
       default:
-        errorMessage = err.message || "Erreur d'authentification";
+        errorMessage = err.message || ERROR_MESSAGES.AUTH_ERROR;
     }
 
     setError(errorMessage);

@@ -20,6 +20,7 @@
  */
 
 import { logger } from '@/utils/logger';
+import { FOOD_DELIVERY_PRICING, LIMITS } from '@/utils/constants';
 import { 
   collection, 
   doc, 
@@ -81,10 +82,10 @@ const CreateRestaurantSchema = z.object({
 });
 
 /** Tarif de livraison par kilomètre (Règle 6) */
-const DELIVERY_RATE_PER_KM = 1.50;
+const DELIVERY_RATE_PER_KM = FOOD_DELIVERY_PRICING.RATE_PER_KM;
 
 /** Supplément weekend (Règle 7) */
-const WEEKEND_SURCHARGE = 1.50;
+const WEEKEND_SURCHARGE = FOOD_DELIVERY_PRICING.WEEKEND_SURCHARGE;
 
 // ============================================================================
 // CALCUL DE PRIX (Règles 5, 6, 7)
@@ -804,14 +805,14 @@ export const FoodDeliveryService = {
         where('restaurantId', '==', restaurantId),
         where('status', 'in', status),
         orderBy('createdAt', 'desc'),
-        limit(50)
+        limit(LIMITS.DEFAULT_QUERY_LIMIT)
       );
     } else {
       q = query(
         ordersRef,
         where('restaurantId', '==', restaurantId),
         orderBy('createdAt', 'desc'),
-        limit(50)
+        limit(LIMITS.DEFAULT_QUERY_LIMIT)
       );
     }
 

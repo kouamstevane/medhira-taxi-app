@@ -9,6 +9,7 @@
 import jsPDF from "jspdf";
 import { Booking } from "@/types/booking";
 import { Timestamp } from "firebase/firestore";
+import { CURRENCY_CODE, DEFAULT_PRICING, DEFAULT_LOCALE } from "@/utils/constants";
 
 /**
  * Interface pour les données de facture
@@ -49,7 +50,7 @@ const toDate = (value: Date | Timestamp | undefined): Date | undefined => {
  */
 const formatDate = (date: Date | undefined): string => {
   if (!date) return "N/A";
-  return date.toLocaleDateString("fr-CA", {
+  return date.toLocaleDateString(DEFAULT_LOCALE, {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -75,10 +76,10 @@ export const extractInvoiceData = (booking: Booking): InvoiceData => {
   const createdAt = toDate(booking.createdAt) || new Date();
   const completedAt = toDate(booking.completedAt);
 
-  // Estimation des prix par composante pour le Canada
-  const estimatedBasePrice = 3.50;
-  const estimatedPricePerKm = 1.75;
-  const estimatedPricePerMin = 0.45;
+  // Estimation des prix par composante (fallback sur DEFAULT_PRICING)
+  const estimatedBasePrice = DEFAULT_PRICING.BASE_PRICE;
+  const estimatedPricePerKm = DEFAULT_PRICING.PRICE_PER_KM;
+  const estimatedPricePerMin = DEFAULT_PRICING.PRICE_PER_MINUTE;
 
   const distancePrice = Math.round(booking.distance * estimatedPricePerKm * 100) / 100;
   const durationPrice = Math.round(
@@ -282,15 +283,15 @@ export const generateInvoicePDF = (data: InvoiceData): void => {
   const rows = [
     {
       label: "Tarif de base",
-      value: `${data.basePrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`,
+      value: `${data.basePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`,
     },
     {
       label: `Distance (${data.distance.toFixed(2)} km)`,
-      value: `${data.distancePrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`,
+      value: `${data.distancePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`,
     },
     {
       label: `Durée (${data.duration} min)`,
-      value: `${data.durationPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`,
+      value: `${data.durationPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`,
     },
   ];
 
@@ -312,7 +313,7 @@ export const generateInvoicePDF = (data: InvoiceData): void => {
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
   doc.text("TOTAL", col1, y + 4);
-  doc.text(`${data.finalPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`, col2, y + 4, {
+  doc.text(`${data.finalPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`, col2, y + 4, {
     align: "right",
   });
 
@@ -374,12 +375,12 @@ export const getInvoiceText = (booking: Booking): string => {
 📍 Vers: ${data.destination}
 
 📊 Détails:
-• Tarif de base: ${data.basePrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD
-• Distance (${data.distance.toFixed(2)} km): ${data.distancePrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD
-• Durée (${data.duration} min): ${data.durationPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD
+• Tarif de base: ${data.basePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}
+• Distance (${data.distance.toFixed(2)} km): ${data.distancePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}
+• Durée (${data.duration} min): ${data.durationPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}
 
 ━━━━━━━━━━━━━━━━━━━━━
-💰 TOTAL: ${data.finalPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD
+💰 TOTAL: ${data.finalPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}
 
 Merci pour votre confiance ! 🙏`;
 };

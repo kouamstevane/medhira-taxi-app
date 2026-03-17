@@ -13,6 +13,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { ERROR_MESSAGES } from '@/utils/constants';
 import type { Restaurant, MenuItem } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 
@@ -98,7 +99,7 @@ export default function MenuManagementClient({ id }: MenuManagementClientProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.price || !form.category) {
-      showError("Veuillez remplir tous les champs obligatoires");
+      showError(ERROR_MESSAGES.REQUIRED_FIELDS);
       return;
     }
 

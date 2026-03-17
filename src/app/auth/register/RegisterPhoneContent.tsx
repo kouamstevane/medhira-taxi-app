@@ -13,7 +13,7 @@ import {
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { FiArrowLeft } from 'react-icons/fi';
 import { isValidPhoneNumber } from '@/lib/validation';
-import { SUPPORTED_COUNTRIES } from '@/utils/constants';
+import { SUPPORTED_COUNTRIES, ERROR_MESSAGES } from '@/utils/constants';
 
 export default function RegisterPhoneContent() {
   const router = useRouter();
@@ -98,13 +98,10 @@ export default function RegisterPhoneContent() {
     const cleanPhone = formData.phone.replace(/^0+/, '');
     const fullPhoneNumber = `${selectedCountry.dialCode}${cleanPhone}`;
 
-    // Mapping des longueurs attendues par indicatif pays
-    const countryLengths: Record<string, number> = {
-      '+1': 10,
-      '+237': 9,
-      '+33': 10,
-      '+32': 9,
-    };
+    // Mapping des longueurs attendues par indicatif pays (dérivé de SUPPORTED_COUNTRIES)
+    const countryLengths: Record<string, number> = Object.fromEntries(
+      SUPPORTED_COUNTRIES.map(c => [c.dialCode, c.phoneLength])
+    );
 
     if (!isValidPhoneNumber(fullPhoneNumber, selectedCountry.dialCode)) {
       const expectedLength = countryLengths[selectedCountry.dialCode] || 9;
@@ -283,13 +280,13 @@ export default function RegisterPhoneContent() {
         errorMessage = "Trop de tentatives. Veuillez réessayer plus tard.";
         break;
       case AuthErrorCodes.INVALID_PHONE_NUMBER:
-        errorMessage = "Numéro de téléphone invalide";
+        errorMessage = ERROR_MESSAGES.INVALID_PHONE;
         break;
       case 'auth/invalid-verification-code':
         errorMessage = "Code de vérification invalide";
         break;
       case AuthErrorCodes.NETWORK_REQUEST_FAILED:
-        errorMessage = "Problème de connexion. Vérifiez votre réseau.";
+        errorMessage = ERROR_MESSAGES.NETWORK_ERROR;
         break;
       case 'auth/invalid-app-credential':
         errorMessage = "Configuration invalide. Vérifiez que localhost est autorisé dans la console Firebase et que la clé API est correcte.";

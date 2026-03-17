@@ -13,6 +13,7 @@ import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { ChatModal } from '@/components/ChatModal';
 import { InvoiceModal } from '@/components/InvoiceModal';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { CURRENCY_CODE, DEFAULT_PRICING, DEFAULT_LOCALE } from '@/utils/constants';
 
 interface DriverFoundViewProps {
   bookingId: string;
@@ -163,7 +164,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
         const { calculateCancellationPenalty } = await import('@/services/taxi.service');
         cancellationFee = await calculateCancellationPenalty(bookingId);
 
-        const confirmMsg = `Attention !\n\nVous êtes sur le point d'annuler une course en cours.\n\nPénalité d'annulation : ${cancellationFee.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD\n\nVoulez-vous vraiment continuer ?`;
+        const confirmMsg = `Attention !\n\nVous êtes sur le point d'annuler une course en cours.\n\nPénalité d'annulation : ${cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}\n\nVoulez-vous vraiment continuer ?`;
 
         if (!confirm(confirmMsg)) {
           setCancelling(false);
@@ -194,7 +195,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       setShowCancelModal(false);
 
       if (cancellationFee > 0) {
-        alert(`Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD ont été débités de votre portefeuille.`);
+        alert(`Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE} ont été débités de votre portefeuille.`);
       } else {
         alert('Commande annulée avec succès.');
       }
@@ -508,13 +509,13 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                   const distanceTraveled = Math.max(0, booking.distance - realTimeDistance);
 
                   // Utiliser les vrais tarifs du CarType
-                  const basePrice = activeCarType?.basePrice ?? 3.50;
-                  const pricePerKm = activeCarType?.pricePerKm ?? 1.75;
-                  const pricePerMin = activeCarType?.pricePerMinute ?? 0.45;
+                  const basePrice = activeCarType?.basePrice ?? DEFAULT_PRICING.BASE_PRICE;
+                  const pricePerKm = activeCarType?.pricePerKm ?? DEFAULT_PRICING.PRICE_PER_KM;
+                  const pricePerMin = activeCarType?.pricePerMinute ?? DEFAULT_PRICING.PRICE_PER_MINUTE;
 
                   const estimatedPrice = basePrice + (distanceTraveled * pricePerKm) + (elapsedMinutes * pricePerMin);
 
-                  return `${estimatedPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD`;
+                  return `${estimatedPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`;
                 })()}
               </p>
               <p className="text-xs text-gray-500 mt-1">

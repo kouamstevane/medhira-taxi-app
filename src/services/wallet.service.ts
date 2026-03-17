@@ -31,7 +31,7 @@ import {
   PaymentMethod,
   RechargeRequest,
 } from '@/types';
-import { CURRENCY_CODE } from '@/utils/constants';
+import { CURRENCY_CODE, LIMITS } from '@/utils/constants';
 
 /**
  * Récupérer ou créer un portefeuille utilisateur
@@ -207,7 +207,7 @@ export const payBooking = async (
  */
 export const getTransactionHistory = async (
   userId: string,
-  limit: number = 50
+  limit: number = LIMITS.MAX_TRANSACTION_HISTORY
 ): Promise<Transaction[]> => {
   const transactionsRef = collection(db, 'transactions');
   const q = query(

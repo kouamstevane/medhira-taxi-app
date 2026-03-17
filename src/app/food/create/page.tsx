@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { onAuthStateChanged } from 'firebase/auth';
+import { RESTAURANT_DEFAULTS } from '@/utils/constants';
 
 const CUISINE_TYPES = [
   "Africaine", "Européenne", "Asiatique", "Fast Food", "Pâtisserie", "Pizza", "Burger", "Santé/Bio", "Desserts"
@@ -40,11 +41,11 @@ export default function CreateRestaurantPage() {
     cuisineType: [] as string[],
     phoneNumber: '',
     email: '',
-    avgPricePerPerson: 15,
-    commissionRate: 10,
+    avgPricePerPerson: RESTAURANT_DEFAULTS.AVG_PRICE_PER_PERSON,
+    commissionRate: RESTAURANT_DEFAULTS.COMMISSION_RATE,
     imageUrl: '',
     openingHours: DAYS.reduce((acc, day) => {
-      acc[day.id] = { open: '08:00', close: '22:00', closed: false };
+      acc[day.id] = { open: RESTAURANT_DEFAULTS.OPENING_TIME, close: RESTAURANT_DEFAULTS.CLOSING_TIME, closed: false };
       return acc;
     }, {} as any)
   });

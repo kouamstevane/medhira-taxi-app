@@ -72,6 +72,7 @@ export interface Booking {
   startedAt?: Date | Timestamp; // Début de la course
   actualDuration?: number; // Durée réelle en minutes
   cancellationFee?: number; // Frais d'annulation 
+  paymentStatus?: 'paid' | 'failed' | 'pending'; // Statut du paiement 
   reason?: string;
 
   // Système de bonus (Plan B)

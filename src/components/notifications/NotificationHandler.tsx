@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { Haptics, NotificationType } from '@capacitor/haptics';
+import { CURRENCY_CODE } from '@/utils/constants';
 
 /**
  * Composant de gestion des push notifications
@@ -64,7 +65,7 @@ export function NotificationHandler() {
             console.log('[NotificationHandler] Paiement reçu:', amount);
             
             // Notification toast
-            showNotification(`Paiement de ${amount} CAD reçu !`, 'success');
+            showNotification(`Paiement de ${amount} ${CURRENCY_CODE} reçu !`, 'success');
         },
         onAlert: (message) => {
             console.log('[NotificationHandler] Alerte:', message);

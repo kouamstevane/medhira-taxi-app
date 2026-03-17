@@ -25,6 +25,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Driver, DriverStatus, Location, Rating } from '@/types';
+import { LIMITS } from '@/utils/constants';
 
 /**
  * Créer ou mettre à jour un profil chauffeur
@@ -131,12 +132,12 @@ export const toggleDriverOnline = async (
  */
 export const getAvailableDrivers = async (): Promise<Driver[]> => {
   const driversRef = collection(db, 'drivers');
-  //  Ajout limit(50) pour optimiser les coûts Firestore (medJira.md #57)
+  //  Ajout limit(DEFAULT_QUERY_LIMIT) pour optimiser les coûts Firestore (medJira.md #57)
   const q = query(
     driversRef,
     where('status', '==', 'available'),
     where('verified', '==', true),
-    limit(50)
+    limit(LIMITS.DEFAULT_QUERY_LIMIT)
   );
 
   const querySnapshot = await getDocs(q);

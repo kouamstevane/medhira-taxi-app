@@ -17,6 +17,7 @@ import {
 import { db } from '@/config/firebase';
 import { Location, AvailableDriver, FindDriversConfig } from '@/types';
 import { logger } from '@/utils/logger';
+import { LIMITS } from '@/utils/constants';
 
 /**
  * Calculer la distance entre deux points (formule de Haversine)
@@ -128,23 +129,23 @@ export const findAvailableDrivers = async (
     const driversRef = collection(db, 'drivers');
 
     // Essayer d'abord avec isAvailable == true
-    //  Ajout limit(50) déjà présent - OK (medJira.md #57)
+    //  Ajout limit(DEFAULT_QUERY_LIMIT) pour optimiser les coûts Firestore (medJira.md #57)
     let driversQuery = query(
       driversRef,
       where('status', '==', 'approved'),
       where('isAvailable', '==', true),
-      limit(50)
+      limit(LIMITS.DEFAULT_QUERY_LIMIT)
     );
 
     let driversSnapshot = await getDocs(driversQuery);
 
     if (driversSnapshot.empty) {
       logger.warn('Aucun chauffeur avec isAvailable=true, recherche sans ce filtre');
-      //  Ajout limit(50) déjà présent - OK (medJira.md #57)
+      //  Ajout limit(DEFAULT_QUERY_LIMIT) pour optimiser les coûts Firestore (medJira.md #57)
       driversQuery = query(
         driversRef,
         where('status', '==', 'approved'),
-        limit(50)
+        limit(LIMITS.DEFAULT_QUERY_LIMIT)
       );
       driversSnapshot = await getDocs(driversQuery);
     }

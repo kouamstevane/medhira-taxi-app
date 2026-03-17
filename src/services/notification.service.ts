@@ -21,6 +21,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { NotificationCollection } from '@/types/firestore-collections';
+import { LIMITS } from '@/utils/constants';
 
 export type { NotificationCollection };
 
@@ -64,7 +65,7 @@ class NotificationService {
       collection(db, this.COLLECTION),
       where('userId', '==', userId),
       where('read', '==', false),
-      limit(50) // Obligatoire : cap pour éviter lectures massives et erreurs de permission
+      limit(LIMITS.DEFAULT_QUERY_LIMIT) // Obligatoire : cap pour éviter lectures massives et erreurs de permission
     );
 
     return onSnapshot(q, (snapshot) => {

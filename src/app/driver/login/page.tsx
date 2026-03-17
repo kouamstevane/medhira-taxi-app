@@ -12,6 +12,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { AuthService } from '@/services';
 import { InputField } from '@/components/forms/InputField';
+import { ERROR_MESSAGES } from '@/utils/constants';
 
 export default function DriverLogin() {
   const [email, setEmail] = useState('');
@@ -23,7 +24,7 @@ export default function DriverLogin() {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError('Veuillez remplir tous les champs');
+      setError(ERROR_MESSAGES.REQUIRED_FIELDS);
       return;
     }
 

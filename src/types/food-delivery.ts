@@ -95,6 +95,7 @@ export interface MenuItem {
  * - cancelled : Annulée
  */
 export type FoodOrderStatus =
+  | 'pending_payment'
   | 'pending'
   | 'confirmed'
   | 'preparing'

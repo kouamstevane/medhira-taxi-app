@@ -14,6 +14,7 @@ import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ERROR_MESSAGES } from '@/utils/constants';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -51,7 +52,7 @@ export default function ResetPasswordPage() {
           setError('Aucun compte associé à cet email');
           break;
         case 'auth/invalid-email':
-          setError('Adresse email invalide');
+          setError(ERROR_MESSAGES.INVALID_EMAIL);
           break;
         case 'auth/too-many-requests':
           setError('Trop de tentatives. Veuillez réessayer plus tard');

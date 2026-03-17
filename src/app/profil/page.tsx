@@ -14,6 +14,7 @@ import { SelectField } from '@/components/forms/SelectField';
 import { useToast } from '@/hooks/useToast';
 import { useForm } from 'react-hook-form';
 import { getFirestoreErrorMessage, logFirestoreError } from '@/utils/firestore-error-handler';
+import { CURRENCY_CODE, DEFAULT_LOCALE } from '@/utils/constants';
 
 interface ProfileFormData {
   firstName: string;
@@ -444,7 +445,7 @@ export default function ProfilPage() {
                     <div>
                       <p className="font-semibold text-gray-800">{type} - {destination || description}</p>
                       <p className="text-sm text-gray-500">
-                        {new Date(timestamp).toLocaleDateString('fr-CA', { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' })} • {price?.toLocaleString('fr-CA', { minimumFractionDigits: 2 })} CAD
+                        {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} • {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
                       </p>
                     </div>
                     <span className={`px-3 py-1 text-xs font-medium rounded-full ${status === 'completed' || status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>

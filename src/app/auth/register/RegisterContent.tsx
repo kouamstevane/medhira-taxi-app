@@ -8,6 +8,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { signUpWithEmail, signInWithGoogle } from '@/services/auth.service';
 import Link from 'next/link';
 import { FiUser, FiMail, FiLock, FiArrowLeft } from 'react-icons/fi';
+import { ERROR_MESSAGES } from '@/utils/constants';
 
 export default function RegisterContent() {
     const router = useRouter();
@@ -55,7 +56,7 @@ export default function RegisterContent() {
 
         // Validation
         if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
-            setError('Veuillez remplir tous les champs obligatoires');
+            setError(ERROR_MESSAGES.REQUIRED_FIELDS);
             return;
         }
 
@@ -71,7 +72,7 @@ export default function RegisterContent() {
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(formData.email)) {
-            setError('Adresse email invalide');
+            setError(ERROR_MESSAGES.INVALID_EMAIL);
             return;
         }
 
@@ -103,7 +104,7 @@ export default function RegisterContent() {
             if (error.code === 'auth/email-already-in-use') {
                 setError('Cette adresse email est déjà utilisée');
             } else if (error.code === 'auth/invalid-email') {
-                setError('Adresse email invalide');
+                setError(ERROR_MESSAGES.INVALID_EMAIL);
             } else if (error.code === 'auth/weak-password') {
                 setError('Mot de passe trop faible (minimum 6 caractères)');
             } else if (error.code === 'auth/network-request-failed') {

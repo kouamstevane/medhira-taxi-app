@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth, db } from '@/config/firebase';
 import { doc, runTransaction, collection, setDoc } from 'firebase/firestore';
-import { CURRENCY_CODE } from '@/utils/constants';
+import { CURRENCY_CODE, LIMITS, WALLET_FEES, WALLET_PRESET_AMOUNTS } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 
 export default function RechargerPage() {
@@ -28,8 +28,8 @@ export default function RechargerPage() {
 
       // Validation du montant
       const numericAmount = parseFloat(amount);
-      if (isNaN(numericAmount) || numericAmount < 500) {
-        throw new Error(`Le montant minimum est de 500 ${CURRENCY_CODE}`);
+      if (isNaN(numericAmount) || numericAmount < LIMITS.MIN_WALLET_RECHARGE) {
+        throw new Error(`Le montant minimum est de ${LIMITS.MIN_WALLET_RECHARGE} ${CURRENCY_CODE}`);
       }
 
       // Simulation de l'appel API de paiement
@@ -58,7 +58,7 @@ export default function RechargerPage() {
   };
 
   const processWalletUpdate = async (userId: string, amount: number, method: string) => {
-    const fees = Math.max(amount * 0.01, 100);
+    const fees = Math.max(amount * WALLET_FEES.RECHARGE_RATE, WALLET_FEES.MIN_FEE);
     const netAmount = amount - fees;
 
     const walletRef = doc(db, 'wallets', userId);
@@ -97,7 +97,7 @@ export default function RechargerPage() {
     });
   };
 
-  const presetAmounts = [1000, 5000, 10000, 20000, 50000];
+  const presetAmounts = WALLET_PRESET_AMOUNTS;
 
   return (
     <div className="min-h-screen bg-[#FFF9E6] p-4 sm:p-6">
@@ -137,9 +137,9 @@ export default function RechargerPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 required
-                min="500"
+                min={LIMITS.MIN_WALLET_RECHARGE}
                 className="w-full p-3 border border-[#E8D9A5] rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-[#FDBC01] focus:border-[#FDBC01]"
-                placeholder="5000"
+                placeholder={String(LIMITS.MIN_WALLET_RECHARGE)}
               />
               
               {/* Montants prédéfinis */}
@@ -228,7 +228,7 @@ export default function RechargerPage() {
 
         {/* Information supplémentaire */}
         <div className="mt-4 text-center text-sm text-[#5A4A1A]">
-          <p>Frais de recharge: 1% (min. 100 {CURRENCY_CODE})</p>
+          <p>Frais de recharge: {(WALLET_FEES.RECHARGE_RATE * 100).toFixed(0)}% (min. {WALLET_FEES.MIN_FEE} {CURRENCY_CODE})</p>
           <p>Le solde sera crédité instantanément après paiement</p>
         </div>
       </div>

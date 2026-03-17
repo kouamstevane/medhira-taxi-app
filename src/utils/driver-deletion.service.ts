@@ -59,6 +59,16 @@ class DriverDeletionService {
   private readonly MAX_LISTING_RESULTS = 1000; // Storage list limit
 
   /**
+   * Retourne adminDb ou lève une erreur explicite si non initialisé (côté serveur uniquement)
+   */
+  private get db() {
+    if (!adminDb) {
+      throw new Error('adminDb non initialisé — ce service doit s\'exécuter côté serveur uniquement.');
+    }
+    return adminDb;
+  }
+
+  /**
    * Supprime complètement un chauffeur et toutes ses données associées
    * 
    * @param driverId - L'ID du chauffeur à supprimer
@@ -170,7 +180,7 @@ class DriverDeletionService {
     stats: DeletionStats
   ): Promise<void> {
     try {
-      const docRef = adminDb.collection(collectionName).doc(documentId);
+      const docRef = this.db.collection(collectionName).doc(documentId);
       const doc = await docRef.get();
 
       if (doc.exists) {
@@ -198,7 +208,7 @@ class DriverDeletionService {
       let lastDocId: string | null = null;
 
       while (hasMore) {
-        let query = adminDb
+        let query = this.db
           .collection(collectionName)
           .where(fieldName, '==', value)
           .limit(this.MAX_BATCH_SIZE);
@@ -216,7 +226,7 @@ class DriverDeletionService {
         }
 
         // Supprimer par batch de 500
-        const batch = adminDb.batch();
+        const batch = this.db.batch();
         let count = 0;
 
         snapshot.docs.forEach((doc) => {
@@ -248,14 +258,14 @@ class DriverDeletionService {
     stats: DeletionStats
   ): Promise<void> {
     try {
-      const snapshot = await adminDb
+      const snapshot = await this.db
         .collection('vehicles')
         .where('ownerId', '==', driverId)
         .limit(this.MAX_BATCH_SIZE)
         .get();
 
       if (!snapshot.empty) {
-        const batch = adminDb.batch();
+        const batch = this.db.batch();
         snapshot.docs.forEach((doc) => {
           batch.delete(doc.ref);
         });
@@ -422,7 +432,7 @@ class DriverDeletionService {
 
     for (const collection of collectionsToCheck) {
       try {
-        let query: any = adminDb.collection(collection.name);
+        let query: any = this.db.collection(collection.name);
 
         if (collection.field) {
           query = query.where(collection.field, '==', driverId);

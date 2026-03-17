@@ -26,6 +26,7 @@ import {
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import type { Restaurant } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
+import { DEFAULT_URLS } from '@/utils/constants';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -56,7 +57,7 @@ export default function Dashboard() {
     phoneNumber: "",
     firstName: "",
     lastName: "",
-    profileImageUrl: "/images/default.webp",
+    profileImageUrl: DEFAULT_URLS.DEFAULT_AVATAR,
     userType: "client"
   });
   const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
@@ -144,7 +145,7 @@ export default function Dashboard() {
           phoneNumber: user.phoneNumber || "",
           firstName: userDataFromDB.firstName || "",
           lastName: userDataFromDB.lastName || "",
-          profileImageUrl: userDataFromDB.profileImageUrl || user.photoURL || "/images/default.webp",
+          profileImageUrl: userDataFromDB.profileImageUrl || user.photoURL || DEFAULT_URLS.DEFAULT_AVATAR,
           userType: userDataFromDB.userType || "client"
         }));
 
@@ -331,7 +332,7 @@ export default function Dashboard() {
               style={{ minHeight: '44px', minWidth: '44px' }}
               aria-label="Menu profil"
             >
-              {userData.profileImageUrl && userData.profileImageUrl !== '/images/default.webp' ? (
+              {userData.profileImageUrl && userData.profileImageUrl !== DEFAULT_URLS.DEFAULT_AVATAR ? (
                 <Image
                   src={userData.profileImageUrl}
                   alt="Profil"
@@ -343,7 +344,7 @@ export default function Dashboard() {
                   onError={(e) => {
                     // En cas d'erreur, remplacer par l'avatar par défaut
                     const target = e.target as HTMLImageElement;
-                    target.src = '/images/default.webp';
+                    target.src = DEFAULT_URLS.DEFAULT_AVATAR;
                     target.onerror = null; // Éviter la boucle infinie
                   }}
                 />
@@ -407,7 +408,7 @@ export default function Dashboard() {
         <div className="bg-gradient-to-br from-[#101010] via-[#1a1a1a] to-[#2a2a2a] text-white rounded-2xl p-6 mb-8 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#f29200] opacity-10 rounded-full -translate-y-16 translate-x-16"></div>
           <div className="relative flex flex-col sm:flex-row items-start">
-            {userData.profileImageUrl && userData.profileImageUrl !== '/images/default.webp' ? (
+            {userData.profileImageUrl && userData.profileImageUrl !== DEFAULT_URLS.DEFAULT_AVATAR ? (
               <Image
                 src={userData.profileImageUrl}
                 alt="Profil"
@@ -419,7 +420,7 @@ export default function Dashboard() {
                 onError={(e) => {
                   // En cas d'erreur, remplacer par l'avatar par défaut
                   const target = e.target as HTMLImageElement;
-                  target.src = '/images/default.webp';
+                  target.src = DEFAULT_URLS.DEFAULT_AVATAR;
                   target.onerror = null;
                 }}
               />

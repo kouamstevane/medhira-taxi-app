@@ -9,6 +9,7 @@ import { Loader2, Camera } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { InputField } from '@/components/forms/InputField';
 import { SelectField } from '@/components/forms/SelectField';
+import { ERROR_MESSAGES, SUPPORTED_COUNTRIES, DEFAULT_DRIVER_COUNTRY_CODE } from '@/utils/constants';
 
 // Validation de l'âge minimum (18 ans)
 const minDate = new Date();
@@ -22,7 +23,7 @@ const step2Schema = z.object({
     return date <= minDate;
   }, "Vous devez avoir au moins 18 ans"),
   nationality: z.string().min(2, "Nationalité requise"),
-  phone: z.string().regex(/^\+?[0-9\s\-()]{8,20}$/, "Numéro de téléphone invalide"),
+  phone: z.string().regex(/^\+?[0-9\s\-()]{8,20}$/, ERROR_MESSAGES.INVALID_PHONE),
   ssn: z.string().min(5, "Numéro de sécurité sociale requis"), // Modèle simplifié
   address: z.string().min(5, "Adresse requise"),
   city: z.string().min(2, "Ville requise"),
@@ -47,7 +48,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
       firstName: initialData?.firstName || '',
       lastName: initialData?.lastName || '',
       dob: initialData?.dob || '',
-      nationality: initialData?.nationality || 'CA',
+      nationality: initialData?.nationality || DEFAULT_DRIVER_COUNTRY_CODE,
       phone: initialData?.phone || '',
       ssn: initialData?.ssn || '',
       address: initialData?.address || '',

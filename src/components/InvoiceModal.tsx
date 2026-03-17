@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { FiDownload, FiCheck, FiMapPin, FiClock, FiNavigation } from 'react-icons/fi';
 import { Booking } from '@/types/booking';
 import { downloadInvoiceFromBooking, extractInvoiceData } from '@/services/invoice.service';
+import { DEFAULT_LOCALE, CURRENCY_CODE } from '@/utils/constants';
 
 interface InvoiceModalProps {
   booking: Booking;
@@ -38,7 +39,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
   };
   
   const formatPrice = (price: number): string => {
-    return price.toLocaleString('fr-CA', { minimumFractionDigits: 2 });
+    return price.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 });
   };
 
   return (
@@ -106,15 +107,15 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Tarif de base</span>
-                <span className="font-medium">{formatPrice(invoiceData.basePrice)} CAD</span>
+                <span className="font-medium">{formatPrice(invoiceData.basePrice)} {CURRENCY_CODE}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Distance ({invoiceData.distance.toFixed(2)} km)</span>
-                <span className="font-medium">{formatPrice(invoiceData.distancePrice)} CAD</span>
+                <span className="font-medium">{formatPrice(invoiceData.distancePrice)} {CURRENCY_CODE}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Durée ({invoiceData.duration} min)</span>
-                <span className="font-medium">{formatPrice(invoiceData.durationPrice)} CAD</span>
+                <span className="font-medium">{formatPrice(invoiceData.durationPrice)} {CURRENCY_CODE}</span>
               </div>
             </div>
             
@@ -123,7 +124,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
               <div className="flex justify-between items-center">
                 <span className="text-lg font-bold text-gray-900">Total</span>
                 <span className="text-2xl font-bold text-[#f29200]">
-                  {formatPrice(invoiceData.finalPrice)} CAD
+                  {formatPrice(invoiceData.finalPrice)} {CURRENCY_CODE}
                 </span>
               </div>
             </div>

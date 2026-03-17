@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, serverTimestamp, query, getDocs, limit } from 'firebase/firestore';
-import { DEFAULT_PRICING } from '@/utils/constants'; // Import des constantes de prix 
+import { DEFAULT_PRICING, CURRENCY_CODE } from '@/utils/constants'; // Import des constantes de prix
 
 export default function CreateCollectionsPage() {
   const [status, setStatus] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -82,7 +82,7 @@ export default function CreateCollectionsPage() {
           sampleDoc: {
             userId: 'sample_user_id',
             balance: 0,
-            currency: 'XAF',
+            currency: CURRENCY_CODE,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           }
@@ -93,7 +93,7 @@ export default function CreateCollectionsPage() {
             userId: 'sample_user_id',
             type: 'credit',
             amount: 0,
-            currency: 'XAF',
+            currency: CURRENCY_CODE,
             description: 'Sample transaction',
             status: 'completed',
             bookingId: '',
@@ -157,7 +157,7 @@ export default function CreateCollectionsPage() {
             weight: 1,
             status: 'pending',
             price: 1000,
-            currency: 'XAF',
+            currency: CURRENCY_CODE,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
           }

@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Wallet } from '@/types';
+import { CURRENCY_CODE, LIMITS, DEFAULT_LOCALE } from '@/utils/constants';
 
 interface WalletPreviewProps {
   /** Classe CSS personnalisée */
@@ -67,7 +68,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
           const newWallet: Wallet = {
             userId: currentUser.uid,
             balance: 0,
-            currency: 'CAD',
+            currency: CURRENCY_CODE,
             updatedAt: new Date(),
           };
           
@@ -80,7 +81,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
         setWallet({
           userId: currentUser.uid,
           balance: 0,
-          currency: 'CAD',
+          currency: CURRENCY_CODE,
           updatedAt: new Date(),
         });
       } finally {
@@ -95,7 +96,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
    * Formater le montant avec séparateurs de milliers
    */
   const formatAmount = (amount: number): string => {
-    return new Intl.NumberFormat('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+    return new Intl.NumberFormat(DEFAULT_LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
   };
 
   if (!currentUser || loading) {
@@ -153,7 +154,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
             <p className="text-lg font-bold text-gray-900 dark:text-white">
               {formatAmount(wallet?.balance || 0)}{' '}
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {wallet?.currency || 'CAD'}
+                {wallet?.currency || CURRENCY_CODE}
               </span>
             </p>
           </div>
@@ -175,8 +176,8 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
           </svg>
         </div>
 
-        {/* Badge "Recharger" si solde faible (inférieur à 5 CAD) */}
-        {(wallet?.balance || 0) < 5 && (
+        {/* Badge "Recharger" si solde faible (inférieur à LOW_BALANCE_THRESHOLD) */}
+        {(wallet?.balance || 0) < LIMITS.LOW_BALANCE_THRESHOLD && (
           <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse">
             Recharger
           </div>

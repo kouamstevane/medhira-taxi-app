@@ -25,6 +25,7 @@ import {
 import { db } from '@/config/firebase';
 import { findAvailableDrivers } from './findAvailableDrivers';
 import { RideCandidate, BroadcastRideParams } from '@/types';
+import { LIMITS, CURRENCY_CODE } from '@/utils/constants';
 
 /**
  * Diffuser une demande de course aux chauffeurs disponibles
@@ -111,7 +112,7 @@ export const broadcastRideRequest = async (
     console.log('[BROADCAST] Broadcast terminé', {
       rideId,
       driversNotified: driverIds.length,
-      bonus: bonus > 0 ? `${bonus} CAD` : 'Aucun',
+      bonus: bonus > 0 ? `${bonus} ${CURRENCY_CODE}` : 'Aucun',
     });
 
     return driverIds;
@@ -256,7 +257,7 @@ export const subscribeToDriverRideRequests = (
     requestsRef,
     where('status', '==', 'pending'),
     orderBy('createdAt', 'desc'),
-    limit(50)
+    limit(LIMITS.DEFAULT_QUERY_LIMIT)
   );
 
   const unsubscribe = onSnapshot(
@@ -313,7 +314,7 @@ export const getPendingCandidatesForDriver = async (
       requestsRef,
       where('status', '==', 'pending'),
       orderBy('createdAt', 'desc'),
-      limit(50)
+      limit(LIMITS.DEFAULT_QUERY_LIMIT)
     );
 
     const requestsSnapshot = await getDocs(pendingRequestsQuery);

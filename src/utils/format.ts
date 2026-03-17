@@ -6,7 +6,7 @@
  * @module utils/format
  */
 
-import { CURRENCY_CODE, CURRENCY_MAP, CURRENCY_LOCALE_MAP } from './constants';
+import { CURRENCY_CODE, CURRENCY_MAP, CURRENCY_LOCALE_MAP, DEFAULT_LOCALE } from './constants';
 
 /**
  * Formate un montant avec le code de devise global
@@ -26,7 +26,7 @@ export const formatCurrencyWithCode = (amount: number): string => {
   // Validation: NaN et montants négatifs sont clampés à 0
   // Les montants négatifs dans une app VTC indiquent généralement une erreur ou fraude potentielle
   const validAmount = typeof amount === 'number' && !isNaN(amount) && amount >= 0 ? amount : 0;
-  return `${validAmount.toLocaleString('fr-FR')} ${CURRENCY_CODE}`;
+  return `${validAmount.toLocaleString(DEFAULT_LOCALE)} ${CURRENCY_CODE}`;
 };
 
 /**
@@ -40,7 +40,7 @@ export const formatCurrencyWithCode = (amount: number): string => {
  * @see formatCurrencyWithCode pour les affichages financiers principaux
  */
 export const formatCurrency = (amount: number): string => {
-  const currency = CURRENCY_MAP[CURRENCY_CODE] || 'CAD';
+  const currency = CURRENCY_MAP[CURRENCY_CODE] || 'XAF';
   const locale = CURRENCY_LOCALE_MAP[currency] || 'fr-FR';
   
   // Pour FCFA, utiliser le code de devise au lieu du symbole (pas de symbole standard)
@@ -122,7 +122,7 @@ export const formatDuration = (minutes: number): string => {
  * formatDate(new Date()) // "4 novembre 2025"
  */
 export const formatDate = (date: Date): string => {
-  return new Intl.DateTimeFormat('fr-CA', {
+  return new Intl.DateTimeFormat(DEFAULT_LOCALE, {
     day: 'numeric',
     month: 'long',
     year: 'numeric'
@@ -139,7 +139,7 @@ export const formatDate = (date: Date): string => {
  * formatDateTime(new Date()) // "4 novembre 2025 à 13:45"
  */
 export const formatDateTime = (date: Date): string => {
-  return new Intl.DateTimeFormat('fr-CA', {
+  return new Intl.DateTimeFormat(DEFAULT_LOCALE, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',

@@ -19,6 +19,12 @@ interface OrderStatusBadgeProps {
 export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ status, className = '' }) => {
   const getStatusConfig = (status: FoodOrderStatus) => {
     switch (status) {
+      case 'pending_payment':
+        return {
+          label: 'Paiement en attente',
+          color: 'bg-amber-100 text-amber-800 border-amber-200',
+          icon: <Clock className="w-4 h-4" />
+        };
       case 'pending':
         return {
           label: 'En attente',

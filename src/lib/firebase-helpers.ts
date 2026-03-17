@@ -9,7 +9,7 @@
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { UserData, Booking, Transaction, Wallet } from '@/types';
-import { DEFAULT_PRICING, CURRENCY_CODE } from '@/utils/constants';
+import { DEFAULT_PRICING, CURRENCY_CODE, PEAK_HOURS } from '@/utils/constants';
 
 /**
  * Crée ou met à jour un document utilisateur dans Firestore
@@ -64,7 +64,7 @@ export const getUserData = async (userId: string): Promise<UserData | null> => {
 export const isPeakHour = (): boolean => {
   const now = new Date();
   const hours = now.getHours();
-  return (hours >= 7 && hours <= 9) || (hours >= 16 && hours <= 19);
+  return (hours >= PEAK_HOURS.MORNING_START && hours <= PEAK_HOURS.MORNING_END) || (hours >= PEAK_HOURS.EVENING_START && hours <= PEAK_HOURS.EVENING_END);
 };
 
 /**

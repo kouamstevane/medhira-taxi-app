@@ -12,6 +12,7 @@ import { auditLoggingService, AuditEventType, AuditLogLevel } from '../../../ser
 import { secureStorage } from '../../../services/secureStorage.service';
 import { emailVerificationService } from '../../../services/email-verification.service';
 import { StructuredLogger } from '@/utils/logger';
+import { SUPPORTED_COUNTRIES, DEFAULT_DRIVER_COUNTRY_CODE } from '@/utils/constants';
 
 // Import des étapes
 import Step1Intent, { Step1FormData } from './components/Step1Intent';
@@ -306,7 +307,7 @@ export default function DriverRegisterWizard() {
   const saveProgress = useCallback(async () => {
     try {
       const progress: RegistrationProgress = {
-        step1Data: { ...step1Data, password: undefined, confirmPassword: undefined }, // Mot de passe exclu
+        step1Data: { ...step1Data, password: undefined }, // Mot de passe exclu
         step2Data: { ...step2Data, ssn: undefined }, // SSN exclu
         step3Data,
         currentStep,
@@ -422,7 +423,7 @@ export default function DriverRegisterWizard() {
                    firstName: data.firstName || '',
                    lastName: data.lastName || '',
                    dob: data.dob || '',
-                   nationality: data.nationality || 'CM',
+                   nationality: data.nationality || DEFAULT_DRIVER_COUNTRY_CODE,
                    ssn: '',
                    address: data.address || '',
                    city: data.city || '',

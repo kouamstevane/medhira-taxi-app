@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { doc, onSnapshot, updateDoc, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
 import { db } from "@/config/firebase";
+import { CURRENCY_CODE, LIMITS, DEFAULT_LOCALE } from "@/utils/constants";
 import { LoadScript, GoogleMap, Marker, DirectionsRenderer } from "@react-google-maps/api";
 
 const mapContainerStyle = { width: "100%", height: "200px" };
@@ -52,7 +53,7 @@ function ConfirmationContent() {
           timeoutId = setTimeout(() => {
             setError("Aucun chauffeur disponible après 60 secondes.");
             updateDoc(bookingRef, { status: "failed", reason: "timeout" });
-          }, 60000);
+          }, LIMITS.DRIVER_SEARCH_TIMEOUT);
         }
 
         if (data.status === "accepted" && data.driverId) {
@@ -262,7 +263,7 @@ function ConfirmationContent() {
             <div className="text-center py-6">
               <div className="text-green-500 text-4xl mb-2">🎉</div>
               <h3 className="text-lg font-semibold">Course terminée</h3>
-              <p className="text-2xl font-bold text-[#f29200] mt-2">{finalPrice.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD</p>
+              <p className="text-2xl font-bold text-[#f29200] mt-2">{finalPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}</p>
               <p className="text-gray-600 mt-1">Merci d'avoir utilisé Medjira Taxi</p>
             </div>
           )}
@@ -291,7 +292,7 @@ function ConfirmationContent() {
               </div>
               <div className="flex justify-between font-bold">
                 <span>Prix initial</span>
-                <span>{booking?.price?.toLocaleString("fr-CA", { minimumFractionDigits: 2 })} CAD</span>
+                <span>{booking?.price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}</span>
               </div>
             </div>
           </div>
