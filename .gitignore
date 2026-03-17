@@ -20,6 +20,9 @@ config/keys/serviceAccountKey.json
 .kilocode/
 .kilocode/mcp.json
 
+# Claude AI
+.claude/
+
 # Production builds
 /build
 /dist
