@@ -11,6 +11,7 @@ config/keys/serviceAccountKey.json
 
 # Testing
 /coverage
+.mcp.json
 
 # Next.js
 /.next/
