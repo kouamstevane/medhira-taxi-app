@@ -1,4 +1,5 @@
 // src/utils/navigation.ts
+import type React from 'react';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import type { StructuredLogger } from './logger';
 
