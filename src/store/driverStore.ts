@@ -16,6 +16,7 @@ export interface DriverCoreData {
   status: string;
   isAvailable: boolean;
   profileImageUrl?: string;
+  licenseNumber?: string;
   car: DriverCarData;
   documents: {
     licensePhoto: string;

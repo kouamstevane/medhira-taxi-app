@@ -221,7 +221,7 @@ export default function DriverProfilePage() {
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <span className="text-slate-400 text-sm">Numéro de permis</span>
-                  <span className="text-white text-sm">{(driver as unknown as { licenseNumber?: string }).licenseNumber}</span>
+                  <span className="text-white text-sm">{driver.licenseNumber}</span>
                 </div>
               </div>
             )}
