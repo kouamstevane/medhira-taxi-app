@@ -42,24 +42,27 @@ class APIClient {
   }
 
   /**
-   * Obtenir le token d'authentification
+   * Obtenir le token d'authentification via Firebase Auth
    */
-  private getAuthToken(): string | null {
-    // Récupérer le token depuis localStorage ou cookie
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('auth-token');
+  private async getAuthToken(): Promise<string | null> {
+    if (typeof window === 'undefined') return null;
+    try {
+      const { getAuth } = await import('firebase/auth');
+      const user = getAuth().currentUser;
+      return user ? await user.getIdToken() : null;
+    } catch {
+      return null;
     }
-    return null;
   }
 
   /**
    * Construire les headers de la requête
    */
-  private buildHeaders(requiresAuth: boolean = false): HeadersInit {
+  private async buildHeaders(requiresAuth: boolean = false): Promise<HeadersInit> {
     const headers: HeadersInit = { ...this.defaultHeaders };
 
     if (requiresAuth) {
-      const token = this.getAuthToken();
+      const token = await this.getAuthToken();
       if (token) {
         (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
       }
@@ -71,7 +74,7 @@ class APIClient {
   /**
    * Gérer les erreurs de requête
    */
-  private async handleResponse(response: Response): Promise<any> {
+  private async handleResponse(response: Response): Promise<unknown> {
     if (!response.ok) {
       const error = await response.json().catch(() => ({
         message: response.statusText,
@@ -101,14 +104,14 @@ class APIClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: 'GET',
-        headers: this.buildHeaders(requiresAuth),
+        headers: await this.buildHeaders(requiresAuth),
         signal: controller.signal,
         ...fetchOptions,
       });
 
-      return await this.handleResponse(response);
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+      return (await this.handleResponse(response)) as T;
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Request timeout', { endpoint });
         throw new Error('La requête a expiré');
       }
@@ -121,7 +124,7 @@ class APIClient {
   /**
    * Effectuer une requête POST
    */
-  async post<T>(endpoint: string, data?: any, options: RequestOptions = {}): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const { requiresAuth = false, timeout = API_CONFIG.timeout, ...fetchOptions } = options;
 
     const controller = new AbortController();
@@ -130,15 +133,15 @@ class APIClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: 'POST',
-        headers: this.buildHeaders(requiresAuth),
+        headers: await this.buildHeaders(requiresAuth),
         body: JSON.stringify(data),
         signal: controller.signal,
         ...fetchOptions,
       });
 
-      return await this.handleResponse(response);
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+      return (await this.handleResponse(response)) as T;
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Request timeout', { endpoint });
         throw new Error('La requête a expiré');
       }
@@ -151,7 +154,7 @@ class APIClient {
   /**
    * Effectuer une requête PUT
    */
-  async put<T>(endpoint: string, data?: any, options: RequestOptions = {}): Promise<T> {
+  async put<T>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const { requiresAuth = false, timeout = API_CONFIG.timeout, ...fetchOptions } = options;
 
     const controller = new AbortController();
@@ -160,15 +163,15 @@ class APIClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: 'PUT',
-        headers: this.buildHeaders(requiresAuth),
+        headers: await this.buildHeaders(requiresAuth),
         body: JSON.stringify(data),
         signal: controller.signal,
         ...fetchOptions,
       });
 
-      return await this.handleResponse(response);
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+      return (await this.handleResponse(response)) as T;
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Request timeout', { endpoint });
         throw new Error('La requête a expiré');
       }
@@ -190,14 +193,14 @@ class APIClient {
     try {
       const response = await fetch(`${this.baseURL}${endpoint}`, {
         method: 'DELETE',
-        headers: this.buildHeaders(requiresAuth),
+        headers: await this.buildHeaders(requiresAuth),
         signal: controller.signal,
         ...fetchOptions,
       });
 
-      return await this.handleResponse(response);
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+      return (await this.handleResponse(response)) as T;
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Request timeout', { endpoint });
         throw new Error('La requête a expiré');
       }
@@ -218,7 +221,7 @@ export const apiClient = new APIClient(API_CONFIG.baseURL, API_CONFIG.headers);
  */
 export const api = {
   get: <T>(endpoint: string, options?: RequestOptions) => apiClient.get<T>(endpoint, options),
-  post: <T>(endpoint: string, data?: any, options?: RequestOptions) => apiClient.post<T>(endpoint, data, options),
-  put: <T>(endpoint: string, data?: any, options?: RequestOptions) => apiClient.put<T>(endpoint, data, options),
+  post: <T>(endpoint: string, data?: unknown, options?: RequestOptions) => apiClient.post<T>(endpoint, data, options),
+  put: <T>(endpoint: string, data?: unknown, options?: RequestOptions) => apiClient.put<T>(endpoint, data, options),
   delete: <T>(endpoint: string, options?: RequestOptions) => apiClient.delete<T>(endpoint, options),
 };
