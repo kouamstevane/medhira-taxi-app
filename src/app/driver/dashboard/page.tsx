@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { auth, db } from '@/config/firebase';
 import {
@@ -11,16 +10,15 @@ import {
   query,
   where,
   getDocs,
-  orderBy
+  orderBy,
+  Timestamp
 } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signOut } from 'firebase/auth';
+import { signOut, User } from 'firebase/auth';
 import Link from 'next/link';
-import {
-  FiTruck, FiDollarSign, FiStar, FiRefreshCw,
-  FiLogOut, FiUser, FiMapPin, FiCheckCircle,
-  FiArrowRight
-} from 'react-icons/fi';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import {
   getPendingCandidatesForDriver,
   subscribeToDriverRideRequests,
@@ -35,7 +33,6 @@ import { updateDriverLocation, calculateFinalFare, markDriverArrived, startTrip,
 import { resendVerificationEmail } from '@/services/auth.service';
 import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
-import { StatsCard } from './components/StatsCard';
 import { getDriverDashboardInfoMessage } from '@/utils/driver.utils';
 
 interface CarInfo {
@@ -72,7 +69,7 @@ interface Trip {
   destination: string;
   price: number;
   status: 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled';
-  createdAt: any;
+  createdAt: Timestamp | Date | string | null;
   unreadMessages?: {
     client: number;
     driver: number;
@@ -99,7 +96,7 @@ interface RideRequest {
 
 export default function DriverDashboard() {
   const [driver, setDriver] = useState<DriverData | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [availableTrips, setAvailableTrips] = useState<Trip[]>([]);
@@ -117,7 +114,7 @@ export default function DriverDashboard() {
     return `${firstChar}${lastChar}`;
   };
 
-  const formatValue = (value: any, defaultValue: any = 'N/A') => {
+  const formatValue = (value: string | number | boolean | null | undefined, defaultValue: string | number = 'N/A'): string | number | boolean => {
     return value ?? defaultValue;
   };
 
@@ -251,11 +248,11 @@ export default function DriverDashboard() {
           console.log('[DRIVER] Snapshot courses actives:', snapshot.size, 'résultat(s)');
           
           if (!snapshot.empty) {
-            const doc = snapshot.docs[0]; // Prendre la première course active
-            const data = doc.data();
-            
+            const activeDoc = snapshot.docs[0]; // Prendre la première course active
+            const data = activeDoc.data();
+
             console.log('[DRIVER] Course active trouvée:', {
-              id: doc.id,
+              id: activeDoc.id,
               status: data.status,
               pickup: data.pickup,
               destination: data.destination
@@ -268,7 +265,7 @@ export default function DriverDashboard() {
             }
             
               setCurrentTrip({
-                id: doc.id,
+                id: activeDoc.id,
                 userId: data.userId,
                 passengerName: data.userEmail || "Client",
                 pickup: data.pickup,
@@ -507,9 +504,10 @@ export default function DriverDashboard() {
             passengerLocation: bookingData.passengerLocation
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erreur d'acceptation:", err);
-      alert(err.message || "Impossible d'accepter la course.");
+      const message = err instanceof Error ? err.message : "Impossible d'accepter la course.";
+      alert(message);
     }
   };
 
@@ -522,7 +520,7 @@ export default function DriverDashboard() {
       
       // Retirer de la liste
       setRideRequests(prev => prev.filter(r => r.rideId !== rideId));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erreur de refus:", err);
       // Ne pas bloquer l'UI si le refus échoue
     }
@@ -570,9 +568,10 @@ export default function DriverDashboard() {
           passengerLocation: bookingData.passengerLocation
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erreur d'acceptation:", err);
-      alert(err.message || "Impossible d'accepter la course.");
+      const message = err instanceof Error ? err.message : "Impossible d'accepter la course.";
+      alert(message);
     }
   };
 
@@ -642,189 +641,256 @@ export default function DriverDashboard() {
   if (!driver) return <NoDriver onLogout={handleLogout} />;
 
   return (
-    <div className="min-h-screen bg-[#e6e6e6]">
-      <header className="bg-[#101010] text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
-          <div className="flex justify-between items-center py-3 sm:py-4">
-            <div className="flex items-center space-x-2 sm:space-x-4 min-w-0 flex-1">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-[#f29200] to-[#ffaa33] rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-bold text-sm sm:text-lg">{getInitials(driver.firstName, driver.lastName)}</span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <h1 className="text-base sm:text-xl lg:text-2xl font-bold text-white truncate">{formatValue(driver.firstName)} {formatValue(driver.lastName)}</h1>
-                <p className="text-xs sm:text-sm text-gray-300 truncate">{formatValue(driver.car?.model)} • {formatValue(driver.car?.plate)}</p>
-              </div>
+    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
+      <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-24">
+        {/* Header */}
+        <header className="p-6 flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-xl z-50">
+          <div className="flex items-center gap-3">
+            <div className="size-12 rounded-full border-2 border-primary/30 bg-gradient-to-r from-primary to-[#ffae33] flex items-center justify-center">
+              <span className="text-white font-bold text-sm">{getInitials(driver.firstName, driver.lastName)}</span>
             </div>
-            <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
-              <Link 
-                href="/dashboard" 
-                className="text-white hover:text-[#f29200] transition flex items-center justify-center px-2 sm:px-3 py-2 rounded-lg hover:bg-[#1a1a1a] touch-manipulation"
-                title="Accéder à l'espace client"
-                style={{ minHeight: '44px', minWidth: '44px' }}
-              >
-                <FiUser className="h-5 w-5" />
-                <span className="hidden lg:inline text-sm ml-2">Espace client</span>
-              </Link>
-              <div className="flex items-center space-x-1 sm:space-x-2">
-                <span className="text-gray-300 text-xs sm:text-sm hidden sm:inline">Disponible</span>
-                <button 
-                  onClick={toggleAvailability} 
-                  className={`relative inline-flex h-6 w-11 rounded-full touch-manipulation ${driver.isAvailable ? 'bg-green-400' : 'bg-gray-300'}`}
-                  style={{ minHeight: '44px', minWidth: '44px' }}
-                  aria-label={driver.isAvailable ? 'Désactiver la disponibilité' : 'Activer la disponibilité'}
-                >
-                  <span className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${driver.isAvailable ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
-              </div>
-              <button 
-                onClick={handleLogout} 
-                className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white px-2 sm:px-4 py-2 rounded-lg transition flex items-center space-x-1 sm:space-x-2 touch-manipulation"
-                style={{ minHeight: '44px' }}
-              >
-                <FiLogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Déconnexion</span>
-              </button>
+            <div>
+              <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Bienvenue</p>
+              <h1 className="text-xl font-bold text-white">Bonjour, {formatValue(driver.firstName)}</h1>
             </div>
           </div>
-        </div>
-      </header>
+          <button
+            onClick={toggleAvailability}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
+              driver.isAvailable
+                ? 'bg-green-500/10 border-green-500/20'
+                : 'bg-slate-700/50 border-white/10'
+            }`}
+          >
+            <span className={`size-2 rounded-full ${driver.isAvailable ? 'bg-green-500 animate-pulse-green' : 'bg-slate-500'}`} />
+            <span className={`text-sm font-bold ${driver.isAvailable ? 'text-green-500' : 'text-slate-400'}`}>
+              {driver.isAvailable ? 'En ligne' : 'Hors ligne'}
+            </span>
+          </button>
+        </header>
 
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-6 lg:py-8">
+        {/* Info Message */}
         {infoMessage && (
-          <div className="mb-4 sm:mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 text-blue-700 rounded">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <p className="text-sm sm:text-base flex-1">{infoMessage}</p>
-              {/* Afficher le bouton "Renvoyer l'email" uniquement si l'email n'est pas vérifié */}
+          <div className="mx-6 mb-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+            <div className="flex items-start gap-3">
+              <MaterialIcon name="info" size="md" className="text-blue-400 mt-0.5" />
+              <p className="text-sm text-blue-300 flex-1">{infoMessage}</p>
               {currentUser && !currentUser.emailVerified && (!driver || driver.status === 'pending') && (
                 <button
                   onClick={handleResendVerificationEmail}
                   disabled={sendingEmail}
-                  className="self-start sm:self-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 touch-manipulation"
-                  style={{ minHeight: '44px' }}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg disabled:opacity-50 flex items-center gap-1"
                 >
-                  <FiRefreshCw className={`h-4 w-4 ${sendingEmail ? 'animate-spin' : ''}`} />
-                  <span>{sendingEmail ? 'Envoi en cours...' : 'Renvoyer l\'email'}</span>
+                  <MaterialIcon name="refresh" size="sm" className={sendingEmail ? 'animate-spin' : ''} />
+                  {sendingEmail ? 'Envoi...' : 'Renvoyer'}
                 </button>
               )}
             </div>
           </div>
         )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
-          {[
-            { label: "Courses", value: formatValue(driver.tripsCompleted, 0), icon: FiTruck, color: "bg-blue-100", iconColor: "text-blue-600" },
-            { label: "Revenus", value: formatCurrencyWithCode(driver.earnings || 0), icon: FiDollarSign, color: "bg-green-100", iconColor: "text-green-600" },
-            { label: "Note", value: `${formatValue(driver.rating, 0)}/5`, icon: FiStar, color: "bg-yellow-100", iconColor: "text-yellow-600" },
-            { label: "Statut", value: formatValue(driver.status, 'actif'), icon: FiRefreshCw, color: "bg-purple-100", iconColor: "text-purple-600" }
-          ].map((stat, i) => (
-            <StatsCard
-              key={i}
-              label={stat.label}
-              value={stat.value}
-              icon={stat.icon}
-              color={stat.color}
-              iconColor={stat.iconColor}
-            />
-          ))}
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-3 gap-3 px-6 mb-6">
+          <GlassCard className="p-4 flex flex-col items-center text-center">
+            <span className="text-primary text-sm font-semibold mb-1">Gains</span>
+            <span className="text-white font-bold text-base leading-tight">{formatCurrencyWithCode(driver.earnings || 0)}</span>
+          </GlassCard>
+          <GlassCard className="p-4 flex flex-col items-center text-center">
+            <span className="text-primary text-sm font-semibold mb-1">Note</span>
+            <div className="flex items-center gap-1">
+              <MaterialIcon name="star" size="sm" className="text-primary" filled />
+              <span className="text-white font-bold text-base">{formatValue(driver.rating, 0)}</span>
+            </div>
+            <span className="text-slate-500 text-[10px]">Top Driver</span>
+          </GlassCard>
+          <GlassCard className="p-4 flex flex-col items-center text-center">
+            <span className="text-primary text-sm font-semibold mb-1">Courses</span>
+            <span className="text-white font-bold text-base">{formatValue(driver.tripsCompleted, 0)}</span>
+            <span className="text-slate-500 text-[10px]">Total</span>
+          </GlassCard>
         </div>
 
-        {/* Section Historique du jour */}
-        <div className="mb-6 sm:mb-8">
-          <h2 className="text-xl font-bold mb-4 text-gray-800">Historique du jour</h2>
-          <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
-            {dailyHistory.length > 0 ? (
-              <div className="space-y-4">
-                {dailyHistory.map(trip => (
-                  <div key={trip.id} className="border-b border-gray-200 pb-3 last:border-b-0">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-semibold text-gray-800">Course #{trip.id.slice(-4)} - {trip.destination}</p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(trip.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • {formatCurrencyWithCode(trip.price)}
-                        </p>
-                      </div>
-                      <span className="text-sm font-medium text-green-600">Complétée</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-4">Aucune course complétée aujourd&apos;hui.</p>
-            )}
-          </div>
+        {/* Status Card */}
+        <div className="px-6 mb-8">
+          <GlassCard variant="elevated" className="p-5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+            <div className="flex items-center gap-3 mb-4">
+              <span className={`size-3 rounded-full ${driver.isAvailable ? 'bg-green-500 animate-pulse-green' : 'bg-slate-500'}`} />
+              <p className="text-white font-medium">
+                {driver.isAvailable ? 'Disponible — En attente' : 'Hors ligne'}
+              </p>
+            </div>
+            <p className="text-slate-400 text-sm mb-5 leading-relaxed">
+              {driver.isAvailable
+                ? 'Votre position est visible par les clients. Restez à proximité des zones animées.'
+                : 'Activez votre statut pour recevoir des demandes de course.'}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={toggleAvailability}
+                className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10 flex items-center justify-center gap-2"
+              >
+                <MaterialIcon name="power_settings_new" size="sm" />
+                {driver.isAvailable ? 'Aller hors ligne' : 'Aller en ligne'}
+              </button>
+              <button
+                onClick={handleLogout}
+                className="py-3 px-4 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive font-semibold transition-all border border-destructive/20 flex items-center justify-center gap-2"
+              >
+                <MaterialIcon name="logout" size="sm" />
+              </button>
+            </div>
+          </GlassCard>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-          {currentTrip && (
+        {/* Current Trip */}
+        {currentTrip && (
+          <div className="px-6 mb-8">
             <CurrentTripCard
               trip={currentTrip}
               onMarkAsArrived={handleMarkAsArrived}
               onStartTrip={handleStartTrip}
               onCompleteTrip={handleCompleteTrip}
             />
-          )}
+          </div>
+        )}
 
-          <div className={currentTrip ? 'lg:col-span-1' : 'lg:col-span-3'}>
-            <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
-              <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-gray-800">Nouvelles demandes</h2>
-              
-              {/* Demandes de course avec matching */}
-              {rideRequests.length > 0 && (
-                <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
-                  {rideRequests.map((request) => (
-                    <RideRequestCard
-                      key={request.rideId}
-                      request={request}
-                      onAccept={() => handleAcceptRideRequest(request.rideId)}
-                      onDecline={() => handleDeclineRideRequest(request.rideId)}
-                    />
+        {/* Demandes en cours */}
+        <div className="px-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-bold text-white">Demandes en cours</h2>
+            {rideRequests.length > 0 && (
+              <span className="text-primary text-xs font-bold px-2 py-1 bg-primary/10 rounded">Nouveau</span>
+            )}
+          </div>
+
+          {rideRequests.length > 0 ? (
+            <div className="space-y-4">
+              {rideRequests.map((request) => (
+                <RideRequestCard
+                  key={request.rideId}
+                  request={request}
+                  onAccept={() => handleAcceptRideRequest(request.rideId)}
+                  onDecline={() => handleDeclineRideRequest(request.rideId)}
+                />
+              ))}
+            </div>
+          ) : (
+            <>
+              {availableTrips.length === 0 ? (
+                <GlassCard className="p-8 text-center">
+                  <MaterialIcon name="search_off" className="text-slate-500 text-[40px] mb-3" />
+                  <p className="text-slate-400 text-sm">Aucune demande pour le moment</p>
+                </GlassCard>
+              ) : (
+                <div className="space-y-4">
+                  {availableTrips.map((trip) => (
+                    <GlassCard key={trip.id} variant="bordered" className="p-5">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1">Course #{trip.id.slice(-4)}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-2xl font-black text-white">{formatCurrencyWithCode(trip.price)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-4 mb-6 relative">
+                        <div className="absolute left-[7px] top-3 bottom-3 w-[1.5px] bg-slate-700" />
+                        <div className="flex items-start gap-4">
+                          <div className="size-4 rounded-full border-2 border-primary bg-background z-10 flex items-center justify-center">
+                            <div className="size-1.5 bg-primary rounded-full" />
+                          </div>
+                          <div>
+                            <p className="text-slate-400 text-[10px] uppercase font-bold leading-none mb-1">Départ</p>
+                            <p className="text-white text-sm font-medium">{trip.pickup}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-4">
+                          <div className="size-4 rounded-full border-2 border-white/40 bg-background z-10 flex items-center justify-center">
+                            <div className="size-1.5 bg-white/40 rounded-full" />
+                          </div>
+                          <div>
+                            <p className="text-slate-400 text-[10px] uppercase font-bold leading-none mb-1">Destination</p>
+                            <p className="text-white text-sm font-medium">{trip.destination}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => acceptTrip(trip.id)}
+                          className="py-3 rounded-xl bg-gradient-to-r from-primary to-orange-600 text-background font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                        >
+                          <MaterialIcon name="check_circle" size="md" />
+                          Accepter
+                        </button>
+                        <button
+                          onClick={() => setAvailableTrips(prev => prev.filter(t => t.id !== trip.id))}
+                          className="py-3 rounded-xl border border-white/10 bg-white/5 text-slate-400 font-bold active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                        >
+                          <MaterialIcon name="cancel" size="md" />
+                          Ignorer
+                        </button>
+                      </div>
+                    </GlassCard>
                   ))}
                 </div>
               )}
+            </>
+          )}
+        </div>
 
-              {/* Anciennes courses disponibles (fallback) */}
-              {rideRequests.length === 0 && (
-                <>
-                  <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-gray-700">Courses disponibles</h3>
-                  {availableTrips.length === 0 ? (
-                    <p className="text-gray-500 text-center py-8">Aucune course disponible</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {availableTrips.map((trip) => (
-                        <div key={trip.id} className="border border-gray-200 rounded-lg p-3 sm:p-4">
-                          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-sm sm:text-base">Course #{trip.id.slice(-4)}</p>
-                              <div className="flex items-start mt-1 sm:mt-2">
-                                <FiMapPin className="h-3 w-3 sm:h-4 sm:w-4 text-green-500 mr-1 sm:mr-2 flex-shrink-0 mt-0.5" />
-                                <p className="text-xs sm:text-sm text-gray-600 break-words">{trip.pickup}</p>
-                              </div>
-                              <div className="flex items-start mt-1 sm:mt-2">
-                                <FiArrowRight className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 mr-1 sm:mr-2 flex-shrink-0 mt-0.5" />
-                                <p className="text-xs sm:text-sm text-gray-600 break-words">{trip.destination}</p>
-                              </div>
-                            </div>
-                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-bold self-start sm:self-auto">
-                              {formatCurrencyWithCode(trip.price)}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => acceptTrip(trip.id)}
-                            className="w-full bg-[#f29200] hover:bg-[#e68600] active:bg-[#d67a00] text-white py-3 sm:py-2 rounded-lg transition flex items-center justify-center space-x-2 touch-manipulation"
-                            style={{ minHeight: '44px' }}
-                          >
-                            <FiCheckCircle className="h-4 w-4" />
-                            <span className="text-sm sm:text-base">Accepter</span>
-                          </button>
-                        </div>
-                      ))}
+        {/* Historique du jour */}
+        <div className="px-6 mb-8">
+          <h2 className="text-lg font-bold text-white mb-4">Historique du jour</h2>
+          <GlassCard className="p-5">
+            {dailyHistory.length > 0 ? (
+              <div className="space-y-4">
+                {dailyHistory.map(trip => (
+                  <div key={trip.id} className="border-b border-white/5 pb-3 last:border-b-0">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-semibold text-white text-sm">Course #{trip.id.slice(-4)}</p>
+                        <p className="text-xs text-slate-400">
+                          {trip.createdAt instanceof Timestamp
+                            ? new Date(trip.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                            : trip.createdAt
+                              ? new Date(trip.createdAt instanceof Date ? trip.createdAt : trip.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                              : '--:--'
+                          } — {trip.destination}
+                        </p>
+                      </div>
+                      <span className="text-primary font-bold text-sm">{formatCurrencyWithCode(trip.price)}</span>
                     </div>
-                  )}
-                </>
-              )}
-            </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-slate-500 text-center py-4 text-sm">Aucune course complétée aujourd&apos;hui.</p>
+            )}
+          </GlassCard>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="px-6 mb-8">
+          <div className="flex gap-3">
+            <Link href="/dashboard" className="flex-1">
+              <GlassCard className="p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
+                <MaterialIcon name="person" size="md" className="text-primary" />
+                <span className="text-white text-sm font-medium">Espace client</span>
+              </GlassCard>
+            </Link>
+            <Link href="/driver/profile" className="flex-1">
+              <GlassCard className="p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
+                <MaterialIcon name="settings" size="md" className="text-primary" />
+                <span className="text-white text-sm font-medium">Mon profil</span>
+              </GlassCard>
+            </Link>
           </div>
         </div>
+
       </div>
+      {/* Bottom Nav — en dehors du conteneur contraint pour éviter tout problème de stacking context */}
+      <BottomNav items={driverNavItems} />
     </div>
   );
 }
@@ -832,10 +898,15 @@ export default function DriverDashboard() {
 
 function Loading() {
   return (
-    <div className="min-h-screen bg-[#e6e6e6] flex items-center justify-center">
+    <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f29200] mx-auto mb-4"></div>
-        <p>Chargement...</p>
+        <div className="relative w-16 h-16 mx-auto mb-6">
+          <div className="absolute inset-0 bg-primary rounded-full opacity-20 animate-ping" />
+          <div className="relative w-16 h-16 bg-primary rounded-full flex items-center justify-center animate-pulse">
+            <MaterialIcon name="local_taxi" className="text-white text-[28px]" />
+          </div>
+        </div>
+        <p className="text-slate-400 animate-pulse">Chargement...</p>
       </div>
     </div>
   );
@@ -843,12 +914,18 @@ function Loading() {
 
 function ErrorView({ error, onLogout }: { error: string; onLogout: () => void }) {
   return (
-    <div className="min-h-screen bg-[#e6e6e6] flex items-center justify-center">
-      <div className="bg-white p-6 rounded-lg shadow text-center">
-        <p className="text-red-500 mb-4">{error}</p>
-        <button onClick={onLogout} className="bg-[#f29200] text-white px-4 py-2 rounded-lg flex items-center space-x-2 mx-auto">
-          <FiLogOut className="h-4 w-4" />
-          <span>Se déconnecter</span>
+    <div className="min-h-screen bg-background flex items-center justify-center px-6">
+      <div className="glass-card p-8 rounded-2xl text-center max-w-sm w-full border border-white/10">
+        <div className="w-14 h-14 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-destructive/20">
+          <MaterialIcon name="error" className="text-destructive text-[28px]" />
+        </div>
+        <p className="text-destructive text-sm mb-6">{error}</p>
+        <button
+          onClick={onLogout}
+          className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+        >
+          <MaterialIcon name="logout" size="sm" />
+          Se déconnecter
         </button>
       </div>
     </div>
@@ -857,12 +934,18 @@ function ErrorView({ error, onLogout }: { error: string; onLogout: () => void })
 
 function NoDriver({ onLogout }: { onLogout: () => void }) {
   return (
-    <div className="min-h-screen bg-[#e6e6e6] flex items-center justify-center">
-      <div className="text-center">
-        <p className="text-red-500 mb-4">Aucun chauffeur trouvé</p>
-        <button onClick={onLogout} className="bg-[#f29200] text-white px-4 py-2 rounded-lg flex items-center space-x-2 mx-auto">
-          <FiLogOut className="h-4 w-4" />
-          <span>Se déconnecter</span>
+    <div className="min-h-screen bg-background flex items-center justify-center px-6">
+      <div className="glass-card p-8 rounded-2xl text-center max-w-sm w-full border border-white/10">
+        <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <MaterialIcon name="person_off" className="text-primary text-[28px]" />
+        </div>
+        <p className="text-slate-400 text-sm mb-6">Aucun profil chauffeur trouvé</p>
+        <button
+          onClick={onLogout}
+          className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+        >
+          <MaterialIcon name="logout" size="sm" />
+          Se déconnecter
         </button>
       </div>
     </div>
