@@ -14,18 +14,18 @@ interface LogEntry {
   context: string;
   operation: string;
   userId: string | null;
-  status: 'START' | 'SUCCESS' | 'ERROR' | 'WARNING';
+  status: 'START' | 'SUCCESS' | 'ERROR' | 'WARNING' | 'INFO' | 'DEBUG';
   errorMessage?: string;
   errorCode?: string;
   stack?: string;
   message?: string;
-  [key: string]: any;
+  [key: string]: string | number | boolean | null | undefined | object;
 }
 
 /**
  * Type pour les méthodes de logging externes
  */
-type LogMethod = (message: string, ...args: any[]) => void;
+type LogMethod = (message: string, ...args: unknown[]) => void;
 
 /**
  * Configuration du logger
@@ -181,7 +181,7 @@ export class StructuredLogger {
    * @param operation - Le nom de l'opération
    * @param details - Détails additionnels à logger
    */
-  logStart(operation: string, details?: Record<string, any>): void {
+  logStart(operation: string, details?: Record<string, unknown>): void {
     const logEntry: LogEntry = {
       timestamp: new Date().toISOString(),
       level: 'INFO',
@@ -202,7 +202,7 @@ export class StructuredLogger {
    * @param operation - Le nom de l'opération
    * @param details - Détails additionnels à logger
    */
-  logSuccess(operation: string, details?: Record<string, any>): void {
+  logSuccess(operation: string, details?: Record<string, unknown>): void {
     const logEntry: LogEntry = {
       timestamp: new Date().toISOString(),
       level: 'INFO',
@@ -224,7 +224,7 @@ export class StructuredLogger {
    * @param error - L'erreur à logger
    * @param details - Détails additionnels à logger
    */
-  logError(operation: string, error: Error, details?: Record<string, any>): void {
+  logError(operation: string, error: Error, details?: Record<string, unknown>): void {
     const logEntry: LogEntry = {
       timestamp: new Date().toISOString(),
       level: 'ERROR',
@@ -233,7 +233,7 @@ export class StructuredLogger {
       userId: this.userId,
       status: 'ERROR',
       errorMessage: error.message,
-      errorCode: (error as any).code,
+      errorCode: (error as Error & { code?: string }).code,
       stack: error.stack,
       ...details
     };
@@ -249,7 +249,7 @@ export class StructuredLogger {
    * @param message - Le message d'avertissement
    * @param details - Détails additionnels à logger
    */
-  logWarning(operation: string, message: string, details?: Record<string, any>): void {
+  logWarning(operation: string, message: string, details?: Record<string, unknown>): void {
     const logEntry: LogEntry = {
       timestamp: new Date().toISOString(),
       level: 'WARNING',
@@ -291,7 +291,7 @@ export class StructuredLogger {
    *
    * @deprecated Utilisez logStart() ou logSuccess() pour plus de précision
    */
-  info(message: string, data?: any): void {
+  info(message: string, data?: Record<string, unknown>): void {
     const logEntry: LogEntry = {
       timestamp: new Date().toISOString(),
       level: 'INFO',
@@ -314,7 +314,7 @@ export class StructuredLogger {
    *
    * @deprecated Utilisez logWarning() pour plus de précision
    */
-  warn(message: string, data?: any): void {
+  warn(message: string, data?: Record<string, unknown>): void {
     this.logWarning(message, message, data);
   }
 
@@ -326,10 +326,11 @@ export class StructuredLogger {
    *
    * @deprecated Utilisez logError() pour plus de précision
    */
-  error(message: string, error?: Error | any): void {
+  error(message: string, error?: Error | unknown): void {
     if (error instanceof Error) {
       this.logError(message, error);
     } else {
+      const extraData = (error !== null && typeof error === 'object') ? (error as Record<string, unknown>) : {};
       const logEntry: LogEntry = {
         timestamp: new Date().toISOString(),
         level: 'ERROR',
@@ -338,7 +339,7 @@ export class StructuredLogger {
         userId: this.userId,
         status: 'ERROR',
         errorMessage: message,
-        ...error
+        ...extraData
       };
       
       this.logToConsole(logEntry, console.error);
@@ -354,7 +355,7 @@ export class StructuredLogger {
    *
    * @deprecated Les logs de debug sont désactivés en production
    */
-  debug(message: string, data?: any): void {
+  debug(message: string, data?: Record<string, unknown>): void {
     if (process.env.NODE_ENV === 'production') {
       return;
     }
