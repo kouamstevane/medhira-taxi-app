@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb, adminAuth } from '@/config/firebase-admin';
+import type { DecodedIdToken } from 'firebase-admin/auth';
 import { driverDeletionService } from '@/utils/driver-deletion.service';
 import { z } from 'zod';
 
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = authHeader.split('Bearer ')[1];
-    let decodedToken: any;
+    let decodedToken: DecodedIdToken | null = null;
 
     try {
       decodedToken = await adminAuth.verifyIdToken(token);
@@ -124,12 +125,12 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Chauffeur supprimé définitivement avec succès',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur API delete-driver-complete:', error);
     return NextResponse.json(
       {
         error: 'Erreur serveur lors de la suppression',
-        details: error.message
+        details: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );

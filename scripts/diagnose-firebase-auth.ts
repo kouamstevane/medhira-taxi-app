@@ -111,13 +111,13 @@ async function checkFirebaseConnection(): Promise<void> {
       details: 'Firebase est accessible et configuré correctement'
     });
 
-  } catch (error: any) {
-    console.error('Erreur de connexion Firebase:', error.message);
+  } catch (error: unknown) {
+    console.error('Erreur de connexion Firebase:', error instanceof Error ? error.message : String(error));
 
     addDiagnostic({
       status: 'error',
       message: 'Impossible de se connecter à Firebase',
-      details: error.message,
+      details: error instanceof Error ? error.message : String(error),
       fix: 'Vérifiez votre clé API et votre configuration réseau'
     });
   }

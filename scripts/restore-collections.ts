@@ -11,7 +11,7 @@ import { join } from 'path';
 // Définition des collections et leur structure de base
 interface CollectionConfig {
   name: string;
-  sampleDoc: Record<string, any>;
+  sampleDoc: Record<string, unknown>;
 }
 
 const collections: CollectionConfig[] = [
@@ -145,7 +145,7 @@ async function createCollections() {
   try {
     // Essayer de charger le fichier de service account
     const serviceAccountPath = join(process.cwd(), 'firebase-service-account.json');
-    let serviceAccount: any = null;
+    let serviceAccount: Record<string, unknown> | null = null;
 
     try {
       const serviceAccountContent = readFileSync(serviceAccountPath, 'utf8');
@@ -169,8 +169,8 @@ async function createCollections() {
 
     db = getFirestore();
     console.log(' Firebase Admin initialisé avec succès\n');
-  } catch (error: any) {
-    console.error('Erreur lors de l\'initialisation de Firebase Admin:', error.message);
+  } catch (error: unknown) {
+    console.error('Erreur lors de l\'initialisation de Firebase Admin:', error instanceof Error ? error.message : String(error));
     console.error('Veuillez configurer les identifiants Firebase Admin:');
     console.error('1. Définissez la variable d\'environnement GOOGLE_APPLICATION_CREDENTIALS');
     console.error('   ou');
@@ -203,8 +203,8 @@ async function createCollections() {
         await docRef.delete();
         console.log(`🗑️  Document de test supprimé de "${collection.name}"`);
         console.log();
-      } catch (error: any) {
-        console.error(`Erreur lors de la création de "${collection.name}":`, error.message);
+      } catch (error: unknown) {
+        console.error(`Erreur lors de la création de "${collection.name}":`, error instanceof Error ? error.message : String(error));
         console.log();
       }
     } else {
@@ -258,8 +258,8 @@ async function createCollections() {
       await bookingRef.delete();
       console.log(`🗑️  Document de test supprimé de bookings`);
       console.log();
-    } catch (error: any) {
-      console.error(`Erreur lors de la création des sous-collections:`, error.message);
+    } catch (error: unknown) {
+      console.error(`Erreur lors de la création des sous-collections:`, error instanceof Error ? error.message : String(error));
       console.log();
     }
   } else {

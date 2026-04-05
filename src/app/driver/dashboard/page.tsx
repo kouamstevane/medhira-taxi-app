@@ -11,6 +11,7 @@ import {
   where,
   getDocs,
   orderBy,
+  limit,
   Timestamp
 } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -34,68 +35,11 @@ import { resendVerificationEmail } from '@/services/auth.service';
 import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
 import { getDriverDashboardInfoMessage } from '@/utils/driver.utils';
-
-interface CarInfo {
-  model?: string;
-  plate?: string;
-  color?: string;
-}
-
-interface DriverData {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  phone?: string;
-  car?: CarInfo;
-  status?: string;
-  isAvailable?: boolean;
-  rating?: number;
-  tripsCompleted?: number;
-  earnings?: number;
-}
-
-
-interface PreciseLocation {
-  lat: number;
-  lng: number;
-  accuracy?: number;
-}
-
-interface Trip {
-  id: string;
-  userId: string; // ID du client pour le chat
-  passengerName: string;
-  pickup: string;
-  destination: string;
-  price: number;
-  status: 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled';
-  createdAt: Timestamp | Date | string | null;
-  unreadMessages?: {
-    client: number;
-    driver: number;
-  };
-  // Coordonnées GPS précises pour la navigation
-  pickupLocation?: PreciseLocation;
-  pickupLocationAccuracy?: number; // Précision en mètres
-  destinationLocation?: PreciseLocation;
-  driverLocation?: PreciseLocation;
-  passengerLocation?: PreciseLocation;
-}
-
-interface RideRequest {
-  rideId: string;
-  candidate: RideCandidate;
-  bookingData?: {
-    pickup: string;
-    destination: string;
-    price: number;
-    distance?: number;
-    duration?: number;
-  };
-}
+import type { Trip, RideRequest } from '@/types/trip';
+import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
 
 export default function DriverDashboard() {
-  const [driver, setDriver] = useState<DriverData | null>(null);
+  const { driver, setDriver, updateDriver } = useDriverStore();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -217,7 +161,8 @@ export default function DriverDashboard() {
           }
         }
 
-        const safeDriverData: DriverData = {
+        const safeDriverData: DriverCoreData = {
+          uid: user.uid,
           firstName: driverData.firstName || 'Chauffeur',
           lastName: driverData.lastName || '',
           email: driverData.email || '',
@@ -226,6 +171,10 @@ export default function DriverDashboard() {
             model: 'Modèle non spécifié',
             plate: 'Non spécifié',
             color: 'Non spécifié'
+          },
+          documents: driverData.documents || {
+            licensePhoto: '',
+            carRegistration: ''
           },
           status: driverData.status || 'pending',
           isAvailable: Boolean(driverData.isAvailable),
@@ -291,7 +240,7 @@ export default function DriverDashboard() {
               });
               console.log('[DRIVER] ✓ Disponibilité réactivée automatiquement');
               // Mettre à jour l'état local
-              setDriver(prev => prev ? { ...prev, isAvailable: true } : null);
+              updateDriver({ isAvailable: true });
             } catch (err) {
               console.error('[DRIVER] Erreur mise à jour disponibilité:', err);
             }
@@ -299,7 +248,8 @@ export default function DriverDashboard() {
         });
 
         // Écouter les courses en attente (ancien système)
-        const q = query(collection(db, "bookings"), where("status", "==", "pending"));
+        // Règle Section 4.1 : limit() obligatoire sur chaque requête
+        const q = query(collection(db, "bookings"), where("status", "==", "pending"), limit(50));
         const unsubscribe = onSnapshot(q, (snapshot) => {
           const trips: Trip[] = [];
           snapshot.forEach((doc) => {
@@ -435,7 +385,8 @@ export default function DriverDashboard() {
         where('driverId', '==', driverId),
         where('status', '==', 'completed'),
         where('completedAt', '>=', today),
-        orderBy('completedAt', 'desc')
+        orderBy('completedAt', 'desc'),
+        limit(100) // Règle Section 4.1 : limit() obligatoire
       );
 
       const historySnapshot = await getDocs(historyQuery);
@@ -456,7 +407,7 @@ export default function DriverDashboard() {
       await updateDoc(doc(db, 'drivers', auth.currentUser.uid), {
         isAvailable: !driver.isAvailable
       });
-      setDriver({ ...driver, isAvailable: !driver.isAvailable });
+      updateDriver({ isAvailable: !driver.isAvailable });
     } catch {
       setError("Erreur de changement de disponibilité");
     }
@@ -478,7 +429,7 @@ export default function DriverDashboard() {
       await incrementDriverAcceptedTrips(auth.currentUser.uid);
 
       // Mettre à jour l'état local
-      setDriver({ ...driver, isAvailable: false });
+      updateDriver({ isAvailable: false });
       setRideRequests(prev => prev.filter(r => r.rideId !== rideId));
       
       // Charger les détails de la course acceptée
@@ -542,7 +493,7 @@ export default function DriverDashboard() {
       await incrementDriverAcceptedTrips(auth.currentUser.uid);
 
       // Mettre à jour l'état local
-      setDriver({ ...driver, isAvailable: false });
+      updateDriver({ isAvailable: false });
       setAvailableTrips(prev => prev.filter(t => t.id !== tripId));
 
       // Charger les détails de la course acceptée
@@ -612,8 +563,7 @@ export default function DriverDashboard() {
         tripsCompleted: (driver.tripsCompleted || 0) + 1
       });
 
-      setDriver({
-        ...driver,
+      updateDriver({
         isAvailable: true,
         earnings: (driver.earnings || 0) + (finalPrice || 0),
         tripsCompleted: (driver.tripsCompleted || 0) + 1

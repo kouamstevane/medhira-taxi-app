@@ -11,7 +11,7 @@ import {
   AuthErrorCodes,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { FiArrowLeft } from 'react-icons/fi';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { isValidPhoneNumber } from '@/lib/validation';
 import { SUPPORTED_COUNTRIES, ERROR_MESSAGES } from '@/utils/constants';
 
@@ -126,7 +126,7 @@ export default function RegisterPhoneContent() {
         appVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
           size: "invisible", //invisible, normal
 
-          callback: (response: any) => {
+          callback: (response: string) => {
             // reCAPTCHA résolu
           }
         });
@@ -138,7 +138,7 @@ export default function RegisterPhoneContent() {
         fullPhoneNumber,
         appVerifier!
       );
-      
+
       setVerificationId(confirmation.verificationId);
       setSuccess(`Code de vérification envoyé au ${fullPhoneNumber}`);
     } catch (error: unknown) {
@@ -146,11 +146,11 @@ export default function RegisterPhoneContent() {
       const err = error as { code?: string };
       if (process.env.NODE_ENV === 'development' && err.code === 'auth/captcha-check-failed') {
         console.warn("Échec de la vérification test, nouvelle tentative avec vérification réelle...");
-        
+
         try {
           // Disable testing mode to force real captcha
           auth.settings.appVerificationDisabledForTesting = false;
-          
+
           // Clear existing verifier
           if (recaptchaVerifier.current) {
             try {
@@ -274,7 +274,7 @@ export default function RegisterPhoneContent() {
     } catch (e) {
       // Ignorer les erreurs de log
     }
-    
+
     switch (err.code) {
       case AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER:
         errorMessage = "Trop de tentatives. Veuillez réessayer plus tard.";
@@ -308,14 +308,14 @@ export default function RegisterPhoneContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f29200] to-[#f29200] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="glass-card rounded-2xl overflow-hidden border border-white/5">
           {/* Header */}
-          <div className="bg-[#101010] px-6 py-4">
-            <Link href="/login" className="inline-flex items-center text-white hover:text-[#f29200] transition-colors">
-              <FiArrowLeft className="mr-2" />
+          <div className="bg-background px-6 py-4 border-b border-white/5">
+            <Link href="/login" className="inline-flex items-center text-white hover:text-primary transition-colors">
+              <MaterialIcon name="arrow_back" size="sm" className="mr-2" />
               Retour
             </Link>
           </div>
@@ -323,25 +323,25 @@ export default function RegisterPhoneContent() {
           {/* Body */}
           <div className="p-6 space-y-4">
             <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-[#101010] mb-2">
+              <h1 className="text-2xl font-bold text-white mb-2">
                 Inscription Client
               </h1>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-slate-400">
                 Inscrivez-vous avec votre numéro de téléphone
               </p>
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-50 border-l-4 border-red-500 p-4">
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="bg-red-500/10 border-l-4 border-red-500 p-4 rounded-r-lg">
+                <p className="text-sm text-red-400">{error}</p>
               </div>
             )}
 
             {/* Success Message */}
             {success && (
-              <div className="bg-green-50 border-l-4 border-green-500 p-4">
-                <p className="text-sm text-green-700">{success}</p>
+              <div className="bg-green-500/10 border-l-4 border-green-500 p-4 rounded-r-lg">
+                <p className="text-sm text-green-400">{success}</p>
               </div>
             )}
 
@@ -349,7 +349,7 @@ export default function RegisterPhoneContent() {
               <div className="space-y-4">
                 {/* Prénom */}
                 <div>
-                  <label className="block text-sm font-medium text-[#101010] mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Prénom *
                   </label>
                   <input
@@ -357,7 +357,7 @@ export default function RegisterPhoneContent() {
                     name="firstName"
                     value={formData.firstName}
                     onChange={handleChange}
-                    className="w-full rounded-md border border-gray-300 p-3 focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
                     placeholder="Jean"
                     required
                   />
@@ -365,7 +365,7 @@ export default function RegisterPhoneContent() {
 
                 {/* Nom */}
                 <div>
-                  <label className="block text-sm font-medium text-[#101010] mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Nom *
                   </label>
                   <input
@@ -373,7 +373,7 @@ export default function RegisterPhoneContent() {
                     name="lastName"
                     value={formData.lastName}
                     onChange={handleChange}
-                    className="w-full rounded-md border border-gray-300 p-3 focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
                     placeholder="Dupont"
                     required
                   />
@@ -381,7 +381,7 @@ export default function RegisterPhoneContent() {
 
                 {/* Numéro de téléphone */}
                 <div>
-                  <label className="block text-sm font-medium text-[#101010] mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Numéro de téléphone *
                   </label>
                   <div className="flex">
@@ -390,7 +390,7 @@ export default function RegisterPhoneContent() {
                       <button
                         type="button"
                         onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
-                        className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#f29200] h-[48px]"
+                        className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-white/5 bg-white/5 text-slate-300 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary h-[48px]"
                       >
                         <span className="mr-2 text-lg">{selectedCountry.flag}</span>
                         <span className="text-sm">{selectedCountry.dialCode}</span>
@@ -400,20 +400,20 @@ export default function RegisterPhoneContent() {
                       </button>
 
                       {isCountryDropdownOpen && (
-                        <div className="absolute z-10 mt-1 w-64 max-h-60 overflow-y-auto bg-white border border-gray-300 rounded-md shadow-lg">
+                        <div className="absolute z-10 mt-1 w-64 max-h-60 overflow-y-auto glass-card border border-white/10 rounded-lg">
                           <div className="py-1">
                             {SUPPORTED_COUNTRIES.map((country) => (
                               <button
                                 key={country.code}
                                 type="button"
                                 onClick={() => handleCountrySelect(country)}
-                                className={`flex items-center w-full px-4 py-2 text-sm text-left hover:bg-gray-100 ${
-                                  selectedCountry.code === country.code ? 'bg-[#f29200] text-white hover:bg-[#e68600]' : 'text-gray-700'
+                                className={`flex items-center w-full px-4 py-2 text-sm text-left hover:bg-white/10 ${
+                                  selectedCountry.code === country.code ? 'bg-primary text-white hover:bg-primary/80' : 'text-slate-300'
                                 }`}
                               >
                                 <span className="text-lg mr-3">{country.flag}</span>
                                 <span className="font-medium mr-2">{country.dialCode}</span>
-                                <span className="text-gray-600">{country.name}</span>
+                                <span className="text-slate-400">{country.name}</span>
                               </button>
                             ))}
                           </div>
@@ -430,19 +430,19 @@ export default function RegisterPhoneContent() {
                         setFormData({ ...formData, phone: value });
                         setError(null);
                       }}
-                      className="flex-1 rounded-r-md border border-gray-300 p-3 focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] h-[48px]"
+                      className="glass-input flex-1 rounded-r-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5 h-[48px]"
                       placeholder={selectedCountry.defaultNumber}
                       required
                     />
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-slate-500 mt-1">
                     Pays sélectionné: {selectedCountry.name} {selectedCountry.flag} • Exemple: {selectedCountry.defaultNumber}
                   </p>
                 </div>
 
                 {/* Mot de passe */}
                 <div>
-                  <label className="block text-sm font-medium text-[#101010] mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Mot de passe *
                   </label>
                   <input
@@ -450,7 +450,7 @@ export default function RegisterPhoneContent() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full rounded-md border border-gray-300 p-3 focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
                     placeholder="•••••••"
                     required
                   />
@@ -458,7 +458,7 @@ export default function RegisterPhoneContent() {
 
                 {/* Confirmer mot de passe */}
                 <div>
-                  <label className="block text-sm font-medium text-[#101010] mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Confirmer le mot de passe *
                   </label>
                   <input
@@ -466,7 +466,7 @@ export default function RegisterPhoneContent() {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className="w-full rounded-md border border-gray-300 p-3 focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
                     placeholder="•••••••"
                     required
                   />
@@ -476,11 +476,11 @@ export default function RegisterPhoneContent() {
                 <button
                   onClick={handleSendCode}
                   disabled={loading}
-                  className="w-full bg-[#f29200] hover:bg-[#e68600] text-white font-bold py-3 px-4 rounded-md transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -494,7 +494,7 @@ export default function RegisterPhoneContent() {
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#101010] mb-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
                     Code de vérification (6 chiffres)
                   </label>
                   <input
@@ -505,7 +505,7 @@ export default function RegisterPhoneContent() {
                       setCode(value.slice(0, 6));
                       setError(null);
                     }}
-                    className="w-full rounded-md border border-gray-300 p-3 text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 bg-white/5 focus:ring-2 focus:ring-primary focus:border-primary"
                     placeholder="123456"
                     maxLength={6}
                   />
@@ -515,11 +515,11 @@ export default function RegisterPhoneContent() {
                   <button
                     onClick={handleVerifyCode}
                     disabled={loading}
-                    className="flex-1 bg-[#101010] hover:bg-[#000000] text-white font-bold py-3 px-4 rounded-md transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? (
                       <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
@@ -534,7 +534,7 @@ export default function RegisterPhoneContent() {
                     type="button"
                     onClick={handleReset}
                     disabled={loading}
-                    className="px-4 py-3 border border-gray-300 rounded-md text-[#101010] hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-3 border border-white/10 rounded-lg text-slate-300 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Annuler
                   </button>
@@ -543,7 +543,7 @@ export default function RegisterPhoneContent() {
                 <button
                   type="button"
                   onClick={handleSendCode}
-                  className="text-sm text-[#f29200] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-sm text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={loading}
                 >
                   Renvoyer le code
@@ -552,10 +552,10 @@ export default function RegisterPhoneContent() {
             )}
 
             {/* Lien vers inscription par email */}
-            <div className="text-center pt-4 border-t border-gray-200">
-              <p className="text-sm text-gray-600">
+            <div className="text-center pt-4 border-t border-white/5">
+              <p className="text-sm text-slate-400">
                 Vous préférez vous inscrire par email ?{' '}
-                <Link href="/auth/register" className="text-[#f29200] hover:underline font-medium">
+                <Link href="/auth/register" className="text-primary hover:underline font-medium">
                   Inscription par email
                 </Link>
               </p>

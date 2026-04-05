@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FiArrowLeft, FiBell, FiCheck, FiClock } from "react-icons/fi";
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { BottomNav } from '@/components/ui/BottomNav';
 import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationCollection } from "@/services/notification.service";
 
@@ -16,34 +18,34 @@ export default function NotificationsPage() {
       case "booking_request":
       case "food_order":
         return (
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-            <FiBell />
+          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">
+            <MaterialIcon name="notifications" size="md" />
           </div>
         );
       case "trip_started":
       case "food_order_update":
         return (
-          <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600">
-            <FiClock />
+          <div className="w-10 h-10 rounded-full bg-yellow-500/10 flex items-center justify-center text-yellow-400">
+            <MaterialIcon name="schedule" size="md" />
           </div>
         );
       case "trip_completed":
       case "payment_received":
         return (
-          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-green-600">
-            <FiCheck />
+          <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center text-green-400">
+            <MaterialIcon name="check_circle" size="md" />
           </div>
         );
       case "alert":
         return (
-          <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600">
-            <FiBell />
+          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
+            <MaterialIcon name="warning" size="md" />
           </div>
         );
       default:
         return (
-          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-600">
-            <FiBell />
+          <div className="w-10 h-10 rounded-full bg-slate-500/10 flex items-center justify-center text-slate-400">
+            <MaterialIcon name="notifications" size="md" />
           </div>
         );
     }
@@ -55,9 +57,10 @@ export default function NotificationsPage() {
     // Navigation contextuelle selon le type
     if (notif.metadata) {
       if (notif.type === "booking_request" || notif.type === "food_order") {
-        router.push("/chauffeur/courses");
+        router.push("/driver/dashboard");
       } else if (notif.type === "trip_started" || notif.type === "driver_arrived") {
-        if (notif.metadata.tripId) router.push(`/taxi/trip/${notif.metadata.tripId}`);
+        if (notif.metadata.tripId) router.push(`/taxi/confirmation?bookingId=${notif.metadata.tripId}`);
+        else router.push("/taxi");
       } else if (notif.type === "payment_received") {
         router.push("/wallet");
       } else if (notif.type === "food_order_update") {
@@ -66,11 +69,12 @@ export default function NotificationsPage() {
     }
   };
 
-  const formatDate = (dateOrTimestamp: any) => {
+  const formatDate = (dateOrTimestamp: { seconds?: number } | Date | number | string | null | undefined) => {
     if (!dateOrTimestamp) return "";
-    const date = dateOrTimestamp.seconds
-      ? new Date(dateOrTimestamp.seconds * 1000)
-      : new Date(dateOrTimestamp);
+    const hasSeconds = typeof dateOrTimestamp === 'object' && !(dateOrTimestamp instanceof Date) && 'seconds' in dateOrTimestamp;
+    const date = hasSeconds
+      ? new Date((dateOrTimestamp as { seconds: number }).seconds * 1000)
+      : new Date(dateOrTimestamp as string | number | Date);
     return date.toLocaleDateString("fr-FR", {
       day: "2-digit",
       month: "short",
@@ -80,80 +84,84 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5]">
+    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
       {/* Header */}
-      <header className="bg-[#101010] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center">
-          <button
-            onClick={() => router.back()}
-            className="p-2 mr-2 rounded-full hover:bg-[#333] transition touch-manipulation"
-            aria-label="Retour"
-          >
-            <FiArrowLeft className="h-6 w-6" />
-          </button>
-          <h1 className="text-xl font-bold">Notifications</h1>
+      <header className="sticky top-0 z-50 bg-[#0D0D0D] backdrop-blur-xl border-b border-white/5">
+        <div className="max-w-[430px] mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center">
+            <button
+              onClick={() => router.back()}
+              className="p-2 mr-2 rounded-full hover:bg-white/5 transition touch-manipulation"
+              aria-label="Retour"
+            >
+              <MaterialIcon name="arrow_back" className="text-white" />
+            </button>
+            <h1 className="text-xl font-bold text-white">Notifications</h1>
+          </div>
+          {hasUnread && (
+            <button
+              onClick={markAllAsRead}
+              className="text-sm font-medium text-primary hover:text-[#ffae33] px-3 py-2 rounded-lg touch-manipulation transition"
+            >
+              Tout marquer lu
+            </button>
+          )}
         </div>
-        {hasUnread && (
-          <button
-            onClick={markAllAsRead}
-            className="text-sm font-medium text-[#f29200] hover:text-[#e08800] px-3 py-2 rounded-lg touch-manipulation"
-          >
-            Tout marquer lu
-          </button>
-        )}
       </header>
 
       {/* Main Content */}
-      <main className="max-w-3xl mx-auto px-4 py-6">
+      <main className="max-w-[430px] mx-auto px-4 py-6">
         {isLoading ? (
           <div className="flex justify-center items-center py-20">
-            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#f29200]" />
+            <MaterialIcon name="refresh" className="animate-spin text-primary text-[40px]" />
           </div>
         ) : notifications.length > 0 ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {notifications.map((notif) => (
-              <div
+              <GlassCard
                 key={notif.notificationId}
-                onClick={() => handleNotificationClick(notif)}
-                className={`bg-white p-4 rounded-xl shadow-sm border cursor-pointer transition-all ${
-                  !notif.read ? "border-[#f29200] border-l-4" : "border-gray-200"
+                variant={!notif.read ? "bordered" : "default"}
+                className={`p-4 cursor-pointer transition-all ${
+                  !notif.read ? "border-l-primary" : ""
                 }`}
+                onClick={() => handleNotificationClick(notif)}
               >
                 <div className="flex items-start">
                   <div className="mr-4 mt-1">{getNotificationIcon(notif.type)}</div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-1">
                       <h3
-                        className={`text-base ${
-                          !notif.read ? "font-bold text-[#101010]" : "font-semibold text-gray-800"
+                        className={`text-base truncate ${
+                          !notif.read ? "font-bold text-white" : "font-semibold text-slate-300"
                         }`}
                       >
                         {notif.title}
                       </h3>
-                      <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                      <span className="text-xs text-slate-500 whitespace-nowrap ml-2">
                         {formatDate(notif.createdAt)}
                       </span>
                     </div>
-                    <p className={`text-sm ${!notif.read ? "text-gray-800" : "text-gray-600"}`}>
+                    <p className={`text-sm ${!notif.read ? "text-slate-300" : "text-slate-400"}`}>
                       {notif.body}
                     </p>
                   </div>
                 </div>
-              </div>
+              </GlassCard>
             ))}
           </div>
         ) : (
-          <div className="text-center py-20 bg-white rounded-xl shadow-sm border border-gray-200 p-8">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FiBell className="h-10 w-10 text-gray-400" />
+          <GlassCard className="p-8 text-center">
+            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MaterialIcon name="notifications_off" className="text-slate-500 text-[40px]" />
             </div>
-            <h2 className="text-xl font-bold text-[#101010] mb-2">Aucune notification</h2>
-            <p className="text-gray-500">
+            <h2 className="text-xl font-bold text-white mb-2">Aucune notification</h2>
+            <p className="text-slate-500">
               Vous n&apos;avez pas de nouvelles notifications pour le moment.
             </p>
-          </div>
+          </GlassCard>
         )}
       </main>
+      <BottomNav />
     </div>
   );
 }

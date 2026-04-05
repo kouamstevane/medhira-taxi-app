@@ -1,33 +1,71 @@
 "use client";
 
-import { useState } from 'react';
-import { db } from '@/config/firebase';
-import { collection, query, where, getDocs, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { db, auth } from '@/config/firebase';
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, serverTimestamp, limit } from 'firebase/firestore';
 import { findAvailableDrivers } from '@/services/matching/findAvailableDrivers';
 import { broadcastRideRequest } from '@/services/matching/broadcast';
 import { logger } from '@/utils/logger';
-/* eslint-disable @typescript-eslint/no-explicit-any */
+
+interface TestResult {
+  type: string;
+  message: string;
+  data: unknown;
+}
+
+interface DriverInfo {
+  id: string;
+  name: string;
+  isAvailable: boolean;
+  status: string;
+  hasLocation: boolean;
+  location: { lat: number; lng: number } | null;
+}
 
 export default function TestMatchingPage() {
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<TestResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [drivers, setDrivers] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<DriverInfo[]>([]);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setIsAdmin(false);
+        router.push('/login');
+        return;
+      }
+      const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+      if (adminDoc.exists()) {
+        setIsAdmin(true);
+      } else {
+        setIsAdmin(false);
+        router.push('/login');
+      }
+    };
+    checkAdmin();
+  }, [router]);
+
+  if (isAdmin === null) {
+    return <div style={{ padding: '2rem', textAlign: 'center' }}>Vérification des droits…</div>;
+  }
+
+  if (!isAdmin) return null;
 
   const testFindDrivers = async () => {
     setLoading(true);
     setResults([]);
-    
+
     try {
-      // Test avec une localisation à Toronto
-      const testLocation = { lat: 43.6532, lng: -79.3832 }; // Toronto
-      
-      logger.info('Test recherche de chauffeurs', { location: testLocation });
-      
+      const testLocation = { lat: 4.0511, lng: 9.7674 }; // Douala
       const availableDrivers = await findAvailableDrivers({
         location: testLocation,
-        rangeKm: 50, // Rayon large pour le test
-        maxTravelMinutes: 30, // 30 minutes pour le test
+        rangeKm: 50, // Large range for test
         maxResults: 10,
+        maxTravelMinutes: 30,
       });
 
       setResults([
@@ -35,11 +73,12 @@ export default function TestMatchingPage() {
       ]);
 
       logger.info('Résultat test', { count: availableDrivers.length, drivers: availableDrivers });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       setResults([
-        { type: 'error', message: `Erreur: ${error.message}`, data: error }
+        { type: 'error', message: `Erreur: ${message}`, data: error }
       ]);
-      logger.error('Erreur test', { error });
+      logger.error('Erreur test', { error: message });
     } finally {
       setLoading(false);
     }
@@ -48,16 +87,18 @@ export default function TestMatchingPage() {
   const checkDrivers = async () => {
     setLoading(true);
     setDrivers([]);
-    
+
     try {
       const driversRef = collection(db, 'drivers');
+      // Règle Section 4.1 : limit() obligatoire sur chaque requête
       const q = query(
         driversRef,
-        where('status', '==', 'approved')
+        where('status', '==', 'approved'),
+        limit(100)
       );
 
       const snapshot = await getDocs(q);
-      const driversList: any[] = [];
+      const driversList: DriverInfo[] = [];
 
       snapshot.forEach((doc) => {
         const data = doc.data();
@@ -75,9 +116,10 @@ export default function TestMatchingPage() {
       setResults([
         { type: 'info', message: `Total: ${driversList.length} chauffeur(s) approuvé(s)`, data: driversList }
       ]);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       setResults([
-        { type: 'error', message: `Erreur: ${error.message}`, data: error }
+        { type: 'error', message: `Erreur: ${message}`, data: error }
       ]);
     } finally {
       setLoading(false);
@@ -91,17 +133,18 @@ export default function TestMatchingPage() {
         isAvailable: true,
         updatedAt: serverTimestamp(),
       });
-      
+
       setResults(prev => [
         ...prev,
         { type: 'success', message: `Chauffeur ${driverId} mis à disponible`, data: null }
       ]);
-      
+
       await checkDrivers();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       setResults(prev => [
         ...prev,
-        { type: 'error', message: `Erreur: ${error.message}`, data: error }
+        { type: 'error', message: `Erreur: ${message}`, data: error }
       ]);
     }
   };
@@ -109,12 +152,12 @@ export default function TestMatchingPage() {
   const testBroadcast = async () => {
     setLoading(true);
     setResults([]);
-    
+
     try {
       // Créer un booking de test
       const testBooking = {
         rideId: 'test-' + Date.now(),
-        pickupLocation: { lat: 4.0511, lng: 9.7679 },
+        pickupLocation: { lat: 4.0511, lng: 9.7674 },
         destination: 'Test destination',
         price: 5000,
         carType: 'Éco',
@@ -123,7 +166,7 @@ export default function TestMatchingPage() {
       };
 
       logger.info('Test broadcast', testBooking);
-      
+
       const driverIds = await broadcastRideRequest(testBooking);
 
       setResults([
@@ -131,11 +174,12 @@ export default function TestMatchingPage() {
       ]);
 
       logger.info('Résultat broadcast', { driverIds });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       setResults([
-        { type: 'error', message: `Erreur broadcast: ${error.message}`, data: error }
+        { type: 'error', message: `Erreur broadcast: ${message}`, data: error }
       ]);
-      logger.error('Erreur broadcast', { error });
+      logger.error('Erreur broadcast', { error: message });
     } finally {
       setLoading(false);
     }
@@ -148,30 +192,30 @@ export default function TestMatchingPage() {
 
         <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Actions de Test</h2>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <button
               onClick={checkDrivers}
               disabled={loading}
               className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
             >
-              Vérifier Chauffeurs
+              Vérifier chauffeurs
             </button>
-            
+
             <button
               onClick={testFindDrivers}
               disabled={loading}
               className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
             >
-              Tester Recherche
+              Tester recherche
             </button>
-            
+
             <button
               onClick={testBroadcast}
               disabled={loading}
               className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition disabled:opacity-50"
             >
-              Tester Broadcast
+              Tester broadcast
             </button>
           </div>
 
@@ -184,15 +228,15 @@ export default function TestMatchingPage() {
 
         {drivers.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Chauffeurs Approuvés ({drivers.length})</h2>
+            <h2 className="text-xl font-semibold mb-4">Chauffeurs approuvés ({drivers.length})</h2>
             <div className="space-y-2">
               {drivers.map((driver) => (
                 <div key={driver.id} className="border rounded-lg p-3 flex justify-between items-center">
                   <div>
                     <p className="font-semibold">{driver.name || driver.id}</p>
                     <p className="text-sm text-gray-600">
-                      Disponible: {driver.isAvailable ? ' Oui' : 'Non'} | 
-                      Localisation: {driver.hasLocation ? ' Oui' : 'Non'}
+                      Disponible: {driver.isAvailable ? '✅ Oui' : '❌ Non'} |
+                      Localisation: {driver.hasLocation ? '✅ Oui' : '❌ Non'}
                     </p>
                   </div>
                   {!driver.isAvailable && (
@@ -200,7 +244,7 @@ export default function TestMatchingPage() {
                       onClick={() => makeDriverAvailable(driver.id)}
                       className="bg-[#f29200] hover:bg-[#e68600] text-white px-3 py-1 rounded text-sm transition"
                     >
-                      Rendre Disponible
+                      Rendre disponible
                     </button>
                   )}
                 </div>
@@ -229,7 +273,7 @@ export default function TestMatchingPage() {
                   }`}>
                     {result.message}
                   </p>
-                  {result.data && (
+                  {result.data !== null && result.data !== undefined && (
                     <pre className="mt-2 text-xs overflow-auto bg-gray-100 p-2 rounded">
                       {JSON.stringify(result.data, null, 2)}
                     </pre>
@@ -243,4 +287,3 @@ export default function TestMatchingPage() {
     </div>
   );
 }
-

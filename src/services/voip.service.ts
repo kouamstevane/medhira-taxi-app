@@ -9,7 +9,12 @@ import { VoipCallState, CallStatus, CallParticipant, IVoipEngine } from '@/types
 import { logger } from '@/utils/logger';
 import { AgoraVoipEngine } from './voip/engines/agora.engine';
 
-const VoipForeground = registerPlugin<any>('VoipForeground');
+interface VoipForegroundPlugin {
+  startService(options: { callerName: string; callId: string }): Promise<void>;
+  stopService(): Promise<void>;
+}
+
+const VoipForeground = registerPlugin<VoipForegroundPlugin>('VoipForeground');
 
 class VoipService {
   private engine: IVoipEngine;
@@ -73,7 +78,7 @@ class VoipService {
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         return await operation();
-      } catch (error: any) {
+      } catch (error: unknown) {
         const isLastAttempt = attempt === maxRetries - 1;
         
         if (isLastAttempt || !this.isNetworkError(error)) {
@@ -92,12 +97,13 @@ class VoipService {
   /**
    * Détermine si une erreur est liée au réseau
    */
-  private isNetworkError(error: any): boolean {
+  private isNetworkError(error: unknown): boolean {
     const networkErrorCodes = ['UNAVAILABLE', 'RESOURCE_EXHAUSTED', 'DEADLINE_EXCEEDED'];
+    const err = error as { code?: string; message?: string };
     return networkErrorCodes.some(code => 
-      error?.code === code || 
-      error?.message?.includes('network') ||
-      error?.message?.includes('timeout')
+      err?.code === code || 
+      err?.message?.includes('network') ||
+      err?.message?.includes('timeout')
     );
   }
 
@@ -172,11 +178,12 @@ class VoipService {
       await this.engine.join(channel, token, caller.uid);
       
       logger.info('Appel créé avec succès', { callId });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : error as { message?: string; code?: string };
       logger.error('Erreur startCall', { error });
       this.updateState({ 
         status: 'failed', 
-        error: error.message || 'Impossible d\'initier l\'appel' 
+        error: err.message || 'Impossible d\'initier l\'appel' 
       });
       throw error;
     }
@@ -218,7 +225,7 @@ class VoipService {
       }
       
       this.updateState({ status: 'accepted' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Erreur acceptCall', { error });
       this.endCall('failed');
     }

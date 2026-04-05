@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { FoodOrder } from '@/types/food-delivery';
 import { OrderStatusBadge } from '@/components/food/OrderStatusBadge';
-import { ArrowLeft, Loader2, ChevronRight, ShoppingBag } from 'lucide-react';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { BottomNav } from '@/components/ui/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { CURRENCY_CODE } from '@/utils/constants';
 
@@ -41,67 +42,68 @@ export default function OrdersHistoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-background pb-20 max-w-[430px] mx-auto">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 p-4 sticky top-0 z-10 flex items-center justify-between shadow-sm">
-        <button onClick={() => router.push('/food')} className="p-2 -ml-2 text-gray-900 bg-gray-50 rounded-full hover:bg-gray-100">
-          <ArrowLeft className="w-6 h-6" />
+      <div className="bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-20 flex items-center justify-between">
+        <button onClick={() => router.push('/food')} className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10">
+          <MaterialIcon name="arrow_back" size="lg" />
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Mes Commandes</h1>
+        <h1 className="text-xl font-bold text-white">Mes Commandes</h1>
         <div className="w-10"></div>
       </div>
 
       <div className="p-4 space-y-4">
         {loading ? (
           <div className="flex justify-center items-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <MaterialIcon name="progress_activity" size="xl" className="animate-spin text-primary" />
           </div>
         ) : orders.length === 0 ? (
-          <div className="bg-white rounded-2xl p-10 text-center border border-gray-100 shadow-sm mt-10">
+          <div className="glass-card rounded-2xl p-10 text-center border border-white/5 mt-10">
             <div className="flex justify-center mb-6">
-              <div className="bg-primary/5 p-5 rounded-full">
-                <ShoppingBag className="w-12 h-12 text-primary" />
+              <div className="bg-primary/10 p-5 rounded-full">
+                <MaterialIcon name="shopping_bag" size="xl" className="text-primary" />
               </div>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Aucune commande</h3>
-            <p className="text-gray-500 text-sm mb-6">Vous n'avez pas encore passé de commande.</p>
-            <button 
+            <h3 className="text-xl font-bold text-white mb-2">Aucune commande</h3>
+            <p className="text-slate-400 text-sm mb-6">Vous n'avez pas encore passé de commande.</p>
+            <button
               onClick={() => router.push('/food')}
-              className="bg-primary text-white font-bold px-6 py-3 rounded-xl shadow-md"
+              className="bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold px-6 py-3 rounded-xl"
             >
               Découvrir les restaurants
             </button>
           </div>
         ) : (
           orders.map((order) => (
-            <div 
-              key={order.id} 
+            <div
+              key={order.id}
               onClick={() => router.push(`/food/orders/${order.id}`)}
-              className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow active:scale-[0.98]"
+              className="glass-card p-5 rounded-2xl border border-white/5 cursor-pointer hover:bg-white/5 transition-all active:scale-[0.98]"
             >
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <h3 className="font-bold text-gray-900 text-lg">{order.restaurantName}</h3>
-                  <p className="text-xs text-gray-500 mt-1">{formatDate(order.createdAt)}</p>
+                  <h3 className="font-bold text-white text-lg">{order.restaurantName}</h3>
+                  <p className="text-xs text-slate-500 mt-1">{formatDate(order.createdAt)}</p>
                 </div>
                 <OrderStatusBadge status={order.status} className="shrink-0" />
               </div>
 
-              <div className="border-t border-gray-50 my-3"></div>
+              <div className="border-t border-white/5 my-3"></div>
 
               <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600 font-medium truncate max-w-[70%]">
+                <p className="text-sm text-slate-300 font-medium truncate max-w-[70%]">
                   {order.orderItems.map(i => `${i.itemQuantity}x ${i.itemName}`).join(', ')}
                 </p>
-                <div className="flex items-center gap-1 font-bold text-gray-900">
+                <div className="flex items-center gap-1 font-bold text-white">
                   {order.totalOrderPrice.toFixed(2)} {CURRENCY_CODE}
-                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                  <MaterialIcon name="chevron_right" size="sm" className="text-slate-500" />
                 </div>
               </div>
             </div>
           ))
         )}
       </div>
+      <BottomNav />
     </div>
   );
 }

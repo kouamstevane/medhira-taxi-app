@@ -160,18 +160,17 @@ class PushNotificationService {
             // Déterminer le type d'utilisateur (conducteur ou passager)
             const userDoc = await getDoc(doc(db, 'users', user.uid));
             
-            // 🔒 CORRECTION: Vérifier si le document existe avant d'accéder à data()
-            if (!userDoc.exists()) {
+            let userType = 'passenger';
+
+            if (userDoc.exists()) {
+                userType = (userDoc.data()?.userType as string) || 'passenger';
+            } else {
                 console.warn('[PushNotifications] Document utilisateur non trouvé, création par défaut');
-                // Créer le document utilisateur avec des valeurs par défaut
                 await setDoc(doc(db, 'users', user.uid), {
-                    userType: 'passenger', // Valeur par défaut
+                    userType: 'passenger',
                     createdAt: new Date(),
                 }, { merge: true });
             }
-            
-            const userData = userDoc.data();
-            const userType = userData?.userType as string || 'passenger'; // 'driver' ou 'passager'
             
             // Sauvegarder le token dans la collection appropriée
             const collectionName = userType === 'driver' ? 'drivers' : 'passengers';
@@ -204,11 +203,8 @@ class PushNotificationService {
      */
     private async subscribeToTopics(userType: string): Promise<void> {
         try {
-            // Importer Firebase Messaging dynamiquement
-            const { getMessaging } = await import('firebase/messaging');
-            
             // S'abonner au topic général selon le type d'utilisateur
-            const generalTopic = userType === 'driver' 
+            const generalTopic = userType === 'driver'
                 ? NOTIFICATION_TOPICS.ALL_DRIVERS 
                 : NOTIFICATION_TOPICS.ALL_PASSENGERS;
             
@@ -288,9 +284,9 @@ class PushNotificationService {
             listener({
                 notification: {
                     data,
-                } as any,
+                } as unknown as ActionPerformed['notification'],
                 actionId: 'received',
-            });
+            } as ActionPerformed);
         });
     }
 
@@ -311,7 +307,7 @@ class PushNotificationService {
             case 'trip_started':
             case 'driver_arrived':
                 // Naviguer vers la page de suivi de course
-                this.navigateTo(`/taxi/trip/${data.tripId}`);
+                this.navigateTo(`/taxi/confirmation?bookingId=${data.tripId}`);
                 break;
             case 'trip_completed':
             case 'payment_received':
@@ -353,7 +349,8 @@ class PushNotificationService {
         // Si pas de token, essayer de le récupérer via Firebase Messaging
         try {
             const messaging = getMessaging(app);
-            const token = await getToken(messaging);
+            const vapidKey = process.env.NEXT_PUBLIC_FCM_VAPID_KEY;
+            const token = await getToken(messaging, vapidKey ? { vapidKey } : undefined);
             this.token = token;
             return token;
         } catch (error) {

@@ -1,37 +1,11 @@
 "use client";
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useMemo } from 'react';
-import { FiMapPin, FiCheckCircle, FiPlay, FiMessageSquare, FiNavigation2 } from 'react-icons/fi';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { ChatModal } from '@/components/ChatModal';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { MapView } from '@/components/ui';
-
-interface PreciseLocation {
-  lat: number;
-  lng: number;
-  accuracy?: number;
-}
-
-interface Trip {
-  id: string;
-  userId: string; // ID du client pour le chat
-  passengerName: string;
-  pickup: string;
-  destination: string;
-  price: number;
-  status: 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled';
-  createdAt: any;
-  unreadMessages?: {
-    client: number;
-    driver: number;
-  };
-  // Coordonnées GPS précises pour la navigation
-  pickupLocation?: PreciseLocation;
-  pickupLocationAccuracy?: number; // Précision en mètres
-  destinationLocation?: PreciseLocation;
-  passengerLocation?: PreciseLocation;
-}
+import type { Trip } from '@/types/trip';
 
 interface CurrentTripCardProps {
   trip: Trip;
@@ -111,8 +85,8 @@ export function CurrentTripCard({
 
   return (
     <div className="lg:col-span-2">
-      <div className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
-        <h2 className="text-xl font-bold mb-4">Course en cours</h2>
+      <div className="glass-card rounded-2xl p-4 sm:p-6 border border-white/5">
+        <h2 className="text-xl font-bold text-white mb-4">Course en cours</h2>
         {mapCenter && (
           <div className="mb-4 h-56 rounded-xl overflow-hidden">
             <MapView
@@ -124,35 +98,35 @@ export function CurrentTripCard({
             />
           </div>
         )}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="font-semibold text-gray-800">Client</p>
-              <p className="text-sm text-gray-700 truncate">{trip.pickup}</p>
-              <p className="text-sm text-gray-700">→ {trip.destination}</p>
+              <p className="font-semibold text-white">Client</p>
+              <p className="text-sm text-slate-300 truncate">{trip.pickup}</p>
+              <p className="text-sm text-slate-300">&rarr; {trip.destination}</p>
             </div>
-            <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-sm">
+            <span className="bg-primary/20 text-primary px-3 py-1 rounded-full text-sm">
               {getStatusLabel(trip.status)}
             </span>
           </div>
           <div className="space-y-2 mb-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center flex-1 min-w-0">
-                <FiMapPin className="h-4 w-4 text-green-500 mr-3 flex-shrink-0" />
+                <MaterialIcon name="location_on" size="sm" className="text-green-400 mr-3 flex-shrink-0" />
                 <div className="min-w-0">
-                  <span className="text-sm text-gray-700 block truncate">{trip.pickup}</span>
+                  <span className="text-sm text-slate-300 block truncate">{trip.pickup}</span>
                   {/* Indicateur de précision GPS */}
                   {trip.pickupLocation && (
                     <span className={`text-xs flex items-center gap-1 ${
-                      (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 20 
-                        ? 'text-green-600' 
-                        : (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 50 
-                          ? 'text-yellow-600' 
-                          : 'text-orange-600'
+                      (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 20
+                        ? 'text-green-400'
+                        : (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 50
+                          ? 'text-yellow-400'
+                          : 'text-orange-400'
                     }`}>
-                      <FiNavigation2 className="h-3 w-3" />
-                      GPS {(trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 20 ? '📍 Très précis' : 
-                           (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 50 ? '📍 Précis' : 
+                      <MaterialIcon name="navigation" size="sm" className="text-inherit" />
+                      GPS {(trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 20 ? 'Très précis' :
+                           (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 50 ? 'Précis' :
                            'Approximatif'}
                       {trip.pickupLocationAccuracy && ` (±${Math.round(trip.pickupLocationAccuracy)}m)`}
                     </span>
@@ -175,17 +149,17 @@ export function CurrentTripCard({
                       window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
                     }
                   }}
-                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center ml-2 shadow-md transition-all"
+                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center ml-2 transition-all"
                 >
-                  <FiNavigation2 className="h-4 w-4 mr-1" />
+                  <MaterialIcon name="navigation" size="sm" className="mr-1" />
                   <span>Naviguer</span>
                 </button>
               )}
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <FiMapPin className="h-4 w-4 text-red-500 mr-3" />
-                <span className="text-sm text-gray-700">{trip.destination}</span>
+                <MaterialIcon name="location_on" size="sm" className="text-red-400 mr-3" />
+                <span className="text-sm text-slate-300">{trip.destination}</span>
               </div>
               <div className="flex items-center gap-2">
                 {/* Navigation vers la destination (quand course démarrée) */}
@@ -195,7 +169,7 @@ export function CurrentTripCard({
                        const query = encodeURIComponent(trip.destination);
                        window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, '_blank');
                     }}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
+                    className="text-blue-400 hover:text-blue-300 text-sm font-medium flex items-center"
                   >
                     <span className="mr-1">Naviguer</span>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
@@ -203,12 +177,12 @@ export function CurrentTripCard({
                 )}
                 <button
                   onClick={() => setShowChat(true)}
-                  className="text-[#f29200] hover:text-[#e68600] text-sm font-medium flex items-center relative"
+                  className="text-primary hover:text-[#ffae33] text-sm font-medium flex items-center relative"
                 >
-                  <FiMessageSquare className="w-4 h-4 mr-1" />
+                  <MaterialIcon name="chat" size="sm" className="mr-1" />
                   <span>Chat</span>
                   {(trip.unreadMessages?.driver || 0) > 0 && (
-                    <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-white">
+                    <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-background">
                       {trip.unreadMessages?.driver}
                     </span>
                   )}
@@ -217,7 +191,7 @@ export function CurrentTripCard({
             </div>
           </div>
           <div className="flex justify-between">
-            <span className="text-lg font-bold text-gray-800">{formatCurrencyWithCode(trip.price)}</span>
+            <span className="text-lg font-bold text-white">{formatCurrencyWithCode(trip.price)}</span>
             <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
               {trip.status === 'accepted' && (
                 <button
@@ -225,7 +199,7 @@ export function CurrentTripCard({
                   className="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm flex items-center justify-center space-x-1 sm:space-x-2 transition touch-manipulation"
                   style={{ minHeight: '44px' }}
                 >
-                  <FiCheckCircle className="h-4 w-4" />
+                  <MaterialIcon name="check_circle" size="sm" />
                   <span>Je suis arrivé</span>
                 </button>
               )}
@@ -235,7 +209,7 @@ export function CurrentTripCard({
                   className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm flex items-center justify-center space-x-1 sm:space-x-2 transition touch-manipulation"
                   style={{ minHeight: '44px' }}
                 >
-                  <FiPlay className="h-4 w-4" />
+                  <MaterialIcon name="play_arrow" size="sm" />
                   <span>Démarrer</span>
                 </button>
               )}
@@ -245,7 +219,7 @@ export function CurrentTripCard({
                   className="bg-red-500 hover:bg-red-600 active:bg-red-700 text-white px-4 py-2 sm:px-3 sm:py-1 rounded text-sm flex items-center justify-center space-x-1 sm:space-x-2 transition touch-manipulation"
                   style={{ minHeight: '44px' }}
                 >
-                  <FiCheckCircle className="h-4 w-4" />
+                  <MaterialIcon name="check_circle" size="sm" />
                   <span>Terminer</span>
                 </button>
               )}
@@ -265,4 +239,3 @@ export function CurrentTripCard({
     </div>
   );
 }
-

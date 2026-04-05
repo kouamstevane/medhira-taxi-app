@@ -36,6 +36,7 @@ import {
   limit,
   startAfter,
   DocumentData,
+  QueryDocumentSnapshot,
   setDoc,
   Timestamp
 } from 'firebase/firestore';
@@ -178,8 +179,8 @@ export const calculateTotalOrderPrice = (
 export const getApprovedRestaurants = async (
   filters?: RestaurantFilters,
   limitCount: number = 20,
-  lastVisible?: DocumentData | null
-): Promise<{ restaurants: Restaurant[], lastDoc: DocumentData | null }> => {
+  lastVisible?: QueryDocumentSnapshot<DocumentData> | null
+): Promise<{ restaurants: Restaurant[], lastDoc: QueryDocumentSnapshot<DocumentData> | null }> => {
   const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
 
   // Construction dynamique de la requête Firestore
@@ -718,7 +719,7 @@ export const updateRestaurantStatus = async (
   additionalData?: Partial<Restaurant>
 ): Promise<void> => {
   const restaurantRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId);
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     status,
     updatedAt: serverTimestamp(),
     ...additionalData
@@ -775,7 +776,7 @@ export const FoodDeliveryService = {
     };
 
     if (!itemData.id) {
-      (data as any).createdAt = serverTimestamp();
+      (data as Record<string, unknown>).createdAt = serverTimestamp();
     }
 
     await setDoc(itemDocRef, data, { merge: true });

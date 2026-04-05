@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, serverTimestamp, query, getDocs, limit } from 'firebase/firestore';
+import { auth, db } from '@/config/firebase';
 import { DEFAULT_PRICING, CURRENCY_CODE } from '@/utils/constants'; // Import des constantes de prix
 
 export default function CreateCollectionsPage() {
@@ -10,6 +12,33 @@ export default function CreateCollectionsPage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setIsAdmin(false);
+        router.push('/login');
+        return;
+      }
+      const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+      if (adminDoc.exists()) {
+        setIsAdmin(true);
+      } else {
+        setIsAdmin(false);
+        router.push('/login');
+      }
+    };
+    checkAdmin();
+  }, [router]);
+
+  if (isAdmin === null) {
+    return <div style={{ padding: '2rem', textAlign: 'center' }}>Vérification des droits…</div>;
+  }
+
+  if (isAdmin === false) return null;
 
   const log = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
     const timestamp = new Date().toLocaleTimeString();
@@ -29,13 +58,13 @@ export default function CreateCollectionsPage() {
     try {
       // Initialiser Firebase
       const firebaseConfig = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDMXeXZCFAVGeSFW_-3MYkrqV2bN1SXY-8",
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "medjira-service.firebaseapp.com",
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "medjira-service",
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "medjira-service.firebasestorage.app",
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "113581657187",
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:113581657187:web:cd8e2ef19a25b4a424bc56",
-        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-3LNHS26HML"
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
       };
 
       const app = initializeApp(firebaseConfig);
@@ -204,8 +233,8 @@ export default function CreateCollectionsPage() {
             await deleteDoc(doc(db, collectionConfig.name, docRef.id));
             log(`🗑️  Document de test supprimé de "${collectionConfig.name}"`, 'info');
             log('');
-          } catch (error: any) {
-            log(`Erreur lors de la création de "${collectionConfig.name}": ${error.message}`, 'error');
+          } catch (error: unknown) {
+            log(`Erreur lors de la création de "${collectionConfig.name}": ${error instanceof Error ? error.message : String(error)}`, 'error');
             log('');
           }
         } else {
@@ -259,8 +288,8 @@ export default function CreateCollectionsPage() {
           await deleteDoc(doc(db, 'bookings', bookingId));
           log(`🗑️  Document de test supprimé de bookings`, 'info');
           log('');
-        } catch (error: any) {
-          log(`Erreur lors de la création des sous-collections: ${error.message}`, 'error');
+        } catch (error: unknown) {
+          log(`Erreur lors de la création des sous-collections: ${error instanceof Error ? error.message : String(error)}`, 'error');
           log('');
         }
       } else {
@@ -308,9 +337,10 @@ export default function CreateCollectionsPage() {
       log(`   Collections attendues: ${expectedCollections.length}`, 'info');
       log(`   Collections manquantes: ${missingCollections.length}`, 'info');
 
-    } catch (error: any) {
-      log(`Erreur générale: ${error.message}`, 'error');
-      showStatus(`Erreur: ${error.message}`, 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`Erreur générale: ${message}`, 'error');
+      showStatus(`Erreur: ${message}`, 'error');
     } finally {
       setIsCreating(false);
     }
@@ -324,13 +354,13 @@ export default function CreateCollectionsPage() {
     try {
       // Initialiser Firebase
       const firebaseConfig = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDMXeXZCFAVGeSFW_-3MYkrqV2bN1SXY-8",
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "medjira-service.firebaseapp.com",
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "medjira-service",
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "medjira-service.firebasestorage.app",
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "113581657187",
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:113581657187:web:cd8e2ef19a25b4a424bc56",
-        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-3LNHS26HML"
+        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
       };
 
       const app = initializeApp(firebaseConfig);
@@ -373,9 +403,10 @@ export default function CreateCollectionsPage() {
       log(`   Collections attendues: ${expectedCollections.length}`, 'info');
       log(`   Collections manquantes: ${missingCollections.length}`, 'info');
 
-    } catch (error: any) {
-      log(`Erreur lors de la vérification: ${error.message}`, 'error');
-      showStatus(`Erreur: ${error.message}`, 'error');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`Erreur lors de la vérification: ${message}`, 'error');
+      showStatus(`Erreur: ${message}`, 'error');
     } finally {
       setIsVerifying(false);
     }

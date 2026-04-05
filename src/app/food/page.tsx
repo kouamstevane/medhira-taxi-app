@@ -1,19 +1,22 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { Restaurant, RestaurantFilters } from '@/types/food-delivery';
 import { RestaurantCard } from '@/components/food/RestaurantCard';
-import { Search, Filter, Loader2, ChefHat, Bike } from 'lucide-react';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { BottomNav } from '@/components/ui/BottomNav';
 import Link from 'next/link';
 
 export default function FoodHomePage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [lastVisible, setLastVisible] = useState<any>(null);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [filters, setFilters] = useState<RestaurantFilters>({});
+  const [searchQuery, setSearchQuery] = useState('');
 
   const CUISINES = ['Tous', 'Africain', 'Européen', 'Fast Food', 'Healthy', 'Asiatique', 'Pâtisserie'];
 
@@ -28,7 +31,7 @@ export default function FoodHomePage() {
           20,
           null
         );
-        
+
         if (isMounted) {
           setRestaurants(newRestaurants);
           setLastVisible(lastDoc);
@@ -50,14 +53,14 @@ export default function FoodHomePage() {
 
   const loadMoreRestaurants = async () => {
     setLoadingMore(true);
-    
+
     try {
       const { restaurants: newRestaurants, lastDoc } = await FoodDeliveryService.getApprovedRestaurants(
         filters,
         20,
         lastVisible
       );
-      
+
       setRestaurants(prev => [...prev, ...newRestaurants]);
       setLastVisible(lastDoc);
       setHasMore(newRestaurants.length === 20);
@@ -69,6 +72,7 @@ export default function FoodHomePage() {
   };
 
   const handleCuisineFilter = (cuisine: string) => {
+    setSearchQuery('');
     if (cuisine === 'Tous') {
       const newFilters = { ...filters };
       delete newFilters.cuisineType;
@@ -79,26 +83,28 @@ export default function FoodHomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-background pb-20 max-w-[430px] mx-auto">
       {/* Header */}
-      <div className="bg-primary text-primary-foreground p-6 rounded-b-[2rem] shadow-sm">
+      <div className="bg-gradient-to-r from-primary to-[#ffae33] text-white p-6 rounded-b-[2rem]">
         <div className="flex justify-between items-center mb-6 pt-4">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight">Food Delivery</h1>
-            <p className="text-primary-foreground/80 mt-1">Qu'est-ce qui vous ferait plaisir ?</p>
+            <p className="text-white/80 mt-1">Qu'est-ce qui vous ferait plaisir ?</p>
           </div>
           <Link href="/food/orders" className="bg-white/20 p-3 rounded-full hover:bg-white/30 transition-colors">
-             <Bike className="w-6 h-6" />
+             <MaterialIcon name="delivery_dining" size="lg" className="text-white" />
           </Link>
         </div>
 
         {/* Search Bar */}
         <div className="relative mt-2">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Rechercher un plat, un restaurant..." 
-            className="w-full bg-white text-gray-900 rounded-2xl py-3.5 pl-12 pr-4 shadow-sm focus:outline-none focus:ring-2 focus:ring-white border-0"
+          <MaterialIcon name="search" size="md" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Rechercher un plat, un restaurant..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full glass-input rounded-2xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-primary border-0"
           />
         </div>
       </div>
@@ -113,9 +119,9 @@ export default function FoodHomePage() {
                 key={cuisine}
                 onClick={() => handleCuisineFilter(cuisine)}
                 className={`snap-start flex-shrink-0 px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
-                  isSelected 
-                    ? 'bg-primary text-white shadow-md scale-105' 
-                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  isSelected
+                    ? 'bg-primary text-white scale-105'
+                    : 'glass-card text-slate-300 border border-white/5 hover:bg-white/5'
                 }`}
               >
                 {cuisine}
@@ -128,35 +134,37 @@ export default function FoodHomePage() {
       {/* Restaurant List */}
       <div className="px-4 mt-2">
         <div className="flex justify-between items-end mb-5">
-          <h2 className="text-xl font-bold text-gray-900 tracking-tight">À proximité de vous</h2>
-          <button className="flex items-center gap-1.5 text-sm text-primary font-bold bg-primary/5 px-3 py-1.5 rounded-lg">
-            <Filter className="w-4 h-4" /> Filtres
+          <h2 className="text-xl font-bold text-white tracking-tight">À proximité de vous</h2>
+          <button className="flex items-center gap-1.5 text-sm text-primary font-bold bg-primary/10 px-3 py-1.5 rounded-lg">
+            <MaterialIcon name="filter_list" size="sm" /> Filtres
           </button>
         </div>
 
         {loading ? (
           <div className="flex flex-col justify-center items-center py-32 space-y-4">
-            <Loader2 className="w-10 h-10 animate-spin text-primary" />
-            <p className="text-gray-500 font-medium">Recherche des meilleurs restaurants...</p>
+            <MaterialIcon name="progress_activity" size="xl" className="animate-spin text-primary" />
+            <p className="text-slate-400 font-medium">Recherche des meilleurs restaurants...</p>
           </div>
         ) : restaurants.length === 0 ? (
-          <div className="bg-white rounded-3xl p-10 text-center border border-gray-100 shadow-sm mt-4">
+          <div className="glass-card rounded-3xl p-10 text-center border border-white/5 mt-4">
             <div className="flex justify-center mb-6">
-              <div className="bg-gray-50 p-5 rounded-full">
-                <ChefHat className="w-12 h-12 text-gray-400" />
+              <div className="bg-white/5 p-5 rounded-full">
+                <MaterialIcon name="restaurant" size="xl" className="text-slate-400" />
               </div>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">Aucun restaurant trouvé</h3>
-            <p className="text-gray-500 text-sm">Essayez de modifier vos filtres ou de tester une autre cuisine.</p>
+            <h3 className="text-xl font-bold text-white mb-2">Aucun restaurant trouvé</h3>
+            <p className="text-slate-400 text-sm">Essayez de modifier vos filtres ou de tester une autre cuisine.</p>
           </div>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {restaurants.map((restaurant) => (
+              {restaurants.filter(r =>
+                !searchQuery || r.name.toLowerCase().includes(searchQuery.toLowerCase())
+              ).map((restaurant) => (
                 <RestaurantCard key={restaurant.id} restaurant={restaurant} />
               ))}
             </div>
-            
+
             {hasMore && (
               <div className="flex justify-center mt-10">
                 <button
@@ -164,13 +172,14 @@ export default function FoodHomePage() {
                   disabled={loadingMore}
                   className="bg-primary/10 text-primary font-bold py-3 px-8 rounded-full hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
-                  {loadingMore ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Charger plus'}
+                  {loadingMore ? <MaterialIcon name="progress_activity" size="md" className="animate-spin" /> : 'Charger plus'}
                 </button>
               </div>
             )}
           </>
         )}
       </div>
+      <BottomNav />
     </div>
   );
 }

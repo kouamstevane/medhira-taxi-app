@@ -8,7 +8,9 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
 import { onAuthStateChanged, User } from "firebase/auth";
-import { ChevronLeft, Camera, Loader2 } from 'lucide-react';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { BottomNav } from '@/components/ui/BottomNav';
 import { InputField } from '@/components/forms/InputField';
 import { SelectField } from '@/components/forms/SelectField';
 import { useToast } from '@/hooks/useToast';
@@ -139,7 +141,7 @@ export default function ProfilPage() {
         const snapshot = await uploadBytes(storageRef, profileImage);
         imageUrl = await getDownloadURL(snapshot.ref);
       }
-      
+
       const user = auth.currentUser;
       if (!user) throw new Error("No user");
 
@@ -158,7 +160,7 @@ export default function ProfilPage() {
     } catch (error) {
       // Logger les détails de l'erreur pour le debugging
       logFirestoreError(error, "mise à jour du profil client");
-      
+
       // Afficher un message d'erreur explicite à l'utilisateur
       const errorMessage = getFirestoreErrorMessage(error, "mise à jour de votre profil");
       showError(errorMessage);
@@ -173,7 +175,7 @@ export default function ProfilPage() {
       // Obtenir la date du début de la journée (00:00:00)
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      
+
       const bookingsQuery = query(
         collection(db, 'bookings'),
         where('userId', '==', userId),
@@ -217,214 +219,219 @@ export default function ProfilPage() {
 
   if (loading && !editing) {
     return (
-      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f29200]"></div>
+      <div className="min-h-screen bg-background font-sans text-slate-100 antialiased flex items-center justify-center">
+        <MaterialIcon name="refresh" className="animate-spin text-primary text-[48px]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-4 sm:p-6">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
+      <div className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
+        {/* Header */}
         <div className="flex items-center mb-6">
-          <Link href="/dashboard" className="mr-4 p-2 rounded-full hover:bg-[#E8D9A5] transition">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#2E2307]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
+          <Link href="/dashboard" className="mr-4 p-2 rounded-full hover:bg-white/5 transition">
+            <MaterialIcon name="arrow_back" className="text-white" />
           </Link>
-          <h1 className="text-2xl font-bold text-[#2E2307]">Mon Profil</h1>
+          <h1 className="text-2xl font-bold text-white">Mon Profil</h1>
         </div>
 
+        {/* Error */}
         {error && (
-          <div className="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700 rounded">
+          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 text-destructive rounded-xl">
             <div className="flex justify-between items-center">
               <p>{error}</p>
-              <button 
-                onClick={() => setError(null)} 
-                className="text-red-700 hover:text-red-900 font-bold"
+              <button
+                onClick={() => setError(null)}
+                className="text-destructive hover:text-red-300 font-bold"
               >
-                ×
+                <MaterialIcon name="close" size="sm" />
               </button>
             </div>
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="p-6">
-            <div className="flex flex-col items-center mb-6">
-              <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-[#E8D9A5] mb-4">
-                {profileImageUrl ? (
-                  <Image 
-                    src={profileImageUrl} 
-                    alt="Photo de profil" 
-                    width={128}
-                    height={128}
-                    className="w-full h-full object-cover"
-                    priority
-                    unoptimized={profileImageUrl.includes('googleusercontent.com')}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
-                )}
-              </div>
-
-              {editing && (
-                <label className="cursor-pointer bg-[#FDBC01] hover:bg-[#E6A900] text-[#2E2307] font-bold py-2 px-4 rounded-md transition">
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    onChange={handleImageChange} 
-                    className="hidden" 
-                  />
-                  Changer la photo
-                </label>
+        {/* Profile Card */}
+        <GlassCard className="p-6">
+          {/* Avatar */}
+          <div className="flex flex-col items-center mb-6">
+            <div className="relative w-28 h-28 rounded-full overflow-hidden border-2 border-primary/40 mb-4">
+              {profileImageUrl ? (
+                <Image
+                  src={profileImageUrl}
+                  alt="Photo de profil"
+                  width={128}
+                  height={128}
+                  className="w-full h-full object-cover"
+                  priority
+                  unoptimized={profileImageUrl.includes('googleusercontent.com')}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full bg-white/5 flex items-center justify-center">
+                  <MaterialIcon name="person" className="text-slate-500 text-[48px]" />
+                </div>
               )}
             </div>
 
-            {editing ? (
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-                
-                <InputField
-                    type="email"
-                    label="Email"
-                    value={userData.email}
-                    disabled
-                    helperText="L'adresse email ne peut pas être modifiée."
+            {editing && (
+              <label className="cursor-pointer bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-2 px-4 rounded-2xl primary-glow transition flex items-center gap-2">
+                <MaterialIcon name="photo_camera" size="sm" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
                 />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputField 
-                    {...form.register('firstName')} 
-                    label="Prénom"
-                    placeholder="Prénom"
-                    required 
-                  />
-                  <InputField 
-                    {...form.register('lastName')} 
-                    label="Nom"
-                    placeholder="Nom"
-                    required 
-                  />
-                </div>
-
-                <div className="flex">
-                   <InputField 
-                    type="tel" 
-                    {...form.register('phone')} 
-                    label="Numéro de téléphone"
-                    placeholder="514XXXXXXX"
-                    helperText="Format sans le code pays (+1)."
-                    required 
-                  />
-                </div>
-
-                <InputField 
-                    type="text" 
-                    {...form.register('address')} 
-                    label="Adresse"
-                    placeholder="Votre adresse actuelle" 
-                />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <InputField 
-                    type="text" 
-                    {...form.register('city')} 
-                    label="Ville"
-                    placeholder="Votre ville" 
-                  />
-                  <SelectField 
-                    {...form.register('country')} 
-                    label="Pays"
-                    options={countries.map(c => ({ value: c, label: c }))}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">À propos de moi</label>
-                  <textarea 
-                    {...form.register('bio')} 
-                    rows={4} 
-                    className="w-full rounded-xl border border-gray-200 p-4 text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] outline-none shadow-sm transition-all" 
-                    placeholder="Parlez-nous un peu de vous..." 
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-3 pt-6 border-t">
-                  <button 
-                    type="button" 
-                    onClick={() => { 
-                      setEditing(false); 
-                      setError(null);
-                      form.reset();
-                    }} 
-                    className="px-6 py-3 border border-gray-200 text-gray-600 font-medium rounded-xl hover:bg-gray-50 transition-all active:scale-[0.98]"
-                  >
-                    Annuler
-                  </button>
-                  <button 
-                    type="submit" 
-                    disabled={loading} 
-                    className="px-8 py-3 bg-[#f29200] hover:bg-[#d98300] text-white font-bold rounded-xl shadow-md transition-all active:scale-[0.98] flex items-center gap-2"
-                  >
-                    {loading ? <Loader2 className="animate-spin" size={20} /> : "Enregistrer"}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-[#5A4A1A]">Email</p>
-                  <p className="font-medium text-[#2E2307]">{userData.email || 'Non renseigné'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-[#5A4A1A]">Prénom</p>
-                  <p className="font-medium text-[#2E2307]">{userData.firstName || 'Non renseigné'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-[#5A4A1A]">Nom</p>
-                  <p className="font-medium text-[#2E2307]">{userData.lastName || 'Non renseigné'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-[#5A4A1A]">Téléphone</p>
-                  <p className="font-medium text-[#2E2307]">{userData.phone ? `+1 ${userData.phone}` : 'Non renseigné'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-[#5A4A1A]">Adresse</p>
-                  <p className="font-medium text-[#2E2307]">{userData.address || 'Non renseigné'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-[#5A4A1A]">Ville</p>
-                  <p className="font-medium text-[#2E2307]">{userData.city || 'Non renseigné'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-[#5A4A1A]">Pays</p>
-                  <p className="font-medium text-[#2E2307]">{userData.country || 'Non renseigné'}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-[#5A4A1A]">À propos</p>
-                  <p className="font-medium text-[#2E2307] whitespace-pre-line">{userData.bio || 'Aucune description'}</p>
-                </div>
-                <div className="flex justify-end pt-4">
-                  <button onClick={() => setEditing(true)} className="px-4 py-2 bg-[#2E2307] hover:bg-[#3D2F0A] text-[#FDBC01] font-bold rounded-md">Modifier le profil</button>
-                </div>
-              </div>
+                Changer la photo
+              </label>
             )}
           </div>
-        </div>
+
+          {/* Form / View */}
+          {editing ? (
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+
+              <InputField
+                  type="email"
+                  label="Email"
+                  value={userData.email}
+                  disabled
+                  helperText="L'adresse email ne peut pas être modifiée."
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputField
+                  {...form.register('firstName')}
+                  label="Prénom"
+                  placeholder="Prénom"
+                  required
+                />
+                <InputField
+                  {...form.register('lastName')}
+                  label="Nom"
+                  placeholder="Nom"
+                  required
+                />
+              </div>
+
+              <div className="flex">
+                 <InputField
+                  type="tel"
+                  {...form.register('phone')}
+                  label="Numéro de téléphone"
+                  placeholder="514XXXXXXX"
+                  helperText="Format sans le code pays (+1)."
+                  required
+                />
+              </div>
+
+              <InputField
+                  type="text"
+                  {...form.register('address')}
+                  label="Adresse"
+                  placeholder="Votre adresse actuelle"
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <InputField
+                  type="text"
+                  {...form.register('city')}
+                  label="Ville"
+                  placeholder="Votre ville"
+                />
+                <SelectField
+                  {...form.register('country')}
+                  label="Pays"
+                  options={countries.map(c => ({ value: c, label: c }))}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-1">A propos de moi</label>
+                <textarea
+                  {...form.register('bio')}
+                  rows={4}
+                  className="glass-input w-full rounded-xl p-4 text-white placeholder:text-slate-500 outline-none transition-all focus:ring-2 focus:ring-primary"
+                  placeholder="Parlez-nous un peu de vous..."
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-6 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(false);
+                    setError(null);
+                    form.reset();
+                  }}
+                  className="glass-card border border-white/10 text-slate-300 px-6 py-3 font-medium rounded-2xl hover:bg-white/5 transition-all active:scale-[0.98]"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-8 py-3 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all active:scale-[0.98] flex items-center gap-2"
+                >
+                  {loading ? <MaterialIcon name="refresh" className="animate-spin" size="sm" /> : "Enregistrer"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-slate-500">Email</p>
+                <p className="font-medium text-white">{userData.email || 'Non renseigné'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Prénom</p>
+                <p className="font-medium text-white">{userData.firstName || 'Non renseigné'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Nom</p>
+                <p className="font-medium text-white">{userData.lastName || 'Non renseigné'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Téléphone</p>
+                <p className="font-medium text-white">{userData.phone ? `+1 ${userData.phone}` : 'Non renseigné'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Adresse</p>
+                <p className="font-medium text-white">{userData.address || 'Non renseigné'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Ville</p>
+                <p className="font-medium text-white">{userData.city || 'Non renseigné'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Pays</p>
+                <p className="font-medium text-white">{userData.country || 'Non renseigné'}</p>
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">A propos</p>
+                <p className="font-medium text-white whitespace-pre-line">{userData.bio || 'Aucune description'}</p>
+              </div>
+              <div className="flex justify-end pt-4">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="px-6 py-3 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all active:scale-[0.98]"
+                >
+                  Modifier le profil
+                </button>
+              </div>
+            </div>
+          )}
+        </GlassCard>
 
         {/* Section Dernières commandes */}
         <div className="mt-8">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-[#2E2307]">Commandes du jour</h2>
-            <Link href="/historique" className="text-sm font-medium text-[#FDBC01] hover:underline">
+            <h2 className="text-xl font-bold text-white">Commandes du jour</h2>
+            <Link href="/historique" className="text-sm font-medium text-primary hover:text-[#ffae33] transition">
               Voir tout →
             </Link>
           </div>
@@ -439,33 +446,39 @@ export default function ProfilPage() {
                 const status = item.status as string | undefined;
                 const type = item.type as string | undefined;
                 const id = item.id as string | undefined;
-                
+
                 return (
-                  <div key={id} className="bg-white rounded-lg shadow-sm p-4 flex justify-between items-center">
+                  <GlassCard key={id} className="p-4 flex justify-between items-center">
                     <div>
-                      <p className="font-semibold text-gray-800">{type} - {destination || description}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="font-semibold text-white">{type} - {destination || description}</p>
+                      <p className="text-sm text-slate-400">
                         {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} • {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
                       </p>
                     </div>
-                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${status === 'completed' || status === 'delivered' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                      status === 'completed' || status === 'delivered'
+                        ? 'bg-green-500/10 text-green-400'
+                        : 'bg-blue-500/10 text-blue-400'
+                    }`}>
                       {status}
                     </span>
-                  </div>
+                  </GlassCard>
                 );
               })
             ) : (
-              <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-                <p className="text-gray-500">Aucune commande aujourd&apos;hui.</p>
-                <Link href="/historique" className="text-sm text-[#FDBC01] hover:underline mt-2 inline-block">
+              <GlassCard className="p-8 text-center">
+                <p className="text-slate-400">Aucune commande aujourd&apos;hui.</p>
+                <Link href="/historique" className="text-sm text-primary hover:text-[#ffae33] mt-2 inline-block transition">
                   Voir l&apos;historique complet
                 </Link>
-              </div>
+              </GlassCard>
             )}
           </div>
         </div>
-
       </div>
+
+      {/* Bottom Navigation */}
+      <BottomNav />
     </div>
   );
 }

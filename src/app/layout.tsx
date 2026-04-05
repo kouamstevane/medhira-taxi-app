@@ -44,6 +44,7 @@ export const viewport: Viewport = {
  * Optimisées pour le SEO, Open Graph et Twitter Cards
  */
 export const metadata: Metadata = {
+  metadataBase: new URL('https://medjira.com'),
   title: {
     default: "Medjira - Taxi et Livraison au Canada",
     template: "%s | Medjira",
@@ -139,18 +140,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
+    <html lang="fr" suppressHydrationWarning className={cn("dark font-sans", geist.variable)}>
       <head>
         {/* Préconnexion aux domaines externes pour optimiser le chargement */}
         <link rel="preconnect" href="https://maps.googleapis.com" />
-        
+
         {/* DNS Prefetch pour Firebase */}
         <link rel="dns-prefetch" href="https://firebaseapp.com" />
         <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
+
+        {/* Material Symbols Outlined (Stitch design system) */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
       </head>
-      
+
       <body
-        className="font-sans antialiased bg-[#f5f5f5] min-h-screen"
+        className="font-sans antialiased bg-background text-foreground min-h-screen"
       >
         <AuthProvider>
           <LayoutClient>

@@ -77,7 +77,7 @@ function matchesRoute(pathname: string, routes: string[]): boolean {
 /**
  * Logger les événements importants (en production, utilisez un service de logging)
  */
-function logEvent(type: 'AUTH_CHECK' | 'REDIRECT' | 'SECURITY', message: string, data?: any) {
+function logEvent(type: 'AUTH_CHECK' | 'REDIRECT' | 'SECURITY', message: string, data?: Record<string, unknown>) {
   if (process.env.NODE_ENV === 'development') {
     console.log(`[MIDDLEWARE:${type}]`, message, data || '');
   }

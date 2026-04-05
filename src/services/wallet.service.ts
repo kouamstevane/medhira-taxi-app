@@ -18,11 +18,11 @@ import {
   where,
   orderBy,
   limit as firestoreLimit,
-  serverTimestamp,
   runTransaction,
-  Timestamp,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
+import { typedServerTimestamp } from '@/lib/firebase-helpers';
 import {
   Wallet,
   Transaction,
@@ -49,7 +49,7 @@ export const getOrCreateWallet = async (userId: string): Promise<Wallet> => {
     userId,
     balance: 0,
     currency: CURRENCY_CODE,
-    updatedAt: serverTimestamp() as Timestamp,
+    updatedAt: typedServerTimestamp(),
   };
 
   await setDoc(walletRef, newWallet);
@@ -77,8 +77,8 @@ export const createTransaction = async (
     ...transactionData,
     id: newTransactionRef.id,
     status: 'pending',
-    createdAt: serverTimestamp() as Timestamp,
-    updatedAt: serverTimestamp() as Timestamp,
+    createdAt: typedServerTimestamp(),
+    updatedAt: typedServerTimestamp(),
   };
 
   await setDoc(newTransactionRef, transaction);
@@ -171,8 +171,8 @@ export const payBooking = async (
     description: 'Paiement de course',
     bookingId,
     status: 'pending',
-    createdAt: serverTimestamp() as Timestamp,
-    updatedAt: serverTimestamp() as Timestamp,
+    createdAt: typedServerTimestamp(),
+    updatedAt: typedServerTimestamp(),
   };
   await setDoc(transactionRef_outer, transaction);
 

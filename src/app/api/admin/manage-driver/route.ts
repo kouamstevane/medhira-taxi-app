@@ -202,10 +202,10 @@ export async function POST(request: NextRequest) {
       default:
         return NextResponse.json({ error: 'Action non supportée' }, { status: 400 });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur API manage-driver:', error);
     return NextResponse.json(
-      { error: 'Erreur serveur', details: error.message },
+      { error: 'Erreur serveur', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

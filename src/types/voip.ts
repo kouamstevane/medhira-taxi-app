@@ -97,7 +97,7 @@ export interface CallQualityMetrics {
 export interface CallLifecycleEvent {
   type: string;
   timestamp: number;
-  payload?: any;
+  payload?: unknown;
 }
 
 export const DEFAULT_CALL_TIMEOUTS = {

@@ -200,17 +200,18 @@ export const signInWithGoogle = async (
         email: user.email,
         emailVerified: user.emailVerified
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { message?: string; code?: string; details?: unknown; stack?: string; constructor?: { name?: string } };
       console.error('[AuthService] Erreur Google Sign-In natif détaillée:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        stack: error.stack,
-        fullName: error.constructor?.name
+        message: err.message,
+        code: err.code,
+        details: err.details,
+        stack: err.stack,
+        fullName: err.constructor?.name
       });
       
       // Analyse spécifique de l'erreur "cancelled"
-      if (error.message?.includes('cancelled')) {
+      if (err.message?.includes('cancelled')) {
         console.warn('[AuthService] L\'activité a été annulée. Vérifiez SHA-1 ET Web Client ID dans Firebase.');
       }
 
@@ -389,7 +390,7 @@ export const createUserDocument = async (
   //  NETTOYAGE : Supprimer les champs undefined pour éviter les erreurs Firestore
   const cleanData = Object.entries(data).reduce((acc, [key, value]) => {
     if (value !== undefined) {
-      acc[key as keyof UserData] = value as any;
+      (acc as Record<string, unknown>)[key] = value;
     }
     return acc;
   }, {} as Partial<UserData>);

@@ -7,8 +7,6 @@
  * @module services/matching/retry
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { logger } from '@/utils/logger';
 import { broadcastRideRequest } from './broadcast';
 import { Location, MatchingMetrics } from '@/types';
@@ -127,9 +125,9 @@ export const findDriverWithRetry = async (
       // Attendre un peu avant le retry (ex: 2 secondes)
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Erreur lors du retry', {
-        error,
+        error: error instanceof Error ? error.message : String(error),
         rideId,
         perimeter: currentPerimeter,
         retryCount,
@@ -189,8 +187,8 @@ const notifyNoDriverAvailable = async (rideId: string): Promise<void> => {
     });
 
     logger.info('Client notifié - Aucun chauffeur disponible', { rideId });
-  } catch (error: any) {
-    logger.error('Erreur lors de la notification au client', { error, rideId });
+  } catch (error: unknown) {
+    logger.error('Erreur lors de la notification au client', { error: error instanceof Error ? error.message : String(error), rideId });
   }
 };
 
@@ -199,9 +197,9 @@ const notifyNoDriverAvailable = async (rideId: string): Promise<void> => {
  */
 export const logMatchingMetrics = async (metrics: MatchingMetrics): Promise<void> => {
   try {
-    logger.info('Métriques de matching', metrics);
+    logger.info('Métriques de matching', { ...metrics });
     // Ici on pourrait aussi sauvegarder dans Firestore si besoin
-  } catch (error: any) {
-    logger.error('Erreur lors de l\'enregistrement des métriques', { error, metrics });
+  } catch (error: unknown) {
+    logger.error('Erreur lors de l\'enregistrement des métriques', { error: error instanceof Error ? error.message : String(error), metrics });
   }
 };

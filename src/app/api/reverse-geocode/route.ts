@@ -30,7 +30,7 @@ export async function GET(request: Request) {
         } else {
             return NextResponse.json({ error: 'No results found', details: data }, { status: 404 });
         }
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    } catch (error: unknown) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
     }
 }

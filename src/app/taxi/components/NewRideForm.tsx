@@ -21,9 +21,12 @@ import { AddressInput } from './AddressInput';
 import { VehicleOption } from './VehicleOption';
 import { FareSummary } from './FareSummary';
 import { BonusSelector } from './BonusSelector';
+import { PaymentMethodSelector } from '@/components/stripe/PaymentMethodSelector';
+import { StripePaymentElement } from '@/components/stripe/StripePaymentElement';
 import { logger } from '@/utils/logger';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
+import type { PaymentMethod } from '@/types/stripe';
 
 //  Schéma Zod de validation pour la création de course (medJira.md #85)
 const BookingSchema = z.object({
@@ -82,6 +85,15 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   const [bonus, setBonus] = useState(0);
   const [showBonus, setShowBonus] = useState(false);
   const [autoSearchEnabled, setAutoSearchEnabled] = useState(false);
+
+  // États paiement
+  const [modalStep, setModalStep] = useState<'summary' | 'payment' | 'stripe'>('summary');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('card');
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletCurrency, setWalletCurrency] = useState('CAD');
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(null);
+  const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
 
   const { isLoaded: mapsLoaded, autocompleteService } = useGoogleMaps();
 
@@ -356,10 +368,132 @@ useEffect(() => {
       return;
     }
 
+    setModalStep('summary');
+    setStripeClientSecret(null);
+    setPendingBookingId(null);
     setShowConfirmModal(true);
   };
 
-  const handleConfirmBooking = async () => {
+  // Étape 2 : passer à la sélection du paiement
+  const handleProceedToPayment = async () => {
+    setWalletLoading(true);
+    try {
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+      const res = await fetch('/api/wallet/balance', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWalletBalance(data.balance ?? 0);
+        setWalletCurrency(data.currency ?? 'CAD');
+        // Présélectionner wallet si le solde est suffisant
+        if (data.balance >= (estimate?.price ?? 0)) {
+          setSelectedPaymentMethod('wallet');
+        } else {
+          setSelectedPaymentMethod('card');
+        }
+      }
+    } catch {
+      setWalletBalance(0);
+      setSelectedPaymentMethod('card');
+    } finally {
+      setWalletLoading(false);
+    }
+    setModalStep('payment');
+  };
+
+  // Étape 3a : paiement wallet → créer la réservation directement
+  const handleWalletBooking = async () => {
+    if (!currentUser || !pickupAddress || !destinationAddress || !selectedCarType || !estimate) return;
+    await handleConfirmBooking('wallet');
+  };
+
+  // Étape 3b : paiement carte → créer réservation + PaymentIntent + afficher Stripe Elements
+  const handleCardPaymentSetup = async () => {
+    if (!currentUser || !pickupAddress || !destinationAddress || !selectedCarType || !estimate) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. Créer la réservation avec paymentMethod: 'card'
+      const bookingId = await createBookingInternal('card');
+      if (!bookingId) return;
+
+      // 2. Créer le PaymentIntent
+      const token = await auth.currentUser!.getIdToken();
+      const piRes = await fetch('/api/stripe/payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          bookingId,
+          amount: (estimate.price ?? 0) + (bonus > 0 ? bonus : 0),
+          currency: 'cad',
+          userId: currentUser.uid,
+        }),
+      });
+
+      if (!piRes.ok) {
+        const errData = await piRes.json().catch(() => ({}));
+        throw new Error(errData.error || 'Impossible de créer le paiement Stripe');
+      }
+
+      const { clientSecret } = await piRes.json();
+      setStripeClientSecret(clientSecret);
+      setPendingBookingId(bookingId);
+      setModalStep('stripe');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erreur lors de la configuration du paiement';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Appelé par StripePaymentElement après autorisation de la carte
+  const handleCardAuthorized = async (paymentIntentId: string) => {
+    logger.info('Carte autorisée', { paymentIntentId, bookingId: pendingBookingId });
+    setShowConfirmModal(false);
+    setModalStep('summary');
+
+    if (pendingBookingId && onBookingCreated) {
+      onBookingCreated(pendingBookingId, pickupAddress, destinationAddress, autoSearchEnabled);
+    }
+    if (onSearchDriver) onSearchDriver();
+  };
+
+  // Crée la réservation Firestore avec la méthode de paiement choisie
+  const createBookingInternal = async (paymentMethod: PaymentMethod): Promise<string | null> => {
+    try {
+      const bookingData = {
+        userId: currentUser!.uid,
+        userEmail: currentUser!.email,
+        pickup: pickupAddress,
+        destination: destinationAddress,
+        pickupLocation: pickupLocation || undefined,
+        pickupLocationAccuracy: pickupAccuracy || undefined,
+        destinationLocation: destinationLocation || undefined,
+        distance: estimate!.distance,
+        duration: estimate!.duration,
+        price: estimate!.price,
+        carType: selectedCarType!.name,
+        status: 'pending' as const,
+        paymentMethod,
+        ...(bonus > 0 && { bonus }),
+        ...(autoSearchEnabled && {
+          automaticSearch: { enabled: true, intervalSeconds: 60, attemptCount: 0, maxAttempts: 10 },
+        }),
+      };
+      BookingSchema.parse(bookingData);
+      return await createBooking(bookingData);
+    } catch (err) {
+      logger.error('Erreur création réservation', { error: err });
+      setError(err instanceof Error ? err.message : 'Erreur lors de la création de la course');
+      setLoading(false);
+      return null;
+    }
+  };
+
+  // Confirmation finale pour paiement wallet (ou fallback sans méthode)
+  const handleConfirmBooking = async (paymentMethod: PaymentMethod = 'wallet') => {
     if (!currentUser || !pickupAddress || !destinationAddress || !selectedCarType || !estimate) {
       logger.warn('Données manquantes pour la confirmation de course');
       return;
@@ -369,62 +503,11 @@ useEffect(() => {
     setError(null);
 
     try {
-      //  Validation structurée avec Zod (medJira.md #85)
-      const bookingData = {
-        userId: currentUser.uid,
-        userEmail: currentUser.email,
-        pickup: pickupAddress,
-        destination: destinationAddress,
-        pickupLocation: pickupLocation || undefined,
-        pickupLocationAccuracy: pickupAccuracy || undefined,
-        destinationLocation: destinationLocation || undefined,
-        distance: estimate.distance,
-        duration: estimate.duration,
-        price: estimate.price,
-        carType: selectedCarType.name,
-        bonus: bonus > 0 ? bonus : undefined,
-      };
+      const bookingId = await createBookingInternal(paymentMethod);
+      if (!bookingId) return;
 
-      try {
-        BookingSchema.parse(bookingData);
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          console.error('[NewRideForm] Erreur de validation:', error.issues);
-          setError(error.issues[0].message);
-          setLoading(false);
-          return;
-        }
-      }
+      logger.info('Course créée', { bookingId, paymentMethod, accuracy: pickupAccuracy ? `${pickupAccuracy.toFixed(0)}m` : 'N/A' });
 
-      const bookingId = await createBooking({
-        userId: currentUser.uid,
-        userEmail: currentUser.email,
-        pickup: pickupAddress,
-        destination: destinationAddress,
-        // Utiliser la position précise avec toutes les métadonnées GPS
-        pickupLocation: pickupLocation || undefined,
-        pickupLocationAccuracy: pickupAccuracy || undefined, // Précision en mètres
-        destinationLocation: destinationLocation || undefined,
-        distance: estimate.distance,
-        duration: estimate.duration,
-        price: estimate.price,
-        carType: selectedCarType.name,
-        status: 'pending',
-        // Nouveaux champs (ajout conditionnel pour éviter undefined)
-        ...(bonus > 0 && { bonus }),
-        ...(autoSearchEnabled && {
-          automaticSearch: {
-            enabled: true,
-            intervalSeconds: 60,
-            attemptCount: 0,
-            maxAttempts: 10,
-          }
-        }),
-      });
-      
-      logger.info('Course créée avec précision GPS', { accuracy: pickupAccuracy ? `${pickupAccuracy.toFixed(0)}m` : 'N/A' });
-
-      //  Haptic feedback succès (medJira.md #93)
       if (Capacitor.isNativePlatform()) {
         try {
           await Haptics.notification({ type: NotificationType.Success });
@@ -433,23 +516,20 @@ useEffect(() => {
         }
       }
 
-      logger.info('Course créée', { bookingId });
       setShowConfirmModal(false);
+      setModalStep('summary');
 
       if (onBookingCreated) {
         onBookingCreated(bookingId, pickupAddress, destinationAddress, autoSearchEnabled);
       }
-
       if (onSearchDriver) {
         onSearchDriver();
       }
     } catch (err: unknown) {
-      //  Typage correct de l'erreur (medJira.md #116)
       logger.error('Erreur création course', { error: err });
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la création de la course';
       setError(errorMessage);
-      
-      //  Haptic feedback erreur (medJira.md #93)
+
       if (Capacitor.isNativePlatform()) {
         try {
           await Haptics.notification({ type: NotificationType.Error });
@@ -688,35 +768,92 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* Boutons d'action */}
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                <button
-                  onClick={() => setShowConfirmModal(false)}
-                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg active:bg-gray-50 hover:bg-gray-50 hover:border-gray-400 font-semibold text-gray-700 transition touch-manipulation"
-                  disabled={loading}
-                  style={{ minHeight: '48px' }}
-                >
-                  Annuler
-                </button>
-                <button
-                  onClick={handleConfirmBooking}
-                  disabled={loading}
-                  className="flex-1 bg-[#f29200] active:bg-[#d67a00] hover:bg-[#e68600] text-white font-bold py-3 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl touch-manipulation"
-                  style={{ minHeight: '48px' }}
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Création...
-                    </span>
-                  ) : (
-                    'Confirmer'
+              {/* Boutons d'action — Étape résumé */}
+              {modalStep === 'summary' && (
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                  <button
+                    onClick={() => setShowConfirmModal(false)}
+                    className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg active:bg-gray-50 hover:bg-gray-50 hover:border-gray-400 font-semibold text-gray-700 transition touch-manipulation"
+                    disabled={loading}
+                    style={{ minHeight: '48px' }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleProceedToPayment}
+                    disabled={loading || walletLoading}
+                    className="flex-1 bg-[#f29200] active:bg-[#d67a00] hover:bg-[#e68600] text-white font-bold py-3 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg touch-manipulation"
+                    style={{ minHeight: '48px' }}
+                  >
+                    {walletLoading ? 'Chargement...' : 'Continuer →'}
+                  </button>
+                </div>
+              )}
+
+              {/* Étape sélection paiement */}
+              {modalStep === 'payment' && (
+                <div className="space-y-4">
+                  <PaymentMethodSelector
+                    walletBalance={walletBalance}
+                    fareAmount={(estimate?.price ?? 0) + (bonus > 0 ? bonus : 0)}
+                    currency={walletCurrency}
+                    selectedMethod={selectedPaymentMethod}
+                    onSelect={setSelectedPaymentMethod}
+                    loading={loading}
+                  />
+                  {error && (
+                    <div className="p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded text-sm">
+                      {error}
+                    </div>
                   )}
-                </button>
-              </div>
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                    <button
+                      onClick={() => setModalStep('summary')}
+                      className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 transition touch-manipulation"
+                      disabled={loading}
+                      style={{ minHeight: '48px' }}
+                    >
+                      ← Retour
+                    </button>
+                    <button
+                      onClick={selectedPaymentMethod === 'wallet' ? handleWalletBooking : handleCardPaymentSetup}
+                      disabled={loading}
+                      className="flex-1 bg-[#f29200] active:bg-[#d67a00] hover:bg-[#e68600] text-white font-bold py-3 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg touch-manipulation"
+                      style={{ minHeight: '48px' }}
+                    >
+                      {loading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          En cours...
+                        </span>
+                      ) : selectedPaymentMethod === 'wallet' ? 'Confirmer (Wallet)' : 'Payer par carte →'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Étape Stripe Elements */}
+              {modalStep === 'stripe' && stripeClientSecret && (
+                <div className="space-y-4">
+                  <StripePaymentElement
+                    clientSecret={stripeClientSecret}
+                    amount={(estimate?.price ?? 0) + (bonus > 0 ? bonus : 0)}
+                    currency={walletCurrency}
+                    onSuccess={handleCardAuthorized}
+                    onError={(msg) => setError(msg)}
+                    submitLabel="Autoriser le paiement"
+                  />
+                  <button
+                    onClick={() => setModalStep('payment')}
+                    className="w-full px-4 py-2 text-sm text-gray-500 underline"
+                  >
+                    ← Changer de méthode de paiement
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

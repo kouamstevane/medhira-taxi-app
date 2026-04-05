@@ -48,7 +48,7 @@ export default function NotFound() {
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link href="/">
-            <Button variant="primary" className="w-full sm:w-auto">
+            <Button variant="default" className="w-full sm:w-auto">
               <svg
                 className="w-5 h-5 mr-2"
                 fill="none"

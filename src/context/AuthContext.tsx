@@ -94,19 +94,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         setUserData(null);
       }
-    } catch (err: any) {
-      if (err?.code === 'unavailable' || err?.message?.includes('offline')) {
+    } catch (err: unknown) {
+      const errorObj = err instanceof Error ? err : null;
+      const errorCode = (err as Record<string, unknown>)?.code as string | undefined;
+      const errorMessage = errorObj?.message ?? String(err);
+      if (errorCode === 'unavailable' || errorMessage.includes('offline')) {
         console.warn('[AuthContext] Impossible de charger les données utilisateur (hors ligne):', {
           uid: user.uid,
-          errorMessage: err.message
+          errorMessage
         });
       } else {
         console.error('[AuthContext] Erreur lors du chargement des données utilisateur:', {
           error: err,
           uid: user.uid,
-          errorCode: err.code,
-          errorMessage: err.message,
-          errorName: err.name
+          errorCode,
+          errorMessage,
+          errorName: errorObj?.name
         });
       }
       setUserData(null);

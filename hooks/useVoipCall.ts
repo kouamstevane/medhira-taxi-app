@@ -36,7 +36,7 @@ export function useVoipCall() {
     calleeId: voipState.callee?.uid || '',
     rideId: voipState.bookingId || '',
     status: voipState.status,
-    startTime: voipState.startTime ? (new Date(voipState.startTime) as any) : (new Date() as any),
+    startTime: voipState.startTime ? new Date(voipState.startTime) : new Date(),
     channel: voipState.channel || '',
     token: voipState.token || null,
     callerMetadata: voipState.caller ? {

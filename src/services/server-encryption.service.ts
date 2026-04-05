@@ -70,7 +70,7 @@ class ServerEncryptionService {
 
       return result.data.encrypted;
     } catch (error: unknown) {
-      const err = error as any; // Cast for accessing .code property of Firebase error
+      const err = error as { code?: string; message?: string };
       console.error('Erreur lors du chiffrement côté serveur:', err);
 
       // Gérer les erreurs spécifiques

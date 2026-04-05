@@ -132,3 +132,15 @@ android/local.properties
 
 # APK pour le directeur (généré)
 apk-directeur/
+
+# Documentation
+docs/
+# Kilo AI framework
+.kilo/
+
+# Stitch design system
+.stitch/
+
+# Test reports
+test-reports/
+nul

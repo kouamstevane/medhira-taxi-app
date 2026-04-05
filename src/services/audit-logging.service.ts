@@ -15,7 +15,7 @@
  */
 
 import { db, auth } from '../config/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 /**
  * Types d'événements d'audit
@@ -50,6 +50,9 @@ export enum AuditEventType {
   // Email de vérification
   EMAIL_VERIFICATION_SENT = 'EMAIL_VERIFICATION_SENT',
   EMAIL_VERIFICATION_FAILED = 'EMAIL_VERIFICATION_FAILED',
+  
+  // Suppression chauffeur
+  DRIVER_DELETED = 'DRIVER_DELETED',
 }
 
 /**
@@ -70,12 +73,12 @@ export interface AuditLogEntry {
   userId: string;
   level: AuditLogLevel;
   action: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   ipAddress?: string | null;
   userAgent?: string | null;
   success: boolean;
   errorMessage?: string | null;
-  timestamp: any; // serverTimestamp from Firestore
+  timestamp: Timestamp | Date | null;
 }
 
 /**
@@ -120,7 +123,7 @@ class AuditLoggingService {
       const context = this.getContext();
 
       // Créer l'entrée d'audit
-      const auditEntry: any = {
+      const auditEntry: Record<string, unknown> = {
         eventType: entry.eventType,
         userId,
         level: entry.level,
@@ -136,27 +139,25 @@ class AuditLoggingService {
       //  NETTOYAGE CRITIQUE : Supprimer les valeurs `undefined` car Firestore ne les accepte pas
       // On convertit les `undefined` récursifs en `null` dans `details`
       if (auditEntry.details) {
-        Object.keys(auditEntry.details).forEach(key => {
-          if (auditEntry.details[key] === undefined) {
-            auditEntry.details[key] = null;
+        const details = auditEntry.details as Record<string, unknown>;
+        Object.keys(details).forEach(key => {
+          if (details[key] === undefined) {
+            details[key] = null;
           }
         });
       }
 
       // Ajouter à Firestore
       await addDoc(collection(db, this.collectionName), auditEntry);
-    } catch (error: any) {
-      // En cas d'erreur de logging, on ne veut pas interrompre le flux principal
-      // Logger l'erreur en console pour debugging
+    } catch (error: unknown) {
+      const err = error as { message?: string; code?: string };
       console.error('[AuditLogging] Erreur lors de l\'écriture dans Firestore:', {
-        message: error.message,
-        code: error.code,
+        message: err.message,
+        code: err.code,
         entry: entry.eventType
       });
       
-      // Si l'erreur est "Missing or insufficient permissions", c'est probablement
-      // que l'utilisateur n'est pas authentifié. On ne bloque pas le flux principal.
-      if (error.code === 'permission-denied' || error.message?.includes('Missing or insufficient permissions')) {
+      if (err.code === 'permission-denied' || err.message?.includes('Missing or insufficient permissions')) {
         console.warn('[AuditLogging] Permission refusée - l\'utilisateur est peut-être déconnecté');
       }
     }
@@ -376,7 +377,7 @@ class AuditLoggingService {
    * @param details - Les détails à nettoyer
    * @returns Les détails nettoyés
    */
-  private sanitizeDetails(details?: Record<string, any>): Record<string, any> | undefined {
+  private sanitizeDetails(details?: Record<string, unknown>): Record<string, unknown> | undefined {
     if (!details) return undefined;
 
     const sanitized = { ...details };

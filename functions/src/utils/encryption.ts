@@ -282,9 +282,9 @@ export async function encryptSensitiveData(
       iv: iv.toString('base64'),
       salt: salt.toString('base64'),
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur lors du chiffrement:', error);
-    throw new Error(`Échec du chiffrement: ${error.message}`);
+    throw new Error(`Échec du chiffrement: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -350,9 +350,9 @@ export async function decryptSensitiveData(
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     
     return decrypted.toString('utf8');
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur lors du déchiffrement:', error);
-    throw new Error(`Échec du déchiffrement: ${error.message}`);
+    throw new Error(`Échec du déchiffrement: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

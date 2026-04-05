@@ -6,8 +6,8 @@
  *
  * @module services/taxi
  */
-//  Retiré eslint-disable @typescript-eslint/no-explicit-any (medJira.md #116)
 
+// [CODE-01] Residual eslint-disable comment removed — typedServerTimestamp() helper used instead of serverTimestamp() as Timestamp
 import { logger } from '@/utils/logger';
 import {
   collection,
@@ -23,10 +23,11 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { auth, db } from '@/config/firebase';
 import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
-import { calculateTripPrice } from '@/lib/firebase-helpers';
+import { calculateTripPrice, typedServerTimestamp } from '@/lib/firebase-helpers';
 import { CURRENCY_CODE, DEFAULT_PRICING, LIMITS } from '@/utils/constants';
+import { PAYMENT_STATUS } from '@/types/stripe';
 
 /**
  * Créer une nouvelle réservation
@@ -39,8 +40,11 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
     ...bookingData,
     id: newBookingRef.id,
     status: 'pending',
-    createdAt: serverTimestamp() as Timestamp,
-    updatedAt: serverTimestamp() as Timestamp,
+    paymentStatus: PAYMENT_STATUS.PENDING,
+    paymentMethod: bookingData.paymentMethod,
+    stripePaymentIntentId: bookingData.stripePaymentIntentId ?? null,
+    createdAt: typedServerTimestamp(),
+    updatedAt: typedServerTimestamp(),
   };
 
   await setDoc(newBookingRef, booking);
@@ -542,7 +546,7 @@ export const calculateFinalFare = async (bookingId: string): Promise<number> => 
   // Calculer la durée réelle depuis le début de la course
   const startTime = booking.startedAt instanceof Timestamp
     ? booking.startedAt.toDate()
-    : (booking.startedAt ? new Date(booking.startedAt as any) : null);
+    : (booking.startedAt ? new Date(booking.startedAt as string | number | Date) : null);
 
   if (!startTime) {
     // Course pas encore démarrée, retourner le prix estimé
@@ -589,7 +593,7 @@ export const markDriverArrived = async (bookingId: string): Promise<void> => {
  */
 export const startTrip = async (bookingId: string): Promise<void> => {
   await updateBookingStatus(bookingId, 'in_progress', {
-    startedAt: serverTimestamp() as any
+    startedAt: typedServerTimestamp()
   });
   
   // Notification système
@@ -631,35 +635,88 @@ export const completeTrip = async (bookingId: string): Promise<void> => {
     carType.pricePerMinute
   );
 
-  // Débiter le wallet du client avant de marquer la course comme terminée
-  if (booking.userId) {
-    try {
-      const { payBooking } = await import('@/services/wallet.service');
-      await payBooking(booking.userId, bookingId, finalPrice);
-    } catch (payError) {
-      logger.error('Erreur paiement course (solde insuffisant ?)', { error: payError, bookingId, finalPrice });
-      // On complète quand même la course mais on flag le paiement comme en attente
-      await updateBookingStatus(bookingId, 'completed', {
-        finalPrice,
-        price: finalPrice,
-        actualDuration: durationMinutes,
-        completedAt: serverTimestamp() as any,
-        paymentStatus: 'failed',
-      });
-      if (booking.driverId) {
-        const driverRef = doc(db, 'drivers', booking.driverId);
-        await updateDoc(driverRef, { status: 'available', currentBookingId: null });
+  // Traitement du paiement selon la méthode choisie par le passager
+  // Prévention double paiement : vérifier le statut actuel
+  const freshSnap = await getDoc(bookingRef);
+  const currentPaymentStatus = freshSnap.data()?.paymentStatus;
+  if (currentPaymentStatus === PAYMENT_STATUS.CAPTURED || currentPaymentStatus === PAYMENT_STATUS.WALLET_PAID) {
+    logger.warn('[completeTrip] Paiement déjà traité, évitement du double paiement', { bookingId, currentPaymentStatus });
+  } else if (booking.userId) {
+    const paymentMethod = booking.paymentMethod as string | undefined;
+    const stripePaymentIntentId = booking.stripePaymentIntentId as string | undefined;
+
+    if (paymentMethod === 'card' && stripePaymentIntentId) {
+      // Paiement par carte : capturer le PaymentIntent via l'API route
+      try {
+        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+        const captureRes = await fetch('/api/stripe/payment-intent', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            paymentIntentId: stripePaymentIntentId,
+            action: 'capture',
+            captureAmount: finalPrice,
+          }),
+        });
+        if (!captureRes.ok) {
+          const errData = await captureRes.json().catch(() => ({}));
+          throw new Error(errData.error || 'Échec capture Stripe');
+        }
+        // accumulateDriverEarnings est déjà appelé dans PUT /api/stripe/payment-intent
+      } catch (payError) {
+        logger.error('Erreur capture Stripe', { error: payError, bookingId, finalPrice });
+        await updateBookingStatus(bookingId, 'completed', {
+          finalPrice,
+          price: finalPrice,
+          actualDuration: durationMinutes,
+          completedAt: typedServerTimestamp(),
+          paymentStatus: PAYMENT_STATUS.FAILED,
+        });
+        if (booking.driverId) {
+          const driverRef = doc(db, 'drivers', booking.driverId);
+          await updateDoc(driverRef, { status: 'available', currentBookingId: null });
+        }
+        return;
       }
-      return;
+    } else if (paymentMethod === 'wallet' || !paymentMethod) {
+      // Paiement par wallet (ou méthode non spécifiée — ancien comportement)
+      try {
+        const { payBooking } = await import('@/services/wallet.service');
+        await payBooking(booking.userId, bookingId, finalPrice);
+      } catch (payError) {
+        logger.error('Erreur paiement wallet (solde insuffisant ?)', { error: payError, bookingId, finalPrice });
+        await updateBookingStatus(bookingId, 'completed', {
+          finalPrice,
+          price: finalPrice,
+          actualDuration: durationMinutes,
+          completedAt: typedServerTimestamp(),
+          paymentStatus: PAYMENT_STATUS.FAILED,
+        });
+        if (booking.driverId) {
+          const driverRef = doc(db, 'drivers', booking.driverId);
+          await updateDoc(driverRef, { status: 'available', currentBookingId: null });
+        }
+        return;
+      }
     }
   }
+
+  const finalPaymentStatus = (() => {
+    const method = booking.paymentMethod as string | undefined;
+    if (method === 'card') return PAYMENT_STATUS.CAPTURED;
+    if (method === 'wallet') return PAYMENT_STATUS.WALLET_PAID;
+    return PAYMENT_STATUS.WALLET_PAID; // rétrocompatibilité
+  })();
 
   await updateBookingStatus(bookingId, 'completed', {
     finalPrice: finalPrice,
     price: finalPrice,
     actualDuration: durationMinutes,
-    completedAt: serverTimestamp() as any,
-    paymentStatus: 'paid',
+    completedAt: typedServerTimestamp(),
+    paymentStatus: finalPaymentStatus,
   });
 
   // Libérer le chauffeur

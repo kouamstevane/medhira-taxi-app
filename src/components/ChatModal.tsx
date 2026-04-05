@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { FiSend, FiX, FiPhone, FiCheck } from 'react-icons/fi';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Message } from '@/types/chat';
 import { subscribeToMessages, sendMessage, markMessagesAsRead, sendSystemMessage } from '@/services/chat.service';
 import { useVoipCall } from '@/hooks/useVoipCall';
@@ -118,9 +118,9 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
           {toast.message}
         </div>
       )}
-      <div className="bg-white w-full sm:max-w-md sm:mx-4 h-[90vh] sm:h-[600px] sm:rounded-2xl shadow-2xl flex flex-col">
+      <div className="glass-card w-full sm:max-w-md sm:mx-4 h-[90vh] sm:h-[600px] sm:rounded-2xl border border-white/10 flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#f29200] to-[#e68600] text-white p-4 flex items-center justify-between sm:rounded-t-2xl">
+        <div className="bg-gradient-to-r from-primary to-[#ffae33] text-white p-4 flex items-center justify-between sm:rounded-t-2xl">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
               👤
@@ -142,22 +142,22 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
               {initiatingCall ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <FiPhone className="text-lg" />
+                <MaterialIcon name="phone" size="md" />
               )}
             </button>
             <button
               onClick={onClose}
               className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition"
             >
-              <FiX className="w-5 h-5" />
+              <MaterialIcon name="close" size="md" />
             </button>
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-background">
           {messages.length === 0 && (
-            <div className="text-center text-gray-500 mt-8">
+            <div className="text-center text-slate-500 mt-8">
               <p className="text-sm">Aucun message pour le moment</p>
               <p className="text-xs mt-2">Envoyez un message pour démarrer la conversation</p>
             </div>
@@ -171,7 +171,7 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
             if (isSystemMessage) {
               return (
                 <div key={message.id} className="flex justify-center">
-                  <div className="bg-blue-100 text-blue-800 text-xs px-3 py-1 rounded-full">
+                  <div className="bg-blue-500/10 text-blue-400 text-xs px-3 py-1 rounded-full">
                     {message.content}
                   </div>
                 </div>
@@ -181,8 +181,8 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
             if (isCallMessage) {
               return (
                 <div key={message.id} className="flex justify-center">
-                  <div className="bg-green-100 text-green-800 text-xs px-3 py-2 rounded-lg flex items-center space-x-2">
-                    <FiPhone className="w-4 h-4" />
+                  <div className="bg-green-500/10 text-green-400 text-xs px-3 py-2 rounded-lg flex items-center space-x-2">
+                    <MaterialIcon name="phone" size="sm" />
                     <span>{message.content}</span>
                   </div>
                 </div>
@@ -197,14 +197,14 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
                 <div
                   className={`max-w-[75%] px-4 py-2 rounded-2xl ${
                     isOwnMessage
-                      ? 'bg-[#f29200] text-white'
-                      : 'bg-white text-gray-900 border border-gray-200'
+                      ? 'bg-primary text-white'
+                      : 'glass-card text-slate-200 border border-white/10'
                   }`}
                 >
                   <p className="text-sm">{message.content}</p>
                   <p
                     className={`text-[10px] mt-1 ${
-                      isOwnMessage ? 'text-white/70' : 'text-gray-400'
+                      isOwnMessage ? 'text-white/70' : 'text-slate-500'
                     }`}
                   >
                     {message.createdAt?.toDate?.()?.toLocaleTimeString('fr-FR', {
@@ -216,12 +216,11 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
                         {message.read ? (
                           // Double coche bleue pour Lu (plus visible sur fond orange)
                           <div className="flex -space-x-1">
-                             <FiCheck className="w-3 h-3 text-blue-600 font-bold" title="Lu" strokeWidth={3} />
-                             <FiCheck className="w-3 h-3 text-blue-600 font-bold" title="Lu" strokeWidth={3} />
+                             <MaterialIcon name="done_all" className="text-blue-400 text-[12px]" />
                           </div>
                         ) : (
                           // Coche simple blanche pour Envoyé
-                          <FiCheck className="w-3 h-3 text-white" title="Envoyé" strokeWidth={2} />
+                          <MaterialIcon name="check" className="text-white text-[12px]" />
                         )}
                       </span>
                     )}
@@ -234,7 +233,7 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
         </div>
 
         {/* Input */}
-        <div className="p-4 bg-white border-t border-gray-200 sm:rounded-b-2xl">
+        <div className="p-4 bg-background border-t border-white/5 sm:rounded-b-2xl">
           <div className="flex items-center space-x-2">
             <input
               type="text"
@@ -242,15 +241,15 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !sending && handleSendMessage()}
               placeholder="Écrivez votre message..."
-              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] bg-gray-50 text-gray-900 placeholder-gray-500 shadow-sm"
+              className="glass-input flex-1 px-4 py-3 rounded-full text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none"
               disabled={sending}
             />
             <button
               onClick={handleSendMessage}
               disabled={!newMessage.trim() || sending}
-              className="p-3 bg-[#f29200] hover:bg-[#e68600] text-white rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-3 bg-primary hover:bg-primary/90 text-white rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <FiSend className="w-5 h-5" />
+              <MaterialIcon name="send" size="md" />
             </button>
           </div>
         </div>

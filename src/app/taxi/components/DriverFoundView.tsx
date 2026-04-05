@@ -497,7 +497,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                 {(() => {
                   // Convertir Timestamp Firestore correctement
                   let startTime: Date;
-                  if (booking.startedAt && typeof (booking.startedAt as any).toDate === 'function') {
+                   if (booking.startedAt && typeof (booking.startedAt as unknown as { toDate?: unknown }).toDate === 'function') {
                     startTime = (booking.startedAt as Timestamp).toDate();
                   } else if (booking.startedAt instanceof Date) {
                     startTime = booking.startedAt;

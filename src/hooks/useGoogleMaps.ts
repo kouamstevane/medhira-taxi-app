@@ -89,12 +89,17 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
           }
         }, 50); // Optimisé pour Android
 
-        setTimeout(() => {
+        const placesTimeout = setTimeout(() => {
           clearInterval(checkPlaces);
           if (!window.google?.maps?.places) {
             setLoadError('La bibliothèque "places" n\'est pas disponible. Vérifiez que l\'API Places est activée.');
           }
         }, 5000);
+
+        return () => {
+          clearInterval(checkPlaces);
+          clearTimeout(placesTimeout);
+        };
       }
       return;
     }
@@ -110,14 +115,17 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
       }, 50); // Optimisé pour vérification rapide
 
       // Timeout après 5 secondes (optimisé)
-      setTimeout(() => {
+      const loadTimeout = setTimeout(() => {
         clearInterval(checkLoaded);
         if (!window.google?.maps?.places) {
           setLoadError('Timeout: La bibliothèque "places" n\'a pas pu être chargée. Vérifiez que l\'API Places est activée.');
         }
       }, 5000);
 
-      return () => clearInterval(checkLoaded);
+      return () => {
+        clearInterval(checkLoaded);
+        clearTimeout(loadTimeout);
+      };
     }
 
     // Charger le script Google Maps
@@ -133,12 +141,6 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     // Debug: Afficher quelle clé est utilisée
     console.log('🔑 [useGoogleMaps] Clé depuis .env:', apiKey ? apiKey.substring(0, 20) + '...' : 'NON DÉFINIE');
 
-    // Fallback sur la clé Browser si aucune clé n'est trouvée
-    if (!apiKey) {
-      apiKey = 'AIzaSyDMXeXZCFAVGeSFW_-3MYkrqV2bN1SXY-8'; // Clé Browser avec restrictions HTTP
-      console.log('[useGoogleMaps] Utilisation de la clé fallback Browser');
-    }
-
     if (!apiKey) {
       setLoadError('Clé API Google Maps manquante.');
       return;
@@ -151,30 +153,14 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     }
 
     const script = document.createElement('script');
-    // Utiliser loading=async pour un chargement plus rapide et moderne
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async`;
+    const callbackName = `__googleMapsReady_${Date.now()}`;
+    (window as unknown as Record<string, () => void>)[callbackName] = () => {
+      delete (window as unknown as Record<string, unknown>)[callbackName];
+      initializeServices();
+    };
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}`;
     script.async = true;
     script.defer = true;
-
-
-    // Avec loading=async, pas besoin de callback - on utilise un polling simple
-    script.onload = () => {
-      // Attendre que Google Maps et Places soient disponibles
-      const checkLoaded = setInterval(() => {
-        if (window.google?.maps?.places) {
-          clearInterval(checkLoaded);
-          initializeServices();
-        }
-      }, 100); // Vérification toutes les 100ms
-
-      // Timeout après 10 secondes
-      setTimeout(() => {
-        clearInterval(checkLoaded);
-        if (!window.google?.maps?.places) {
-          setLoadError('Timeout: Google Maps n\'a pas pu charger. Vérifiez votre connexion et votre clé API.');
-        }
-      }, 10000);
-    };
 
     // Gérer les erreurs de chargement du script
     script.onerror = () => {

@@ -3,13 +3,39 @@ import { logger } from '@/utils/logger';
 
 const AGORA_APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID || '';
 
-// Import dynamique d'AgoraRTC pour éviter les erreurs SSR
-let AgoraRTC: any = null;
+interface IAgoraUser {
+  uid: string | number;
+  audioTrack: IRemoteAudioTrack | null;
+  videoTrack: unknown;
+  hasAudio: boolean;
+  hasVideo: boolean;
+}
 
-// Types pour AgoraRTC (chargés dynamiquement)
-type IAgoraRTCClient = any;
-type IMicrophoneAudioTrack = any;
-type IRemoteAudioTrack = any;
+interface IAgoraRTCClient {
+  on(event: string, callback: (...args: unknown[]) => void): void;
+  join(appId: string, channel: string, token: string | null, uid: string | number): Promise<void>;
+  leave(): Promise<void>;
+  publish(tracks: unknown[]): Promise<void>;
+  subscribe(user: IAgoraUser, mediaType: string): Promise<void>;
+}
+
+interface IMicrophoneAudioTrack {
+  stop(): void;
+  close(): void;
+  setEnabled(enabled: boolean): Promise<void>;
+}
+
+interface IRemoteAudioTrack {
+  play(): void;
+  stop(): void;
+}
+
+interface IAgoraRTCStatic {
+  createClient(config: { mode: string; codec: string }): IAgoraRTCClient;
+  createMicrophoneAudioTrack(): Promise<IMicrophoneAudioTrack>;
+}
+
+let AgoraRTC: IAgoraRTCStatic | null = null;
 
 /**
  * Charge dynamiquement le SDK AgoraRTC uniquement côté client
@@ -21,7 +47,7 @@ async function loadAgoraRTC(): Promise<void> {
   
   if (!AgoraRTC) {
     try {
-      AgoraRTC = await import('agora-rtc-sdk-ng');
+      AgoraRTC = (await import('agora-rtc-sdk-ng')) as unknown as IAgoraRTCStatic;
       logger.info('AgoraRTC chargé avec succès');
     } catch (error) {
       logger.error('Erreur lors du chargement d\'AgoraRTC', { error });
@@ -63,25 +89,28 @@ export class AgoraVoipEngine implements IVoipEngine {
   private setupListeners() {
     if (!this.client) return;
 
-    this.client.on('user-published', async (user: any, mediaType: any) => {
-      if (mediaType === 'audio') {
-        await this.client?.subscribe(user, mediaType);
-        this.remoteAudioTrack = user.audioTrack || null;
+    this.client.on('user-published', async (user: unknown, mediaType: unknown) => {
+      const agoraUser = user as IAgoraUser;
+      const mediaTypeStr = mediaType as string;
+      if (mediaTypeStr === 'audio') {
+        await this.client?.subscribe(agoraUser, mediaTypeStr);
+        this.remoteAudioTrack = agoraUser.audioTrack || null;
         this.remoteAudioTrack?.play();
-        this.onRemoteUserJoined(user.uid.toString());
+        this.onRemoteUserJoined(agoraUser.uid.toString());
       }
     });
 
-    this.client.on('user-unpublished', (user: any) => {
+    this.client.on('user-unpublished', (user: unknown) => {
+      const agoraUser = user as IAgoraUser;
       if (this.remoteAudioTrack) {
         this.remoteAudioTrack.stop();
         this.remoteAudioTrack = null;
       }
-      this.onRemoteUserLeft(user.uid.toString());
+      this.onRemoteUserLeft(agoraUser.uid.toString());
     });
 
-    this.client.on('connection-state-change', (curState: any, revState: any, reason: any) => {
-      if (curState === 'DISCONNECTED' && reason !== 'LEAVE') {
+    this.client.on('connection-state-change', (curState: unknown, _revState: unknown, reason: unknown) => {
+      if ((curState as string) === 'DISCONNECTED' && (reason as string) !== 'LEAVE') {
         this.onError('Connexion perdue avec le serveur vocal Agora');
       }
     });
@@ -94,10 +123,13 @@ export class AgoraVoipEngine implements IVoipEngine {
 
     try {
       await this.client.join(AGORA_APP_ID, channel, token || null, uid);
+      if (!AgoraRTC) {
+        throw new Error('AgoraRTC non initialisé');
+      }
       this.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
       await this.client.publish([this.localAudioTrack]);
       logger.info('Agora engine joined and published');
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Agora join error', { error });
       throw error;
     }

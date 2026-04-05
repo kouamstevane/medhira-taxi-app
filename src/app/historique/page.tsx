@@ -6,12 +6,21 @@ import { auth, db } from '@/config/firebase';
 import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 import { onAuthStateChanged } from "firebase/auth";
 import Link from 'next/link';
-import { FiDownload } from 'react-icons/fi';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { BottomNav } from '@/components/ui/BottomNav';
 import { downloadInvoiceFromBooking } from '@/services/invoice.service';
 import { Booking } from '@/types/booking';
 import { formatCurrencyWithCode } from '@/utils/format';
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'all';
+
+const FILTER_OPTIONS: { value: FilterPeriod; label: string }[] = [
+  { value: 'today', label: "Aujourd'hui" },
+  { value: 'week', label: '7 derniers jours' },
+  { value: 'month', label: 'Ce mois-ci' },
+  { value: 'all', label: 'Tout' },
+];
 
 export default function HistoriquePage() {
   const [history, setHistory] = useState<Array<Record<string, unknown>>>([]);
@@ -55,7 +64,7 @@ export default function HistoriquePage() {
       }
 
       // Requêtes pour bookings (taxis)
-      const bookingsQuery = period === 'all' 
+      const bookingsQuery = period === 'all'
         ? query(
             collection(db, 'bookings'),
             where('userId', '==', userId),
@@ -87,16 +96,16 @@ export default function HistoriquePage() {
         getDocs(parcelsQuery),
       ]);
 
-      const bookings = bookingsSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        type: 'Taxi', 
-        ...doc.data() 
+      const bookings = bookingsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        type: 'Taxi',
+        ...doc.data()
       }));
-      
-      const parcels = parcelsSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        type: 'Livraison', 
-        ...doc.data() 
+
+      const parcels = parcelsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        type: 'Livraison',
+        ...doc.data()
       }));
 
       const combinedHistory = [...bookings, ...parcels].sort((a, b) => {
@@ -130,15 +139,15 @@ export default function HistoriquePage() {
 
   const getStatusColor = (status: string) => {
     const colorMap: Record<string, string> = {
-      'pending': 'bg-yellow-100 text-yellow-800',
-      'accepted': 'bg-blue-100 text-blue-800',
-      'in_progress': 'bg-indigo-100 text-indigo-800',
-      'completed': 'bg-green-100 text-green-800',
-      'cancelled': 'bg-red-100 text-red-800',
-      'failed': 'bg-red-100 text-red-800',
-      'delivered': 'bg-green-100 text-green-800',
+      'pending': 'bg-yellow-500/10 text-yellow-400',
+      'accepted': 'bg-blue-500/10 text-blue-400',
+      'in_progress': 'bg-indigo-500/10 text-indigo-400',
+      'completed': 'bg-green-500/10 text-green-400',
+      'cancelled': 'bg-red-500/10 text-red-400',
+      'failed': 'bg-red-500/10 text-red-400',
+      'delivered': 'bg-green-500/10 text-green-400',
     };
-    return colorMap[status] || 'bg-gray-100 text-gray-800';
+    return colorMap[status] || 'bg-slate-500/10 text-slate-400';
   };
 
   // Télécharger la facture d'une course
@@ -166,7 +175,7 @@ export default function HistoriquePage() {
         completedAt: item.completedAt as Timestamp,
         actualDuration: item.actualDuration as number,
       };
-      
+
       downloadInvoiceFromBooking(booking);
     } catch (error) {
       console.error('Erreur téléchargement facture:', error);
@@ -175,71 +184,42 @@ export default function HistoriquePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FFF9E6] p-4 sm:p-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
+      <div className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
         {/* Header */}
         <div className="flex items-center mb-6">
-          <Link href="/dashboard" className="mr-4 p-2 rounded-full hover:bg-[#E8D9A5] transition">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-[#2E2307]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
+          <Link href="/dashboard" className="mr-4 p-2 rounded-full hover:bg-white/5 transition">
+            <MaterialIcon name="arrow_back" className="text-white" />
           </Link>
-          <h1 className="text-2xl font-bold text-[#2E2307]">Historique des commandes</h1>
+          <h1 className="text-2xl font-bold text-white">Historique des commandes</h1>
         </div>
 
         {/* Filtres */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          <p className="text-sm font-medium text-[#5A4A1A] mb-3">Période</p>
+        <GlassCard className="p-4 mb-6">
+          <p className="text-sm font-medium text-slate-400 mb-3">Période</p>
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setFilter('today')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                filter === 'today'
-                  ? 'bg-[#FDBC01] text-[#2E2307] shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              Aujourd&apos;hui
-            </button>
-            <button
-              onClick={() => setFilter('week')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                filter === 'week'
-                  ? 'bg-[#FDBC01] text-[#2E2307] shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              7 derniers jours
-            </button>
-            <button
-              onClick={() => setFilter('month')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                filter === 'month'
-                  ? 'bg-[#FDBC01] text-[#2E2307] shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              Ce mois-ci
-            </button>
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                filter === 'all'
-                  ? 'bg-[#FDBC01] text-[#2E2307] shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              Tout
-            </button>
+            {FILTER_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setFilter(opt.value)}
+                className={`px-4 py-2 rounded-xl font-medium transition-all text-sm ${
+                  filter === opt.value
+                    ? 'bg-gradient-to-r from-primary to-[#ffae33] text-white primary-glow'
+                    : 'glass-card border border-white/10 text-slate-300 hover:bg-white/5'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
-        </div>
+        </GlassCard>
 
         {/* Liste des commandes */}
         {loading ? (
-          <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#FDBC01] mx-auto mb-4"></div>
-            <p className="text-gray-600">Chargement de l&apos;historique...</p>
-          </div>
+          <GlassCard className="p-12 text-center">
+            <MaterialIcon name="refresh" className="animate-spin text-primary text-[48px] mx-auto block mb-4" />
+            <p className="text-slate-400">Chargement de l&apos;historique...</p>
+          </GlassCard>
         ) : history.length > 0 ? (
           <div className="space-y-3">
             {history.map(item => {
@@ -252,61 +232,61 @@ export default function HistoriquePage() {
               const status = item.status as string | undefined;
               const type = item.type as string | undefined;
               const id = item.id as string | undefined;
-              
+
               return (
-                <div key={id} className="bg-white rounded-xl shadow-sm p-4 sm:p-6 hover:shadow-md transition-shadow">
+                <GlassCard key={id} className="p-4 sm:p-5">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className="px-3 py-1 text-xs font-semibold rounded-full bg-[#FFF4D6] text-[#2E2307]">
+                        <span className="px-3 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
                           {type}
                         </span>
                         <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(status || 'pending')}`}>
                           {getStatusLabel(status || 'pending')}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-500 mb-1">
-                        {new Date(timestamp).toLocaleDateString('fr-FR', { 
+                      <p className="text-sm text-slate-400 mb-1">
+                        {new Date(timestamp).toLocaleDateString('fr-FR', {
                           weekday: 'long',
-                          day: '2-digit', 
-                          month: 'long', 
-                          year: 'numeric' 
-                        })} à {new Date(timestamp).toLocaleTimeString('fr-FR', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
+                          day: '2-digit',
+                          month: 'long',
+                          year: 'numeric'
+                        })} à {new Date(timestamp).toLocaleTimeString('fr-FR', {
+                          hour: '2-digit',
+                          minute: '2-digit'
                         })}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xl font-bold text-[#FDBC01]">{formatCurrencyWithCode(price || 0)}</p>
+                      <p className="text-xl font-bold text-primary">{formatCurrencyWithCode(price || 0)}</p>
                     </div>
                   </div>
 
                   {type === 'Taxi' && (
-                    <div className="space-y-2 border-t pt-3">
+                    <div className="space-y-2 border-t border-white/10 pt-3">
                       <div className="flex items-start">
-                        <span className="text-green-500 mr-2 mt-1">●</span>
+                        <span className="text-green-400 mr-2 mt-1">●</span>
                         <div>
-                          <p className="text-xs text-gray-500">Départ</p>
-                          <p className="font-medium text-gray-900">{pickup || 'Non spécifié'}</p>
+                          <p className="text-xs text-slate-500">Départ</p>
+                          <p className="font-medium text-white">{pickup || 'Non spécifié'}</p>
                         </div>
                       </div>
                       <div className="flex items-start">
-                        <span className="text-red-500 mr-2 mt-1">●</span>
+                        <span className="text-red-400 mr-2 mt-1">●</span>
                         <div>
-                          <p className="text-xs text-gray-500">Arrivée</p>
-                          <p className="font-medium text-gray-900">{destination || 'Non spécifié'}</p>
+                          <p className="text-xs text-slate-500">Arrivée</p>
+                          <p className="font-medium text-white">{destination || 'Non spécifié'}</p>
                         </div>
                       </div>
-                      
+
                       {/* Bouton télécharger facture - uniquement pour les courses terminées */}
                       {status === 'completed' && (
-                        <div className="mt-3 pt-3 border-t">
+                        <div className="mt-3 pt-3 border-t border-white/10">
                           <button
                             onClick={() => handleDownloadInvoice(item)}
-                            className="flex items-center justify-center w-full px-4 py-2.5 bg-gradient-to-r from-[#f29200] to-[#e68600] text-white font-medium rounded-lg hover:from-[#e68600] hover:to-[#d67a00] transition-all shadow-sm hover:shadow-md"
+                            className="flex items-center justify-center w-full px-4 py-2.5 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all hover:opacity-90 active:scale-[0.98]"
                           >
-                            <FiDownload className="w-4 h-4 mr-2" />
+                            <MaterialIcon name="download" size="sm" className="mr-2" />
                             Télécharger la facture PDF
                           </button>
                         </div>
@@ -315,34 +295,35 @@ export default function HistoriquePage() {
                   )}
 
                   {type === 'Livraison' && (
-                    <div className="border-t pt-3">
-                      <p className="text-sm text-gray-600">{description || 'Aucune description'}</p>
+                    <div className="border-t border-white/10 pt-3">
+                      <p className="text-sm text-slate-400">{description || 'Aucune description'}</p>
                       {destination && (
-                        <p className="text-sm text-gray-500 mt-1">
-                          <span className="font-medium">Destination :</span> {destination}
+                        <p className="text-sm text-slate-500 mt-1">
+                          <span className="font-medium text-slate-300">Destination :</span> {destination}
                         </p>
                       )}
                     </div>
                   )}
-                </div>
+                </GlassCard>
               );
             })}
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            <p className="text-gray-500 text-lg font-medium">Aucune commande trouvée</p>
-            <p className="text-gray-400 text-sm mt-2">
+          <GlassCard className="p-12 text-center">
+            <MaterialIcon name="assignment" className="text-slate-500 text-[64px] mx-auto block mb-4" />
+            <p className="text-white text-lg font-medium">Aucune commande trouvée</p>
+            <p className="text-slate-500 text-sm mt-2">
               {filter === 'today' && "Vous n'avez passé aucune commande aujourd'hui"}
               {filter === 'week' && "Aucune commande dans les 7 derniers jours"}
               {filter === 'month' && "Aucune commande ce mois-ci"}
               {filter === 'all' && "Votre historique est vide"}
             </p>
-          </div>
+          </GlassCard>
         )}
       </div>
+
+      {/* Bottom Navigation */}
+      <BottomNav />
     </div>
   );
 }

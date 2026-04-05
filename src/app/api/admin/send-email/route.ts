@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendDriverStatusEmail } from '@/lib/email-service';
+import { adminAuth, adminDb } from '@/config/firebase-admin';
 import { z } from 'zod';
 
 const EmailPayloadSchema = z.object({
@@ -14,6 +15,28 @@ const EmailPayloadSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    if (!adminAuth || !adminDb) {
+      return NextResponse.json({ error: 'Firebase Admin SDK non configuré.' }, { status: 503 });
+    }
+
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 });
+    }
+
+    let uid: string;
+    try {
+      const decoded = await adminAuth.verifyIdToken(authHeader.slice(7));
+      uid = decoded.uid;
+    } catch {
+      return NextResponse.json({ error: 'Token invalide ou expiré.' }, { status: 401 });
+    }
+
+    const adminSnapshot = await adminDb.collection('admins').where('userId', '==', uid).limit(1).get();
+    if (adminSnapshot.empty) {
+      return NextResponse.json({ error: 'Accès non autorisé.' }, { status: 403 });
+    }
+
     const body = await request.json();
     
     // Validation Zod
@@ -46,17 +69,18 @@ export async function POST(request: NextRequest) {
       message: 'Email envoyé avec succès',
       messageId: info.messageId,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erreur API send-email:', error);
     
-    // Messages d'erreur plus détaillés pour le debugging
     let errorMessage = 'Erreur lors de l\'envoi de l\'email';
-    let errorDetails = error.message;
+    const errorLike = error instanceof Error ? error : null;
+    const code = errorLike && 'code' in errorLike ? (errorLike as { code?: string }).code : undefined;
+    let errorDetails = errorLike?.message || String(error);
 
-    if (error.code === 'EAUTH') {
+    if (code === 'EAUTH') {
       errorMessage = 'Erreur d\'authentification SMTP';
       errorDetails = 'Vérifiez vos identifiants SMTP (SMTP_USER et SMTP_PASS)';
-    } else if (error.code === 'ECONNECTION') {
+    } else if (code === 'ECONNECTION') {
       errorMessage = 'Impossible de se connecter au serveur SMTP';
       errorDetails = 'Vérifiez SMTP_HOST et SMTP_PORT';
     }
@@ -65,7 +89,7 @@ export async function POST(request: NextRequest) {
       { 
         error: errorMessage,
         details: errorDetails,
-        code: error.code || 'UNKNOWN',
+        code: code || 'UNKNOWN',
       },
       { status: 500 }
     );

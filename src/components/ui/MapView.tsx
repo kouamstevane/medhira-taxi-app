@@ -51,7 +51,7 @@ interface MapViewProps {
     icon?: string;
   }>;
   /** Callback quand la carte est cliquée */
-  onMapClick?: (event: any) => void;
+  onMapClick?: (event: google.maps.MapMouseEvent | { latitude: number; longitude: number }) => void;
   /** Callback quand un marqueur est cliqué */
   onMarkerClick?: (markerId: string) => void;
   /** Afficher le bouton de recentrage */
@@ -148,7 +148,7 @@ export const MapView: React.FC<MapViewProps> = ({
         center={center}
         zoom={zoom}
         markers={markers}
-        onMapClick={onMapClick}
+        onMapClick={onMapClick as ((event: { latitude: number; longitude: number }) => void) | undefined}
         onMarkerClick={onMarkerClick}
         className={className}
       />

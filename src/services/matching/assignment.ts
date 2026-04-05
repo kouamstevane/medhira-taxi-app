@@ -230,8 +230,9 @@ export const cancelAssignment = async (
     }
 
     logger.info('Attribution annulée', { rideId, reason });
-  } catch (error: any) {
-    logger.error('Erreur lors de l\'annulation', { error, rideId });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Erreur lors de l\'annulation', { error: errorMessage, rideId });
     throw error;
   }
 };

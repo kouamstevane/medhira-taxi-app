@@ -28,7 +28,7 @@
 
 import { adminDb } from '@/config/firebase-admin';
 import * as admin from 'firebase-admin';
-import { auditLoggingService, AuditLogLevel } from '@/services/audit-logging.service';
+import { auditLoggingService, AuditLogLevel, AuditEventType } from '@/services/audit-logging.service';
 
 /**
  * Résultat de la suppression d'un chauffeur
@@ -138,9 +138,9 @@ class DriverDeletionService {
       try {
         await admin.auth().deleteUser(driverId);
         console.log(` Compte Firebase Auth '${driverId}' supprimé`);
-      } catch (authError: any) {
-        // Si l'utilisateur n'existe pas déjà dans Auth, ce n'est pas une erreur bloquante
-        if (authError.code !== 'auth/user-not-found') {
+      } catch (authError: unknown) {
+        const authErrorCode = (authError as Record<string, unknown>)?.code as string | undefined;
+        if (authErrorCode !== 'auth/user-not-found') {
           throw authError;
         }
         console.warn(`Compte Firebase Auth '${driverId}' non trouvé lors de la suppression`);
@@ -314,7 +314,7 @@ class DriverDeletionService {
     ];
 
     //  CORRECTION: Vérifier que le bucket Storage est accessible avant de traiter les fichiers
-    let bucket: any = null;
+    let bucket: import('@google-cloud/storage').Bucket | null = null;
     try {
       bucket = admin.storage().bucket();
 
@@ -345,7 +345,7 @@ class DriverDeletionService {
           // Supprimer les fichiers par batch de 100
           for (let i = 0; i < files.length; i += 100) {
             const batch = files.slice(i, i + 100);
-            await Promise.all(batch.map((file: any) => file.delete()));
+            await Promise.all(batch.map((file: import('@google-cloud/storage').File) => file.delete()));
             stats.filesDeleted += batch.length;
           }
           console.log(` ${files.length} fichier(s) supprimé(s) dans ${path}`);
@@ -389,7 +389,7 @@ class DriverDeletionService {
       const collectionsSummary = Object.fromEntries(stats.collectionsDeleted);
 
       await auditLoggingService.log({
-        eventType: 'DRIVER_DELETED' as any,
+        eventType: AuditEventType.DRIVER_DELETED,
         userId: adminId,
         level: success ? AuditLogLevel.INFO : AuditLogLevel.ERROR,
         action: 'Suppression définitive complète du chauffeur',
@@ -432,15 +432,15 @@ class DriverDeletionService {
 
     for (const collection of collectionsToCheck) {
       try {
-        let query: any = this.db.collection(collection.name);
+        let query: admin.firestore.Query<admin.firestore.DocumentData> | admin.firestore.DocumentReference<admin.firestore.DocumentData> = this.db.collection(collection.name);
 
         if (collection.field) {
           query = query.where(collection.field, '==', driverId);
         } else {
-          query = query.doc(driverId);
+          query = (query as admin.firestore.CollectionReference<admin.firestore.DocumentData>).doc(driverId);
         }
 
-        const snapshot = await query.count().get();
+        const snapshot = await (query as admin.firestore.Query<admin.firestore.DocumentData>).count().get();
         const count = snapshot.data().count;
         collectionsCount[collection.name] = count;
       } catch (error) {

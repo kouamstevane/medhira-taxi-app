@@ -17,7 +17,7 @@ export interface TestError {
   errorType: string;
   errorMessage: string;
   stackTrace?: string;
-  context: Record<string, any>;
+  context: Record<string, unknown>;
   severity: 'low' | 'medium' | 'high' | 'critical';
 }
 
@@ -128,7 +128,7 @@ export class TestLogger {
     testName: string;
     testFile: string;
     error: Error | unknown;
-    context?: Record<string, any>;
+    context?: Record<string, unknown>;
     severity?: 'low' | 'medium' | 'high' | 'critical';
   }): void {
     const error = params.error as Error;

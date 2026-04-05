@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { auth } from '@/config/firebase';
 import { signOut } from 'firebase/auth';
 import { sendVerificationEmail } from '@/services/auth.service';
-import { FiMail, FiArrowLeft, FiRefreshCw, FiLogOut, FiCheckCircle } from 'react-icons/fi';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -21,7 +21,7 @@ export default function VerifyEmailPage() {
     if (user) {
       setEmail(user.email || '');
       setIsVerified(user.emailVerified || false);
-      
+
       // Si l'email est déjà vérifié, rediriger vers le dashboard
       if (user.emailVerified) {
         router.push('/dashboard');
@@ -93,94 +93,99 @@ export default function VerifyEmailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f5f5f5] via-[#e6e6e6] to-[#f5f5f5] flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-64 h-64 bg-[#f29200] rounded-full opacity-10 blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 w-80 h-80 bg-[#f29200] rounded-full opacity-10 blur-3xl animate-pulse delay-1000" />
-      </div>
+    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
+      <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-hidden">
+        {/* Top Safe Area */}
+        <div className="h-12 w-full" />
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Header */}
-        <div className="text-center mb-8">
+        {/* Back Link */}
+        <div className="px-6">
           <Link
             href="/"
-            className="inline-flex items-center text-gray-600 hover:text-[#f29200] transition-colors mb-6"
+            className="inline-flex items-center text-slate-400 hover:text-primary transition-colors"
           >
-            <FiArrowLeft className="mr-2" />
+            <MaterialIcon name="arrow_back" size="md" className="mr-2" />
             Retour
           </Link>
-
-          <div className="flex justify-center mb-4">
-            <div className="w-20 h-20 bg-gradient-to-br from-[#f29200] to-[#e68600] rounded-full flex items-center justify-center shadow-lg">
-              <FiMail className="w-10 h-10 text-white" />
-            </div>
-          </div>
-
-          <h1 className="text-3xl font-bold text-[#101010] mb-2">Vérifiez votre email</h1>
-          <p className="text-gray-600">Un email de vérification a été envoyé à votre adresse</p>
         </div>
 
-        {/* Formulaire */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 text-red-700 rounded">
-              <p className="text-sm">{error}</p>
-            </div>
-          )}
+        {/* Icon */}
+        <div className="flex flex-col items-center justify-center pt-8 pb-6">
+          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
+            <MaterialIcon name="mail" className="text-primary text-[40px]" />
+          </div>
+        </div>
 
-          {success && (
-            <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 text-green-700 rounded flex items-center">
-              <FiCheckCircle className="mr-2 flex-shrink-0" />
-              <p className="text-sm">{success}</p>
-            </div>
-          )}
+        {/* Heading */}
+        <div className="px-6 text-center">
+          <h1 className="text-white text-[28px] font-bold leading-tight mb-2">Vérifiez votre email</h1>
+          <p className="text-slate-400 text-base font-normal">Un email de vérification a été envoyé à votre adresse</p>
+        </div>
 
-          {/* Email affiché */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Adresse email :</p>
-            <p className="text-lg font-semibold text-[#101010]">{email}</p>
+        {/* Error Message */}
+        {error && (
+          <div className="mx-6 mt-6 p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
+            <MaterialIcon name="error" size="md" className="text-destructive mt-0.5" />
+            <span className="text-destructive text-sm">{error}</span>
+          </div>
+        )}
+
+        {/* Success Message */}
+        {success && (
+          <div className="mx-6 mt-6 p-3 bg-green-500/10 border border-green-500/20 rounded-xl flex items-start gap-2">
+            <MaterialIcon name="check_circle" size="md" className="text-green-400 mt-0.5" />
+            <span className="text-green-400 text-sm">{success}</span>
+          </div>
+        )}
+
+        {/* Card */}
+        <div className="mx-6 mt-8 glass-card rounded-2xl p-6">
+          {/* Email Display */}
+          <div className="mb-6 p-4 bg-white/5 rounded-xl border border-white/10">
+            <p className="text-sm text-slate-500 mb-1">Adresse email :</p>
+            <p className="text-lg font-semibold text-white">{email}</p>
           </div>
 
           {/* Instructions */}
           <div className="mb-6 space-y-3">
             <div className="flex items-start">
-              <div className="flex-shrink-0 w-6 h-6 bg-[#f29200] rounded-full flex items-center justify-center mr-3 mt-0.5">
+              <div className="flex-shrink-0 w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-3 mt-0.5">
                 <span className="text-white text-sm font-bold">1</span>
               </div>
-              <p className="text-sm text-gray-700">Ouvrez votre boîte de réception email</p>
+              <p className="text-sm text-slate-400">Ouvrez votre boîte de réception email</p>
             </div>
             <div className="flex items-start">
-              <div className="flex-shrink-0 w-6 h-6 bg-[#f29200] rounded-full flex items-center justify-center mr-3 mt-0.5">
+              <div className="flex-shrink-0 w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-3 mt-0.5">
                 <span className="text-white text-sm font-bold">2</span>
               </div>
-              <p className="text-sm text-gray-700">Trouvez l&apos;email de Medjira Taxi</p>
+              <p className="text-sm text-slate-400">Trouvez l&apos;email de Medhira Taxi</p>
             </div>
             <div className="flex items-start">
-              <div className="flex-shrink-0 w-6 h-6 bg-[#f29200] rounded-full flex items-center justify-center mr-3 mt-0.5">
+              <div className="flex-shrink-0 w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-3 mt-0.5">
                 <span className="text-white text-sm font-bold">3</span>
               </div>
-              <p className="text-sm text-gray-700">Cliquez sur le lien de vérification</p>
+              <p className="text-sm text-slate-400">Cliquez sur le lien de vérification</p>
             </div>
           </div>
 
-          {/* Boutons */}
+          {/* Buttons */}
           <div className="space-y-3">
             <button
               onClick={handleCheckVerification}
               disabled={loading || isVerified}
-              className="w-full py-3 bg-gradient-to-r from-[#f29200] to-[#e68600] text-white rounded-lg font-bold shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
+              className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {loading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   Vérification en cours...
-                </span>
+                </>
               ) : (
                 <span className="flex items-center justify-center">
-                  <FiRefreshCw className="mr-2" />
+                  <MaterialIcon name="refresh" size="md" className="mr-2" />
                   J&apos;ai vérifié mon email
                 </span>
               )}
@@ -189,42 +194,42 @@ export default function VerifyEmailPage() {
             <button
               onClick={handleResendEmail}
               disabled={loading}
-              className="w-full py-3 px-4 border border-[#f29200] text-[#f29200] rounded-lg font-bold hover:bg-[#f29200] hover:text-white transition-all duration-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              className="glass-card w-full h-14 flex items-center justify-center gap-2 rounded-2xl border border-white/10 text-slate-300 font-bold active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-[#f29200]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-slate-300" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   Envoi en cours...
-                </span>
+                </>
               ) : (
-                <span className="flex items-center justify-center">
-                  <FiMail className="mr-2" />
+                <>
+                  <MaterialIcon name="mail" size="md" />
                   Renvoyer l&apos;email de vérification
-                </span>
+                </>
               )}
             </button>
 
             <button
               onClick={handleLogout}
-              className="w-full py-3 px-4 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all duration-300 flex items-center justify-center"
+              className="glass-card w-full h-14 flex items-center justify-center gap-2 rounded-2xl border border-white/10 text-slate-300 font-medium active:scale-[0.98] transition-transform"
             >
-              <FiLogOut className="mr-2" />
+              <MaterialIcon name="logout" size="md" />
               Se déconnecter
             </button>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="mt-6 text-center text-sm text-gray-500">
-          <p>Vous n&apos;avez pas reçu l&apos;email ?</p>
+        <div className="mt-auto pb-10 pt-6 text-center">
+          <p className="text-slate-500 text-sm">Vous n&apos;avez pas reçu l&apos;email ?</p>
           <p className="mt-1">
             <button
               onClick={handleResendEmail}
               disabled={loading}
-              className="text-[#f29200] hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+              className="text-primary text-sm font-semibold hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Renvoyer l&apos;email
             </button>

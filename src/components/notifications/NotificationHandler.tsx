@@ -2,9 +2,11 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useAuth } from '@/hooks/useAuth';
-import { Haptics, NotificationType } from '@capacitor/haptics';
+import { db } from '@/config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { CURRENCY_CODE } from '@/utils/constants';
 
 /**
@@ -42,9 +44,9 @@ export function NotificationHandler() {
         },
         onTripStarted: (tripId) => {
             console.log('[NotificationHandler] Course démarrée:', tripId);
-            
+
             // Naviguer vers la page de suivi de course
-            router.push(`/taxi/trip/${tripId}`);
+            router.push(`/taxi/confirmation?bookingId=${tripId}`);
         },
         onTripCompleted: (tripId) => {
             console.log('[NotificationHandler] Course terminée:', tripId);
@@ -54,10 +56,10 @@ export function NotificationHandler() {
         },
         onDriverArrived: (tripId) => {
             console.log('[NotificationHandler] Conducteur arrivé:', tripId);
-            
+
             // Naviguer vers la page de suivi de course
-            router.push(`/taxi/trip/${tripId}`);
-            
+            router.push(`/taxi/confirmation?bookingId=${tripId}`);
+
             // Notification toast
             showNotification('Votre conducteur est arrivé !', 'success');
         },
@@ -79,12 +81,9 @@ export function NotificationHandler() {
      * Affiche une notification toast
      */
     const showNotification = (message: string, type: 'success' | 'error' | 'info') => {
-        // Implémenter avec un système de toast (ex: react-hot-toast)
-        // Pour l'instant, utiliser console.log
-        console.log(`[NotificationHandler] Toast ${type}:`, message);
-        
-        // TODO: Implémenter avec react-hot-toast ou similaire
-        // toast[type](message);
+        if (type === 'success') toast.success(message);
+        else if (type === 'error') toast.error(message);
+        else toast(message);
     };
 
     /**
@@ -99,12 +98,8 @@ export function NotificationHandler() {
         // et mettre à jour les abonnements aux topics
         const updateDriverTopicSubscription = async () => {
             try {
-                // Importer Firestore dynamiquement
-                const { getFirestore, doc, getDoc } = await import('firebase/firestore');
-                const db = getFirestore();
-                
                 if (!currentUser) return;
-                
+
                 const driverRef = doc(db, 'drivers', currentUser.uid);
                 const driverDoc = await getDoc(driverRef);
                 
@@ -146,15 +141,6 @@ export function NotificationHandler() {
 
     // Ce composant ne rend rien visuellement
     return null;
-}
-
-/**
- * Hook pour utiliser le handler de notifications dans les composants
- */
-export function useNotificationHandler() {
-    return {
-        NotificationHandler,
-    };
 }
 
 export default NotificationHandler;

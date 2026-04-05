@@ -43,7 +43,7 @@ export type MarketCode = 'CM' | 'CA' | 'FR' | 'BE';
  * // Migrer vers le Canada :
  * export const ACTIVE_MARKET: MarketCode = 'CA';
  */
-export const ACTIVE_MARKET: MarketCode = 'CM';
+export const ACTIVE_MARKET: MarketCode = 'CA';
 
 // ============================================================================
 // INTERFACES DE CONFIGURATION

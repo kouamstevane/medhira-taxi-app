@@ -1,70 +1,33 @@
-/**
- * Page d'Accueil de l'Application
- * 
- * Affiche une carte Google Maps en plein écran avec:
- * - Vue interactive de la ville
- * - Bouton flottant pour demander une course
- * - Aperçu rapide du solde wallet (glassmorphism)
- * - Redirection automatique selon l'état d'authentification
- * 
- * Comportement:
- * - Si non connecté → affiche splash screen avec options de connexion
- * - Si connecté → affiche carte avec fonctionnalités complètes
- * 
- * @page
- */
-
 'use client';
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
-/**
- * HomePage Component
- * 
- * Page d'accueil principale avec carte interactive et gestion de l'authentification
- */
 export default function HomePage() {
   const router = useRouter();
   const { currentUser, loading } = useAuth();
 
-  /**
-   * Rediriger les utilisateurs authentifiés vers le dashboard
-   * - Si connecté → redirection automatique vers /dashboard
-   * - Si non connecté → afficher le splash screen
-   */
   useEffect(() => {
     if (!loading && currentUser) {
-      // Rediriger immédiatement vers le dashboard si l'utilisateur est connecté
       router.push('/dashboard');
     }
   }, [currentUser, loading, router]);
 
-
-  // Écran de chargement ou redirection en cours
   if (loading || currentUser) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#f5f5f5] to-[#e6e6e6] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="relative w-24 h-24 mx-auto mb-8">
-            <div className="absolute inset-0 bg-[#f29200] rounded-full opacity-20 animate-ping" />
-            <div className="relative w-24 h-24 bg-[#f29200] rounded-full flex items-center justify-center shadow-2xl animate-pulse">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-12 w-12 text-white"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z" />
-              </svg>
+            <div className="absolute inset-0 bg-primary rounded-full opacity-20 animate-ping" />
+            <div className="relative w-24 h-24 bg-primary rounded-full flex items-center justify-center shadow-2xl animate-pulse">
+              <MaterialIcon name="local_taxi" className="text-white text-[40px]" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-[#101010] mb-2">Medjira</h2>
-          <p className="text-gray-600 animate-pulse">
+          <h2 className="text-2xl font-bold text-white mb-2">Medhira</h2>
+          <p className="text-muted-foreground animate-pulse">
             {loading ? 'Chargement...' : 'Redirection...'}
           </p>
         </div>
@@ -72,94 +35,78 @@ export default function HomePage() {
     );
   }
 
-  // Splash Screen pour utilisateurs non connectés uniquement
-  if (!currentUser) {
-    return (
-      <div className="font-sans min-h-screen bg-gradient-to-br from-[#f5f5f5] via-[#e6e6e6] to-[#f5f5f5] p-6 flex flex-col justify-center items-center relative overflow-hidden">
-        {/* Background decorative elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 left-10 w-64 h-64 bg-[#f29200] rounded-full opacity-10 blur-3xl animate-pulse" />
-          <div className="absolute bottom-20 right-10 w-80 h-80 bg-[#f29200] rounded-full opacity-10 blur-3xl animate-pulse delay-1000" />
+  return (
+    <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-background">
+      {/* Hero Area */}
+      <div className="relative h-[397px] w-full flex flex-col items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 hero-gradient" />
+        {/* Decorative glow */}
+        <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-40">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 blur-[120px] rounded-full" />
+          <div className="absolute top-[20%] right-[-10%] w-[30%] h-[30%] bg-primary/10 blur-[100px] rounded-full" />
+        </div>
+        {/* Wordmark */}
+        <div className="relative z-10 flex items-center gap-3">
+          <MaterialIcon name="taxi_alert" className="text-primary !text-[40px]" />
+          <h2 className="text-white text-[40px] font-extrabold tracking-tight">Medhira</h2>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 flex flex-col px-6 pb-10 justify-between">
+        {/* Tagline */}
+        <div className="text-center space-y-3">
+          <h1 className="text-white text-[22px] font-bold leading-tight">
+            Votre taxi &amp; livraison en 1 clic
+          </h1>
+          <p className="text-slate-400 text-sm font-medium">
+            Rapide, fiable, disponible 24h/24
+          </p>
         </div>
 
-        {/* Header */}
-        <header className="flex justify-center items-center mb-12 w-full max-w-md relative z-10">
-          <div className="flex items-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#f29200] to-[#e68600] rounded-2xl flex items-center justify-center mr-3 shadow-lg transform hover:scale-105 transition-transform">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z" />
-              </svg>
+        {/* Service Chips */}
+        <div className="flex justify-center gap-3 py-6">
+          {[
+            { emoji: '🚕', label: 'Taxi' },
+            { emoji: '🍔', label: 'Food' },
+            { emoji: '📦', label: 'Colis' },
+          ].map((service) => (
+            <div
+              key={service.label}
+              className="flex h-10 items-center justify-center gap-2 rounded-full glass-card px-5 transition-transform active:scale-95"
+            >
+              <span className="text-primary text-sm">{service.emoji}</span>
+              <p className="text-primary text-sm font-semibold">{service.label}</p>
             </div>
-            <h1 className="text-3xl font-bold text-[#101010]">Medjira</h1>
-          </div>
-        </header>
+          ))}
+        </div>
 
-        {/* Main Content */}
-        <main className="flex flex-col items-center w-full max-w-md relative z-10">
-          <div className="mb-12 text-center px-4">
-            <h1 className="text-4xl font-bold text-[#101010] mb-4 leading-tight">
-              <span className="text-[#f29200] bg-clip-text">Mobilité</span> et{' '}
-              <span className="text-[#f29200] bg-clip-text">Livraison</span>{' '}
-              <span className="block mt-2">Simplifiées</span>
-            </h1>
-            <p className="text-gray-600 text-lg">
-              Commandez un taxi ou faites livrer vos repas en quelques clics
-            </p>
-          </div>
+        {/* Action Buttons */}
+        <div className="flex flex-col gap-4 w-full max-w-md mx-auto">
+          <Link href="/login">
+            <button className="h-[56px] w-full bg-gradient-to-r from-primary to-[#ffae00] text-white font-bold text-lg rounded-xl primary-glow flex items-center justify-center transition-all hover:opacity-90 active:scale-[0.98]">
+              Se Connecter
+            </button>
+          </Link>
 
-          <div className="relative w-full h-72 mb-12 px-6">
-            <Image
-              src="/images/taxi-booking.webp"
-              alt="Medjira Service"
-              fill
-              className="object-contain drop-shadow-2xl"
-              priority
-            />
-          </div>
+          <Link href="/auth/register">
+            <button className="h-[56px] w-full glass-card border-2 border-primary/60 text-primary font-bold text-lg rounded-xl flex items-center justify-center transition-all hover:bg-primary/10 active:scale-[0.98]">
+              Créer un compte
+            </button>
+          </Link>
+        </div>
 
-          <div className="w-full space-y-4">
-            <Link href="/login" className="block w-full">
-              <button className="w-full py-4 bg-gradient-to-r from-[#f29200] to-[#e68600] text-white rounded-2xl font-bold shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 flex items-center justify-center group">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 group-hover:animate-bounce" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-                Se Connecter
-              </button>
-            </Link>
-
-            <Link href="/auth/register" className="block w-full">
-              <button className="w-full py-4 bg-white text-[#101010] border-2 border-[#101010] rounded-2xl font-bold shadow-lg hover:shadow-xl hover:bg-gray-50 transition-all duration-300 transform hover:scale-105 active:scale-95 flex items-center justify-center group">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2 group-hover:rotate-12 transition-transform" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6z" />
-                </svg>
-                Créer un Compte
-              </button>
-            </Link>
-
-            {/* Bouton Chauffeur */}
-            <Link href="/driver/login" className="block w-full">
-              <button className="w-full py-3 bg-transparent text-gray-600 border border-gray-300 rounded-2xl font-medium hover:border-[#f29200] hover:text-[#f29200] transition-all duration-300 flex items-center justify-center group">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                Espace Chauffeur
-              </button>
-            </Link>
-          </div>
-        </main>
-
-        {/* Footer */}
-        <footer className="mt-12 text-center text-sm text-gray-500 relative z-10">
-          <p>🇨🇦 Service disponible au Canada</p>
-          <p className="mt-2">Toronto • Ottawa • Montréal</p>
-        </footer>
+        {/* Driver Link */}
+        <div className="pt-6 text-center">
+          <Link
+            href="/driver/login"
+            className="inline-flex items-center gap-1 text-primary text-sm font-semibold hover:underline"
+          >
+            Vous êtes chauffeur ? Espace Chauffeur
+            <MaterialIcon name="arrow_forward" size="sm" />
+          </Link>
+        </div>
       </div>
-    );
-  }
-
-  // Cette partie ne devrait jamais être atteinte si l'utilisateur est connecté
-  // (redirection automatique vers /dashboard)
-  // Mais on la garde pour éviter les erreurs TypeScript
-  return null;
+    </div>
+  );
 }

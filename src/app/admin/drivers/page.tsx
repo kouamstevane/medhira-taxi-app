@@ -1,35 +1,29 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { 
-  collection, 
-  query, 
-  onSnapshot, 
-  doc, 
-  updateDoc, 
-  Timestamp, 
-  deleteDoc,
-  getDoc
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  startAfter,
+  getDocs,
+  DocumentSnapshot,
+  Timestamp,
 } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
+import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { createLogger } from '@/utils/logger';
+
+const logger = createLogger('AdminDrivers');
 import type { DriverDeletionResult } from '@/utils/driver-deletion.service';
 import Image from 'next/image';
-import { 
-  CheckCircle, 
-  XCircle, 
-  AlertTriangle, 
-  Clock, 
-  Search, 
-  Filter as FilterIcon,
-  User as UserIcon,
-  Car,
-  ChevronRight,
-  ShieldCheck,
-  FileText
-} from 'lucide-react';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
 import AdminHeader from '@/components/admin/AdminHeader';
+import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
 
 export interface Driver {
   id: string;
@@ -63,7 +57,7 @@ export interface Driver {
     vehicleInterior?: string;
     biometricPhoto?: string;
   };
-  createdAt: any;
+  createdAt: unknown;
   rejectionReason?: string;
   isSuspended?: boolean;
   suspensionReason?: string;
@@ -97,9 +91,14 @@ export default function AdminDriversPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const router = useRouter();
-  
+  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const isAdmin = useAdminAuth();
+
+  const PAGE_SIZE = 25;
+
   // States for administrative action modale
   const [actionModal, setActionModal] = useState<{
     show: boolean,
@@ -118,49 +117,18 @@ export default function AdminDriversPage() {
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
 
   useEffect(() => {
-    const checkAdmin = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        setIsAdmin(false);
-        router.push('/login');
-        return;
-      }
-
-      try {
-        const adminDoc = await getDoc(doc(db, 'admins', user.uid));
-        if (adminDoc.exists()) {
-          setIsAdmin(true);
-        } else {
-          // Fallback: chercher dans la collection où userId correspond à l'UID
-          const { getDocs, where, collection } = await import('firebase/firestore');
-          const adminQuery = query(
-            collection(db, 'admins'),
-            where('userId', '==', user.uid)
-          );
-          const adminSnapshot = await getDocs(adminQuery);
-          
-          if (!adminSnapshot.empty) {
-            setIsAdmin(true);
-          } else {
-            setIsAdmin(false);
-            router.push('/dashboard');
-          }
-        }
-      } catch (err) {
-        console.error('Error checking admin status:', err);
-        setIsAdmin(false);
-      }
-    };
-
-    checkAdmin();
-  }, [router]);
+    setCurrentPage(0);
+    setDrivers([]);
+  }, [filter]);
 
   useEffect(() => {
     if (!isAdmin) return;
 
     setLoading(true);
     const driversRef = collection(db, 'drivers');
-    let q = query(driversRef);
+    const q = filter === 'all'
+      ? query(driversRef, orderBy('createdAt', 'desc'), limit(PAGE_SIZE))
+      : query(driversRef, where('status', '==', filter), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const driversData = snapshot.docs.map(doc => ({
@@ -168,28 +136,43 @@ export default function AdminDriversPage() {
         ...doc.data()
       })) as Driver[];
 
-      // Tri local (du plus récent au plus ancien)
-      const sortedDrivers = driversData.sort((a, b) => {
-        const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt);
-        const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt);
-        return dateB.getTime() - dateA.getTime();
-      });
-
-      // Filtrage
-      if (filter === 'all') {
-        setDrivers(sortedDrivers);
-      } else {
-        setDrivers(sortedDrivers.filter(d => d.status === filter));
-      }
+      setDrivers(driversData);
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(snapshot.docs.length === PAGE_SIZE);
       setLoading(false);
     }, (err) => {
-      console.error('Error fetching drivers:', err);
+      logger.error('Chargement des chauffeurs', err instanceof Error ? err : new Error(String(err)));
       setError('Erreur lors du chargement des chauffeurs');
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [filter, isAdmin]);
+
+  const loadMore = async () => {
+    if (!lastDoc || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const driversRef = collection(db, 'drivers');
+      const q = filter === 'all'
+        ? query(driversRef, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE))
+        : query(driversRef, where('status', '==', filter), orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE));
+
+      const snapshot = await getDocs(q);
+      const newDrivers = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Driver[];
+
+      setDrivers(prev => [...prev, ...newDrivers]);
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
+      setHasMore(snapshot.docs.length === PAGE_SIZE);
+    } catch (err) {
+      logger.error('Chargement page suivante', err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleAdminAction = async (action: string, driverId: string, reason?: string) => {
     setProcessing(driverId);
@@ -199,7 +182,7 @@ export default function AdminDriversPage() {
     try {
       if (!auth.currentUser) throw new Error('Non authentifié');
       const idToken = await auth.currentUser.getIdToken(true);
-      
+
       const response = await fetch('/api/admin/manage-driver', {
         method: 'POST',
         headers: {
@@ -210,7 +193,7 @@ export default function AdminDriversPage() {
           action,
           driverId,
           reason,
-          adminUid: auth.currentUser.uid 
+          adminUid: auth.currentUser.uid
         })
       });
 
@@ -224,9 +207,10 @@ export default function AdminDriversPage() {
       setSelectedDriver(null);
       setRejectionReason('');
       setActionModal({ show: false, action: null, driver: null, reason: '' });
-    } catch (err: any) {
-      console.error('Error performing admin action:', err);
-      setError(err.message || 'Erreur lors de la mise à jour du statut');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erreur lors de la mise à jour du statut';
+      logger.error('Action admin sur chauffeur', err instanceof Error ? err : new Error(String(err)));
+      setError(message);
     } finally {
       setProcessing(null);
     }
@@ -246,7 +230,7 @@ export default function AdminDriversPage() {
       if (!currentUser) {
         throw new Error('Vous devez être connecté pour effectuer cette action');
       }
-      
+
       const idToken = await currentUser.getIdToken();
 
       // 2. Appeler l'API de suppression complète
@@ -269,13 +253,13 @@ export default function AdminDriversPage() {
       setDeleteModalOpen(false);
       setDriverToDelete(null);
       setSelectedDriver(null);
-      
+
       return result as DriverDeletionResult;
-    } catch (err: any) {
-      console.error('Error deleting driver:', err);
-      const errorMessage = err.message || 'Erreur lors de la suppression du compte';
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la suppression du compte';
+      logger.error('Suppression chauffeur', err instanceof Error ? err : new Error(String(err)));
       setError(errorMessage);
-      
+
       return {
         success: false,
         deletedCollections: [],
@@ -320,7 +304,7 @@ export default function AdminDriversPage() {
     };
 
     const statusKey = status as keyof typeof styles;
-    const style = styles[statusKey] || 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+    const style = styles[statusKey] || 'bg-slate-500/10 text-slate-500 border-slate-500/20';
     const label = labels[statusKey] || status;
 
     return (
@@ -332,8 +316,8 @@ export default function AdminDriversPage() {
 
   if (isAdmin === null) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
@@ -343,10 +327,10 @@ export default function AdminDriversPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-slate-900">
-      <AdminHeader 
-        title="Gestion des Chauffeurs" 
-        subtitle="Validation et suivi des chauffeurs" 
+    <div className="min-h-screen bg-background text-white">
+      <AdminHeader
+        title="Gestion des Chauffeurs"
+        subtitle="Validation et suivi des chauffeurs"
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -356,21 +340,21 @@ export default function AdminDriversPage() {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`relative overflow-hidden group p-4 rounded-2xl border transition-all duration-500 shadow-sm ${
+              className={`relative overflow-hidden group p-4 rounded-2xl border transition-all duration-500 ${
                 filter === f
-                  ? 'bg-amber-50 border-amber-200 shadow-amber-500/10'
-                  : 'bg-white border-gray-200 hover:border-gray-300'
+                  ? 'bg-primary/10 border-primary/30'
+                  : 'glass-card border-white/5 hover:border-white/10'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className={`text-sm font-semibold capitalize transition-colors ${filter === f ? 'text-amber-600' : 'text-gray-600'}`}>
+                <span className={`text-sm font-semibold capitalize transition-colors ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
                   {f === 'all' ? 'Tous' : f === 'pending' ? 'En attente' : f === 'approved' ? 'Approuvés' : 'Refusés'}
                 </span>
-                <div className={`p-2 rounded-lg transition-colors ${filter === f ? 'bg-amber-500 text-white shadow-sm' : 'bg-gray-100 text-gray-500'}`}>
-                  {f === 'all' ? <ShieldCheck className="w-4 h-4" /> : f === 'pending' ? <AlertTriangle className="w-4 h-4" /> : f === 'approved' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                <div className={`p-2 rounded-lg transition-colors ${filter === f ? 'bg-primary text-black' : 'bg-white/5 text-slate-400'}`}>
+                  {f === 'all' ? <MaterialIcon name="verified_user" size="sm" /> : f === 'pending' ? <MaterialIcon name="warning" size="sm" /> : f === 'approved' ? <MaterialIcon name="check_circle" size="sm" /> : <MaterialIcon name="cancel" size="sm" />}
                 </div>
               </div>
-              {filter === f && <div className="absolute bottom-0 left-0 h-1 w-full bg-amber-500" />}
+              {filter === f && <div className="absolute bottom-0 left-0 h-1 w-full bg-primary" />}
             </button>
           ))}
         </div>
@@ -379,19 +363,19 @@ export default function AdminDriversPage() {
         <div className="space-y-4 mb-6">
           {error && (
             <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <AlertTriangle className="w-5 h-5 shrink-0" />
+              <MaterialIcon name="warning" size="md" className="shrink-0" />
               <p className="text-sm font-medium flex-1">{error}</p>
               <button onClick={() => setError(null)} className="p-1 hover:bg-rose-500/10 rounded-lg">
-                <XCircle className="w-4 h-4" />
+                <MaterialIcon name="cancel" size="sm" />
               </button>
             </div>
           )}
           {success && (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 shadow-sm">
-              <CheckCircle className="w-5 h-5 shrink-0" />
+            <div className="p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+              <MaterialIcon name="check_circle" size="md" className="shrink-0" />
               <p className="text-sm font-medium flex-1">{success}</p>
-              <button onClick={() => setSuccess(null)} className="p-1 hover:bg-emerald-500/10 rounded-lg">
-                <XCircle className="w-4 h-4" />
+              <button onClick={() => setSuccess(null)} className="p-1 hover:bg-green-500/10 rounded-lg">
+                <MaterialIcon name="cancel" size="sm" />
               </button>
             </div>
           )}
@@ -400,77 +384,77 @@ export default function AdminDriversPage() {
         {/* Search & Action Bar */}
         <div className="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between">
           <div className="relative w-full md:w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Rechercher un chauffeur..." 
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 transition-all shadow-sm"
+            <MaterialIcon name="search" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Rechercher un chauffeur..."
+              className="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl text-sm"
             />
           </div>
           <div className="flex items-center gap-2">
-            <button className="p-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-600 transition shadow-sm">
-              <FilterIcon className="w-4 h-4" />
+            <button className="p-2.5 glass-card border border-white/5 rounded-xl hover:bg-white/5 text-slate-400 transition">
+              <MaterialIcon name="filter_list" size="sm" />
             </button>
           </div>
         </div>
 
         {/* Liste des chauffeurs */}
-        <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden shadow-sm">
+        <div className="glass-card border border-white/5 rounded-3xl overflow-hidden">
           {loading ? (
             <DriverSkeleton />
           ) : drivers.length === 0 ? (
             <div className="py-24 text-center">
-              <div className="inline-flex p-4 rounded-full bg-gray-50 mb-4 text-gray-400">
-                <UserIcon className="w-12 h-12" />
+              <div className="inline-flex p-4 rounded-full bg-white/5 mb-4 text-slate-500">
+                <MaterialIcon name="person" size="xl" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900">Aucun chauffeur trouvé</h3>
-              <p className="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
-                Il n'y a aucun profil correspondant à votre filtre "{filter}" pour le moment.
+              <h3 className="text-lg font-semibold text-white">Aucun chauffeur trouvé</h3>
+              <p className="text-slate-400 text-sm mt-1 max-w-xs mx-auto">
+                Il n&apos;y a aucun profil correspondant à votre filtre &quot;{filter}&quot; pour le moment.
               </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-white/5">
+                <thead className="bg-white/[0.03]">
                   <tr>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Chauffeur</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Contact</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Véhicule</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Statut</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-widest">Date</th>
-                    <th className="px-6 py-4 text-right text-[11px] font-bold text-gray-500 uppercase tracking-widest">Détails</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Chauffeur</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Contact</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Véhicule</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Statut</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Date</th>
+                    <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-500 uppercase tracking-widest">Détails</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {drivers.map((driver) => (
-                    <tr key={driver.id} className="group hover:bg-gray-50 transition-colors">
+                <tbody className="divide-y divide-white/5">
+                  {drivers.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map((driver) => (
+                    <tr key={driver.id} className="group hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-4">
-                          <div className="h-10 w-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 font-bold">
+                          <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold">
                             {(driver.firstName || 'U').charAt(0).toUpperCase()}
                             {(driver.lastName || '').charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <div 
-                              className="text-sm font-semibold text-gray-900 group-hover:text-amber-600 transition-colors cursor-pointer" 
+                            <div
+                              className="text-sm font-semibold text-white group-hover:text-primary transition-colors cursor-pointer"
                               onClick={() => setSelectedDriver(driver)}
                             >
                               {driver.firstName || 'Utilisateur'} {driver.lastName || ''}
                             </div>
-                            <div className="text-[11px] text-gray-500 font-medium">Permis: {driver.licenseNumber || 'N/A'}</div>
+                            <div className="text-[11px] text-slate-500 font-medium">Permis: {driver.licenseNumber || 'N/A'}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-300">{driver.email}</div>
-                        <div className="text-[11px] text-gray-500">{driver.phone || driver.phoneNumber}</div>
+                        <div className="text-sm text-slate-300">{driver.email}</div>
+                        <div className="text-[11px] text-slate-500">{driver.phone || driver.phoneNumber}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <Car className="w-3 h-3 text-[#f29200]" />
-                          <div className="text-sm text-gray-300 font-medium">{driver.car?.model || driver.carModel || 'N/A'}</div>
+                          <MaterialIcon name="directions_car" size="sm" className="text-primary" />
+                          <div className="text-sm text-slate-300 font-medium">{driver.car?.model || driver.carModel || 'N/A'}</div>
                         </div>
-                        <div className="text-[11px] text-gray-500 uppercase tracking-tighter opacity-70">
+                        <div className="text-[11px] text-slate-500 uppercase tracking-tighter opacity-70">
                           {driver.car?.plate || driver.carPlate || 'N/A'} • {driver.car?.color || driver.carColor || 'N/A'}
                         </div>
                       </td>
@@ -484,23 +468,67 @@ export default function AdminDriversPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-[11px] font-medium text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-[11px] font-medium text-slate-500">
                         {driver.createdAt instanceof Timestamp
                           ? driver.createdAt.toDate().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : new Date(driver.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          : new Date(driver.createdAt as number).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button
                           onClick={() => setSelectedDriver(driver)}
-                          className="p-2 hover:bg-white/10 rounded-xl transition-colors text-gray-400 hover:text-white"
+                          className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
                         >
-                          <ChevronRight className="w-5 h-5" />
+                          <MaterialIcon name="chevron_right" size="md" />
                         </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+
+              {/* Pagination controls */}
+              <div className="flex items-center justify-between px-6 py-4 border-t border-white/5">
+                <span className="text-xs text-slate-500">
+                  {drivers.length} chauffeur{drivers.length !== 1 ? 's' : ''} chargés
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                    disabled={currentPage === 0}
+                    className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    title="Page précédente"
+                  >
+                    <MaterialIcon name="chevron_left" size="sm" />
+                  </button>
+                  <span className="text-xs text-slate-400 px-2">
+                    {currentPage + 1} / {Math.ceil(drivers.length / PAGE_SIZE) || 1}
+                  </span>
+                  {(currentPage + 1) * PAGE_SIZE < drivers.length ? (
+                    <button
+                      onClick={() => setCurrentPage(p => p + 1)}
+                      className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 transition-all"
+                      title="Page suivante"
+                    >
+                      <MaterialIcon name="chevron_right" size="sm" />
+                    </button>
+                  ) : hasMore ? (
+                    <button
+                      onClick={() => {
+                        loadMore();
+                        setCurrentPage(p => p + 1);
+                      }}
+                      disabled={loadingMore}
+                      className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-xs font-semibold hover:bg-primary/20 transition-all disabled:opacity-50"
+                    >
+                      {loadingMore ? 'Chargement...' : 'Charger plus'}
+                    </button>
+                  ) : (
+                    <button disabled className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 opacity-30 cursor-not-allowed">
+                      <MaterialIcon name="chevron_right" size="sm" />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -510,23 +538,23 @@ export default function AdminDriversPage() {
       {selectedDriver && (
         <div className="fixed inset-0 z-50 flex items-center justify-end">
           {/* Overlay */}
-          <div 
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={() => { setSelectedDriver(null); setRejectionReason(''); }}
           />
-          
+
           {/* Content */}
-          <div className="relative h-full w-full max-w-2xl bg-[#0d0d0d] border-l border-white/10 shadow-2xl overflow-y-auto animate-in slide-in-from-right duration-500">
+          <div className="relative h-full w-full max-w-2xl bg-[#0d0d0d] border-l border-white/10 overflow-y-auto animate-in slide-in-from-right duration-500">
             <div className="sticky top-0 z-50 bg-[#0d0d0d]/80 backdrop-blur-xl border-b border-white/5 p-6 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-[#f29200] to-amber-400 flex items-center justify-center text-black font-black text-xl shadow-[0_0_20px_rgba(242,146,0,0.3)]">
+                <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-primary to-[#ffae33] flex items-center justify-center text-black font-black text-xl shadow-[0_0_20px_rgba(242,146,0,0.3)]">
                   {selectedDriver.firstName[0]}{selectedDriver.lastName[0]}
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">{selectedDriver.firstName} {selectedDriver.lastName}</h2>
+                  <h2 className="text-xl font-bold text-white">{selectedDriver.firstName} {selectedDriver.lastName}</h2>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(selectedDriver.status)}
-                    <span className="text-[10px] text-gray-500 font-mono">ID: {selectedDriver.id.substring(0, 8)}...</span>
+                    <span className="text-[10px] text-slate-500 font-mono">ID: {selectedDriver.id.substring(0, 8)}...</span>
                   </div>
                 </div>
               </div>
@@ -534,7 +562,7 @@ export default function AdminDriversPage() {
                 onClick={() => { setSelectedDriver(null); setRejectionReason(''); }}
                 className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors"
               >
-                <XCircle className="w-6 h-6 text-gray-400" />
+                <MaterialIcon name="cancel" size="lg" className="text-slate-400" />
               </button>
             </div>
 
@@ -542,10 +570,10 @@ export default function AdminDriversPage() {
               {/* Informations Personnelles */}
               <section>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-[#f29200]/10 rounded-lg text-[#f29200]">
-                    <UserIcon className="w-5 h-5" />
+                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                    <MaterialIcon name="person" size="md" />
                   </div>
-                  <h3 className="text-lg font-bold">Informations Personnelles</h3>
+                  <h3 className="text-lg font-bold text-white">Informations Personnelles</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 p-6 bg-white/[0.02] border border-white/5 rounded-2xl">
                   {[
@@ -557,8 +585,8 @@ export default function AdminDriversPage() {
                     { label: 'Ville', value: (selectedDriver.city || 'Non renseignée') },
                   ].map((item, idx) => (
                     <div key={idx}>
-                      <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">{item.label}</span>
-                      <p className="text-sm text-gray-200 font-medium">{item.value || 'N/A'}</p>
+                      <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{item.label}</span>
+                      <p className="text-sm text-slate-300 font-medium">{item.value || 'N/A'}</p>
                     </div>
                   ))}
                 </div>
@@ -567,10 +595,10 @@ export default function AdminDriversPage() {
               {/* Informations Véhicule */}
               <section>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-[#f29200]/10 rounded-lg text-[#f29200]">
-                    <Car className="w-5 h-5" />
+                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                    <MaterialIcon name="directions_car" size="md" />
                   </div>
-                  <h3 className="text-lg font-bold">Véhicule</h3>
+                  <h3 className="text-lg font-bold text-white">Véhicule</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 p-6 bg-white/[0.02] border border-white/5 rounded-2xl">
                   {[
@@ -579,8 +607,8 @@ export default function AdminDriversPage() {
                     { label: 'Couleur', value: (selectedDriver.car?.color || selectedDriver.carColor) },
                   ].map((item, idx) => (
                     <div key={idx}>
-                      <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">{item.label}</span>
-                      <p className="text-sm text-gray-200 font-medium">{item.value || 'N/A'}</p>
+                      <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{item.label}</span>
+                      <p className="text-sm text-slate-300 font-medium">{item.value || 'N/A'}</p>
                     </div>
                   ))}
                 </div>
@@ -589,12 +617,12 @@ export default function AdminDriversPage() {
               {/* Documents */}
               <section>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-[#f29200]/10 rounded-lg text-[#f29200]">
-                    <FileText className="w-5 h-5" />
+                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                    <MaterialIcon name="description" size="md" />
                   </div>
-                  <h3 className="text-lg font-bold">Documents Officiels</h3>
+                  <h3 className="text-lg font-bold text-white">Documents Officiels</h3>
                 </div>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {[
                     { label: 'Photo de profil', src: selectedDriver.documents.biometricPhoto, id: 'biometricPhoto' },
@@ -609,8 +637,8 @@ export default function AdminDriversPage() {
                     { label: 'Véhicule (Intérieur)', src: selectedDriver.documents.vehicleInterior, id: 'vehicleInterior' },
                   ].map((doc, idx) => doc.src ? (
                     <div key={idx} className="group flex flex-col gap-2">
-                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{doc.label}</span>
-                      <div className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-white/5 ring-1 ring-white/5 hover:ring-[#f29200]/50 transition-all duration-300">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{doc.label}</span>
+                      <div className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-white/5 ring-1 ring-white/5 hover:ring-primary/50 transition-all duration-300">
                         <a href={doc.src} target="_blank" rel="noopener noreferrer" className="block h-full w-full">
                           <Image
                             src={doc.src}
@@ -626,10 +654,10 @@ export default function AdminDriversPage() {
                     </div>
                   ) : null)}
                 </div>
-                
+
                 {Object.values(selectedDriver.documents).every(v => !v) && (
                   <div className="p-8 text-center bg-white/5 border border-white/10 rounded-2xl">
-                    <p className="text-gray-500 text-sm">Aucun document numérique disponible.</p>
+                    <p className="text-slate-500 text-sm">Aucun document numérique disponible.</p>
                   </div>
                 )}
               </section>
@@ -639,10 +667,10 @@ export default function AdminDriversPage() {
                 {selectedDriver.status === 'pending' ? (
                   <div className="space-y-6">
                     <div className="flex items-center gap-3">
-                      < ShieldCheck className="w-5 h-5 text-emerald-500" />
+                      <MaterialIcon name="verified_user" size="md" className="text-emerald-500" />
                       <h3 className="text-lg font-bold text-emerald-500">Validation Requise</h3>
                     </div>
-                    
+
                     <div className="flex flex-col gap-4">
                       <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
                         <p className="text-xs text-emerald-400 mb-4 font-medium italic">
@@ -662,12 +690,12 @@ export default function AdminDriversPage() {
                           value={rejectionReason}
                           onChange={(e) => setRejectionReason(e.target.value)}
                           placeholder="Motif détaillé du refus..."
-                          className="w-full p-4 bg-black/40 border border-white/10 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/30 transition-all min-h-[100px]"
+                          className="glass-input w-full p-4 rounded-2xl text-sm min-h-[100px]"
                         />
                         <button
                           onClick={() => handleAdminAction('reject', selectedDriver.id, rejectionReason.trim())}
                           disabled={processing === selectedDriver.id || !rejectionReason.trim()}
-                          className="w-full h-12 bg-white/5 hover:bg-rose-500/10 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 text-gray-400 font-bold uppercase text-xs tracking-widest rounded-2xl transition-all disabled:opacity-50"
+                          className="w-full h-12 bg-white/5 hover:bg-rose-500/10 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 text-slate-400 font-bold uppercase text-xs tracking-widest rounded-2xl transition-all disabled:opacity-50"
                         >
                           {processing === selectedDriver.id ? 'Traitement...' : 'Refuser l\'inscription'}
                         </button>
@@ -676,7 +704,7 @@ export default function AdminDriversPage() {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    <h3 className="text-lg font-bold">Options Administratives</h3>
+                    <h3 className="text-lg font-bold text-white">Options Administratives</h3>
                     <div className="grid grid-cols-2 gap-4">
                       {selectedDriver.isSuspended ? (
                         <button
@@ -712,46 +740,45 @@ export default function AdminDriversPage() {
       {actionModal.show && actionModal.driver && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setActionModal({ show: false, action: null, driver: null, reason: '' })} />
-          <div className="relative bg-[#1a1a1a] border border-white/10 rounded-3xl max-w-md w-full p-8 shadow-2xl animate-in zoom-in-95 duration-300">
+          <div className="relative glass-card border border-white/10 rounded-3xl max-w-md w-full p-8 animate-in zoom-in-95 duration-300">
             <div className="flex items-center gap-4 mb-6">
               <div className="p-3 bg-red-500/10 rounded-2xl text-red-500">
-                <AlertTriangle className="w-6 h-6" />
+                <MaterialIcon name="warning" size="lg" />
               </div>
-              <h3 className="text-xl font-bold">
+              <h3 className="text-xl font-bold text-white">
                 {actionModal.action === 'suspend' ? 'Suspendre' : 'Désactiver'} le chauffeur
               </h3>
             </div>
-             
-            <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-              Vous êtes sur le point de {actionModal.action === 'suspend' ? 'suspendre temporairement' : 'désactiver définitivement'} le compte de 
+
+            <p className="text-slate-400 text-sm mb-6 leading-relaxed">
+              Vous êtes sur le point de {actionModal.action === 'suspend' ? 'suspendre temporairement' : 'désactiver définitivement'} le compte de
               <strong className="text-white ml-1">{actionModal.driver.firstName} {actionModal.driver.lastName}</strong>.
             </p>
 
             <div className="space-y-2 mb-8">
-              <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Raison de l'action</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Raison de l&apos;action</label>
               <textarea
                 value={actionModal.reason}
                 onChange={(e) => setActionModal({ ...actionModal, reason: e.target.value })}
                 placeholder="Précisez la raison..."
-                className="w-full p-4 bg-black/40 border border-white/10 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[#f29200]/30 transition-all min-h-[100px]"
+                className="glass-input w-full p-4 rounded-2xl text-sm min-h-[100px]"
               />
             </div>
 
             <div className="flex gap-4">
               <button
                 onClick={() => setActionModal({ show: false, action: null, driver: null, reason: '' })}
-                className="flex-1 h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-bold uppercase transition-all"
+                className="flex-1 h-12 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-bold uppercase transition-all text-slate-300"
               >
                 Annuler
               </button>
               <button
                 onClick={() => {
                   if (actionModal.action && actionModal.driver && actionModal.reason.trim()) {
-                    handleAdminAction(actionModal.action as any, actionModal.driver.id, actionModal.reason.trim());
-                  }
+                    handleAdminAction(actionModal.action, actionModal.driver.id, actionModal.reason.trim());                  }
                 }}
                 disabled={!actionModal.reason.trim() || !!processing}
-                className="flex-1 h-12 bg-red-600 hover:bg-red-500 text-black font-black rounded-2xl text-xs font-bold uppercase transition-all shadow-[0_0_20px_rgba(220,38,38,0.2)] disabled:opacity-50"
+                className="flex-1 h-12 bg-red-600 hover:bg-red-500 text-white font-black rounded-2xl text-xs uppercase transition-all shadow-[0_0_20px_rgba(220,38,38,0.2)] disabled:opacity-50"
               >
                 Confirmer
               </button>
@@ -769,6 +796,7 @@ export default function AdminDriversPage() {
           driver={driverToDelete}
         />
       )}
+      <BottomNav items={adminNavItems} />
     </div>
   );
 }

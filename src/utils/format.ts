@@ -147,3 +147,13 @@ export const formatDateTime = (date: Date): string => {
     minute: '2-digit'
   }).format(date);
 };
+
+/**
+ * Convertit un timestamp Firestore ({ seconds }) ou une Date en Date JS,
+ * puis la formate en date courte avec heure (ex: "4 nov. 13:45").
+ */
+export const formatFirestoreDate = (ts: { seconds: number } | Date | null): string => {
+  if (!ts) return '';
+  const d = ts instanceof Date ? ts : new Date((ts as { seconds: number }).seconds * 1000);
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+};

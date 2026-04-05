@@ -345,7 +345,7 @@ export interface VehicleCollection {
  */
 export interface ConfigCollection {
   key: string;
-  value: any;
+  value: unknown;
   updatedAt: Date;
 }
 
@@ -424,7 +424,7 @@ export interface AuditLogCollection {
   userId: string;
   action: string;
   resource: string;
-  details: any;
+  details: unknown;
   ipAddress?: string;
   userAgent?: string;
   timestamp: Date;
@@ -619,7 +619,7 @@ export interface AuditLogCollection {
   userId: string;
   action: string;
   resource: string;
-  details: any;
+  details: unknown;
   ipAddress?: string;
   userAgent?: string;
   timestamp: Date;
@@ -823,7 +823,7 @@ export interface NotificationCollection {
   title: string;
   body: string;
   type: 'booking_request' | 'trip_started' | 'trip_completed' | 'driver_arrived' | 'payment_received' | 'food_order' | 'food_order_update' | 'alert' | 'info';
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   read: boolean;
   createdAt: Date;
 }

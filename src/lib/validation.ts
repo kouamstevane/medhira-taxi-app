@@ -182,7 +182,7 @@ export interface ValidationRule {
   minLength?: number;
   maxLength?: number;
   pattern?: RegExp;
-  custom?: (value: any) => boolean;
+  custom?: (value: unknown) => boolean;
   message?: string;
 }
 
@@ -194,7 +194,7 @@ export interface ValidationErrors {
   [key: string]: string;
 }
 
-export const validateObject = (data: Record<string, any>, schema: ValidationSchema): ValidationErrors => {
+export const validateObject = (data: Record<string, unknown>, schema: ValidationSchema): ValidationErrors => {
   const errors: ValidationErrors = {};
 
   for (const [field, rules] of Object.entries(schema)) {
@@ -210,18 +210,18 @@ export const validateObject = (data: Record<string, any>, schema: ValidationSche
     if (!value) continue;
 
     // Length validations
-    if (rules.minLength && value.length < rules.minLength) {
+    if (rules.minLength && typeof value === 'string' && value.length < rules.minLength) {
       errors[field] = rules.message || `${field} doit contenir au moins ${rules.minLength} caractères`;
       continue;
     }
 
-    if (rules.maxLength && value.length > rules.maxLength) {
+    if (rules.maxLength && typeof value === 'string' && value.length > rules.maxLength) {
       errors[field] = rules.message || `${field} ne doit pas dépasser ${rules.maxLength} caractères`;
       continue;
     }
 
     // Pattern validation
-    if (rules.pattern && !rules.pattern.test(value)) {
+    if (rules.pattern && typeof value === 'string' && !rules.pattern.test(value)) {
       errors[field] = rules.message || `${field} n'est pas valide`;
       continue;
     }

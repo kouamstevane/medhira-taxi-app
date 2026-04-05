@@ -35,7 +35,7 @@ export class AgoraService {
   // Event handlers
   private onUserJoinedCallbacks: Array<(user: IAgoraRTCRemoteUser) => void> = [];
   private onUserLeftCallbacks: Array<(user: IAgoraRTCRemoteUser) => void> = [];
-  private onErrorCallbacks: Array<(error: any) => void> = [];
+  private onErrorCallbacks: Array<(error: Error) => void> = [];
   private onNetworkQualityCallbacks: Array<(quality: NetworkQuality) => void> = [];
 
   /**
@@ -65,7 +65,7 @@ export class AgoraService {
       // Créer le client RTC
       this.client = AgoraRTC.createClient({
         mode: finalConfig.mode,
-        codec: finalConfig.codec as any  // Cast pour compatibilité agora-rtc-sdk-ng
+        codec: finalConfig.codec as "vp8" | "h264"
       });
 
       // Note: setAudioProfile n'est plus disponible dans agora-rtc-sdk-ng 4.x
@@ -238,7 +238,7 @@ export class AgoraService {
     });
 
     // Erreur de connexion
-    this.client.on('error', (error: any) => {
+    this.client.on('error', (error: Error) => {
       console.error('[AgoraService] Agora error:', error);
 
       // Notifier les callbacks
@@ -254,7 +254,7 @@ export class AgoraService {
     });
 
     // Avertissement
-    this.client.on('warning', (warning: any) => {
+    this.client.on('warning', (warning: number) => {
       console.warn('[AgoraService] Agora warning:', warning);
     });
   }
@@ -276,7 +276,7 @@ export class AgoraService {
   /**
    * Abonne à l'événement error
    */
-  onError(callback: (error: any) => void): void {
+  onError(callback: (error: Error) => void): void {
     this.onErrorCallbacks.push(callback);
   }
 

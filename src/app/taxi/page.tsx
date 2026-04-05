@@ -20,6 +20,8 @@ import { db } from '@/config/firebase';
 import { startAutomaticSearch, stopAutomaticSearch } from '@/services/matching/automaticSearch';
 import { BonusSelector } from './components/BonusSelector';
 import { useAuth } from '@/hooks/useAuth';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { BottomNav } from '@/components/ui/BottomNav';
 
 type Step = 'form' | 'searching' | 'driver_found' | 'completed' | 'failed';
 
@@ -287,210 +289,180 @@ export default function TaxiPage() {
   }, [bookingId, step]);
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <header className="bg-[#101010] text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg sm:text-2xl font-bold truncate">Commander un taxi</h1>
-              <p className="text-gray-300 text-xs sm:text-sm mt-1 hidden sm:block">Réservez votre course en quelques clics</p>
+    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
+      <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-hidden">
+        {/* Header */}
+        <header className="sticky top-0 z-20 flex items-center p-4 bg-background/80 backdrop-blur-xl border-b border-white/5">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center justify-center size-10 rounded-full glass-card text-white active:scale-95 transition-transform"
+          >
+            <MaterialIcon name="arrow_back" size="md" />
+          </button>
+          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Réserver un taxi</h1>
+        </header>
+
+        {/* Content */}
+        <main className="flex-1 px-4 py-6">
+          {step === 'form' && (
+            <div className="space-y-6">
+              <NewRideForm
+                onBookingCreated={handleBookingCreated}
+                onSearchDriver={handleSearchDriver}
+              />
             </div>
-            <button
-              onClick={() => router.back()}
-              className="px-3 sm:px-4 py-2 bg-gray-700 active:bg-gray-600 hover:bg-gray-600 rounded-lg transition touch-manipulation flex-shrink-0"
-              style={{ minHeight: '44px', minWidth: '44px' }}
-            >
-              <span className="hidden sm:inline">Retour</span>
-              <span className="sm:hidden">←</span>
-            </button>
-          </div>
-        </div>
-      </header>
+          )}
 
-      <main className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 py-4 sm:py-8">
-        {step === 'form' && (
-          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 md:p-8">
-            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Nouvelle course</h2>
-
-            <NewRideForm
-              onBookingCreated={handleBookingCreated}
-              onSearchDriver={handleSearchDriver}
+          {step === 'searching' && bookingId && (
+            <SearchingDriverBottomSheet
+              bookingId={bookingId}
+              pickupAddress={pickupAddress}
+              destinationAddress={destinationAddress}
+              timeRemaining={timeRemaining}
+              onCancel={handleCancelSearch}
+              isAutoSearching={isAutoSearching}
             />
-          </div>
-        )}
+          )}
 
-        {step === 'searching' && bookingId && (
-          <SearchingDriverBottomSheet
-            bookingId={bookingId}
-            pickupAddress={pickupAddress}
-            destinationAddress={destinationAddress}
-            timeRemaining={timeRemaining}
-            onCancel={handleCancelSearch}
-            isAutoSearching={isAutoSearching}
-          />
-        )}
-
-        {step === 'failed' && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
-            <div className="bg-white w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 sm:p-8 text-center transform transition-all duration-300 animate-slideUp">
-              {/* Icône d'erreur animée */}
-              <div className="mb-4">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto animate-bounce">
-                  <svg className="w-8 h-8 sm:w-10 sm:h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
+          {step === 'failed' && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
+              <div className="glass-card w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 sm:p-8 text-center border border-white/10">
+                {/* Icône d'erreur */}
+                <div className="mb-5">
+                  <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto border border-destructive/20">
+                    <MaterialIcon name="error" className="text-destructive text-[32px]" />
+                  </div>
                 </div>
-              </div>
 
-              {/* Titre et message */}
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
-                Aucun chauffeur disponible
-              </h2>
-              <p className="text-sm sm:text-base text-gray-600 mb-6">
-                Désolé, aucun chauffeur n&apos;est disponible dans votre zone pour le moment.
-                Veuillez réessayer dans quelques instants.
-              </p>
+                <h2 className="text-xl font-bold text-white mb-2">
+                  Aucun chauffeur disponible
+                </h2>
+                <p className="text-sm text-slate-400 mb-6">
+                  Désolé, aucun chauffeur n&apos;est disponible dans votre zone pour le moment.
+                </p>
 
-              {/* Sélecteur de Bonus pour le retry */}
-              <div className="mb-6 text-left bg-gray-50 p-4 rounded-xl border border-gray-100">
-                <BonusSelector
-                  selectedBonus={retryBonus}
-                  onSelect={setRetryBonus}
-                />
-              </div>
+                {/* Sélecteur de Bonus pour le retry */}
+                <div className="mb-6 text-left glass-card p-4 rounded-xl border border-white/5">
+                  <BonusSelector
+                    selectedBonus={retryBonus}
+                    onSelect={setRetryBonus}
+                  />
+                </div>
 
-              {/* Bouton réessayer */}
-              <button
-                onClick={async () => {
-                  if (!bookingId) return;
+                {/* Bouton réessayer */}
+                <button
+                  onClick={async () => {
+                    if (!bookingId) return;
 
-                  await triggerHaptic(ImpactStyle.Medium); //  Haptic feedback (medJira.md #93)
-                  console.log('[RETRY] Début du réessai pour bookingId:', bookingId);
+                    await triggerHaptic(ImpactStyle.Medium);
+                    console.log('[RETRY] Début du réessai pour bookingId:', bookingId);
 
-                  try {
-                    // Récupérer les infos du booking
-                    const bookingRef = doc(db, 'bookings', bookingId);
-                    const bookingSnap = await getDoc(bookingRef);
+                    try {
+                      const bookingRef = doc(db, 'bookings', bookingId);
+                      const bookingSnap = await getDoc(bookingRef);
 
-                    if (!bookingSnap.exists()) {
-                      console.error('[RETRY] Booking introuvable');
-                      return;
-                    }
-
-                    const data = bookingSnap.data();
-                    console.log('[RETRY] Données du booking récupérées:', data);
-
-                    // Réinitialiser complètement le booking
-                    await updateDoc(bookingRef, {
-                      status: 'pending',
-                      driverId: null,
-                      driverName: null,
-                      driverPhone: null,
-                      failureReason: null,
-                      updatedAt: serverTimestamp(),
-                      // Ajouter le bonus si sélectionné (conditionnel pour éviter undefined)
-                      ...(retryBonus > 0 && { bonus: retryBonus }),
-                    });
-
-                    console.log('[RETRY] Booking réinitialisé à pending');
-
-                    // Réinitialiser le timer AVANT de passer en searching
-                    setTimeRemaining(60);
-                    
-                    // Passer en mode recherche
-                    setStep('searching');
-
-                    // Lancer la recherche après un délai
-                    setTimeout(async () => {
-                      try {
-                        console.log('[RETRY] Lancement de findDriverWithRetry');
-                        const { findDriverWithRetry } = await import('@/services/matching');
-
-                        await findDriverWithRetry(
-                          bookingId,
-                          data.pickupLocation,
-                          data.destination,
-                          data.price,
-                          data.carType,
-                          retryBonus || data.bonus || 0 // Passer le bonus
-                        );
-
-                        console.log('[RETRY] findDriverWithRetry terminé');
-                      } catch (error) {
-                        console.error('[RETRY] Erreur findDriverWithRetry:', error);
+                      if (!bookingSnap.exists()) {
+                        console.error('[RETRY] Booking introuvable');
+                        return;
                       }
-                    }, 500);
-                  } catch (error) {
-                    console.error('[RETRY] Erreur lors du redémarrage:', error);
-                    setStep('failed');
-                  }
-                }}
-                className="w-full bg-gradient-to-r from-[#f29200] to-[#e68600] hover:from-[#e68600] hover:to-[#d67a00] active:from-[#d67a00] active:to-[#c56900] text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl touch-manipulation"
-                style={{ minHeight: '56px' }}
-              >
-                Réessayer
-              </button>
 
-              {/* Bouton retour à l'accueil */}
-              <button
-                onClick={async () => {
-                  await triggerHaptic(ImpactStyle.Light); //  Haptic feedback (medJira.md #93)
-                  setStep('form');
-                  setBookingId(null);
-                  router.push('/dashboard');
-                }}
-                className="w-full mt-3 bg-white hover:bg-gray-50 text-gray-700 font-medium py-3 px-6 rounded-xl border-2 border-gray-300 transition-all touch-manipulation"
-                style={{ minHeight: '56px' }}
-              >
-                Retour à l&apos;accueil
-              </button>
+                      const data = bookingSnap.data();
 
-              {/* Info supplémentaire */}
-              <p className="text-xs text-gray-500 mt-4">
-                💡 Conseil : Essayez à une heure différente pour plus de disponibilité
-              </p>
-            </div>
-          </div>
-        )}
+                      await updateDoc(bookingRef, {
+                        status: 'pending',
+                        driverId: null,
+                        driverName: null,
+                        driverPhone: null,
+                        failureReason: null,
+                        updatedAt: serverTimestamp(),
+                        ...(retryBonus > 0 && { bonus: retryBonus }),
+                      });
 
-        {step === 'driver_found' && bookingId && (
-          <DriverFoundView bookingId={bookingId} onComplete={() => setStep('completed')} />
-        )}
+                      setTimeRemaining(60);
+                      setStep('searching');
 
-        {step === 'completed' && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
-            <div className="bg-white w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 sm:p-8 text-center transform transition-all duration-300 animate-slideUp">
-              {/* Icône de succès */}
-              <div className="mb-4">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                  <svg className="w-10 h-10 sm:w-12 sm:h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
+                      setTimeout(async () => {
+                        try {
+                          const { findDriverWithRetry } = await import('@/services/matching');
+                          await findDriverWithRetry(
+                            bookingId,
+                            data.pickupLocation,
+                            data.destination,
+                            data.price,
+                            data.carType,
+                            retryBonus || data.bonus || 0
+                          );
+                        } catch (error) {
+                          console.error('[RETRY] Erreur findDriverWithRetry:', error);
+                        }
+                      }, 500);
+                    } catch (error) {
+                      console.error('[RETRY] Erreur lors du redémarrage:', error);
+                      setStep('failed');
+                    }
+                  }}
+                  className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                >
+                  <MaterialIcon name="refresh" size="md" />
+                  Réessayer
+                </button>
+
+                {/* Bouton retour */}
+                <button
+                  onClick={async () => {
+                    await triggerHaptic(ImpactStyle.Light);
+                    setStep('form');
+                    setBookingId(null);
+                    router.push('/dashboard');
+                  }}
+                  className="w-full mt-3 h-14 glass-card text-slate-300 font-semibold rounded-2xl border border-white/10 active:scale-[0.98] transition-transform flex items-center justify-center"
+                >
+                  Retour à l&apos;accueil
+                </button>
+
+                <p className="text-xs text-slate-500 mt-4">
+                  Conseil : Essayez à une heure différente pour plus de disponibilité
+                </p>
               </div>
-
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Course terminée !</h2>
-              <p className="text-sm sm:text-base text-gray-600 mb-6">
-                Merci d&apos;avoir utilisé Medjira Taxi
-              </p>
-              <button
-                onClick={async () => {
-                  await triggerHaptic(ImpactStyle.Medium); //  Haptic feedback (medJira.md #93)
-                  setStep('form');
-                  setBookingId(null);
-                  setPickupAddress('');
-                  setDestinationAddress('');
-                }}
-                className="w-full bg-gradient-to-r from-[#f29200] to-[#e68600] hover:from-[#e68600] hover:to-[#d67a00] text-white font-bold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl touch-manipulation"
-                style={{ minHeight: '56px' }}
-              >
-                Nouvelle course
-              </button>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+
+          {step === 'driver_found' && bookingId && (
+            <DriverFoundView bookingId={bookingId} onComplete={() => setStep('completed')} />
+          )}
+
+          {step === 'completed' && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
+              <div className="glass-card w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 sm:p-8 text-center border border-white/10">
+                <div className="mb-5">
+                  <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto border border-green-500/20">
+                    <MaterialIcon name="check_circle" className="text-green-500 text-[32px]" />
+                  </div>
+                </div>
+
+                <h2 className="text-xl font-bold text-white mb-2">Course terminée !</h2>
+                <p className="text-sm text-slate-400 mb-6">
+                  Merci d&apos;avoir utilisé Medhira Taxi
+                </p>
+                <button
+                  onClick={async () => {
+                    await triggerHaptic(ImpactStyle.Medium);
+                    setStep('form');
+                    setBookingId(null);
+                    setPickupAddress('');
+                    setDestinationAddress('');
+                  }}
+                  className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                >
+                  <MaterialIcon name="add" size="md" />
+                  Nouvelle course
+                </button>
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
+      <BottomNav />
     </div>
   );
 }

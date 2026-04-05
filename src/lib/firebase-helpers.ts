@@ -6,7 +6,7 @@
  * @module lib/firebase-helpers
  */
 
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { UserData, Booking, Transaction, Wallet } from '@/types';
 import { DEFAULT_PRICING, CURRENCY_CODE, PEAK_HOURS } from '@/utils/constants';
@@ -137,9 +137,18 @@ export const getOrCreateWallet = async (userId: string): Promise<Wallet> => {
     userId,
     balance: 0,
     currency: CURRENCY_CODE,
-    updatedAt: serverTimestamp() as any,
+    updatedAt: typedServerTimestamp(),
   };
 
   await setDoc(walletRef, newWallet);
   return newWallet;
 };
+
+/**
+ * Typed server timestamp for Firestore write operations.
+ * Use instead of `serverTimestamp() as any` or `serverTimestamp() as Timestamp`.
+ * The sentinel resolves to a Timestamp server-side, but before write it's a FieldValue.
+ */
+export function typedServerTimestamp(): Timestamp {
+  return serverTimestamp() as Timestamp;
+}

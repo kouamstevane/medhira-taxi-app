@@ -91,25 +91,26 @@ class EmailVerificationService {
       });
 
       return result.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
       console.error('[EmailVerificationService] Erreur lors de l\'envoi de l\'email:', {
-        code: error.code,
-        message: error.message,
+        code: err.code,
+        message: err.message,
         email,
       });
 
       // Gérer les erreurs spécifiques
-      if (error.code === 'unauthenticated') {
+      if (err.code === 'unauthenticated') {
         throw new Error('Vous devez être connecté pour effectuer cette action.');
-      } else if (error.code === 'invalid-argument') {
+      } else if (err.code === 'invalid-argument') {
         throw new Error('L\'adresse email fournie est invalide.');
-      } else if (error.code === 'resource-exhausted') {
+      } else if (err.code === 'resource-exhausted') {
         throw new Error('Trop de tentatives. Veuillez réessayer dans quelques minutes.');
-      } else if (error.code === 'permission-denied') {
+      } else if (err.code === 'permission-denied') {
         throw new Error('Clé API Resend invalide. Veuillez contacter le support.');
       } else {
         throw new Error(
-          error.message || 'Erreur lors de l\'envoi de l\'email de vérification.'
+          err.message || 'Erreur lors de l\'envoi de l\'email de vérification.'
         );
       }
     }

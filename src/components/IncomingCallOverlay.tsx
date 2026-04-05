@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useVoipCall } from '@/hooks/useVoipCall';
-import { MdPhone, MdPhonePaused, MdClose } from 'react-icons/md';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 export function IncomingCallOverlay() {
@@ -65,7 +65,7 @@ export function IncomingCallOverlay() {
           onClick={declineCall}
           className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform"
         >
-          <MdPhone className="text-4xl rotate-[135deg]" />
+          <MaterialIcon name="call_end" className="text-[36px]" />
         </button>
 
         {/* Bouton Accepter */}
@@ -73,7 +73,7 @@ export function IncomingCallOverlay() {
           onClick={acceptCall}
           className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform animate-bounce"
         >
-          <MdPhone className="text-4xl" />
+          <MaterialIcon name="call" className="text-[36px]" />
         </button>
       </div>
 

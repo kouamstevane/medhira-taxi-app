@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { X, AlertCircle, CheckCircle, Info, AlertTriangle } from 'lucide-react';
+import { CheckCircle, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 

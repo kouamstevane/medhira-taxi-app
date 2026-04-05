@@ -4,22 +4,45 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import { ArrowLeft, MapPin, CreditCard, ChevronRight, Loader2 } from 'lucide-react';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { BottomNav } from '@/components/ui/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import type { AuthContextType } from '@/types';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { getDeliveryDistance } from '@/utils/distance';
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { currentUser: user, userData } = useAuth() || { currentUser: { uid: 'user_123' } as any, userData: null }; // Mock fallback
+  const { currentUser: user, userData } = useAuth() || { currentUser: { uid: 'user_123' } as unknown as AuthContextType['currentUser'], userData: null }; // Mock fallback
   const { items, restaurant, getSubtotal, clearCart } = useCartStore();
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [deliveryDistance, setDeliveryDistance] = useState(3.5);
+  const [durationMinutes, setDurationMinutes] = useState(15);
+  const [distanceIsEstimate, setDistanceIsEstimate] = useState(true);
+  const [distanceLoading, setDistanceLoading] = useState(false);
 
-  // Mocked delivery info
-  // TODO: Intégration Google Distance Matrix API pour la distance réelle
-  const deliveryDistance = 3.5; 
   const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
   const deliveryAddress = userData?.address || "Veuillez définir votre adresse dans le profil";
+
+  // Calculate real delivery distance when restaurant and user address are available
+  React.useEffect(() => {
+    if (!restaurant || !userData?.address) return;
+
+    const origin      = userData.address;
+    const destination = restaurant.location
+      ? restaurant.location
+      : restaurant.address || restaurant.name;
+
+    setDistanceLoading(true);
+    getDeliveryDistance(origin, destination)
+      .then(({ distanceKm, durationMinutes: dur, isEstimate }) => {
+        setDeliveryDistance(distanceKm);
+        setDurationMinutes(dur);
+        setDistanceIsEstimate(isEstimate);
+      })
+      .finally(() => setDistanceLoading(false));
+  }, [restaurant, userData?.address]);
 
   if (!restaurant || items.length === 0) {
     router.push('/food');
@@ -65,55 +88,59 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-32">
+    <div className="min-h-screen bg-background pb-32 max-w-[430px] mx-auto">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 p-4 sticky top-0 z-10 flex items-center justify-between">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-gray-900 bg-gray-50 rounded-full">
-          <ArrowLeft className="w-6 h-6" />
+      <div className="bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-20 flex items-center justify-between">
+        <button onClick={() => router.back()} className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10">
+          <MaterialIcon name="arrow_back" size="lg" />
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Paiement</h1>
+        <h1 className="text-xl font-bold text-white">Paiement</h1>
         <div className="w-10"></div> {/* Spacer */}
       </div>
 
       <div className="p-4 space-y-6">
         {/* Delivery Address */}
-        <section className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Adresse de livraison</h2>
+        <section className="glass-card p-5 rounded-2xl border border-white/5">
+          <h2 className="text-lg font-bold text-white mb-4">Adresse de livraison</h2>
           <div className="flex items-start gap-4">
             <div className="bg-primary/10 p-3 rounded-full text-primary mt-1">
-              <MapPin className="w-6 h-6" />
+              <MaterialIcon name="location_on" size="lg" />
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-gray-900">Domicile</p>
-              <p className="text-gray-500 text-sm mt-1">{deliveryAddress}</p>
-              <p className="text-gray-400 text-xs mt-1">~ {deliveryDistance} km</p>
+              <p className="font-semibold text-white">Domicile</p>
+              <p className="text-slate-400 text-sm mt-1">{deliveryAddress}</p>
+              <p className="text-slate-500 text-xs mt-1">
+                {distanceLoading
+                  ? 'Calcul de la distance...'
+                  : `${distanceIsEstimate ? '~' : ''} ${deliveryDistance.toFixed(1)} km · ~${durationMinutes} min`}
+              </p>
             </div>
-            <button className="text-primary text-sm font-semibold">Modifier</button>
+            <button onClick={() => router.push('/profil')} className="text-primary text-sm font-semibold">Modifier</button>
           </div>
         </section>
 
         {/* Order Summary */}
-        <section className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Résumé ({items.length} articles)</h2>
+        <section className="glass-card p-5 rounded-2xl border border-white/5">
+          <h2 className="text-lg font-bold text-white mb-4">Résumé ({items.length} articles)</h2>
           <div className="space-y-3 mb-4">
             {items.map(item => (
               <div key={item.id} className="flex justify-between text-sm">
-                <span className="text-gray-600">
-                  <span className="font-semibold text-gray-900 mr-2">{item.quantity}x</span>
+                <span className="text-slate-300">
+                  <span className="font-semibold text-white mr-2">{item.quantity}x</span>
                   {item.name}
                 </span>
-                <span className="font-medium text-gray-900">{(item.price * item.quantity).toFixed(2)} {CURRENCY_CODE}</span>
+                <span className="font-medium text-white">{(item.price * item.quantity).toFixed(2)} {CURRENCY_CODE}</span>
               </div>
             ))}
           </div>
 
-          <div className="border-t border-gray-100 pt-4 space-y-2 text-sm text-gray-600">
+          <div className="border-t border-white/5 pt-4 space-y-2 text-sm text-slate-400">
             <div className="flex justify-between">
               <span>Sous-total</span>
               <span>{subtotal.toFixed(2)} {CURRENCY_CODE}</span>
             </div>
             <div className="flex justify-between">
-              <span>Frais de livraison ({deliveryDistance} km)</span>
+              <span>Frais de livraison ({distanceIsEstimate ? '~' : ''}{deliveryDistance.toFixed(1)} km)</span>
               <span>{deliveryCost.toFixed(2)} {CURRENCY_CODE}</span>
             </div>
             {isWeekend && (
@@ -124,44 +151,44 @@ export default function CheckoutPage() {
             )}
           </div>
 
-          <div className="border-t border-gray-100 mt-4 pt-4 flex justify-between items-center text-lg font-bold text-gray-900">
+          <div className="border-t border-white/5 mt-4 pt-4 flex justify-between items-center text-lg font-bold text-white">
             <span>Total</span>
             <span>{total.toFixed(2)} {CURRENCY_CODE}</span>
           </div>
         </section>
 
         {/* Payment Method */}
-        <section className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Moyen de paiement</h2>
+        <section className="glass-card p-5 rounded-2xl border border-white/5">
+          <h2 className="text-lg font-bold text-white mb-4">Moyen de paiement</h2>
           <div className="flex items-center justify-between p-4 border border-primary/20 bg-primary/5 rounded-xl">
             <div className="flex items-center gap-3">
-              <CreditCard className="w-6 h-6 text-primary" />
+              <MaterialIcon name="credit_card" size="lg" className="text-primary" />
               <div>
-                <p className="font-semibold text-gray-900">Apple Pay</p>
-                <p className="text-xs text-gray-500">Moyen par défaut</p>
+                <p className="font-semibold text-white">Apple Pay</p>
+                <p className="text-xs text-slate-400">Moyen par défaut</p>
               </div>
             </div>
-            <ChevronRight className="w-5 h-5 text-gray-400" />
+            <MaterialIcon name="chevron_right" size="md" className="text-slate-500" />
           </div>
         </section>
 
         {errorMsg && (
-          <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm border border-red-100 flex items-center justify-between">
+          <div className="bg-destructive/10 text-destructive p-4 rounded-xl text-sm border border-destructive/20 flex items-center justify-between">
             {errorMsg}
           </div>
         )}
       </div>
 
       {/* Checkout Footer */}
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white border-t border-gray-100 z-20">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/5 z-20 max-w-[430px] mx-auto">
         <button
           onClick={handleCreateOrder}
           disabled={loading}
-          className="w-full bg-primary text-primary-foreground font-bold text-lg py-4 rounded-xl shadow-lg shadow-primary/30 hover:bg-primary/95 transition-all flex justify-center items-center gap-2 disabled:opacity-70"
+          className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-lg py-4 rounded-xl hover:opacity-90 transition-all flex justify-center items-center gap-2 disabled:opacity-70"
         >
           {loading ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
               Traitement du paiement...
             </>
           ) : (
@@ -169,6 +196,7 @@ export default function CheckoutPage() {
           )}
         </button>
       </div>
+      <BottomNav />
     </div>
   );
 }

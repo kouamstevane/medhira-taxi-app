@@ -12,6 +12,11 @@ export interface CompressionOptions {
   outputFormat?: 'image/webp' | 'image/jpeg' | 'image/png';
 }
 
+interface WindowWithIdleCallback extends Window {
+  requestIdleCallback(callback: IdleRequestCallback, options?: IdleRequestOptions): number;
+  cancelIdleCallback(id: number): void;
+}
+
 export interface CompressionResult {
   file: File;
   originalSize: number;
@@ -135,7 +140,7 @@ class ImageCompressionService {
         }, 5000);
 
         if ('requestIdleCallback' in window) {
-          (window as any).requestIdleCallback(safeCompress, { timeout: 2000 });
+          (window as unknown as WindowWithIdleCallback).requestIdleCallback(safeCompress, { timeout: 2000 });
         } else {
           setTimeout(safeCompress, 0);
         }

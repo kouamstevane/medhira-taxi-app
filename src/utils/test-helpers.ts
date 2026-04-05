@@ -143,7 +143,8 @@ export function generateFirebaseError(code: string): { code: string; message: st
 /**
  * Validateur de format de rapport de test
  */
-export function validateTestReport(report: any): boolean {
+export function validateTestReport(report: unknown): boolean {
+  if (typeof report !== 'object' || report === null) return false;
   const requiredFields = [
     'runId',
     'startTime',
@@ -155,7 +156,7 @@ export function validateTestReport(report: any): boolean {
     'performance',
   ];
 
-  return requiredFields.every((field) => field in report);
+  return requiredFields.every((field) => field in (report as Record<string, unknown>));
 }
 
 /**
@@ -189,7 +190,7 @@ export function maskPhoneNumber(phone: string): string {
 /**
  * Créer un snapshot de l'état actuel pour comparaison
  */
-export function createSnapshot(data: any): string {
+export function createSnapshot(data: unknown): string {
   return JSON.stringify(data, null, 2);
 }
 

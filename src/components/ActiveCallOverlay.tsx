@@ -2,14 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useVoipCall } from '@/hooks/useVoipCall';
-import { 
-  MdMic, 
-  MdMicOff, 
-  MdVolumeUp, 
-  MdVolumeOff, 
-  MdCallEnd,
-  MdFiberManualRecord
-} from 'react-icons/md';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 export function ActiveCallOverlay() {
   const { callState, endCall, toggleMute, toggleSpeaker } = useVoipCall();
@@ -85,7 +78,7 @@ export function ActiveCallOverlay() {
                 callState.isMuted ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'
               }`}
             >
-              {callState.isMuted ? <MdMicOff className="text-2xl" /> : <MdMic className="text-2xl" />}
+              {callState.isMuted ? <MaterialIcon name="mic_off" className="text-[24px]" /> : <MaterialIcon name="mic" className="text-[24px]" />}
             </button>
             <span className="text-xs text-slate-400">Secret</span>
           </div>
@@ -98,7 +91,7 @@ export function ActiveCallOverlay() {
                 callState.isSpeakerOn ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'
               }`}
             >
-              {callState.isSpeakerOn ? <MdVolumeUp className="text-2xl" /> : <MdVolumeOff className="text-2xl" />}
+              {callState.isSpeakerOn ? <MaterialIcon name="volume_up" className="text-[24px]" /> : <MaterialIcon name="volume_off" className="text-[24px]" />}
             </button>
             <span className="text-xs text-slate-400">Haut-parleur</span>
           </div>
@@ -109,7 +102,7 @@ export function ActiveCallOverlay() {
           onClick={() => endCall()}
           className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
         >
-          <MdCallEnd className="text-4xl" />
+          <MaterialIcon name="call_end" className="text-[36px]" />
         </button>
       </div>
 

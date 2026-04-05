@@ -35,7 +35,7 @@ export class SignalingService {
       const createCallFunction = httpsCallable(functions, 'createCall');
       const result = await createCallFunction(params);
 
-      const data = result.data as any;
+      const data = result.data as { callId: string; channel: string; token: string };
 
       if (!data.callId || !data.channel || !data.token) {
         throw new Error('Invalid response from createCall function');
@@ -46,9 +46,9 @@ export class SignalingService {
         channel: data.channel,
         token: data.token
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[SignalingService] Error creating call:', error);
-      throw new Error(`Failed to create call: ${error.message}`);
+      throw new Error(`Failed to create call: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -60,9 +60,9 @@ export class SignalingService {
       const answerCallFunction = httpsCallable(functions, 'answerCall');
       await answerCallFunction({ callId });
       console.log('[SignalingService] Call answered:', callId);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[SignalingService] Error answering call:', error);
-      throw new Error(`Failed to answer call: ${error.message}`);
+      throw new Error(`Failed to answer call: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -77,9 +77,9 @@ export class SignalingService {
         reason: 'declined' as CallEndReason
       });
       console.log('[SignalingService] Call declined:', callId);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[SignalingService] Error declining call:', error);
-      throw new Error(`Failed to decline call: ${error.message}`);
+      throw new Error(`Failed to decline call: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -94,9 +94,9 @@ export class SignalingService {
         reason: reason || 'user_ended'
       });
       console.log('[SignalingService] Call ended:', callId, 'reason:', reason);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[SignalingService] Error ending call:', error);
-      throw new Error(`Failed to end call: ${error.message}`);
+      throw new Error(`Failed to end call: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -115,9 +115,9 @@ export class SignalingService {
         id: callDoc.id,
         ...callDoc.data()
       } as VoipCall;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[SignalingService] Error getting call:', error);
-      throw new Error(`Failed to get call: ${error.message}`);
+      throw new Error(`Failed to get call: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -145,9 +145,9 @@ export class SignalingService {
       });
 
       return calls;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[SignalingService] Error getting active calls:', error);
-      throw new Error(`Failed to get active calls: ${error.message}`);
+      throw new Error(`Failed to get active calls: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -297,9 +297,9 @@ export class SignalingService {
         id: doc.id,
         ...doc.data()
       } as VoipCall;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[SignalingService] Error getting call by ride:', error);
-      throw new Error(`Failed to get call by ride: ${error.message}`);
+      throw new Error(`Failed to get call by ride: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

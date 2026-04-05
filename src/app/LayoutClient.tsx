@@ -14,6 +14,8 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Header } from '@/components/layout/Header';
 import { VoipCallProvider } from '@/context/VoipCallProvider';
+import { Toaster } from 'react-hot-toast';
+import { NotificationHandler } from '@/components/notifications/NotificationHandler';
 
 interface LayoutClientProps {
   children: React.ReactNode;
@@ -72,9 +74,27 @@ export default function LayoutClient({ children }: LayoutClientProps) {
 
   return (
     <VoipCallProvider>
+      {/* Push notifications handler (invisible) */}
+      <NotificationHandler />
+
+      {/* Toast notifications */}
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: '#1A1A1A',
+            color: '#FFFFFF',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '12px',
+            fontSize: '14px',
+          },
+          success: { iconTheme: { primary: '#f29200', secondary: '#0F0F0F' } },
+        }}
+      />
+
       {/* Header conditionnel */}
       {showHeader && <Header userData={userData} />}
-      
+
       {/* Contenu principal */}
       <main className={showHeader ? '' : ''}>
         {children}

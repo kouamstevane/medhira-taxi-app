@@ -6,6 +6,7 @@ import { doc, onSnapshot, updateDoc, type DocumentSnapshot, type DocumentData } 
 import { db } from "@/config/firebase";
 import { CURRENCY_CODE, LIMITS, DEFAULT_LOCALE } from "@/utils/constants";
 import { LoadScript, GoogleMap, Marker, DirectionsRenderer } from "@react-google-maps/api";
+import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 const mapContainerStyle = { width: "100%", height: "200px" };
 const defaultCenter = { lat: 43.6532, lng: -79.3832 }; // Toronto
@@ -15,7 +16,7 @@ function ConfirmationContent() {
   const searchParams = useSearchParams();
   const bookingId = searchParams.get("bookingId");
 
-  const [booking, setBooking] = useState<any>(null);
+  const [booking, setBooking] = useState<DocumentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -127,7 +128,7 @@ function ConfirmationContent() {
     return `${timeMin} min`;
   };
 
-  const calculateDistance = (loc1: any, loc2: any) => {
+  const calculateDistance = (loc1: { lat: number; lng: number }, loc2: { lat: number; lng: number }) => {
     const R = 6371;
     const dLat = (loc2.lat - loc1.lat) * Math.PI / 180;
     const dLng = (loc2.lng - loc1.lng) * Math.PI / 180;
@@ -141,163 +142,198 @@ function ConfirmationContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#e6e6e6] flex flex-col items-center justify-center p-6">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f29200] mb-4"></div>
-        <h2 className="text-xl font-bold text-[#101010]">Chargement...</h2>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+        <div className="relative w-16 h-16 mx-auto mb-6">
+          <div className="absolute inset-0 bg-primary rounded-full opacity-20 animate-ping" />
+          <div className="relative w-16 h-16 bg-primary rounded-full flex items-center justify-center animate-pulse">
+            <MaterialIcon name="local_taxi" className="text-white text-[28px]" />
+          </div>
+        </div>
+        <p className="text-slate-400 animate-pulse">Chargement...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#e6e6e6] flex flex-col items-center justify-center p-6">
-        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded mb-4 w-full max-w-md text-center">
-          <p>{error}</p>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+        <div className="glass-card p-6 rounded-2xl w-full max-w-md text-center border border-white/10">
+          <div className="w-14 h-14 bg-destructive/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-destructive/20">
+            <MaterialIcon name="error" className="text-destructive text-[28px]" />
+          </div>
+          <p className="text-destructive mb-4">{error}</p>
+          <button
+            onClick={() => window.history.back()}
+            className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl active:scale-[0.98] transition-transform"
+          >
+            Retour
+          </button>
         </div>
-        <button
-          onClick={() => window.history.back()}
-          className="bg-[#f29200] text-white px-6 py-2 rounded-lg font-bold"
-        >
-          Retour
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#e6e6e6]">
-      <header className="bg-[#101010] text-white p-4">
-        <h1 className="text-xl font-bold">Suivi de course</h1>
-      </header>
-
-      <main className="p-4 pt-6">
-        {/* Carte */}
-        <div className="mb-6 rounded-xl overflow-hidden shadow-lg">
-          <LoadScript 
-            googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}
-            libraries={["geometry", "places"]}
+    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
+      <div className="max-w-[430px] mx-auto min-h-screen flex flex-col">
+        <header className="sticky top-0 z-20 flex items-center p-4 bg-background/80 backdrop-blur-xl border-b border-white/5">
+          <button
+            onClick={() => window.history.back()}
+            className="flex items-center justify-center size-10 rounded-full glass-card text-white active:scale-95 transition-transform"
           >
-            <GoogleMap 
-              mapContainerStyle={mapContainerStyle} 
-              center={driverLocation || defaultCenter} 
-              zoom={14}
+            <MaterialIcon name="arrow_back" size="md" />
+          </button>
+          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Suivi de course</h1>
+        </header>
+
+        <main className="flex-1 p-4 space-y-4">
+          {/* Carte */}
+          <div className="rounded-xl overflow-hidden border border-white/10">
+            <LoadScript
+              googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}
+              libraries={["geometry", "places"]}
             >
-              {booking?.pickupLocation && (
-                <Marker position={booking.pickupLocation} label="P" />
-              )}
-              {driverLocation && (
-                <Marker 
-                  position={driverLocation} 
-                  icon={{
-                    url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-                    scaledSize: new google.maps.Size(40, 40)
-                  }} 
-                />
-              )}
-              {directions && (
-                <DirectionsRenderer
-                  options={{
-                    polylineOptions: { strokeColor: "#0000FF", strokeWeight: 5 },
-                    suppressMarkers: true
-                  }}
-                  directions={directions}
-                />
-              )}
-            </GoogleMap>
-          </LoadScript>
-        </div>
-
-        {/* Notification d'arrivée */}
-        {showArrival && (
-          <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4 rounded">
-            <p> Votre chauffeur est arrivé !</p>
+              <GoogleMap
+                mapContainerStyle={mapContainerStyle}
+                center={driverLocation || defaultCenter}
+                zoom={14}
+              >
+                {booking?.pickupLocation && (
+                  <Marker position={booking.pickupLocation} label="P" />
+                )}
+                {driverLocation && (
+                  <Marker
+                    position={driverLocation}
+                    icon={{
+                      url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                      scaledSize: new google.maps.Size(40, 40)
+                    }}
+                  />
+                )}
+                {directions && (
+                  <DirectionsRenderer
+                    options={{
+                      polylineOptions: { strokeColor: "#f29200", strokeWeight: 5 },
+                      suppressMarkers: true
+                    }}
+                    directions={directions}
+                  />
+                )}
+              </GoogleMap>
+            </LoadScript>
           </div>
-        )}
 
-        {/* Statut */}
-        <div className="bg-white rounded-2xl p-6 shadow-lg mb-6">
-          <h2 className="text-xl font-bold text-[#101010] mb-4">Statut de la course</h2>
-
-          {booking?.status === "pending" && (
-            <div className="text-center py-6">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f29200] mx-auto mb-4"></div>
-              <h3 className="text-lg font-semibold">Recherche d'un chauffeur</h3>
-              <p className="text-gray-600">En attente...</p>
+          {/* Notification d'arrivée */}
+          {showArrival && (
+            <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-4 rounded-xl flex items-center gap-3">
+              <MaterialIcon name="where_to_vote" size="md" className="text-green-400" />
+              <p className="font-semibold">Votre chauffeur est arrivé !</p>
             </div>
           )}
 
-          {booking?.status === "accepted" && (
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Chauffeur en route</h3>
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">En route</span>
-              </div>
-              <p><strong>Temps estimé :</strong> {getEstimatedArrivalTime()}</p>
-              {booking.driverName && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                  <p><strong>Chauffeur :</strong> {booking.driverName}</p>
-                  <p><strong>Véhicule :</strong> {booking.carColor} {booking.carModel} ({booking.carPlate})</p>
-                  <p><strong>Téléphone :</strong> {booking.driverPhone}</p>
+          {/* Statut */}
+          <div className="glass-card rounded-2xl p-6 border border-white/5">
+            <h2 className="text-lg font-bold text-white mb-4">Statut de la course</h2>
+
+            {booking?.status === "pending" && (
+              <div className="text-center py-6">
+                <div className="relative w-12 h-12 mx-auto mb-4">
+                  <div className="absolute inset-0 bg-primary rounded-full opacity-20 animate-ping" />
+                  <div className="relative w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
+                    <MaterialIcon name="search" className="text-primary text-[24px]" />
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
-
-          {booking?.status === "arrived" && (
-            <div className="text-center py-6">
-              <div className="text-green-500 text-4xl mb-2"></div>
-              <h3 className="text-lg font-semibold">Chauffeur arrivé</h3>
-              <p>Votre chauffeur vous attend au point de départ.</p>
-            </div>
-          )}
-
-          {booking?.status === "in_progress" && (
-            <div className="text-center py-6">
-              <div className="animate-pulse text-green-500 text-4xl mb-2">🚗</div>
-              <h3 className="text-lg font-semibold">Course en cours</h3>
-              <p>Destination : {booking?.destination}</p>
-            </div>
-          )}
-
-          {booking?.status === "completed" && finalPrice && (
-            <div className="text-center py-6">
-              <div className="text-green-500 text-4xl mb-2">🎉</div>
-              <h3 className="text-lg font-semibold">Course terminée</h3>
-              <p className="text-2xl font-bold text-[#f29200] mt-2">{finalPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}</p>
-              <p className="text-gray-600 mt-1">Merci d'avoir utilisé Medjira Taxi</p>
-            </div>
-          )}
-        </div>
-
-        {/* Détails */}
-        <div className="bg-white rounded-2xl p-6 shadow-lg">
-          <h2 className="text-xl font-bold text-[#101010] mb-4">Détails du trajet</h2>
-          <div className="space-y-3">
-            <div className="flex items-start">
-              <div className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-3"></div>
-              <span>{booking?.pickup}</span>
-            </div>
-            <div className="flex items-start">
-              <div className="w-2 h-2 bg-red-500 rounded-full mt-2 mr-3"></div>
-              <span>{booking?.destination}</span>
-            </div>
-            <div className="border-t pt-3 mt-3">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Distance</span>
-                <span>{booking?.distance} km</span>
+                <h3 className="text-base font-semibold text-white">Recherche d&apos;un chauffeur</h3>
+                <p className="text-slate-400 text-sm">En attente...</p>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Durée estimée</span>
-                <span>{booking?.duration} min</span>
+            )}
+
+            {booking?.status === "accepted" && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-semibold text-white">Chauffeur en route</h3>
+                  <span className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-xs font-bold">En route</span>
+                </div>
+                <p className="text-slate-300 text-sm"><strong>Temps estimé :</strong> {getEstimatedArrivalTime()}</p>
+                {booking.driverName && (
+                  <div className="mt-4 p-4 glass-card rounded-xl border border-white/5 space-y-1">
+                    <p className="text-sm text-slate-300"><span className="text-slate-500">Chauffeur :</span> {booking.driverName}</p>
+                    <p className="text-sm text-slate-300"><span className="text-slate-500">Véhicule :</span> {booking.carColor} {booking.carModel} ({booking.carPlate})</p>
+                    <p className="text-sm text-slate-300"><span className="text-slate-500">Téléphone :</span> {booking.driverPhone}</p>
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between font-bold">
-                <span>Prix initial</span>
-                <span>{booking?.price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}</span>
+            )}
+
+            {booking?.status === "arrived" && (
+              <div className="text-center py-6">
+                <div className="w-14 h-14 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-500/20">
+                  <MaterialIcon name="where_to_vote" className="text-green-400 text-[28px]" />
+                </div>
+                <h3 className="text-base font-semibold text-white">Chauffeur arrivé</h3>
+                <p className="text-slate-400 text-sm">Votre chauffeur vous attend au point de départ.</p>
+              </div>
+            )}
+
+            {booking?.status === "in_progress" && (
+              <div className="text-center py-6">
+                <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">
+                  <MaterialIcon name="local_taxi" className="text-primary text-[28px]" />
+                </div>
+                <h3 className="text-base font-semibold text-white">Course en cours</h3>
+                <p className="text-slate-400 text-sm">Destination : {booking?.destination}</p>
+              </div>
+            )}
+
+            {booking?.status === "completed" && finalPrice && (
+              <div className="text-center py-6">
+                <div className="w-14 h-14 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-500/20">
+                  <MaterialIcon name="check_circle" className="text-green-400 text-[28px]" />
+                </div>
+                <h3 className="text-base font-semibold text-white">Course terminée</h3>
+                <p className="text-2xl font-bold text-primary mt-2">{finalPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}</p>
+                <p className="text-slate-400 text-sm mt-1">Merci d&apos;avoir utilisé Medhira Taxi</p>
+              </div>
+            )}
+          </div>
+
+          {/* Détails */}
+          <div className="glass-card rounded-2xl p-6 border border-white/5">
+            <h2 className="text-lg font-bold text-white mb-4">Détails du trajet</h2>
+            <div className="space-y-4 relative">
+              <div className="absolute left-[5px] top-3 bottom-12 w-[1.5px] bg-slate-700" />
+              <div className="flex items-start gap-4">
+                <div className="size-3 rounded-full bg-primary ring-4 ring-primary/20 z-10" />
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">Départ</p>
+                  <p className="text-white text-sm font-medium">{booking?.pickup}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="size-3 rounded-full border-2 border-white/60 z-10" />
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">Destination</p>
+                  <p className="text-white text-sm font-medium">{booking?.destination}</p>
+                </div>
+              </div>
+            </div>
+            <div className="border-t border-white/5 pt-4 mt-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Distance</span>
+                <span className="text-white">{booking?.distance} km</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">Durée estimée</span>
+                <span className="text-white">{booking?.duration} min</span>
+              </div>
+              <div className="flex justify-between font-bold text-sm">
+                <span className="text-white">Prix initial</span>
+                <span className="text-primary">{booking?.price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}</span>
               </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }
@@ -306,9 +342,13 @@ function ConfirmationContent() {
 export default function ConfirmationPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#e6e6e6] flex flex-col items-center justify-center p-6">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f29200] mb-4"></div>
-        <h2 className="text-xl font-bold text-[#101010]">Chargement...</h2>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 bg-primary rounded-full opacity-20 animate-ping" />
+          <div className="relative w-16 h-16 bg-primary rounded-full flex items-center justify-center animate-pulse">
+            <span className="material-symbols-outlined text-white text-[28px]">local_taxi</span>
+          </div>
+        </div>
       </div>
     }>
       <ConfirmationContent />

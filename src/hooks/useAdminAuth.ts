@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, query, collection, where, getDocs, limit } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
 import { createLogger } from '@/utils/logger';
 
@@ -40,7 +40,8 @@ export function useAdminAuth(): boolean | null {
 
         const adminQuery = query(
           collection(db, 'admins'),
-          where('userId', '==', user.uid)
+          where('userId', '==', user.uid),
+          limit(1) // Règle Section 4.1 : limit() obligatoire
         );
         const adminSnapshot = await getDocs(adminQuery);
 

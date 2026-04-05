@@ -89,15 +89,16 @@
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getFirestore, collection, addDoc, deleteDoc, doc, getDoc, listCollections, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-        // Configuration Firebase
+        // ⚠️ SÉCURITÉ : Ne jamais commiter ce fichier avec de vraies clés API
+        // Remplacez les valeurs ci-dessous par votre configuration Firebase
         const firebaseConfig = {
-            apiKey: "AIzaSyDMXeXZCFAVGeSFW_-3MYkrqV2bN1SXY-8",
-            authDomain: "medjira-service.firebaseapp.com",
-            projectId: "medjira-service",
-            storageBucket: "medjira-service.firebasestorage.app",
-            messagingSenderId: "113581657187",
-            appId: "1:113581657187:web:cd8e2ef19a25b4a424bc56",
-            measurementId: "G-3LNHS26HML"
+            apiKey: "VOTRE_CLE_API_FIREBASE_ICI",
+            authDomain: "VOTRE_PROJET.firebaseapp.com",
+            projectId: "VOTRE_PROJET_ID",
+            storageBucket: "VOTRE_PROJET.firebasestorage.app",
+            messagingSenderId: "VOTRE_SENDER_ID",
+            appId: "VOTRE_APP_ID",
+            measurementId: "VOTRE_MEASUREMENT_ID"
         };
 
         // Initialiser Firebase

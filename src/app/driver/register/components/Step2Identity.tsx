@@ -215,11 +215,12 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
           const file = new File([blob], "biophoto.jpeg", { type: "image/jpeg" });
           setPhotoFile(file);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Erreur lors de la prise de photo:", error);
-        if (error?.message?.includes('User cancelled') || error?.message?.includes('cancelled')) {
-          return; // Annulation volontaire, pas d'erreur affichée
-        } else if (error?.message?.includes('permission')) {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes('User cancelled') || msg.includes('cancelled')) {
+          return;
+        } else if (msg.includes('permission')) {
           setPhotoError("Permission caméra refusée. Veuillez l'autoriser dans les paramètres.");
         } else {
           setPhotoError("Impossible de prendre la photo. Veuillez réessayer.");

@@ -193,13 +193,13 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
             case 'payment_received':
                 if (onPaymentReceived) {
                     // Le montant devrait être dans les données de la notification
-                    const amount = (data as any).amount || 0;
+                    const amount = (data as Record<string, unknown>).amount as number || 0;
                     onPaymentReceived(amount);
                 }
                 break;
             case 'alert':
                 if (onAlert) {
-                    const message = (data as any).message || 'Alerte';
+                    const message = (data as Record<string, unknown>).message as string || 'Alerte';
                     onAlert(message);
                 }
                 break;

@@ -22,6 +22,9 @@ export interface DriverCoreData {
     licensePhoto: string;
     carRegistration: string;
   };
+  rating?: number;
+  tripsCompleted?: number;
+  earnings?: number;
 }
 
 interface DriverState {

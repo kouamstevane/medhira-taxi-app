@@ -71,7 +71,7 @@ export default function Error({ error, reset }: ErrorProps) {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Button
             onClick={reset}
-            variant="primary"
+            variant="default"
             className="w-full sm:w-auto"
           >
             Réessayer
