@@ -17,6 +17,7 @@ import {
   persistentMultipleTabManager
 } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
+import { getFunctions, Functions } from "firebase/functions";
 
 /**
  * Configuration Firebase récupérée depuis les variables d'environnement
@@ -72,6 +73,7 @@ if (typeof window !== 'undefined') {
 //  Export de l'instance Firestore
 export const db: Firestore = firestoreInstance;
 export const storage: FirebaseStorage = getStorage(app);
+export const functions: Functions = getFunctions(app);
 
 /**
  * Export de l'app Firebase pour des cas d'usage avancés
