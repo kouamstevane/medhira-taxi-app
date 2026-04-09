@@ -18,6 +18,7 @@ import {
 } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 import { getFunctions, Functions } from "firebase/functions";
+import { getDatabase, Database } from "firebase/database";
 
 /**
  * Configuration Firebase récupérée depuis les variables d'environnement
@@ -74,6 +75,7 @@ if (typeof window !== 'undefined') {
 export const db: Firestore = firestoreInstance;
 export const storage: FirebaseStorage = getStorage(app);
 export const functions: Functions = getFunctions(app);
+export const rtdb: Database = getDatabase(app);
 
 /**
  * Export de l'app Firebase pour des cas d'usage avancés
