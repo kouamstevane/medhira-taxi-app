@@ -108,10 +108,12 @@ temp/
 .turbo
 
 
-# Test files
-**/__tests__/
-**/*.test.*
-**/*.spec.*clés
+# Test files (node_modules only — project tests are versioned)
+node_modules/**/__tests__/
+node_modules/**/*.test.*
+node_modules/**/*.spec.*
+.kilo/**/__tests__/
+.kilo/**/*.test.*clés
 "src/config/keys/serviceAccountKey.json" 
 src/config/keys/*.json
 
