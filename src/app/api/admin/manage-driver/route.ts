@@ -9,9 +9,16 @@ import { z } from 'zod';
 
 // Schéma de validation pour les actions admin
 const ManageDriverSchema = z.object({
-  action: z.enum(['approve', 'reject', 'suspend', 'unsuspend', 'deactivate', 'reactivate', 'delete']),
+  action: z.enum([
+    'approve', 'reject', 'suspend', 'unsuspend', 'deactivate', 'reactivate', 'delete',
+    'approve_document',
+    'reject_document',
+    'delete_rating',
+  ]),
   driverId: z.string().min(1),
   reason: z.string().optional(),
+  documentKey: z.string().optional(),
+  documentRejectionReason: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -48,7 +55,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { action, driverId, reason } = result.data;
+    const { action, driverId, reason, documentKey, documentRejectionReason } = result.data;
 
     // Vérifier que l'utilisateur est bien un admin
     const adminDoc = await adminDb.collection('admins').doc(adminUid).get();
@@ -202,6 +209,35 @@ export async function POST(request: NextRequest) {
         }
         
         return NextResponse.json({ success: true, message: 'Chauffeur et toutes ses données supprimés avec succès' });
+
+      case 'approve_document': {
+        if (!documentKey) return NextResponse.json({ error: 'documentKey requis.' }, { status: 400 })
+        await driverRef.update({
+          [`documents.${documentKey}.status`]: 'approved',
+          [`documents.${documentKey}.approvedAt`]: timestamp,
+          [`documents.${documentKey}.approvedBy`]: adminUid,
+          updatedAt: timestamp,
+        })
+        return NextResponse.json({ success: true, action: 'approve_document', documentKey })
+      }
+
+      case 'reject_document': {
+        if (!documentKey) return NextResponse.json({ error: 'documentKey requis.' }, { status: 400 })
+        await driverRef.update({
+          [`documents.${documentKey}.status`]: 'rejected',
+          [`documents.${documentKey}.rejectionReason`]: documentRejectionReason ?? reason ?? 'Document non conforme',
+          [`documents.${documentKey}.rejectedAt`]: timestamp,
+          [`documents.${documentKey}.rejectedBy`]: adminUid,
+          updatedAt: timestamp,
+        })
+        return NextResponse.json({ success: true, action: 'reject_document', documentKey })
+      }
+
+      case 'delete_rating': {
+        if (!documentKey) return NextResponse.json({ error: 'ratingId requis.' }, { status: 400 })
+        await adminDb.collection('driver_ratings').doc(documentKey).delete()
+        return NextResponse.json({ success: true, action: 'delete_rating' })
+      }
 
       default:
         return NextResponse.json({ error: 'Action non supportée' }, { status: 400 });

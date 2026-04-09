@@ -33,6 +33,7 @@ export interface Driver {
   phone: string;
   phoneNumber?: string;
   status: 'pending' | 'approved' | 'rejected' | 'available' | 'offline' | 'busy' | 'action_required';
+  driverType?: 'chauffeur' | 'livreur' | 'les_deux';
   licenseNumber: string;
   city: string;
   car: {
@@ -86,6 +87,7 @@ export default function AdminDriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [driverTypeFilter, setDriverTypeFilter] = useState<'all' | 'chauffeur' | 'livreur' | 'les_deux'>('all');
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
@@ -359,6 +361,17 @@ export default function AdminDriversPage() {
           ))}
         </div>
 
+        {/* Driver Type Filter */}
+        <div className="flex gap-2 mb-6">
+          {(['all', 'chauffeur', 'livreur', 'les_deux'] as const).map((t) => (
+            <button key={t} onClick={() => setDriverTypeFilter(t)}
+              className={['px-4 h-8 rounded-xl text-xs font-medium transition-all',
+                driverTypeFilter === t ? 'bg-primary text-white' : 'bg-white/5 text-slate-400'].join(' ')}>
+              {t === 'all' ? 'Tous types' : t === 'les_deux' ? 'Les deux' : t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          ))}
+        </div>
+
         {/* Global Messages */}
         <div className="space-y-4 mb-6">
           {error && (
@@ -426,7 +439,7 @@ export default function AdminDriversPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {drivers.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map((driver) => (
+                  {drivers.filter(d => driverTypeFilter === 'all' || (d.driverType ?? 'chauffeur') === driverTypeFilter).slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map((driver) => (
                     <tr key={driver.id} className="group hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-4">
@@ -441,7 +454,15 @@ export default function AdminDriversPage() {
                             >
                               {driver.firstName || 'Utilisateur'} {driver.lastName || ''}
                             </div>
-                            <div className="text-[11px] text-slate-500 font-medium">Permis: {driver.licenseNumber || 'N/A'}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-slate-500 font-medium">Permis: {driver.licenseNumber || 'N/A'}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                driver.driverType === 'livreur' ? 'bg-amber-500/10 text-amber-400' :
+                                driver.driverType === 'les_deux' ? 'bg-purple-500/10 text-purple-400' :
+                                'bg-primary/10 text-primary'}`}>
+                                {driver.driverType === 'livreur' ? 'Livreur' : driver.driverType === 'les_deux' ? 'Les deux' : 'Chauffeur'}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </td>
