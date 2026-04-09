@@ -91,7 +91,7 @@ export default function RechargerPage() {
 
     try {
       // Note : la mise à jour du solde est gérée de manière fiable par le webhook Stripe
-      // (payment_intent.succeeded → /api/webhooks/stripe).
+      // (payment_intent.succeeded → Cloud Function stripeWebhookInstant).
       // Ici on redirige simplement avec un message de confirmation.
       router.push(`/wallet?success=${encodeURIComponent('Recharge en cours de traitement...')}`);
     } catch {
