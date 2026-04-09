@@ -19,12 +19,23 @@ export interface DriverCoreData {
   licenseNumber?: string;
   car: DriverCarData;
   documents: {
-    licensePhoto: string;
-    carRegistration: string;
+    licensePhoto?: string;
+    carRegistration?: string;
+    [key: string]: string | undefined;
   };
   rating?: number;
   tripsCompleted?: number;
   earnings?: number;
+  // === Champs livreur (2026-04-07) ===
+  driverType?: 'chauffeur' | 'livreur' | 'les_deux';
+  activeMode?: 'taxi' | 'livraison';
+  cityId?: string;
+  vehicleType?: 'velo' | 'scooter' | 'moto' | 'voiture';
+  activeDeliveryOrderId?: string | null;
+  deliveriesCompleted?: number;
+  deliveryEarnings?: number;
+  ratingsCount?: number;
+  fcmToken?: string;
 }
 
 interface DriverState {
