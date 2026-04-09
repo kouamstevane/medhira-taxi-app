@@ -340,6 +340,46 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "food_delivery_orders",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "driverId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "food_delivery_orders",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "driverId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "food_delivery_orders",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "cityId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "food_delivery_orders",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "restaurantId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "driver_ratings",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "driverId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "driver_ratings",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "driverId", "order": "ASCENDING" }, { "fieldPath": "orderType", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "drivers",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "cityId", "order": "ASCENDING" }, { "fieldPath": "isAvailable", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "driverType", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "active_bookings",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "driverId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }]
     }
   ],
   "fieldOverrides": []

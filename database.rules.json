@@ -49,6 +49,14 @@
         }
       }
     },
+    "delivery_tracking": {
+      "$orderId": {
+        "location": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.token.activeDeliveryOrderId === $orderId"
+        }
+      }
+    },
     ".info": {
       "connected": {
         ".read": true

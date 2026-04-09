@@ -51,6 +51,16 @@ service firebase.storage {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
     
+    // Preuves de livraison (photos à la remise du colis)
+    match /delivery_proofs/{orderId}/{filename} {
+      allow write: if request.auth != null
+        && request.auth.token.activeDeliveryOrderId == orderId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      allow read: if request.auth != null;
+    }
+
     // Bloquer tout le reste par défaut
     match /{allPaths=**} {
       allow read, write: if false;
