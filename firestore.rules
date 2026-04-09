@@ -611,10 +611,10 @@ service cloud.firestore {
                       exists(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)) &&
                       get(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)).data.ownerId == request.auth.uid);
       
-      // Création : Utilisateur authentifié avec paiement validé (Règle 3)
+      // Création : Utilisateur authentifié — paymentValidated est false à la création, true après paiement
       allow create: if isAuthenticated() &&
                        request.resource.data.userId == request.auth.uid &&
-                       request.resource.data.paymentValidated == true &&
+                       request.resource.data.paymentValidated == false &&
                        request.resource.data.totalOrderPrice is number &&
                        request.resource.data.orderItems is list &&
                        request.resource.data.deliveryAddress is string;

@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
           suspensionReason: reason,
           suspendedAt: timestamp,
           suspendedBy: adminUid,
-          status: 'offline',
+          status: 'suspended',
           isAvailable: false,
           updatedAt: timestamp,
         });
@@ -149,6 +149,8 @@ export async function POST(request: NextRequest) {
           suspensionReason: null,
           suspendedAt: null,
           suspendedBy: null,
+          status: 'approved',
+          isAvailable: true,
           updatedAt: timestamp,
         });
 
@@ -164,7 +166,7 @@ export async function POST(request: NextRequest) {
           suspensionReason: reason,
           suspendedAt: timestamp,
           suspendedBy: adminUid,
-          status: 'offline',
+          status: 'suspended',
           isAvailable: false,
           updatedAt: timestamp,
         });
@@ -179,6 +181,8 @@ export async function POST(request: NextRequest) {
           suspensionReason: null,
           suspendedAt: null,
           suspendedBy: null,
+          status: 'approved',
+          isAvailable: true,
           updatedAt: timestamp,
         });
 
