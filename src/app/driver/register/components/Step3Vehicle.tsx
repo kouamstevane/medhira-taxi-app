@@ -22,15 +22,27 @@ const step3Schema = z.object({
 
 export type Step3FormData = z.infer<typeof step3Schema>;
 
+type VehicleDeliveryType = 'velo' | 'scooter' | 'moto' | 'voiture';
+
 interface Step3VehicleProps {
   onNext: (data: Step3FormData, files: { registration: File; insurance?: File; techControl: File; interiorPhoto: File; exteriorPhoto: File }) => void;
   onBack: () => void;
   initialData?: Partial<Step3FormData>;
   initialFiles?: { registration?: File; insurance?: File; techControl?: File; interiorPhoto?: File; exteriorPhoto?: File };
   loading?: boolean;
+  driverType?: 'chauffeur' | 'livreur' | 'les_deux';
+  onVehicleTypeChange?: (vehicleType: VehicleDeliveryType) => void;
 }
 
-export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles, loading }: Step3VehicleProps) {
+const DELIVERY_VEHICLE_OPTIONS: { value: VehicleDeliveryType; label: string; icon: string }[] = [
+  { value: 'velo', label: 'Vélo', icon: '🚲' },
+  { value: 'scooter', label: 'Scooter', icon: '🛵' },
+  { value: 'moto', label: 'Moto', icon: '🏍️' },
+  { value: 'voiture', label: 'Voiture', icon: '🚗' },
+]
+
+export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles, loading, driverType = 'chauffeur', onVehicleTypeChange }: Step3VehicleProps) {
+  const [selectedDeliveryVehicle, setSelectedDeliveryVehicle] = React.useState<VehicleDeliveryType>('scooter');
   const { showInfo, showError } = useToast();
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<Step3FormData>({
     resolver: zodResolver(step3Schema),
@@ -190,6 +202,58 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
       {fileErrors[key] && <p className="text-red-500 text-xs mt-1">{fileErrors[key]}</p>}
     </div>
   );
+
+  // Rendu pour livreur uniquement
+  if (driverType === 'livreur') {
+    return (
+      <div className="space-y-6">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-[#101010]">Type de véhicule</h2>
+          <p className="text-gray-500 mt-2">Sélectionnez votre véhicule de livraison.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          {DELIVERY_VEHICLE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                setSelectedDeliveryVehicle(opt.value);
+                onVehicleTypeChange?.(opt.value);
+              }}
+              className={[
+                'p-6 rounded-xl border-2 flex flex-col items-center gap-2 transition-all',
+                selectedDeliveryVehicle === opt.value
+                  ? 'border-[#f29200] bg-[#f29200]/10'
+                  : 'border-gray-200 bg-white hover:border-[#f29200]/50',
+              ].join(' ')}
+            >
+              <span className="text-3xl">{opt.icon}</span>
+              <span className={['font-semibold', selectedDeliveryVehicle === opt.value ? 'text-[#f29200]' : 'text-gray-700'].join(' ')}>
+                {opt.label}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-4 pt-4">
+          <button type="button" onClick={onBack} disabled={loading} className="w-1/3 bg-gray-200 text-[#101010] font-bold py-4 rounded-xl hover:bg-gray-300 transition-colors">
+            Retour
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onVehicleTypeChange?.(selectedDeliveryVehicle);
+              // Passer des données vides car un livreur n'a pas de formulaire voiture
+              onNext({} as Step3FormData, {} as { registration: File; techControl: File; interiorPhoto: File; exteriorPhoto: File });
+            }}
+            disabled={loading}
+            className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-xl hover:bg-[#e68600] transition-colors"
+          >
+            Continuer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
