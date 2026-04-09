@@ -5,6 +5,7 @@ import { ToastContainer } from '@/components/ui/Toast';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useConnectivityMonitor } from '@/hooks/useConnectivityMonitor';
 import { useDriverRegistration } from '@/hooks/useDriverRegistration';
+import Step0RoleSelection from './components/Step0RoleSelection';
 import Step1Intent from './components/Step1Intent';
 import Step2Identity from './components/Step2Identity';
 import Step3Vehicle from './components/Step3Vehicle';
@@ -12,13 +13,14 @@ import Step4Compliance from './components/Step4Compliance';
 import Step5Monetization from './components/Step5Monetization';
 
 export default function DriverRegisterWizard() {
-  const { toasts, removeToast, showWarning, showInfo } = useToast();
+  const { toasts, removeToast, showWarning } = useToast();
   const isOnline = useConnectivityMonitor(showWarning);
   const {
     currentStep, loading, error, isSubmitting, submissionSuccess,
     rejectionCode, rejectionReason,
+    driverType, setVehicleType,
     step1Data, step2Data, step3Data, biometricsPhoto, vehicleFiles, complianceFiles,
-    handleGoogleSignIn, handleStep1Next, handleStep2Next, handleStep3Next,
+    handleStep0Next, handleGoogleSignIn, handleStep1Next, handleStep2Next, handleStep3Next,
     handleStep4Next, handleStep5FinalSubmit, handleFixRejection, handleLogout,
     setCurrentStep,
   } = useDriverRegistration();
@@ -70,7 +72,7 @@ export default function DriverRegisterWizard() {
       </div>
 
       <div className="glass-card rounded-2xl w-full max-w-2xl overflow-hidden">
-        {/* Progress bar */}
+        {/* Progress bar — 6 étapes: 0 à 5 */}
         <div className="h-2 w-full bg-white/5">
           <div
             className="h-full bg-gradient-to-r from-primary to-[#ffae33] transition-all duration-300"
@@ -89,6 +91,9 @@ export default function DriverRegisterWizard() {
             </div>
           )}
 
+          {currentStep === 0 && (
+            <Step0RoleSelection onNext={handleStep0Next} />
+          )}
           {currentStep === 1 && (
             <Step1Intent onNext={handleStep1Next} onGoogleSignIn={handleGoogleSignIn} loading={loading} initialData={step1Data} />
           )}
@@ -96,7 +101,15 @@ export default function DriverRegisterWizard() {
             <Step2Identity onNext={handleStep2Next} onBack={() => setCurrentStep(1)} loading={loading} initialData={step2Data} initialPhoto={biometricsPhoto} />
           )}
           {currentStep === 3 && (
-            <Step3Vehicle onNext={handleStep3Next} onBack={() => setCurrentStep(2)} loading={loading} initialData={step3Data} initialFiles={vehicleFiles} />
+            <Step3Vehicle
+              onNext={handleStep3Next}
+              onBack={() => setCurrentStep(2)}
+              loading={loading}
+              initialData={step3Data}
+              initialFiles={vehicleFiles}
+              driverType={driverType}
+              onVehicleTypeChange={setVehicleType}
+            />
           )}
           {currentStep === 4 && (
             <Step4Compliance onNext={handleStep4Next} onBack={() => setCurrentStep(3)} loading={loading} initialFiles={complianceFiles} />

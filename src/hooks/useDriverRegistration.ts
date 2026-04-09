@@ -22,6 +22,7 @@ import type { Step2FormData } from '@/app/driver/register/components/Step2Identi
 import type { Step3FormData } from '@/app/driver/register/components/Step3Vehicle';
 import type { Step4Files } from '@/app/driver/register/components/Step4Compliance';
 import type { Step5FormData } from '@/app/driver/register/components/Step5Monetization';
+import type { DriverType } from '@/types/firestore-collections';
 
 interface RegistrationProgress {
   step1Data: Partial<Step1FormData>;
@@ -34,7 +35,7 @@ interface RegistrationProgress {
 export function useDriverRegistration() {
   const router = useRouter();
 
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExistingUser, setIsExistingUser] = useState(false);
@@ -43,6 +44,9 @@ export function useDriverRegistration() {
   const [rejectionCode, setRejectionCode] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [emailVerificationAttempts, setEmailVerificationAttempts] = useState(0);
+
+  const [driverType, setDriverType] = useState<DriverType>('chauffeur');
+  const [vehicleType, setVehicleType] = useState<'velo' | 'scooter' | 'moto' | 'voiture'>('voiture');
 
   const [step1Data, setStep1Data] = useState<Partial<Step1FormData>>({});
   const [step2Data, setStep2Data] = useState<Partial<Step2FormData>>({});
@@ -131,7 +135,8 @@ export function useDriverRegistration() {
             setStep1Data(prev => ({ ...prev, ...saved.step1Data }));
             setStep2Data(saved.step2Data || {});
             setStep3Data(saved.step3Data || {});
-            setCurrentStep(saved.currentStep || 1);
+            // Toujours reprendre au moins à l'étape 1 (step0 est la sélection du rôle)
+            setCurrentStep(Math.max(saved.currentStep || 1, 1));
           }
         }
 
@@ -200,6 +205,11 @@ export function useDriverRegistration() {
         },
       }
     );
+  };
+
+  const handleStep0Next = (selectedDriverType: DriverType) => {
+    setDriverType(selectedDriverType);
+    setCurrentStep(1);
   };
 
   const handleGoogleSignIn = async () => {
@@ -339,7 +349,18 @@ export function useDriverRegistration() {
         await auditLoggingService.logSSNEncryption(userId, true);
       }
 
-      const finalDriverData = {
+      const carData = (driverType === 'chauffeur' || driverType === 'les_deux') ? {
+        brand: step3Data.carBrand,
+        model: step3Data.carModel,
+        year: step3Data.productionYear,
+        color: step3Data.carColor,
+        seats: step3Data.passengerSeats,
+        fuelType: step3Data.fuelType,
+        mileage: step3Data.mileage,
+        techControlDate: step3Data.techControlDate,
+      } : undefined;
+
+      const finalDriverData: Record<string, unknown> = {
         uid: userId,
         firstName: step2Data.firstName,
         lastName: step2Data.lastName,
@@ -351,16 +372,9 @@ export function useDriverRegistration() {
         city: step2Data.city,
         zipCode: step2Data.zipCode,
         ssn: encryptedSsn,
-        car: {
-          brand: step3Data.carBrand,
-          model: step3Data.carModel,
-          year: step3Data.productionYear,
-          color: step3Data.carColor,
-          seats: step3Data.passengerSeats,
-          fuelType: step3Data.fuelType,
-          mileage: step3Data.mileage,
-          techControlDate: step3Data.techControlDate,
-        },
+        driverType,
+        vehicleType,
+        cityId: 'edmonton',
         documents: {
           biometricPhoto: getValue(uploadResults[0]),
           carRegistration: getValue(uploadResults[1]),
@@ -381,6 +395,10 @@ export function useDriverRegistration() {
         rating: 0,
         tripsCompleted: 0,
       };
+
+      if (carData) {
+        finalDriverData.car = carData;
+      }
 
       await auth.currentUser?.getIdToken(true);
       const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
@@ -500,6 +518,11 @@ export function useDriverRegistration() {
     rejectionReason,
     emailVerificationAttempts,
     setEmailVerificationAttempts,
+    // Driver type state
+    driverType,
+    setDriverType,
+    vehicleType,
+    setVehicleType,
     // Step data
     step1Data,
     step2Data,
@@ -508,6 +531,7 @@ export function useDriverRegistration() {
     vehicleFiles,
     complianceFiles,
     // Handlers
+    handleStep0Next,
     handleGoogleSignIn,
     handleStep1Next,
     handleStep2Next,
