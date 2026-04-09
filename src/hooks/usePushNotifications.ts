@@ -89,6 +89,19 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
             }
         };
 
+        if (currentUser) {
+            currentUser.getIdTokenResult().then((idTokenResult) => {
+                const claims = idTokenResult.claims;
+                if (claims.role === 'driver' || claims.driver === true) {
+                    if (mounted) setUserType('driver');
+                } else if (claims.role === 'passenger' || claims.passenger === true) {
+                    if (mounted) setUserType('passenger');
+                }
+            }).catch((err) => {
+                console.warn('[usePushNotifications] Could not get user claims:', err);
+            });
+        }
+
         init();
 
         return () => {

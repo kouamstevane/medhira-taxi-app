@@ -16,6 +16,7 @@ import {
   serverTimestamp,
   getDocs,
   increment,
+  limit,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Message, MessageType } from '@/types/chat';
@@ -77,7 +78,7 @@ export const subscribeToMessages = (
   callback: (messages: Message[]) => void
 ): (() => void) => {
   const messagesRef = collection(db, 'bookings', bookingId, 'messages');
-  const q = query(messagesRef, orderBy('createdAt', 'asc'));
+  const q = query(messagesRef, orderBy('createdAt', 'asc'), limit(200));
 
   const unsubscribe = onSnapshot(
     q,
@@ -110,7 +111,8 @@ export const markMessagesAsRead = async (
     const q = query(
       messagesRef,
       where('read', '==', false),
-      where('senderType', '==', userType === 'client' ? 'chauffeur' : 'client')
+      where('senderType', '==', userType === 'client' ? 'chauffeur' : 'client'),
+      limit(200)
     );
 
     const snapshot = await getDocs(q);

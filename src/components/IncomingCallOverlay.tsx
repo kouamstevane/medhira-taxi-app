@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useVoipCall } from '@/hooks/useVoipCall';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
@@ -39,10 +40,13 @@ export function IncomingCallOverlay() {
         <div className="relative">
           <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
           {caller?.avatar ? (
-            <img 
+            <Image 
               src={caller.avatar} 
               alt={caller.name} 
-              className="w-32 h-32 rounded-full border-4 border-slate-700 object-cover shadow-2xl" 
+              className="w-32 h-32 rounded-full border-4 border-slate-700 object-cover shadow-2xl"
+              width={128}
+              height={128}
+              unoptimized
             />
           ) : (
             <div className="w-32 h-32 rounded-full bg-slate-700 flex items-center justify-center text-5xl font-bold text-white shadow-2xl">

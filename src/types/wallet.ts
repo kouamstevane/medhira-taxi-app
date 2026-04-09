@@ -19,7 +19,7 @@ export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'cancelled'
 /**
  * Méthode de paiement
  */
-export type PaymentMethod = 'orange_money' | 'mtn_money' | 'visa' | 'mastercard' | 'paypal';
+export type WalletPaymentMethod = 'orange_money' | 'mtn_money' | 'visa' | 'mastercard' | 'paypal';
 
 /**
  * Interface pour une transaction de portefeuille
@@ -32,7 +32,7 @@ export interface Transaction {
   netAmount?: number;
   fees?: number;
   currency: string;
-  method?: PaymentMethod;
+  method?: WalletPaymentMethod;
   status: TransactionStatus;
   description?: string;
   reference?: string;
@@ -56,7 +56,7 @@ export interface Wallet {
  */
 export interface RechargeRequest {
   amount: number;
-  method: PaymentMethod;
+  method: WalletPaymentMethod;
   phoneNumber?: string;
   cardDetails?: {
     cardNumber: string;

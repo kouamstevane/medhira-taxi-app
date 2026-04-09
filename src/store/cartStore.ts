@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { MenuItem, Restaurant } from '@/types/food-delivery';
 
 export interface CartItem extends MenuItem {
@@ -20,67 +21,77 @@ interface CartState {
   getSubtotal: () => number;
 }
 
-export const useCartStore = create<CartState>()((set, get) => ({
-  items: [],
-  restaurant: null,
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
+      items: [],
+      restaurant: null,
 
-  addItem: (item, restaurant) => {
-    set((state) => {
-      // Si on ajoute un article d'un autre restaurant, on vide le panier
-      if (state.restaurant && state.restaurant.id !== restaurant.id) {
-        return {
-          items: [{ ...item, quantity: 1 }],
-          restaurant,
-        };
-      }
+      addItem: (item, restaurant) => {
+        set((state) => {
+          if (state.restaurant && state.restaurant.id !== restaurant.id) {
+            return {
+              items: [{ ...item, quantity: 1 }],
+              restaurant,
+            };
+          }
 
-      const existingItem = state.items.find(i => i.id === item.id);
-      if (existingItem) {
-        return {
+          const existingItem = state.items.find(i => i.id === item.id);
+          if (existingItem) {
+            return {
+              items: state.items.map(i => 
+                i.id === item.id 
+                  ? { ...i, quantity: i.quantity + 1 } 
+                  : i
+              ),
+              restaurant,
+            };
+          }
+
+          return {
+            items: [...state.items, { ...item, quantity: 1 }],
+            restaurant: restaurant,
+          };
+        });
+      },
+
+      removeItem: (itemId) => {
+        set((state) => {
+          const newItems = state.items.filter(i => i.id !== itemId);
+          return {
+            items: newItems,
+            restaurant: newItems.length === 0 ? null : state.restaurant
+          };
+        });
+      },
+
+      updateQuantity: (itemId, quantity) => {
+        if (quantity <= 0) {
+          get().removeItem(itemId);
+          return;
+        }
+        
+        set((state) => ({
           items: state.items.map(i => 
-            i.id === item.id 
-              ? { ...i, quantity: i.quantity + 1 } 
+            i.id === itemId 
+              ? { ...i, quantity } 
               : i
-          ),
-          restaurant,
-        };
-      }
+          )
+        }));
+      },
 
-      return {
-        items: [...state.items, { ...item, quantity: 1 }],
-        restaurant: restaurant,
-      };
-    });
-  },
+      clearCart: () => set({ items: [], restaurant: null }),
 
-  removeItem: (itemId) => {
-    set((state) => {
-      const newItems = state.items.filter(i => i.id !== itemId);
-      return {
-        items: newItems,
-        restaurant: newItems.length === 0 ? null : state.restaurant
-      };
-    });
-  },
-
-  updateQuantity: (itemId, quantity) => {
-    if (quantity <= 0) {
-      get().removeItem(itemId);
-      return;
+      getTotalItems: () => get().items.reduce((total, item) => total + item.quantity, 0),
+      
+      getSubtotal: () => get().items.reduce((total, item) => total + (item.price * item.quantity), 0),
+    }),
+    {
+      name: 'medjira-cart-store',
+      partialize: (state) => ({
+        items: state.items,
+        restaurant: state.restaurant ? { id: state.restaurant.id } as Restaurant : null,
+      }),
     }
-    
-    set((state) => ({
-      items: state.items.map(i => 
-        i.id === itemId 
-          ? { ...i, quantity } 
-          : i
-      )
-    }));
-  },
-
-  clearCart: () => set({ items: [], restaurant: null }),
-
-  getTotalItems: () => get().items.reduce((total, item) => total + item.quantity, 0),
-  
-  getSubtotal: () => get().items.reduce((total, item) => total + (item.price * item.quantity), 0),
-}));
+  )
+);

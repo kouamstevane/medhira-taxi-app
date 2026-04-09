@@ -51,7 +51,7 @@ export type {
 export type {
   TransactionType,
   TransactionStatus,
-  PaymentMethod,
+  WalletPaymentMethod,
   Transaction,
   Wallet,
   RechargeRequest,

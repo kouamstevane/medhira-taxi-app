@@ -21,6 +21,7 @@ import {
   limit,
   serverTimestamp,
   Timestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { findAvailableDrivers } from './findAvailableDrivers';
@@ -75,6 +76,8 @@ export const broadcastRideRequest = async (
     const driverIds: string[] = [];
     const expiresAt = new Date(Date.now() + timeoutSeconds * 1000);
 
+    const batch = writeBatch(db);
+
     for (const driver of availableDrivers) {
       const candidateRef = doc(candidatesRef, driver.driverId);
 
@@ -86,17 +89,14 @@ export const broadcastRideRequest = async (
         createdAt: serverTimestamp() as Timestamp,
         distance: driver.distance,
         score: driver.score,
-        // Nouveaux champs
         travelTimeMinutes: driver.travelTimeMinutes,
         bonus: bonus,
       };
 
-      await setDoc(candidateRef, candidate);
-      
-      //  NOUVEAU : Créer aussi une demande dans driver_requests pour optimiser les requêtes
-      // Cela évite les requêtes collection group sur tous les bookings
+      batch.set(candidateRef, candidate);
+
       const driverRequestRef = doc(db, 'driver_requests', driver.driverId, 'requests', rideId);
-      await setDoc(driverRequestRef, {
+      batch.set(driverRequestRef, {
         rideId,
         status: 'pending',
         expiresAt: Timestamp.fromDate(expiresAt),
@@ -105,9 +105,11 @@ export const broadcastRideRequest = async (
         travelTimeMinutes: driver.travelTimeMinutes,
         bonus: bonus,
       });
-      
+
       driverIds.push(driver.driverId);
     }
+
+    await batch.commit();
 
     console.log('[BROADCAST] Broadcast terminé', {
       rideId,

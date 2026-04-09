@@ -14,6 +14,8 @@ import { ChatModal } from '@/components/ChatModal';
 import { InvoiceModal } from '@/components/InvoiceModal';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 import { CURRENCY_CODE, DEFAULT_PRICING, DEFAULT_LOCALE } from '@/utils/constants';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/ui/Toast';
 
 interface DriverFoundViewProps {
   bookingId: string;
@@ -50,6 +52,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
 
   const { autocompleteService } = useGoogleMaps();
   const { watchPosition } = useCapacitorGeolocation();
+  const { showError, showSuccess, toasts, removeToast } = useToast();
 
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
@@ -152,7 +155,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       const bookingSnap = await getDoc(bookingRef);
 
       if (!bookingSnap.exists()) {
-        alert('Réservation introuvable.');
+        showError('Réservation introuvable.');
         return;
       }
 
@@ -195,15 +198,15 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       setShowCancelModal(false);
 
       if (cancellationFee > 0) {
-        alert(`Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE} ont été débités de votre portefeuille.`);
+        showError(`Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE} ont été débités de votre portefeuille.`);
       } else {
-        alert('Commande annulée avec succès.');
+        showSuccess('Commande annulée avec succès.');
       }
 
       onComplete();
     } catch (error) {
       logger.error('Erreur lors de l\'annulation', { error, bookingId });
-      alert('Erreur lors de l\'annulation. Veuillez réessayer.');
+      showError('Erreur lors de l\'annulation. Veuillez réessayer.');
     } finally {
       setCancelling(false);
     }
@@ -218,10 +221,10 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       setShowEditDestModal(false);
       setNewDestination('');
       setNewDestLocation(null);
-      alert('Destination mise à jour avec succès ! Le prix a été recalculé.');
+      showSuccess('Destination mise à jour avec succès ! Le prix a été recalculé.');
     } catch (error) {
       console.error('Erreur mise à jour destination:', error);
-      alert('Erreur lors de la mise à jour de la destination.');
+      showError('Erreur lors de la mise à jour de la destination.');
     } finally {
       setUpdatingDest(false);
     }
@@ -328,7 +331,9 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
       {/* Carte */}
       <div className="relative h-[300px] sm:h-[400px] bg-gray-100">
         {isLoaded ? (
@@ -630,6 +635,6 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
           }}
         />
       )}
-    </div>
+    </>
   );
 }

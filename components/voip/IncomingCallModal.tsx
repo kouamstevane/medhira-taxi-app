@@ -1,9 +1,12 @@
+'use client';
+
 /**
  * Modal d'appel entrant VoIP
  * Affiché lorsqu'un utilisateur reçoit un appel
  */
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { MdPhone, MdCallEnd } from 'react-icons/md';
 import { Haptics } from '@capacitor/haptics';
 import { useVoipCall } from '../../hooks/useVoipCall';
@@ -78,10 +81,13 @@ export function IncomingCallModal({ call, metadata, onClose }: IncomingCallModal
     <div className="incoming-call-modal">
       <div className="incoming-call-content">
         {/* Avatar de l'appelant */}
-        <img
+        <Image
           src={metadata.avatar || '/default-avatar.png'}
           alt={metadata.name}
           className="incoming-call-avatar"
+          width={120}
+          height={120}
+          unoptimized
         />
 
         {/* Nom de l'appelant */}

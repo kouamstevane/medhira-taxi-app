@@ -176,7 +176,8 @@ export default function Dashboard() {
             // Fallback: chercher dans la collection où userId correspond à l'UID
             const adminQuery = query(
               collection(db, 'admins'),
-              where('userId', '==', user.uid)
+              where('userId', '==', user.uid),
+              limit(1)
             );
             const adminSnapshot = await getDocs(adminQuery);
             setIsAdmin(!adminSnapshot.empty);

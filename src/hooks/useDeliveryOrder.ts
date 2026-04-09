@@ -22,6 +22,9 @@ export function useDeliveryOrder(orderId: string) {
   const [loading, setLoading] = useState(true)
   const [localStatus, setLocalStatus] = useState<DeliveryStatus | null>(null)
   const gpsWatchIdRef = useRef<number | null>(null)
+  const lastEmitTimeRef = useRef<number>(0)
+
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!orderId) return
@@ -29,6 +32,10 @@ export function useDeliveryOrder(orderId: string) {
       const data = snap.exists() ? ({ orderId: snap.id, ...snap.data() } as FoodDeliveryOrder) : null
       setOrder(data)
       if (data) setLocalStatus(data.status)
+      setLoading(false)
+    }, (err) => {
+      console.error('[useDeliveryOrder] Erreur de synchronisation:', err)
+      setError('Erreur de connexion aux données')
       setLoading(false)
     })
     return () => unsub()
@@ -45,12 +52,17 @@ export function useDeliveryOrder(orderId: string) {
 
       gpsWatchIdRef.current = navigator.geolocation.watchPosition(
         (position) => {
+          const now = Date.now()
+          const speed = position.coords.speed ?? 0
+          const interval = speed > 1 ? 1000 : 5000
+          if (now - lastEmitTimeRef.current < interval) return
+          lastEmitTimeRef.current = now
           set(locationRef, {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             heading: position.coords.heading ?? 0,
-            speed: position.coords.speed ?? 0,
-            updatedAt: Date.now(),
+            speed,
+            updatedAt: now,
           })
         },
         (error) => {
@@ -141,6 +153,7 @@ export function useDeliveryOrder(orderId: string) {
   return {
     order: effectiveOrder,
     loading,
+    error,
     updateStatus,
     refuseOrder,
     confirmPickup,

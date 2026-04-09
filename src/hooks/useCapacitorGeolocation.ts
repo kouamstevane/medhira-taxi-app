@@ -278,7 +278,7 @@ export const useCapacitorGeolocation = () => {
                     {
                         enableHighAccuracy: true,
                         timeout: 10000,
-                        maximumAge: throttleMs / 1000 //  Accepte cache récent pour réduire fréquence
+                        maximumAge: throttleMs // Accept cache within throttle window
                     },
                     (position, err) => {
                         if (err) {
@@ -287,10 +287,11 @@ export const useCapacitorGeolocation = () => {
                         }
                         if (position) {
                             const now = Date.now();
+                            const speed = position.coords.speed ?? 0;
+                            const effectiveInterval = speed > 1 ? throttleMs : 5000;
                             const timeSinceLastCallback = now - lastCallbackTime;
                             
-                            //  Throttling à maxFrequencyHz (medJira.md #67)
-                            if (timeSinceLastCallback >= throttleMs) {
+                            if (timeSinceLastCallback >= effectiveInterval) {
                                 lastCallbackTime = now;
                                 const preciseLocation: PreciseLocation = {
                                     lat: position.coords.latitude,

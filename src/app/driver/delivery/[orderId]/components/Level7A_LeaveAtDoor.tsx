@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import type { FoodDeliveryOrder } from '@/types/firestore-collections'
 
@@ -15,12 +15,26 @@ export default function Level7A_LeaveAtDoor({ order, confirmDelivery, uploadProo
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const blobUrlRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current)
+      }
+    }
+  }, [])
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (!f) return
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current)
+    }
+    const newUrl = URL.createObjectURL(f)
+    blobUrlRef.current = newUrl
     setPhoto(f)
-    setPreview(URL.createObjectURL(f))
+    setPreview(newUrl)
   }
 
   const handleConfirm = async () => {

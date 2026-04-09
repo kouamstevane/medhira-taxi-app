@@ -31,6 +31,7 @@ const DOC_LABELS: Record<string, string> = {
 export function useDocumentStatus(uid: string | null) {
   const [documents, setDocuments] = useState<DocumentStatusEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [globalStatus, setGlobalStatus] = useState<'all_approved' | 'has_rejected' | 'pending'>('pending')
 
   useEffect(() => {
@@ -53,9 +54,13 @@ export function useDocumentStatus(uid: string | null) {
       const hasRejected = entries.some(e => e.status === 'rejected')
       setGlobalStatus(allApproved ? 'all_approved' : hasRejected ? 'has_rejected' : 'pending')
       setLoading(false)
+    }, (err) => {
+      console.error('[useDocumentStatus] Erreur de synchronisation:', err)
+      setError('Erreur de connexion aux données')
+      setLoading(false)
     })
     return () => unsub()
   }, [uid])
 
-  return { documents, loading, globalStatus }
+  return { documents, loading, error, globalStatus }
 }

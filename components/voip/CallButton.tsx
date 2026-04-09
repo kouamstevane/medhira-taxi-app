@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Composant bouton d'appel VoIP
  * Bouton circulaire pour déclencher un appel vocal

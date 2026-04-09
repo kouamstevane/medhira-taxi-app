@@ -9,6 +9,7 @@ type PeriodFilter = '7days' | '30days' | 'all'
 export function useDriverRatings(uid: string, period: PeriodFilter = 'all') {
   const [ratings, setRatings] = useState<DriverRating[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!uid) return
@@ -29,6 +30,10 @@ export function useDriverRatings(uid: string, period: PeriodFilter = 'all') {
       })
       setRatings(filtered)
       setLoading(false)
+    }, (err) => {
+      console.error('[useDriverRatings] Erreur de synchronisation:', err)
+      setError('Erreur de connexion aux données')
+      setLoading(false)
     })
     return () => unsub()
   }, [uid, period])
@@ -37,5 +42,5 @@ export function useDriverRatings(uid: string, period: PeriodFilter = 'all') {
     ? ratings.reduce((s, r) => s + r.score, 0) / ratings.length
     : null
 
-  return { ratings, avgScore, loading }
+  return { ratings, avgScore, loading, error }
 }

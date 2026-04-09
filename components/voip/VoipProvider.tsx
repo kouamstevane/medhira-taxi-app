@@ -1,13 +1,17 @@
+'use client';
+
 /**
  * Provider VoIP pour gérer les appels au niveau global de l'application
  * Affiche automatiquement les modaux d'appel entrant et les écrans d'appel actif
  */
 
+import dynamic from 'next/dynamic';
 import React, { useEffect } from 'react';
 import { useVoipCall } from '../../hooks/useVoipCall';
-import { IncomingCallModal } from './IncomingCallModal';
-import { ActiveCallScreen } from './ActiveCallScreen';
 import { VoipCall } from '../../src/types/voip';
+
+const IncomingCallModal = dynamic(() => import('./IncomingCallModal'), { ssr: false, loading: () => null })
+const ActiveCallScreen = dynamic(() => import('./ActiveCallScreen'), { ssr: false, loading: () => null })
 
 interface VoipProviderProps {
   children: React.ReactNode;

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2, UploadCloud, FileCheck, X } from 'lucide-react';
@@ -41,6 +41,13 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
   });
 
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  const blobUrlsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   // Gérer les previews pour les fichiers initiaux
   React.useEffect(() => {
@@ -49,7 +56,9 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
         Object.entries(initialFiles).forEach(([key, file]) => {
             if (file instanceof File) {
                 if (file.type.startsWith('image/')) {
-                    newPreviews[key] = URL.createObjectURL(file);
+                    const url = URL.createObjectURL(file);
+                    blobUrlsRef.current.push(url);
+                    newPreviews[key] = url;
                 } else if (file.type === 'application/pdf') {
                     newPreviews[key] = 'pdf';
                 }
@@ -72,7 +81,13 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
 
     // Générer une preview
     if (file.type.startsWith('image/')) {
+        const oldUrl = previews[key];
+        if (oldUrl && oldUrl !== 'pdf') {
+            URL.revokeObjectURL(oldUrl);
+            blobUrlsRef.current = blobUrlsRef.current.filter(u => u !== oldUrl);
+        }
         const url = URL.createObjectURL(file);
+        blobUrlsRef.current.push(url);
         setPreviews(prev => ({ ...prev, [key]: url }));
     } else if (file.type === 'application/pdf') {
         // Simple preview logic for PDF

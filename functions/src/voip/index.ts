@@ -28,6 +28,21 @@ function getMessaging() {
   return getAdmin().messaging();
 }
 
+const voipRateLimits = new Map<string, { count: number; resetAt: number }>();
+function checkVoipRateLimit(uid: string, action: string, maxCalls: number, windowSeconds: number): void {
+  const key = `${uid}:${action}`;
+  const now = Date.now();
+  const entry = voipRateLimits.get(key);
+  if (entry && now < entry.resetAt) {
+    if (entry.count >= maxCalls) {
+      throw new HttpsError('resource-exhausted', `Rate limit exceeded for ${action}. Try again later.`);
+    }
+    entry.count++;
+  } else {
+    voipRateLimits.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
+  }
+}
+
 
 /**
  * Valide que l'appartient à l'utilisateur
@@ -130,6 +145,8 @@ export const createCall = onCall(
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
+
+  checkVoipRateLimit(request.auth.uid, 'createCall', 10, 60);
 
   const callerId = request.auth.uid;
   const data = request.data as { calleeId?: string; rideId?: string };
@@ -278,6 +295,8 @@ export const answerCall = onCall(
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
 
+  checkVoipRateLimit(request.auth.uid, 'answerCall', 20, 60);
+
   const { callId } = request.data as { callId?: string };
   const userId = request.auth.uid;
 
@@ -329,6 +348,8 @@ export const endCall = onCall(
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
+
+  checkVoipRateLimit(request.auth.uid, 'endCall', 20, 60);
 
   const { callId, reason } = request.data as { callId?: string; reason?: string };
   const userId = request.auth.uid;
@@ -389,6 +410,8 @@ export const sendSystemMessage = onCall(
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
+
+  checkVoipRateLimit(request.auth.uid, 'sendSystemMessage', 10, 60);
 
   const { bookingId, content, recipient } = request.data as { bookingId?: string; content?: string; recipient?: string };
 

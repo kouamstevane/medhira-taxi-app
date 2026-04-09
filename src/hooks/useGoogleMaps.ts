@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 
 interface UseGoogleMapsReturn {
@@ -33,6 +33,14 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
   const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService | null>(null);
   const [autocompleteService, setAutocompleteService] = useState<google.maps.places.AutocompleteService | null>(null);
 
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const initializeServices = useCallback(() => {
     if (window.google && window.google.maps) {
       try {
@@ -45,6 +53,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
         if (!window.google.maps.places) {
           // Attendre un peu et réessayer
           setTimeout(() => {
+            if (!mountedRef.current) return;
             if (window.google?.maps?.places) {
               try {
                 setDirectionsService(new window.google.maps.DirectionsService());
@@ -56,6 +65,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
                 setLoadError((err as Error).message || 'Erreur d\'initialisation de Google Maps');
               }
             } else {
+              if (!mountedRef.current) return;
               setLoadError('La bibliothèque "places" n\'est pas disponible. Vérifiez que l\'API Places est activée.');
             }
           }, 500);
@@ -63,12 +73,14 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
         }
 
         // Initialiser les services
+        if (!mountedRef.current) return;
         setDirectionsService(new window.google.maps.DirectionsService());
         setAutocompleteService(new window.google.maps.places.AutocompleteService());
         setIsLoaded(true);
         setLoadError(null);
       } catch (err: unknown) {
         console.error('Erreur lors de l\'initialisation des services Google Maps:', err);
+        if (!mountedRef.current) return;
         setLoadError((err as Error).message || 'Erreur d\'initialisation de Google Maps');
       }
     }

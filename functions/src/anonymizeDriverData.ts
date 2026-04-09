@@ -7,7 +7,9 @@ import { onDocumentUpdated, FirestoreEvent, Change, QueryDocumentSnapshot } from
 import * as functionsV1 from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 
-admin.initializeApp();
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 // ============================================================================
 // Fonction planifiée : anonymisation quotidienne (§8.2)

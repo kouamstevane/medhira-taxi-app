@@ -30,10 +30,7 @@ export default function RestaurantClient({ id }: RestaurantClientProps) {
 
   const loadRestaurantData = async () => {
     try {
-      // Pour ce walkthrough on récupère tous les restaurants et on filtre,
-      // dans une app prod on ajouterait `getRestaurantById` dans le service
-      const { restaurants } = await FoodDeliveryService.getApprovedRestaurants({});
-      const current = restaurants.find(r => r.id === id);
+      const current = await FoodDeliveryService.getRestaurantById(id);
 
       if (current) {
         setRestaurant(current);

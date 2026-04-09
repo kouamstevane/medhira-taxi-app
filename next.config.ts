@@ -38,10 +38,6 @@ const nextConfig: NextConfig = {
     formats: ['image/webp'],
     minimumCacheTTL: 60,
   },
-  // ESLint et TypeScript sont maintenant gérés séparément
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   // Configuration Turbopack (Next.js 16+)
   turbopack: {
     // Configuration vide car les optimisations sont gérées automatiquement

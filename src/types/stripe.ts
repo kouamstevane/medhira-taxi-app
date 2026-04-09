@@ -90,16 +90,6 @@ export interface DriverRequirements {
   lastCheckedAt: Date;
 }
 
-/** Exigences KYC Stripe persistées pour le chauffeur */
-export interface DriverRequirements {
-  /** Liste des exigences actuellement en attente */
-  currently_due: string[];
-  /** Date limite pour fournir les documents (timestamp UTC) */
-  current_deadline: number | null;
-  /** Dernière mise à jour des exigences */
-  lastCheckedAt: Date;
-}
-
 /** Données persistées dans Firestore pour un chauffeur */
 export interface DriverStripeData {
   stripeAccountId: string | null;
@@ -180,7 +170,7 @@ export const PAYMENT_STATUS = {
 export type PaymentStatus = typeof PAYMENT_STATUS[keyof typeof PAYMENT_STATUS];
 
 /** Méthode de paiement choisie par le passager */
-export type PaymentMethod = 'card' | 'wallet';
+export type StripePaymentMethod = 'card' | 'wallet';
 
 // ============================================================================
 // WEBHOOKS

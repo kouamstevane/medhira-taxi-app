@@ -24,6 +24,7 @@ export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
     
     // Ref pour éviter les problèmes de fermeture (§4.1)
     const isTrackingRef = useRef(false);
+    const lastHapticRef = useRef(0);
 
     const startTracking = useCallback(async () => {
         if (!currentUser?.uid) {
@@ -41,9 +42,13 @@ export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
                     // Haptic feedback discret sur update (§9.1)
                     // Uniquement si vitesse > 5 m/s (18 km/h) pour éviter spam
                     if (location.speed > 5) {
-                        Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
-                            // Silencieux en cas d'erreur (non-critique)
-                        });
+                        const now = Date.now();
+                        if (now - lastHapticRef.current >= 60000) {
+                            lastHapticRef.current = now;
+                            Haptics.impact({ style: ImpactStyle.Light }).catch(() => {
+                                // Silencieux en cas d'erreur (non-critique)
+                            });
+                        }
                     }
                 },
                 onError: (err: TrackingError) => {

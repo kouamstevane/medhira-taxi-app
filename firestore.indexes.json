@@ -380,6 +380,26 @@
       "collectionGroup": "active_bookings",
       "queryScope": "COLLECTION",
       "fields": [{ "fieldPath": "driverId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "drivers",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "weeklyPayoutEnabled", "order": "ASCENDING" }, { "fieldPath": "stripeAccountStatus", "order": "ASCENDING" }, { "fieldPath": "pendingBalanceCents", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "drivers",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "active_bookings",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "driverId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "anonymization_tasks",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "anonymizeAt", "order": "ASCENDING" }]
     }
   ],
   "fieldOverrides": []

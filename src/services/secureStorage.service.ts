@@ -23,46 +23,92 @@ import CryptoJS from 'crypto-js';
  * - Pas de fallback hardcodé (génération sécurisée si absent)
  */
 
-// Clé de stockage pour la clé de chiffrement dérivée
 const DERIVED_KEY_STORAGE = 'derived_encryption_key';
+const SALT_KEY = 'medjira_device_salt';
+const LEGACY_STATIC_SALT = 'medhira-taxi-static-salt';
+const LEGACY_STATIC_SEED_SUFFIX = 'medhira-taxi-salt-2024';
 
-// Nombre d'itérations PBKDF2 (RFC 2898 recommande 10,000+ minimum)
 const PBKDF2_ITERATIONS = 100000;
 
-/**
- * Génère une clé de chiffrement dérivée sécurisée
- * Conforme à §8.2 (Protection des Données) et §12 (Anti-Patterns)
- * 
- * @returns Clé de chiffrement dérivée (device-specific + user-specific)
- */
+async function getOrCreateDeviceSalt(): Promise<string> {
+    const { value } = await Preferences.get({ key: SALT_KEY });
+    if (value) return value;
+
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    const salt = Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('');
+    await Preferences.set({ key: SALT_KEY, value: salt });
+    return salt;
+}
+
+async function deriveKeyInWorker(seed: string, salt: string, iterations: number): Promise<string> {
+    try {
+        const { getCryptoWorker } = await import('@/workers')
+        const worker = getCryptoWorker()
+        
+        if (!worker) {
+            return CryptoJS.PBKDF2(seed, salt, {
+                keySize: 256 / 32,
+                iterations,
+            }).toString()
+        }
+
+        return new Promise((resolve) => {
+            const handler = (e: MessageEvent) => {
+                if (e.data.type === 'deriveKeyResult') {
+                    worker.removeEventListener('message', handler)
+                    resolve(e.data.key || CryptoJS.PBKDF2(seed, salt, {
+                        keySize: 256 / 32,
+                        iterations,
+                    }).toString())
+                }
+            }
+            worker.addEventListener('message', handler)
+            worker.postMessage({ type: 'deriveKey', seed, salt, iterations })
+        })
+    } catch {
+        return CryptoJS.PBKDF2(seed, salt, {
+            keySize: 256 / 32,
+            iterations,
+        }).toString()
+    }
+}
+
 async function generateDerivedEncryptionKey(): Promise<string> {
     try {
-        // 1. Obtenir l'identifiant unique de l'appareil
         const deviceInfo = await Device.getId();
         const deviceId = deviceInfo.identifier || 'unknown-device';
-        
-        // 2. Obtenir l'UID utilisateur (si connecté)
+
         const auth = getAuth();
         const userUid = auth.currentUser?.uid || 'anonymous';
-        
-        // 3. Combiner device ID + user UID + salt statique
-        const combinedSeed = `${deviceId}:${userUid}:medhira-taxi-salt-2024`;
-        
-        // 4. Dériver une clé forte avec PBKDF2 (SHA-256)
-        const derivedKey = CryptoJS.PBKDF2(
-            combinedSeed,
-            'medhira-taxi-static-salt',
-            {
-                keySize: 256 / 32, // 256 bits
-                iterations: PBKDF2_ITERATIONS,
-            }
-        ).toString();
-        
+
+        const deviceSalt = await getOrCreateDeviceSalt();
+        const combinedSeed = `${deviceId}:${userUid}:${deviceSalt}`;
+
+        const derivedKey = await deriveKeyInWorker(combinedSeed, deviceSalt, PBKDF2_ITERATIONS);
+
         return derivedKey;
     } catch (error) {
         console.error('[SecureStorage] Error generating derived key:', error);
-        // Fallback sécurisé: générer une clé aléatoire (pas de fallback hardcodé)
         return CryptoJS.lib.WordArray.random(256 / 8).toString();
+    }
+}
+
+async function generateLegacyDerivedEncryptionKey(): Promise<string> {
+    try {
+        const deviceInfo = await Device.getId();
+        const deviceId = deviceInfo.identifier || 'unknown-device';
+
+        const auth = getAuth();
+        const userUid = auth.currentUser?.uid || 'anonymous';
+
+        const combinedSeed = `${deviceId}:${userUid}:${LEGACY_STATIC_SEED_SUFFIX}`;
+
+        const derivedKey = await deriveKeyInWorker(combinedSeed, LEGACY_STATIC_SALT, PBKDF2_ITERATIONS);
+
+        return derivedKey;
+    } catch {
+        return '';
     }
 }
 
@@ -162,7 +208,16 @@ class SecureStorageService {
     private async decrypt(encryptedData: string): Promise<string> {
         const encryptionKey = await getEncryptionKey();
         const bytes = CryptoJS.AES.decrypt(encryptedData, encryptionKey);
-        return bytes.toString(CryptoJS.enc.Utf8);
+        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+        if (decrypted) return decrypted;
+
+        const legacyKey = await generateLegacyDerivedEncryptionKey();
+        if (!legacyKey) throw new Error('Decryption failed');
+        const legacyBytes = CryptoJS.AES.decrypt(encryptedData, legacyKey);
+        const legacyDecrypted = legacyBytes.toString(CryptoJS.enc.Utf8);
+        if (!legacyDecrypted) throw new Error('Decryption failed');
+
+        return legacyDecrypted;
     }
 
     /**
@@ -210,11 +265,29 @@ class SecureStorageService {
                 return null;
             }
 
-            // Déchiffrer
-            const decrypted = await this.decrypt(value);
+            let decrypted: string;
+            const encryptionKey = await getEncryptionKey();
+            const bytes = CryptoJS.AES.decrypt(value, encryptionKey);
+            decrypted = bytes.toString(CryptoJS.enc.Utf8);
+
+            if (!decrypted) {
+                const legacyKey = await generateLegacyDerivedEncryptionKey();
+                if (legacyKey) {
+                    const legacyBytes = CryptoJS.AES.decrypt(value, legacyKey);
+                    const legacyDecrypted = legacyBytes.toString(CryptoJS.enc.Utf8);
+                    if (legacyDecrypted) {
+                        decrypted = legacyDecrypted;
+                        this.setItem(key, JSON.parse(legacyDecrypted).data ?? JSON.parse(legacyDecrypted)).catch(() => {});
+                    }
+                }
+            }
+
+            if (!decrypted) {
+                return null;
+            }
+
             const storedData: StoredData<T> = JSON.parse(decrypted);
 
-            // Vérifier expiration
             if (storedData.expiresAt && Date.now() > storedData.expiresAt) {
                 await this.removeItem(key);
                 return null;

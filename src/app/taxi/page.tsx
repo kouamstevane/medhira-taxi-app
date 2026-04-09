@@ -7,15 +7,17 @@
 
 'use client';
 
+import dynamic from 'next/dynamic';
+
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
 import { NewRideForm } from './components/NewRideForm';
-import { DriverFoundView } from './components/DriverFoundView';
+const DriverFoundView = dynamic(() => import('./components/DriverFoundView'), { ssr: false, loading: () => <div className="w-full h-64 bg-gray-100 animate-pulse rounded-xl" /> })
 import { SearchingDriverBottomSheet } from './components/SearchingDriverBottomSheet';
 import { logger } from '@/utils/logger';
-import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { startAutomaticSearch, stopAutomaticSearch } from '@/services/matching/automaticSearch';
 import { BonusSelector } from './components/BonusSelector';
@@ -63,7 +65,8 @@ export default function TaxiPage() {
         const q = query(
           bookingsRef,
           where('userId', '==', currentUser.uid),
-          where('status', 'in', ['pending', 'accepted', 'driver_arrived', 'in_progress'])
+          where('status', 'in', ['pending', 'accepted', 'driver_arrived', 'in_progress']),
+          limit(5)
         );
 
         const snapshot = await getDocs(q);

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useVoipCall } from '@/hooks/useVoipCall';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
@@ -42,10 +43,13 @@ export function ActiveCallOverlay() {
       <div className="flex flex-col items-center gap-4 mt-8">
         <div className="relative">
           {otherParticipant?.avatar ? (
-            <img 
+            <Image 
               src={otherParticipant.avatar} 
               alt={otherParticipant.name} 
-              className="w-24 h-24 rounded-full border-2 border-slate-700 object-cover" 
+              className="w-24 h-24 rounded-full border-2 border-slate-700 object-cover"
+              width={96}
+              height={96}
+              unoptimized
             />
           ) : (
             <div className="w-24 h-24 rounded-full bg-slate-700 flex items-center justify-center text-3xl font-bold text-white">

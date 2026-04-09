@@ -5,11 +5,7 @@
  * les composants de cartes de course, et les services de matching.
  */
 
-export interface PreciseLocation {
-  lat: number;
-  lng: number;
-  accuracy?: number;
-}
+import { PreciseLocation } from './booking';
 
 export interface BaseTrip {
   id: string;

@@ -1,6 +1,6 @@
 // src/hooks/useDriverProfile.ts
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { auth, db, storage } from '@/config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -38,6 +38,16 @@ export function useDriverProfile() {
   const [payoutToggleLoading, setPayoutToggleLoading] = useState(false);
   const [manualPayoutLoading, setManualPayoutLoading] = useState(false);
   const [payoutSuccess, setPayoutSuccess] = useState('');
+
+  const mountedRef = useRef(true);
+  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      timeoutsRef.current.forEach(clearTimeout);
+    };
+  }, []);
 
   const fetchStripeData = useCallback(async () => {
     const user = auth.currentUser;
@@ -80,6 +90,7 @@ export function useDriverProfile() {
     }
 
     getDoc(doc(db, 'drivers', user.uid)).then(docSnap => {
+      if (!mountedRef.current) return;
       if (docSnap.exists()) {
         const data = docSnap.data() as DriverCoreData;
         setDriver(data);
@@ -188,7 +199,10 @@ export function useDriverProfile() {
       if (!res.ok) throw new Error(data.error);
       setStripeData(prev => prev ? { ...prev, weeklyPayoutEnabled: enabled } : prev);
       setPayoutSuccess(data.message ?? '');
-      setTimeout(() => setPayoutSuccess(''), 4000);
+      const timeout = setTimeout(() => {
+        if (mountedRef.current) setPayoutSuccess('');
+      }, 4000);
+      timeoutsRef.current.push(timeout);
     } catch (err) {
       setStripeError(err instanceof Error ? err.message : 'Erreur');
     } finally {
@@ -211,7 +225,10 @@ export function useDriverProfile() {
       const data: { error?: string; amount?: number; currency?: string } = await res.json();
       if (!res.ok) throw new Error(data.error);
       setPayoutSuccess(`Virement de ${data.amount} ${data.currency?.toUpperCase()} envoyé !`);
-      setTimeout(() => setPayoutSuccess(''), 5000);
+      const timeout = setTimeout(() => {
+        if (mountedRef.current) setPayoutSuccess('');
+      }, 5000);
+      timeoutsRef.current.push(timeout);
       await fetchStripeData();
     } catch (err) {
       setStripeError(err instanceof Error ? err.message : 'Erreur');
@@ -226,7 +243,10 @@ export function useDriverProfile() {
       const { AuthService } = await import('@/services');
       await AuthService.sendVerificationEmail(auth.currentUser);
       setVerificationEmailSent(true);
-      setTimeout(async () => { await reloadUser(); }, 2000);
+      const timeout = setTimeout(async () => {
+        if (mountedRef.current) await reloadUser();
+      }, 2000);
+      timeoutsRef.current.push(timeout);
     } catch (err) {
       logFirestoreError(err, "envoi de l'email de vérification");
       setError("Erreur lors de l'envoi de l'email de vérification.");

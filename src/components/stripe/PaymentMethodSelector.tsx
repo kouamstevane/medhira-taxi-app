@@ -11,14 +11,14 @@
  */
 
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import type { PaymentMethod } from '@/types/stripe';
+import type { StripePaymentMethod } from '@/types/stripe';
 
 interface PaymentMethodSelectorProps {
   walletBalance: number;
   fareAmount: number;
   currency: string;
-  selectedMethod: PaymentMethod;
-  onSelect: (method: PaymentMethod) => void;
+  selectedMethod: StripePaymentMethod;
+  onSelect: (method: StripePaymentMethod) => void;
   loading?: boolean;
 }
 

@@ -15,7 +15,7 @@ import { emailVerificationService } from '@/services/email-verification.service'
 import { StructuredLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
 import { redirectWithFallback } from '@/utils/navigation';
-import { checkConnectivity } from '@/hooks/useConnectivityMonitor';
+import { useConnectivityMonitor, checkConnectivity } from '@/hooks/useConnectivityMonitor';
 import { DEFAULT_DRIVER_COUNTRY_CODE } from '@/utils/constants';
 import type { Step1FormData } from '@/app/driver/register/components/Step1Intent';
 import type { Step2FormData } from '@/app/driver/register/components/Step2Identity';
@@ -60,6 +60,7 @@ export function useDriverRegistration() {
     idFront?: File; idBack?: File; licenseFront?: File; licenseBack?: File;
   }>({});
 
+  const connectivityOnline = useConnectivityMonitor(() => {});
   const isMountedRef = useRef(true);
   const emailRetryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -511,7 +512,7 @@ export function useDriverRegistration() {
     currentStep,
     loading,
     error,
-    isOnline: true, // passed from useConnectivityMonitor in the page component
+    isOnline: connectivityOnline,
     isSubmitting,
     submissionSuccess,
     rejectionCode,

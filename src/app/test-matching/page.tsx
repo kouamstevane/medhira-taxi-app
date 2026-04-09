@@ -94,7 +94,7 @@ export default function TestMatchingPage() {
       const q = query(
         driversRef,
         where('status', '==', 'approved'),
-        limit(100)
+        limit(50)
       );
 
       const snapshot = await getDocs(q);

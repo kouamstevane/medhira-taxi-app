@@ -680,6 +680,23 @@ export const migrateCurrencyToCADHTTP = onRequest(
       });
       return;
     }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Non authentifié' });
+      return;
+    }
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      const userDoc = await admin.firestore().collection('admins').where('userId', '==', decodedToken.uid).limit(1).get();
+      if (userDoc.empty) {
+        res.status(403).json({ error: 'Accès non autorisé — admin requis' });
+        return;
+      }
+    } catch (error) {
+      res.status(401).json({ error: 'Token invalide' });
+      return;
+    }
     
     logger.info('🚀 Démarrage de la migration FCFA → CAD (HTTP)...');
     

@@ -463,22 +463,32 @@ export const updateDriverLocation = async (
   bookingId: string,
   location: Location
 ): Promise<void> => {
-  const bookingRef = doc(db, 'bookings', bookingId);
-  await updateDoc(bookingRef, {
-    driverLocation: location,
-    updatedAt: serverTimestamp(),
-  });
+  try {
+    const bookingRef = doc(db, 'bookings', bookingId);
+    await updateDoc(bookingRef, {
+      driverLocation: location,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('[taxi.service] updateDriverLocation failed:', error);
+    throw error;
+  }
 };
 
 export const updatePassengerLocation = async (
   bookingId: string,
   location: Location
 ): Promise<void> => {
-  const bookingRef = doc(db, 'bookings', bookingId);
-  await updateDoc(bookingRef, {
-    passengerLocation: location,
-    updatedAt: serverTimestamp(),
-  });
+  try {
+    const bookingRef = doc(db, 'bookings', bookingId);
+    await updateDoc(bookingRef, {
+      passengerLocation: location,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('[taxi.service] updatePassengerLocation failed:', error);
+    throw error;
+  }
 };
 
 /**

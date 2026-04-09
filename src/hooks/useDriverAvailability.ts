@@ -15,6 +15,7 @@ import { useDriverStore } from '@/store/driverStore'
 export function useDriverAvailability() {
   const { driver } = useDriverStore()
   const gpsWatchIdRef = useRef<number | null>(null)
+  const lastEmitTimeRef = useRef<number>(0)
 
   useEffect(() => {
     const uid = auth.currentUser?.uid
@@ -32,13 +33,18 @@ export function useDriverAvailability() {
 
       gpsWatchIdRef.current = navigator.geolocation.watchPosition(
         (position) => {
+          const now = Date.now()
+          const speed = position.coords.speed ?? 0
+          const interval = speed > 1 ? 1000 : 5000
+          if (now - lastEmitTimeRef.current < interval) return
+          lastEmitTimeRef.current = now
           set(locationRef, {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
             accuracy: position.coords.accuracy,
-            speed: position.coords.speed ?? 0,
+            speed,
             heading: position.coords.heading ?? 0,
-            timestamp: Date.now(),
+            timestamp: now,
           })
         },
         (error) => {

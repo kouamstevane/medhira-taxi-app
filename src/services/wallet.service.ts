@@ -28,7 +28,7 @@ import {
   Transaction,
   TransactionType,
   TransactionStatus,
-  PaymentMethod,
+  WalletPaymentMethod,
   RechargeRequest,
 } from '@/types';
 import { CURRENCY_CODE, LIMITS } from '@/utils/constants';

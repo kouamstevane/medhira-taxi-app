@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { collection, query, where, orderBy, limit, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 
@@ -31,19 +31,23 @@ export function useDriverActivity(uid: string): {
       return
     }
 
-    const allRecords: ActivityRecord[] = []
+    const taxiRecordsRef: ActivityRecord[] = []
+    const deliveryRecordsRef: ActivityRecord[] = []
     let taxiLoaded = false
     let deliveryLoaded = false
 
+    const mergeAndSort = () => {
+      const merged = [...taxiRecordsRef, ...deliveryRecordsRef].sort((a, b) => b.date.localeCompare(a.date))
+      setRecords(merged)
+    }
+
     const checkDone = () => {
       if (taxiLoaded && deliveryLoaded) {
-        allRecords.sort((a, b) => b.date.localeCompare(a.date))
-        setRecords([...allRecords])
+        mergeAndSort()
         setLoading(false)
       }
     }
 
-    // Query taxi rides (active_bookings)
     const taxiQuery = query(
       collection(db, 'active_bookings'),
       where('driverId', '==', uid),
@@ -52,16 +56,13 @@ export function useDriverActivity(uid: string): {
     )
 
     const unsubTaxi = onSnapshot(taxiQuery, (snap) => {
-      // Remove old taxi records
-      const idx = allRecords.findIndex(r => r.type === 'taxi')
-      if (idx !== -1) allRecords.splice(0, allRecords.length, ...allRecords.filter(r => r.type !== 'taxi'))
-
+      taxiRecordsRef.length = 0
       snap.docs.forEach(d => {
         const data = d.data()
         const ts = data.createdAt instanceof Timestamp
           ? data.createdAt.toDate()
           : new Date(data.createdAt ?? Date.now())
-        allRecords.push({
+        taxiRecordsRef.push({
           id: d.id,
           type: 'taxi',
           description: `Course — ${data.pickupAddress ?? 'Départ inconnu'}`,
@@ -70,10 +71,10 @@ export function useDriverActivity(uid: string): {
         })
       })
       taxiLoaded = true
+      mergeAndSort()
       checkDone()
     })
 
-    // Query delivery orders (food_delivery_orders)
     const deliveryQuery = query(
       collection(db, 'food_delivery_orders'),
       where('driverId', '==', uid),
@@ -82,15 +83,13 @@ export function useDriverActivity(uid: string): {
     )
 
     const unsubDelivery = onSnapshot(deliveryQuery, (snap) => {
-      // Remove old delivery records
-      allRecords.splice(0, allRecords.length, ...allRecords.filter(r => r.type !== 'livraison'))
-
+      deliveryRecordsRef.length = 0
       snap.docs.forEach(d => {
         const data = d.data()
         const ts = data.createdAt instanceof Timestamp
           ? data.createdAt.toDate()
           : new Date(data.createdAt ?? Date.now())
-        allRecords.push({
+        deliveryRecordsRef.push({
           id: d.id,
           type: 'livraison',
           description: `Livraison — ${data.restaurantName ?? 'Restaurant inconnu'}`,
@@ -99,6 +98,7 @@ export function useDriverActivity(uid: string): {
         })
       })
       deliveryLoaded = true
+      mergeAndSort()
       checkDone()
     })
 

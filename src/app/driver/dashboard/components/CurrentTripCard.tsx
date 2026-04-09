@@ -1,11 +1,13 @@
 "use client";
+import dynamic from 'next/dynamic';
 import { useState, useMemo } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { ChatModal } from '@/components/ChatModal';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
-import { MapView } from '@/components/ui';
 import type { Trip } from '@/types/trip';
+
+const MapView = dynamic(() => import('@/components/ui').then(mod => ({ default: mod.MapView })), { ssr: false, loading: () => <div className="w-full h-56 bg-gray-100 animate-pulse rounded-xl" /> })
 
 interface CurrentTripCardProps {
   trip: Trip;

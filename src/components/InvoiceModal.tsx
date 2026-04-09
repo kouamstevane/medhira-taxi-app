@@ -12,6 +12,8 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Booking } from '@/types/booking';
 import { downloadInvoiceFromBooking, extractInvoiceData } from '@/services/invoice.service';
 import { DEFAULT_LOCALE, CURRENCY_CODE } from '@/utils/constants';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/ui/Toast';
 
 interface InvoiceModalProps {
   booking: Booking;
@@ -21,6 +23,7 @@ interface InvoiceModalProps {
 export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
+  const { showError, toasts, removeToast } = useToast();
   
   const invoiceData = extractInvoiceData(booking);
   
@@ -32,7 +35,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
       setTimeout(() => setDownloaded(false), 3000);
     } catch (error) {
       console.error('Erreur téléchargement facture:', error);
-      alert('Erreur lors du téléchargement de la facture');
+      showError('Erreur lors du téléchargement de la facture');
     } finally {
       setDownloading(false);
     }
@@ -43,7 +46,9 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
       <div className="glass-card rounded-2xl border border-white/10 max-w-md w-full max-h-[90vh] overflow-y-auto">
         {/* En-tête avec gradient */}
         <div className="bg-gradient-to-r from-primary to-[#ffae33] text-white p-6 rounded-t-2xl">
@@ -186,6 +191,6 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
           </p>
         </div>
       </div>
-    </div>
+    </>
   );
 }

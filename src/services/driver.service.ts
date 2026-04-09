@@ -34,25 +34,30 @@ export const createOrUpdateDriver = async (
   driverId: string,
   driverData: Partial<Driver>
 ): Promise<void> => {
-  const driverRef = doc(db, 'drivers', driverId);
-  const driverSnap = await getDoc(driverRef);
+  try {
+    const driverRef = doc(db, 'drivers', driverId);
+    const driverSnap = await getDoc(driverRef);
 
-  if (driverSnap.exists()) {
-    await updateDoc(driverRef, {
-      ...driverData,
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    await setDoc(driverRef, {
-      id: driverId,
-      ...driverData,
-      status: 'offline',
-      verified: false,
-      rating: 5,
-      totalTrips: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    if (driverSnap.exists()) {
+      await updateDoc(driverRef, {
+        ...driverData,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await setDoc(driverRef, {
+        id: driverId,
+        ...driverData,
+        status: 'offline',
+        verified: false,
+        rating: 5,
+        totalTrips: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    console.error('[driver.service] createOrUpdateDriver failed:', error);
+    throw error;
   }
 };
 
@@ -75,7 +80,7 @@ export const getDriverById = async (driverId: string): Promise<Driver | null> =>
  */
 export const getDriverByUserId = async (userId: string): Promise<Driver | null> => {
   const driversRef = collection(db, 'drivers');
-  const q = query(driversRef, where('userId', '==', userId));
+  const q = query(driversRef, where('userId', '==', userId), limit(1));
   
   const querySnapshot = await getDocs(q);
   
@@ -93,12 +98,17 @@ export const updateDriverStatus = async (
   driverId: string,
   status: DriverStatus
 ): Promise<void> => {
-  const driverRef = doc(db, 'drivers', driverId);
-  
-  await updateDoc(driverRef, {
-    status,
-    updatedAt: serverTimestamp(),
-  });
+  try {
+    const driverRef = doc(db, 'drivers', driverId);
+
+    await updateDoc(driverRef, {
+      status,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('[driver.service] updateDriverStatus failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -204,16 +214,10 @@ const updateDriverRating = async (driverId: string, newRating: number): Promise<
  */
 export const incrementDriverTrips = async (driverId: string): Promise<void> => {
   const driverRef = doc(db, 'drivers', driverId);
-  const driverSnap = await getDoc(driverRef);
-
-  if (driverSnap.exists()) {
-    const currentTrips = driverSnap.data().totalTrips || 0;
-    
-    await updateDoc(driverRef, {
-      totalTrips: currentTrips + 1,
-      updatedAt: serverTimestamp(),
-    });
-  }
+  await updateDoc(driverRef, {
+    totalTrips: increment(1),
+    updatedAt: serverTimestamp(),
+  });
 };
 
 /**
@@ -221,16 +225,10 @@ export const incrementDriverTrips = async (driverId: string): Promise<void> => {
  */
 export const incrementDriverAcceptedTrips = async (driverId: string): Promise<void> => {
   const driverRef = doc(db, 'drivers', driverId);
-  const driverSnap = await getDoc(driverRef);
-
-  if (driverSnap.exists()) {
-    const currentAccepted = driverSnap.data().tripsAccepted || 0;
-    
-    await updateDoc(driverRef, {
-      tripsAccepted: currentAccepted + 1,
-      updatedAt: serverTimestamp(),
-    });
-  }
+  await updateDoc(driverRef, {
+    tripsAccepted: increment(1),
+    updatedAt: serverTimestamp(),
+  });
 };
 
 /**
@@ -238,16 +236,10 @@ export const incrementDriverAcceptedTrips = async (driverId: string): Promise<vo
  */
 export const incrementDriverDeclinedTrips = async (driverId: string): Promise<void> => {
   const driverRef = doc(db, 'drivers', driverId);
-  const driverSnap = await getDoc(driverRef);
-
-  if (driverSnap.exists()) {
-    const currentDeclined = driverSnap.data().tripsDeclined || 0;
-    
-    await updateDoc(driverRef, {
-      tripsDeclined: currentDeclined + 1,
-      updatedAt: serverTimestamp(),
-    });
-  }
+  await updateDoc(driverRef, {
+    tripsDeclined: increment(1),
+    updatedAt: serverTimestamp(),
+  });
 };
 
 /**

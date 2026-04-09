@@ -194,3 +194,22 @@
 .animate-pulse-green {
   animation: pulse-green 2s infinite;
 }
+
+/* H2: Mobile touch targets minimum 44x44px (WCAG 2.5.5 / medJiraV2 §9.1) */
+button,
+[role="button"],
+a[role="button"],
+input[type="submit"],
+input[type="button"],
+input[type="reset"] {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Small icon-only buttons need padding to reach 44px */
+button[class*="p-1"],
+button[class*="p-2"],
+a[class*="p-1"],
+a[class*="p-2"] {
+  padding: 0.625rem;
+}

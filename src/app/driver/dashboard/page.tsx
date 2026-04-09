@@ -40,6 +40,8 @@ import { getDriverDashboardInfoMessage } from '@/utils/driver.utils';
 import type { Trip, RideRequest } from '@/types/trip';
 import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
 import { useDriverAvailability } from '@/hooks/useDriverAvailability';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/ui/Toast';
 
 export default function DriverDashboard() {
   const { driver, setDriver, updateDriver } = useDriverStore();
@@ -55,6 +57,7 @@ export default function DriverDashboard() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { showError, toasts, removeToast } = useToast();
 
   const getInitials = (firstName?: string, lastName?: string): string => {
     const firstChar = firstName?.[0] || 'D';
@@ -125,7 +128,7 @@ export default function DriverDashboard() {
         // Vérifier si le compte est actif
         if (driverData.isActive === false) {
           await signOut(auth);
-          alert('Votre compte a été désactivé par un administrateur. Contactez le support.');
+          showError('Votre compte a été désactivé par un administrateur. Contactez le support.');
           router.push('/driver/login');
           return;
         }
@@ -134,13 +137,13 @@ export default function DriverDashboard() {
         if (driverData.isSuspended) {
           await signOut(auth);
           const reason = driverData.suspensionReason || 'Contactez le support pour plus d\'informations.';
-          alert(`Votre compte a été suspendu. Raison: ${reason}`);
+          showError(`Votre compte a été suspendu. Raison: ${reason}`);
           router.push('/driver/login');
           return;
         }
 
         if (driverData.status === 'rejected') {
-          alert('Votre demande a été rejetée. Vous pouvez soumettre une nouvelle demande.');
+          showError('Votre demande a été rejetée. Vous pouvez soumettre une nouvelle demande.');
           router.push('/driver/register');
           return;
         }
@@ -425,7 +428,7 @@ export default function DriverDashboard() {
       const result = await assignDriver(rideId, auth.currentUser.uid);
 
       if (!result.success) {
-        alert(result.error || "Impossible d'accepter la course. Elle a peut-être déjà été prise.");
+        showError(result.error || "Impossible d'accepter la course. Elle a peut-être déjà été prise.");
         return;
       }
 
@@ -462,7 +465,7 @@ export default function DriverDashboard() {
     } catch (err: unknown) {
       console.error("Erreur d'acceptation:", err);
       const message = err instanceof Error ? err.message : "Impossible d'accepter la course.";
-      alert(message);
+      showError(message);
     }
   };
 
@@ -489,7 +492,7 @@ export default function DriverDashboard() {
       const result = await assignDriver(tripId, auth.currentUser.uid);
 
       if (!result.success) {
-        alert(result.error || "Impossible d'accepter la course. Elle a peut-être déjà été prise.");
+        showError(result.error || "Impossible d'accepter la course. Elle a peut-être déjà été prise.");
         return;
       }
 
@@ -526,7 +529,7 @@ export default function DriverDashboard() {
     } catch (err: unknown) {
       console.error("Erreur d'acceptation:", err);
       const message = err instanceof Error ? err.message : "Impossible d'accepter la course.";
-      alert(message);
+      showError(message);
     }
   };
 
@@ -537,7 +540,7 @@ export default function DriverDashboard() {
       // Le state se mettra à jour via onSnapshot
     } catch (error) {
       console.error('Erreur marquage arrivée:', error);
-      alert('Erreur lors du marquage. Réessayez.');
+      showError('Erreur lors du marquage. Réessayez.');
     }
   };
 
@@ -548,7 +551,7 @@ export default function DriverDashboard() {
       // Le state se mettra à jour via onSnapshot
     } catch (error) {
       console.error('Erreur démarrage course:', error);
-      alert('Erreur lors du démarrage. Réessayez.');
+      showError('Erreur lors du démarrage. Réessayez.');
     }
   };
 
@@ -576,7 +579,7 @@ export default function DriverDashboard() {
       setCurrentTrip(null);
     } catch (error) {
       console.error("Erreur lors de la fin de course:", error);
-      alert("Erreur lors de la clôture de la course");
+      showError("Erreur lors de la clôture de la course");
     }
   };
 
@@ -598,7 +601,9 @@ export default function DriverDashboard() {
   const activeMode = driver?.activeMode ?? 'taxi'
 
   return (
-    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
       <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-24">
         {/* Header */}
         <header className="p-6 flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-xl z-50">
@@ -868,7 +873,7 @@ export default function DriverDashboard() {
       </div>
       {/* Bottom Nav — en dehors du conteneur contraint pour éviter tout problème de stacking context */}
       <BottomNav items={driverNavItems} />
-    </div>
+    </>
   );
 }
 

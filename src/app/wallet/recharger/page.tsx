@@ -1,4 +1,5 @@
 "use client";
+import dynamic from 'next/dynamic';
 import type React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -9,7 +10,7 @@ import { CURRENCY_CODE, LIMITS, WALLET_FEES, WALLET_PRESET_AMOUNTS, ACTIVE_MARKE
 import { formatCurrencyWithCode } from '@/utils/format';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
-import { StripePaymentElement } from '@/components/stripe/StripePaymentElement';
+const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement'), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 animate-pulse rounded-xl" /> })
 import { STRIPE_CURRENCY_BY_MARKET } from '@/types/stripe';
 
 type PaymentStep = 'select' | 'stripe_form' | 'success';

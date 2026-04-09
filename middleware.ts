@@ -22,9 +22,19 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-/**
- * Routes publiques (accessibles sans authentification)
- */
+const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'medjira-service';
+
+interface DecodedFirebaseToken {
+  iss: string;
+  aud: string;
+  exp: number;
+  iat: number;
+  sub: string;
+  email?: string;
+  role?: string;
+  [key: string]: unknown;
+}
+
 const PUBLIC_ROUTES = [
   '/',
   '/login',
@@ -34,9 +44,6 @@ const PUBLIC_ROUTES = [
   '/auth/verify-email',
 ];
 
-/**
- * Routes protégées nécessitant une authentification
- */
 const PROTECTED_ROUTES = [
   '/dashboard',
   '/taxi',
@@ -45,27 +52,24 @@ const PROTECTED_ROUTES = [
   '/profile',
 ];
 
-/**
- * Routes réservées aux chauffeurs
- */
 const DRIVER_ROUTES = [
   '/driver/dashboard',
   '/driver/profile',
   '/driver/verify',
 ];
 
-/**
- * Routes publiques pour les chauffeurs (login, register, verify-email)
- */
 const DRIVER_PUBLIC_ROUTES = [
   '/driver/login',
   '/driver/register',
   '/driver/verify-email',
 ];
 
-/**
- * Vérifier si une route correspond à un pattern
- */
+const ADMIN_ROUTES = [
+  '/admin',
+];
+
+const VALID_USER_TYPES = ['chauffeur', 'driver', 'passager', 'passenger', 'admin'];
+
 function matchesRoute(pathname: string, routes: string[]): boolean {
   return routes.some(route => {
     if (pathname === route) return true;
@@ -74,14 +78,69 @@ function matchesRoute(pathname: string, routes: string[]): boolean {
   });
 }
 
-/**
- * Logger les événements importants (en production, utilisez un service de logging)
- */
 function logEvent(type: 'AUTH_CHECK' | 'REDIRECT' | 'SECURITY', message: string, data?: Record<string, unknown>) {
   if (process.env.NODE_ENV === 'development') {
     console.log(`[MIDDLEWARE:${type}]`, message, data || '');
   }
-  // En production, envoyez vers un service de logging (Sentry, LogRocket, etc.)
+}
+
+function decodeJwtPayload(token: string): DecodedFirebaseToken | null {
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+
+  try {
+    let payload = parts[1];
+    const pad = payload.length % 4;
+    if (pad) {
+      payload += '='.repeat(4 - pad);
+    }
+    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return decoded as DecodedFirebaseToken;
+  } catch {
+    return null;
+  }
+}
+
+function verifyFirebaseToken(token: string): { valid: boolean; decoded: DecodedFirebaseToken | null } {
+  if (!token || typeof token !== 'string') {
+    return { valid: false, decoded: null };
+  }
+
+  const decoded = decodeJwtPayload(token);
+  if (!decoded) {
+    logEvent('SECURITY', 'Invalid JWT structure');
+    return { valid: false, decoded: null };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+
+  if (typeof decoded.exp !== 'number' || decoded.exp <= now) {
+    logEvent('SECURITY', 'Token expired', { exp: decoded.exp, now });
+    return { valid: false, decoded: null };
+  }
+
+  const expectedIssuer = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
+  if (decoded.iss !== expectedIssuer) {
+    logEvent('SECURITY', 'Invalid token issuer', { iss: decoded.iss, expected: expectedIssuer });
+    return { valid: false, decoded: null };
+  }
+
+  if (decoded.aud !== FIREBASE_PROJECT_ID) {
+    logEvent('SECURITY', 'Invalid token audience', { aud: decoded.aud, expected: FIREBASE_PROJECT_ID });
+    return { valid: false, decoded: null };
+  }
+
+  return { valid: true, decoded };
+}
+
+function isAdminUser(decoded: DecodedFirebaseToken | null, userType: string | undefined): boolean {
+  if (decoded?.role === 'admin') return true;
+  if (decoded && typeof decoded['https://medjira.taxi/claims'] === 'object') {
+    const claims = decoded['https://medjira.taxi/claims'] as Record<string, unknown>;
+    if (claims.admin === true) return true;
+  }
+  if (userType === 'admin') return true;
+  return false;
 }
 
 /**
@@ -92,36 +151,41 @@ export function middleware(request: NextRequest) {
   const response = NextResponse.next();
 
   // ==================== Vérification de l'authentification ====================
-  
+
   const authToken = request.cookies.get('auth-token')?.value;
   const userType = request.cookies.get('user-type')?.value;
-  const isAuthenticated = !!authToken;
+
+  const { valid: tokenValid, decoded: decodedToken } = verifyFirebaseToken(authToken || '');
+  const isAuthenticated = tokenValid;
+
+  if (userType && !VALID_USER_TYPES.includes(userType)) {
+    logEvent('SECURITY', 'Invalid user-type cookie value', { userType, path: pathname });
+  }
 
   logEvent('AUTH_CHECK', `Route: ${pathname}, Auth: ${isAuthenticated}, Type: ${userType || 'none'}`);
 
   // ==================== Gestion des routes publiques ====================
-  
+
   const isPublicRoute = matchesRoute(pathname, PUBLIC_ROUTES);
   const isDriverPublicRoute = matchesRoute(pathname, DRIVER_PUBLIC_ROUTES);
 
-  // Si utilisateur connecté essaie d'accéder aux pages de login/signup
   if (isAuthenticated && (isPublicRoute || isDriverPublicRoute)) {
-    const excludedRoutes = ['/']; // Page d'accueil accessible même connecté
+    const excludedRoutes = ['/'];
     const shouldRedirect = !excludedRoutes.includes(pathname);
 
     if (shouldRedirect) {
-      const redirectUrl = userType === 'chauffeur' ? '/driver/dashboard' : '/dashboard';
+      const redirectUrl = userType === 'chauffeur' || userType === 'driver' ? '/driver/dashboard' : '/dashboard';
       logEvent('REDIRECT', `Authenticated user → ${redirectUrl}`, { from: pathname });
       return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
   }
 
   // ==================== Protection des routes privées ====================
-  
+
   const isProtectedRoute = matchesRoute(pathname, PROTECTED_ROUTES);
   const isDriverRoute = matchesRoute(pathname, DRIVER_ROUTES);
+  const isAdminRoute = matchesRoute(pathname, ADMIN_ROUTES);
 
-  // Routes protégées pour utilisateurs normaux
   if (isProtectedRoute && !isAuthenticated) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
@@ -142,6 +206,26 @@ export function middleware(request: NextRequest) {
       logEvent('REDIRECT', 'Non-driver accessing driver route → /dashboard', {
         userType,
         from: pathname,
+      });
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // ==================== Protection des routes admin ====================
+
+  if (isAdminRoute) {
+    if (!isAuthenticated) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      logEvent('REDIRECT', 'Unauthenticated user on admin route → /login', { from: pathname });
+      return NextResponse.redirect(loginUrl);
+    }
+
+    if (!isAdminUser(decodedToken, userType)) {
+      logEvent('SECURITY', 'Non-admin accessing admin route', {
+        userType,
+        from: pathname,
+        tokenRole: decodedToken?.role,
       });
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
@@ -207,14 +291,10 @@ export function middleware(request: NextRequest) {
   // ==================== Cookies de sécurité ====================
   
   // S'assurer que les cookies sont sécurisés
-  if (authToken) {
-    // Les cookies devraient être définis avec les flags suivants:
-    // - HttpOnly: true (empêche l'accès JavaScript)
-    // - Secure: true (HTTPS seulement en production)
-    // - SameSite: 'strict' ou 'lax'
-    // 
-    // Note: Ces flags sont définis lors de la création des cookies (login)
-    // Le middleware les vérifie ici
+  if (authToken && !tokenValid) {
+    logEvent('SECURITY', 'Clearing invalid auth-token cookie', { path: pathname });
+    response.cookies.delete('auth-token');
+    response.cookies.delete('user-type');
   }
 
   return response;

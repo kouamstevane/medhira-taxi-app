@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { PlaceSuggestion } from '@/types';
 
 interface UsePlacesAutocompleteProps {
@@ -19,6 +19,11 @@ export const usePlacesAutocomplete = ({
 }: UsePlacesAutocompleteProps): UsePlacesAutocompleteReturn => {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const clearSuggestions = useCallback(() => {
     setSuggestions([]);
@@ -48,6 +53,7 @@ export const usePlacesAutocomplete = ({
       autocompleteService.getPlacePredictions(
         request,
         (predictions, status) => {
+          if (!mountedRef.current) return;
           setLoading(false);
           if (
             status === google.maps.places.PlacesServiceStatus.OK &&

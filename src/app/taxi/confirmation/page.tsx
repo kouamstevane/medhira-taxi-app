@@ -1,11 +1,17 @@
 "use client";
 
+import dynamic from 'next/dynamic';
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import { doc, onSnapshot, updateDoc, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
 import { db } from "@/config/firebase";
 import { CURRENCY_CODE, LIMITS, DEFAULT_LOCALE } from "@/utils/constants";
-import { LoadScript, GoogleMap, Marker, DirectionsRenderer } from "@react-google-maps/api";
+const GoogleMapsComponents = dynamic(() => import('@react-google-maps/api'), { 
+  ssr: false,
+  loading: () => <div className="w-full h-[200px] bg-gray-100 animate-pulse rounded-xl" />
+});
+
+const { LoadScript, GoogleMap, Marker, DirectionsRenderer } = GoogleMapsComponents || {};
 import { MaterialIcon } from "@/components/ui/MaterialIcon";
 
 const mapContainerStyle = { width: "100%", height: "200px" };

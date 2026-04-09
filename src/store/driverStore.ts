@@ -1,5 +1,6 @@
 // src/store/driverStore.ts
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export interface DriverCarData {
   model: string;
@@ -46,16 +47,32 @@ interface DriverState {
   clearDriver: () => void;
 }
 
-export const useDriverStore = create<DriverState>()((set) => ({
-  driver: null,
-  isLoaded: false,
+export const useDriverStore = create<DriverState>()(
+  persist(
+    (set) => ({
+      driver: null,
+      isLoaded: false,
 
-  setDriver: (driver) => set({ driver, isLoaded: true }),
+      setDriver: (driver) => set({ driver, isLoaded: true }),
 
-  updateDriver: (partial) =>
-    set((state) => ({
-      driver: state.driver ? { ...state.driver, ...partial } : null,
-    })),
+      updateDriver: (partial) =>
+        set((state) => ({
+          driver: state.driver ? { ...state.driver, ...partial } : null,
+        })),
 
-  clearDriver: () => set({ driver: null, isLoaded: false }),
-}));
+      clearDriver: () => set({ driver: null, isLoaded: false }),
+    }),
+    {
+      name: 'medjira-driver-store',
+      partialize: (state) => ({
+        driver: state.driver
+          ? {
+              isAvailable: state.driver.isAvailable,
+              activeDeliveryOrderId: state.driver.activeDeliveryOrderId,
+              activeMode: state.driver.activeMode,
+            }
+          : null,
+      }),
+    }
+  )
+);

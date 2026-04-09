@@ -1,9 +1,12 @@
+'use client';
+
 /**
  * Écran d'appel VoIP actif
  * Affiché pendant un appel en cours
  */
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { MdMic, MdMicOff, MdVolumeUp, MdVolumeOff, MdCallEnd } from 'react-icons/md';
 import { Haptics } from '@capacitor/haptics';
 import { useVoipCall } from '../../hooks/useVoipCall';
@@ -72,10 +75,13 @@ export function ActiveCallScreen({ call, metadata }: ActiveCallScreenProps) {
     <div className="active-call-screen">
       <div className="active-call-content">
         {/* Avatar de l'autre participant */}
-        <img
+        <Image
           src={metadata.avatar || '/default-avatar.png'}
           alt={metadata.name}
           className="active-call-avatar"
+          width={120}
+          height={120}
+          unoptimized
         />
 
         {/* Nom */}

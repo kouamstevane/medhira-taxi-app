@@ -7,17 +7,19 @@ service firebase.storage {
     // ========== AJOUTEZ CECI ==========
     // Logo public pour les emails et l'application
     match /logo/{allPaths=**} {
-      allow read: if true; // Lecture publique pour les emails
-      allow write: if request.auth != null; // Écriture protégée
+      allow read: if true;
+      allow write: if request.auth != null
+                    && request.resource.size < 2 * 1024 * 1024;
     }
     // ==================================
 
     // Images de profil des utilisateurs
     match /profile_images/{userId} {
-      allow read: if true; // Les images de profil sont publiques
+      allow read: if request.auth != null;
       allow write: if request.auth != null
                     && request.auth.uid == userId
-                    && resource.contentType.matches('image/.*'); // Validation MIME type
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
     }
     
     // Documents des chauffeurs (permis, carte grise, etc.)
@@ -26,6 +28,7 @@ service firebase.storage {
       allow read: if request.auth != null && request.auth.uid == driverId;
       allow write: if request.auth != null
                     && request.auth.uid == driverId
+                    && request.resource.size < 10 * 1024 * 1024
                     && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
     }
     
@@ -35,20 +38,24 @@ service firebase.storage {
       allow read: if request.auth != null && request.auth.uid == driverId;
       allow write: if request.auth != null
                     && request.auth.uid == driverId
+                    && request.resource.size < 10 * 1024 * 1024
                     && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
     }
     
     // Images des véhicules
     match /vehicles/{vehicleId}/{allPaths=**} {
-      allow read: if true; // Les images de véhicules sont publiques
+      allow read: if request.auth != null;
       allow write: if request.auth != null
-                    && resource.contentType.matches('image/.*'); // Validation MIME type
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
     }
     
     // Documents de transaction/factures
     match /receipts/{userId}/{receiptId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.size < 5 * 1024 * 1024;
     }
     
     // Preuves de livraison (photos à la remise du colis)

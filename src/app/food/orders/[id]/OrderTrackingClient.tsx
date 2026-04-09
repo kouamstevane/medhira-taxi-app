@@ -11,6 +11,8 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/ui/Toast';
 
 const STATUS_STEPS = [
   { id: 'pending', icon: 'schedule', label: 'En attente' },
@@ -27,6 +29,7 @@ interface OrderTrackingClientProps {
 
 export default function OrderTrackingClient({ orderId }: OrderTrackingClientProps) {
   const router = useRouter();
+  const { showError, toasts, removeToast } = useToast();
 
   const [order, setOrder] = useState<FoodOrder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,7 +84,7 @@ export default function OrderTrackingClient({ orderId }: OrderTrackingClientProp
 
   const handleSubmitReview = async () => {
     if (!order || restaurantRating === 0) {
-      alert('Veuillez au moins noter le restaurant.');
+      showError('Veuillez au moins noter le restaurant.');
       return;
     }
 
@@ -110,7 +113,7 @@ export default function OrderTrackingClient({ orderId }: OrderTrackingClientProp
       setReviewSubmitted(true);
     } catch (err) {
       console.error('Erreur soumission avis:', err);
-      alert('Erreur lors de la soumission de l\'avis.');
+      showError('Erreur lors de la soumission de l\'avis.');
     } finally {
       setSubmittingReview(false);
     }
@@ -143,7 +146,9 @@ export default function OrderTrackingClient({ orderId }: OrderTrackingClientProp
   const isCancelled = order.status === 'cancelled';
 
   return (
-    <div className="min-h-screen bg-background pb-20 max-w-[430px] mx-auto">
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <div className="min-h-screen bg-background pb-20 max-w-[430px] mx-auto">
       {/* Header */}
       <div className="bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-20 flex items-center justify-between">
         <button onClick={() => router.back()} className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10">
@@ -280,6 +285,6 @@ export default function OrderTrackingClient({ orderId }: OrderTrackingClientProp
         )}
       </div>
       <BottomNav />
-    </div>
+    </>
   );
 }

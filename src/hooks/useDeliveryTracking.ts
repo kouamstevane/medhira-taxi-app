@@ -14,14 +14,19 @@ interface DriverLocation {
 export function useDeliveryTracking(orderId: string | null): {
   driverLocation: { lat: number; lng: number; heading: number } | null
   isOnline: boolean
+  error: string | null
 } {
   const [location, setLocation] = useState<DriverLocation | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!orderId) return
     const trackingRef = ref(rtdb, `delivery_tracking/${orderId}/location`)
     const unsub = onValue(trackingRef, (snap) => {
       setLocation(snap.val() as DriverLocation | null)
+    }, (err) => {
+      console.error('[useDeliveryTracking] Erreur de synchronisation:', err)
+      setError('Erreur de connexion aux données')
     })
     return () => unsub()
   }, [orderId])
@@ -31,5 +36,6 @@ export function useDeliveryTracking(orderId: string | null): {
   return {
     driverLocation: location ? { lat: location.lat, lng: location.lng, heading: location.heading } : null,
     isOnline,
+    error,
   }
 }

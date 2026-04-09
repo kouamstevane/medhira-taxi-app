@@ -5,7 +5,7 @@
  */
 
 import { Timestamp } from 'firebase/firestore';
-import { PaymentStatus, PaymentMethod } from './stripe';
+import { PaymentStatus, StripePaymentMethod } from './stripe';
 
 /**
  * Coordonnées géographiques
@@ -74,7 +74,7 @@ export interface Booking {
   actualDuration?: number; // Durée réelle en minutes
   cancellationFee?: number; // Frais d'annulation 
   paymentStatus?: PaymentStatus; // Statut du paiement
-  paymentMethod?: PaymentMethod; // Méthode de paiement (carte ou portefeuille)
+  paymentMethod?: StripePaymentMethod; // Méthode de paiement (carte ou portefeuille)
   stripePaymentIntentId?: string | null; // ID du PaymentIntent Stripe
   paymentActionRequired?: string | null; // Type d'action requise (ex: 'redirect_to_url')
   paymentActionClientSecret?: string | null; // Client secret pour 3D Secure

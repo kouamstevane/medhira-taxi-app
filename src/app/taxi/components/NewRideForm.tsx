@@ -7,6 +7,7 @@
 
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod'; //  Ajout validation Zod (medJira.md #85)
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'; //  Ajout haptic (medJira.md #93)
@@ -21,12 +22,12 @@ import { AddressInput } from './AddressInput';
 import { VehicleOption } from './VehicleOption';
 import { FareSummary } from './FareSummary';
 import { BonusSelector } from './BonusSelector';
-import { PaymentMethodSelector } from '@/components/stripe/PaymentMethodSelector';
-import { StripePaymentElement } from '@/components/stripe/StripePaymentElement';
+const PaymentMethodSelector = dynamic(() => import('@/components/stripe/PaymentMethodSelector'), { ssr: false, loading: () => <div className="w-full h-24 bg-gray-100 animate-pulse rounded-xl" /> })
+const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement'), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 animate-pulse rounded-xl" /> })
 import { logger } from '@/utils/logger';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
-import type { PaymentMethod } from '@/types/stripe';
+import type { StripePaymentMethod } from '@/types/stripe';
 
 //  Schéma Zod de validation pour la création de course (medJira.md #85)
 const BookingSchema = z.object({
@@ -88,7 +89,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
 
   // États paiement
   const [modalStep, setModalStep] = useState<'summary' | 'payment' | 'stripe'>('summary');
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('card');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<StripePaymentMethod>('card');
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletCurrency, setWalletCurrency] = useState('CAD');
   const [walletLoading, setWalletLoading] = useState(false);
@@ -461,7 +462,7 @@ useEffect(() => {
   };
 
   // Crée la réservation Firestore avec la méthode de paiement choisie
-  const createBookingInternal = async (paymentMethod: PaymentMethod): Promise<string | null> => {
+  const createBookingInternal = async (paymentMethod: StripePaymentMethod): Promise<string | null> => {
     try {
       const bookingData = {
         userId: currentUser!.uid,
@@ -493,7 +494,7 @@ useEffect(() => {
   };
 
   // Confirmation finale pour paiement wallet (ou fallback sans méthode)
-  const handleConfirmBooking = async (paymentMethod: PaymentMethod = 'wallet') => {
+  const handleConfirmBooking = async (paymentMethod: StripePaymentMethod = 'wallet') => {
     if (!currentUser || !pickupAddress || !destinationAddress || !selectedCarType || !estimate) {
       logger.warn('Données manquantes pour la confirmation de course');
       return;

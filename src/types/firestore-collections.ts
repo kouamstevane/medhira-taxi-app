@@ -623,25 +623,6 @@ export interface DriverRequestCollection {
  * Règles de sécurité :
  * - Read : Chauffeur concerné uniquement
  * - Create : Utilisateurs authentifiés
-  callerMetadata: {
-    uid: string;
-    name: string;
-    avatar?: string;
-  };
-  startTime: Date;
-  answerTime?: Date;
-  endTime?: Date;
-  reason?: string;
-}
-
-/**
- * Sous-collection REQUESTS (dans DRIVER_REQUESTS)
- * -----------------------------------------------
- * Description : Demandes individuelles pour un chauffeur
- * 
- * Règles de sécurité :
- * - Read : Chauffeur concerné uniquement
- * - Create : Utilisateurs authentifiés
  * - Update : Chauffeur concerné uniquement
  * - Delete : Non autorisé
  * 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/config/firebase';
-import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, Timestamp, limit } from 'firebase/firestore';
 import { onAuthStateChanged } from "firebase/auth";
 import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -12,6 +12,8 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { downloadInvoiceFromBooking } from '@/services/invoice.service';
 import { Booking } from '@/types/booking';
 import { formatCurrencyWithCode } from '@/utils/format';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/ui/Toast';
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'all';
 
@@ -27,6 +29,7 @@ export default function HistoriquePage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterPeriod>('today');
   const router = useRouter();
+  const { showError, toasts, removeToast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -68,13 +71,15 @@ export default function HistoriquePage() {
         ? query(
             collection(db, 'bookings'),
             where('userId', '==', userId),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
+            limit(50)
           )
         : query(
             collection(db, 'bookings'),
             where('userId', '==', userId),
             where('createdAt', '>=', Timestamp.fromDate(startDate)),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
+            limit(50)
           );
 
       // Requêtes pour parcels (livraisons)
@@ -82,13 +87,15 @@ export default function HistoriquePage() {
         ? query(
             collection(db, 'parcels'),
             where('senderId', '==', userId),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
+            limit(50)
           )
         : query(
             collection(db, 'parcels'),
             where('senderId', '==', userId),
             where('createdAt', '>=', Timestamp.fromDate(startDate)),
-            orderBy('createdAt', 'desc')
+            orderBy('createdAt', 'desc'),
+            limit(50)
           );
 
       const [bookingsSnapshot, parcelsSnapshot] = await Promise.all([
@@ -179,12 +186,14 @@ export default function HistoriquePage() {
       downloadInvoiceFromBooking(booking);
     } catch (error) {
       console.error('Erreur téléchargement facture:', error);
-      alert('Erreur lors du téléchargement de la facture');
+      showError('Erreur lors du téléchargement de la facture');
     }
   };
 
   return (
-    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
       <div className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
         {/* Header */}
         <div className="flex items-center mb-6">
@@ -324,6 +333,6 @@ export default function HistoriquePage() {
 
       {/* Bottom Navigation */}
       <BottomNav />
-    </div>
+    </>
   );
 }

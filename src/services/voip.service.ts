@@ -49,20 +49,23 @@ class VoipService {
   }
 
   private async initEngine() {
-    await this.engine.initialize();
-    
-    // Configurer les callbacks de l'engine
-    this.engine.onRemoteUserJoined = (uid) => {
-      logger.info('Participant distant rejoint', { uid });
-    };
-    
-    this.engine.onRemoteUserLeft = (uid) => {
-      logger.info('Participant distant parti', { uid });
-    };
-    
-    this.engine.onError = (message) => {
-      this.updateState({ error: message });
-    };
+    try {
+      await this.engine.initialize();
+      
+      this.engine.onRemoteUserJoined = (uid) => {
+        logger.info('Participant distant rejoint', { uid });
+      };
+      
+      this.engine.onRemoteUserLeft = (uid) => {
+        logger.info('Participant distant parti', { uid });
+      };
+      
+      this.engine.onError = (message) => {
+        this.updateState({ error: message });
+      };
+    } catch (error) {
+      console.error('[voip.service] initEngine failed:', error);
+    }
   }
 
   // --- Actions ---

@@ -106,8 +106,13 @@ export const reactivateDriver = async (
 export const deleteDriver = async (
   driverId: string
 ): Promise<void> => {
-  const driverRef = doc(db, 'drivers', driverId);
-  await deleteDoc(driverRef);
+  try {
+    const driverRef = doc(db, 'drivers', driverId);
+    await deleteDoc(driverRef);
+  } catch (error) {
+    console.error('[admin.service] deleteDriver failed:', error);
+    throw error;
+  }
 };
 
 /**

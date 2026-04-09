@@ -211,6 +211,7 @@ export async function processWeeklyPayouts(
     .where('weeklyPayoutEnabled', '==', true)
     .where('stripeAccountStatus', '==', 'active')
     .where('pendingBalanceCents', '>', 0)
+    .limit(50)
     .get();
 
   for (const doc of snapshot.docs) {
