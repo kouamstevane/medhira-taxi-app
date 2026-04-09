@@ -322,24 +322,35 @@ export const createDriverProfile = onCall(
     if (driverData.userType !== 'chauffeur') {
       throw new HttpsError('failed-precondition', 'userType invalide.');
     }
+
+    // Valider driverType (nouveau) — userType reste toujours 'chauffeur'
+    const validDriverTypes = ['chauffeur', 'livreur', 'les_deux']
+    if (!validDriverTypes.includes(driverData.driverType as string)) {
+      throw new HttpsError('failed-precondition', 'driverType invalide. Valeurs acceptées: chauffeur, livreur, les_deux.')
+    }
+
+    // ⚠️ CORRECTION : year < 2010 rejette les anciens véhicules (pas > 2010 !)
+    if (
+      (driverData.driverType === 'chauffeur' || driverData.driverType === 'les_deux') &&
+      (driverData.car as Record<string, unknown> | undefined)?.year != null &&
+      Number((driverData.car as Record<string, unknown>).year) < 2010   // REJETER si ANTÉRIEUR à 2010
+    ) {
+      throw new HttpsError('failed-precondition', 'Véhicule trop ancien. Année minimale: 2010.')
+    }
+
     const allowedStatuses = ['pending', 'action_required', 'rejected'];
     const status = driverData.status as string | undefined;
     if (!status || !allowedStatuses.includes(status)) {
       throw new HttpsError('failed-precondition', `status invalide. Attendu: ${allowedStatuses.join(', ')}, Reçu: ${status}`);
     }
 
-    const requiredFields = [
-      'firstName',
-      'lastName',
-      'dob',
-      'nationality',
-      'address',
-      'city',
-      'zipCode',
-      'phone',
-      'car',
-      'documents',
-    ];
+    const requiredFields = ['firstName', 'lastName', 'dob', 'nationality', 'address', 'city', 'zipCode', 'phone', 'documents']
+    if (driverData.driverType === 'chauffeur' || driverData.driverType === 'les_deux') {
+      requiredFields.push('car')
+    }
+    if (driverData.driverType === 'livreur' && driverData.vehicleType !== 'velo' && !driverData.deliveryVehicle) {
+      throw new HttpsError('failed-precondition', 'Véhicule livreur manquant.')
+    }
 
     if (!hasRequiredFields(driverData, requiredFields)) {
       throw new HttpsError('failed-precondition', 'Champs requis manquants.');
@@ -374,6 +385,14 @@ export const createDriverProfile = onCall(
           userType: 'chauffeur',
           status: 'pending',
           updatedAt: now,
+          driverType: driverData.driverType,
+          cityId: driverData.cityId || 'edmonton',
+          vehicleType: driverData.vehicleType ?? (driverData.driverType === 'chauffeur' ? 'voiture' : null),
+          activeMode: driverData.driverType === 'les_deux' ? 'taxi' : null,
+          activeDeliveryOrderId: null,
+          deliveriesCompleted: 0,
+          deliveryEarnings: 0,
+          ratingsCount: 0,
         };
 
         if (snapshot.exists) {
@@ -658,7 +677,6 @@ export const onFoodOrderCreated = onDocumentWritten('food_orders/{orderId}', asy
   }
 
   const restaurantId = afterData.restaurantId as string;
-  const pickupCode = afterData.pickupCode as string;
   const restaurantName = afterData.restaurantName as string || 'Restaurant';
   const totalOrderPrice = afterData.totalOrderPrice as number;
 
