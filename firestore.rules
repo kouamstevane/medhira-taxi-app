@@ -174,10 +174,20 @@ service cloud.firestore {
                         ))
                      || isAdmin();
       
+      // Mise à jour : Le chauffeur peut re-soumettre ses documents sans modifier les champs protégés
+      allow update: if request.auth != null
+        && request.auth.uid == driverId
+        && !('status' in request.resource.data)
+        && !('driverType' in request.resource.data)
+        && !('cityId' in request.resource.data)
+        && !('stripeAccountId' in request.resource.data)
+        && !('deliveryEarnings' in request.resource.data)
+        && !('ratingsCount' in request.resource.data);
+
       // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé ou en brouillon
       // Cela permet au chauffeur de recommencer son inscription
-      allow delete: if isAdmin() || 
-                    (isOwner(driverId) && 
+      allow delete: if isAdmin() ||
+                    (isOwner(driverId) &&
                      resource.data.status in ['rejected', 'draft']);
     }
     
@@ -628,7 +638,45 @@ service cloud.firestore {
       // Suppression : Non autorisée (conserver l'historique)
       allow delete: if false;
     }
-    
+
+    // ============================================================================
+    // FONCTION HELPER TRANSITIONS DE STATUT LIVRAISON
+    // ============================================================================
+
+    function isValidStatusTransition(from, to) {
+      return (from == 'assigned'              && to == 'heading_to_restaurant')
+          || (from == 'assigned'              && to == 'refused')
+          || (from == 'heading_to_restaurant' && to == 'arrived_restaurant')
+          || (from == 'arrived_restaurant'    && to == 'waiting')
+          || (from == 'waiting'               && to == 'picked_up')
+          || (from == 'waiting'               && to == 'cancelled')
+          || (from == 'picked_up'             && to == 'heading_to_client')
+          || (from == 'heading_to_client'     && to == 'arrived_client')
+          || (from == 'arrived_client'        && to == 'delivered');
+    }
+
+    // ============================================================================
+    // COLLECTION FOOD_DELIVERY_ORDERS (COMMANDES EN COURS DE LIVRAISON)
+    // ============================================================================
+
+    match /food_delivery_orders/{orderId} {
+      allow read: if request.auth != null
+        && (resource.data.driverId == request.auth.uid
+            || resource.data.clientId == request.auth.uid
+            || request.auth.token.admin == true);
+
+      allow create: if false;
+
+      allow update: if request.auth.uid == resource.data.driverId
+        && isValidStatusTransition(resource.data.status, request.resource.data.status)
+        && request.resource.data.driverId == resource.data.driverId
+        && request.resource.data.clientId == resource.data.clientId
+        && request.resource.data.totalAmount == resource.data.totalAmount
+        && request.resource.data.driverEarnings == resource.data.driverEarnings;
+
+      allow delete: if false;
+    }
+
     // ============================================================================
     // COLLECTION RESTAURANT_REVIEWS (AVIS RESTAURANTS) — Règle 11
     // ============================================================================
@@ -695,6 +743,26 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
     }
     
+    // ============================================================================
+    // COLLECTION DRIVER_RATINGS (ÉVALUATIONS DES CHAUFFEURS)
+    // ============================================================================
+
+    match /driver_ratings/{ratingId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.clientId == request.auth.uid;
+      allow update, delete: if request.auth.token.admin == true;
+    }
+
+    // ============================================================================
+    // COLLECTION CITIES (VILLES)
+    // ============================================================================
+
+    match /cities/{cityId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.token.admin == true;
+    }
+
     // ============================================================================
     // FIN DES RÈGLES DE SÉCURITÉ
     // ============================================================================
