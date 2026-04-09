@@ -1302,3 +1302,79 @@ export const logPinFailure = onCall(
     return { success: true }
   }
 )
+
+/**
+ * Cloud Function de sécurité sur le champ `documents`.
+ *
+ * Empêche les transitions invalides de statut de documents:
+ * - rejected → approved : INTERDIT (nécessite nouveau téléchargement)
+ * - rejected → pending : AUTORISÉ (re-upload après rejet)
+ * - pending → approved : INTERDIT côté client (admin only)
+ * - approved → rejected : AUTORISÉ (audit admin)
+ * - approved → pending : INTERDIT
+ *
+ * En cas de transition invalide, rollback vers l'état précédent.
+ */
+export const onDriverDocumentsUpdated = onDocumentUpdated(
+  { document: 'drivers/{uid}', region: 'europe-west1' },
+  async (event) => {
+    const before = event.data.before.data()
+    const after = event.data.after.data()
+    if (!before || !after) return
+
+    const beforeDocs = before.documents as Record<string, { status: string }> | undefined
+    const afterDocs = after.documents as Record<string, { status: string }> | undefined
+
+    if (!beforeDocs || !afterDocs) return
+
+    const invalidTransitions: Array<{
+      docKey: string
+      from: string
+      to: string
+      rollbackValue: { status: string; url?: string | null }
+    }> = []
+
+    for (const [docKey, beforeEntry] of Object.entries(beforeDocs)) {
+      const afterEntry = afterDocs[docKey]
+      if (!afterEntry) continue
+
+      const fromStatus = beforeEntry.status
+      const toStatus = afterEntry.status
+
+      // rejected → approved : INTERDIT
+      if (fromStatus === 'rejected' && toStatus === 'approved') {
+        invalidTransitions.push({ docKey, from: fromStatus, to: toStatus, rollbackValue: beforeEntry })
+      }
+      // pending → approved : INTERDIT (réservé admin via CF)
+      else if (fromStatus === 'pending' && toStatus === 'approved') {
+        // @ts-expect-error Firestore triggers don't expose event.auth
+        const hasAdminClaim = event.auth?.token?.admin === true
+        if (!hasAdminClaim) {
+          invalidTransitions.push({ docKey, from: fromStatus, to: toStatus, rollbackValue: beforeEntry })
+        }
+      }
+      // approved → pending : INTERDIT
+      else if (fromStatus === 'approved' && toStatus === 'pending') {
+        invalidTransitions.push({ docKey, from: fromStatus, to: toStatus, rollbackValue: beforeEntry })
+      }
+    }
+
+    if (invalidTransitions.length > 0) {
+      const rollbackUpdates: Record<string, unknown> = {}
+      for (const { docKey, rollbackValue } of invalidTransitions) {
+        rollbackUpdates[`documents.${docKey}`] = rollbackValue
+      }
+
+      await admin.firestore().collection('drivers').doc(event.params.uid).update(rollbackUpdates)
+
+      await admin.firestore().collection('audit_logs').add({
+        type: 'driver_documents_invalid_transition',
+        uid: event.params.uid,
+        invalidTransitions,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      })
+
+      console.warn('[onDriverDocumentsUpdated] Rollback triggered:', invalidTransitions)
+    }
+  }
+)

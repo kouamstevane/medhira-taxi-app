@@ -2,10 +2,16 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage, auth } from '@/config/firebase'  // auth importé
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { getDatabase, ref as rtdbRef, set } from 'firebase/database'
+import { db, storage, auth } from '@/config/firebase'
 import { retryWithBackoff } from '@/utils/retry'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
+
+const ACTIVE_DELIVERY_STATUSES: DeliveryStatus[] = [
+  'accepted', 'driver_heading_to_restaurant', 'driver_arrived_restaurant',
+  'picked_up', 'out_for_delivery', 'arriving',
+]
 
 export function validatePin(orderPin: string, input: string): boolean {
   return orderPin === input
@@ -15,6 +21,7 @@ export function useDeliveryOrder(orderId: string) {
   const [order, setOrder] = useState<FoodDeliveryOrder | null>(null)
   const [loading, setLoading] = useState(true)
   const [localStatus, setLocalStatus] = useState<DeliveryStatus | null>(null)
+  const gpsWatchIdRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!orderId) return
@@ -26,6 +33,43 @@ export function useDeliveryOrder(orderId: string) {
     })
     return () => unsub()
   }, [orderId])
+
+  // GPS RTDB emission — throttled 1Hz — active during delivery
+  useEffect(() => {
+    if (!orderId || !localStatus) return
+    const isActive = ACTIVE_DELIVERY_STATUSES.includes(localStatus)
+
+    if (isActive && gpsWatchIdRef.current === null) {
+      const rtdb = getDatabase()
+      const locationRef = rtdbRef(rtdb, `delivery_tracking/${orderId}/location`)
+
+      gpsWatchIdRef.current = navigator.geolocation.watchPosition(
+        (position) => {
+          set(locationRef, {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            heading: position.coords.heading ?? 0,
+            speed: position.coords.speed ?? 0,
+            updatedAt: Date.now(),
+          })
+        },
+        (error) => {
+          console.error('[useDeliveryOrder] GPS error:', error)
+        },
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+      )
+    } else if (!isActive && gpsWatchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current)
+      gpsWatchIdRef.current = null
+    }
+
+    return () => {
+      if (gpsWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(gpsWatchIdRef.current)
+        gpsWatchIdRef.current = null
+      }
+    }
+  }, [orderId, localStatus])
 
   // Optimistic UI
   const updateStatus = useCallback(async (status: DeliveryStatus) => {
@@ -57,11 +101,11 @@ export function useDeliveryOrder(orderId: string) {
   }, [orderId])
 
   const uploadProofPhoto = useCallback(async (file: File): Promise<string> => {
-    const storageRef = ref(storage, `delivery_proofs/${orderId}/${Date.now()}.jpg`)
+    const fileRef = storageRef(storage, `delivery_proofs/${orderId}/${Date.now()}.jpg`)
     return retryWithBackoff(
       async () => {
-        await uploadBytes(storageRef, file)
-        return getDownloadURL(storageRef)
+        await uploadBytes(fileRef, file)
+        return getDownloadURL(fileRef)
       },
       { maxAttempts: 3, baseDelay: 1000 }
     )

@@ -39,9 +39,11 @@ import DeliveryOrdersList from './components/DeliveryOrdersList';
 import { getDriverDashboardInfoMessage } from '@/utils/driver.utils';
 import type { Trip, RideRequest } from '@/types/trip';
 import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
+import { useDriverAvailability } from '@/hooks/useDriverAvailability';
 
 export default function DriverDashboard() {
   const { driver, setDriver, updateDriver } = useDriverStore();
+  useDriverAvailability();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
