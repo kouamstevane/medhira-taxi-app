@@ -9,7 +9,6 @@ import { useDriverStore } from '@/store/driverStore'
 import { useDriverActivity, type ActivityRecord } from '@/hooks/useDriverActivity'
 import { EvaluationsTab } from './components/EvaluationsTab'
 import { formatCurrencyWithCode } from '@/utils/format'
-import { CURRENCY_CODE } from '@/utils/constants'
 
 type Tab = 'historique' | 'gains' | 'evaluations'
 
@@ -26,7 +25,7 @@ function RecordItem({ record }: { record: ActivityRecord }) {
           <p className="text-xs text-slate-500">{record.date}</p>
         </div>
       </div>
-      <p className="font-bold text-white shrink-0">{formatCurrencyWithCode(record.amount, CURRENCY_CODE)}</p>
+      <p className="font-bold text-white shrink-0">{formatCurrencyWithCode(record.amount)}</p>
     </div>
   )
 }
@@ -95,11 +94,11 @@ export default function DriverActivitePage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-slate-400">Aujourd&apos;hui</p>
-                  <p className="text-2xl font-bold text-white">{formatCurrencyWithCode(todayTotal, CURRENCY_CODE)}</p>
+                  <p className="text-2xl font-bold text-white">{formatCurrencyWithCode(todayTotal)}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-400">Total cumulé</p>
-                  <p className="text-xl font-bold text-primary">{formatCurrencyWithCode(totals.total, CURRENCY_CODE)}</p>
+                  <p className="text-xl font-bold text-primary">{formatCurrencyWithCode(totals.total)}</p>
                 </div>
               </div>
               {totals.taxi > 0 && totals.livraison > 0 && (
@@ -107,12 +106,12 @@ export default function DriverActivitePage() {
                   <div className="text-center">
                     <MaterialIcon name="directions_car" className="text-primary text-[20px]" />
                     <p className="text-xs text-slate-400 mt-1">Taxi</p>
-                    <p className="font-bold text-white">{formatCurrencyWithCode(totals.taxi, CURRENCY_CODE)}</p>
+                    <p className="font-bold text-white">{formatCurrencyWithCode(totals.taxi)}</p>
                   </div>
                   <div className="text-center">
                     <MaterialIcon name="delivery_dining" className="text-amber-400 text-[20px]" />
                     <p className="text-xs text-slate-400 mt-1">Livraison</p>
-                    <p className="font-bold text-white">{formatCurrencyWithCode(totals.livraison, CURRENCY_CODE)}</p>
+                    <p className="font-bold text-white">{formatCurrencyWithCode(totals.livraison)}</p>
                   </div>
                 </div>
               )}

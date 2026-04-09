@@ -9,8 +9,8 @@ import { retryWithBackoff } from '@/utils/retry'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
 
 const ACTIVE_DELIVERY_STATUSES: DeliveryStatus[] = [
-  'accepted', 'driver_heading_to_restaurant', 'driver_arrived_restaurant',
-  'picked_up', 'out_for_delivery', 'arriving',
+  'assigned', 'heading_to_restaurant', 'arrived_restaurant',
+  'picked_up', 'heading_to_client', 'arrived_client',
 ]
 
 export function validatePin(orderPin: string, input: string): boolean {

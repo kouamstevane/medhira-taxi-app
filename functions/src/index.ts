@@ -1318,6 +1318,7 @@ export const logPinFailure = onCall(
 export const onDriverDocumentsUpdated = onDocumentUpdated(
   { document: 'drivers/{uid}', region: 'europe-west1' },
   async (event) => {
+    if (!event.data) return
     const before = event.data.before.data()
     const after = event.data.after.data()
     if (!before || !after) return
