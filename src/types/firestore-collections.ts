@@ -58,44 +58,75 @@ export interface UserCollection {
  * - 'action_required' : Action requise
  */
 export interface DriverCollection {
-  driverId: string;
-  userType: 'chauffeur';
-  email: string;
-  phoneNumber: null; // Interdiction d'auth par téléphone
-  firstName: string;
-  lastName: string;
-  dob: string; // Date de naissance
-  nationality: string;
-  address: string;
-  city: string;
-  zipCode: string;
-  phone: string;
-  car: {
-    make: string;
-    model: string;
-    year: number;
-    plateNumber: string;
-    color: string;
-  };
+  // === Champs existants (inchangés) ===
+  driverId: string
+  userType: 'chauffeur'          // JAMAIS modifié — compatibilité Cloud Function
+  email: string
+  phoneNumber: null              // Toujours null — interdiction d'auth par téléphone
+  firstName: string
+  lastName: string
+  dob: string
+  nationality: string
+  address: string
+  city: string
+  zipCode: string
+  phone: string
+  ssn?: { data: string; iv: string; salt: string }
+  bank?: { data: string; iv: string; salt: string }
+  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'action_required'
+  isAvailable: boolean
+  rating: number
+  tripsCompleted: number
+  createdAt: Date
+  updatedAt: Date
+
+  // === Nouveaux champs ===
+  driverType: 'chauffeur' | 'livreur' | 'les_deux'
+  cityId: string                 // ex: 'edmonton'
+  activeMode?: 'taxi' | 'livraison'  // pertinent si driverType === 'les_deux'
+  vehicleType?: 'velo' | 'scooter' | 'moto' | 'voiture'
+  activeDeliveryOrderId?: string | null
+  fcmToken?: string              // Token FCM pour notifications push
+
+  // Véhicule livreur (si driverType inclut 'livreur')
+  deliveryVehicle?: {
+    type: 'velo' | 'scooter' | 'moto' | 'voiture'
+    brand?: string
+    model?: string
+    year?: number
+    plate?: string               // absent si type === 'velo'
+  }
+
+  // Véhicule chauffeur — standardisé make→brand, plateNumber→plate, +3 nouveaux champs
+  car?: {
+    brand: string                // anciennement `make`
+    model: string
+    year: number                 // >= 2010 obligatoire
+    color: string
+    seats: number
+    fuelType: string
+    mileage: number
+    techControlDate: string
+    plate: string                // anciennement `plateNumber`
+  }
+
+  // Documents — nouvelle structure imbriquée (remplace { license, insurance, registration })
   documents: {
-    license: string;
-    insurance: string;
-    registration: string;
-  };
-  ssn?: {
-    data: string; // Données chiffrées
-    iv: string;
-    salt: string;
-  };
-  bank?: {
-    data: string; // Données chiffrées
-    iv: string;
-    salt: string;
-  };
-  status: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'action_required';
-  isAvailable: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+    [documentKey: string]: {
+      url: string | null
+      status: 'pending' | 'approved' | 'rejected' | 'not_submitted'
+      rejectionReason?: string
+      submittedAt?: Date
+      reviewedAt?: Date
+    }
+  }
+
+  // Gains livreur
+  deliveriesCompleted?: number
+  deliveryEarnings?: number
+
+  // Notation
+  ratingsCount?: number
 }
 
 /**
@@ -652,6 +683,100 @@ export interface NotificationCollection {
   createdAt: Date;
 }
 
+// ─────────────────────────────────────────────────────────────
+// LIVREUR FEATURE — Nouveaux types (2026-04-07)
+// ─────────────────────────────────────────────────────────────
+
+export type DriverType = 'chauffeur' | 'livreur' | 'les_deux'
+export type VehicleType = 'velo' | 'scooter' | 'moto' | 'voiture'
+export type DeliveryPreference = 'leave_at_door' | 'meet_outside' | 'meet_at_door'
+export type DeliveryStatus =
+  | 'assigned'
+  | 'refused'
+  | 'heading_to_restaurant'
+  | 'arrived_restaurant'
+  | 'waiting'
+  | 'picked_up'
+  | 'heading_to_client'
+  | 'arrived_client'
+  | 'delivered'
+  | 'cancelled'
+
+export interface DocumentEntry {
+  url: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'not_submitted'
+  rejectionReason?: string
+  submittedAt?: Date
+  reviewedAt?: Date
+}
+
+export interface FoodDeliveryOrder {
+  orderId: string
+  driverId: string
+  restaurantId: string
+  clientId: string
+  cityId: string
+  status: DeliveryStatus
+  deliveryPreference: DeliveryPreference
+  pinCode?: string                  // 4 chiffres — présent si meet_outside | meet_at_door
+  proofPhotoUrl?: string            // URL photo — présent si leave_at_door après livraison
+  restaurantAddress: {
+    address: string
+    lat: number
+    lng: number
+  }
+  clientNeighbourhood: string       // Quartier client (révélé dès l'assignation)
+  clientAddress: {
+    address: string                 // Adresse complète (révélée seulement au statut picked_up)
+    lat: number
+    lng: number
+    instructions?: string
+  }
+  restaurantWaitingStartedAt?: Date
+  cancellationReason?: 'excessive_wait' | 'driver_cancelled' | 'restaurant_cancelled'
+  cancellationReasonFreeText?: string
+  cancellationImpactOnStats: boolean  // false si excessive_wait
+  orderItems: {
+    name: string
+    qty: number
+    price: number
+  }[]
+  orderNumber: string               // ex: '#402'
+  restaurantName: string
+  restaurantPhone: string
+  clientPhone: string
+  totalAmount: number
+  driverEarnings: number            // montant net livreur après commission
+  createdAt: Date
+  updatedAt: Date
+  deliveredAt?: Date
+}
+
+export interface DriverRating {
+  ratingId: string
+  driverId: string
+  clientId: string
+  orderId: string
+  orderType: 'livraison' | 'taxi'
+  score: number                     // 1 à 5
+  comment?: string
+  createdAt: Date
+}
+
+export interface CityDocument {
+  cityId: string                    // ex: 'edmonton'
+  name: string                      // ex: 'Edmonton'
+  country: string                   // 'CA'
+  currency: string                  // 'CAD'
+  isActive: boolean
+  deliveryZones?: {
+    name: string
+    polygon: { lat: number; lng: number }[]
+  }[]
+  createdAt: Date
+  updatedAt: Date
+}
+
 // ============================================================================
 // INDEXES FIRESTORE
 // ============================================================================
@@ -709,6 +834,9 @@ export const FIRESTORE_COLLECTIONS = {
   FOOD_ORDERS: 'food_orders',
   RESTAURANT_REVIEWS: 'restaurant_reviews',
   DELIVERY_REVIEWS: 'delivery_reviews',
+  FOOD_DELIVERY_ORDERS: 'food_delivery_orders',
+  DRIVER_RATINGS: 'driver_ratings',
+  CITIES: 'cities',
 } as const;
 
 export const FIRESTORE_SUBCOLLECTIONS = {
