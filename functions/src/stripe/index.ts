@@ -1,7 +1,7 @@
 /**
  * Cloud Functions — Webhooks Stripe
  *
- * stripeWebhookInstant : 57 événements v1 (payload complet)
+ * stripeWebhookInstant : 25 événements v1 (payload complet)
  *   URL : https://europe-west1-medjira-service.cloudfunctions.net/stripeWebhookInstant
  *
  * stripeWebhookLight : 10 événements v2 (thin events)
@@ -41,8 +41,12 @@ function getDb(): FirebaseFirestore.Firestore {
 }
 
 // ── Stripe client factory ──────────────────────────────────────────────────
+let _stripe: InstanceType<typeof Stripe> | null = null;
 function getStripe(): InstanceType<typeof Stripe> {
-  return new Stripe(stripeSecretKey.value(), { apiVersion: '2026-03-25.dahlia' });
+  if (!_stripe) {
+    _stripe = new Stripe(stripeSecretKey.value(), { apiVersion: '2026-03-25.dahlia' });
+  }
+  return _stripe;
 }
 
 // ── Statuts de paiement ────────────────────────────────────────────────────
@@ -263,9 +267,12 @@ async function onPaymentIntentFailed(pi: Record<string, unknown>): Promise<void>
   const db        = getDb();
 
   if (metadata.purpose === 'taxi_ride' && metadata.bookingId) {
-    await db.collection('bookings').doc(metadata.bookingId).update({
-      paymentStatus: PAYMENT_STATUS.FAILED,
-      paymentError:  errorMsg,
+    const bookingRef = db.collection('bookings').doc(metadata.bookingId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(bookingRef);
+      if (!snap.exists) return;
+      if (snap.data()?.paymentStatus === PAYMENT_STATUS.FAILED) return; // déjà traité
+      tx.update(bookingRef, { paymentStatus: PAYMENT_STATUS.FAILED, paymentError: errorMsg });
     });
   }
 
@@ -302,7 +309,7 @@ async function onPaymentIntentRequiresAction(pi: Record<string, unknown>): Promi
     await getDb().collection('bookings').doc(metadata.bookingId).update({
       paymentStatus:             PAYMENT_STATUS.REQUIRES_ACTION,
       paymentActionRequired:     actionType ?? 'unknown',
-      paymentActionClientSecret: redirectObj?.url ?? null,
+      paymentActionRedirectUrl: redirectObj?.url ?? null,
     });
   }
 }
@@ -430,15 +437,21 @@ async function onChargeRefunded(charge: Record<string, unknown>): Promise<void> 
 
 async function onDisputeCreated(dispute: Record<string, unknown>): Promise<void> {
   const disputeId = dispute.id as string;
-  await getDb().collection('stripe_disputes').doc(disputeId).set({
-    disputeId,
-    chargeId:  dispute.charge as string,
-    amount:    dispute.amount as number,
-    currency:  dispute.currency as string,
-    reason:    dispute.reason as string,
-    status:    dispute.status as string,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  const db = getDb();
+  const ref = db.collection('stripe_disputes').doc(disputeId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) return;
+    tx.set(ref, {
+      disputeId,
+      chargeId:  dispute.charge as string,
+      amount:    dispute.amount as number,
+      currency:  dispute.currency as string,
+      reason:    dispute.reason as string,
+      status:    dispute.status as string,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   });
   console.warn(`[Webhook] Litige créé: ${disputeId}`);
 }
@@ -515,29 +528,38 @@ async function onTransferReversed(transfer: Record<string, unknown>): Promise<vo
 async function onPayoutPaid(payout: Record<string, unknown>): Promise<void> {
   const payoutId    = payout.id as string;
   const arrivalDate = (payout.arrival_date as number) ?? null;
-
-  await getDb().collection('platform_payouts').doc(payoutId).set({
-    payoutId,
-    amountCents:  payout.amount as number,
-    currency:     (payout.currency as string).toUpperCase(),
-    status:       'paid',
-    arrivalDate:  arrivalDate ? new Date(arrivalDate * 1000) : null,
-    metadata:     (payout.metadata ?? {}) as Record<string, string>,
-    createdAt:    new Date(),
+  const ref = getDb().collection('platform_payouts').doc(payoutId);
+  await getDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) return; // idempotent — ignorer replay
+    tx.set(ref, {
+      payoutId,
+      amountCents:  payout.amount as number,
+      currency:     (payout.currency as string).toUpperCase(),
+      status:       'paid',
+      arrivalDate:  arrivalDate ? new Date(arrivalDate * 1000) : null,
+      metadata:     (payout.metadata ?? {}) as Record<string, string>,
+      createdAt:    new Date(),
+    });
   });
 }
 
 async function onPayoutFailed(payout: Record<string, unknown>): Promise<void> {
   const payoutId = payout.id as string;
-  await getDb().collection('platform_payouts').doc(payoutId).set({
-    payoutId,
-    amountCents:    payout.amount as number,
-    currency:       (payout.currency as string).toUpperCase(),
-    status:         'failed',
-    failureMessage: (payout.failure_message as string) ?? 'Raison inconnue',
-    failureCode:    (payout.failure_code as string) ?? null,
-    metadata:       (payout.metadata ?? {}) as Record<string, string>,
-    createdAt:      new Date(),
+  const ref = getDb().collection('platform_payouts').doc(payoutId);
+  await getDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) return; // idempotent — ignorer replay
+    tx.set(ref, {
+      payoutId,
+      amountCents:    payout.amount as number,
+      currency:       (payout.currency as string).toUpperCase(),
+      status:         'failed',
+      failureMessage: (payout.failure_message as string) ?? 'Raison inconnue',
+      failureCode:    (payout.failure_code as string) ?? null,
+      metadata:       (payout.metadata ?? {}) as Record<string, string>,
+      createdAt:      new Date(),
+    });
   });
 }
 
@@ -556,14 +578,20 @@ async function onPayoutCanceled(payout: Record<string, unknown>): Promise<void> 
 
 async function onRefundCreated(refund: Record<string, unknown>): Promise<void> {
   const refundId = refund.id as string;
-  await getDb().collection('stripe_refunds').doc(refundId).set({
-    refundId,
-    chargeId:  refund.charge as string,
-    amount:    refund.amount as number,
-    currency:  refund.currency as string,
-    status:    refund.status as string,
-    reason:    refund.reason as string | null,
-    createdAt: new Date(),
+  const db = getDb();
+  const ref = db.collection('stripe_refunds').doc(refundId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) return;
+    tx.set(ref, {
+      refundId,
+      chargeId:  refund.charge as string,
+      amount:    refund.amount as number,
+      currency:  refund.currency as string,
+      status:    refund.status as string,
+      reason:    refund.reason as string | null,
+      createdAt: new Date(),
+    });
   });
 }
 
