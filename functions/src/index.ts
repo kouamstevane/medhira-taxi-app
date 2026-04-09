@@ -873,6 +873,7 @@ export const onFoodOrderAccepted = onDocumentUpdated(
       .where('isAvailable', '==', true)
       .where('status', '==', 'approved')
       .where('driverType', 'in', ['livreur', 'les_deux'])
+      .limit(20)
       .get()
 
     const activeCandidates = candidates.docs.filter(doc => {
@@ -907,45 +908,46 @@ export const onFoodOrderAccepted = onDocumentUpdated(
       return
     }
 
-    // 5. Créer food_delivery_orders
-    await db.collection('food_delivery_orders').doc(orderId).set({
-      orderId,
-      driverId: nearest.id,
-      restaurantId: after.restaurantId,
-      clientId: after.userId,
-      cityId: after.cityId || 'edmonton',
-      status: 'assigned',
-      deliveryPreference: after.deliveryPreference ?? 'leave_at_door',
-      pinCode: after.pinCode ?? null,
-      restaurantAddress: after.restaurantAddress,
-      clientNeighbourhood: after.clientNeighbourhood ?? '',
-      clientAddress: {
-        address: after.deliveryAddress ?? '',
-        lat: after.deliveryLocation?.lat ?? 0,
-        lng: after.deliveryLocation?.lng ?? 0,
-        instructions: after.deliveryInstructions ?? undefined,
-      },
-      orderItems: (after.orderItems ?? []).map((item: { itemName: string; itemQuantity: number; itemPrice: number }) => ({
-        name: item.itemName,
-        qty: item.itemQuantity,
-        price: item.itemPrice,
-      })),
-      orderNumber: after.orderNumber ?? '',
-      restaurantName: after.restaurantName ?? '',
-      restaurantPhone: after.restaurantPhone ?? '',
-      clientPhone: after.customerPhone ?? '',
-      totalAmount: after.totalOrderPrice ?? 0,
-      driverEarnings: (after.deliveryCost ?? 0) * DELIVERY_SHARE_RATE,
-      cancellationImpactOnStats: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
+    // 5. Créer food_delivery_orders + marquer le driver comme occupé (transaction)
+    await db.runTransaction(async (transaction) => {
+      transaction.set(db.collection('food_delivery_orders').doc(orderId), {
+        orderId,
+        driverId: nearest.id,
+        restaurantId: after.restaurantId,
+        clientId: after.userId,
+        cityId: after.cityId || 'edmonton',
+        status: 'assigned',
+        deliveryPreference: after.deliveryPreference ?? 'leave_at_door',
+        pinCode: after.pinCode ?? null,
+        restaurantAddress: after.restaurantAddress,
+        clientNeighbourhood: after.clientNeighbourhood ?? '',
+        clientAddress: {
+          address: after.deliveryAddress ?? '',
+          lat: after.deliveryLocation?.lat ?? 0,
+          lng: after.deliveryLocation?.lng ?? 0,
+          instructions: after.deliveryInstructions ?? undefined,
+        },
+        orderItems: (after.orderItems ?? []).map((item: { itemName: string; itemQuantity: number; itemPrice: number }) => ({
+          name: item.itemName,
+          qty: item.itemQuantity,
+          price: item.itemPrice,
+        })),
+        orderNumber: after.orderNumber ?? '',
+        restaurantName: after.restaurantName ?? '',
+        restaurantPhone: after.restaurantPhone ?? '',
+        clientPhone: after.customerPhone ?? '',
+        totalAmount: after.totalOrderPrice ?? 0,
+        driverEarnings: (after.deliveryCost ?? 0) * DELIVERY_SHARE_RATE,
+        cancellationImpactOnStats: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
-    // 6. Marquer le driver comme occupé
-    await db.collection('drivers').doc(nearest.id).update({
-      activeDeliveryOrderId: orderId,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
+      transaction.update(db.collection('drivers').doc(nearest.id), {
+        activeDeliveryOrderId: orderId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
 
     // 7. Émettre custom claim pour les règles RTDB (tracking)
     await admin.auth().setCustomUserClaims(nearest.id, { activeDeliveryOrderId: orderId })
@@ -1177,6 +1179,7 @@ export const onDeliveryOrderTimeout = onRequest(
       .where('isAvailable', '==', true)
       .where('status', '==', 'approved')
       .where('driverType', 'in', ['livreur', 'les_deux'])
+      .limit(20)
       .get()
 
     const activeCandidates = candidates.docs.filter(doc => {
@@ -1379,3 +1382,5 @@ export const onDriverDocumentsUpdated = onDocumentUpdated(
     }
   }
 )
+
+export { stripeWebhookInstant, stripeWebhookLight } from './stripe/index.js'
