@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 const isMobile = process.env.MOBILE_BUILD === 'true';
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      { source: '/driver/historique', destination: '/driver/activite', permanent: true },
+      { source: '/driver/gains',      destination: '/driver/activite', permanent: true },
+    ]
+  },
   output: isMobile ? 'export' : undefined,
   trailingSlash: !isMobile,
   skipTrailingSlashRedirect: isMobile,

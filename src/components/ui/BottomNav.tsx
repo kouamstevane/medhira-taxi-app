@@ -24,10 +24,10 @@ const defaultUserItems: NavItem[] = [
 ];
 
 export const driverNavItems: NavItem[] = [
-  { href: '/driver/dashboard', icon: 'home', label: 'Accueil' },
-  { href: '/driver/historique', icon: 'history', label: 'Historique' },
-  { href: '/driver/gains', icon: 'payments', label: 'Gains' },
-  { href: '/driver/profile', icon: 'person', label: 'Profil' },
+  { href: '/driver/dashboard',  icon: 'home',        label: 'Accueil'    },
+  { href: '/driver/activite',   icon: 'bar_chart',   label: 'Activité'   },
+  { href: '/driver/documents',  icon: 'folder_open', label: 'Documents'  },
+  { href: '/driver/profile',    icon: 'person',      label: 'Profil'     },
 ];
 
 export const portalNavItems = (restaurantId: string): NavItem[] => [
