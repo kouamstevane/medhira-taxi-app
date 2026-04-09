@@ -98,12 +98,19 @@ export type FoodOrderStatus =
   | 'pending_payment'
   | 'pending'
   | 'confirmed'
+  | 'accepted'                       // restaurant a accepté la commande
   | 'preparing'
   | 'ready'
+  | 'driver_heading_to_restaurant'   // synchronisé depuis food_delivery_orders
+  | 'driver_arrived_restaurant'
   | 'picked_up'
+  | 'out_for_delivery'
+  | 'arriving'
   | 'delivering'
   | 'delivered'
-  | 'cancelled';
+  | 'no_driver_available'            // aucun livreur après 3 tentatives
+  | 'cancelled'
+  | 'cancelled_by_restaurant';
 
 /**
  * Interface OrderItem
@@ -164,6 +171,15 @@ export interface FoodOrder {
   // Infos client (dénormalisées)
   customerName?: string;
   customerPhone?: string;
+  // Champs requis par le flux livraison
+  cityId?: string;
+  deliveryPreference?: 'leave_at_door' | 'meet_outside' | 'meet_at_door';
+  pinCode?: string;
+  orderNumber?: string;
+  restaurantAddress?: { address: string; lat: number; lng: number };
+  restaurantPhone?: string;
+  clientNeighbourhood?: string;
+  deliveryInstructions?: string;
 }
 
 // ============================================================================
