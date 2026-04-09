@@ -399,6 +399,11 @@ export const createFoodOrder = async (
     isWeekend: boolean;
     deliveryAddress: string;
     deliveryLocation?: { lat: number; lng: number };
+    deliveryPreference?: 'leave_at_door' | 'meet_outside' | 'meet_at_door';
+    deliveryInstructions?: string;
+    customerPhone?: string;
+    clientNeighbourhood?: string;
+    cityId?: string;
   }
 ): Promise<string> => {
   // Validation Zod
@@ -448,6 +453,12 @@ export const createFoodOrder = async (
     // Infos restaurant (dénormalisées)
     restaurantName: restaurant.name,
     restaurantImage: restaurant.imageUrl,
+    // Champs livraison
+    deliveryPreference: orderData.deliveryPreference ?? 'leave_at_door',
+    deliveryInstructions: orderData.deliveryInstructions ?? undefined,
+    customerPhone: orderData.customerPhone ?? '',
+    clientNeighbourhood: orderData.clientNeighbourhood ?? '',
+    cityId: orderData.cityId ?? 'edmonton',
     // Timestamps
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

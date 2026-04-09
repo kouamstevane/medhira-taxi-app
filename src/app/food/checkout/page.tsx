@@ -17,6 +17,8 @@ export default function CheckoutPage() {
   const { items, restaurant, getSubtotal, clearCart } = useCartStore();
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [deliveryPreference, setDeliveryPreference] = useState<'leave_at_door' | 'meet_outside' | 'meet_at_door'>('leave_at_door');
+  const [deliveryInstructions, setDeliveryInstructions] = useState('');
   const [deliveryDistance, setDeliveryDistance] = useState(3.5);
   const [durationMinutes, setDurationMinutes] = useState(15);
   const [distanceIsEstimate, setDistanceIsEstimate] = useState(true);
@@ -74,6 +76,8 @@ export default function CheckoutPage() {
         deliveryDistance,
         isWeekend,
         deliveryAddress,
+        deliveryPreference,
+        deliveryInstructions,
       });
 
       // 3. Vider le panier et rediriger vers le suivi
@@ -169,6 +173,43 @@ export default function CheckoutPage() {
               </div>
             </div>
             <MaterialIcon name="chevron_right" size="md" className="text-slate-500" />
+          </div>
+        </section>
+
+        {/* Delivery Preference */}
+        <section className="glass-card p-5 rounded-2xl border border-white/5">
+          <h2 className="text-lg font-bold text-white mb-4">Préférences de livraison</h2>
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-white">Mode de livraison</p>
+            {([
+              { value: 'leave_at_door', label: 'Déposer à la porte', desc: 'Photo requise pour confirmation' },
+              { value: 'meet_outside',  label: "Rendez-vous à l'extérieur", desc: 'Code PIN requis' },
+              { value: 'meet_at_door',  label: 'Rendez-vous à la porte', desc: 'Code PIN requis' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setDeliveryPreference(opt.value)}
+                className={[
+                  'w-full p-3 rounded-xl border text-left transition-all',
+                  deliveryPreference === opt.value ? 'border-primary bg-primary/10' : 'border-white/10',
+                ].join(' ')}
+              >
+                <p className="text-sm font-medium text-white">{opt.label}</p>
+                <p className="text-xs text-slate-400">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <label className="text-sm font-semibold text-white">Instructions de livraison (optionnel)</label>
+            <textarea
+              value={deliveryInstructions}
+              onChange={(e) => setDeliveryInstructions(e.target.value)}
+              placeholder="Ex: 3e étage, porte gauche…"
+              className="w-full mt-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm resize-none"
+              rows={2}
+            />
           </div>
         </section>
 

@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import { auth } from '@/config/firebase';
+import { auth, db } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
@@ -165,10 +166,17 @@ export default function OrdersManagementClient({ id }: OrdersManagementClientPro
                   <div className="flex gap-2">
                     {order.status === 'confirmed' && (
                       <button
-                        onClick={() => updateOrderStatus(order.id, 'preparing')}
-                        className="bg-gradient-to-r from-primary to-[#ffae33] text-white px-4 py-2 rounded-xl text-xs font-bold hover:opacity-90 transition"
+                        onClick={async () => {
+                          await updateDoc(doc(db, 'food_orders', order.id), {
+                            status: 'accepted',
+                            updatedAt: serverTimestamp(),
+                          });
+                          setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'accepted' as FoodOrder['status'] } : o));
+                          showSuccess('Commande acceptée — un livreur va être assigné');
+                        }}
+                        className="w-full h-10 bg-primary text-white text-sm font-bold rounded-xl"
                       >
-                        Accepter
+                        Accepter la commande (assigner un livreur)
                       </button>
                     )}
                     {order.status === 'preparing' && (
