@@ -30,7 +30,7 @@ import {
 import {
   encryptSensitiveData as encryptData,
 } from './utils/encryption.js';
-import { createBulkNotifications, createNotification } from './utils/notificationService.js';
+import { createNotification } from './utils/notificationService.js';
 import { BankDetailsSchema, EncryptionRequestSchema } from './validators/schemas.js';
 import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { isEncryptedData, hasRequiredFields } from './utils/validation.js';
@@ -847,3 +847,458 @@ export const onFoodOrderStatusChanged = onDocumentUpdated('food_orders/{orderId}
     }
   }
 });
+
+// ============================================================================
+// Task 6 — onFoodOrderAccepted
+// ============================================================================
+
+export const onFoodOrderAccepted = onDocumentUpdated(
+  { document: 'food_orders/{orderId}', region: 'europe-west1' },
+  async (event) => {
+    if (!event.data) return
+    const before = event.data.before.data()
+    const after  = event.data.after.data()
+    if (!before || !after) return
+
+    // Se déclencher UNIQUEMENT quand status passe de 'confirmed' à 'accepted'
+    if (before.status === 'accepted' || after.status !== 'accepted') return
+
+    const orderId = event.params.orderId
+    const db = admin.firestore()
+    const rtdb = getDatabase()
+
+    // 1. Trouver les livreurs disponibles dans la même ville
+    const candidates = await db.collection('drivers')
+      .where('cityId', '==', after.cityId || 'edmonton')
+      .where('isAvailable', '==', true)
+      .where('status', '==', 'approved')
+      .where('driverType', 'in', ['livreur', 'les_deux'])
+      .get()
+
+    const activeCandidates = candidates.docs.filter(doc => {
+      const d = doc.data()
+      if (d.driverType === 'les_deux' && d.activeMode !== 'livraison') return false
+      if (d.activeDeliveryOrderId != null) return false
+      return true
+    })
+
+    // 2. Lire les positions RTDB
+    const locationSnaps = await Promise.all(
+      activeCandidates.map(doc => rtdb.ref(`driver_locations/${doc.id}`).get())
+    )
+    const candidatesWithLocation = activeCandidates
+      .map((doc, i) => ({
+        id: doc.id,
+        data: doc.data(),
+        loc: locationSnaps[i].val() as { lat: number; lng: number } | null,
+      }))
+      .filter((c): c is { id: string; data: FirebaseFirestore.DocumentData; loc: { lat: number; lng: number } } => c.loc != null)
+
+    // 3. Sélectionner le livreur le plus proche
+    const restaurantAddress = after.restaurantAddress ?? { lat: 0, lng: 0 }
+    const nearest = selectNearestDriver(candidatesWithLocation, restaurantAddress)
+
+    // 4. Aucun livreur disponible
+    if (!nearest) {
+      await db.collection('food_orders').doc(orderId).update({
+        status: 'no_driver_available',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return
+    }
+
+    // 5. Créer food_delivery_orders
+    await db.collection('food_delivery_orders').doc(orderId).set({
+      orderId,
+      driverId: nearest.id,
+      restaurantId: after.restaurantId,
+      clientId: after.userId,
+      cityId: after.cityId || 'edmonton',
+      status: 'assigned',
+      deliveryPreference: after.deliveryPreference ?? 'leave_at_door',
+      pinCode: after.pinCode ?? null,
+      restaurantAddress: after.restaurantAddress,
+      clientNeighbourhood: after.clientNeighbourhood ?? '',
+      clientAddress: {
+        address: after.deliveryAddress ?? '',
+        lat: after.deliveryLocation?.lat ?? 0,
+        lng: after.deliveryLocation?.lng ?? 0,
+        instructions: after.deliveryInstructions ?? undefined,
+      },
+      orderItems: (after.orderItems ?? []).map((item: { itemName: string; itemQuantity: number; itemPrice: number }) => ({
+        name: item.itemName,
+        qty: item.itemQuantity,
+        price: item.itemPrice,
+      })),
+      orderNumber: after.orderNumber ?? '',
+      restaurantName: after.restaurantName ?? '',
+      restaurantPhone: after.restaurantPhone ?? '',
+      clientPhone: after.customerPhone ?? '',
+      totalAmount: after.totalOrderPrice ?? 0,
+      driverEarnings: (after.deliveryCost ?? 0) * DELIVERY_SHARE_RATE,
+      cancellationImpactOnStats: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    // 6. Marquer le driver comme occupé
+    await db.collection('drivers').doc(nearest.id).update({
+      activeDeliveryOrderId: orderId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    // 7. Émettre custom claim pour les règles RTDB (tracking)
+    await admin.auth().setCustomUserClaims(nearest.id, { activeDeliveryOrderId: orderId })
+
+    // 8. Notification FCM au livreur
+    const driverSnap = await db.collection('drivers').doc(nearest.id).get()
+    const fcmToken = driverSnap.data()?.fcmToken
+    if (fcmToken) {
+      await admin.messaging().send({
+        token: fcmToken,
+        notification: {
+          title: 'Nouvelle commande',
+          body: `${after.restaurantName ?? 'Restaurant'} — ${after.orderNumber ?? ''}`,
+        },
+        data: { type: 'delivery_order_new', orderId },
+      })
+    }
+
+    // 9. Planifier timeout 90s via Cloud Tasks
+    const PROJECT_ID = process.env.GCLOUD_PROJECT ?? ''
+    const LOCATION = 'europe-west1'
+    const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net`
+    const tasksClient = new CloudTasksClient()
+    const queuePath = tasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout')
+    await tasksClient.createTask({
+      parent: queuePath,
+      task: {
+        httpRequest: {
+          httpMethod: 'POST',
+          url: `${FUNCTION_URL}/onDeliveryOrderTimeout`,
+          body: Buffer.from(JSON.stringify({ orderId, attemptNumber: 1 })).toString('base64'),
+          headers: { 'Content-Type': 'application/json' },
+        },
+        scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 90 },
+      },
+    })
+  }
+)
+
+// ============================================================================
+// Task 7 — onDeliveryStatusChanged + onRestaurantCancelOrder
+// ============================================================================
+
+export const onDeliveryStatusChanged = onDocumentUpdated(
+  { document: 'food_delivery_orders/{orderId}', region: 'europe-west1' },
+  async (event) => {
+    if (!event.data) return
+    const before = event.data.before.data()
+    const after  = event.data.after.data()
+    if (!before || !after || before.status === after.status) return
+
+    const db = admin.firestore()
+    const statusMapping: Record<string, string> = {
+      heading_to_restaurant: 'driver_heading_to_restaurant',
+      arrived_restaurant:    'driver_arrived_restaurant',
+      picked_up:             'picked_up',
+      heading_to_client:     'out_for_delivery',
+      arrived_client:        'arriving',
+      delivered:             'delivered',
+      cancelled:             'cancelled',
+    }
+
+    const foodOrderStatus = statusMapping[after.status]
+    if (!foodOrderStatus) return
+
+    await db.collection('food_orders').doc(event.params.orderId).update({
+      status: foodOrderStatus,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    const sendClientNotif = async (title: string, body: string) => {
+      const clientSnap = await db.collection('users').doc(after.clientId).get()
+      const fcmToken = clientSnap.data()?.fcmToken
+      if (fcmToken) {
+        await admin.messaging().send({
+          token: fcmToken,
+          notification: { title, body },
+          data: { type: 'delivery_order_update', orderId: event.params.orderId },
+        })
+      }
+    }
+
+    if (after.status === 'picked_up') {
+      await sendClientNotif('Votre commande est en route !',
+        `${after.restaurantName} — votre commande a été récupérée`)
+    }
+    if (after.status === 'delivered') {
+      await sendClientNotif('Commande livrée', 'Votre commande est arrivée — notez votre livreur')
+    }
+  }
+)
+
+export const onRestaurantCancelOrder = onDocumentUpdated(
+  { document: 'food_orders/{orderId}', region: 'europe-west1' },
+  async (event) => {
+    if (!event.data) return
+    const before = event.data.before.data()
+    const after  = event.data.after.data()
+    if (!before || !after) return
+    if (after.status !== 'cancelled_by_restaurant' || before.status === 'cancelled_by_restaurant') return
+
+    const db = admin.firestore()
+    const deliveryOrderSnap = await db.collection('food_delivery_orders').doc(event.params.orderId).get()
+    if (!deliveryOrderSnap.exists) return
+
+    const deliveryOrder = deliveryOrderSnap.data()!
+
+    if (['picked_up', 'heading_to_client', 'arrived_client', 'delivered'].includes(deliveryOrder.status)) {
+      await db.collection('audit_logs').add({
+        type: 'restaurant_cancel_after_pickup',
+        orderId: event.params.orderId,
+        driverId: deliveryOrder.driverId,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return
+    }
+
+    await db.collection('food_delivery_orders').doc(event.params.orderId).update({
+      status: 'cancelled',
+      cancellationReason: 'restaurant_cancelled',
+      cancellationImpactOnStats: false,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    await db.collection('drivers').doc(deliveryOrder.driverId).update({
+      activeDeliveryOrderId: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    const driverSnap = await db.collection('drivers').doc(deliveryOrder.driverId).get()
+    const fcmToken = driverSnap.data()?.fcmToken
+    if (fcmToken) {
+      await admin.messaging().send({
+        token: fcmToken,
+        notification: {
+          title: 'Commande annulée',
+          body: `Le restaurant a annulé la commande ${deliveryOrder.orderNumber}`,
+        },
+        data: { type: 'delivery_order_update', orderId: event.params.orderId },
+      })
+    }
+  }
+)
+
+// ============================================================================
+// Task 8 — onDeliveryOrderCompleted + onDeliveryOrderTimeout
+// ============================================================================
+
+export const onDeliveryOrderCompleted = onDocumentUpdated(
+  { document: 'food_delivery_orders/{orderId}', region: 'europe-west1' },
+  async (event) => {
+    if (!event.data) return
+    const before = event.data.before.data()
+    const after  = event.data.after.data()
+    if (!before || !after) return
+    if (!['delivered', 'cancelled'].includes(after.status) || before.status === after.status) return
+
+    const db = admin.firestore()
+    const rtdb = getDatabase()
+    const orderId = event.params.orderId
+    const driverId = after.driverId
+
+    await db.collection('drivers').doc(driverId).update({
+      activeDeliveryOrderId: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    await admin.auth().setCustomUserClaims(driverId, { activeDeliveryOrderId: null })
+
+    if (after.status === 'delivered') {
+      await db.collection('drivers').doc(driverId).update({
+        deliveriesCompleted: admin.firestore.FieldValue.increment(1),
+        deliveryEarnings:    admin.firestore.FieldValue.increment(after.driverEarnings ?? 0),
+        updatedAt:           admin.firestore.FieldValue.serverTimestamp(),
+      })
+    }
+
+    await rtdb.ref(`delivery_tracking/${orderId}`).remove()
+  }
+)
+
+export const onDeliveryOrderTimeout = onRequest(
+  { region: 'europe-west1' },
+  async (req, res) => {
+    const queueName = req.headers['x-cloudtasks-queuename'] as string
+    if (queueName !== 'delivery-order-timeout') {
+      console.warn('[onDeliveryOrderTimeout] Unauthorized invocation', { queueName })
+      res.status(403).send('Unauthorized')
+      return
+    }
+
+    const { orderId, attemptNumber } = req.body as { orderId: string; attemptNumber: number }
+    const db = admin.firestore()
+    const rtdb = getDatabase()
+
+    const orderRef = db.collection('food_delivery_orders').doc(orderId)
+    const orderSnap = await orderRef.get()
+    if (!orderSnap.exists) { res.status(200).send('Order not found'); return }
+
+    const order = orderSnap.data()!
+
+    if (order.status !== 'assigned') { res.status(200).send('Already processed'); return }
+
+    await db.collection('drivers').doc(order.driverId).update({
+      activeDeliveryOrderId: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    if (attemptNumber >= 3) {
+      await db.collection('food_orders').doc(orderId).update({
+        status: 'no_driver_available',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      await orderRef.update({
+        status: 'cancelled',
+        cancellationReason: 'driver_cancelled',
+        cancellationImpactOnStats: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      res.status(200).send('No driver available after 3 attempts')
+      return
+    }
+
+    const foodOrderSnap = await db.collection('food_orders').doc(orderId).get()
+    const foodOrder = foodOrderSnap.data()!
+
+    const candidates = await db.collection('drivers')
+      .where('cityId', '==', foodOrder.cityId)
+      .where('isAvailable', '==', true)
+      .where('status', '==', 'approved')
+      .where('driverType', 'in', ['livreur', 'les_deux'])
+      .get()
+
+    const activeCandidates = candidates.docs.filter(doc => {
+      if (doc.id === order.driverId) return false
+      const d = doc.data()
+      if (d.driverType === 'les_deux' && d.activeMode !== 'livraison') return false
+      if (d.activeDeliveryOrderId != null) return false
+      return true
+    })
+
+    const locationSnaps = await Promise.all(
+      activeCandidates.map(doc => rtdb.ref(`driver_locations/${doc.id}`).get())
+    )
+    const candidatesWithLocation = activeCandidates
+      .map((doc, i) => ({ id: doc.id, data: doc.data(), loc: locationSnaps[i].val() as { lat: number; lng: number } | null }))
+      .filter((c): c is { id: string; data: FirebaseFirestore.DocumentData; loc: { lat: number; lng: number } } => c.loc != null)
+
+    const nextDriver = selectNearestDriver(candidatesWithLocation, foodOrder.restaurantAddress)
+
+    if (!nextDriver) {
+      await db.collection('food_orders').doc(orderId).update({ status: 'no_driver_available', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+      await orderRef.update({ status: 'cancelled', cancellationReason: 'driver_cancelled', cancellationImpactOnStats: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+      res.status(200).send('No candidate found')
+      return
+    }
+
+    await orderRef.update({ driverId: nextDriver.id, status: 'assigned', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    await db.collection('drivers').doc(nextDriver.id).update({ activeDeliveryOrderId: orderId, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    await admin.auth().setCustomUserClaims(nextDriver.id, { activeDeliveryOrderId: orderId })
+
+    const driverSnap = await db.collection('drivers').doc(nextDriver.id).get()
+    const fcmToken = driverSnap.data()?.fcmToken
+    if (fcmToken) {
+      await admin.messaging().send({
+        token: fcmToken,
+        notification: { title: 'Nouvelle commande', body: foodOrder.orderNumber ?? '' },
+        data: { type: 'delivery_order_new', orderId },
+      })
+    }
+
+    const PROJECT_ID = process.env.GCLOUD_PROJECT ?? ''
+    const LOCATION = 'europe-west1'
+    const tasksClient = new CloudTasksClient()
+    const queuePath = tasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout')
+    await tasksClient.createTask({
+      parent: queuePath,
+      task: {
+        httpRequest: {
+          httpMethod: 'POST',
+          url: `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/onDeliveryOrderTimeout`,
+          body: Buffer.from(JSON.stringify({ orderId, attemptNumber: attemptNumber + 1 })).toString('base64'),
+          headers: { 'Content-Type': 'application/json' },
+        },
+        scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 90 },
+      },
+    })
+
+    res.status(200).send(`Reassigned to ${nextDriver.id}, attempt ${attemptNumber + 1}`)
+  }
+)
+
+// ============================================================================
+// Task 9 — onDriverRatingCreated + logPinFailure
+// ============================================================================
+
+export const onDriverRatingCreated = onDocumentCreated(
+  { document: 'driver_ratings/{ratingId}', region: 'europe-west1' },
+  async (event) => {
+    const rating = event.data?.data()
+    if (!rating) return
+
+    const db = admin.firestore()
+    const driverRef = db.collection('drivers').doc(rating.driverId)
+
+    await db.runTransaction(async (tx) => {
+      const driverDoc = await tx.get(driverRef)
+      const driverData = driverDoc.data()
+      if (!driverData) return
+
+      const currentCount = driverData.ratingsCount ?? 0
+      const currentRating = driverData.rating ?? 0
+      const newCount = currentCount + 1
+      const newRating = ((currentRating * currentCount) + rating.score) / newCount
+
+      tx.update(driverRef, {
+        rating:       newRating,
+        ratingsCount: newCount,
+        updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+      })
+    })
+  }
+)
+
+const pinFailureAttempts = new Map<string, { count: number; resetAt: number }>()
+
+export const logPinFailure = onCall(
+  { region: 'europe-west1' },
+  async (request) => {
+    const uid = request.auth?.uid
+    if (!uid) throw new Error('Unauthenticated')
+
+    const { orderId, clientPhone } = request.data as { orderId: string; clientPhone: string }
+
+    const now = Date.now()
+    const driverState = pinFailureAttempts.get(uid)
+    if (driverState && now < driverState.resetAt) {
+      if (driverState.count >= 5) {
+        throw new Error('Rate limit exceeded')
+      }
+      driverState.count++
+    } else {
+      pinFailureAttempts.set(uid, { count: 1, resetAt: now + 3600000 })
+    }
+
+    await admin.firestore().collection('audit_logs').add({
+      type: 'delivery_pin_failed',
+      orderId,
+      driverId: uid,
+      clientPhone,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    return { success: true }
+  }
+)
