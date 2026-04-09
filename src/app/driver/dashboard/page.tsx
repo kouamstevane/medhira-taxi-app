@@ -34,6 +34,8 @@ import { updateDriverLocation, calculateFinalFare, markDriverArrived, startTrip,
 import { resendVerificationEmail } from '@/services/auth.service';
 import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
+import ModeSwitch from './components/ModeSwitch';
+import DeliveryOrdersList from './components/DeliveryOrdersList';
 import { getDriverDashboardInfoMessage } from '@/utils/driver.utils';
 import type { Trip, RideRequest } from '@/types/trip';
 import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
@@ -590,6 +592,9 @@ export default function DriverDashboard() {
   if (error) return <ErrorView error={error} onLogout={handleLogout} />;
   if (!driver) return <NoDriver onLogout={handleLogout} />;
 
+  const driverType = driver?.driverType ?? 'chauffeur'
+  const activeMode = driver?.activeMode ?? 'taxi'
+
   return (
     <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
       <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-24">
@@ -692,6 +697,26 @@ export default function DriverDashboard() {
             </div>
           </GlassCard>
         </div>
+
+        {/* ModeSwitch — uniquement pour les_deux */}
+        {driverType === 'les_deux' && driver && (
+          <div className="px-6 mb-6">
+            <ModeSwitch
+              uid={driver.uid}
+              currentMode={activeMode}
+              onModeChange={(mode) => updateDriver({ activeMode: mode })}
+              disabled={driver?.activeDeliveryOrderId != null}
+            />
+          </div>
+        )}
+
+        {/* Section livraison */}
+        {(activeMode === 'livraison' || driverType === 'livreur') && driver && (
+          <div className="px-6 mb-8">
+            <h2 className="text-lg font-bold text-white mb-4">Commandes de livraison</h2>
+            <DeliveryOrdersList uid={driver.uid} />
+          </div>
+        )}
 
         {/* Current Trip */}
         {currentTrip && (
