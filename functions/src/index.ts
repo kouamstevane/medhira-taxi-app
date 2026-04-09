@@ -14,7 +14,7 @@
  * @module functions
  */
 
-import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { onCall, onRequest, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2/options';
 import { defineSecret } from 'firebase-functions/params';
@@ -32,8 +32,13 @@ import {
 } from './utils/encryption.js';
 import { createBulkNotifications, createNotification } from './utils/notificationService.js';
 import { BankDetailsSchema, EncryptionRequestSchema } from './validators/schemas.js';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { isEncryptedData, hasRequiredFields } from './utils/validation.js';
+import * as crypto from 'crypto';
+import { getDatabase } from 'firebase-admin/database';
+import { CloudTasksClient } from '@google-cloud/tasks';
+import { DELIVERY_SHARE_RATE } from './config/stripe.js';
+import { selectNearestDriver } from './utils/matching.js';
 
 // Définir le secret de chiffrement depuis Firebase Secret Manager
 const encryptionMasterKey = defineSecret('ENCRYPTION_MASTER_KEY');
@@ -663,122 +668,63 @@ export { sendVerificationEmail, sendVerificationEmailHttp } from './emails/send-
  * Règle 4 : Notification automatique des chauffeurs disponibles.
  * Le code de récupération est inclus dans la notification.
  */
-export const onFoodOrderCreated = onDocumentWritten('food_orders/{orderId}', async (event) => {
-  const beforeData = event.data?.before.data();
-  const afterData = event.data?.after.data();
+export const onFoodOrderCreated = onDocumentUpdated(
+  { document: 'food_orders/{orderId}', region: 'europe-west1' },
+  async (event) => {
+    if (!event.data) return
+    const before = event.data.before.data()
+    const after  = event.data.after.data()
+    if (!before || !after) return
 
-  // Ne traiter que les créations (pas les mises à jour)
-  if (beforeData || !afterData) return;
+    // Ne déclencher QUE quand paymentValidated passe de false → true
+    if (before.paymentValidated || !after.paymentValidated) return
 
-  // Vérifier que le paiement est validé (Règle 3)
-  if (!afterData.paymentValidated) {
-    console.log(`[FoodOrder] Commande ${event.params.orderId} non validée, pas de notification.`);
-    return;
-  }
+    const orderId = event.params.orderId
+    const restaurantId = after.restaurantId
 
-  const restaurantId = afterData.restaurantId as string;
-  const restaurantName = afterData.restaurantName as string || 'Restaurant';
-  const totalOrderPrice = afterData.totalOrderPrice as number;
+    // 1. Générer orderNumber via compteur atomique par restaurant
+    const restaurantRef = admin.firestore().collection('restaurants').doc(restaurantId)
+    const orderNumber = await admin.firestore().runTransaction(async (tx) => {
+      const restaurantDoc = await tx.get(restaurantRef)
+      const counter = (restaurantDoc.data()?.orderCounter || 0) + 1
+      tx.update(restaurantRef, { orderCounter: counter })
+      return `#${counter}`
+    })
 
-  try {
-    // Récupérer les informations du restaurant pour la localisation
-    const restaurantDoc = await admin.firestore().collection('restaurants').doc(restaurantId).get();
-    if (!restaurantDoc.exists) {
-      console.warn(`[FoodOrder] Restaurant ${restaurantId} introuvable.`);
-      return;
+    // 2. Générer pinCode si nécessaire
+    const deliveryPreference = after.deliveryPreference as string | undefined
+    const pinCode = (deliveryPreference === 'meet_outside' || deliveryPreference === 'meet_at_door')
+      ? crypto.randomInt(1000, 9999).toString()
+      : null
+
+    // 3. Lire les infos restaurant pour dénormalisation
+    const restaurantDoc = await admin.firestore().collection('restaurants').doc(restaurantId).get()
+    const restaurantData = restaurantDoc.data()
+
+    // 4. Enrichir food_orders avec les champs requis
+    const updates: Record<string, unknown> = {
+      orderNumber,
+      cityId: after.cityId || restaurantData?.cityId || 'edmonton',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }
-
-    // Récupérer les chauffeurs disponibles
-    //  limit() appliqué pour éviter les surcharges (medJira §4.1)
-    const driversSnapshot = await admin.firestore()
-      .collection('drivers')
-      .where('status', '==', 'approved')
-      .where('isOnline', '==', true)
-      .where('currentRide', '==', null)
-      .limit(50)
-      .get();
-
-    if (driversSnapshot.empty) {
-      console.log(`[FoodOrder] Aucun chauffeur disponible pour la commande ${event.params.orderId}.`);
-      return;
-    }
-
-    // Préparer les notifications
-    const tokens: string[] = [];
-    driversSnapshot.docs.forEach((driverDoc) => {
-      const driverData = driverDoc.data();
-      if (driverData.fcmToken) {
-        tokens.push(driverData.fcmToken as string);
+    if (pinCode != null) updates.pinCode = pinCode
+    if (!after.restaurantAddress && restaurantData) {
+      updates.restaurantAddress = {
+        address: restaurantData.address,
+        lat: restaurantData.location?.lat ?? 0,
+        lng: restaurantData.location?.lng ?? 0,
       }
-    });
-
-    if (tokens.length === 0) {
-      console.log(`[FoodOrder] Aucun token FCM disponible pour les chauffeurs.`);
-      return;
+    }
+    if (!after.restaurantPhone && restaurantData) {
+      updates.restaurantPhone = restaurantData.phone
+    }
+    if (!after.restaurantName && restaurantData) {
+      updates.restaurantName = restaurantData.name
     }
 
-    // Envoyer les notifications push (Règle 4)
-    // Le pickupCode est exclu des notifications FCM : il ne doit être visible
-    // que par le chauffeur assigné à la commande, pas par tous les candidats.
-    const message: admin.messaging.MulticastMessage = {
-      tokens,
-      notification: {
-        title: `🍔 Nouvelle commande — ${restaurantName}`,
-        body: `Livraison ${totalOrderPrice.toFixed(2)} CAD`,
-      },
-      data: {
-        type: 'food_order',
-        orderId: event.params.orderId,
-        restaurantId,
-        restaurantName,
-        totalOrderPrice: String(totalOrderPrice),
-      },
-      android: {
-        priority: 'high' as const,
-        notification: {
-          channelId: 'food_orders',
-          sound: 'default',
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1,
-          },
-        },
-      },
-    };
-
-    const response = await admin.messaging().sendEachForMulticast(message);
-    console.log(
-      `[FoodOrder] Notifications envoyées: ${response.successCount}/${tokens.length} pour commande ${event.params.orderId}`
-    );
-
-    // Persister les notifications dans Firestore pour la cloche de notifications
-    const driverIds = driversSnapshot.docs.map((d) => d.id);
-    await createBulkNotifications(driverIds, {
-      title: `🍔 Nouvelle commande — ${restaurantName}`,
-      body: `Livraison ${totalOrderPrice.toFixed(2)} CAD`,
-      type: 'food_order',
-      metadata: { orderId: event.params.orderId, restaurantId },
-    });
-
-    // Nettoyer les tokens invalides
-    const failedTokens: string[] = [];
-    response.responses.forEach((resp, idx) => {
-      if (!resp.success && resp.error?.code === 'messaging/invalid-registration-token') {
-        failedTokens.push(tokens[idx]);
-      }
-    });
-
-    if (failedTokens.length > 0) {
-      console.log(`[FoodOrder] ${failedTokens.length} tokens FCM invalides détectés.`);
-    }
-  } catch (error) {
-    console.error(`[FoodOrder] Erreur envoi notifications:`, error);
+    await admin.firestore().collection('food_orders').doc(orderId).update(updates)
   }
-});
+)
 
 // ============================================================================
 // Livraison de Repas — Notification Client (Statut Commande)
