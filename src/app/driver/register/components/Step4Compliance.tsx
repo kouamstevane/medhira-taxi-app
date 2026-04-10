@@ -68,9 +68,17 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
     }
   }, [initialFiles]);
 
+  const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, key: keyof typeof files) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+      showWarning('Format non supporté. Utilisez JPEG, PNG, WebP ou PDF.');
+      e.target.value = '';
+      return;
+    }
 
     if (file.size > 10 * 1024 * 1024) {
       showError("Fichier trop lourd (Max 10Mo)");
