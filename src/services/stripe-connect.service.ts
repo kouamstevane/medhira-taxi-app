@@ -205,16 +205,27 @@ export async function processWeeklyPayouts(
   const results: TransferResult[] = [];
   const processedAt = new Date();
   const lockExpiration = Date.now() + 300000;
+  let totalDriversScanned = 0;
 
-  const snapshot = await getAdminDb()
-    .collection('drivers')
-    .where('weeklyPayoutEnabled', '==', true)
-    .where('stripeAccountStatus', '==', 'active')
-    .where('pendingBalanceCents', '>', 0)
-    .limit(50)
-    .get();
+  let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | undefined;
 
-  for (const doc of snapshot.docs) {
+  do {
+    let q = getAdminDb()
+      .collection('drivers')
+      .where('weeklyPayoutEnabled', '==', true)
+      .where('stripeAccountStatus', '==', 'active')
+      .where('pendingBalanceCents', '>', 0)
+      .orderBy('pendingBalanceCents')
+      .limit(100) as FirebaseFirestore.Query;
+
+    if (lastDoc) q = q.startAfter(lastDoc);
+
+    const snapshot = await q.get();
+    if (snapshot.empty) break;
+
+    totalDriversScanned += snapshot.size;
+
+    for (const doc of snapshot.docs) {
     const driverId = doc.id;
     const data = doc.data();
     const { stripeAccountId, pendingBalanceCents, payoutLockUntil } = data;
@@ -334,14 +345,17 @@ export async function processWeeklyPayouts(
         error: errorMsg,
       });
     }
-  }
+    } // fin for (const doc of snapshot.docs)
+
+    lastDoc = snapshot.docs[snapshot.docs.length - 1];
+  } while (lastDoc !== undefined); // fin do/while pagination
 
   const succeeded = results.filter(r => r.status === 'succeeded');
   const totalAmountTransferred = succeeded.reduce((sum, r) => sum + r.amount, 0);
 
   return {
     processedAt,
-    totalDrivers: snapshot.size,
+    totalDrivers: totalDriversScanned,
     successCount: succeeded.length,
     failedCount: results.length - succeeded.length,
     totalAmountTransferred,
