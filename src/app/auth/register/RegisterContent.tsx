@@ -121,8 +121,14 @@ export default function RegisterContent() {
         setLoading(true);
 
         try {
-            await signInWithGoogle();
-            router.push('/dashboard');
+            const user = await signInWithGoogle();
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            const userType = userDoc.exists() ? userDoc.data()?.userType : 'client';
+            if (userType === 'chauffeur') {
+                router.push('/driver/dashboard');
+            } else {
+                router.push('/dashboard');
+            }
         } catch (err: unknown) {
             console.error('Erreur connexion Google:', err);
             const error = err as { code?: string; message?: string };
