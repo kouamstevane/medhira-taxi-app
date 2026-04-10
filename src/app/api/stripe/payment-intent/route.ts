@@ -46,6 +46,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'bookingId et amount sont requis' }, { status: 400 });
     }
 
+    // Vérification d'ownership : seul le passager propriétaire peut créer un PaymentIntent
+    const bookingSnap = await getAdminDb().collection('bookings').doc(bookingId).get();
+    if (!bookingSnap.exists) {
+      return NextResponse.json({ error: 'Réservation introuvable' }, { status: 404 });
+    }
+    const bookingOwner = bookingSnap.data()?.passengerId ?? bookingSnap.data()?.userId;
+    if (bookingOwner !== userId) {
+      return NextResponse.json({ error: 'Accès refusé : vous n\'êtes pas le passager de cette réservation' }, { status: 403 });
+    }
+
     const currency = getStripeCurrency();
     const result = await createRidePaymentIntent(amount, currency, userId, bookingId);
 
