@@ -341,14 +341,19 @@ export function useDriverRegistration() {
       const getValue = (r: PromiseSettledResult<string | null>) =>
         r.status === 'fulfilled' ? r.value : null;
 
-      let encryptedSsn = null;
-      if (step2Data.ssn) {
-        encryptedSsn = await retryWithBackoff(
-          () => serverEncryptionService.encryptSSN(step2Data.ssn!),
-          { maxAttempts: 3 }
-        );
-        await auditLoggingService.logSSNEncryption(userId, true);
+      if (!step2Data.ssn || step2Data.ssn.trim().length < 5) {
+        setError('Le numéro d\'assurance sociale est requis. Veuillez compléter l\'étape Identité.');
+        setCurrentStep(2);
+        setLoading(false);
+        setIsSubmitting(false);
+        return;
       }
+      let encryptedSsn = null;
+      encryptedSsn = await retryWithBackoff(
+        () => serverEncryptionService.encryptSSN(step2Data.ssn!),
+        { maxAttempts: 3 }
+      );
+      await auditLoggingService.logSSNEncryption(userId, true);
 
       const carData = (driverType === 'chauffeur' || driverType === 'les_deux') ? {
         brand: step3Data.carBrand,
