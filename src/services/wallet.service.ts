@@ -29,7 +29,6 @@ import {
   TransactionType,
   TransactionStatus,
   WalletPaymentMethod,
-  RechargeRequest,
 } from '@/types';
 import { CURRENCY_CODE, LIMITS } from '@/utils/constants';
 
@@ -85,32 +84,6 @@ export const createTransaction = async (
   return newTransactionRef.id;
 };
 
-/**
- * Recharger le portefeuille
- */
-export const rechargeWallet = async (
-  userId: string,
-  request: RechargeRequest
-): Promise<string> => {
-  const transactionId = await createTransaction({
-    userId,
-    type: 'deposit',
-    amount: request.amount,
-    currency: CURRENCY_CODE,
-    method: request.method,
-    description: `Rechargement via ${request.method}`,
-  });
-
-  try {
-    // Dans une vraie application, ici on intégrerait l'API de paiement
-    await completeTransaction(transactionId, userId, request.amount);
-  } catch (error) {
-    await failTransaction(transactionId, `Échec rechargement: ${(error as Error).message}`);
-    throw error;
-  }
-
-  return transactionId;
-};
 
 /**
  * Finaliser une transaction et mettre à jour le solde
