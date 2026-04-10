@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    await verifyFirebaseToken(request);
+    const userId = await verifyFirebaseToken(request);
     const body: UpdatePaymentIntentRequest = await request.json();
     const { paymentIntentId, action, captureAmount } = body;
 
@@ -94,43 +94,66 @@ export async function PUT(request: NextRequest) {
     const db = getAdminDb();
 
     if (action === 'capture') {
-      const currency = captureAmount ? getStripeCurrency() : undefined;
-      await captureRidePayment(paymentIntentId, captureAmount, currency);
-
       const bookingsSnap = await db
         .collection('bookings')
         .where('stripePaymentIntentId', '==', paymentIntentId)
         .limit(1)
         .get();
 
-      if (!bookingsSnap.empty) {
-        const booking = bookingsSnap.docs[0];
-        const bookingData = booking.data();
-        const driverId = bookingData.driverId;
-        const finalAmount = captureAmount ?? bookingData.price;
-        const cur = bookingData.paymentCurrency ?? getStripeCurrency();
-
-        if (driverId && finalAmount) {
-          await accumulateDriverEarnings(driverId, finalAmount, cur);
-        }
-        await booking.ref.update({ paymentStatus: PAYMENT_STATUS.CAPTURED, finalPrice: finalAmount });
+      if (bookingsSnap.empty) {
+        return NextResponse.json({ error: 'Réservation introuvable pour ce PaymentIntent' }, { status: 404 });
       }
+
+      const booking = bookingsSnap.docs[0];
+      const bookingData = booking.data();
+
+      // Vérification d'ownership
+      const bookingOwner = bookingData.passengerId ?? bookingData.userId;
+      if (bookingOwner !== userId) {
+        return NextResponse.json({ error: 'Accès refusé : vous n\'êtes pas le passager de cette réservation' }, { status: 403 });
+      }
+
+      // Idempotence : déjà capturé → répondre sans rien faire
+      if (bookingData?.paymentStatus === PAYMENT_STATUS.CAPTURED) {
+        return NextResponse.json({ success: true, alreadyCaptured: true });
+      }
+
+      const currency = captureAmount ? getStripeCurrency() : undefined;
+      await captureRidePayment(paymentIntentId, captureAmount, currency);
+
+      const driverId = bookingData.driverId;
+      const finalAmount = captureAmount ?? bookingData.price;
+      const cur = bookingData.paymentCurrency ?? getStripeCurrency();
+
+      if (driverId && finalAmount) {
+        await accumulateDriverEarnings(driverId, finalAmount, cur);
+      }
+      await booking.ref.update({ paymentStatus: PAYMENT_STATUS.CAPTURED, finalPrice: finalAmount });
 
       return NextResponse.json({ success: true, action: 'captured' });
     }
 
     if (action === 'cancel') {
-      await cancelRidePayment(paymentIntentId);
-
       const bookingsSnap = await db
         .collection('bookings')
         .where('stripePaymentIntentId', '==', paymentIntentId)
         .limit(1)
         .get();
 
-      if (!bookingsSnap.empty) {
-        await bookingsSnap.docs[0].ref.update({ paymentStatus: PAYMENT_STATUS.CANCELLED });
+      if (bookingsSnap.empty) {
+        return NextResponse.json({ error: 'Réservation introuvable pour ce PaymentIntent' }, { status: 404 });
       }
+
+      const bookingData = bookingsSnap.docs[0].data();
+
+      // Vérification d'ownership
+      const bookingOwner = bookingData.passengerId ?? bookingData.userId;
+      if (bookingOwner !== userId) {
+        return NextResponse.json({ error: 'Accès refusé : vous n\'êtes pas le passager de cette réservation' }, { status: 403 });
+      }
+
+      await cancelRidePayment(paymentIntentId);
+      await bookingsSnap.docs[0].ref.update({ paymentStatus: PAYMENT_STATUS.CANCELLED });
 
       return NextResponse.json({ success: true, action: 'cancelled' });
     }
