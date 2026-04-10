@@ -232,6 +232,16 @@ export const signInWithGoogle = async (
     });
   }
 
+  // Prévenir la collision : si l'utilisateur vient de la page client mais est déjà un chauffeur,
+  // on le déconnecte immédiatement pour éviter d'écraser son identité chauffeur.
+  if (intendedUserType === 'client') {
+    const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
+    if (driverDoc.exists()) {
+      await firebaseSignOut(auth);
+      throw new Error('Ce compte est un compte chauffeur. Veuillez utiliser la page de connexion chauffeur.');
+    }
+  }
+
   // Vérifier si l'utilisateur existe dans l'une des collections
   //  CORRECTION : Vérifier la collection correspondante au type attendu
   const collectionName = intendedUserType === 'chauffeur' ? 'drivers' : 'users';
