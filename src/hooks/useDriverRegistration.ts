@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { auth, db, storage, app } from '@/config/firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp as firestoreServerTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AuthService } from '@/services';
 import { serverEncryptionService } from '@/services/server-encryption.service';
@@ -316,10 +316,13 @@ export function useDriverRegistration() {
       return;
     }
 
+    // Variables accessibles dans le catch pour le cleanup Storage
+    let uploadResults: PromiseSettledResult<string | null>[] = [];
+
     try {
       await user.getIdToken(true);
 
-      const uploadResults = await Promise.allSettled([
+      uploadResults = await Promise.allSettled([
         uploadFileWithRetry(biometricsPhoto, 'biometrics', userId),
         uploadFileWithRetry(vehicleFiles.registration!, 'documents', userId),
         uploadFileWithRetry(vehicleFiles.insurance || null, 'documents', userId),
@@ -477,6 +480,20 @@ export function useDriverRegistration() {
         );
       }
     } catch (err: unknown) {
+      // Cleanup des fichiers Storage orphelins uploadés avant l'échec de createDriverProfile
+      const uploadedUrls = uploadResults
+        .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && typeof r.value === 'string')
+        .map(r => r.value);
+
+      for (const url of uploadedUrls) {
+        try {
+          const fileRef = ref(storage, url);
+          await deleteObject(fileRef);
+        } catch {
+          // Ignorer les erreurs de cleanup individuel
+        }
+      }
+
       const error = err as { code?: string; message?: string };
       let errorMessage = "Erreur lors de l'inscription. Veuillez réessayer.";
       if (error?.code === 'permission-denied') {
