@@ -136,8 +136,10 @@ export function useDriverRegistration() {
             setStep1Data(prev => ({ ...prev, ...saved.step1Data }));
             setStep2Data(saved.step2Data || {});
             setStep3Data(saved.step3Data || {});
-            // Toujours reprendre au moins à l'étape 1 (step0 est la sélection du rôle)
-            setCurrentStep(Math.max(saved.currentStep || 1, 1));
+            // Les objets File ne sont pas sérialisables — impossible de restaurer au-delà de l'étape 2
+            // Les étapes 3+ (véhicule, documents) nécessitent de re-uploader les fichiers
+            const maxRestorableStep = 2;
+            setCurrentStep(Math.min(Math.max(saved.currentStep || 1, 1), maxRestorableStep));
           }
         }
 
