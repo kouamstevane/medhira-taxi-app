@@ -266,14 +266,24 @@ export const signInWithGoogle = async (
       userType: intendedUserType
     });
 
-    await createUserDocument(user.uid, {
-      email: user.email,
-      firstName: user.displayName?.split(' ')[0] || '',
-      lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
-      profileImageUrl: user.photoURL || undefined,
-      userType: intendedUserType,
-      ...(intendedUserType === 'chauffeur' ? { status: 'draft' } : {}),
-    });
+    try {
+      await createUserDocument(user.uid, {
+        email: user.email,
+        firstName: user.displayName?.split(' ')[0] || '',
+        lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+        profileImageUrl: user.photoURL || undefined,
+        userType: intendedUserType,
+        ...(intendedUserType === 'chauffeur' ? { status: 'draft' } : {}),
+      });
+    } catch (docError) {
+      // Empêcher un compte Auth orphelin sans document Firestore
+      console.error('[AuthService] Échec création document Firestore, déconnexion préventive', {
+        uid: user.uid,
+        docError
+      });
+      try { await firebaseSignOut(auth); } catch {}
+      throw new Error('Erreur lors de la création du profil. Veuillez réessayer.');
+    }
 
     console.log('[AuthService] Document utilisateur créé avec succès', {
       userType: intendedUserType,
