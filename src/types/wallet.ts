@@ -17,9 +17,9 @@ export type TransactionType = 'deposit' | 'withdrawal' | 'payment' | 'refund';
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'cancelled';
 
 /**
- * Méthode de paiement
+ * Méthode de paiement (Canada uniquement — Stripe carte bancaire)
  */
-export type WalletPaymentMethod = 'orange_money' | 'mtn_money' | 'visa' | 'mastercard' | 'paypal';
+export type WalletPaymentMethod = 'visa' | 'mastercard' | 'stripe_card';
 
 /**
  * Interface pour une transaction de portefeuille
@@ -52,17 +52,11 @@ export interface Wallet {
 }
 
 /**
- * Demande de rechargement
+ * Demande de rechargement (Stripe uniquement au Canada)
  */
 export interface RechargeRequest {
   amount: number;
   method: WalletPaymentMethod;
-  phoneNumber?: string;
-  cardDetails?: {
-    cardNumber: string;
-    expiryDate: string;
-    cvv: string;
-  };
 }
 
 /**
