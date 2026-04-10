@@ -4,32 +4,28 @@ import type React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { auth, db } from '@/config/firebase';
-import { doc, runTransaction, collection } from 'firebase/firestore';
-import { CURRENCY_CODE, LIMITS, WALLET_FEES, WALLET_PRESET_AMOUNTS, ACTIVE_MARKET } from '@/utils/constants';
+import { auth } from '@/config/firebase';
+import { CURRENCY_CODE, LIMITS, WALLET_PRESET_AMOUNTS, ACTIVE_MARKET } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement'), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 animate-pulse rounded-xl" /> })
 import { STRIPE_CURRENCY_BY_MARKET } from '@/types/stripe';
 
-type PaymentStep = 'select' | 'stripe_form' | 'success';
-type PaymentMethod = 'om' | 'momo' | 'card';
+type PaymentStep = 'select' | 'stripe_form';
 
 export default function RechargerPage() {
   const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('om');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState<PaymentStep>('select');
   const [stripeClientSecret, setStripeClientSecret] = useState('');
   const router = useRouter();
 
-  const stripeSupported = STRIPE_CURRENCY_BY_MARKET[ACTIVE_MARKET] !== null;
   const stripeCurrency = STRIPE_CURRENCY_BY_MARKET[ACTIVE_MARKET] ?? 'cad';
 
   // ============================================================
-  // Soumission principale
+  // Soumission : uniquement Stripe (carte bancaire)
   // ============================================================
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -46,34 +42,22 @@ export default function RechargerPage() {
         throw new Error(`Le montant minimum est de ${LIMITS.MIN_WALLET_RECHARGE} ${CURRENCY_CODE}`);
       }
 
-      if (paymentMethod === 'card') {
-        if (!stripeSupported) {
-          throw new Error(
-            `Le paiement par carte n'est pas disponible pour le marché ${ACTIVE_MARKET}. Utilisez Orange Money ou MTN Money.`
-          );
-        }
-        // Créer le PaymentIntent via l'API
-        const token = await user.getIdToken();
-        const res = await fetch('/api/stripe/wallet/recharge', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ amount: numericAmount }),
-        });
+      // Créer le PaymentIntent via l'API Stripe
+      const token = await user.getIdToken();
+      const res = await fetch('/api/stripe/wallet/recharge', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ amount: numericAmount }),
+      });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? 'Erreur lors de la création du paiement');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Erreur lors de la création du paiement');
 
-        setStripeClientSecret(data.clientSecret);
-        setStep('stripe_form');
-      } else {
-        // Mobile Money (Orange Money / MTN) — simulation (à remplacer par l'API réelle)
-        await simulateMobileMoneyAPI(numericAmount, paymentMethod);
-        await processWalletUpdate(user.uid, numericAmount, paymentMethod);
-        router.push(`/wallet?success=${encodeURIComponent(formatCurrencyWithCode(numericAmount) + ' ajoutés avec succès!')}`);
-      }
+      setStripeClientSecret(data.clientSecret);
+      setStep('stripe_form');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Une erreur est survenue. Veuillez réessayer.');
     } finally {
@@ -85,57 +69,15 @@ export default function RechargerPage() {
   // Callback succès Stripe
   // ============================================================
 
-  const handleStripeSuccess = async (paymentIntentId: string) => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    try {
-      // Note : la mise à jour du solde est gérée de manière fiable par le webhook Stripe
-      // (payment_intent.succeeded → Cloud Function stripeWebhookInstant).
-      // Ici on redirige simplement avec un message de confirmation.
-      router.push(`/wallet?success=${encodeURIComponent('Recharge en cours de traitement...')}`);
-    } catch {
-      setError('Paiement reçu mais erreur lors de la mise à jour. Contactez le support.');
-    }
+  const handleStripeSuccess = async (_paymentIntentId: string) => {
+    // Le solde est crédité par le webhook Stripe (payment_intent.succeeded →
+    // Cloud Function stripeWebhookInstant). On redirige avec un message informatif.
+    router.push(`/wallet?success=${encodeURIComponent('Recharge en cours de traitement. Votre solde sera mis à jour dans quelques instants.')}`);
   };
 
   const handleStripeError = (message: string) => {
     setError(message);
     setStep('select');
-  };
-
-  // ============================================================
-  // Mise à jour Firestore du portefeuille (Mobile Money)
-  // ============================================================
-
-  const processWalletUpdate = async (userId: string, rechargeAmount: number, method: string) => {
-    const fees = Math.max(rechargeAmount * WALLET_FEES.RECHARGE_RATE, WALLET_FEES.MIN_FEE);
-    const netAmount = rechargeAmount - fees;
-    const walletRef = doc(db, 'wallets', userId);
-    const transactionRef = doc(collection(db, 'transactions'));
-
-    await runTransaction(db, async (transaction) => {
-      const walletDoc = await transaction.get(walletRef);
-      if (!walletDoc.exists()) {
-        transaction.set(walletRef, { balance: netAmount, currency: CURRENCY_CODE, updatedAt: new Date() });
-      } else {
-        const currentBalance = walletDoc.data().balance || 0;
-        transaction.update(walletRef, { balance: currentBalance + netAmount, updatedAt: new Date() });
-      }
-      transaction.set(transactionRef, {
-        userId, amount: rechargeAmount, fees, netAmount,
-        method: method === 'om' ? 'Orange Money' : 'MTN Mobile Money',
-        type: 'deposit', status: 'completed', createdAt: new Date(),
-      });
-    });
-  };
-
-  // ============================================================
-  // Simulation Mobile Money (à remplacer par l'intégration réelle)
-  // ============================================================
-
-  const simulateMobileMoneyAPI = async (_amount: number, _method: string) => {
-    await new Promise(resolve => setTimeout(resolve, 1500));
   };
 
   const presetAmounts = WALLET_PRESET_AMOUNTS;
@@ -181,7 +123,7 @@ export default function RechargerPage() {
   }
 
   // ============================================================
-  // Écran principal (sélection montant + méthode)
+  // Écran principal (sélection montant)
   // ============================================================
 
   return (
@@ -243,55 +185,23 @@ export default function RechargerPage() {
               </div>
             </div>
 
-            {/* Méthode de paiement */}
+            {/* Méthode de paiement — uniquement carte bancaire (Canada) */}
             <div>
               <label className="block text-sm font-medium text-slate-400 mb-3">
                 Méthode de paiement
               </label>
-              <div className="space-y-3">
-                {/* Orange Money */}
-                <label className={`flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all ${
-                  paymentMethod === 'om' ? 'glass-card border-2 border-primary' : 'glass-card border border-white/10'
-                }`}>
-                  <input type="radio" name="paymentMethod" value="om" checked={paymentMethod === 'om'} onChange={() => setPaymentMethod('om')} className="hidden" />
-                  <div className="bg-orange-500 text-white p-2 rounded-lg">
-                    <MaterialIcon name="phone_android" size="md" />
-                  </div>
-                  <span className="text-white font-medium">Orange Money</span>
-                  {paymentMethod === 'om' && <MaterialIcon name="check_circle" size="md" className="text-primary ml-auto" />}
-                </label>
-
-                {/* MTN Mobile Money */}
-                <label className={`flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all ${
-                  paymentMethod === 'momo' ? 'glass-card border-2 border-primary' : 'glass-card border border-white/10'
-                }`}>
-                  <input type="radio" name="paymentMethod" value="momo" checked={paymentMethod === 'momo'} onChange={() => setPaymentMethod('momo')} className="hidden" />
-                  <div className="bg-yellow-400 text-black p-2 rounded-lg">
-                    <MaterialIcon name="phone_android" size="md" />
-                  </div>
-                  <span className="text-white font-medium">MTN Mobile Money</span>
-                  {paymentMethod === 'momo' && <MaterialIcon name="check_circle" size="md" className="text-primary ml-auto" />}
-                </label>
-
-                {/* Carte bancaire (Stripe) — affiché seulement si le marché supporte Stripe */}
-                {stripeSupported && (
-                  <label className={`flex items-center gap-3 p-4 rounded-xl cursor-pointer transition-all ${
-                    paymentMethod === 'card' ? 'glass-card border-2 border-primary' : 'glass-card border border-white/10'
-                  }`}>
-                    <input type="radio" name="paymentMethod" value="card" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} className="hidden" />
-                    <div className="bg-blue-600 text-white p-2 rounded-lg">
-                      <MaterialIcon name="credit_card" size="md" />
-                    </div>
-                    <div className="flex-1">
-                      <span className="text-white font-medium block">Carte bancaire</span>
-                      <span className="text-slate-500 text-xs">Visa · Mastercard · Apple Pay · Google Pay</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {paymentMethod === 'card' && <MaterialIcon name="check_circle" size="md" className="text-primary" />}
-                      <MaterialIcon name="lock" size="sm" className="text-slate-500" />
-                    </div>
-                  </label>
-                )}
+              <div className="flex items-center gap-3 p-4 rounded-xl glass-card border-2 border-primary">
+                <div className="bg-blue-600 text-white p-2 rounded-lg">
+                  <MaterialIcon name="credit_card" size="md" />
+                </div>
+                <div className="flex-1">
+                  <span className="text-white font-medium block">Carte bancaire</span>
+                  <span className="text-slate-500 text-xs">Visa · Mastercard · Apple Pay · Google Pay</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <MaterialIcon name="check_circle" size="md" className="text-primary" />
+                  <MaterialIcon name="lock" size="sm" className="text-slate-500" />
+                </div>
               </div>
             </div>
 
@@ -311,22 +221,17 @@ export default function RechargerPage() {
                 </>
               ) : (
                 <>
-                  <MaterialIcon name={paymentMethod === 'card' ? 'credit_card' : 'check'} size="md" />
-                  {paymentMethod === 'card' ? 'Continuer vers le paiement' : 'Confirmer la recharge'}
+                  <MaterialIcon name="credit_card" size="md" />
+                  Continuer vers le paiement
                 </>
               )}
             </button>
           </form>
 
-          {/* Info frais */}
+          {/* Info */}
           <div className="text-center text-xs text-slate-500 space-y-1">
-            {paymentMethod !== 'card' && (
-              <p>Frais de recharge: {(WALLET_FEES.RECHARGE_RATE * 100).toFixed(0)}% (min. {WALLET_FEES.MIN_FEE} {CURRENCY_CODE})</p>
-            )}
-            {paymentMethod === 'card' && (
-              <p>Aucuns frais supplémentaires · Traitement sécurisé par Stripe</p>
-            )}
-            <p>Le solde sera crédité instantanément après paiement</p>
+            <p>Aucuns frais supplémentaires · Traitement sécurisé par Stripe</p>
+            <p>Le solde est crédité via webhook Stripe après confirmation du paiement</p>
           </div>
         </main>
       </div>
