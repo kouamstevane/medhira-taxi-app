@@ -8,6 +8,17 @@ import { auth, storage, db } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { retryWithBackoff } from '@/utils/retry'
 
+const ALLOWED_DOC_KEYS = [
+  'idFront', 'idBack', 'licenseFront', 'licenseBack',
+  'photoProfile', 'permitConduire', 'casierJudiciaire',
+  'historiqueConduire', 'preuvePermitTravail',
+  'plaqueImmatriculation', 'permitCommercial',
+  'vehicleRegistration', 'vehicleInsurance', 'techControl',
+  'vehicleExterior', 'vehicleInterior',
+  'plaqueImmatriculationCommerciale', 'visiteTechniqueCommerciale', 'certificatVille',
+] as const;
+type AllowedDocKey = typeof ALLOWED_DOC_KEYS[number];
+
 const DOC_LABELS: Record<string, string> = {
   photoProfile: 'Photo de profil',
   permitConduire: 'Permis de conduire',
@@ -32,6 +43,12 @@ export default function DocumentReuploadPage() {
 
   const handleUpload = async () => {
     if (!file || !auth.currentUser) return
+
+    if (!ALLOWED_DOC_KEYS.includes(docKey as AllowedDocKey)) {
+      setError('Type de document non reconnu')
+      return
+    }
+
     setUploading(true)
     setError(null)
     try {
