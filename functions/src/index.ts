@@ -320,7 +320,7 @@ export const createDriverProfile = onCall(
     }
 
 
-    if (driverData.phoneNumber !== null) {
+    if (driverData.phoneNumber != null) {
       throw new HttpsError('failed-precondition', 'phoneNumber doit être null.');
     }
 
