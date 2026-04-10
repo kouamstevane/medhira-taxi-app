@@ -293,8 +293,32 @@ async function onPaymentIntentFailed(pi: Record<string, unknown>): Promise<void>
 async function onPaymentIntentCanceled(pi: Record<string, unknown>): Promise<void> {
   const metadata = (pi.metadata ?? {}) as Record<string, string>;
   if (metadata.purpose === 'taxi_ride' && metadata.bookingId) {
-    await getDb().collection('bookings').doc(metadata.bookingId).update({
-      paymentStatus: PAYMENT_STATUS.CANCELLED,
+    const db         = getDb();
+    const bookingRef = db.collection('bookings').doc(metadata.bookingId);
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(bookingRef);
+      if (!snap.exists) return;
+
+      const currentStatus = snap.data()?.paymentStatus;
+
+      // Ne pas rétrograder un statut terminal positif (captured) vers cancelled
+      if (currentStatus === PAYMENT_STATUS.CAPTURED) {
+        console.warn(
+          `[Webhook] onPaymentIntentCanceled: ignoré — booking ${metadata.bookingId} déjà capturé`
+        );
+        return;
+      }
+
+      // Idempotence : déjà annulé, ne rien faire
+      if (currentStatus === PAYMENT_STATUS.CANCELLED) {
+        console.warn(
+          `[Webhook] onPaymentIntentCanceled: déjà annulé — ${metadata.bookingId}`
+        );
+        return;
+      }
+
+      tx.update(bookingRef, { paymentStatus: PAYMENT_STATUS.CANCELLED });
     });
   }
 }
@@ -571,14 +595,34 @@ async function onPayoutFailed(payout: Record<string, unknown>): Promise<void> {
 
 async function onPayoutCanceled(payout: Record<string, unknown>): Promise<void> {
   const payoutId = payout.id as string;
-  await getDb().collection('platform_payouts').doc(payoutId).set({
-    payoutId,
-    amountCents: payout.amount as number,
-    currency:    (payout.currency as string).toUpperCase(),
-    status:      'canceled',
-    canceledAt:  new Date(),
-    metadata:    (payout.metadata ?? {}) as Record<string, string>,
-    createdAt:   new Date(),
+  const db       = getDb();
+  const ref      = db.collection('platform_payouts').doc(payoutId);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+
+    // Idempotence : déjà annulé, ne rien faire
+    if (snap.exists && snap.data()?.status === 'canceled') {
+      console.warn(`[Webhook] onPayoutCanceled: déjà traité — ${payoutId}`);
+      return;
+    }
+
+    // Conserver createdAt si le document existait déjà
+    const existingCreatedAt = snap.exists ? snap.data()?.createdAt : new Date();
+
+    tx.set(
+      ref,
+      {
+        payoutId,
+        amountCents: payout.amount as number,
+        currency:    (payout.currency as string).toUpperCase(),
+        status:      'canceled',
+        canceledAt:  new Date(),
+        metadata:    (payout.metadata ?? {}) as Record<string, string>,
+        createdAt:   existingCreatedAt ?? new Date(),
+      },
+      { merge: true },
+    );
   });
 }
 
