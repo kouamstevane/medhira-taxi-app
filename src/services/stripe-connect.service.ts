@@ -295,7 +295,23 @@ export async function processWeeklyPayouts(
       });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error(`processWeeklyPayouts: erreur pour chauffeur ${driverId}:`, errorMsg);
+      // Extraire l'ID du transfer Stripe si disponible (pour réconciliation manuelle)
+      const stripeTransferId = (err as Record<string, unknown>)?.transferId as string | undefined;
+      if (stripeTransferId) {
+        console.error(
+          `processWeeklyPayouts: transfer Stripe ${stripeTransferId} créé mais transaction Firestore échouée pour ${driverId} — réconciliation manuelle requise`,
+          errorMsg
+        );
+      } else {
+        console.error(`processWeeklyPayouts: erreur pour chauffeur ${driverId}:`, errorMsg);
+      }
+
+      // Libérer le lock pour ne pas bloquer ce chauffeur pendant 5 min inutilement
+      try {
+        await getAdminDb().collection('drivers').doc(driverId).update({ payoutLockUntil: null });
+      } catch (unlockErr) {
+        console.error(`processWeeklyPayouts: impossible de libérer le lock pour ${driverId}:`, unlockErr);
+      }
 
       await getAdminDb().collection('driver_payouts').add({
         driverId,
@@ -304,12 +320,13 @@ export async function processWeeklyPayouts(
         currency: currency.toLowerCase(),
         status: 'failed',
         error: errorMsg,
+        stripeTransferId: stripeTransferId ?? null,
         processedAt,
         week: getISOWeek(processedAt),
       });
 
       results.push({
-        transferId: '',
+        transferId: stripeTransferId ?? '',
         driverId,
         amount: fromStripeAmount(pendingBalanceCents, currency),
         currency,
@@ -391,37 +408,58 @@ export async function triggerManualPayout(
 
   // Étape 2 : appel Stripe hors transaction
   const processedAt = new Date();
-  const transfer = await stripe.transfers.create({
-    amount: lockedBalance,
-    currency: currency.toLowerCase(),
-    destination: stripeAccountId,
-    description: `Virement manuel chauffeur ${driverId} — ${processedAt.toISOString().split('T')[0]}`,
-    metadata: {
-      driverId,
-      type: 'manual',
-      platform: 'medhira_taxi',
-    },
-  });
+  let transfer: Awaited<ReturnType<typeof stripe.transfers.create>> | undefined;
 
-  // Étape 3 : libérer le verrou + zéroter le solde + persister
-  await db.runTransaction(async (tx) => {
-    const payoutRef = db.collection('driver_payouts').doc();
-    tx.update(driverRef, {
-      pendingBalanceCents: 0,
-      lastPayoutAt: processedAt,
-      payoutLockUntil: null,
-    });
-    tx.set(payoutRef, {
-      driverId,
-      stripeTransferId: transfer.id,
-      amountCents: lockedBalance,
-      amount: fromStripeAmount(lockedBalance, currency),
+  try {
+    transfer = await stripe.transfers.create({
+      amount: lockedBalance,
       currency: currency.toLowerCase(),
-      type: 'manual',
-      status: 'succeeded',
-      processedAt,
+      destination: stripeAccountId,
+      description: `Virement manuel chauffeur ${driverId} — ${processedAt.toISOString().split('T')[0]}`,
+      metadata: {
+        driverId,
+        type: 'manual',
+        platform: 'medhira_taxi',
+      },
     });
-  });
+
+    // Étape 3 : libérer le verrou + zéroter le solde + persister
+    await db.runTransaction(async (tx) => {
+      const payoutRef = db.collection('driver_payouts').doc();
+      tx.update(driverRef, {
+        pendingBalanceCents: 0,
+        lastPayoutAt: processedAt,
+        payoutLockUntil: null,
+      });
+      tx.set(payoutRef, {
+        driverId,
+        stripeTransferId: transfer!.id,
+        amountCents: lockedBalance,
+        amount: fromStripeAmount(lockedBalance, currency),
+        currency: currency.toLowerCase(),
+        type: 'manual',
+        status: 'succeeded',
+        processedAt,
+      });
+    });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    if (transfer) {
+      console.error(
+        `triggerManualPayout: transfer Stripe ${transfer.id} créé mais transaction Firestore échouée pour ${driverId} — réconciliation manuelle requise`,
+        errorMsg
+      );
+    } else {
+      console.error(`triggerManualPayout: erreur Stripe pour chauffeur ${driverId}:`, errorMsg);
+    }
+    // Libérer le lock pour ne pas bloquer ce chauffeur
+    try {
+      await driverRef.update({ payoutLockUntil: null });
+    } catch (unlockErr) {
+      console.error(`triggerManualPayout: impossible de libérer le lock pour ${driverId}:`, unlockErr);
+    }
+    throw err;
+  }
 
   return {
     transferId: transfer.id,
