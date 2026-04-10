@@ -385,13 +385,20 @@ async function onCapabilityUpdated(capability: Record<string, unknown>): Promise
 }
 
 async function onChargeRefunded(charge: Record<string, unknown>): Promise<void> {
-  const chargeId       = charge.id as string;
-  const metadata       = (charge.metadata ?? {}) as Record<string, string>;
-  const amountRefunded = (charge.amount_refunded as number) ?? 0;
-  const currency       = (charge.currency as string) ?? 'cad';
-  const zeroDecimal    = ['xaf', 'xof'].includes(currency);
-  const refundAmount   = zeroDecimal ? amountRefunded : amountRefunded / 100;
-  const db             = getDb();
+  const chargeId    = charge.id as string;
+  const metadata    = (charge.metadata ?? {}) as Record<string, string>;
+  const currency    = (charge.currency as string) ?? 'cad';
+  const zeroDecimal = ['xaf', 'xof'].includes(currency);
+  const db          = getDb();
+
+  // Utiliser le montant du dernier remboursement (delta), pas le cumulatif charge.amount_refunded
+  // charge.refunds.data est trié du plus récent au plus ancien
+  const refundsData      = (charge.refunds as any)?.data ?? [];
+  const lastRefundAmount: number = refundsData.length > 0
+    ? (refundsData[0].amount as number)
+    : ((charge.amount_refunded as number) ?? 0);
+  const refundAmount    = zeroDecimal ? lastRefundAmount : lastRefundAmount / 100;
+  const driverShareCents = Math.round(lastRefundAmount * DRIVER_SHARE_RATE);
 
   const txRef     = db.collection('transactions').doc(`refund_${chargeId}`);
   const driverRef = metadata.driverId
@@ -427,9 +434,8 @@ async function onChargeRefunded(charge: Record<string, unknown>): Promise<void> 
     }
 
     if (driverRef && driverSnap?.exists) {
-      const current          = driverSnap.data()?.pendingBalanceCents ?? 0;
-      const driverShareCents = Math.round(amountRefunded * DRIVER_SHARE_RATE);
-      const newBalance       = Math.max(0, current - driverShareCents);
+      const current    = driverSnap.data()?.pendingBalanceCents ?? 0;
+      const newBalance = Math.max(0, current - driverShareCents);
       tx.update(driverRef, { pendingBalanceCents: newBalance });
     }
   });
