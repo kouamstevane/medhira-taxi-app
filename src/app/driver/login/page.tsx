@@ -69,7 +69,7 @@ export default function DriverLogin() {
 
   const handleGoogleLogin = async () => {
     try {
-      const user = await AuthService.signInWithGoogle();
+      const user = await AuthService.signInWithGoogleForDriver();
       await verifyDriverAccount(user.uid);
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "Erreur de connexion Google");
