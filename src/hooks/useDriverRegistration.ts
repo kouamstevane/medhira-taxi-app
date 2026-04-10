@@ -385,7 +385,7 @@ export function useDriverRegistration() {
         ssn: encryptedSsn,
         driverType,
         vehicleType,
-        cityId: 'edmonton',
+        cityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',
         documents: {
           biometricPhoto: getValue(uploadResults[0]),
           carRegistration: getValue(uploadResults[1]),
