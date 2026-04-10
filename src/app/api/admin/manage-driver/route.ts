@@ -17,6 +17,7 @@ const ManageDriverSchema = z.object({
   ]),
   driverId: z.string().min(1),
   reason: z.string().optional(),
+  rejectionCode: z.string().optional(),
   documentKey: z.string().optional(),
   documentRejectionReason: z.string().optional(),
 });
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { action, driverId, reason, documentKey, documentRejectionReason } = result.data;
+    const { action, driverId, reason, rejectionCode, documentKey, documentRejectionReason } = result.data;
 
     // Vérifier que l'utilisateur est bien un admin
     const adminDoc = await adminDb.collection('admins').doc(adminUid).get();
@@ -122,10 +123,11 @@ export async function POST(request: NextRequest) {
 
       case 'reject':
         if (!reason) return NextResponse.json({ error: 'Raison requise pour le refus' }, { status: 400 });
-        
+
         await driverRef.update({
           status: 'rejected',
           rejectionReason: reason,
+          rejectionCode: rejectionCode ?? 'R005',
           rejectedAt: timestamp,
           rejectedBy: adminUid,
           updatedAt: timestamp,

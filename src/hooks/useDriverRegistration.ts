@@ -514,16 +514,14 @@ export function useDriverRegistration() {
   };
 
   const handleFixRejection = () => {
-    if (rejectionCode === 'R001' || rejectionCode === 'R004') {
-      setRejectionCode(null);
-      setCurrentStep(4);
-    } else if (rejectionCode === 'R002' || rejectionCode === 'R003') {
-      setRejectionCode(null);
-      setCurrentStep(3);
-    } else {
-      setRejectionCode(null);
-      setCurrentStep(2);
-    }
+    const stepByCode: Record<string, number> = {
+      R001: 4, R004: 4,
+      R002: 3, R003: 3,
+      R005: 2,
+    };
+    const targetStep = (rejectionCode && stepByCode[rejectionCode]) ? stepByCode[rejectionCode] : 2;
+    setRejectionCode(null);
+    setCurrentStep(targetStep);
   };
 
   const handleLogout = async () => {
