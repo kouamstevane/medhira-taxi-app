@@ -276,7 +276,12 @@ export const encryptSensitiveData = onCall(
 );
 
 export const createDriverProfile = onCall(
-  { cors: true },
+  { cors: [
+    'https://medhira.ca',
+    'https://www.medhira.ca',
+    /^https:\/\/.*\.medhira\.ca$/,
+    ...(process.env.FUNCTIONS_EMULATOR === 'true' ? ['http://localhost:3000'] : []),
+  ] },
   async (request: CallableRequest) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Vous devez être connecté pour effectuer cette action.');
