@@ -640,8 +640,6 @@ export const onDriverRegistration = onDocumentWritten("drivers/{driverId}", asyn
       return;
     }
 
-    // L'email de bienvenue est envoyé automatiquement par la Cloud Function sendVerificationEmail
-    // lors de l'inscription du chauffeur via le client.
     // Ce trigger ne fait que logger la transition vers l'état 'pending'.
     console.log(`[DriverRegistration] Chauffeur ${event.params.driverId} passé à l'état 'pending'. Email: ${email}`);
   }
@@ -652,13 +650,6 @@ export const onDriverRegistration = onDocumentWritten("drivers/{driverId}", asyn
 // ============================================================================
 // Ces fonctions permettent de migrer toutes les données existantes d'un pays a un autre avec un taux de conversion.
 export { migrateCurrencyToCAD, migrateCurrencyToCADHTTP } from './migrateCurrency.js';
-
-// ============================================================================
-// Export des fonctions d'envoi d'emails via Resend
-// ============================================================================
-// Ces fonctions utilisent Resend + react-email pour envoyer des emails avec
-// une excellente délivrabilité (SPF/DKIM configuré)
-export { sendVerificationEmail, sendVerificationEmailHttp } from './emails/send-verification-email.js';
 
 // ============================================================================
 // Livraison de Repas — Notification Chauffeurs (Règle 4)
