@@ -1,11 +1,12 @@
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { FcGoogle } from 'react-icons/fc';
 import { InputField } from '@/components/forms/InputField';
 import { ERROR_MESSAGES } from '@/utils/constants';
+import OTPInput from '@/components/ui/OTPInput';
 
 const step1Schema = z.object({
   email: z.string().email(ERROR_MESSAGES.INVALID_EMAIL),
@@ -20,10 +21,14 @@ interface Step1IntentProps {
   onGoogleSignIn: () => void;
   initialData?: Partial<Step1FormData>;
   loading?: boolean;
+  sendVerificationCode?: (email: string) => Promise<{ success: boolean; error?: string }>;
+  verifyCode?: (code: string) => Promise<{ success: boolean; error?: string; attemptsLeft?: number }>;
+  onVerified?: () => void;
+  emailPreVerified?: boolean;
 }
 
-export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loading }: Step1IntentProps) {
-  const { register, handleSubmit, formState: { errors } } = useForm<Step1FormData>({
+export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loading, sendVerificationCode, verifyCode, onVerified, emailPreVerified = false }: Step1IntentProps) {
+  const { register, handleSubmit, getValues, formState: { errors } } = useForm<Step1FormData>({
     resolver: zodResolver(step1Schema),
     defaultValues: {
       email: initialData?.email || '',
@@ -31,6 +36,56 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
       password: '',
     }
   });
+
+  const [verificationPhase, setVerificationPhase] = useState(false);
+  const [codeVerified, setCodeVerified] = useState(emailPreVerified);
+  const [formData, setFormData] = useState<Step1FormData | null>(null);
+
+  const handleFormSubmit = async (data: Step1FormData) => {
+    if (sendVerificationCode) {
+      setFormData(data);
+      try {
+        await onNext(data);
+        setVerificationPhase(true);
+      } catch {
+        // Error already handled in hook
+      }
+    } else {
+      try {
+        await onNext(data);
+      } catch {
+        // Error already handled in hook
+      }
+    }
+  };
+
+  const handleCodeVerified = () => {
+    setCodeVerified(true);
+    onVerified?.();
+  };
+
+  // Phase B : vérification OTP
+  if (verificationPhase && !codeVerified && sendVerificationCode && verifyCode) {
+    const email = formData?.email ?? getValues('email');
+    return (
+      <div className="space-y-6">
+        <div className="text-center mb-8">
+          <div className="mx-auto w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
+            <span className="text-3xl">✉️</span>
+          </div>
+          <h2 className="text-2xl font-bold text-[#101010]">Vérifiez votre email</h2>
+          <p className="text-gray-500 mt-2">Entrez le code à 6 chiffres envoyé à votre adresse email.</p>
+        </div>
+        <OTPInput
+          email={email}
+          onVerify={verifyCode}
+          onResend={() => sendVerificationCode(email)}
+          onSuccess={handleCodeVerified}
+          loading={loading}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -61,7 +116,7 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
         </div>
 
         {/* Option B: Manuel */}
-        <form onSubmit={handleSubmit(onNext)} className="space-y-4">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
           <InputField
             {...register('email')}
             type="email"
