@@ -764,6 +764,32 @@ service cloud.firestore {
     }
 
     // ============================================================================
+    // COLLECTION EMAIL_VERIFICATION_CODES (CODES OTP EMAIL)
+    // ============================================================================
+
+    match /emailVerificationCodes/{uid} {
+      allow read, write: if false;
+    }
+
+    // ============================================================================
+    // COLLECTION EMAIL_LOGS (JOURNAUX D'ENVOI EMAIL)
+    // ============================================================================
+
+    match /emailLogs/{messageId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ============================================================================
+    // COLLECTION ADMIN_ALERTS (ALERTES ADMINISTRATEUR)
+    // ============================================================================
+
+    match /adminAlerts/{alertId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ============================================================================
     // FIN DES RÈGLES DE SÉCURITÉ
     // ============================================================================
   }
