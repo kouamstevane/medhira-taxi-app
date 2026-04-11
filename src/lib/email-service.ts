@@ -1,74 +1,53 @@
-import nodemailer from 'nodemailer';
-import { 
-  getApprovalTemplate, 
-  getRejectionTemplate, 
-  getSuspensionTemplate, 
-  getDeactivationTemplate, 
-  getReactivationTemplate 
+import { Resend } from 'resend';
+import {
+  getApprovalTemplate,
+  getRejectionTemplate,
+  getSuspensionTemplate,
+  getDeactivationTemplate,
+  getReactivationTemplate,
+  getVerificationCodeTemplate,
 } from './email-templates';
 
+function getResendClient(): Resend {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY manquant dans les variables d\'environnement');
+  }
+  return new Resend(apiKey);
+}
+
 /**
- * Service centralisé pour l'envoi d'emails via Nodemailer
+ * Service centralisé pour l'envoi d'emails via Resend
  */
 export async function sendEmail({
   to,
   subject,
   html,
-  fromName = 'Medjira'
+  fromName = 'Medjira',
+  tags,
 }: {
   to: string;
   subject: string;
   html: string;
   fromName?: string;
-}) {
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const smtpFrom = process.env.SMTP_FROM;
+  tags?: Array<{ name: string; value: string }>;
+}): Promise<{ messageId?: string }> {
+  const resend = getResendClient();
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'medjira@medjira.com';
 
-  if (!smtpHost || !smtpPort || !smtpUser || !smtpPass) {
-    console.error('Configuration SMTP manquante:', { 
-      host: !!smtpHost, 
-      port: !!smtpPort, 
-      user: !!smtpUser, 
-      pass: !!smtpPass 
-    });
-    throw new Error('Configuration SMTP incomplete dans les variables d\'environnement');
-  }
-
-  const port = parseInt(smtpPort, 10);
-  const isSecure = port === 465;
-
-  const transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: port,
-    secure: isSecure,
-    auth: {
-      user: smtpUser,
-      pass: smtpPass,
-    },
-    // TLS options pour les ports non-465 (STARTTLS)
-    ...(!isSecure && {
-      requireTLS: true,
-      tls: {
-        // En prod, il faudrait idéalement laisser rejectUnauthorized: true
-        // Mais pour la compatibilité avec certains serveurs on garde flexible
-        rejectUnauthorized: process.env.NODE_ENV === 'production' ? true : false,
-      },
-    }),
-  });
-
-  const from = smtpFrom || `${fromName} <${smtpUser}>`;
-
-  const mailOptions = {
-    from,
+  const result = await resend.emails.send({
+    from: `${fromName} <${fromEmail}>`,
     to,
     subject,
     html,
-  };
+    tags,
+  });
 
-  return await transporter.sendMail(mailOptions);
+  if (result.error) {
+    throw new Error(`Erreur Resend: ${result.error.message}`);
+  }
+
+  return { messageId: result.data?.id };
 }
 
 /**
@@ -102,14 +81,38 @@ export async function sendDriverStatusEmail({
       html = getSuspensionTemplate(driverName, reason);
       break;
     case 'deactivation':
-      subject = '🚫 Votre compte chauffeur Medjira a été désactivé';
+      subject = 'Votre compte chauffeur Medjira a été désactivé';
       html = getDeactivationTemplate(driverName, reason);
       break;
     case 'reactivation':
-      subject = ' Votre compte chauffeur Medjira a été réactivé';
+      subject = 'Votre compte chauffeur Medjira a été réactivé';
       html = getReactivationTemplate(driverName);
       break;
   }
 
   return await sendEmail({ to, subject, html });
+}
+
+/**
+ * Envoie un email de code de vérification
+ */
+export async function sendVerificationCodeEmail({
+  to,
+  code,
+  uid,
+}: {
+  to: string;
+  code: string;
+  uid: string;
+}): Promise<{ messageId?: string }> {
+  return sendEmail({
+    to,
+    subject: 'Votre code de vérification Medjira',
+    html: getVerificationCodeTemplate(code),
+    fromName: 'Medjira',
+    tags: [
+      { name: 'uid', value: uid },
+      { name: 'type', value: 'verification_code' },
+    ],
+  });
 }
