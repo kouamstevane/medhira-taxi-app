@@ -150,11 +150,8 @@ export default function DriverLogin() {
             </button>
           </div>
 
-          {/* Forgot Password & Verify Email */}
-          <div className="flex justify-between pt-1">
-            <Link href="/driver/verify-email" className="text-primary text-sm font-semibold hover:underline">
-              Vérifier mon email
-            </Link>
+          {/* Forgot Password */}
+          <div className="flex justify-end pt-1">
             <Link href="/driver/reset-password" className="text-primary text-sm font-semibold hover:underline">
               Mot de passe oublié ?
             </Link>

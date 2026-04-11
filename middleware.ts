@@ -61,7 +61,6 @@ const DRIVER_ROUTES = [
 const DRIVER_PUBLIC_ROUTES = [
   '/driver/login',
   '/driver/register',
-  '/driver/verify-email',
 ];
 
 const ADMIN_ROUTES = [

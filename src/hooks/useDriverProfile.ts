@@ -30,8 +30,6 @@ export function useDriverProfile() {
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState<Partial<DriverCoreData>>({});
   const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [verificationEmailSent, setVerificationEmailSent] = useState(false);
-
   const [stripeData, setStripeData] = useState<StripeConnectData | null>(null);
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState('');
@@ -237,22 +235,6 @@ export function useDriverProfile() {
     }
   };
 
-  const handleResendVerificationEmail = async () => {
-    if (!auth.currentUser) return;
-    try {
-      const { AuthService } = await import('@/services');
-      await AuthService.sendVerificationEmail(auth.currentUser);
-      setVerificationEmailSent(true);
-      const timeout = setTimeout(async () => {
-        if (mountedRef.current) await reloadUser();
-      }, 2000);
-      timeoutsRef.current.push(timeout);
-    } catch (err) {
-      logFirestoreError(err, "envoi de l'email de vérification");
-      setError("Erreur lors de l'envoi de l'email de vérification.");
-    }
-  };
-
   return {
     driver,
     loading,
@@ -263,7 +245,6 @@ export function useDriverProfile() {
     setFormData,
     profileImage,
     setProfileImage,
-    verificationEmailSent,
     isEmailVerified,
     stripeData,
     stripeLoading,
@@ -276,7 +257,6 @@ export function useDriverProfile() {
     handleCreateStripeAccount,
     handleToggleWeeklyPayout,
     handleManualPayout,
-    handleResendVerificationEmail,
     fetchStripeData,
   };
 }

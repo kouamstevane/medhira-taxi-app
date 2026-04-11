@@ -16,7 +16,6 @@ export default function DriverProfilePage() {
     setFormData,
     profileImage,
     setProfileImage,
-    verificationEmailSent,
     isEmailVerified,
     stripeData,
     stripeLoading,
@@ -29,7 +28,6 @@ export default function DriverProfilePage() {
     handleCreateStripeAccount,
     handleToggleWeeklyPayout,
     handleManualPayout,
-    handleResendVerificationEmail,
     fetchStripeData,
   } = useDriverProfile();
 
@@ -80,35 +78,6 @@ export default function DriverProfilePage() {
       </div>
 
       <div className="max-w-[430px] mx-auto p-4 space-y-4">
-        {/* Bannière d'avertissement si l'email n'est pas vérifié */}
-        {!isEmailVerified && (
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <MaterialIcon name="warning" size="lg" className="text-yellow-400 flex-shrink-0" />
-                  <p className="font-bold text-yellow-400">Email non vérifié</p>
-                </div>
-                <p className="text-sm text-slate-400 mt-1">
-                  Vous devez vérifier votre email avant de pouvoir modifier votre profil.
-                  {verificationEmailSent && " Un nouvel email de vérification vous a été envoyé."}
-                </p>
-              </div>
-              <button
-                onClick={handleResendVerificationEmail}
-                disabled={verificationEmailSent}
-                className={`px-4 py-2 rounded-xl font-medium transition-all text-sm ${
-                  verificationEmailSent
-                    ? 'bg-white/5 text-slate-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-primary to-[#ffae33] text-white primary-glow active:scale-[0.98]'
-                }`}
-              >
-                {verificationEmailSent ? 'Email envoyé' : "Renvoyer l'email"}
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Error */}
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">

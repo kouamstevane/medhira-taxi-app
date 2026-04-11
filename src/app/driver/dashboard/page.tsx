@@ -31,7 +31,6 @@ import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { incrementDriverAcceptedTrips, incrementDriverDeclinedTrips } from '@/services/driver.service';
 import { updateDriverLocation, calculateFinalFare, markDriverArrived, startTrip, completeTrip } from '@/services/taxi.service';
-import { resendVerificationEmail } from '@/services/auth.service';
 import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
 import ModeSwitch from './components/ModeSwitch';
@@ -54,7 +53,6 @@ export default function DriverDashboard() {
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
   const [dailyHistory, setDailyHistory] = useState<Trip[]>([]);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [sendingEmail, setSendingEmail] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showError, toasts, removeToast } = useToast();
@@ -67,42 +65,6 @@ export default function DriverDashboard() {
 
   const formatValue = (value: string | number | boolean | null | undefined, defaultValue: string | number = 'N/A'): string | number | boolean => {
     return value ?? defaultValue;
-  };
-
-  /**
-   * Fonction pour renvoyer l'email de vérification au chauffeur
-   * Utilise la même logique que la page verify-email
-   */
-  const handleResendVerificationEmail = async () => {
-    if (!currentUser) {
-      setError("Utilisateur non connecté");
-      return;
-    }
-
-    setSendingEmail(true);
-    setError(null);
-
-    try {
-      await resendVerificationEmail(
-        currentUser,
-        (message) => {
-          setInfoMessage(message);
-          // Masquer le message après 5 secondes
-          setTimeout(() => {
-            setInfoMessage(null);
-          }, 5000);
-        },
-        (errorMessage) => {
-          setError(errorMessage);
-        }
-      );
-    } catch (err: unknown) {
-      const error = err as { code?: string; message?: string };
-      console.error('[DriverDashboard] Erreur lors de l\'envoi de l\'email de vérification:', error);
-      setError(error.message || 'Erreur lors de l\'envoi de l\'email de vérification');
-    } finally {
-      setSendingEmail(false);
-    }
   };
 
   useEffect(() => {
@@ -637,16 +599,6 @@ export default function DriverDashboard() {
             <div className="flex items-start gap-3">
               <MaterialIcon name="info" size="md" className="text-blue-400 mt-0.5" />
               <p className="text-sm text-blue-300 flex-1">{infoMessage}</p>
-              {currentUser && !currentUser.emailVerified && (!driver || driver.status === 'pending') && (
-                <button
-                  onClick={handleResendVerificationEmail}
-                  disabled={sendingEmail}
-                  className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg disabled:opacity-50 flex items-center gap-1"
-                >
-                  <MaterialIcon name="refresh" size="sm" className={sendingEmail ? 'animate-spin' : ''} />
-                  {sendingEmail ? 'Envoi...' : 'Renvoyer'}
-                </button>
-              )}
             </div>
           </div>
         )}
