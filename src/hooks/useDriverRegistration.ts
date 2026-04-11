@@ -9,9 +9,8 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AuthService } from '@/services';
 import { serverEncryptionService } from '@/services/server-encryption.service';
-import { auditLoggingService, AuditEventType, AuditLogLevel } from '@/services/audit-logging.service';
+import { auditLoggingService } from '@/services/audit-logging.service';
 import { secureStorage } from '@/services/secureStorage.service';
-import { emailVerificationService } from '@/services/email-verification.service';
 import { StructuredLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
 import { redirectWithFallback } from '@/utils/navigation';
@@ -43,8 +42,6 @@ export function useDriverRegistration() {
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
   const [rejectionCode, setRejectionCode] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
-  const [emailVerificationAttempts, setEmailVerificationAttempts] = useState(0);
-
   const [driverType, setDriverType] = useState<DriverType>('chauffeur');
   const [vehicleType, setVehicleType] = useState<'velo' | 'scooter' | 'moto' | 'voiture'>('voiture');
 
@@ -423,26 +420,6 @@ export function useDriverRegistration() {
         maxAttempts: 3,
       });
 
-      try {
-        await retryWithBackoff(
-          () => emailVerificationService.sendVerificationEmail(
-            auth.currentUser?.email || '',
-            step2Data.firstName || undefined
-          ),
-          { maxAttempts: 3 }
-        );
-        await auditLoggingService.log({
-          eventType: AuditEventType.EMAIL_VERIFICATION_SENT,
-          userId,
-          level: AuditLogLevel.INFO,
-          action: 'Email de vérification envoyé après inscription',
-          success: true,
-          details: { email: auth.currentUser?.email },
-        });
-      } catch {
-        // Non-bloquant
-      }
-
       await clearProgress();
       setSubmissionSuccess(true);
 
@@ -601,8 +578,6 @@ export function useDriverRegistration() {
     submissionSuccess,
     rejectionCode,
     rejectionReason,
-    emailVerificationAttempts,
-    setEmailVerificationAttempts,
     // Driver type state
     driverType,
     setDriverType,
