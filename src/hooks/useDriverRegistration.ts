@@ -251,7 +251,10 @@ export function useDriverRegistration() {
         });
       }
       setStep1Data(data);
-      setCurrentStep(2);
+      // Envoyer le code OTP — Step1 reste visible en Phase B
+      // Le passage à Step2 est déclenché par Step1Intent après vérification réussie
+      await handleSendVerificationCode(data.email);
+      // Ne PAS appeler setCurrentStep(2) ici
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       if (error?.code === 'auth/email-already-in-use') {
@@ -261,6 +264,7 @@ export function useDriverRegistration() {
       } else {
         setError(error?.message || 'Erreur inconnue');
       }
+      throw err;
     } finally {
       setLoading(false);
     }
