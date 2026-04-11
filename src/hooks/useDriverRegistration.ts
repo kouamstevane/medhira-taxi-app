@@ -529,6 +529,64 @@ export function useDriverRegistration() {
     router.push('/');
   };
 
+  // ============================================================================
+  // VÉRIFICATION EMAIL OTP
+  // ============================================================================
+
+  const handleSendVerificationCode = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    if (!checkConnectivity()) {
+      return { success: false, error: 'Pas de connexion internet.' };
+    }
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+
+      const res = await fetch('/api/auth/send-verification-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error ?? 'Erreur lors de l\'envoi du code.' };
+      }
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Erreur réseau. Réessayez.' };
+    }
+  };
+
+  const handleVerifyCode = async (code: string): Promise<{ success: boolean; error?: string; attemptsLeft?: number }> => {
+    if (!checkConnectivity()) {
+      return { success: false, error: 'Pas de connexion internet.' };
+    }
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+
+      const res = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error, attemptsLeft: data.attemptsLeft };
+      }
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Erreur réseau. Réessayez.' };
+    }
+  };
+
   return {
     // State
     currentStep,
@@ -563,6 +621,8 @@ export function useDriverRegistration() {
     handleStep5FinalSubmit,
     handleFixRejection,
     handleLogout,
+    handleSendVerificationCode,
+    handleVerifyCode,
     setCurrentStep,
   };
 }
