@@ -77,6 +77,8 @@ export const signUpWithEmail = async (
 
 /**
  * Envoyer un email de vérification
+ * @deprecated Utiliser POST /api/auth/send-verification-code à la place.
+ * L'envoi de code OTP remplace le lien email Firebase Auth.
  */
 export const sendVerificationEmail = async (user: User): Promise<void> => {
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medjira-service.firebaseapp.com';
@@ -109,14 +111,14 @@ export const reloadUser = async (user: User): Promise<void> => {
 
 /**
  * Renvoyer un email de vérification avec gestion de l'état de chargement
- * 
+ *
  * Cette fonction est utilisée dans le dashboard chauffeur pour permettre
  * aux utilisateurs de renvoyer l'email de vérification si nécessaire.
- * 
+ *
  * @param user - L'utilisateur Firebase Auth
  * @param onSuccess - Callback optionnel appelé après l'envoi réussi
  * @param onError - Callback optionnel appelé en cas d'erreur
- * 
+ *
  * @example
  * try {
  *   await resendVerificationEmail(user);
@@ -124,6 +126,7 @@ export const reloadUser = async (user: User): Promise<void> => {
  * } catch (error) {
  *   // Afficher un message d'erreur
  * }
+ * @deprecated Utiliser POST /api/auth/send-verification-code à la place.
  */
 export const resendVerificationEmail = async (
   user: User,
