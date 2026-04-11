@@ -22,6 +22,7 @@ export default function DriverRegisterWizard() {
     step1Data, step2Data, step3Data, biometricsPhoto, vehicleFiles, complianceFiles,
     handleStep0Next, handleGoogleSignIn, handleStep1Next, handleStep2Next, handleStep3Next,
     handleStep4Next, handleStep5FinalSubmit, handleFixRejection, handleLogout,
+    handleSendVerificationCode, handleVerifyCode,
     setCurrentStep,
   } = useDriverRegistration();
 
@@ -95,7 +96,15 @@ export default function DriverRegisterWizard() {
             <Step0RoleSelection onNext={handleStep0Next} />
           )}
           {currentStep === 1 && (
-            <Step1Intent onNext={handleStep1Next} onGoogleSignIn={handleGoogleSignIn} loading={loading} initialData={step1Data} />
+            <Step1Intent
+              onNext={handleStep1Next}
+              onGoogleSignIn={handleGoogleSignIn}
+              loading={loading}
+              initialData={step1Data}
+              sendVerificationCode={handleSendVerificationCode}
+              verifyCode={handleVerifyCode}
+              onVerified={() => setCurrentStep(2)}
+            />
           )}
           {currentStep === 2 && (
             <Step2Identity onNext={handleStep2Next} onBack={() => setCurrentStep(1)} loading={loading} initialData={step2Data} initialPhoto={biometricsPhoto} />
