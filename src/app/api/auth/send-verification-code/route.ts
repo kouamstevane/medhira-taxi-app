@@ -67,19 +67,8 @@ export async function POST(request: NextRequest) {
   const code = String(crypto.randomInt(100000, 1000000));
   const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
 
-  // Stocker dans Firestore
-  const now = admin.firestore.Timestamp.now();
-  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
-  await docRef.set({
-    code: hashedCode,
-    email,
-    expiresAt,
-    attempts: 0,
-    createdAt: now,
-    resendAt: now,
-  });
-
-  // Envoyer l'email
+  // Envoyer l'email EN PREMIER — écrire en Firestore seulement si l'envoi réussit
+  // (évite de bloquer l'utilisateur par le rate limit si Resend est indisponible)
   let messageId: string | undefined;
   try {
     const emailResult = await sendVerificationCodeEmail({ to: email, code, uid });
@@ -91,6 +80,18 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  // Stocker en Firestore uniquement après un envoi réussi
+  const now = admin.firestore.Timestamp.now();
+  const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
+  await docRef.set({
+    code: hashedCode,
+    email,
+    expiresAt,
+    attempts: 0,
+    createdAt: now,
+    resendAt: now,
+  });
 
   // Créer le log d'email pour le webhook
   if (messageId) {

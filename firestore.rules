@@ -103,12 +103,17 @@ service cloud.firestore {
       
       // Création : Les utilisateurs authentifiés peuvent créer leur propre document
       // Permet la création de comptes clients par email ou téléphone
-      allow create: if isOwner(userId) && 
-                       request.resource.data.userType == 'client';
+      // SÉCURITÉ : Bloque la création d'un document client si l'utilisateur est déjà chauffeur
+      // (empêche la collision de rôles côté serveur, sans dépendre du check client-side)
+      allow create: if isOwner(userId) &&
+                       request.resource.data.userType == 'client' &&
+                       !exists(/databases/$(database)/documents/drivers/$(userId));
       
       // Mise à jour : Seul le propriétaire peut modifier ses propres données
       // Permet aux clients de mettre à jour leur profil
-      allow update: if isOwner(userId);
+      // SÉCURITÉ : userType est immuable — impossible de s'auto-promouvoir restaurateur/admin
+      allow update: if isOwner(userId) &&
+                       request.resource.data.userType == resource.data.userType;
       
       // Suppression : Non autorisée pour les clients
       allow delete: if false;
@@ -174,16 +179,6 @@ service cloud.firestore {
                         ))
                      || isAdmin();
       
-      // Mise à jour : Le chauffeur peut re-soumettre ses documents sans modifier les champs protégés
-      allow update: if request.auth != null
-        && request.auth.uid == driverId
-        && !('status' in request.resource.data)
-        && !('driverType' in request.resource.data)
-        && !('cityId' in request.resource.data)
-        && !('stripeAccountId' in request.resource.data)
-        && !('deliveryEarnings' in request.resource.data)
-        && !('ratingsCount' in request.resource.data);
-
       // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé ou en brouillon
       // Cela permet au chauffeur de recommencer son inscription
       allow delete: if isAdmin() ||
@@ -211,9 +206,10 @@ service cloud.firestore {
         // Permet aux chauffeurs de voir uniquement leurs propres demandes
         allow read: if isAuthenticated() && request.auth.uid == driverId;
         
-        // Création : Les utilisateurs authentifiés peuvent créer des demandes
-        // Permet au système de broadcast de créer des demandes pour les chauffeurs
-        allow create: if isAuthenticated();
+        // Création : Restreinte au propriétaire du booking (requestId == bookingId)
+        // Les Cloud Functions utilisent Admin SDK et contournent cette règle
+        allow create: if isAuthenticated() &&
+                         get(/databases/$(database)/documents/bookings/$(requestId)).data.userId == request.auth.uid;
         
         // Mise à jour : Le chauffeur peut mettre à jour ses propres demandes
         // Permet aux chauffeurs d'accepter/refuser les demandes
@@ -252,9 +248,10 @@ service cloud.firestore {
       // Création : Seul le propriétaire peut créer son wallet
       allow create: if isOwner(userId);
       
-      // Mise à jour : Seul le propriétaire peut mettre à jour son wallet
-      // Permet d'ajouter ou retirer de l'argent
-      allow update: if isOwner(userId);
+      // Mise à jour : INTERDITE via client SDK
+      // Le solde ne peut être modifié que par les Cloud Functions (Admin SDK)
+      // pour garantir l'intégrité financière
+      allow update: if false;
       
       // Suppression : Non autorisée
       // Ne jamais permettre la suppression des wallets pour éviter la perte de données
@@ -274,9 +271,10 @@ service cloud.firestore {
                      (resource.data.userId == request.auth.uid || 
                       resource.data.driverId == request.auth.uid);
       
-      // Création : Les utilisateurs authentifiés peuvent créer des transactions
-      // Permet aux clients et chauffeurs de créer des transactions
-      allow create: if isAuthenticated();
+      // Création : INTERDITE via client SDK
+      // Les transactions ne peuvent être créées que par les Cloud Functions (Admin SDK)
+      // pour garantir l'intégrité financière (montant, type, parties impliquées)
+      allow create: if false;
       
       // Mise à jour : Non autorisée
       // Les transactions ne doivent pas être modifiées pour garantir l'intégrité
@@ -300,33 +298,62 @@ service cloud.firestore {
                      (resource.data.userId == request.auth.uid || 
                       resource.data.driverId == request.auth.uid);
       
-      // Lecture : Tous les utilisateurs authentifiés peuvent lire les bookings en attente
-      // Cela permet aux chauffeurs de voir les demandes disponibles pour les accepter
-      allow read: if isAuthenticated() && resource.data.status == 'pending';
+      // Lecture : Seuls les chauffeurs peuvent lire les bookings en attente
+      // Vérifié côté serveur via l'existence du document dans la collection drivers
+      allow read: if isAuthenticated() &&
+                     resource.data.status == 'pending' &&
+                     exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
       
-      // Création : Les utilisateurs authentifiés peuvent créer des réservations
-      // Permet aux clients de créer des demandes de course
-      allow create: if isAuthenticated();
+      // Création : Validation obligatoire
+      // - userId doit appartenir à l'auteur
+      // - statut initial forcé à 'pending'
+      // - price doit être un nombre positif
+      // - driverId interdit à la création (assigné lors de l'acceptation)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.price is number &&
+                       request.resource.data.price > 0 &&
+                       !('driverId' in request.resource.data);
       
-      // Mise à jour : Le propriétaire ou le chauffeur assigné peuvent mettre à jour
-      // Permet aux clients et chauffeurs de modifier les détails de la réservation
-      allow update: if isAuthenticated() && 
-                       (resource.data.userId == request.auth.uid || 
-                        resource.data.driverId == request.auth.uid);
+      // Mise à jour : Champs non-sensibles uniquement (notes, metadata, etc.)
+      // driverId et status sont protégés — les transitions ont leurs propres règles ci-dessous
+      allow update: if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid ||
+                        resource.data.driverId == request.auth.uid) &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['price', 'userId', 'createdAt', 'driverId', 'status']);
+
+      // Mise à jour : Le chauffeur assigné peut faire avancer le statut de la course
+      allow update: if isAuthenticated() &&
+                       resource.data.driverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'updatedAt', 'startedAt', 'completedAt']) &&
+                       request.resource.data.status in ['in_progress', 'completed'];
       
       // Mise à jour : Permettre à un chauffeur d'accepter une course en attente
       // Un chauffeur peut mettre à jour un booking pending pour l'accepter
-      allow update: if isAuthenticated() && 
+      // RESTRICTION : Seuls status, driverId et updatedAt peuvent être modifiés
+      allow update: if isAuthenticated() &&
                        resource.data.status == 'pending' &&
                        request.resource.data.status == 'accepted' &&
-                       request.resource.data.driverId == request.auth.uid;
+                       request.resource.data.driverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'driverId', 'driverName', 'assignedAt',
+                                   'updatedAt', 'driverPhone', 'driverLocation',
+                                   'carModel', 'carPlate', 'carColor']);
       
       // Mise à jour : Permettre au client d'annuler sa propre commande
       // Le client peut annuler sa commande même si elle a été acceptée
-      allow update: if isAuthenticated() && 
+      // RESTRICTION : Seuls les champs liés à l'annulation peuvent être modifiés
+      // NOTE: cancelledBy n'est pas toujours présent (certains flows ne l'incluent pas)
+      allow update: if isAuthenticated() &&
                        resource.data.userId == request.auth.uid &&
                        request.resource.data.status == 'cancelled' &&
-                       request.resource.data.cancelledBy == 'client';
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'cancelledBy', 'cancelledAt',
+                                   'cancellationReason', 'cancellationFee',
+                                   'reason', 'updatedAt']);
       
       // Suppression : Non autorisée
       // Les réservations ne doivent pas être supprimées pour conserver l'historique
@@ -409,15 +436,17 @@ service cloud.firestore {
       allow create: if isAuthenticated() &&
                        request.resource.data.userId == request.auth.uid;
       
-      // Mise à jour : Le propriétaire ou le chauffeur assigné peuvent mettre à jour
+      // Mise à jour : Seul le chauffeur assigné peut modifier les données de tracking
+      // Le client n'a besoin que de lire les données de tracking, pas de les modifier
+      // RESTRICTION : Les champs critiques (userId, driverId, bookingId) ne peuvent pas être modifiés
       allow update: if isAuthenticated() &&
-                       (resource.data.userId == request.auth.uid ||
-                        resource.data.driverId == request.auth.uid);
+                       resource.data.driverId == request.auth.uid &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['userId', 'driverId', 'bookingId']);
       
-      // Suppression : Le propriétaire ou le chauffeur assigné peuvent supprimer
-      allow delete: if isAuthenticated() &&
-                       (resource.data.userId == request.auth.uid ||
-                        resource.data.driverId == request.auth.uid);
+      // Suppression : Réservée aux admins ou Cloud Functions (Admin SDK)
+      // Interdite côté client pour éviter la perte de données de tracking critiques
+      allow delete: if isAdmin();
     }
     
     // ============================================================================
@@ -435,7 +464,9 @@ service cloud.firestore {
       
       // Création : Les utilisateurs authentifiés peuvent créer des colis
       // Permet aux clients de créer des demandes de livraison de colis
-      allow create: if isAuthenticated();
+      // VALIDATION : senderId doit correspondre à l'utilisateur authentifié
+      allow create: if isAuthenticated() &&
+                       request.resource.data.senderId == request.auth.uid;
       
       // Mise à jour : L'expéditeur ou le chauffeur peuvent mettre à jour les colis
       // Permet de modifier le statut de livraison
@@ -458,9 +489,19 @@ service cloud.firestore {
       // Permet aux clients de voir les informations sur les véhicules des chauffeurs
       allow read: if isAuthenticated();
       
-      // Écriture : Seul le propriétaire du véhicule peut le modifier
-      // Permet aux chauffeurs de gérer leurs propres véhicules
-      allow write: if isAuthenticated() && resource.data.ownerId == request.auth.uid;
+      // Création : Le chauffeur crée un véhicule — ownerId vérifié sur request.resource
+      // (resource n'existe pas encore lors d'un create)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.ownerId == request.auth.uid;
+
+      // Mise à jour : Seul le propriétaire peut modifier
+      allow update: if isAuthenticated() &&
+                       resource.data.ownerId == request.auth.uid &&
+                       request.resource.data.ownerId == resource.data.ownerId;
+
+      // Suppression : Seul le propriétaire peut supprimer
+      allow delete: if isAuthenticated() &&
+                       resource.data.ownerId == request.auth.uid;
     }
     
     // ============================================================================
@@ -526,16 +567,22 @@ service cloud.firestore {
         request.resource.data.callerMetadata is map &&
         request.resource.data.callerMetadata.uid == request.auth.uid;
       
-      // Mise à jour :
-      // - Le callee peut changer le statut (answer/decline)
-      // - Le caller peut changer le statut (end call)
+      // Mise à jour : Transitions de statut restreintes par rôle
+      // - Seul le callee peut accepter ou refuser
+      // - Le caller ou le callee peuvent terminer ou marquer comme échoué
       // - Seuls certains champs sont modifiables
       allow update: if isAuthenticated() &&
-        (request.auth.uid == resource.data.calleeId ||
-         request.auth.uid == resource.data.callerId) &&
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'answerTime', 'endTime', 'reason']) &&
-        request.resource.data.status in ['accepted', 'declined', 'ended', 'failed'];
+        (
+          // Le callee peut accepter ou refuser
+          (request.auth.uid == resource.data.calleeId &&
+           request.resource.data.status in ['accepted', 'declined']) ||
+          // L'un ou l'autre peut terminer ou signaler un échec
+          ((request.auth.uid == resource.data.callerId ||
+            request.auth.uid == resource.data.calleeId) &&
+           request.resource.data.status in ['ended', 'failed'])
+        );
       
       // Suppression : Interdite (cleanup automatique via Cloud Function après 24h)
       allow delete: if false;
@@ -549,8 +596,14 @@ service cloud.firestore {
       // Lecture : Réservée aux admins
       allow read: if isAdmin();
       
-      // Création : Tout utilisateur authentifié peut enregistrer un log d'audit
-      allow create: if isAuthenticated();
+      // Création : Utilisateur authentifié avec validation des champs requis
+      // Les logs d'audit client-side sont immuables après création
+      // TODO: Migrer vers Cloud Functions uniquement pour une traçabilité 100% fiable
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.eventType is string &&
+                       request.resource.data.action is string &&
+                       request.resource.data.timestamp != null;
       
       // Mise à jour : Interdite pour garantir l'intégrité de l'audit
       allow update: if false;
@@ -569,9 +622,14 @@ service cloud.firestore {
     // ============================================================================
     
     match /restaurants/{restaurantId} {
-      // Lecture : Tous les utilisateurs authentifiés peuvent lire
-      // Les clients ne verront que les restaurants approuvés (filtré côté client)
-      allow read: if isAuthenticated();
+      // Lecture : Filtrage par statut côté serveur (plus côté client)
+      // - Un client ne voit que les restaurants 'approved'
+      // - Le propriétaire voit son propre restaurant quel que soit son statut
+      // - L'admin voit tous les restaurants
+      allow read: if isAuthenticated() &&
+                     (resource.data.status == 'approved' ||
+                      resource.data.ownerId == request.auth.uid ||
+                      isAdmin());
       
       // Création : Utilisateur authentifié ayant le rôle 'restaurateur' peut créer un compte restaurant
       // Le statut initial DOIT être 'pending_approval' (validation admin requise)
@@ -615,10 +673,12 @@ service cloud.firestore {
     
     match /food_orders/{orderId} {
       // Lecture : Client, chauffeur assigné, ou propriétaire du restaurant
-      allow read: if isAuthenticated() && 
-                     (resource.data.userId == request.auth.uid || 
+      // Lecture : Client, chauffeur assigné, ou propriétaire du restaurant
+      // get() sur un document inexistant retourne null → .ownerId == uid évalue à false
+      // exists() préalable est donc redondant et coûte une lecture supplémentaire
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid ||
                       resource.data.driverId == request.auth.uid ||
-                      exists(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)) &&
                       get(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)).data.ownerId == request.auth.uid);
       
       // Création : Utilisateur authentifié — paymentValidated est false à la création, true après paiement
@@ -629,11 +689,31 @@ service cloud.firestore {
                        request.resource.data.orderItems is list &&
                        request.resource.data.deliveryAddress is string;
       
-      // Mise à jour : Client (annulation), chauffeur (statut livraison), ou admin
-      allow update: if isAuthenticated() && 
-                       (resource.data.userId == request.auth.uid || 
-                        resource.data.driverId == request.auth.uid)
-                    || isAdmin();
+      // Mise à jour — Client : confirmation paiement ou annulation
+      // Permet aussi la cancellation suite à échec paiement
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['userId', 'restaurantId', 'driverId', 'driverName',
+                                  'driverPhone', 'totalOrderPrice', 'orderItems']);
+      
+      // Mise à jour — Chauffeur assigné : progression livraison
+      // RESTRICTION : status, timestamps de livraison et updatedAt
+      allow update: if isAuthenticated() &&
+                       resource.data.driverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'updatedAt', 'pickedUpAt', 'deliveredAt',
+                                   'cancelledAt', 'driverLocation']);
+      
+      // Mise à jour — Restaurateur : accepter/refuser des commandes
+      // Seul le propriétaire du restaurant peut modifier les commandes de son restaurant
+      allow update: if isAuthenticated() &&
+                       get(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)).data.ownerId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'updatedAt', 'driverId', 'driverName', 'driverPhone']);
+      
+      // Mise à jour — Admin : accès complet
+      allow update: if isAdmin();
       
       // Suppression : Non autorisée (conserver l'historique)
       allow delete: if false;
@@ -663,7 +743,7 @@ service cloud.firestore {
       allow read: if request.auth != null
         && (resource.data.driverId == request.auth.uid
             || resource.data.clientId == request.auth.uid
-            || request.auth.token.admin == true);
+            || isAdmin());
 
       allow create: if false;
 
@@ -733,8 +813,10 @@ service cloud.firestore {
       // Lecture : Seul le destinataire de la notification peut la lire
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
       
-      // Création : Les systèmes backend OU les utilisateurs peuvent créer (ex: chat)
-      allow create: if isAuthenticated();
+      // Création : L'utilisateur ne peut créer une notification que pour lui-même
+      // Les Cloud Functions (Admin SDK) peuvent créer pour n'importe quel userId
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
       
       // Mise à jour : Le propriétaire peut mettre à jour (ex: marquer comme lu)
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
@@ -751,7 +833,7 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.clientId == request.auth.uid;
-      allow update, delete: if request.auth.token.admin == true;
+      allow update, delete: if isAdmin();
     }
 
     // ============================================================================
@@ -760,7 +842,7 @@ service cloud.firestore {
 
     match /cities/{cityId} {
       allow read: if request.auth != null;
-      allow write: if request.auth.token.admin == true;
+      allow write: if isAdmin();
     }
 
     // ============================================================================

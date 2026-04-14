@@ -20,6 +20,14 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
   const [countdown, setCountdown] = useState(60);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Focus automatique sur le premier input au montage
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      inputsRef.current[0]?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Countdown 60s au montage
   useEffect(() => {
     if (countdown <= 0) return;
@@ -89,7 +97,7 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
   const isLoading = loading || verifying;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="otp-input-container">
       <div className="text-center">
         <p className="text-gray-600 text-sm">
           Un code a été envoyé à <span className="font-semibold text-[#101010]">{email}</span>
@@ -109,7 +117,8 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
             disabled={isLoading}
-            className={`w-11 h-14 text-center text-xl font-bold border-2 rounded-xl focus:outline-none transition-colors
+            data-testid={`otp-digit-${i}`}
+            className={`w-11 h-14 text-center text-xl font-bold text-gray-900 border-2 rounded-xl focus:outline-none transition-colors
               ${error ? 'border-red-400 bg-red-50' : digit ? 'border-[#f29200] bg-orange-50' : 'border-gray-300 bg-white'}
               ${isLoading ? 'opacity-50 cursor-not-allowed' : 'focus:border-[#f29200]'}
             `}
@@ -119,10 +128,10 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
 
       {/* Erreur + tentatives */}
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center">
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center" data-testid="otp-error">
           <p className="text-red-600 text-sm">{error}</p>
           {attemptsLeft > 0 && attemptsLeft < 3 && (
-            <p className="text-red-400 text-xs mt-1">{attemptsLeft} tentative{attemptsLeft > 1 ? 's' : ''} restante{attemptsLeft > 1 ? 's' : ''}</p>
+            <p className="text-red-400 text-xs mt-1" data-testid="otp-attempts-remaining">{attemptsLeft} tentative{attemptsLeft > 1 ? 's' : ''} restante{attemptsLeft > 1 ? 's' : ''}</p>
           )}
         </div>
       )}
@@ -133,6 +142,7 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
         onClick={handleVerify}
         disabled={isLoading || digits.join('').length < 6}
         className="w-full bg-[#f29200] text-white font-bold py-4 rounded-xl hover:bg-[#e68600] transition-colors flex justify-center items-center disabled:opacity-50 disabled:cursor-not-allowed"
+        data-testid="otp-verify-btn"
       >
         {verifying ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : null}
         Vérifier mon email
@@ -142,13 +152,14 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
       <div className="text-center">
         <p className="text-gray-500 text-sm">Vous n'avez rien reçu ?</p>
         {countdown > 0 ? (
-          <p className="text-gray-400 text-sm mt-1">Renvoyer dans <span className="font-semibold text-[#f29200]">{countdown}s</span></p>
+          <p className="text-gray-400 text-sm mt-1" data-testid="otp-countdown">Renvoyer dans <span className="font-semibold text-[#f29200]">{countdown}s</span></p>
         ) : (
           <button
             type="button"
             onClick={handleResend}
             disabled={resendLoading}
             className="mt-1 text-[#f29200] font-semibold text-sm hover:underline disabled:opacity-50"
+            data-testid="otp-resend-btn"
           >
             {resendLoading ? 'Envoi...' : 'Renvoyer le code'}
           </button>

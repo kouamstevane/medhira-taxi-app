@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db, storage, app } from '@/config/firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp as firestoreServerTimestamp } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp as firestoreServerTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AuthService } from '@/services';
@@ -237,20 +237,18 @@ export function useDriverRegistration() {
     setError(null);
     try {
       if (!isExistingUser) {
-        const credential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-        await setDoc(doc(db, 'users', credential.user.uid), {
-          uid: credential.user.uid,
-          email: data.email,
-          userType: 'chauffeur',
-          registrationStatus: 'incomplete',
-          createdAt: firestoreServerTimestamp(),
-          updatedAt: firestoreServerTimestamp(),
-        });
+        // Créer uniquement le compte Firebase Auth — le profil driver complet
+        // est créé à Step5 via Cloud Function createDriverProfile.
+        // Ne pas écrire dans users/ (réservé aux clients, userType='client').
+        await createUserWithEmailAndPassword(auth, data.email, data.password);
       }
       setStep1Data(data);
       // Envoyer le code OTP — Step1 reste visible en Phase B
       // Le passage à Step2 est déclenché par Step1Intent après vérification réussie
-      await handleSendVerificationCode(data.email);
+      const sendResult = await handleSendVerificationCode(data.email);
+      if (!sendResult.success) {
+        throw new Error(sendResult.error ?? 'Erreur lors de l\'envoi du code de vérification.');
+      }
       // Ne PAS appeler setCurrentStep(2) ici
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };

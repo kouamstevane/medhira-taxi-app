@@ -4,7 +4,7 @@
 
 **Goal:** Replace Firebase Auth email verification links with a 6-digit OTP code sent via Resend, with a beautiful Hostinger-inspired dark template and Resend webhook tracking.
 
-**Architecture:** Three new Next.js API routes handle OTP send/verify/webhook. A shared `OTPInput` component handles the 6-digit UI in Step1Intent and the driver dashboard. Resend webhook events are tracked in Firestore `emailLogs`.
+**Architecture:** Three new Next.js API routes handle OTP send/verify/webhook. A shared `OTPInput` component handles the 6-digit UI in Step1Intent during registration. Resend webhook events are tracked in Firestore `emailLogs`. Google Sign-In users bypass email verification entirely.
 
 **Tech Stack:** Next.js 14 App Router, Firebase Admin SDK, Resend SDK, Zod, crypto (Node.js built-in), React, Tailwind CSS
 
@@ -20,9 +20,19 @@
 | `src/lib/email-templates.ts` | Modify | Add `getVerificationCodeTemplate(code)` |
 | `src/lib/email-service.ts` | Modify | Add `tags` param to `sendEmail()`, add `sendVerificationCodeEmail()` |
 | `src/components/ui/OTPInput.tsx` | Create | Reusable 6-input OTP component with auto-focus, countdown |
-| `src/components/ui/OTPVerificationModal.tsx` | Create | Modal wrapper for dashboard use |
 | `src/app/driver/register/components/Step1Intent.tsx` | Modify | Add Phase B (OTP verification UI) after account creation |
-| `src/hooks/useDriverRegistration.ts` | Modify | Add `handleSendVerificationCode`, `handleVerifyCode`, update `handleStep1Next` and `handleGoogleSignIn` |
+| `src/hooks/useDriverRegistration.ts` | Modify | Add `handleSendVerificationCode`, `handleVerifyCode`, update `handleStep1Next`, remove `emailVerificationService` import, delete email block in `handleStep5FinalSubmit` |
+| `src/hooks/useDriverProfile.ts` | Modify | Remove `handleResendVerificationEmail`, `verificationEmailSent`, and related exports |
+| `src/app/driver/dashboard/page.tsx` | Modify | Remove `handleResendVerificationEmail`, `sendingEmail` state, `resendVerificationEmail` import, "Renvoyer" button |
+| `src/app/driver/profile/page.tsx` | Modify | Remove "Email non vérifié" banner, `verificationEmailSent` and `handleResendVerificationEmail` from destructuring |
+| `src/app/driver/verify-email/page.tsx` | Delete | Redundant — verification now at Step1 via OTP |
+| `src/app/driver/login/page.tsx` | Modify | Remove "Vérifier mon email" link to deleted verify-email page |
+| `middleware.ts` | Modify | Remove `/driver/verify-email` from public routes |
+| `src/services/auth.service.ts` | Modify | Add `@deprecated` JSDoc on `sendVerificationEmail()` and `resendVerificationEmail()` |
+| `src/services/email-verification.service.ts` | Delete | Replaced by direct API route calls |
+| `functions/src/emails/send-verification-email.ts` | Delete | Cloud Function replaced by Next.js API routes |
+| `functions/src/index.ts` | Modify | Remove `sendVerificationEmail` / `sendVerificationEmailHttp` exports |
+| `firestore.rules` | Modify | Add security rules for `emailVerificationCodes`, `emailLogs`, `adminAlerts` |
 
 ---
 
@@ -519,36 +529,14 @@ mkdir -p src/app/api/webhooks/resend
 // src/app/api/webhooks/resend/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/config/firebase-admin';
-import { Webhook } from 'svix';
+import { Resend } from 'resend';
+import type { WebhookEventPayload } from 'resend';
 import * as admin from 'firebase-admin';
 
 export const runtime = 'nodejs';
 
-// Désactiver le body parsing automatique de Next.js — nécessaire pour la validation SVIX
-export const dynamic = 'force-dynamic';
-
-type WebhookEventType =
-  | 'email.sent'
-  | 'email.delivered'
-  | 'email.delivery_delayed'
-  | 'email.complained'
-  | 'email.bounced'
-  | 'email.failed';
-
-interface ResendWebhookPayload {
-  type: WebhookEventType;
-  data: {
-    email_id: string;
-    to: string[];
-    subject: string;
-    tags?: Record<string, string>;
-    bounce?: { message?: string };
-    failed?: { reason?: string };
-  };
-}
-
-function eventTypeToStatus(type: WebhookEventType): string {
-  const map: Record<WebhookEventType, string> = {
+function eventTypeToStatus(type: string): string {
+  const map: Record<string, string> = {
     'email.sent': 'sent',
     'email.delivered': 'delivered',
     'email.delivery_delayed': 'delayed',
@@ -573,19 +561,19 @@ export async function POST(request: NextRequest) {
   // Lire le body brut pour la validation de signature
   const rawBody = await request.text();
 
-  // Valider la signature SVIX
-  const svixId = request.headers.get('svix-id') ?? '';
-  const svixTimestamp = request.headers.get('svix-timestamp') ?? '';
-  const svixSignature = request.headers.get('svix-signature') ?? '';
-
-  let payload: ResendWebhookPayload;
+  // Valider la signature via le SDK Resend
+  const resend = new Resend();
+  let payload: WebhookEventPayload;
   try {
-    const wh = new Webhook(webhookSecret);
-    payload = wh.verify(rawBody, {
-      'svix-id': svixId,
-      'svix-timestamp': svixTimestamp,
-      'svix-signature': svixSignature,
-    }) as ResendWebhookPayload;
+    payload = resend.webhooks.verify({
+      payload: rawBody,
+      headers: {
+        id: request.headers.get('svix-id') as string,
+        timestamp: request.headers.get('svix-timestamp') as string,
+        signature: request.headers.get('svix-signature') as string,
+      },
+      webhookSecret,
+    }) as WebhookEventPayload;
   } catch {
     console.error('[webhook/resend] Signature invalide');
     return NextResponse.json({ error: 'Signature invalide.' }, { status: 401 });
@@ -602,7 +590,7 @@ export async function POST(request: NextRequest) {
   const docRef = adminDb.collection('emailLogs').doc(messageId);
   const docSnap = await docRef.get();
 
-  // Si le document existe, on met à jour. Sinon, on crée un document minimal.
+  // Si le document n'existe pas, on crée un document minimal.
   if (!docSnap.exists) {
     await docRef.set({
       messageId,
@@ -654,23 +642,11 @@ export async function POST(request: NextRequest) {
 }
 ```
 
-- [ ] **Step 3: Vérifier que `svix` est installé**
-
-```bash
-cd c:/Users/User/Documents/AlloTraining/medhira-taxi-app
-npm list svix
-```
-
-Si absent :
-```bash
-npm install svix
-```
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add src/app/api/webhooks/resend/route.ts
-git commit -m "feat(api): add Resend webhook handler with SVIX signature validation"
+git commit -m "feat(api): add Resend webhook handler with SDK signature validation"
 ```
 
 ---
@@ -865,9 +841,9 @@ Les imports clés :
 - `createUserWithEmailAndPassword` depuis `firebase/auth`
 - `emailVerificationService` depuis `@/services/email-verification.service`
 
-- [ ] **Step 2: Ajouter les deux nouveaux handlers après le bloc cleanup (ligne ~80)**
+- [ ] **Step 2: Ajouter les deux nouveaux handlers après `handleLogout` (ligne ~530)**
 
-Ajouter ces deux fonctions dans le corps du hook `useDriverRegistration`, juste après le bloc `useEffect` de cleanup :
+Ajouter ces deux fonctions dans le corps du hook `useDriverRegistration`, après `handleLogout` et avant le `return {` :
 
 ```typescript
   // ============================================================================
@@ -902,6 +878,9 @@ Ajouter ces deux fonctions dans le corps du hook `useDriverRegistration`, juste 
   };
 
   const handleVerifyCode = async (code: string): Promise<{ success: boolean; error?: string; attemptsLeft?: number }> => {
+    if (!checkConnectivity()) {
+      return { success: false, error: 'Pas de connexion internet.' };
+    }
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
@@ -959,7 +938,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { FcGoogle } from 'react-icons/fc';
-import { Loader2, CheckCircle } from 'lucide-react';
 import { InputField } from '@/components/forms/InputField';
 import { ERROR_MESSAGES } from '@/utils/constants';
 import OTPInput from '@/components/ui/OTPInput';
@@ -973,12 +951,13 @@ const step1Schema = z.object({
 export type Step1FormData = z.infer<typeof step1Schema>;
 
 interface Step1IntentProps {
-  onNext: (data: Step1FormData) => void;
+  onNext: (data: Step1FormData) => Promise<void>;
   onGoogleSignIn: () => void;
   initialData?: Partial<Step1FormData>;
   loading?: boolean;
   sendVerificationCode?: (email: string) => Promise<{ success: boolean; error?: string }>;
   verifyCode?: (code: string) => Promise<{ success: boolean; error?: string; attemptsLeft?: number }>;
+  onVerified?: () => void;
   emailPreVerified?: boolean;
 }
 ```
@@ -995,6 +974,7 @@ export default function Step1Intent({
   loading,
   sendVerificationCode,
   verifyCode,
+  onVerified,
   emailPreVerified = false,
 }: Step1IntentProps) {
   const { register, handleSubmit, getValues, formState: { errors } } = useForm<Step1FormData>({
@@ -1010,24 +990,27 @@ export default function Step1Intent({
   const [codeVerified, setCodeVerified] = useState(emailPreVerified);
   const [formData, setFormData] = useState<Step1FormData | null>(null);
 
-  const handleFormSubmit = (data: Step1FormData) => {
+  const handleFormSubmit = async (data: Step1FormData) => {
     if (sendVerificationCode) {
       setFormData(data);
-      // Le parent (useDriverRegistration) crée le compte et envoie le code
-      // onNext est appelé ici pour créer le compte — la phase B s'affichera via verificationPhase
-      onNext(data);
-      setVerificationPhase(true);
+      try {
+        await onNext(data);
+        setVerificationPhase(true);
+      } catch {
+        // Error already handled in hook
+      }
     } else {
-      onNext(data);
+      try {
+        await onNext(data);
+      } catch {
+        // Error already handled in hook
+      }
     }
   };
 
   const handleCodeVerified = () => {
     setCodeVerified(true);
-    // Passer à Step2 — on utilise formData si disponible, sinon on appelle onNext avec les valeurs courantes
-    if (formData) {
-      onNext(formData);
-    }
+    onVerified?.();
   };
 
   // Phase B : vérification OTP
@@ -1108,9 +1091,12 @@ Remplacer par :
     initialData={step1Data}
     sendVerificationCode={handleSendVerificationCode}
     verifyCode={handleVerifyCode}
+    onVerified={() => setCurrentStep(2)}
   />
 )}
 ```
+
+> **Note :** `onVerified` appelle directement `setCurrentStep(2)` pour la transition vers Step2. Ceci évite le bug de double appel à `handleStep1Next` — le compte est déjà créé lors du premier `onNext(data)` dans `handleFormSubmit`.
 
 - [ ] **Step 3: Commit**
 
@@ -1126,7 +1112,9 @@ git commit -m "feat(register): wire OTP handlers to Step1Intent"
 **Files:**
 - Modify: `src/hooks/useDriverRegistration.ts`
 
-> **Note :** Après la création du compte avec `createUserWithEmailAndPassword()`, le hook appelait `setCurrentStep(2)` immédiatement. Avec le nouveau flux, Step1 reste visible en Phase B après la création — le passage à Step2 est déclenché par Step1 (via `onSuccess` de OTPInput → `handleCodeVerified` → `onNext`). Il faut donc **ne plus appeler `setCurrentStep(2)` dans `handleStep1Next`** et **appeler `handleSendVerificationCode`** à la place.
+> **Note :** Après la création du compte avec `createUserWithEmailAndPassword()`, le hook appelait `setCurrentStep(2)` immédiatement. Avec le nouveau flux, Step1 reste visible en Phase B après la création — le passage à Step2 est déclenché par Step1 (via `onSuccess` de OTPInput → `handleCodeVerified` → `onVerified` prop → `setCurrentStep(2)` dans `page.tsx`). Il faut donc **ne plus appeler `setCurrentStep(2)` dans `handleStep1Next`** et **appeler `handleSendVerificationCode`** à la place.
+>
+> **⚠️ IMPORTANT :** Conserver `setStep1Data(data)` (ligne 253) — ne remplacer QUE la ligne `setCurrentStep(2)` (ligne 254).
 
 - [ ] **Step 1: Lire `handleStep1Next` dans le hook**
 
@@ -1147,6 +1135,15 @@ await handleSendVerificationCode(data.email);
 // Ne PAS appeler setCurrentStep(2) ici
 ```
 
+**⚠️ IMPORTANT — Re-throw dans le catch :** Le catch block de `handleStep1Next` doit re-throw l'erreur pour que `handleFormSubmit` (devenu async avec `await onNext(data)`) puisse détecter l'échec. Ajouter `throw err;` à la fin du catch block existant :
+
+```typescript
+} catch (err) {
+  // ... existing error handling (setError, etc.) ...
+  throw err;
+}
+```
+
 - [ ] **Step 3: Commit**
 
 ```bash
@@ -1156,86 +1153,298 @@ git commit -m "feat(hook): send OTP after account creation, Step2 transition via
 
 ---
 
-## Task 11: `OTPVerificationModal` pour le dashboard chauffeur
+## Task 11: Modifier `useDriverRegistration.ts` — nettoyage imports et Step5
 
 **Files:**
-- Create: `src/components/ui/OTPVerificationModal.tsx`
+- Modify: `src/hooks/useDriverRegistration.ts`
 
-- [ ] **Step 1: Create the file**
+- [ ] **Step 1: Supprimer l'import `emailVerificationService` (ligne 14)**
 
+Localiser et supprimer :
 ```typescript
-// src/components/ui/OTPVerificationModal.tsx
-'use client';
-import React from 'react';
-import { X } from 'lucide-react';
-import OTPInput from './OTPInput';
+// SUPPRIMER cette ligne :
+import { emailVerificationService } from '@/services/email-verification.service';
+```
 
-interface OTPVerificationModalProps {
-  email: string;
-  isOpen: boolean;
-  onClose: () => void;
-  onVerify: (code: string) => Promise<{ success: boolean; error?: string; attemptsLeft?: number }>;
-  onResend: () => Promise<{ success: boolean; error?: string }>;
-  onSuccess?: () => void;
-}
+- [ ] **Step 2: Supprimer le bloc email verification dans `handleStep5FinalSubmit` (lignes 422-440)**
 
-export default function OTPVerificationModal({
-  email,
-  isOpen,
-  onClose,
-  onVerify,
-  onResend,
-  onSuccess,
-}: OTPVerificationModalProps) {
-  if (!isOpen) return null;
-
-  const handleSuccess = () => {
-    onSuccess?.();
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      
-      {/* Modal */}
-      <div className="relative bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 transition-colors"
-        >
-          <X className="h-5 w-5 text-gray-500" />
-        </button>
-
-        <div className="text-center mb-6">
-          <h2 className="text-xl font-bold text-[#101010]">Vérification email</h2>
-          <p className="text-gray-500 text-sm mt-1">Un code a été envoyé à votre adresse email</p>
-        </div>
-
-        <OTPInput
-          email={email}
-          onVerify={onVerify}
-          onResend={onResend}
-          onSuccess={handleSuccess}
-        />
-      </div>
-    </div>
+Localiser et **supprimer** le bloc suivant dans `handleStep5FinalSubmit` :
+```typescript
+// SUPPRIMER tout ce bloc (lignes 422-440) :
+try {
+  await retryWithBackoff(
+    () => emailVerificationService.sendVerificationEmail(
+      auth.currentUser?.email || '',
+      step2Data.firstName || undefined
+    ),
+    { maxAttempts: 3 }
   );
+  await auditLoggingService.log({
+    eventType: AuditEventType.EMAIL_VERIFICATION_SENT,
+    userId,
+    level: AuditLogLevel.INFO,
+    action: 'Email de vérification envoyé après inscription',
+    success: true,
+    details: { email: auth.currentUser?.email },
+  });
+} catch {
+  // Non-bloquant
 }
 ```
 
-- [ ] **Step 2: Commit**
+L'email est désormais vérifié à Step1 — ce bloc est redondant.
+
+- [ ] **Step 3: Supprimer `emailVerificationAttempts` du state et du return**
+
+Supprimer la déclaration de state (autour de la ligne 46) :
+```typescript
+// SUPPRIMER :
+const [emailVerificationAttempts, setEmailVerificationAttempts] = useState(0);
+```
+
+Supprimer du return object du hook :
+```typescript
+// SUPPRIMER du return { ... } :
+emailVerificationAttempts,
+setEmailVerificationAttempts,
+```
+
+Ce state est mort — les tentatives sont désormais gérées côté serveur dans Firestore.
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add src/components/ui/OTPVerificationModal.tsx
-git commit -m "feat(ui): add OTPVerificationModal for dashboard email verification"
+git add src/hooks/useDriverRegistration.ts
+git commit -m "feat(hook): remove emailVerificationService import and Step5 email block"
 ```
 
 ---
 
-## Task 12: Configurer le webhook dans Resend Dashboard + `.env.local`
+## Task 12: Nettoyer la vérification email — dashboard, profile, verify-email
+
+**Files:**
+- Modify: `src/hooks/useDriverProfile.ts`
+- Modify: `src/app/driver/dashboard/page.tsx`
+- Modify: `src/app/driver/profile/page.tsx`
+- Delete: `src/app/driver/verify-email/page.tsx`
+- Modify: `middleware.ts`
+
+> **Décision :** Les utilisateurs Google Sign-In ne reçoivent pas de vérification email. Les utilisateurs email/password vérifient à Step1. Toute la vérification email post-inscription est supprimée.
+
+- [ ] **Step 1: Supprimer `handleResendVerificationEmail` dans `useDriverProfile.ts` (lignes 240-254)**
+
+Localiser et **supprimer** la fonction `handleResendVerificationEmail` entière (lignes 240-254).
+
+Supprimer les états et exports associés :
+- `verificationEmailSent` / `setVerificationEmailSent` (ligne 33, uniquement utilisé par cette fonction)
+- Export de `handleResendVerificationEmail` (ligne 279)
+- Export de `verificationEmailSent` (ligne 266)
+
+- [ ] **Step 2: Supprimer la bannière "Email non vérifié" dans `src/app/driver/profile/page.tsx`**
+
+Localiser (lignes 83-110) la bannière conditionnelle `{!isEmailVerified && (...)}` et la **supprimer** entièrement.
+
+Supprimer du destructuring `useDriverProfile()` (lignes 19, 32) :
+- `verificationEmailSent,`
+- `handleResendVerificationEmail,`
+
+Conserver `isEmailVerified` s'il est utilisé ailleurs dans le composant. Si `isEmailVerified` n'est plus utilisé, le supprimer aussi.
+
+- [ ] **Step 3: Supprimer la vérification email dans `src/app/driver/dashboard/page.tsx`**
+
+Supprimer l'import (ligne 34) :
+```typescript
+// SUPPRIMER :
+import { resendVerificationEmail } from '@/services/auth.service';
+```
+
+Supprimer le state (ligne 57) :
+```typescript
+// SUPPRIMER :
+const [sendingEmail, setSendingEmail] = useState(false);
+```
+
+Supprimer la fonction `handleResendVerificationEmail` entière (lignes 72-106).
+
+Supprimer le bouton "Renvoyer" dans le bloc Info Message (lignes 640-649) :
+```typescript
+// SUPPRIMER :
+{currentUser && !currentUser.emailVerified && (!driver || driver.status === 'pending') && (
+  <button
+    onClick={handleResendVerificationEmail}
+    disabled={sendingEmail}
+    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg disabled:opacity-50 flex items-center gap-1"
+  >
+    <MaterialIcon name="refresh" size="sm" className={sendingEmail ? 'animate-spin' : ''} />
+    {sendingEmail ? 'Envoi...' : 'Renvoyer'}
+  </button>
+)}
+```
+
+- [ ] **Step 4: Supprimer la page verify-email chauffeur**
+
+```bash
+rm src/app/driver/verify-email/page.tsx
+```
+
+> Cette page est devenue redondante : la vérification email se fait maintenant à Step1 de l'inscription via OTP.
+
+- [ ] **Step 5: Supprimer le lien "Vérifier mon email" dans `src/app/driver/login/page.tsx`**
+
+Localiser (ligne 155) le lien vers `/driver/verify-email` et le **supprimer** :
+```typescript
+// SUPPRIMER :
+<Link href="/driver/verify-email" className="text-primary text-sm font-semibold hover:underline">
+  Vérifier mon email
+</Link>
+```
+
+Le bloc `{/* Forgot Password & Verify Email */}` (lignes 153-161) ne doit garder que le lien "Mot de passe oublié".
+
+- [ ] **Step 6: Nettoyer `middleware.ts`**
+
+Supprimer la référence à `/driver/verify-email` (ligne 64) dans les routes publiques :
+```typescript
+// SUPPRIMER cette ligne :
+'/driver/verify-email',
+```
+
+> **Note :** Ne PAS supprimer `/auth/verify-email` (ligne 44) — cette page est utilisée par le flux passager, pas le flux chauffeur.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/hooks/useDriverProfile.ts src/app/driver/profile/page.tsx src/app/driver/dashboard/page.tsx src/app/driver/login/page.tsx middleware.ts
+git rm src/app/driver/verify-email/page.tsx
+git commit -m "chore: remove post-registration email verification — OTP at Step1 replaces it"
+```
+
+---
+
+## Task 13: Ajouter les règles de sécurité Firestore
+
+**Files:**
+- Modify: `firestore.rules`
+
+- [ ] **Step 1: Ajouter les règles pour les nouvelles collections**
+
+Localiser le bloc `match /{document=**}` ou la fin des règles existantes, et ajouter avant le closing `}` :
+
+```rules
+match /emailVerificationCodes/{uid} {
+  allow read, write: if false;
+}
+
+match /emailLogs/{messageId} {
+  allow read: if isAdmin();
+  allow write: if false;
+}
+
+match /adminAlerts/{alertId} {
+  allow read: if isAdmin();
+  allow write: if false;
+}
+```
+
+> **Note :** L'Admin SDK bypass les règles Firestore — ces règles protègent contre les accès client directs. La fonction `isAdmin()` doit déjà exister dans le fichier de règles.
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add firestore.rules
+git commit -m "feat(security): add Firestore rules for emailVerificationCodes, emailLogs, adminAlerts"
+```
+
+---
+
+## Task 14: Déprécier `auth.service.ts`
+
+**Files:**
+- Modify: `src/services/auth.service.ts`
+
+- [ ] **Step 1: Ajouter `@deprecated` sur `sendVerificationEmail()` (ligne 81)**
+
+Localiser :
+```typescript
+export const sendVerificationEmail = async (user: User): Promise<void> => {
+```
+
+Ajouter au-dessus :
+```typescript
+/**
+ * @deprecated Utiliser POST /api/auth/send-verification-code à la place.
+ * L'envoi de code OTP remplace le lien email Firebase Auth.
+ */
+export const sendVerificationEmail = async (user: User): Promise<void> => {
+```
+
+- [ ] **Step 2: Ajouter `@deprecated` sur `resendVerificationEmail()` (ligne 128)**
+
+Localiser :
+```typescript
+export const resendVerificationEmail = async (
+```
+
+Ajouter au-dessus :
+```typescript
+/**
+ * @deprecated Utiliser POST /api/auth/send-verification-code à la place.
+ */
+export const resendVerificationEmail = async (
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/services/auth.service.ts
+git commit -m "chore: deprecate sendVerificationEmail and resendVerificationEmail in auth.service"
+```
+
+---
+
+## Task 15: Supprimer les fichiers obsolètes
+
+**Files:**
+- Delete: `src/services/email-verification.service.ts`
+- Delete: `functions/src/emails/send-verification-email.ts`
+- Modify: `functions/src/index.ts`
+
+- [ ] **Step 1: Supprimer `email-verification.service.ts`**
+
+```bash
+rm src/services/email-verification.service.ts
+```
+
+> Vérifier au préalable qu'aucun autre fichier n'importe ce service (grep `email-verification.service`).
+
+- [ ] **Step 2: Supprimer la Cloud Function**
+
+```bash
+rm functions/src/emails/send-verification-email.ts
+```
+
+- [ ] **Step 3: Nettoyer `functions/src/index.ts`**
+
+Supprimer la ligne 643 (commentaire) :
+```typescript
+// SUPPRIMER : // L'email de bienvenue est envoyé automatiquement par la Cloud Function sendVerificationEmail
+```
+
+Supprimer la ligne 661 (export) :
+```typescript
+// SUPPRIMER : export { sendVerificationEmail, sendVerificationEmailHttp } from './emails/send-verification-email.js';
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add -A
+git commit -m "chore: delete email-verification.service and send-verification-email Cloud Function"
+```
+
+---
+
+## Task 16: Configurer le webhook dans Resend Dashboard + `.env.local`
 
 **Files:**
 - Modify: `.env.local`
@@ -1263,7 +1472,7 @@ git commit -m "chore(env): add RESEND_WEBHOOK_SECRET placeholder"
 
 ---
 
-## Task 13: Test manuel end-to-end
+## Task 17: Test manuel end-to-end
 
 - [ ] **Step 1: Démarrer le serveur local**
 
@@ -1282,7 +1491,12 @@ npm run dev
 6. Vérifier dans Firebase Console (Firestore) que `emailVerificationCodes/{uid}` a été supprimé
 7. Vérifier dans Firebase Auth que `emailVerified: true`
 
-- [ ] **Step 3: Tester le webhook (optionnel avec ngrok)**
+- [ ] **Step 3: Tester le flux Google Sign-In**
+
+1. Cliquer "Continuer avec Google" sur Step1
+2. Vérifier la transition directe vers Step2 (pas de vérification email)
+
+- [ ] **Step 4: Tester le webhook (optionnel avec ngrok)**
 
 Si tu veux tester le webhook en local :
 ```bash
@@ -1291,9 +1505,16 @@ npx ngrok http 3000
 # Copier l'URL ngrok → mettre dans Resend Dashboard comme URL de webhook temporaire
 ```
 
-- [ ] **Step 4: Vérifier les emailLogs dans Firestore**
+- [ ] **Step 5: Vérifier les emailLogs dans Firestore**
 
 Après envoi, vérifier dans Firebase Console → Firestore → collection `emailLogs` que le document a été créé avec `status: 'sent'`. Après réception du webhook Resend, vérifier que le status passe à `'delivered'`.
+
+- [ ] **Step 6: Vérifier la suppression des anciens fichiers**
+
+1. Vérifier que `src/services/email-verification.service.ts` est supprimé
+2. Vérifier que `functions/src/emails/send-verification-email.ts` est supprimé
+3. Vérifier que `functions/src/index.ts` ne contient plus les exports supprimés
+4. Lancer `npm run build` pour vérifier qu'il n'y a pas d'erreurs de compilation
 
 ---
 
@@ -1302,13 +1523,20 @@ Après envoi, vérifier dans Firebase Console → Firestore → collection `emai
 **Spec coverage :**
 - ✅ `POST /api/auth/send-verification-code` — Task 3
 - ✅ `POST /api/auth/verify-code` — Task 4
-- ✅ `POST /api/webhooks/resend` — Task 5
+- ✅ `POST /api/webhooks/resend` — Task 5 (Resend SDK Webhooks, Correction G)
 - ✅ Template email fond sombre avec code en évidence — Task 1
 - ✅ `sendEmail()` avec tags — Task 2
 - ✅ `sendVerificationCodeEmail()` — Task 2
 - ✅ Step1Intent Phase B avec 6 inputs — Tasks 6, 8
-- ✅ `useDriverRegistration` handlers — Tasks 7, 10
-- ✅ `OTPVerificationModal` dashboard — Task 11
+- ✅ `useDriverRegistration` handlers + `checkConnectivity()` — Tasks 7, 10
+- ✅ Remove `emailVerificationService` import — Task 11
+- ✅ Delete email block in `handleStep5FinalSubmit` — Task 11
+- ✅ `useDriverProfile.ts` cleanup (remove verification UI) — Task 12
+- ✅ `dashboard/page.tsx` cleanup (remove independent email verification) — Task 12
+- ✅ `profile/page.tsx` cleanup (remove email verification banner) — Task 12
+- ✅ `driver/verify-email/page.tsx` deletion — Task 12
+- ✅ `driver/login/page.tsx` cleanup (remove "Vérifier mon email" link) — Task 12
+- ✅ `middleware.ts` cleanup (remove `/driver/verify-email` route) — Task 12
 - ✅ Webhook events : delivered, failed, bounced, complained, delivery_delayed — Task 5
 - ✅ SHA-256 hash du code — Tasks 3, 4
 - ✅ Rate limit 1/min — Task 3
@@ -1316,11 +1544,32 @@ Après envoi, vérifier dans Firebase Console → Firestore → collection `emai
 - ✅ `adminAuth.updateUser(uid, { emailVerified: true })` — Task 4
 - ✅ `emailLogs` créé à l'envoi, mis à jour par webhook — Tasks 3, 5
 - ✅ Tags Resend `uid` + `type` — Task 2
-- ✅ `RESEND_WEBHOOK_SECRET` configuration — Task 12
+- ✅ `RESEND_WEBHOOK_SECRET` configuration — Task 16
+- ✅ Firestore security rules (`emailVerificationCodes`, `emailLogs`, `adminAlerts`) — Task 13
+- ✅ `@deprecated` on `auth.service.ts` — Task 14
+- ✅ Delete `email-verification.service.ts` — Task 15
+- ✅ Delete `send-verification-email.ts` Cloud Function — Task 15
+- ✅ Clean up `functions/src/index.ts` — Task 15
+- ✅ Correction H: `data.to[0]` (string[]) + `data.tags?.uid` (Record) — Task 5
+
+**Flow correctness :**
+- ✅ `handleFormSubmit` (async) → `await onNext(data)` creates account → catch block for error handling → `setVerificationPhase(true)` shows Phase B
+- ✅ `handleCodeVerified` → `onVerified()` → `setCurrentStep(2)` in `page.tsx` (no double-call)
+- ✅ `handleStep1Next` : only replaces `setCurrentStep(2)` → `handleSendVerificationCode(data.email)`, preserves `setStep1Data(data)`, catch block re-throws for async `handleFormSubmit`
+- ✅ `handleGoogleSignIn` : pas de modification — les utilisateurs Google vont directement à Step2 sans vérification email
 
 **Types consistency :**
 - `sendVerificationCodeEmail({ to, code, uid })` — Task 2 défini, Task 3 utilisé ✅
 - `getVerificationCodeTemplate(code)` — Task 1 défini, Task 2 utilisé ✅
-- `OTPInput({ email, onVerify, onResend, onSuccess, loading })` — Task 6 défini, Tasks 8, 11 utilisé ✅
+- `OTPInput({ email, onVerify, onResend, onSuccess, loading })` — Task 6 défini, Task 8 utilisé ✅
 - `handleSendVerificationCode(email)` → `Promise<{success, error?}>` — Task 7 défini, Tasks 9, 10 utilisé ✅
 - `handleVerifyCode(code)` → `Promise<{success, error?, attemptsLeft?}>` — Task 7 défini, Task 9 utilisé ✅
+- `onVerified: () => void` — Task 8 défini, Task 9 passé `() => setCurrentStep(2)` ✅
+
+**Migration order (spec §8.5) :**
+- ✅ Étape 1 : API routes + template + service (Tasks 1-5)
+- ✅ Étape 2 : Step1Intent + useDriverRegistration (Tasks 6-11)
+- ✅ Étape 3 : useDriverProfile cleanup (Task 12)
+- ✅ Étape 4 : Firestore rules + deprecation + suppression (Tasks 13-15)
+- ✅ Étape 5 : Configuration webhook (Task 16)
+- ✅ Étape 6 : Test end-to-end (Task 17)

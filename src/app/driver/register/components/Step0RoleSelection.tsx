@@ -17,7 +17,7 @@ export default function Step0RoleSelection({ onNext }: Props) {
   const [selected, setSelected] = useState<DriverType | null>(null)
 
   return (
-    <div className="w-full max-w-lg mx-auto">
+    <div className="w-full max-w-lg mx-auto" data-testid="step0-role-selection">
       <h2 className="text-2xl font-bold text-white mb-2 text-center">Quel est votre rôle ?</h2>
       <p className="text-slate-400 text-center mb-8">Choisissez comment vous souhaitez utiliser l&apos;application.</p>
 
@@ -26,6 +26,7 @@ export default function Step0RoleSelection({ onNext }: Props) {
           <button
             key={role.value}
             onClick={() => setSelected(role.value)}
+            data-testid={`role-btn-${role.value}`}
             className={[
               'glass-card w-full p-5 rounded-2xl border text-left flex items-center gap-4 transition-all active:scale-[0.99]',
               selected === role.value ? 'border-primary bg-primary/10' : 'border-white/10 hover:border-white/20',
@@ -50,6 +51,7 @@ export default function Step0RoleSelection({ onNext }: Props) {
       <button
         onClick={() => selected && onNext(selected)}
         disabled={!selected}
+        data-testid="step0-continue-btn"
         className="w-full h-14 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Continuer

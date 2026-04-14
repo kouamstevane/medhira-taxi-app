@@ -68,7 +68,7 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
   if (verificationPhase && !codeVerified && sendVerificationCode && verifyCode) {
     const email = formData?.email ?? getValues('email');
     return (
-      <div className="space-y-6">
+      <div className="space-y-6" data-testid="otp-verification-screen">
         <div className="text-center mb-8">
           <div className="mx-auto w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
             <span className="text-3xl">✉️</span>
@@ -88,7 +88,7 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-testid="step1-registration-form">
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold text-[#101010]">Gagnez de l'argent avec Medjira</h2>
         <p className="text-gray-500 mt-2">Rejoignez notre réseau de chauffeurs et commencez à rouler aujourd'hui.</p>
@@ -100,6 +100,7 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
           type="button"
           onClick={onGoogleSignIn}
           disabled={loading}
+          data-testid="google-signin-btn"
           className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-xl p-4 text-[#101010] font-semibold hover:bg-gray-50 transition-colors shadow-sm active:scale-[0.98]"
         >
           <FcGoogle size={24} />
@@ -147,6 +148,7 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
           <button
             type="submit"
             disabled={loading}
+            data-testid="step1-submit-btn"
             className="w-full bg-[#f29200] text-white font-bold py-4 rounded-xl hover:bg-[#e68600] transition-colors mt-6 flex justify-center items-center"
           >
             {loading ? (

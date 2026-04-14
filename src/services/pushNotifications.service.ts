@@ -167,7 +167,7 @@ class PushNotificationService {
             } else {
                 console.warn('[PushNotifications] Document utilisateur non trouvé, création par défaut');
                 await setDoc(doc(db, 'users', user.uid), {
-                    userType: 'passenger',
+                    userType: 'client',
                     createdAt: new Date(),
                 }, { merge: true });
             }

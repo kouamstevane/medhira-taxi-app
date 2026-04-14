@@ -1379,4 +1379,5 @@ export const onDriverDocumentsUpdated = onDocumentUpdated(
   }
 )
 
-export { stripeWebhookInstant, stripeWebhookLight } from './stripe/index.js'
+export { stripeWebhookInstant, stripeWebhookLight } from './stripe/index.js';
+export { resendWebhook } from './emails/resend-webhook.js';
