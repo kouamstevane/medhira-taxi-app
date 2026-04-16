@@ -24,6 +24,7 @@ export default function DriverRegisterWizard() {
     handleStep4Next, handleStep5FinalSubmit, handleFixRejection, handleLogout,
     handleSendVerificationCode, handleVerifyCode,
     setCurrentStep,
+    isExistingUser,
   } = useDriverRegistration();
 
   if (rejectionCode) {
@@ -104,6 +105,7 @@ export default function DriverRegisterWizard() {
               sendVerificationCode={handleSendVerificationCode}
               verifyCode={handleVerifyCode}
               onVerified={() => setCurrentStep(2)}
+              emailPreVerified={isExistingUser}
             />
           )}
           {currentStep === 2 && (

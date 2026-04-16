@@ -154,22 +154,25 @@ class PushNotificationService {
 
         try {
             // Importer Firestore dynamiquement pour éviter les erreurs SSR
-            const { getFirestore, doc, getDoc, setDoc } = await import('firebase/firestore');
+            const { getFirestore, doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
             const db = getFirestore();
             
-            // Déterminer le type d'utilisateur (conducteur ou passager)
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            
+            const [driverDoc, userDoc] = await Promise.all([
+                getDoc(doc(db, 'drivers', user.uid)),
+                getDoc(doc(db, 'users', user.uid)),
+            ]);
+
             let userType = 'passenger';
 
-            if (userDoc.exists()) {
+            if (driverDoc.exists()) {
+                userType = 'driver';
+            } else if (userDoc.exists()) {
                 userType = (userDoc.data()?.userType as string) || 'passenger';
             } else {
-                console.warn('[PushNotifications] Document utilisateur non trouvé, création par défaut');
-                await setDoc(doc(db, 'users', user.uid), {
-                    userType: 'client',
-                    createdAt: new Date(),
-                }, { merge: true });
+                // Utilisateur inconnu — ni driver ni client existant
+                // Ne PAS créer de document fantôme (ex: chauffeur en attente de Cloud Function)
+                console.warn('[PushNotifications] Document utilisateur non trouvé pour uid:', user.uid);
+                return;
             }
             
             // Sauvegarder le token dans la collection appropriée
@@ -178,15 +181,16 @@ class PushNotificationService {
             
             await setDoc(userRef, {
                 fcmToken: token,
-                tokenUpdatedAt: new Date(),
+                tokenUpdatedAt: serverTimestamp(),
             }, { merge: true });
 
-            // Aussi sauvegarder dans la collection users pour que les Cloud Functions VoIP
-            // puissent toujours trouver le token
-            await setDoc(doc(db, 'users', user.uid), {
-                fcmToken: token,
-                tokenUpdatedAt: new Date(),
-            }, { merge: true });
+            // Sauvegarder dans users/ UNIQUEMENT pour les clients (les chauffeurs n'ont PAS de doc users/)
+            if (userType !== 'driver') {
+                await setDoc(doc(db, 'users', user.uid), {
+                    fcmToken: token,
+                    tokenUpdatedAt: serverTimestamp(),
+                }, { merge: true });
+            }
             
             // S'abonner aux topics appropriés (medJiraV2.md §6.1)
             await this.subscribeToTopics(userType);

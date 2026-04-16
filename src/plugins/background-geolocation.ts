@@ -31,19 +31,19 @@ export interface BackgroundGeolocationPlugin {
     removeAllListeners(): Promise<void>
 }
 
-export const BackgroundGeolocation = registerPlugin<BackgroundGeolocationPlugin>(
-    'BackgroundGeolocation'
-)
-
 type LocationListener = (data: LocationData) => void
 
+/**
+ * Fallback web pour background geolocation
+ * Utilisé automatiquement par Capacitor sur plateforme web/PWA
+ */
 export class FallbackBackgroundGeolocation implements BackgroundGeolocationPlugin {
     private watchId: string | null = null
     private listeners: LocationListener[] = []
     private isTracking = false
     private lastLocation: LocationData | undefined
 
-    async startTracking(options: StartTrackingOptions): Promise<void> {
+    async startTracking(_options: StartTrackingOptions): Promise<void> {
         if (this.isTracking) return
 
         this.isTracking = true
@@ -117,3 +117,10 @@ export class FallbackBackgroundGeolocation implements BackgroundGeolocationPlugi
         this.listeners = []
     }
 }
+
+export const BackgroundGeolocation = registerPlugin<BackgroundGeolocationPlugin>(
+    'BackgroundGeolocation',
+    {
+        web: () => Promise.resolve(new FallbackBackgroundGeolocation()),
+    }
+)

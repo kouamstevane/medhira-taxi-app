@@ -6,16 +6,11 @@ import { useEffect, useState, Suspense } from "react";
 import { doc, onSnapshot, updateDoc, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
 import { db } from "@/config/firebase";
 import { CURRENCY_CODE, LIMITS, DEFAULT_LOCALE } from "@/utils/constants";
-const GoogleMapsComponents = dynamic(() => import('@react-google-maps/api'), { 
+const ConfirmationMap = dynamic(() => import('./ConfirmationMap').then(m => ({ default: m.ConfirmationMap })), {
   ssr: false,
   loading: () => <div className="w-full h-[200px] bg-gray-100 animate-pulse rounded-xl" />
 });
-
-const { LoadScript, GoogleMap, Marker, DirectionsRenderer } = GoogleMapsComponents || {};
 import { MaterialIcon } from "@/components/ui/MaterialIcon";
-
-const mapContainerStyle = { width: "100%", height: "200px" };
-const defaultCenter = { lat: 43.6532, lng: -79.3832 }; // Toronto
 
 // Composant principal qui utilise useSearchParams
 function ConfirmationContent() {
@@ -195,38 +190,11 @@ function ConfirmationContent() {
         <main className="flex-1 p-4 space-y-4">
           {/* Carte */}
           <div className="rounded-xl overflow-hidden border border-white/10">
-            <LoadScript
-              googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}
-              libraries={["geometry", "places"]}
-            >
-              <GoogleMap
-                mapContainerStyle={mapContainerStyle}
-                center={driverLocation || defaultCenter}
-                zoom={14}
-              >
-                {booking?.pickupLocation && (
-                  <Marker position={booking.pickupLocation} label="P" />
-                )}
-                {driverLocation && (
-                  <Marker
-                    position={driverLocation}
-                    icon={{
-                      url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-                      scaledSize: new google.maps.Size(40, 40)
-                    }}
-                  />
-                )}
-                {directions && (
-                  <DirectionsRenderer
-                    options={{
-                      polylineOptions: { strokeColor: "#f29200", strokeWeight: 5 },
-                      suppressMarkers: true
-                    }}
-                    directions={directions}
-                  />
-                )}
-              </GoogleMap>
-            </LoadScript>
+            <ConfirmationMap
+              driverLocation={driverLocation}
+              pickupLocation={booking?.pickupLocation}
+              directions={directions}
+            />
           </div>
 
           {/* Notification d'arrivée */}

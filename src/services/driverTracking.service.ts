@@ -66,6 +66,9 @@ class DriverTrackingService {
     // ⚡ Uber/Bolt pattern: Garder uniquement la DERNIÈRE position offline
     // Évite l'explosion mémoire avec GPS rapide (1Hz = 3600 positions/heure)
     private lastOfflineLocation: DriverLocation | null = null;
+    private lastFirestoreWriteTime = 0;
+    private lastRtdbWriteTime = 0;
+    private removePluginListener: (() => void) | null = null;
 
     /**
      * Démarre le tracking avec validation RGPD
@@ -98,7 +101,10 @@ class DriverTrackingService {
             // 3. Écoute état connexion (§11.2)
             this.setupConnectionListener();
 
-            // 4. Mise à jour Firestore (état "en ligne")
+            // 4. Plugin listener pour propagation web (fallback)
+            await this.setupPluginListener(config);
+
+            // 5. Mise à jour Firestore (état "en ligne")
             await this.updateDriverStatus(config.driverId, 'online');
 
             this.isTracking = true;
@@ -124,6 +130,11 @@ class DriverTrackingService {
         if (this.removeConnectedListener) {
             this.removeConnectedListener();
             this.removeConnectedListener = null;
+        }
+
+        if (this.removePluginListener) {
+            this.removePluginListener();
+            this.removePluginListener = null;
         }
 
         // Arrêt service natif (arrête les events)
@@ -186,8 +197,11 @@ class DriverTrackingService {
         try {
             const validatedLocation = LocationDataSchema.parse(locationData);
             
-            // 🔒 Le service natif écrit déjà dans Firebase RTDB
-            // Ce service ne fait qu'écouter et propager à l'UI
+            // 🔒 Écriture lastLocation dans Firestore (throttled 15s)
+            // Nécessaire pour la page confirmation taxi (onSnapshot sur drivers/{driverId})
+            if (this.config.driverId) {
+                await this.writeLastLocationToFirestore(this.config.driverId, validatedLocation);
+            }
             
             // Callback client (pour UI)
             if (this.config.onLocationUpdate) {
@@ -219,6 +233,54 @@ class DriverTrackingService {
         });
 
         this.removeConnectedListener = () => off(connectedRef);
+    }
+
+    /**
+     * Setup listener plugin pour propagation web
+     * Sur web, le plugin fallback capte le GPS mais n'écrit pas dans RTDB.
+     * Ce listener capte les positions et les écrit dans RTDB.
+     * Sur natif, addListener ne déclenche pas (le service natif écrit déjà dans RTDB).
+     */
+    private async setupPluginListener(config: TrackingConfig): Promise<void> {
+        try {
+            const locationRef = ref(getDatabase(), `driver_locations/${config.driverId}`);
+            const handle = await BackgroundGeolocation.addListener('location', async (location) => {
+                const now = Date.now();
+                if (now - this.lastRtdbWriteTime < 1_000) return;
+                this.lastRtdbWriteTime = now;
+                await set(locationRef, {
+                    ...location,
+                    tripId: config.tripId ?? null,
+                });
+            });
+            this.removePluginListener = () => { handle.remove().catch(() => {}); };
+        } catch {
+            // Plugin natif ne supporte pas addListener - normal sur Android
+            // Le service natif écrit directement dans RTDB
+        }
+    }
+
+    /**
+     * Écrit lastLocation dans Firestore (drivers/{driverId}.lastLocation)
+     * Throttlé à 1 écriture / 15s pour optimiser les coûts Firestore
+     * Nécessaire pour la page confirmation taxi qui lit via onSnapshot
+     */
+    private async writeLastLocationToFirestore(driverId: string, location: DriverLocation): Promise<void> {
+        const now = Date.now();
+        if (now - this.lastFirestoreWriteTime < 15_000) return;
+        this.lastFirestoreWriteTime = now;
+
+        try {
+            const firestore = getFirestore();
+            const driverRef = doc(firestore, 'drivers', driverId);
+            await updateDoc(driverRef, {
+                lastLocation: { lat: location.lat, lng: location.lng },
+                locationUpdatedAt: serverTimestamp(),
+            });
+        } catch (error) {
+            console.error('Failed to write lastLocation to Firestore:', error);
+            this.lastFirestoreWriteTime = 0; // allow retry on next event
+        }
     }
 
     /**

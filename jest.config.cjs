@@ -23,6 +23,9 @@ const customJestConfig = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
 
+  // Polyfill fetch avant le chargement de tout module (firebase/auth en a besoin)
+  setupFiles: ['<rootDir>/jest.fetch-polyfill.js'],
+
   // Fichiers de setup
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 
@@ -36,6 +39,12 @@ const customJestConfig = {
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/.next/',
+    // Tests Playwright — doivent être lancés via `npx playwright test`
+    '<rootDir>/e2e/',
+    // Tests Firestore rules — nécessitent les émulateurs Firebase (`npm run test:firestore:emulators`)
+    '<rootDir>/tests/',
+    // Fichiers de setup/helpers qui ne contiennent pas de tests
+    '<rootDir>/src/__tests__/setup/',
   ],
 
   // Couverture de code

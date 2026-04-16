@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
@@ -23,11 +23,9 @@ const STATUS_STEPS = [
   { id: 'delivered', icon: 'location_on', label: 'Livrée' },
 ];
 
-interface OrderTrackingClientProps {
-  orderId: string;
-}
-
-export default function OrderTrackingClient({ orderId }: OrderTrackingClientProps) {
+export default function OrderTrackingClient() {
+  const params = useParams()
+  const orderId = params.id as string
   const router = useRouter();
   const { showError, toasts, removeToast } = useToast();
 
@@ -283,6 +281,7 @@ export default function OrderTrackingClient({ orderId }: OrderTrackingClientProp
             <p className="text-sm text-green-400/80">Votre retour est précieux.</p>
           </section>
         )}
+      </div>
       </div>
       <BottomNav />
     </>

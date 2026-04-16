@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ========================================
-# Script de génération d'APK pour Medhira Taxi
+# Script de génération d'APK pour Medjira Taxi
 # ========================================
 
 echo "========================================"

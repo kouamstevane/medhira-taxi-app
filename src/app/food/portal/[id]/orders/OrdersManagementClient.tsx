@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { auth, db } from '@/config/firebase';
@@ -14,11 +14,9 @@ import type { Restaurant, FoodOrder } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 
-interface OrdersManagementClientProps {
-  id: string;
-}
-
-export default function OrdersManagementClient({ id }: OrdersManagementClientProps) {
+export default function OrdersManagementClient() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter();
   const { showError, showSuccess, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);

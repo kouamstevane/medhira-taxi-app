@@ -41,6 +41,11 @@ export default function DriverLogin() {
 
       await verifyDriverAccount(userCredential.user.uid);
     } catch (error: unknown) {
+      // Si l'utilisateur est connecté mais verifyDriverAccount a échoué,
+      // le déconnecter pour éviter un état authentifié en arrière-plan
+      if (auth.currentUser) {
+        await auth.signOut().catch(() => {});
+      }
       const message = error instanceof Error ? error.message : "Erreur de connexion";
       if (!message.includes('Veuillez vérifier votre adresse email')) {
         setError(message);
@@ -72,6 +77,9 @@ export default function DriverLogin() {
       const user = await AuthService.signInWithGoogleForDriver();
       await verifyDriverAccount(user.uid);
     } catch (error: unknown) {
+      if (auth.currentUser) {
+        await auth.signOut().catch(() => {});
+      }
       setError(error instanceof Error ? error.message : "Erreur de connexion Google");
     }
   };

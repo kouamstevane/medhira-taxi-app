@@ -33,6 +33,8 @@ describe('retryWithBackoff', () => {
       maxAttempts: 3,
       baseDelay: 100,
     });
+    // Prévenir le unhandled rejection pendant le flush des fake timers
+    resultPromise.catch(() => {});
 
     await jest.advanceTimersByTimeAsync(100);
     await jest.advanceTimersByTimeAsync(200);

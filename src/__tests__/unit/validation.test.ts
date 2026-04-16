@@ -55,8 +55,8 @@ describe('Validation des numéros de téléphone', () => {
   });
 
   describe('Cas limites (Edge cases)', () => {
-    test('devrait gérer un numéro avec le minimum de chiffres (+12)', () => {
-      expect(isValidPhoneNumber('+12')).toBe(true);
+    test('devrait gérer un numéro avec le minimum de chiffres (+1234567)', () => {
+      expect(isValidPhoneNumber('+1234567')).toBe(true);
     });
 
     test('devrait gérer un numéro avec le maximum de chiffres (15)', () => {

@@ -71,13 +71,12 @@ describe('findDriverWithRetry', () => {
   });
 
   it('propage erreur au dernier retry', async () => {
-    mockBroadcastRideRequest.mockRejectedValue(new Error('unavailable'));
-    jest.useFakeTimers();
-    const p = findDriverWithRetry('r1', { lat: 43.65, lng: -79.38 }, 'T', 25, undefined, 0,
-      { maxRetries: 1, timeoutSeconds: 90, initialPerimeterMinutes: 5, expandedPerimeterMinutes: 10 });
-    await jest.advanceTimersByTimeAsync(5000);
-    await expect(p).rejects.toThrow('unavailable');
-    jest.useRealTimers();
+    // maxRetries: 1 → le catch relance immédiatement l'erreur, pas de setTimeout impliqué
+    mockBroadcastRideRequest.mockRejectedValueOnce(new Error('unavailable'));
+    await expect(
+      findDriverWithRetry('r1', { lat: 43.65, lng: -79.38 }, 'T', 25, undefined, 0,
+        { maxRetries: 1, timeoutSeconds: 90, initialPerimeterMinutes: 5, expandedPerimeterMinutes: 10 })
+    ).rejects.toThrow('unavailable');
   });
 });
 

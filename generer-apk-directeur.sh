@@ -5,7 +5,7 @@
 # ========================================
 
 echo "========================================"
-echo "  Medhira Taxi - Génération APK Directeur"
+echo "  Medjira Taxi - Génération APK Directeur"
 echo "========================================"
 echo ""
 
@@ -52,7 +52,7 @@ echo ""
 
 echo "[4/4] Préparation du fichier pour l'envoi..."
 SOURCE="android/app/build/outputs/apk/debug/app-debug.apk"
-DEST="apk-directeur/Medhira-Taxi-Test.apk"
+DEST="apk-directeur/Medjira-Taxi-Test.apk"
 
 if [ ! -f "$SOURCE" ]; then
     echo "[ERREUR] L'APK source n'existe pas : $SOURCE"

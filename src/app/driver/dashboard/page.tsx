@@ -12,7 +12,9 @@ import {
   getDocs,
   orderBy,
   limit,
-  Timestamp
+  Timestamp,
+  documentId,
+  increment
 } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut, User } from 'firebase/auth';
@@ -30,7 +32,8 @@ import { assignDriver } from '@/services/matching/assignment';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { incrementDriverAcceptedTrips, incrementDriverDeclinedTrips } from '@/services/driver.service';
-import { updateDriverLocation, calculateFinalFare, markDriverArrived, startTrip, completeTrip } from '@/services/taxi.service';
+import { calculateFinalFare, markDriverArrived, startTrip, completeTrip } from '@/services/taxi.service';
+import { useDriverTracking } from '@/hooks/useDriverTracking';
 import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
 import ModeSwitch from './components/ModeSwitch';
@@ -41,6 +44,45 @@ import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
 import { useDriverAvailability } from '@/hooks/useDriverAvailability';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+
+async function fetchBookingsForRequests(
+  requests: Array<{ rideId: string; candidate: RideCandidate }>
+): Promise<RideRequest[]> {
+  const bookingIds = requests.map(req => req.rideId).filter(Boolean);
+  const bookingMap = new Map<string, Record<string, unknown>>();
+
+  if (bookingIds.length > 0) {
+    for (let i = 0; i < bookingIds.length; i += 30) {
+      const batchIds = bookingIds.slice(i, i + 30);
+      try {
+        const bookingQuery = query(
+          collection(db, 'bookings'),
+          where(documentId(), 'in', batchIds),
+          limit(30)
+        );
+        const snap = await getDocs(bookingQuery);
+        snap.forEach(d => bookingMap.set(d.id, d.data() as Record<string, unknown>));
+      } catch (error) {
+        console.error('Erreur chargement batch bookings:', error);
+      }
+    }
+  }
+
+  return requests.map(req => {
+    const bookingData = bookingMap.get(req.rideId);
+    const result: RideRequest = { rideId: req.rideId, candidate: req.candidate };
+    if (bookingData) {
+      result.bookingData = {
+        pickup: bookingData.pickup as string,
+        destination: bookingData.destination as string,
+        price: bookingData.price as number,
+        distance: bookingData.distance as number | undefined,
+        duration: bookingData.duration as number | undefined,
+      };
+    }
+    return result;
+  });
+}
 
 export default function DriverDashboard() {
   const { driver, setDriver, updateDriver } = useDriverStore();
@@ -56,6 +98,11 @@ export default function DriverDashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showError, toasts, removeToast } = useToast();
+  const isTripActive = !!currentTrip && ['accepted', 'driver_arrived', 'in_progress'].includes(currentTrip.status);
+  const { lastLocation: _trackingLocation, error: _trackingError } = useDriverTracking({
+    tripId: currentTrip?.id,
+    enabled: !!driver?.isAvailable || isTripActive,
+  });
 
   const getInitials = (firstName?: string, lastName?: string): string => {
     const firstChar = firstName?.[0] || 'D';
@@ -76,6 +123,11 @@ export default function DriverDashboard() {
 
       // Mettre à jour l'état de l'utilisateur actuel
       setCurrentUser(user);
+
+      // Initialiser les fonctions de cleanup comme no-ops pour éviter les appels invalides en cas d'erreur
+      let unsubscribeCurrentTrip: () => void = () => {};
+      let unsubscribe: () => void = () => {};
+      let unsubscribeRideRequests: () => void = () => {};
 
       try {
         const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
@@ -157,12 +209,13 @@ export default function DriverDashboard() {
         const currentTripQuery = query(
           collection(db, "bookings"),
           where("driverId", "==", user.uid),
-          where("status", "in", ["accepted", "driver_arrived", "in_progress"])
+          where("status", "in", ["accepted", "driver_arrived", "in_progress"]),
+          limit(1)
         );
         
         console.log('[DRIVER] Initialisation listener courses actives pour:', user.uid);
         
-        const unsubscribeCurrentTrip = onSnapshot(currentTripQuery, async (snapshot) => {
+        unsubscribeCurrentTrip = onSnapshot(currentTripQuery, async (snapshot) => {
           console.log('[DRIVER] Snapshot courses actives:', snapshot.size, 'résultat(s)');
           
           if (!snapshot.empty) {
@@ -219,7 +272,7 @@ export default function DriverDashboard() {
         // Écouter les courses en attente (ancien système)
         // Règle Section 4.1 : limit() obligatoire sur chaque requête
         const q = query(collection(db, "bookings"), where("status", "==", "pending"), limit(50));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        unsubscribe = onSnapshot(q, (snapshot) => {
           const trips: Trip[] = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
@@ -238,111 +291,37 @@ export default function DriverDashboard() {
         });
 
         // Écouter les nouvelles demandes de course (nouveau système de matching)
-        const unsubscribeRideRequests = subscribeToDriverRideRequests(user.uid, async (requests) => {
-          // Charger les détails de chaque booking
-          const rideRequestsWithData: RideRequest[] = await Promise.all(
-            requests.map(async (req) => {
-              try {
-                const bookingDoc = await getDoc(doc(db, 'bookings', req.rideId));
-                if (bookingDoc.exists()) {
-                  const bookingData = bookingDoc.data();
-                  return {
-                    ...req,
-                    bookingData: {
-                      pickup: bookingData.pickup,
-                      destination: bookingData.destination,
-                      price: bookingData.price,
-                      distance: bookingData.distance,
-                      duration: bookingData.duration,
-                    },
-                  };
-                }
-                return req;
-              } catch (error) {
-                console.error('Erreur chargement booking:', error);
-                return req;
-              }
-            })
-          );
-          setRideRequests(rideRequestsWithData);
+        unsubscribeRideRequests = subscribeToDriverRideRequests(user.uid, async (requests) => {
+          setRideRequests(await fetchBookingsForRequests(requests));
         });
 
         // Charger les demandes en attente au démarrage
         getPendingCandidatesForDriver(user.uid).then(async (requests) => {
-          const rideRequestsWithData: RideRequest[] = await Promise.all(
-            requests.map(async (req) => {
-              try {
-                const bookingDoc = await getDoc(doc(db, 'bookings', req.rideId));
-                if (bookingDoc.exists()) {
-                  const bookingData = bookingDoc.data();
-                  return {
-                    ...req,
-                    bookingData: {
-                      pickup: bookingData.pickup,
-                      destination: bookingData.destination,
-                      price: bookingData.price,
-                      distance: bookingData.distance,
-                      duration: bookingData.duration,
-                    },
-                  };
-                }
-                return req;
-              } catch (error) {
-                console.error('Erreur chargement booking:', error);
-                return req;
-              }
-            })
-          );
-          setRideRequests(rideRequestsWithData);
+          setRideRequests(await fetchBookingsForRequests(requests));
         });
 
-        return () => {
-          unsubscribeCurrentTrip();
-          unsubscribe();
-          unsubscribeRideRequests();
-        };
       } catch (err) {
         console.error('Erreur de chargement:', err);
         setError("Erreur de chargement");
       } finally {
         setLoading(false);
-        fetchDailyHistory(user.uid);
+        if (user?.uid) fetchDailyHistory(user.uid);
       }
+
+      // Cleanup toujours retourné, même si le try a échoué
+      return () => {
+        try {
+          unsubscribeCurrentTrip();
+          unsubscribe();
+          unsubscribeRideRequests();
+        } catch {
+          // Silently ignore cleanup errors
+        }
+      };
     });
 
     return () => unsubscribeAuth();
   }, [router]);
-
-  // Suivi GPS en temps réel quand une course est active
-  useEffect(() => {
-    if (!currentTrip || !['accepted', 'driver_arrived', 'in_progress'].includes(currentTrip.status)) return;
-
-    console.log('[DRIVER] Démarrage du suivi GPS pour la course:', currentTrip.id);
-
-    const THROTTLE_MS = 2500;
-    let lastUpdateTime = 0;
-
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const now = Date.now();
-        if (now - lastUpdateTime < THROTTLE_MS) {
-          return;
-        }
-        lastUpdateTime = now;
-        const { latitude, longitude } = position.coords;
-        updateDriverLocation(currentTrip.id, { lat: latitude, lng: longitude })
-          .catch(err => console.error('Erreur updateDriverLocation:', err));
-      },
-      (error) => console.error('Erreur GPS:', error),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
-    );
-
-    return () => {
-      console.log('[DRIVER] Arrêt du suivi GPS');
-      navigator.geolocation.clearWatch(watchId);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTrip?.id, currentTrip?.status]);
 
   const fetchDailyHistory = async (driverId: string) => {
     try {
@@ -527,16 +506,13 @@ export default function DriverDashboard() {
       // Récupérer le prix final pour mettre à jour les stats
       const finalPrice = await calculateFinalFare(tripId);
 
+      const priceToAdd = finalPrice || 0;
       await updateDoc(doc(db, 'drivers', auth.currentUser.uid), {
-        earnings: (driver.earnings || 0) + (finalPrice || 0),
-        tripsCompleted: (driver.tripsCompleted || 0) + 1
+        earnings: increment(priceToAdd),
+        tripsCompleted: increment(1)
       });
 
-      updateDriver({
-        isAvailable: true,
-        earnings: (driver.earnings || 0) + (finalPrice || 0),
-        tripsCompleted: (driver.tripsCompleted || 0) + 1
-      });
+      updateDriver({ isAvailable: true });
 
       setCurrentTrip(null);
     } catch (error) {
@@ -822,6 +798,7 @@ export default function DriverDashboard() {
           </div>
         </div>
 
+      </div>
       </div>
       {/* Bottom Nav — en dehors du conteneur contraint pour éviter tout problème de stacking context */}
       <BottomNav items={driverNavItems} />

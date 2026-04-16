@@ -216,15 +216,13 @@ export const createCall = onCall(
 
   // 8. Envoyer la notification FCM au destinataire
   const fcmToken = await getUserFcmToken(calleeId);
-  const callerDataForNotif = callerData;
-
   if (fcmToken) {
     const message = {
       token: fcmToken,
       notification: {
         title: '📞 Appel entrant',
-        body: `${callerDataForNotif?.displayName || callerDataForNotif?.name || 'Utilisateur'} vous appelle`,
-        imageUrl: callerDataForNotif?.photoURL || undefined
+        body: `${callerData?.displayName || callerData?.name || 'Utilisateur'} vous appelle`,
+        imageUrl: callerData?.photoURL || undefined
       },
       data: {
         type: 'incoming_call',
@@ -233,8 +231,8 @@ export const createCall = onCall(
         channel,
         // Le token Agora n'est pas inclus dans FCM : le destinataire doit appeler
         // la Cloud Function getCallToken(callId) pour obtenir son propre token sécurisé.
-        callerName: callerDataForNotif?.displayName || callerDataForNotif?.name || 'Utilisateur',
-        callerAvatar: callerDataForNotif?.photoURL || '',
+        callerName: callerData?.displayName || callerData?.name || 'Utilisateur',
+        callerAvatar: callerData?.photoURL || '',
         callerRole
       },
       android: {
@@ -399,6 +397,62 @@ export const endCall = onCall(
   return { success: true, duration: Math.floor(duration / 1000) };
 });
 
+
+/**
+ * Récupère un token Agora pour rejoindre un canal d'appel existant
+ * Le destinataire d'un appel utilise cette fonction après réception du FCM
+ */
+export const getCallToken = onCall(
+  { secrets: [agoraAppId, agoraAppCertificate] },
+  async (request: CallableRequest) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
+    }
+
+    checkVoipRateLimit(request.auth.uid, 'getCallToken', 20, 60);
+
+    const { callId } = request.data as { callId?: string };
+    const userId = request.auth.uid;
+
+    if (!callId) {
+      throw new HttpsError('invalid-argument', 'callId manquant');
+    }
+
+    const callDoc = await getDb().collection('calls').doc(callId).get();
+
+    if (!callDoc.exists) {
+      throw new HttpsError('not-found', 'Appel non trouvé');
+    }
+
+    const callData = callDoc.data() as {
+      callerId: string;
+      calleeId: string;
+      status: string;
+      channel: string;
+    } | undefined;
+
+    if (callData?.callerId !== userId && callData?.calleeId !== userId) {
+      throw new HttpsError('permission-denied', 'Vous n\'êtes pas participant à cet appel');
+    }
+
+    if (callData?.status === 'ended' || callData?.status === 'missed' || callData?.status === 'rejected') {
+      throw new HttpsError('failed-precondition', 'Cet appel est terminé');
+    }
+
+    const token = generateAgoraToken(
+      callData.channel,
+      userId,
+      agoraAppId.value(),
+      agoraAppCertificate.value()
+    );
+
+    return {
+      token,
+      channel: callData.channel,
+      uid: userId
+    };
+  }
+);
 
 /**
  * Envoie un message système dans une conversation de course

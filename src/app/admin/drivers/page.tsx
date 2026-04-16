@@ -14,6 +14,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
+import { suspendDriver, unsuspendDriver, deactivateDriver, reactivateDriver } from '@/services/admin.service';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { createLogger } from '@/utils/logger';
 
@@ -183,26 +184,37 @@ export default function AdminDriversPage() {
 
     try {
       if (!auth.currentUser) throw new Error('Non authentifié');
-      const idToken = await auth.currentUser.getIdToken(true);
+      const adminUid = auth.currentUser.uid;
 
-      const response = await fetch('/api/admin/manage-driver', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-          action,
-          driverId,
-          reason,
-          adminUid: auth.currentUser.uid
-        })
-      });
+      if (action === 'suspend') {
+        await suspendDriver(driverId, reason || 'Suspension administrative', adminUid);
+      } else if (action === 'unsuspend') {
+        await unsuspendDriver(driverId, adminUid);
+      } else if (action === 'deactivate') {
+        await deactivateDriver(driverId, reason || 'Désactivation administrative', adminUid);
+      } else if (action === 'reactivate') {
+        await reactivateDriver(driverId, adminUid);
+      } else {
+        const idToken = await auth.currentUser.getIdToken(true);
+        const response = await fetch('/api/admin/manage-driver', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`
+          },
+          body: JSON.stringify({
+            action,
+            driverId,
+            reason,
+            adminUid
+          })
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Erreur lors de l\'action');
+        if (!response.ok) {
+          throw new Error(data.error || 'Erreur lors de l\'action');
+        }
       }
 
       setSuccess(`Action "${action}" effectuée avec succès`);

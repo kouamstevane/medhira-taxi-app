@@ -3,27 +3,37 @@ import { MenuItem, Restaurant } from '@/types/food-delivery';
 
 const menuItem1: MenuItem = {
   id: 'item-1',
+  restaurantId: 'resto-1',
   name: 'Pizza Margherita',
   price: 12.5,
   description: 'Tomate, mozzarella',
   category: 'pizzas',
-  available: true,
+  isAvailable: true,
+  createdAt: {} as MenuItem['createdAt'],
+  updatedAt: {} as MenuItem['updatedAt'],
 };
 
 const menuItem2: MenuItem = {
   id: 'item-2',
+  restaurantId: 'resto-1',
   name: 'Burger Classic',
   price: 9.99,
   description: 'Boeuf, salade, tomate',
   category: 'burgers',
-  available: true,
+  isAvailable: true,
+  createdAt: {} as MenuItem['createdAt'],
+  updatedAt: {} as MenuItem['updatedAt'],
 };
 
 const menuItem3: MenuItem = {
   id: 'item-3',
+  restaurantId: 'resto-1',
   name: 'Salade Cesar',
   price: 8.5,
   category: 'salades',
+  isAvailable: true,
+  createdAt: {} as MenuItem['createdAt'],
+  updatedAt: {} as MenuItem['updatedAt'],
 };
 
 const restaurant1: Restaurant = {

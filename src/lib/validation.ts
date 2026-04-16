@@ -52,9 +52,12 @@ import { SUPPORTED_COUNTRIES } from '@/utils/constants';
 export const isValidPhoneNumber = (phone: string, countryCode?: string): boolean => {
   if (!phone) return false;
 
-  // Accepte les formats: +15551234567, +33612345678, etc.
-  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-  const phoneRegex = /^\+[1-9]\d{1,14}$/;
+  // Accepte uniquement l'espace ASCII (U+0020) comme séparateur.
+  // On n'utilise pas \s car il capture des caractères Unicode invisibles
+  // (U+FEFF, U+200B, etc.) qui pourraient masquer des entrées malveillantes.
+  const cleanPhone = phone.replace(/ /g, '');
+  // Minimum 7 chiffres au total (indicatif + numéro), maximum 15 (norme E.164)
+  const phoneRegex = /^\+[1-9]\d{6,14}$/;
 
   if (!phoneRegex.test(cleanPhone)) {
     return false;

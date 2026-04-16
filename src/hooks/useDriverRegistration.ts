@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db, storage, app } from '@/config/firebase';
-import { createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
+import { createUserWithEmailAndPassword, onAuthStateChanged, deleteUser } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp as firestoreServerTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -141,6 +141,10 @@ export function useDriverRegistration() {
         }
 
         try {
+          // Forcer le refresh du token avant la lecture Firestore
+          // Évite les erreurs permission-denied sur mobile où le token
+          // peut ne pas être propagé quand onAuthStateChanged se déclenche.
+          await user.getIdToken(true);
           const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
           if (driverDoc.exists()) {
             const data = driverDoc.data();
@@ -251,6 +255,14 @@ export function useDriverRegistration() {
       }
       // Ne PAS appeler setCurrentStep(2) ici
     } catch (err: unknown) {
+      // Nettoyer le compte Auth si créé mais OTP échoué
+      if (!isExistingUser && auth.currentUser) {
+        try {
+          await deleteUser(auth.currentUser);
+        } catch (cleanupErr) {
+          console.error('[useDriverRegistration] Erreur suppression compte Auth après échec OTP:', cleanupErr);
+        }
+      }
       const error = err as { code?: string; message?: string };
       if (error?.code === 'auth/email-already-in-use') {
         setError('Cet email est déjà utilisé. Essayez de vous connecter.');
@@ -601,5 +613,6 @@ export function useDriverRegistration() {
     handleSendVerificationCode,
     handleVerifyCode,
     setCurrentStep,
+    isExistingUser,
   };
 }

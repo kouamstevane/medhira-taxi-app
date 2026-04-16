@@ -191,6 +191,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
           </p>
         </div>
       </div>
+      </div>
     </>
   );
 }

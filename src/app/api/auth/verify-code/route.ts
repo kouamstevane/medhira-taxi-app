@@ -72,8 +72,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Comparer le code (SHA-256)
-  const hashedSubmitted = crypto.createHash('sha256').update(code).digest('hex');
+  const salt: string = data.salt;
+  const hashedSubmitted = await new Promise<string>((resolve, reject) =>
+    crypto.pbkdf2(code, salt, 100_000, 64, 'sha512', (err, key) =>
+      err ? reject(err) : resolve(key.toString('hex'))
+    )
+  );
   if (hashedSubmitted !== data.code) {
     const newAttempts = attempts + 1;
     if (newAttempts >= 3) {

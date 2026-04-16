@@ -14,11 +14,13 @@ import {
   Firestore,
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager
+  persistentMultipleTabManager,
+  persistentSingleTabManager
 } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 import { getFunctions, Functions } from "firebase/functions";
 import { getDatabase, Database } from "firebase/database";
+import { Capacitor } from "@capacitor/core";
 
 /**
  * Configuration Firebase récupérée depuis les variables d'environnement
@@ -53,12 +55,17 @@ if (!getApps().length) {
 export const auth: Auth = getAuth(app);
 
 //  Activer la persistance locale pour offline-first (medJira.md #3)
+// Sur mobile (Capacitor), utiliser SingleTabManager — MultipleTabManager
+// utilise BroadcastChannel/localStorage events qui ne fonctionnent pas
+// correctement dans un WebView unique, ce qui empêche la propagation
+// du token d'auth vers Firestore (erreurs permission-denied).
 let firestoreInstance: Firestore;
 if (typeof window !== 'undefined') {
   try {
+    const isNative = Capacitor.isNativePlatform();
     initializeFirestore(app, {
       localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
+        tabManager: isNative ? persistentSingleTabManager(undefined) : persistentMultipleTabManager()
       })
     });
     firestoreInstance = getFirestore(app);

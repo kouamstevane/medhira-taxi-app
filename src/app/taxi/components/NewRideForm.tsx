@@ -22,8 +22,8 @@ import { AddressInput } from './AddressInput';
 import { VehicleOption } from './VehicleOption';
 import { FareSummary } from './FareSummary';
 import { BonusSelector } from './BonusSelector';
-const PaymentMethodSelector = dynamic(() => import('@/components/stripe/PaymentMethodSelector'), { ssr: false, loading: () => <div className="w-full h-24 bg-gray-100 animate-pulse rounded-xl" /> })
-const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement'), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 animate-pulse rounded-xl" /> })
+const PaymentMethodSelector = dynamic(() => import('@/components/stripe/PaymentMethodSelector').then(m => ({ default: m.PaymentMethodSelector })), { ssr: false, loading: () => <div className="w-full h-24 bg-gray-100 animate-pulse rounded-xl" /> })
+const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement').then(m => ({ default: m.StripePaymentElement })), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 animate-pulse rounded-xl" /> })
 import { logger } from '@/utils/logger';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';

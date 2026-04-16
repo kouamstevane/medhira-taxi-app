@@ -63,9 +63,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Générer le code
   const code = String(crypto.randomInt(100000, 1000000));
-  const hashedCode = crypto.createHash('sha256').update(code).digest('hex');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hashedCode = await new Promise<string>((resolve, reject) =>
+    crypto.pbkdf2(code, salt, 100_000, 64, 'sha512', (err, key) =>
+      err ? reject(err) : resolve(key.toString('hex'))
+    )
+  );
 
   // Envoyer l'email EN PREMIER — écrire en Firestore seulement si l'envoi réussit
   // (évite de bloquer l'utilisateur par le rate limit si Resend est indisponible)
@@ -86,6 +90,7 @@ export async function POST(request: NextRequest) {
   const expiresAt = admin.firestore.Timestamp.fromMillis(Date.now() + 15 * 60 * 1000);
   await docRef.set({
     code: hashedCode,
+    salt,
     email,
     expiresAt,
     attempts: 0,

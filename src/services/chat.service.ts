@@ -17,6 +17,7 @@ import {
   getDocs,
   increment,
   limit,
+  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Message, MessageType } from '@/types/chat';
@@ -116,11 +117,17 @@ export const markMessagesAsRead = async (
     );
 
     const snapshot = await getDocs(q);
-    const updatePromises = snapshot.docs.map((doc) =>
-      updateDoc(doc.ref, { read: true })
-    );
+    const BATCH_LIMIT = 500;
+    const docs = snapshot.docs;
 
-    await Promise.all(updatePromises);
+    for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
+      const chunk = docs.slice(i, i + BATCH_LIMIT);
+      const batch = writeBatch(db);
+      chunk.forEach((docSnap) => {
+        batch.update(docSnap.ref, { read: true });
+      });
+      await batch.commit();
+    }
 
     // Réinitialiser le compteur
     // Note: Les champs Firestore utilisent encore 'driver' pour la compatibilité

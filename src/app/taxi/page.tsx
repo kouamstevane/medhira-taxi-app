@@ -14,7 +14,7 @@ import { useRouter } from 'next/navigation';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
 import { NewRideForm } from './components/NewRideForm';
-const DriverFoundView = dynamic(() => import('./components/DriverFoundView'), { ssr: false, loading: () => <div className="w-full h-64 bg-gray-100 animate-pulse rounded-xl" /> })
+const DriverFoundView = dynamic(() => import('./components/DriverFoundView').then(m => ({ default: m.DriverFoundView })), { ssr: false, loading: () => <div className="w-full h-64 bg-gray-100 animate-pulse rounded-xl" /> })
 import { SearchingDriverBottomSheet } from './components/SearchingDriverBottomSheet';
 import { logger } from '@/utils/logger';
 import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
@@ -445,7 +445,7 @@ export default function TaxiPage() {
 
                 <h2 className="text-xl font-bold text-white mb-2">Course terminée !</h2>
                 <p className="text-sm text-slate-400 mb-6">
-                  Merci d&apos;avoir utilisé Medhira Taxi
+                  Merci d&apos;avoir utilisé Medjira Taxi
                 </p>
                 <button
                   onClick={async () => {

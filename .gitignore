@@ -4,6 +4,7 @@ functions/node_modules/
 node_modulesOld-after/
 /.pnp
 .pnp.js
+*.txt
 
 # Ne jamais versionner les clés Firebase
 config/keys/serviceAccountKey.json

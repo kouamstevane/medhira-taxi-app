@@ -138,9 +138,19 @@ service cloud.firestore {
     // Les admins peuvent modifier le statut
     // Les utilisateurs peuvent supprimer leur propre compte refusé pour permettre la recréation
     match /drivers/{driverId} {
-      // Lecture : Les utilisateurs authentifiés peuvent lire les données des chauffeurs
-      // Permet aux clients de voir les informations des chauffeurs pour les courses
-      allow read: if isAuthenticated();
+      // Lecture d'un chauffeur spécifique (get) : authentifié
+      // Permet aux clients de voir les infos du chauffeur assigné (confirmation page, tracking)
+      // Permet au chauffeur de lire son propre profil
+      allow get: if isAuthenticated();
+      
+      // Liste des chauffeurs (query) : admin OU chauffeurs approuvés/disponibles uniquement
+      // Restriction RGPD : seuls les chauffeurs avec status 'approved' ou 'available' sont listables
+      // - 'approved' : chauffeurs vérifiés prêts à recevoir des courses
+      // - 'available' : chauffeurs actuellement en ligne et disponibles
+      // Les requêtes de matching filtrent par status='approved' ou status='available'
+      // TODO: Déplacer les champs sensibles (ssn, bank, address) dans une subcollection privée
+      allow list: if isAdmin()
+        || (isAuthenticated() && resource.data.status in ['approved', 'available']);
       
       // Création : Les chauffeurs peuvent créer leur propre document
       // CONTRAINTE : Les chauffeurs doivent s'inscrire par email UNIQUEMENT
@@ -291,15 +301,16 @@ service cloud.firestore {
     
     // Collection bookings - Les utilisateurs et chauffeurs peuvent lire leurs propres réservations
     match /bookings/{bookingId} {
-      // Lecture : Les utilisateurs authentifiés peuvent lire les réservations
+      // Lecture : Les utilisateurs authentifiés peuvent lire leurs propres réservations
       // Permet aux clients de lire leurs propres réservations
       // Permet aux chauffeurs de lire les réservations où ils sont assignés
       allow read: if isAuthenticated() && 
                      (resource.data.userId == request.auth.uid || 
                       resource.data.driverId == request.auth.uid);
       
-      // Lecture : Seuls les chauffeurs peuvent lire les bookings en attente
-      // Vérifié côté serveur via l'existence du document dans la collection drivers
+      // [INTENTIONNEL] Les deux règles allow read sont combinées avec OR logique (Firestore behavior).
+      // Cette seconde règle permet à tout chauffeur vérifié de lire les bookings en statut 'pending'
+      // pour le système de matching — les chauffeurs voient les courses disponibles à accepter.
       allow read: if isAuthenticated() &&
                      resource.data.status == 'pending' &&
                      exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
@@ -748,11 +759,18 @@ service cloud.firestore {
       allow create: if false;
 
       allow update: if request.auth.uid == resource.data.driverId
-        && isValidStatusTransition(resource.data.status, request.resource.data.status)
+        && (
+          // Transition de statut valide
+          isValidStatusTransition(resource.data.status, request.resource.data.status)
+          // Ou mise à jour sans changement de statut (ex: reportNotReady ajoute restaurantWaitingStartedAt)
+          || request.resource.data.status == resource.data.status
+        )
         && request.resource.data.driverId == resource.data.driverId
         && request.resource.data.clientId == resource.data.clientId
         && request.resource.data.totalAmount == resource.data.totalAmount
-        && request.resource.data.driverEarnings == resource.data.driverEarnings;
+        && request.resource.data.driverEarnings == resource.data.driverEarnings
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt', 'pickedUpAt', 'deliveredAt', 'cancelledAt', 'proofPhotoUrl', 'restaurantWaitingStartedAt']);
 
       allow delete: if false;
     }
@@ -832,7 +850,12 @@ service cloud.firestore {
     match /driver_ratings/{ratingId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
-        && request.resource.data.clientId == request.auth.uid;
+        && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.score is number
+        && request.resource.data.score >= 1
+        && request.resource.data.score <= 5
+        && request.resource.data.driverId is string
+        && request.resource.data.orderId is string;
       allow update, delete: if isAdmin();
     }
 

@@ -1,14 +1,8 @@
-import PortalClient from './PortalClient';
-
-export const dynamic = 'force-static';
-export const dynamicParams = false;
-
+export const dynamic = 'force-static'
 export async function generateStaticParams() {
-  return [{ id: 'preview' }];
+  return [{ id: 'preview' }]
 }
-
-export default async function RestaurantPortalPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  
-  return <PortalClient id={id} />;
+import PortalClient from './PortalClient'
+export default function Page() {
+  return <PortalClient />
 }

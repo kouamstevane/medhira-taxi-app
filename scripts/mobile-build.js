@@ -2,15 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { promisify } from 'util';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const sleep = promisify(setTimeout);
 
-const apiDir = path.join(__dirname, '../src/app/api');
+const appDir = path.join(__dirname, '../src/app');
 const middlewareFile = path.join(__dirname, '../middleware.ts');
-let modifiedFiles = [];
+let modifiedFiles = [];  // { original, temp } — fichiers renommés
 
 function getAllRouteFiles(dir, fileList = []) {
     if (!fs.existsSync(dir)) return fileList;
@@ -26,18 +24,19 @@ function getAllRouteFiles(dir, fileList = []) {
     return fileList;
 }
 
+
 async function restoreFiles() {
-    console.log('🔄 Restauration des fichiers API...');
+    console.log('Restauration des fichiers...');
+
+    // Restaurer les route handlers / middleware renommés
     for (const { original, temp } of modifiedFiles) {
         if (fs.existsSync(temp)) {
             try {
-                if (fs.existsSync(original)) {
-                    fs.unlinkSync(original);
-                }
+                if (fs.existsSync(original)) fs.unlinkSync(original);
                 fs.renameSync(temp, original);
-                console.log(` Restauré : ${path.relative(apiDir, original)}`);
+                console.log(` Restauré : ${path.relative(appDir, original)}`);
             } catch (err) {
-                console.error(`Erreur lors de la restauration de ${original}: ` + err.message);
+                console.error(`Erreur restauration ${original}: ` + err.message);
             }
         }
     }
@@ -45,16 +44,18 @@ async function restoreFiles() {
 
 async function runBuild() {
     try {
-        console.log('🚀 Démarrage du build mobile...');
-        if (fs.existsSync(apiDir)) {
-            console.log('🙈 Masquage temporaire des routes API (renommage chirurgical)...');
-            const routeFiles = getAllRouteFiles(apiDir);
+        console.log('Démarrage du build mobile...');
+
+        // 1. Masquer les route handlers
+        if (fs.existsSync(appDir)) {
+            console.log('Masquage temporaire de tous les route handlers...');
+            const routeFiles = getAllRouteFiles(appDir);
             for (const file of routeFiles) {
                 const tempFile = file + '.tmp_build';
                 try {
                     fs.renameSync(file, tempFile);
                     modifiedFiles.push({ original: file, temp: tempFile });
-                    console.log(`� Masqué : ${path.relative(apiDir, file)}`);
+                    console.log(` Masqué : ${path.relative(appDir, file)}`);
                 } catch (err) {
                     console.error(`Impossible de masquer ${file}: ` + err.message);
                     throw err;
@@ -62,8 +63,9 @@ async function runBuild() {
             }
         }
 
+        // 2. Masquer le middleware
         if (fs.existsSync(middlewareFile)) {
-            console.log('🙈 Masquage temporaire du middleware...');
+            console.log('Masquage temporaire du middleware...');
             const tempMiddleware = middlewareFile + '.tmp_build';
             try {
                 fs.renameSync(middlewareFile, tempMiddleware);
@@ -74,22 +76,41 @@ async function runBuild() {
             }
         }
 
-        console.log('📦 Compilation Next.js (Static Export)...');
-        // On utilise npx pour être sûr de trouver l'exécutable local
+        // 3. Supprimer le cache dev de Next.js (contient validator.ts qui référence les routes masquées)
+        const nextDevDir = path.join(__dirname, '../.next/dev');
+        if (fs.existsSync(nextDevDir)) {
+            console.log('Nettoyage du cache Next.js dev...');
+            fs.rmSync(nextDevDir, { recursive: true, force: true });
+        }
+
+        // 4. Build Next.js static export
+        console.log('Compilation Next.js (Static Export)...');
         execSync('npx next build', {
             stdio: 'inherit',
             env: { ...process.env, MOBILE_BUILD: 'true' }
         });
 
-        console.log('📱 Synchronisation Capacitor...');
+        // 5. Sync Capacitor
+        console.log('Synchronisation Capacitor...');
         execSync('npx cap sync', { stdio: 'inherit' });
 
-        console.log(' Build mobile terminé avec succès !');
+        console.log('Build mobile terminé avec succès !');
     } catch (error) {
         console.error('Erreur pendant le build:', error.message);
     } finally {
         await restoreFiles();
     }
 }
+
+// Restaurer les fichiers même si le processus est interrompu (Ctrl+C, SIGTERM)
+process.on('SIGINT', async () => {
+    console.log('\nInterruption détectée — restauration des fichiers...');
+    await restoreFiles();
+    process.exit(1);
+});
+process.on('SIGTERM', async () => {
+    await restoreFiles();
+    process.exit(1);
+});
 
 runBuild();

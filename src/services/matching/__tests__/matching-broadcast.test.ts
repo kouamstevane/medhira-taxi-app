@@ -36,7 +36,7 @@ jest.mock('firebase/firestore', () => ({
   where: (...args: unknown[]) => mockWhere(...args),
   orderBy: (...args: unknown[]) => mockOrderBy(...args),
   limit: (...args: unknown[]) => mockLimit(...args),
-  onSnapshot: (...args: unknown[]) => mockOnSnapshot(...args),
+  onSnapshot: (...args: unknown[]) => (mockOnSnapshot as (...a: unknown[]) => unknown)(...args),
   serverTimestamp: () => ({ _ts: 'server-timestamp' }),
   Timestamp: {
     fromDate: jest.fn((d: Date) => ({

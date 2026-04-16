@@ -27,6 +27,17 @@ function getDb(): FirebaseFirestore.Firestore {
   return admin.firestore();
 }
 
+// Resend SDK v6+ envoie tags comme Record<string, string> (ex: { type: 'verification_code', uid: 'abc123' })
+interface ResendWebhookData {
+  email_id?: string;
+  to?: string[];
+  from?: string;
+  subject?: string;
+  tags?: Record<string, string>;
+  bounce?: { message?: string };
+  failed?: { reason?: string };
+}
+
 // ── Mapping type → statut ──────────────────────────────────────────────────
 function eventTypeToStatus(type: string): string {
   const map: Record<string, string> = {
@@ -78,9 +89,8 @@ export const resendWebhook = onRequest(
     }
 
     const { type, data } = payload;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const anyData = data as any;
-    const messageId = anyData.email_id as string | undefined;
+    const webhookData = data as unknown as ResendWebhookData;
+    const messageId = webhookData.email_id;
     const now = admin.firestore.Timestamp.now();
 
     console.log(`[resendWebhook] ${type} — messageId: ${messageId ?? 'none'}`);
@@ -99,10 +109,10 @@ export const resendWebhook = onRequest(
       await docRef.set({
         messageId,
         status:    eventTypeToStatus(type),
-        to:        anyData.to?.[0] ?? '',
-        subject:   anyData.subject ?? '',
-        type:      anyData.tags?.type ?? 'unknown',
-        uid:       anyData.tags?.uid ?? null,
+        to:        webhookData.to?.[0] ?? '',
+        subject:   webhookData.subject ?? '',
+        type:      webhookData.tags?.type ?? 'unknown',
+        uid:       webhookData.tags?.uid ?? null,
         createdAt: now,
         updatedAt: now,
       });
@@ -123,11 +133,11 @@ export const resendWebhook = onRequest(
         break;
       case 'email.bounced':
         update.bouncedAt = now;
-        update.reason    = anyData.bounce?.message ?? 'Inconnu';
+        update.reason    = webhookData.bounce?.message ?? 'Inconnu';
         break;
       case 'email.failed':
         update.failedAt = now;
-        update.reason   = anyData.failed?.reason ?? 'Inconnu';
+        update.reason   = webhookData.failed?.reason ?? 'Inconnu';
         break;
       case 'email.complained':
         update.complainedAt = now;
@@ -135,8 +145,8 @@ export const resendWebhook = onRequest(
         await db.collection('adminAlerts').add({
           type:      'email_complaint',
           messageId,
-          uid:       anyData.tags?.uid ?? null,
-          to:        anyData.to?.[0] ?? '',
+          uid:       webhookData.tags?.uid ?? null,
+          to:        webhookData.to?.[0] ?? '',
           createdAt: now,
         });
         break;

@@ -18,9 +18,11 @@ import {
   where,
   orderBy,
   limit as firestoreLimit,
+  startAfter,
   runTransaction,
   serverTimestamp,
 } from 'firebase/firestore';
+import type { DocumentSnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { typedServerTimestamp } from '@/lib/firebase-helpers';
 import {
@@ -178,25 +180,48 @@ export const payBooking = async (
 /**
  * Récupérer l'historique des transactions
  */
-export const getTransactionHistory = async (
+export const getTransactionHistory = (
   userId: string,
   limit: number = LIMITS.MAX_TRANSACTION_HISTORY
-): Promise<Transaction[]> => {
-  const transactionsRef = collection(db, 'transactions');
-  const q = query(
-    transactionsRef,
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    firestoreLimit(limit)
-  );
+): Promise<Transaction[]> =>
+  getTransactionHistoryPaginated(userId, { pageSize: limit }).then(r => r.transactions);
 
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => doc.data() as Transaction);
+export type TransactionPageCursor = DocumentSnapshot;
+
+export interface PaginatedTransactionResult {
+  transactions: Transaction[];
+  lastDocSnapshot: TransactionPageCursor | null;
+  hasMore: boolean;
+}
+
+export const getTransactionHistoryPaginated = async (
+  userId: string,
+  options?: {
+    pageSize?: number;
+    type?: string;
+    cursor?: TransactionPageCursor | null;
+  }
+): Promise<PaginatedTransactionResult> => {
+  const pageSize = options?.pageSize ?? 20;
+
+  const constraints = [
+    where('userId', '==', userId),
+    ...(options?.type ? [where('type', '==', options.type)] : []),
+    orderBy('createdAt', 'desc'),
+    firestoreLimit(pageSize),
+    ...(options?.cursor ? [startAfter(options.cursor)] : []),
+  ];
+
+  const q = query(collection(db, 'transactions'), ...constraints);
+  const snap = await getDocs(q);
+
+  const transactions = snap.docs.map(d => d.data() as Transaction);
+  const lastDocSnapshot = snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null;
+  const hasMore = snap.docs.length === pageSize;
+
+  return { transactions, lastDocSnapshot, hasMore };
 };
 
-/**
- * Récupérer une transaction par ID
- */
 export const getTransactionById = async (transactionId: string): Promise<Transaction | null> => {
   const transactionRef = doc(db, 'transactions', transactionId);
   const transactionSnap = await getDoc(transactionRef);

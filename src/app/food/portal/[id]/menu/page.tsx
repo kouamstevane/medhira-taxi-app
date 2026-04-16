@@ -1,17 +1,12 @@
-import MenuManagementClient from './MenuManagementClient';
-
-export const dynamic = 'force-static';
-export const dynamicParams = false;
-
+export const dynamic = 'force-static'
 export async function generateStaticParams() {
-  return [{ id: 'preview' }];
+  return [{ id: 'preview' }]
 }
-
-export default async function MenuManagementPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+import MenuManagementClient from './MenuManagementClient'
+export default function Page() {
   return (
     <main>
-      <MenuManagementClient id={id} />
+      <MenuManagementClient />
     </main>
-  );
+  )
 }

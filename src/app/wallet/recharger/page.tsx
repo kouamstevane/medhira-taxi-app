@@ -9,7 +9,7 @@ import { CURRENCY_CODE, LIMITS, WALLET_PRESET_AMOUNTS, ACTIVE_MARKET } from '@/u
 import { formatCurrencyWithCode } from '@/utils/format';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
-const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement'), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 animate-pulse rounded-xl" /> })
+const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement').then(m => ({ default: m.StripePaymentElement })), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 animate-pulse rounded-xl" /> })
 import { STRIPE_CURRENCY_BY_MARKET } from '@/types/stripe';
 
 type PaymentStep = 'select' | 'stripe_form';

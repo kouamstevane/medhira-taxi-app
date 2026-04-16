@@ -10,8 +10,8 @@ import React, { useEffect } from 'react';
 import { useVoipCall } from '../../hooks/useVoipCall';
 import { VoipCall } from '../../src/types/voip';
 
-const IncomingCallModal = dynamic(() => import('./IncomingCallModal'), { ssr: false, loading: () => null })
-const ActiveCallScreen = dynamic(() => import('./ActiveCallScreen'), { ssr: false, loading: () => null })
+const IncomingCallModal = dynamic(() => import('./IncomingCallModal').then(m => ({ default: m.IncomingCallModal })), { ssr: false, loading: () => null })
+const ActiveCallScreen = dynamic(() => import('./ActiveCallScreen').then(m => ({ default: m.ActiveCallScreen })), { ssr: false, loading: () => null })
 
 interface VoipProviderProps {
   children: React.ReactNode;

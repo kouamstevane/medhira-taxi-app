@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/config/firebase';
-import { collection, query, where, orderBy, limit, getDocs, startAfter, QueryDocumentSnapshot, type QueryConstraint } from 'firebase/firestore';
+import { auth } from '@/config/firebase';
+import { getTransactionHistoryPaginated, type TransactionPageCursor } from '@/services/wallet.service';
 import { onAuthStateChanged } from 'firebase/auth';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { type Transaction, TRANSACTION_ICONS } from '../_shared';
+import { timestampToDate } from '@/lib/firebase-helpers';
 
 type FilterType = 'all' | 'deposit' | 'withdrawal' | 'payment';
 
@@ -26,7 +27,7 @@ export default function WalletHistoriquePage() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null);
+  const [lastDoc, setLastDoc] = useState<TransactionPageCursor | null>(null);
   const [hasMore, setHasMore] = useState(true);
 
   // Authentification : stocke l'uid pour que le second effect puisse y réagir
@@ -49,32 +50,27 @@ export default function WalletHistoriquePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, filter]);
 
-  const fetchTransactions = async (uid: string, cursor: QueryDocumentSnapshot | null, currentFilter: FilterType) => {
+  const fetchTransactions = async (uid: string, cursor: TransactionPageCursor | null, currentFilter: FilterType) => {
     const PAGE_SIZE = 20;
     try {
-      const constraints: QueryConstraint[] = [
-        where('userId', '==', uid),
-        ...(currentFilter !== 'all' ? [where('type', '==', currentFilter)] : []),
-        orderBy('createdAt', 'desc'),
-        limit(PAGE_SIZE),
-      ];
-      if (cursor) constraints.push(startAfter(cursor));
-
-      const q = query(collection(db, 'transactions'), ...constraints);
-      const snap = await getDocs(q);
-
-      const docs = snap.docs.map(d => {
-        const data = d.data();
-        return { id: d.id, ...data, date: data.createdAt?.toDate?.() || new Date() } as Transaction;
+      const result = await getTransactionHistoryPaginated(uid, {
+        pageSize: PAGE_SIZE,
+        type: currentFilter !== 'all' ? currentFilter : undefined,
+        cursor,
       });
+
+      const docs = result.transactions.map(t => ({
+        ...t,
+        date: timestampToDate(t.createdAt),
+      } as Transaction));
 
       if (cursor) {
         setTransactions(prev => [...prev, ...docs]);
       } else {
         setTransactions(docs);
       }
-      setLastDoc(snap.docs[snap.docs.length - 1] ?? null);
-      setHasMore(snap.docs.length === PAGE_SIZE);
+      setLastDoc(result.lastDocSnapshot);
+      setHasMore(result.hasMore);
     } catch (e) {
       console.error('Erreur transactions:', e);
     } finally {
@@ -92,7 +88,7 @@ export default function WalletHistoriquePage() {
   const filtered = transactions; // Firestore filtre déjà par type, plus besoin de filtrage côté client
 
   const totalCredits = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.netAmount ?? t.amount), 0);
-  const totalDebits  = transactions.filter(t => t.type !== 'deposit').reduce((s, t) => s + (t.amount), 0);
+  const totalDebits  = transactions.filter(t => t.type !== 'deposit').reduce((s, t) => s + (t.netAmount ?? t.amount), 0);
 
   const formatDate = (date: Date) =>
     date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });

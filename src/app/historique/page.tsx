@@ -330,6 +330,7 @@ export default function HistoriquePage() {
           </GlassCard>
         )}
       </div>
+      </div>
 
       {/* Bottom Navigation */}
       <BottomNav />

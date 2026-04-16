@@ -1,17 +1,12 @@
-import RestaurantClient from './RestaurantClient';
-
-export const dynamic = 'force-static';
-export const dynamicParams = false;
-
+export const dynamic = 'force-static'
 export async function generateStaticParams() {
-  return [{ id: 'preview' }];
+  return [{ id: 'preview' }]
 }
-
-export default async function RestaurantDetailsPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+import RestaurantClient from './RestaurantClient'
+export default function Page() {
   return (
     <main>
-      <RestaurantClient id={id} />
+      <RestaurantClient />
     </main>
-  );
+  )
 }

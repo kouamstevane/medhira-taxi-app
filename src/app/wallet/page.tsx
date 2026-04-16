@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db } from '@/config/firebase';
-import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, setDoc } from 'firebase/firestore';
+import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { CURRENCY_CODE } from '@/utils/constants';
+import { getOrCreateWallet, getTransactionHistory } from '@/services/wallet.service';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import Link from 'next/link';
 import { type Transaction, TRANSACTION_ICONS } from './_shared';
+import { timestampToDate } from '@/lib/firebase-helpers';
 
 export default function WalletPage() {
   const [balance, setBalance] = useState(0);
@@ -27,30 +27,17 @@ export default function WalletPage() {
         setLoading(true);
         setError('');
 
-        const walletRef = doc(db, 'wallets', user.uid);
-        const txQuery = query(
-          collection(db, 'transactions'),
-          where('userId', '==', user.uid),
-          orderBy('createdAt', 'desc'),
-          limit(3)
-        );
-
-        const [walletSnap, txSnap] = await Promise.all([
-          getDoc(walletRef),
-          getDocs(txQuery).catch(() => null),
+        const [wallet, txData] = await Promise.all([
+          getOrCreateWallet(user.uid),
+          getTransactionHistory(user.uid, 3).catch(() => []),
         ]);
 
-        if (walletSnap.exists()) {
-          setBalance(walletSnap.data().balance || 0);
-        } else {
-          await setDoc(walletRef, { balance: 0, currency: CURRENCY_CODE, updatedAt: new Date() });
-          setBalance(0);
-        }
+        setBalance(wallet.balance || 0);
 
-        setTransactions(txSnap ? txSnap.docs.map(d => {
-          const data = d.data();
-          return { id: d.id, ...data, date: data.createdAt?.toDate?.() || new Date() } as Transaction;
-        }) : []);
+        setTransactions(txData.map(t => ({
+          ...t,
+          date: timestampToDate(t.createdAt),
+        } as Transaction)));
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
         if (!errMsg.includes('offline') && !errMsg.includes('permission')) {

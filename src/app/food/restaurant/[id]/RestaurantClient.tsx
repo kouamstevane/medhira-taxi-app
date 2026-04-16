@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Image from 'next/image';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { Restaurant, MenuItem } from '@/types/food-delivery';
@@ -11,11 +11,9 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { BottomNav } from '@/components/ui/BottomNav';
 
-interface RestaurantClientProps {
-  id: string;
-}
-
-export default function RestaurantClient({ id }: RestaurantClientProps) {
+export default function RestaurantClient() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);

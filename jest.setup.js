@@ -37,13 +37,35 @@ try {
   console.warn(' Le système de logging des tests n\'a pas pu être chargé:', error.message);
 }
 
-// Mock de Firebase
+// Mock de Firebase config
 jest.mock('./src/config/firebase', () => ({
   auth: {
     currentUser: null,
   },
   db: {},
   storage: {},
+}));
+
+// Mock de firebase/auth (évite l'erreur "fetch is not defined" lors de l'import
+// du module dans l'environnement Node/jsdom qui ne l'expose pas toujours)
+jest.mock('firebase/auth', () => ({
+  signInWithPhoneNumber: jest.fn().mockResolvedValue({
+    confirm: jest.fn().mockResolvedValue({ user: { uid: 'test-uid' } }),
+  }),
+  onAuthStateChanged: jest.fn((auth, callback) => {
+    callback(null);
+    return jest.fn();
+  }),
+  getAuth: jest.fn(() => ({})),
+  RecaptchaVerifier: jest.fn().mockImplementation(() => ({
+    verify: jest.fn().mockResolvedValue('dummy-token'),
+    clear: jest.fn(),
+  })),
+  PhoneAuthProvider: jest.fn(),
+  createUserWithEmailAndPassword: jest.fn(),
+  signInWithEmailAndPassword: jest.fn(),
+  signOut: jest.fn().mockResolvedValue(undefined),
+  updateProfile: jest.fn().mockResolvedValue(undefined),
 }));
 
 // Mock de Next.js router

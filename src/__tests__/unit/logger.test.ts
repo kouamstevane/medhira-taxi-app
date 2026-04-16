@@ -146,18 +146,18 @@ describe('StructuredLogger', () => {
   describe('debug', () => {
     it('ne log pas en production', () => {
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'production';
+      (process.env as Record<string, string>).NODE_ENV = 'production';
 
       log.debug('debug message');
 
       expect(consoleLogSpy).not.toHaveBeenCalled();
 
-      process.env.NODE_ENV = originalEnv;
+      (process.env as Record<string, string>).NODE_ENV = originalEnv ?? '';
     });
 
     it('log en développement', () => {
       const originalEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
+      (process.env as Record<string, string>).NODE_ENV = 'development';
 
       const consoleDebugSpy = jest.spyOn(console, 'debug').mockImplementation();
       log.debug('debug message');
@@ -171,7 +171,7 @@ describe('StructuredLogger', () => {
       );
 
       consoleDebugSpy.mockRestore();
-      process.env.NODE_ENV = originalEnv;
+      (process.env as Record<string, string>).NODE_ENV = originalEnv ?? '';
     });
   });
 });

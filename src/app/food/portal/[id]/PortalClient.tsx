@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { auth } from '@/config/firebase';
@@ -14,11 +14,9 @@ import { formatCurrencyWithCode } from '@/utils/format';
 import Link from 'next/link';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 
-interface PortalClientProps {
-  id: string;
-}
-
-export default function PortalClient({ id }: PortalClientProps) {
+export default function PortalClient() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter();
   const { showError, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { auth } from '@/config/firebase';
@@ -15,11 +15,9 @@ import type { Restaurant, MenuItem } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 
-interface MenuManagementClientProps {
-  id: string;
-}
-
-export default function MenuManagementClient({ id }: MenuManagementClientProps) {
+export default function MenuManagementClient() {
+  const params = useParams()
+  const id = params.id as string
   const router = useRouter();
   const { showError, showSuccess, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);

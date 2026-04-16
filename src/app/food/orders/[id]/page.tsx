@@ -1,17 +1,12 @@
-import OrderTrackingClient from './OrderTrackingClient';
-
-export const dynamic = 'force-static';
-export const dynamicParams = false;
-
+export const dynamic = 'force-static'
 export async function generateStaticParams() {
-  return [{ id: 'preview' }];
+  return [{ id: 'preview' }]
 }
-
-export default async function OrderTrackingPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+import OrderTrackingClient from './OrderTrackingClient'
+export default function Page() {
   return (
     <main>
-      <OrderTrackingClient orderId={id} />
+      <OrderTrackingClient />
     </main>
-  );
+  )
 }

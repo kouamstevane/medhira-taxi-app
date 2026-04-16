@@ -635,6 +635,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
           }}
         />
       )}
+      </div>
     </>
   );
 }
