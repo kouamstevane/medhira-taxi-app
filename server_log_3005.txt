@@ -1,9 +1,0 @@
-▲ Next.js 16.1.6 (Turbopack)
-- Local:         http://localhost:3005
-- Network:       http://192.168.1.195:3005
-- Environments: .env.local
-
-✓ Starting...
-⨯ Unable to acquire lock at c:\Users\User\Documents\AlloTraining\medhira-taxi-app\.next\dev\lock, is another instance of next dev running?
-  Suggestion: If you intended to restart next dev, terminate the other process, and then try again.
-[?25h
