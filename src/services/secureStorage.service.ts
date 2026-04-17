@@ -25,8 +25,8 @@ import CryptoJS from 'crypto-js';
 
 const DERIVED_KEY_STORAGE = 'derived_encryption_key';
 const SALT_KEY = 'medjira_device_salt';
-const LEGACY_STATIC_SALT = 'medhira-taxi-static-salt';
-const LEGACY_STATIC_SEED_SUFFIX = 'medhira-taxi-salt-2024';
+const LEGACY_STATIC_SALT = 'medjira-taxi-static-salt';
+const LEGACY_STATIC_SEED_SUFFIX = 'medjira-taxi-salt-2024';
 
 const PBKDF2_ITERATIONS = 100000;
 

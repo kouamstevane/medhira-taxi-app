@@ -128,7 +128,7 @@ export const generateInvoicePDF = (data: InvoiceData): void => {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(28);
   doc.setFont("helvetica", "bold");
-  doc.text("MEDHIRA TAXI", pageWidth / 2, 22, { align: "center" });
+  doc.text("MEDJIRA TAXI", pageWidth / 2, 22, { align: "center" });
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");

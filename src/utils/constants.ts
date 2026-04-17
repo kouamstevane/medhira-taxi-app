@@ -201,9 +201,9 @@ const MARKET_CONFIGS: Record<MarketCode, MarketConfig> = {
     locale: 'fr-CA',
     driverCountryCode: 'CA',
     pricing: {
-      BASE_PRICE: 3.50,
-      PRICE_PER_KM: 1.75,
-      PRICE_PER_MINUTE: 0.45,
+      BASE_PRICE: 0,
+      PRICE_PER_KM: 0,
+      PRICE_PER_MINUTE: 1.00,
       PEAK_HOUR_MULTIPLIER: 1.25,
       TRAFFIC_MULTIPLIER: 1.15,
       DISCOUNT_RATE: 0.10,

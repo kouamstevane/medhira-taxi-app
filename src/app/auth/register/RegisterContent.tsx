@@ -169,13 +169,13 @@ export default function RegisterContent() {
                     <div className="bg-primary/10 p-3 rounded-xl mb-3">
                         <MaterialIcon name="local_taxi" className="text-primary text-[32px] font-bold" />
                     </div>
-                    <h2 className="text-primary text-2xl font-bold tracking-tight">Medhira</h2>
+                    <h2 className="text-primary text-2xl font-bold tracking-tight">Medjira</h2>
                 </div>
 
                 {/* Heading */}
                 <div className="px-6 text-center">
                     <h1 className="text-white text-[28px] font-bold leading-tight mb-2">Créer un compte</h1>
-                    <p className="text-slate-400 text-base font-normal">Rejoignez Medhira dès aujourd&apos;hui</p>
+                    <p className="text-slate-400 text-base font-normal">Rejoignez Medjira dès aujourd&apos;hui</p>
                 </div>
 
                 {/* Error Message */}

@@ -103,7 +103,7 @@
 }
 
 .dark {
-  /* Medhira Design System — Dark Theme */
+  /* Medjira Design System — Dark Theme */
   --background: #0F0F0F;
   --foreground: #FFFFFF;
   --card: #1A1A1A;
@@ -136,20 +136,20 @@
   --sidebar-border: rgba(255, 255, 255, 0.06);
   --sidebar-ring: #f29200;
 
-  /* Medhira custom tokens */
-  --medhira-primary: #f29200;
-  --medhira-primary-hover: #e68600;
-  --medhira-primary-glow: rgba(242, 146, 0, 0.4);
-  --medhira-bg: #0F0F0F;
-  --medhira-surface: #1A1A1A;
-  --medhira-surface-hover: #242424;
-  --medhira-text-secondary: #9CA3AF;
-  --medhira-text-disabled: #4B5563;
-  --medhira-success: #10B981;
-  --medhira-error: #EF4444;
-  --medhira-warning: #F59E0B;
-  --medhira-info: #3B82F6;
-  --medhira-overlay: rgba(0, 0, 0, 0.6);
+  /* Medjira custom tokens */
+  --medjira-primary: #f29200;
+  --medjira-primary-hover: #e68600;
+  --medjira-primary-glow: rgba(242, 146, 0, 0.4);
+  --medjira-bg: #0F0F0F;
+  --medjira-surface: #1A1A1A;
+  --medjira-surface-hover: #242424;
+  --medjira-text-secondary: #9CA3AF;
+  --medjira-text-disabled: #4B5563;
+  --medjira-success: #10B981;
+  --medjira-error: #EF4444;
+  --medjira-warning: #F59E0B;
+  --medjira-info: #3B82F6;
+  --medjira-overlay: rgba(0, 0, 0, 0.6);
 }
 
 @layer base {
@@ -164,7 +164,7 @@
   }
 }
 
-/* Medhira Utility Classes */
+/* Medjira Utility Classes */
 .glass-card {
   background: rgba(26, 26, 26, 0.8);
   backdrop-filter: blur(12px);
@@ -178,7 +178,7 @@
 }
 
 .primary-glow {
-  box-shadow: 0 4px 20px -2px var(--medhira-primary-glow);
+  box-shadow: 0 4px 20px -2px var(--medjira-primary-glow);
 }
 
 .hero-gradient {

@@ -24,10 +24,12 @@ import { DEFAULT_URLS } from '@/utils/constants';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { redirectWithFallback } from '@/utils/navigation';
 
 export default function Dashboard() {
   const router = useRouter();
   const routerRef = useRef(router);
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   routerRef.current = router;
   const [notifCount, setNotifCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
@@ -196,27 +198,25 @@ export default function Dashboard() {
       } else {
         // Pas d'utilisateur connecté - confirmer et rediriger
         setIsAuthLoading(false);
-        routerRef.current.push("/login");
+        redirectTimeoutRef.current = redirectWithFallback(routerRef.current, '/login');
       }
     });
 
     return () => {
       unsubscribe();
       unsubscribeNotifsRef.current?.();
+      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const logout = async () => {
     try {
-      // Déconnexion Firebase
       await signOut(auth);
-      // Redirection immédiate - plus performant sur mobile
-      router.push('/login');
+      redirectTimeoutRef.current = redirectWithFallback(router, '/login', { timeoutMs: 2000 });
     } catch (error) {
       console.error("Erreur de déconnexion :", error);
-      // Forcer la redirection même en cas d'erreur
-      router.push('/login');
+      window.location.replace('/login');
     }
   };
 
@@ -235,7 +235,7 @@ export default function Dashboard() {
               <MaterialIcon name="local_taxi" className="text-white text-[40px]" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Medhira</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">Medjira</h2>
           <p className="text-muted-foreground animate-pulse">Redirection...</p>
         </div>
       </div>

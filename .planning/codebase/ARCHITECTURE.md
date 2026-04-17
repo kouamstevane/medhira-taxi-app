@@ -3,7 +3,7 @@ _Last updated: 2026-04-03_
 
 ## Summary
 
-Medhira is a Next.js 14 App Router PWA/mobile hybrid (via Capacitor) offering three verticals: taxi booking, food delivery, and parcel delivery. The backend is entirely Firebase (Firestore + Auth + Storage + Functions) with a thin Next.js API layer for Stripe and admin operations. Real-time features are driven by Firestore `onSnapshot` subscriptions directly from client components.
+Medjira is a Next.js 14 App Router PWA/mobile hybrid (via Capacitor) offering three verticals: taxi booking, food delivery, and parcel delivery. The backend is entirely Firebase (Firestore + Auth + Storage + Functions) with a thin Next.js API layer for Stripe and admin operations. Real-time features are driven by Firestore `onSnapshot` subscriptions directly from client components.
 
 ---
 

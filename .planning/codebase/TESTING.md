@@ -13,7 +13,7 @@ Testing is configured with Jest + React Testing Library but coverage is extremel
 **Runner:** Jest (via `jest.config.cjs`)
 - Uses `next/jest` wrapper for Next.js compatibility
 - Transform: `@swc/jest` (faster than `babel-jest`)
-- Config: `C:\Users\User\Documents\AlloTraining\medhira-taxi-app\jest.config.cjs`
+- Config: `C:\Users\User\Documents\AlloTraining\medjira-taxi-app\jest.config.cjs`
 
 **Test environment:** `jest-environment-jsdom`
 

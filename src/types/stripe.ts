@@ -1,5 +1,5 @@
 /**
- * Types Stripe pour l'application Medhira Taxi
+ * Types Stripe pour l'application Medjira Taxi
  *
  * Couvre :
  * - PaymentIntents (paiements passager)

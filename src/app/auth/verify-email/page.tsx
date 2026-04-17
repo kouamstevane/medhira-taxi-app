@@ -158,7 +158,7 @@ export default function VerifyEmailPage() {
               <div className="flex-shrink-0 w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-3 mt-0.5">
                 <span className="text-white text-sm font-bold">2</span>
               </div>
-              <p className="text-sm text-slate-400">Trouvez l&apos;email de Medhira Taxi</p>
+              <p className="text-sm text-slate-400">Trouvez l&apos;email de Medjira Taxi</p>
             </div>
             <div className="flex items-start">
               <div className="flex-shrink-0 w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-3 mt-0.5">

@@ -39,9 +39,9 @@ import java.util.concurrent.TimeUnit;
  */
 public class LocationForegroundService extends Service {
     
-    private static final String CHANNEL_ID = "medhira_location_channel";
+    private static final String CHANNEL_ID = "medjira_location_channel";
     private static final int NOTIFICATION_ID = 1001;
-    private static final String WAKE_LOCK_TAG = "MedHira::LocationWakeLock";
+    private static final String WAKE_LOCK_TAG = "MedJira::LocationWakeLock";
     
     // Throttling selon §5.2
     private static final long UPDATE_INTERVAL_MOVING_MS = 1000;      // 1Hz en mouvement
@@ -225,7 +225,7 @@ public class LocationForegroundService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "MedHira Location Service",
+                "MedJira Location Service",
                 NotificationManager.IMPORTANCE_LOW
             );
             channel.setDescription("Service de localisation pour courses VTC");
@@ -242,7 +242,7 @@ public class LocationForegroundService extends Service {
         );
         
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("MedHira - En course")
+            .setContentTitle("MedJira - En course")
             .setContentText("Localisation active pour le suivi client")
             .setSmallIcon(getApplicationInfo().icon) // Utilise l'icône de l'application par défaut
             .setContentIntent(pendingIntent)

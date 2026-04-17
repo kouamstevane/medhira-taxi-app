@@ -28,7 +28,7 @@ const messaging = firebase.messaging();
 // Handle background messages (app not in foreground).
 messaging.onBackgroundMessage((payload) => {
   const { title, body, icon } = payload.notification ?? {};
-  self.registration.showNotification(title || 'Medhira', {
+  self.registration.showNotification(title || 'Medjira', {
     body: body || '',
     icon: icon || '/icon-192.png',
     badge: '/icon-192.png',

@@ -266,7 +266,7 @@ function ConfirmationContent() {
                 </div>
                 <h3 className="text-base font-semibold text-white">Course terminée</h3>
                 <p className="text-2xl font-bold text-primary mt-2">{finalPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}</p>
-                <p className="text-slate-400 text-sm mt-1">Merci d&apos;avoir utilisé Medhira Taxi</p>
+                <p className="text-slate-400 text-sm mt-1">Merci d&apos;avoir utilisé Medjira Taxi</p>
               </div>
             )}
           </div>

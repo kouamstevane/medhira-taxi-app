@@ -1,19 +1,29 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { redirectWithFallback } from '@/utils/navigation';
 
 export default function HomePage() {
   const router = useRouter();
   const { currentUser, loading } = useAuth();
+  const redirectedRef = useRef(false);
+  const fallbackRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!loading && currentUser) {
-      router.push('/dashboard');
+    if (!loading && currentUser && !redirectedRef.current) {
+      redirectedRef.current = true;
+      fallbackRef.current = redirectWithFallback(router, '/dashboard');
     }
+
+    return () => {
+      if (fallbackRef.current) {
+        clearTimeout(fallbackRef.current);
+      }
+    };
   }, [currentUser, loading, router]);
 
   if (loading || currentUser) {
@@ -26,7 +36,7 @@ export default function HomePage() {
               <MaterialIcon name="local_taxi" className="text-white text-[40px]" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Medhira</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">Medjira</h2>
           <p className="text-muted-foreground animate-pulse">
             {loading ? 'Chargement...' : 'Redirection...'}
           </p>
@@ -48,7 +58,7 @@ export default function HomePage() {
         {/* Wordmark */}
         <div className="relative z-10 flex items-center gap-3">
           <MaterialIcon name="taxi_alert" className="text-primary !text-[40px]" />
-          <h2 className="text-white text-[40px] font-extrabold tracking-tight">Medhira</h2>
+          <h2 className="text-white text-[40px] font-extrabold tracking-tight">Medjira</h2>
         </div>
       </div>
 

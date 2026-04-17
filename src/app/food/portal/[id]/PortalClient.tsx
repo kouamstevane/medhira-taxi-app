@@ -293,7 +293,7 @@ export default function PortalClient() {
                 Besoin d'aide avec une commande ou votre compte ?
               </p>
               <button
-                onClick={() => window.open('mailto:business@medhira.com', '_blank')}
+                onClick={() => window.open('mailto:business@medjira.com', '_blank')}
                 className="w-full py-3 bg-white text-primary font-bold rounded-2xl hover:bg-white/90 transition text-sm"
               >
                 Contacter Medjira Business

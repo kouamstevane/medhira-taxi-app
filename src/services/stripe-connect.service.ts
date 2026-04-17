@@ -65,7 +65,7 @@ export async function createDriverConnectAccount(
     },
     metadata: {
       driverId,
-      platform: 'medhira_taxi',
+      platform: 'medjira_taxi',
     },
   });
 
@@ -273,7 +273,7 @@ export async function processWeeklyPayouts(
         metadata: {
           driverId,
           week: getISOWeek(processedAt),
-          platform: 'medhira_taxi',
+          platform: 'medjira_taxi',
         },
       });
 
@@ -433,7 +433,7 @@ export async function triggerManualPayout(
       metadata: {
         driverId,
         type: 'manual',
-        platform: 'medhira_taxi',
+        platform: 'medjira_taxi',
       },
     });
 

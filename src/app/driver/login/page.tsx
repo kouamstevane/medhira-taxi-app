@@ -95,7 +95,7 @@ export default function DriverLogin() {
           <div className="bg-primary/10 p-3 rounded-xl mb-3">
             <MaterialIcon name="local_taxi" className="text-primary text-[32px] font-bold" />
           </div>
-          <h2 className="text-primary text-2xl font-bold tracking-tight">Medhira</h2>
+          <h2 className="text-primary text-2xl font-bold tracking-tight">Medjira</h2>
           <span className="text-slate-500 text-sm mt-1">Espace Chauffeur</span>
         </div>
 

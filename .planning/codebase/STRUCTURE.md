@@ -10,7 +10,7 @@ The project is a Next.js 14 App Router application with Capacitor for Android pa
 ## Directory Layout
 
 ```
-medhira-taxi-app/
+medjira-taxi-app/
 ├── src/
 │   ├── app/                    # Next.js App Router — pages and API routes
 │   │   ├── api/                # Server-side Route Handlers (Stripe, admin, geocoding)
