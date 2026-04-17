@@ -529,25 +529,31 @@ export function useDriverRegistration() {
       return { success: false, error: 'Pas de connexion internet.' };
     }
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+      const user = auth.currentUser;
+      if (!user) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
 
-      const res = await fetch('/api/auth/send-verification-code', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ email }),
-      });
+      await user.getIdToken(true);
+      const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+      const functionsInstance = getFunctions(app, functionsRegion);
+      const sendCode = httpsCallable<{ email: string }, { success: boolean; error?: string }>(
+        functionsInstance, 'sendVerificationCode'
+      );
+      const result = await sendCode({ email });
+      const data = result.data;
 
-      const data = await res.json();
-      if (!res.ok) {
+      if (!data.success) {
         return { success: false, error: data.error ?? 'Erreur lors de l\'envoi du code.' };
       }
       return { success: true };
-    } catch {
-      return { success: false, error: 'Erreur réseau. Réessayez.' };
+    } catch (err: unknown) {
+      const error = err as { code?: string; message?: string };
+      if (error.code === 'functions/unauthenticated') {
+        return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+      }
+      if (error.code === 'functions/resource-exhausted') {
+        return { success: false, error: 'Trop de tentatives. Réessayez dans quelques secondes.' };
+      }
+      return { success: false, error: error.message || 'Erreur réseau. Réessayez.' };
     }
   };
 
@@ -556,25 +562,28 @@ export function useDriverRegistration() {
       return { success: false, error: 'Pas de connexion internet.' };
     }
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+      const user = auth.currentUser;
+      if (!user) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
 
-      const res = await fetch('/api/auth/verify-code', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ code }),
-      });
+      await user.getIdToken(true);
+      const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+      const functionsInstance = getFunctions(app, functionsRegion);
+      const verifyFn = httpsCallable<{ code: string }, { success: boolean; error?: string; attemptsLeft?: number }>(
+        functionsInstance, 'verifyCode'
+      );
+      const result = await verifyFn({ code });
+      const data = result.data;
 
-      const data = await res.json();
-      if (!res.ok) {
+      if (!data.success) {
         return { success: false, error: data.error, attemptsLeft: data.attemptsLeft };
       }
       return { success: true };
-    } catch {
-      return { success: false, error: 'Erreur réseau. Réessayez.' };
+    } catch (err: unknown) {
+      const error = err as { code?: string; message?: string };
+      if (error.code === 'functions/unauthenticated') {
+        return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+      }
+      return { success: false, error: error.message || 'Erreur réseau. Réessayez.' };
     }
   };
 

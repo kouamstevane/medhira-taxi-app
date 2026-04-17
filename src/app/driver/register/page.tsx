@@ -1,5 +1,6 @@
 // src/app/driver/register/page.tsx
 "use client";
+import { auth } from '@/config/firebase';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -105,7 +106,7 @@ export default function DriverRegisterWizard() {
               sendVerificationCode={handleSendVerificationCode}
               verifyCode={handleVerifyCode}
               onVerified={() => setCurrentStep(2)}
-              emailPreVerified={isExistingUser}
+              emailPreVerified={isExistingUser && auth.currentUser?.emailVerified === true}
             />
           )}
           {currentStep === 2 && (
