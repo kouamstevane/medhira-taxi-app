@@ -45,15 +45,15 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
   ) => {
     const baseSelectClasses = `
       w-full px-4 py-3 border rounded-xl outline-none transition-all duration-200
-      bg-white text-gray-900 appearance-none cursor-pointer
+      bg-[#1A1A1A] text-white appearance-none cursor-pointer
       focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]
-      disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-500
+      disabled:bg-white/5 disabled:cursor-not-allowed disabled:text-[#4B5563]
       shadow-sm active:scale-[0.99]
     `;
 
     const errorClasses = error
-      ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-      : 'border-gray-300';
+      ? 'border-[#EF4444] focus:ring-[#EF4444] focus:border-[#EF4444]'
+      : 'border-white/[0.08]';
 
     const iconPaddingClass = icon ? 'pl-11' : '';
 
@@ -61,7 +61,7 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
       <div className={`w-full ${containerClassName}`}>
         {/* Label */}
         {label && (
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -71,7 +71,7 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
         <div className="relative">
           {/* Left Icon */}
           {icon && (
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#4B5563] pointer-events-none">
               {icon}
             </div>
           )}
@@ -100,7 +100,7 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
           </select>
 
           {/* Dropdown Icon */}
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none">
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#4B5563] pointer-events-none">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path
                 strokeLinecap="round"

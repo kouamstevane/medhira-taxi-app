@@ -79,7 +79,7 @@ export function ActiveCallOverlay() {
             <button
               onClick={toggleMute}
               className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
-                callState.isMuted ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'
+                callState.isMuted ? 'bg-[#1A1A1A] text-white' : 'bg-slate-800 text-white'
               }`}
             >
               {callState.isMuted ? <MaterialIcon name="mic_off" className="text-[24px]" /> : <MaterialIcon name="mic" className="text-[24px]" />}
@@ -92,7 +92,7 @@ export function ActiveCallOverlay() {
             <button
               onClick={toggleSpeaker}
               className={`w-16 h-16 rounded-full flex items-center justify-center transition-colors ${
-                callState.isSpeakerOn ? 'bg-white text-slate-900' : 'bg-slate-800 text-white'
+                callState.isSpeakerOn ? 'bg-[#1A1A1A] text-white' : 'bg-slate-800 text-white'
               }`}
             >
               {callState.isSpeakerOn ? <MaterialIcon name="volume_up" className="text-[24px]" /> : <MaterialIcon name="volume_off" className="text-[24px]" />}

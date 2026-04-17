@@ -70,11 +70,11 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
     return (
       <div className="space-y-6" data-testid="otp-verification-screen">
         <div className="text-center mb-8">
-          <div className="mx-auto w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
+          <div className="mx-auto w-16 h-16 bg-[#f29200]/20 rounded-full flex items-center justify-center mb-4">
             <span className="text-3xl">✉️</span>
           </div>
-          <h2 className="text-2xl font-bold text-[#101010]">Vérifiez votre email</h2>
-          <p className="text-gray-500 mt-2">Entrez le code à 6 chiffres envoyé à votre adresse email.</p>
+          <h2 className="text-2xl font-bold text-white">Vérifiez votre email</h2>
+          <p className="text-[#9CA3AF] mt-2">Entrez le code à 6 chiffres envoyé à votre adresse email.</p>
         </div>
         <OTPInput
           email={email}
@@ -90,8 +90,8 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
   return (
     <div className="space-y-6" data-testid="step1-registration-form">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-[#101010]">Gagnez de l'argent avec Medjira</h2>
-        <p className="text-gray-500 mt-2">Rejoignez notre réseau de chauffeurs et commencez à rouler aujourd'hui.</p>
+        <h2 className="text-2xl font-bold text-white">Gagnez de l'argent avec Medjira</h2>
+        <p className="text-[#9CA3AF] mt-2">Rejoignez notre réseau de chauffeurs et commencez à rouler aujourd'hui.</p>
       </div>
 
       <div className="space-y-4">
@@ -101,7 +101,7 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
           onClick={onGoogleSignIn}
           disabled={loading}
           data-testid="google-signin-btn"
-          className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 rounded-xl p-4 text-[#101010] font-semibold hover:bg-gray-50 transition-colors shadow-sm active:scale-[0.98]"
+          className="w-full flex items-center justify-center gap-3 bg-white border border-white/10 rounded-xl p-4 text-[#101010] font-semibold hover:bg-gray-50 transition-colors shadow-sm active:scale-[0.98]"
         >
           <FcGoogle size={24} />
           Continuer avec Google
@@ -109,10 +109,10 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
 
         <div className="relative py-4">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300"></div>
+            <div className="w-full border-t border-white/10"></div>
           </div>
           <div className="relative flex justify-center">
-            <span className="bg-white px-4 text-sm text-gray-500">ou inscription manuelle</span>
+            <span className="bg-[#0F0F0F] px-4 text-sm text-[#9CA3AF]">ou inscription manuelle</span>
           </div>
         </div>
 
@@ -149,7 +149,7 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
             type="submit"
             disabled={loading}
             data-testid="step1-submit-btn"
-            className="w-full bg-[#f29200] text-white font-bold py-4 rounded-xl hover:bg-[#e68600] transition-colors mt-6 flex justify-center items-center"
+            className="w-full bg-gradient-to-r from-[#f29200] to-[#e68600] text-white font-bold py-4 rounded-[28px] hover:brightness-110 transition-all mt-6 flex justify-center items-center shadow-[0_0_20px_rgba(242,146,0,0.4)]"
           >
             {loading ? (
               <span className="animate-pulse">Chargement...</span>

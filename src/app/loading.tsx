@@ -19,7 +19,7 @@ import React from 'react';
  */
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f5f5f5] to-[#e6e6e6] flex items-center justify-center">
+    <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center">
       <div className="text-center">
         {/* Logo animé */}
         <div className="relative w-24 h-24 mx-auto mb-8">
@@ -41,11 +41,11 @@ export default function Loading() {
         </div>
 
         {/* Texte */}
-        <h2 className="text-2xl font-bold text-[#101010] mb-2">Medjira</h2>
-        <p className="text-gray-600 animate-pulse">Chargement en cours...</p>
+        <h2 className="text-2xl font-bold text-white mb-2">Medjira</h2>
+        <p className="text-[#9CA3AF] animate-pulse">Chargement en cours...</p>
 
         {/* Barre de progression */}
-        <div className="w-64 h-2 bg-gray-200 rounded-full mt-6 mx-auto overflow-hidden">
+        <div className="w-64 h-2 bg-white/10 rounded-full mt-6 mx-auto overflow-hidden">
           <div className="h-full bg-[#f29200] rounded-full animate-loading-bar" />
         </div>
       </div>

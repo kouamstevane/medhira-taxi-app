@@ -39,17 +39,17 @@ export function SearchingDriverBottomSheet({
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center animate-fadeIn">
       {/* BottomSheet Container */}
-      <div className="bg-white w-full sm:max-w-lg sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all duration-300 ease-out animate-slideUp max-h-[85vh] overflow-y-auto">
+      <div className="bg-[#0F0F0F] w-full sm:max-w-lg sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all duration-300 ease-out animate-slideUp max-h-[85vh] overflow-y-auto">
         {/* Header avec bouton fermer */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-4 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
-          <h2 className="text-lg sm:text-xl font-bold text-gray-900">Recherche de chauffeur</h2>
+        <div className="sticky top-0 bg-[#0F0F0F] border-b border-white/[0.05] px-4 sm:px-6 py-4 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
+          <h2 className="text-lg sm:text-xl font-bold text-white">Recherche de chauffeur</h2>
           <button
             onClick={onCancel}
-            className="p-2 hover:bg-gray-100 active:bg-gray-200 rounded-full transition touch-manipulation"
+            className="p-2 hover:bg-white/10 active:bg-white/20 rounded-full transition touch-manipulation"
             style={{ minHeight: '44px', minWidth: '44px' }}
             aria-label="Annuler la recherche"
           >
-            <FiX className="h-6 w-6 text-gray-600" />
+            <FiX className="h-6 w-6 text-[#9CA3AF]" />
           </button>
         </div>
 
@@ -93,14 +93,14 @@ export function SearchingDriverBottomSheet({
 
           {/* Texte de statut */}
           <div className="text-center space-y-2">
-            <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
+            <h3 className="text-xl sm:text-2xl font-bold text-white">
               Recherche en cours...
             </h3>
-            <p className="text-sm sm:text-base text-gray-600">
+            <p className="text-sm sm:text-base text-[#9CA3AF]">
               Nous recherchons les chauffeurs proches de vous
             </p>
             {isAutoSearching && (
-              <div className="inline-block mt-2 px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full animate-pulse">
+              <div className="inline-block mt-2 px-3 py-1 bg-[#3B82F6]/20 text-[#3B82F6] text-xs font-semibold rounded-full animate-pulse">
                 Recherche automatique active
               </div>
             )}
@@ -108,7 +108,7 @@ export function SearchingDriverBottomSheet({
 
           {/* Timer et barre de progression */}
           <div className="space-y-3">
-            <div className="flex items-center justify-center space-x-2 text-gray-700">
+            <div className="flex items-center justify-center space-x-2 text-white">
               <FiClock className="h-5 w-5 text-[#f29200]" />
               <span className="text-base sm:text-lg font-semibold">
                 {timeRemaining}s restantes
@@ -116,7 +116,7 @@ export function SearchingDriverBottomSheet({
             </div>
 
             {/* Barre de progression */}
-            <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
               <div
                 className="bg-gradient-to-r from-[#f29200] to-[#e68600] h-2 rounded-full transition-all duration-1000 ease-linear"
                 style={{ width: `${progressPercent}%` }}
@@ -125,16 +125,16 @@ export function SearchingDriverBottomSheet({
           </div>
 
           {/* Informations de la course */}
-          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+          <div className="bg-[#1A1A1A] border border-white/[0.06] rounded-xl p-4 space-y-3">
             <div className="flex items-start space-x-3">
               <div className="mt-0.5">
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                <p className="text-xs font-semibold text-[#4B5563] uppercase tracking-wide mb-1">
                   Départ
                 </p>
-                <p className="text-sm sm:text-base text-gray-900 break-words leading-tight">
+                <p className="text-sm sm:text-base text-white break-words leading-tight">
                   {pickupAddress}
                 </p>
               </div>
@@ -145,10 +145,10 @@ export function SearchingDriverBottomSheet({
                 <div className="w-3 h-3 rounded-full bg-red-500"></div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                <p className="text-xs font-semibold text-[#4B5563] uppercase tracking-wide mb-1">
                   Destination
                 </p>
-                <p className="text-sm sm:text-base text-gray-900 break-words leading-tight">
+                <p className="text-sm sm:text-base text-white break-words leading-tight">
                   {destinationAddress}
                 </p>
               </div>
@@ -158,7 +158,7 @@ export function SearchingDriverBottomSheet({
           {/* Bouton annuler accessible au pouce */}
           <button
             onClick={onCancel}
-            className="w-full bg-gray-200 hover:bg-gray-300 active:bg-gray-400 text-gray-800 font-bold py-4 rounded-xl transition touch-manipulation flex items-center justify-center space-x-2 shadow-sm"
+            className="w-full bg-[#1A1A1A] border border-white/10 hover:bg-white/10 active:bg-white/20 text-white font-bold py-4 rounded-xl transition touch-manipulation flex items-center justify-center space-x-2 shadow-sm"
             style={{ minHeight: '56px' }}
           >
             <FiX className="h-5 w-5" />
@@ -166,8 +166,8 @@ export function SearchingDriverBottomSheet({
           </button>
 
           {/* Conseils */}
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r-lg">
-            <p className="text-xs sm:text-sm text-blue-800">
+          <div className="bg-[#3B82F6]/10 border-l-4 border-l-[#3B82F6] p-3 rounded-r-lg">
+            <p className="text-xs sm:text-sm text-[#93C5FD]">
               💡 <strong>Astuce :</strong> Nous élargissons automatiquement la zone de recherche pour trouver le meilleur chauffeur pour vous.
             </p>
           </div>

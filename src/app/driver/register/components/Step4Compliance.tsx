@@ -130,13 +130,13 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
   };
 
   const renderFileInput = (label: string, key: keyof typeof files, accept = "image/*,application/pdf") => (
-    <div className="border border-gray-200 rounded-xl p-4 bg-gray-50 flex flex-col items-center text-center">
-      <label className="block text-sm font-medium text-gray-700 mb-2 w-full text-left">
+    <div className="border border-white/[0.06] rounded-xl p-4 bg-[#1A1A1A] flex flex-col items-center text-center">
+      <label className="block text-sm font-medium text-[#9CA3AF] mb-2 w-full text-left">
         {label} <span className="text-red-500">*</span>
       </label>
       
       {previews[key] ? (
-        <div className="relative w-full aspect-video rounded-lg overflow-hidden border border-gray-200 bg-white shadow-sm flex items-center justify-center group">
+        <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-[#242424] border border-white/[0.06] flex items-center justify-center group">
           {previews[key] === 'pdf' ? (
               <div className="flex flex-col items-center justify-center p-4">
                   <FileCheck className="w-12 h-12 text-blue-500 mb-2" />
@@ -153,7 +153,7 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
           </div>
         </div>
       ) : (
-        <div className="relative w-full aspect-video border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center hover:bg-gray-100 transition-colors cursor-pointer bg-white">
+        <div className="relative w-full aspect-video border-2 border-dashed border-white/[0.15] rounded-lg flex flex-col items-center justify-center hover:bg-white/5 transition-colors cursor-pointer bg-[#1A1A1A]">
           <input 
             type="file" 
             id={`file-${key}`}
@@ -161,13 +161,13 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
             onChange={(e) => handleFileChange(e, key)} 
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
           />
-          <UploadCloud size={32} className="mb-2 text-gray-400" />
-          <span className="text-sm font-medium text-gray-600">Cliquez pour ajouter</span>
-          <span className="text-xs text-gray-400 mt-1">Image ou PDF (Max 10Mo)</span>
+          <UploadCloud size={32} className="mb-2 text-[#4B5563]" />
+          <span className="text-sm font-medium text-[#9CA3AF]">Cliquez pour ajouter</span>
+          <span className="text-xs text-[#4B5563] mt-1">Image ou PDF (Max 10Mo)</span>
         </div>
       )}
       
-      <p className="text-xs text-gray-500 mt-2">
+      <p className="text-xs text-[#9CA3AF] mt-2">
           Assurez-vous que le texte soit lisible et sans reflet.
       </p>
     </div>
@@ -176,9 +176,9 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-[#101010]">Conformité Légale</h2>
-        <p className="text-gray-500 mt-2">Vos documents d'identité pour validation de votre profil.</p>
-        <div className="bg-blue-50 text-blue-800 p-3 rounded-lg text-sm mt-4 font-medium flex items-center justify-center">
+        <h2 className="text-2xl font-bold text-white">Conformité Légale</h2>
+        <p className="text-[#9CA3AF] mt-2">Vos documents d'identité pour validation de votre profil.</p>
+        <div className="bg-[#3B82F6]/10 text-[#3B82F6] p-3 rounded-lg text-sm mt-4 font-medium flex items-center justify-center">
              <FileCheck className="mr-2" size={18} />
              Vérifiez la lisibilité de vos documents avant d'envoyer.
         </div>
@@ -187,8 +187,8 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
       <form onSubmit={handleSubmit} className="space-y-6">
         
         {/* Card 1: Identité */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-            <h3 className="text-lg font-semibold text-[#101010] border-b pb-2">Pièce d'Identité ou Passeport</h3>
+        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Pièce d'Identité ou Passeport</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {renderFileInput("Recto", "idFront")}
                 {renderFileInput("Verso", "idBack")}
@@ -196,8 +196,8 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
         </div>
 
         {/* Card 2: Permis */}
-         <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-            <h3 className="text-lg font-semibold text-[#101010] border-b pb-2">Permis de Conduire</h3>
+         <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Permis de Conduire</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {renderFileInput("Recto", "licenseFront")}
                 {renderFileInput("Verso", "licenseBack")}
@@ -205,10 +205,10 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
         </div>
 
         <div className="flex gap-4 pt-4">
-           <button type="button" onClick={onBack} disabled={loading} className="w-1/3 bg-gray-200 text-[#101010] font-bold py-4 rounded-xl hover:bg-gray-300 transition-colors">
+           <button type="button" onClick={onBack} disabled={loading} className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors">
             Retour
           </button>
-          <button type="submit" disabled={loading} className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-xl hover:bg-[#e68600] transition-colors flex justify-center items-center">
+           <button type="submit" disabled={loading} className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] hover:bg-[#e68600] transition-colors flex justify-center items-center shadow-[0_0_20px_rgba(242,146,0,0.4)]">
              {loading ? <Loader2 className="animate-spin mr-2" /> : null} Valider les documents
           </button>
         </div>

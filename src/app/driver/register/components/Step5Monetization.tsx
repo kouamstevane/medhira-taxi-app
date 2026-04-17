@@ -39,8 +39,8 @@ export default function Step5Monetization({
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-[#101010]">Paiement & Monétisation</h2>
-        <p className="text-gray-500 mt-2">Configuration de vos virements</p>
+        <h2 className="text-2xl font-bold text-white">Paiement & Monétisation</h2>
+        <p className="text-[#9CA3AF] mt-2">Configuration de vos virements</p>
       </div>
 
       {/* Bannière Stripe */}
@@ -49,8 +49,8 @@ export default function Step5Monetization({
           <Lock className="w-5 h-5 text-[#635bff]" />
         </div>
         <div>
-          <p className="font-semibold text-[#101010] text-sm">Coordonnées bancaires sécurisées par Stripe</p>
-          <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+          <p className="font-semibold text-white text-sm">Coordonnées bancaires sécurisées par Stripe</p>
+          <p className="text-xs text-[#9CA3AF] mt-1 leading-relaxed">
             Pour votre sécurité et conformité <strong>PCI DSS</strong>, vos informations bancaires
             sont collectées directement via le formulaire sécurisé de Stripe — jamais stockées
             sur nos serveurs.
@@ -59,17 +59,17 @@ export default function Step5Monetization({
       </div>
 
       {/* Processus expliqué */}
-      <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
-        <h3 className="text-sm font-semibold text-[#101010] border-b pb-2">Comment ça fonctionne</h3>
+      <div className="bg-[#1A1A1A] p-5 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+        <h3 className="text-sm font-semibold text-white border-b border-white/[0.08] pb-2">Comment ça fonctionne</h3>
 
         <div className="space-y-3">
           <div className="flex items-start gap-3">
-            <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-green-700">1</span>
+            <div className="w-7 h-7 rounded-full bg-[#10B981]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-xs font-bold text-[#10B981]">1</span>
             </div>
             <div>
-              <p className="text-sm font-medium text-[#101010]">Soumission de votre dossier</p>
-              <p className="text-xs text-gray-500">Vos informations personnelles et documents sont enregistrés.</p>
+              <p className="text-sm font-medium text-white">Soumission de votre dossier</p>
+              <p className="text-xs text-[#9CA3AF]">Vos informations personnelles et documents sont enregistrés.</p>
             </div>
           </div>
 
@@ -78,18 +78,18 @@ export default function Step5Monetization({
               <span className="text-xs font-bold text-[#635bff]">2</span>
             </div>
             <div>
-              <p className="text-sm font-medium text-[#101010]">Formulaire bancaire Stripe</p>
-              <p className="text-xs text-gray-500">Vous serez redirigé vers Stripe pour saisir vos coordonnées bancaires en toute sécurité.</p>
+              <p className="text-sm font-medium text-white">Formulaire bancaire Stripe</p>
+              <p className="text-xs text-[#9CA3AF]">Vous serez redirigé vers Stripe pour saisir vos coordonnées bancaires en toute sécurité.</p>
             </div>
           </div>
 
           <div className="flex items-start gap-3">
-            <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-orange-700">3</span>
+            <div className="w-7 h-7 rounded-full bg-[#f29200]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-xs font-bold text-[#f29200]">3</span>
             </div>
             <div>
-              <p className="text-sm font-medium text-[#101010]">Vérification et activation</p>
-              <p className="text-xs text-gray-500">Stripe vérifie votre identité (KYC) et active les virements hebdomadaires.</p>
+              <p className="text-sm font-medium text-white">Vérification et activation</p>
+              <p className="text-xs text-[#9CA3AF]">Stripe vérifie votre identité (KYC) et active les virements hebdomadaires.</p>
             </div>
           </div>
         </div>
@@ -97,20 +97,20 @@ export default function Step5Monetization({
 
       {/* Avantages */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-gray-50 rounded-xl p-3 text-center">
+        <div className="bg-[#1A1A1A] rounded-xl p-3 text-center border border-white/[0.06]">
           <ShieldCheck className="w-6 h-6 text-green-600 mx-auto mb-1" />
-          <p className="text-xs font-medium text-gray-700">PCI DSS</p>
-          <p className="text-xs text-gray-500">Certifié</p>
+          <p className="text-xs font-medium text-[#9CA3AF]">PCI DSS</p>
+          <p className="text-xs text-[#4B5563]">Certifié</p>
         </div>
-        <div className="bg-gray-50 rounded-xl p-3 text-center">
+        <div className="bg-[#1A1A1A] rounded-xl p-3 text-center border border-white/[0.06]">
           <Building2 className="w-6 h-6 text-blue-600 mx-auto mb-1" />
-          <p className="text-xs font-medium text-gray-700">70% gains</p>
-          <p className="text-xs text-gray-500">Hebdomadaire</p>
+          <p className="text-xs font-medium text-[#9CA3AF]">70% gains</p>
+          <p className="text-xs text-[#4B5563]">Hebdomadaire</p>
         </div>
-        <div className="bg-gray-50 rounded-xl p-3 text-center">
+        <div className="bg-[#1A1A1A] rounded-xl p-3 text-center border border-white/[0.06]">
           <CreditCard className="w-6 h-6 text-[#635bff] mx-auto mb-1" />
-          <p className="text-xs font-medium text-gray-700">Virement</p>
-          <p className="text-xs text-gray-500">Automatique</p>
+          <p className="text-xs font-medium text-[#9CA3AF]">Virement</p>
+          <p className="text-xs text-[#4B5563]">Automatique</p>
         </div>
       </div>
 
@@ -119,7 +119,7 @@ export default function Step5Monetization({
           type="button"
           onClick={onBack}
           disabled={loading || disabled}
-          className="w-1/3 bg-gray-200 text-[#101010] font-bold py-4 rounded-xl hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Retour
         </button>
@@ -127,7 +127,7 @@ export default function Step5Monetization({
         <button
           type="submit"
           disabled={loading || disabled}
-          className="w-2/3 bg-green-600 text-white font-bold py-4 rounded-xl hover:bg-green-700 transition-colors flex justify-center items-center shadow-lg hover:shadow-green-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-2/3 bg-green-600 text-white font-bold py-4 rounded-[28px] hover:bg-green-700 transition-colors flex justify-center items-center shadow-lg hover:shadow-green-600/20 shadow-[0_0_20px_rgba(16,185,129,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? <Loader2 className="animate-spin mr-2 w-5 h-5" /> : null}
           Soumettre ma candidature

@@ -99,8 +99,8 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
   return (
     <div className="space-y-6" data-testid="otp-input-container">
       <div className="text-center">
-        <p className="text-gray-600 text-sm">
-          Un code a été envoyé à <span className="font-semibold text-[#101010]">{email}</span>
+        <p className="text-[#9CA3AF] text-sm">
+          Un code a été envoyé à <span className="font-semibold text-white">{email}</span>
         </p>
       </div>
 
@@ -118,8 +118,8 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
             onKeyDown={(e) => handleKeyDown(i, e)}
             disabled={isLoading}
             data-testid={`otp-digit-${i}`}
-            className={`w-11 h-14 text-center text-xl font-bold text-gray-900 border-2 rounded-xl focus:outline-none transition-colors
-              ${error ? 'border-red-400 bg-red-50' : digit ? 'border-[#f29200] bg-orange-50' : 'border-gray-300 bg-white'}
+            className={`w-11 h-14 text-center text-xl font-bold text-white border-2 rounded-xl focus:outline-none transition-colors
+              ${error ? 'border-[#EF4444] bg-[#EF4444]/10' : digit ? 'border-[#f29200] bg-[#f29200]/10' : 'border-white/[0.08] bg-[#1A1A1A]'}
               ${isLoading ? 'opacity-50 cursor-not-allowed' : 'focus:border-[#f29200]'}
             `}
           />
@@ -128,10 +128,10 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
 
       {/* Erreur + tentatives */}
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-center" data-testid="otp-error">
-          <p className="text-red-600 text-sm">{error}</p>
+        <div className="p-3 bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg text-center" data-testid="otp-error">
+          <p className="text-[#EF4444] text-sm">{error}</p>
           {attemptsLeft > 0 && attemptsLeft < 3 && (
-            <p className="text-red-400 text-xs mt-1" data-testid="otp-attempts-remaining">{attemptsLeft} tentative{attemptsLeft > 1 ? 's' : ''} restante{attemptsLeft > 1 ? 's' : ''}</p>
+            <p className="text-[#EF4444]/60 text-xs mt-1" data-testid="otp-attempts-remaining">{attemptsLeft} tentative{attemptsLeft > 1 ? 's' : ''} restante{attemptsLeft > 1 ? 's' : ''}</p>
           )}
         </div>
       )}
@@ -150,9 +150,9 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
 
       {/* Renvoyer le code */}
       <div className="text-center">
-        <p className="text-gray-500 text-sm">Vous n'avez rien reçu ?</p>
+        <p className="text-[#9CA3AF] text-sm">Vous n'avez rien reçu ?</p>
         {countdown > 0 ? (
-          <p className="text-gray-400 text-sm mt-1" data-testid="otp-countdown">Renvoyer dans <span className="font-semibold text-[#f29200]">{countdown}s</span></p>
+          <p className="text-[#4B5563] text-sm mt-1" data-testid="otp-countdown">Renvoyer dans <span className="font-semibold text-[#f29200]">{countdown}s</span></p>
         ) : (
           <button
             type="button"

@@ -113,7 +113,7 @@ export const Header: React.FC<HeaderProps> = ({
                   }}
                 />
               ) : (
-                <div className="w-9 h-9 bg-gray-300 rounded-full border-2 border-[#f29200] shadow-sm" />
+                <div className="w-9 h-9 bg-[#242424] rounded-full border-2 border-[#f29200] shadow-sm" />
               )}
               <span className="hidden sm:inline text-sm font-medium text-white">
                 {userData.firstName}
@@ -121,22 +121,22 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {/* Menu déroulant */}
-            <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-xl py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <p className="font-semibold text-gray-900">
+            <div className="absolute right-0 mt-2 w-52 bg-[#1A1A1A] border border-white/[0.08] rounded-lg shadow-lg py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+              <div className="px-4 py-3 border-b border-white/[0.06]">
+                <p className="font-semibold text-white">
                   {userData.firstName} {userData.lastName}
                 </p>
-                <p className="text-xs text-gray-500 truncate">{userData.phoneNumber || userData.email}</p>
+                <p className="text-xs text-[#9CA3AF] truncate">{userData.phoneNumber || userData.email}</p>
               </div>
               <button
                 onClick={() => router.push('/profil')}
-                className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition"
+                className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-white/5 transition"
               >
                 👤 Mon profil
               </button>
               <button
                 onClick={handleLogout}
-                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition"
+                className="block w-full text-left px-4 py-2 text-sm text-[#EF4444] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition"
               >
                 🔐 Déconnexion
               </button>

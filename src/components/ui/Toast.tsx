@@ -33,14 +33,14 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
   const getIcon = () => {
     switch (toast.type) {
       case 'success':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return <CheckCircle className="w-5 h-5 text-[#10B981]" />;
       case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-500" />;
+        return <AlertCircle className="w-5 h-5 text-[#EF4444]" />;
       case 'warning':
-        return <AlertTriangle className="w-5 h-5 text-yellow-500" />;
+        return <AlertTriangle className="w-5 h-5 text-[#F59E0B]" />;
       case 'info':
       default:
-        return <Info className="w-5 h-5 text-blue-500" />;
+        return <Info className="w-5 h-5 text-[#3B82F6]" />;
     }
   };
 
@@ -49,10 +49,10 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
     const exitStyles = isExiting ? "opacity-0 translate-x-full" : "opacity-100 translate-x-0";
     
     const typeStyles = {
-      success: "border-l-4 border-green-500 bg-green-50",
-      error: "border-l-4 border-red-500 bg-red-50",
-      warning: "border-l-4 border-yellow-500 bg-yellow-50",
-      info: "border-l-4 border-blue-500 bg-blue-50",
+      success: "border-l-4 border-[#10B981] bg-[#10B981]/10",
+      error: "border-l-4 border-[#EF4444] bg-[#EF4444]/10",
+      warning: "border-l-4 border-[#F59E0B] bg-[#F59E0B]/10",
+      info: "border-l-4 border-[#3B82F6] bg-[#3B82F6]/10",
     };
 
     return `${baseStyles} ${exitStyles} ${typeStyles[toast.type]}`;
@@ -64,7 +64,7 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
         {getIcon()}
       </div>
       <div className="flex-grow">
-        <p className="text-sm font-medium text-gray-900">{toast.message}</p>
+        <p className="text-sm font-medium text-white">{toast.message}</p>
       </div>
       <button
         onClick={() => {

@@ -165,7 +165,7 @@ export function useDriverRegistration() {
             } else if (['pending', 'approved', 'active'].includes(data.status)) {
               setError('Votre dossier est en cours de traitement ou déjà validé.');
               setTimeout(() =>
-                redirectWithFallback(router, '/driver/dashboard', loggerRef.current, isMountedRef, redirectTimeoutRef),
+                (redirectTimeoutRef.current = redirectWithFallback(router, '/driver/dashboard')),
                 2000
               );
             }
@@ -464,12 +464,9 @@ export function useDriverRegistration() {
       if (stripeOnboardingUrl) {
         window.location.href = stripeOnboardingUrl;
       } else {
-        await redirectWithFallback(
+        redirectTimeoutRef.current = redirectWithFallback(
           router,
-          '/driver/dashboard?submission=1&stripe=pending',
-          loggerRef.current,
-          isMountedRef,
-          redirectTimeoutRef
+          '/driver/dashboard?submission=1&stripe=pending'
         );
       }
     } catch (err: unknown) {

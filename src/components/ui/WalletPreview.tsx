@@ -115,7 +115,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
         onClick={() => router.push('/wallet')}
         className="
           group relative overflow-hidden
-          backdrop-blur-lg bg-white/90 dark:bg-gray-900/90
+          backdrop-blur-lg bg-[#1A1A1A]/95
           border border-white/20
           rounded-2xl shadow-xl
           px-5 py-3
@@ -148,12 +148,12 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
 
           {/* Solde */}
           <div className="text-left">
-            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+            <p className="text-xs text-[#9CA3AF] font-medium">
               Mon solde
             </p>
-            <p className="text-lg font-bold text-gray-900 dark:text-white">
+            <p className="text-lg font-bold text-white">
               {formatAmount(wallet?.balance || 0)}{' '}
-              <span className="text-sm text-gray-600 dark:text-gray-400">
+              <span className="text-sm text-[#9CA3AF]">
                 {wallet?.currency || CURRENCY_CODE}
               </span>
             </p>

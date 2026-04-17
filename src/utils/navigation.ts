@@ -13,9 +13,11 @@ export function redirectWithFallback(
 ): NodeJS.Timeout | null {
   const timeoutMs = options?.timeoutMs ?? DEFAULT_REDIRECT_TIMEOUT;
 
-  router.push(url).catch((err) => {
+  try {
+    router.push(url);
+  } catch (err: unknown) {
     console.warn('[Navigation] router.push failed:', err);
-  });
+  }
 
   const fallbackTimeout = setTimeout(() => {
     if (typeof window !== 'undefined' && window.location.pathname !== url) {

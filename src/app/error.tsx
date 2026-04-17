@@ -24,12 +24,12 @@ export default function Error({ error, reset }: ErrorProps) {
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-[#e6e6e6] flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+    <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-[#1A1A1A] border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] rounded-2xl p-8 text-center">
         {/* Icône d'erreur */}
-        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+        <div className="w-20 h-20 bg-[#EF4444]/20 rounded-full flex items-center justify-center mx-auto mb-6">
           <svg
-            className="w-10 h-10 text-red-600"
+            className="w-10 h-10 text-[#EF4444]"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -44,23 +44,23 @@ export default function Error({ error, reset }: ErrorProps) {
         </div>
 
         {/* Titre */}
-        <h1 className="text-2xl font-bold text-[#101010] mb-3">
+        <h1 className="text-2xl font-bold text-white mb-3">
           Une erreur est survenue
         </h1>
 
         {/* Message */}
-        <p className="text-gray-600 mb-6">
+        <p className="text-[#9CA3AF] mb-6">
           Nous sommes désolés, quelque chose s'est mal passé. Veuillez réessayer.
         </p>
 
         {/* Détails de l'erreur (en développement) */}
         {process.env.NODE_ENV === 'development' && (
-          <div className="bg-gray-100 rounded-lg p-4 mb-6 text-left">
-            <p className="text-sm font-mono text-red-600 break-words">
+          <div className="bg-white/5 rounded-lg p-4 mb-6 text-left">
+            <p className="text-sm font-mono text-[#EF4444] break-words">
               {error.message}
             </p>
             {error.digest && (
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-[#4B5563] mt-2">
                 Digest: {error.digest}
               </p>
             )}

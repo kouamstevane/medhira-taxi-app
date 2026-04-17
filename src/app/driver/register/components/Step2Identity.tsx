@@ -276,15 +276,15 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-[#101010]">Votre Profil Chauffeur</h2>
-        <p className="text-gray-500 mt-2">Ces informations sont requises pour votre vérification légale.</p>
+        <h2 className="text-2xl font-bold text-white">Votre Profil Chauffeur</h2>
+        <p className="text-[#9CA3AF] mt-2">Ces informations sont requises pour votre vérification légale.</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         
         {/* Card 1: Identité */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-            <h3 className="text-lg font-semibold text-[#101010] border-b pb-2">Identité</h3>
+        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Identité</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <InputField 
                     {...register('firstName')} 
@@ -346,8 +346,8 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
         </div>
 
         {/* Card 2: Adresse */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-            <h3 className="text-lg font-semibold text-[#101010] border-b pb-2">Adresse Postale</h3>
+        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Adresse Postale</h3>
             
             <div className="relative">
                 <InputField 
@@ -364,12 +364,12 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                 />
                 {/* Predictions Dropdown */}
                 {predictions.length > 0 && (
-                    <ul className="absolute z-10 w-full bg-white border border-gray-300 mt-1 rounded-xl shadow-xl max-h-60 overflow-auto">
+                    <ul className="absolute z-10 w-full bg-[#1A1A1A] border border-white/[0.08] mt-1 rounded-xl shadow-xl max-h-60 overflow-auto">
                         {predictions.map(prediction => (
                             <li 
                                 key={prediction.place_id} 
                                 onClick={() => handlePlaceSelect(prediction.place_id, prediction.description)}
-                                className="p-3 hover:bg-gray-50 cursor-pointer text-sm transition-colors border-b last:border-b-0"
+                                className="p-3 hover:bg-white/5 cursor-pointer text-sm text-white transition-colors border-b border-white/[0.06] last:border-b-0"
                             >
                                 {prediction.description}
                             </li>
@@ -397,9 +397,9 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
         </div>
 
         {/* Card 3: Biométrie */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-             <h3 className="text-lg font-semibold text-[#101010] border-b pb-2">Photo de profil</h3>
-             <p className="text-sm text-gray-500">Prenez un selfie sur le vif. Assurez-vous d'être bien éclairé et de cadrer votre visage et cou dans l'ovale virtuel.</p>
+        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+             <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Photo de profil</h3>
+             <p className="text-sm text-[#9CA3AF]">Prenez un selfie sur le vif. Assurez-vous d'être bien éclairé et de cadrer votre visage et cou dans l'ovale virtuel.</p>
              
              {/* Input file caché — fallback web uniquement (invisible sur natif) */}
              <input
@@ -417,22 +417,22 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                          <img src={photoDataUrl} alt="Biometric" className="w-full h-full object-cover" />
                      </div>
                  ) : (
-                     <div className="w-48 h-48 rounded-full bg-gray-200 flex items-center justify-center border-4 border-dashed border-gray-400">
-                         <Camera className="w-12 h-12 text-gray-400" />
+                      <div className="w-48 h-48 rounded-full bg-[#242424] flex items-center justify-center border-4 border-dashed border-white/20">
+                          <Camera className="w-12 h-12 text-[#4B5563]" />
                      </div>
                  )}
                  <button
                     type="button"
                     onClick={takePhoto}
-                    className="mt-4 px-6 py-2 bg-gray-100 text-[#101010] font-medium rounded-full hover:bg-gray-200 transition-colors"
+                     className="mt-4 px-6 py-2 bg-[#242424] text-white font-medium rounded-full hover:bg-white/10 transition-colors"
                 >
                     {photoDataUrl ? 'Reprendre la photo' : 'Ouvrir la caméra'}
                 </button>
                 
                 {/* Affichage de l'erreur de photo */}
                 {photoError && (
-                    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <p className="text-red-600 text-sm text-center">{photoError}</p>
+                     <div className="mt-3 p-3 bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg">
+                         <p className="text-[#EF4444] text-sm text-center">{photoError}</p>
                     </div>
                 )}
              </div>
@@ -442,14 +442,14 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
           <button
             type="button"
             onClick={onBack}
-            className="w-1/3 bg-gray-200 text-[#101010] font-bold py-4 rounded-xl hover:bg-gray-300 transition-colors"
+            className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors"
           >
             Retour
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-xl hover:bg-[#e68600] transition-colors flex justify-center items-center"
+            className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] hover:bg-[#e68600] transition-colors shadow-[0_0_20px_rgba(242,146,0,0.4)] flex justify-center items-center"
           >
             {loading ? <Loader2 className="animate-spin mr-2" /> : null}
             Enregistrer le brouillon & Continuer

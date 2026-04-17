@@ -157,7 +157,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
   if (!isLoaded) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+      <div className="w-full h-full flex items-center justify-center bg-[#1A1A1A]">
         <div className="text-center">
           <LoadingSpinner size="lg" />
           <p className="text-gray-600 mt-4">Chargement de la carte...</p>

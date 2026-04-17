@@ -13,8 +13,8 @@ interface MapFallbackProps {
 
 export const MapFallback = ({ error, apiKey }: MapFallbackProps) => {
   return (
-    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-      <div className="text-center p-8 max-w-lg bg-white rounded-2xl shadow-xl">
+    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#0F0F0F] to-[#1A1A1A]">
+      <div className="text-center p-8 max-w-lg bg-[#1A1A1A] border border-white/[0.06] rounded-2xl shadow-xl">
         <div className="mb-6">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -32,35 +32,35 @@ export const MapFallback = ({ error, apiKey }: MapFallbackProps) => {
           </svg>
         </div>
         
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+        <h2 className="text-2xl font-bold text-white mb-4">
           Carte non disponible
         </h2>
         
         {!apiKey ? (
           <div className="space-y-4">
-            <p className="text-gray-600">
+            <p className="text-[#9CA3AF]">
               La clé API Google Maps n'est pas configurée.
             </p>
-            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 text-left rounded">
-              <p className="font-semibold text-yellow-800 mb-2">Action requise :</p>
-              <p className="text-sm text-yellow-700">
-                Ajoutez <code className="bg-yellow-100 px-2 py-1 rounded">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> dans votre fichier <code className="bg-yellow-100 px-2 py-1 rounded">.env.local</code>
+            <div className="bg-[#F59E0B]/10 border-l-4 border-[#F59E0B]/20 p-4 text-left rounded">
+              <p className="font-semibold text-[#F59E0B] mb-2">Action requise :</p>
+              <p className="text-sm text-[#F59E0B]">
+                Ajoutez <code className="bg-[#F59E0B]/20 px-2 py-1 rounded">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> dans votre fichier <code className="bg-[#F59E0B]/20 px-2 py-1 rounded">.env.local</code>
               </p>
             </div>
           </div>
         ) : error?.includes('ApiProjectMapError') ? (
           <div className="space-y-4">
-            <p className="text-gray-600">
+            <p className="text-[#9CA3AF]">
               Erreur de configuration de la clé API Google Maps.
             </p>
-            <div className="bg-red-50 border-l-4 border-red-400 p-4 text-left rounded">
-              <p className="font-semibold text-red-800 mb-2">Vérifications nécessaires :</p>
-              <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
+            <div className="bg-[#EF4444]/10 border-l-4 border-[#EF4444]/20 p-4 text-left rounded">
+              <p className="font-semibold text-[#EF4444] mb-2">Vérifications nécessaires :</p>
+              <ul className="text-sm text-[#EF4444] space-y-1 list-disc list-inside">
                 <li>La clé API est valide dans Google Cloud Console</li>
                 <li>Maps JavaScript API est activée</li>
                 <li>Places API est activée</li>
                 <li>Directions API est activée</li>
-                <li>Les restrictions autorisent <code className="bg-red-100 px-1 rounded">localhost:3000</code></li>
+                <li>Les restrictions autorisent <code className="bg-[#EF4444]/20 px-1 rounded">localhost:3000</code></li>
                 <li>Le billing est activé sur votre compte Google Cloud</li>
               </ul>
             </div>
@@ -75,7 +75,7 @@ export const MapFallback = ({ error, apiKey }: MapFallbackProps) => {
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-gray-600">{error || 'Erreur de chargement de la carte'}</p>
+            <p className="text-[#9CA3AF]">{error || 'Erreur de chargement de la carte'}</p>
             <button
               onClick={() => window.location.reload()}
               className="px-6 py-3 bg-[#f29200] hover:bg-[#e68600] text-white font-semibold rounded-lg transition"

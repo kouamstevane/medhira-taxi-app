@@ -8,7 +8,7 @@ import { db } from "@/config/firebase";
 import { CURRENCY_CODE, LIMITS, DEFAULT_LOCALE } from "@/utils/constants";
 const ConfirmationMap = dynamic(() => import('./ConfirmationMap').then(m => ({ default: m.ConfirmationMap })), {
   ssr: false,
-  loading: () => <div className="w-full h-[200px] bg-gray-100 animate-pulse rounded-xl" />
+  loading: () => <div className="w-full h-[200px] bg-[#1A1A1A] animate-pulse rounded-xl" />
 });
 import { MaterialIcon } from "@/components/ui/MaterialIcon";
 

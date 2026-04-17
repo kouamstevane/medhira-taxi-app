@@ -327,12 +327,12 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
     if (isLoading) {
         return (
             <div 
-                className={`relative w-full h-full bg-gray-200 animate-pulse ${className}`}
+                className={`relative w-full h-full bg-white/10 animate-pulse ${className}`}
                 aria-label="Chargement de la carte"
                 role="status"
             >
                 <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3">
-                    <div className="w-12 h-12 bg-gray-300 rounded-full animate-pulse" />
+                    <div className="w-12 h-12 bg-white/5 rounded-full animate-pulse" />
                     <div className="text-gray-500 text-sm font-medium">
                         Chargement de la carte...
                     </div>
@@ -345,19 +345,19 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
     if (!isOnline) {
         return (
             <div 
-                className={`relative w-full h-full bg-gray-50 flex flex-col items-center justify-center p-6 ${className}`}
+                className={`relative w-full h-full bg-[#1A1A1A] flex flex-col items-center justify-center p-6 ${className}`}
                 role="alert"
                 aria-live="polite"
             >
-                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mb-4">
+                <div className="w-16 h-16 bg-[#242424] rounded-full flex items-center justify-center mb-4">
                     <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
                     </svg>
                 </div>
-                <h3 className="text-gray-900 font-semibold text-lg mb-2">
+                <h3 className="text-white font-semibold text-lg mb-2">
                     Mode hors ligne
                 </h3>
-                <p className="text-gray-500 text-center text-sm mb-4 max-w-xs">
+                <p className="text-[#9CA3AF] text-center text-sm mb-4 max-w-xs">
                     La carte nécessite une connexion internet pour fonctionner.
                 </p>
                 <button

@@ -22,8 +22,8 @@ import { AddressInput } from './AddressInput';
 import { VehicleOption } from './VehicleOption';
 import { FareSummary } from './FareSummary';
 import { BonusSelector } from './BonusSelector';
-const PaymentMethodSelector = dynamic(() => import('@/components/stripe/PaymentMethodSelector').then(m => ({ default: m.PaymentMethodSelector })), { ssr: false, loading: () => <div className="w-full h-24 bg-gray-100 animate-pulse rounded-xl" /> })
-const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement').then(m => ({ default: m.StripePaymentElement })), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 animate-pulse rounded-xl" /> })
+const PaymentMethodSelector = dynamic(() => import('@/components/stripe/PaymentMethodSelector').then(m => ({ default: m.PaymentMethodSelector })), { ssr: false, loading: () => <div className="w-full h-24 bg-white/10 animate-pulse rounded-xl" /> })
+const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement').then(m => ({ default: m.StripePaymentElement })), { ssr: false, loading: () => <div className="w-full h-48 bg-white/10 animate-pulse rounded-xl" /> })
 import { logger } from '@/utils/logger';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
@@ -549,7 +549,7 @@ useEffect(() => {
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Message d'erreur GPS - affiché si la géolocalisation échoue */}
         {geoError && !pickupAddress && (
-          <div className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-lg">
+          <div className="bg-[#f29200]/10 border-l-4 border-orange-400 p-4 rounded-lg">
             <div className="flex items-start">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-orange-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -557,10 +557,10 @@ useEffect(() => {
                 </svg>
               </div>
               <div className="ml-3 flex-1">
-                <h3 className="text-sm font-medium text-orange-800">
+                <h3 className="text-sm font-medium text-[#f29200]">
                   Impossible de détecter votre position
                 </h3>
-                <div className="mt-2 text-sm text-orange-700">
+                <div className="mt-2 text-sm text-[#f29200]">
                   <p>Le signal GPS est trop faible. Pour une meilleure précision :</p>
                   <ul className="list-disc list-inside mt-1 space-y-1">
                     <li>Sortez à l&apos;extérieur (ciel dégagé)</li>
@@ -572,7 +572,7 @@ useEffect(() => {
                   <button
                     type="button"
                     onClick={() => window.location.reload()}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-orange-700 bg-orange-100 hover:bg-orange-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-[#f29200] bg-[#f29200]/20 hover:bg-[#f29200]/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-colors"
                   >
                     <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -613,13 +613,13 @@ useEffect(() => {
 
         {/* Types de véhicules */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
+          <label className="block text-sm font-medium text-[#9CA3AF] mb-3">
             Type de véhicule
             <span className="text-red-500 ml-1">*</span>
           </label>
           {carTypes.length === 0 ? (
-            <div className="p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
-              <p className="text-gray-500 text-sm">
+            <div className="p-4 border-2 border-dashed border-white/[0.08] rounded-lg text-center">
+              <p className="text-[#9CA3AF] text-sm">
                 {error && error.includes('types de véhicules')
                   ? 'Impossible de charger les types de véhicules. Veuillez rafraîchir la page.'
                   : 'Chargement des types de véhicules...'}
@@ -652,7 +652,7 @@ useEffect(() => {
         />
 
         {/* Options Avancées (Bonus & Recherche Auto) */}
-        <div className="space-y-4 pt-2 border-t border-gray-100">
+        <div className="space-y-4 pt-2 border-t border-white/[0.05]">
           {/* Toggle Bonus */}
           <div>
             <button
@@ -664,7 +664,7 @@ useEffect(() => {
             </button>
 
             {showBonus && (
-              <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="mt-3 p-4 bg-[#1A1A1A] rounded-xl border border-white/[0.05]">
                 <BonusSelector
                   selectedBonus={bonus}
                   onSelect={setBonus}
@@ -674,21 +674,21 @@ useEffect(() => {
           </div>
 
           {/* Toggle Recherche Auto */}
-          <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+          <div className="flex items-center gap-3 p-3 bg-[#3B82F6]/10 rounded-xl border border-[#3B82F6]/20">
             <div className="flex items-center h-5">
               <input
                 id="auto-search"
                 type="checkbox"
                 checked={autoSearchEnabled}
                 onChange={(e) => setAutoSearchEnabled(e.target.checked)}
-                className="w-5 h-5 text-[#f29200] border-gray-300 rounded focus:ring-[#f29200]"
+                className="w-5 h-5 text-[#f29200] border-white/[0.08] rounded focus:ring-[#f29200]"
               />
             </div>
             <div className="flex-1">
-              <label htmlFor="auto-search" className="text-sm font-medium text-gray-900 cursor-pointer">
+              <label htmlFor="auto-search" className="text-sm font-medium text-white cursor-pointer">
                 Recherche automatique
               </label>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-[#9CA3AF]">
                 Réessayer automatiquement si aucun chauffeur n&apos;est trouvé immédiatement.
               </p>
             </div>
@@ -697,7 +697,7 @@ useEffect(() => {
 
         {/* Message d'erreur */}
         {error && (
-          <div className="p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded">
+          <div className="p-3 bg-[#EF4444]/10 border-l-4 border-red-500 text-[#EF4444] rounded">
             <p>{error}</p>
           </div>
         )}
@@ -706,7 +706,7 @@ useEffect(() => {
         <button
           type="submit"
           disabled={!pickupAddress || !destinationAddress || !selectedCarType || !estimate || loading || estimating}
-          className="w-full bg-[#f29200] hover:bg-[#e68600] active:bg-[#d67a00] text-white font-bold py-4 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-base sm:text-lg"
+          className="w-full bg-[#f29200] hover:bg-[#e68600] active:bg-[#d67a00] text-white font-bold py-4 px-6 rounded-[28px] transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-base sm:text-lg shadow-[0_0_20px_rgba(242,146,0,0.4)]"
           style={{ minHeight: '48px' }} // Zone tactile minimale pour mobile
         >
           {loading ? 'Création en cours...' : 'Demander une course'}
@@ -716,7 +716,7 @@ useEffect(() => {
       {/* Modal de confirmation */}
       {showConfirmModal && estimate && selectedCarType && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-lg flex items-center justify-center p-2 sm:p-4 z-50 transition-opacity duration-300">
-          <div className="bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl transform transition-all duration-300 scale-100">
+          <div className="bg-[#1A1A1A] rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl transform transition-all duration-300 scale-100">
             {/* Header */}
             <div className="bg-gradient-to-r from-[#f29200] to-[#e68600] p-4 sm:p-6 text-white">
               <h2 className="text-xl sm:text-2xl font-bold mb-1">Confirmer la course</h2>
@@ -726,30 +726,30 @@ useEffect(() => {
             <div className="p-4 sm:p-6">
               <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
                 {/* Point de départ */}
-                <div className="border-b border-gray-200 pb-3 sm:pb-4">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">De</p>
-                  <p className="text-sm sm:text-base font-semibold text-gray-900 leading-tight break-words">{pickupAddress}</p>
+                <div className="border-b border-white/[0.06] pb-3 sm:pb-4">
+                  <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">De</p>
+                  <p className="text-sm sm:text-base font-semibold text-white leading-tight break-words">{pickupAddress}</p>
                 </div>
 
                 {/* Destination */}
-                <div className="border-b border-gray-200 pb-3 sm:pb-4">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">À</p>
-                  <p className="text-sm sm:text-base font-semibold text-gray-900 leading-tight break-words">{destinationAddress}</p>
+                <div className="border-b border-white/[0.06] pb-3 sm:pb-4">
+                  <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">À</p>
+                  <p className="text-sm sm:text-base font-semibold text-white leading-tight break-words">{destinationAddress}</p>
                 </div>
 
                 {/* Informations de la course */}
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-200">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-white/[0.06]">
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Véhicule</p>
-                    <p className="text-sm sm:text-base font-semibold text-gray-900">{selectedCarType.name}</p>
+                    <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">Véhicule</p>
+                    <p className="text-sm sm:text-base font-semibold text-white">{selectedCarType.name}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Distance</p>
-                    <p className="text-sm sm:text-base font-semibold text-gray-900">{estimate.distance.toFixed(1)} km</p>
+                    <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">Distance</p>
+                    <p className="text-sm sm:text-base font-semibold text-white">{estimate.distance.toFixed(1)} km</p>
                   </div>
                   <div className="col-span-2">
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Durée</p>
-                    <p className="text-sm sm:text-base font-semibold text-gray-900">~{estimate.duration} min</p>
+                    <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">Durée</p>
+                    <p className="text-sm sm:text-base font-semibold text-white">~{estimate.duration} min</p>
                   </div>
                 </div>
 
@@ -774,7 +774,7 @@ useEffect(() => {
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                   <button
                     onClick={() => setShowConfirmModal(false)}
-                    className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg active:bg-gray-50 hover:bg-gray-50 hover:border-gray-400 font-semibold text-gray-700 transition touch-manipulation"
+                    className="flex-1 px-4 py-3 border-2 border-white/[0.08] rounded-lg active:bg-white/5 hover:bg-white/5 hover:border-white/10 font-semibold text-white transition touch-manipulation"
                     disabled={loading}
                     style={{ minHeight: '48px' }}
                   >
@@ -803,14 +803,14 @@ useEffect(() => {
                     loading={loading}
                   />
                   {error && (
-                    <div className="p-3 bg-red-50 border-l-4 border-red-500 text-red-700 rounded text-sm">
+                    <div className="p-3 bg-[#EF4444]/10 border-l-4 border-red-500 text-[#EF4444] rounded text-sm">
                       {error}
                     </div>
                   )}
                   <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                     <button
                       onClick={() => setModalStep('summary')}
-                      className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg font-semibold text-gray-700 transition touch-manipulation"
+                      className="flex-1 px-4 py-3 border-2 border-white/[0.08] rounded-lg font-semibold text-white transition touch-manipulation"
                       disabled={loading}
                       style={{ minHeight: '48px' }}
                     >
@@ -849,7 +849,7 @@ useEffect(() => {
                   />
                   <button
                     onClick={() => setModalStep('payment')}
-                    className="w-full px-4 py-2 text-sm text-gray-500 underline"
+                    className="w-full px-4 py-2 text-sm text-[#9CA3AF] underline"
                   >
                     ← Changer de méthode de paiement
                   </button>

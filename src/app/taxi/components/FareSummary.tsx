@@ -26,11 +26,11 @@ export const FareSummary = ({
 }: FareSummaryProps) => {
   if (loading) {
     return (
-      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+      <div className="bg-[#1A1A1A] p-4 rounded-lg border border-white/[0.06]">
         <div className="animate-pulse space-y-3">
-          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-          <div className="h-8 bg-gray-200 rounded w-1/3"></div>
+          <div className="h-4 bg-white/10 rounded w-3/4"></div>
+          <div className="h-4 bg-white/10 rounded w-1/2"></div>
+          <div className="h-8 bg-white/10 rounded w-1/3"></div>
         </div>
       </div>
     );
@@ -38,7 +38,7 @@ export const FareSummary = ({
 
   if (distance === null || duration === null || price === null) {
     return (
-      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 text-center text-gray-500">
+      <div className="bg-[#1A1A1A] p-4 rounded-lg border border-white/[0.06] text-center text-[#9CA3AF]">
         <p>Sélectionnez un départ et une destination pour voir l'estimation</p>
       </div>
     );

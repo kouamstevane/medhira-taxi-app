@@ -23,7 +23,7 @@ export const BonusSelector: React.FC<BonusSelectorProps> = ({
     return (
         <div className="w-full space-y-3 animate-fadeIn">
             <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-900">
+                <h3 className="text-sm font-semibold text-white">
                     Motiver un chauffeur (Bonus)
                 </h3>
                 {selectedBonus > 0 && (
@@ -37,7 +37,7 @@ export const BonusSelector: React.FC<BonusSelectorProps> = ({
                 )}
             </div>
 
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-[#9CA3AF]">
                 Ajoutez un bonus pour élargir la zone de recherche à 10 min et motiver les chauffeurs éloignés.
             </p>
 
@@ -52,7 +52,7 @@ export const BonusSelector: React.FC<BonusSelectorProps> = ({
               active:scale-95 transform
               ${selectedBonus === amount
                                 ? 'bg-[#f29200] text-white shadow-lg ring-2 ring-[#f29200] ring-offset-2'
-                                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                : 'bg-[#1A1A1A] border border-white/[0.08] text-[#9CA3AF] hover:bg-white/5 hover:border-white/20'
                             }
               ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
             `}
@@ -68,9 +68,9 @@ export const BonusSelector: React.FC<BonusSelectorProps> = ({
             </div>
 
             {selectedBonus > 0 && (
-                <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 flex items-start gap-2">
+                <div className="bg-[#f29200]/10 border border-[#f29200]/20 rounded-lg p-3 flex items-start gap-2">
                     <span className="text-orange-500 mt-0.5">⚡</span>
-                    <p className="text-xs text-orange-700">
+                    <p className="text-xs text-[#f29200]">
                         <strong>Zone élargie !</strong> Votre demande est maintenant visible par les chauffeurs jusqu&apos;à 10 minutes de distance.
                     </p>
                 </div>

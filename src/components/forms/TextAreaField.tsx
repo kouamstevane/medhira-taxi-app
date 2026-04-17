@@ -38,15 +38,15 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
   ) => {
     const baseTextAreaClasses = `
       w-full px-4 py-3 border rounded-xl outline-none transition-all duration-200
-      bg-white text-gray-900 placeholder-gray-400 resize-y
+      bg-[#1A1A1A] text-white placeholder-[#4B5563] resize-y
       focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]
-      disabled:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-500
+      disabled:bg-white/5 disabled:cursor-not-allowed disabled:text-[#4B5563]
       shadow-sm
     `;
 
     const errorClasses = error
-      ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
-      : 'border-gray-300';
+      ? 'border-[#EF4444] focus:ring-[#EF4444] focus:border-[#EF4444]'
+      : 'border-white/[0.08]';
 
     const charCount = value ? String(value).length : 0;
 
@@ -54,7 +54,7 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
       <div className={`w-full ${containerClassName}`}>
         {/* Label */}
         {label && (
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>

@@ -303,9 +303,9 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-8 text-center">
+      <div className="bg-[#0F0F0F] rounded-lg shadow-md p-8 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f29200] mx-auto mb-4"></div>
-        <p className="text-gray-600">Chargement du suivi...</p>
+        <p className="text-[#9CA3AF]">Chargement du suivi...</p>
       </div>
     );
   }
@@ -333,9 +333,9 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+      <div className="bg-[#0F0F0F] rounded-xl shadow-lg overflow-hidden">
       {/* Carte */}
-      <div className="relative h-[300px] sm:h-[400px] bg-gray-100">
+      <div className="relative h-[300px] sm:h-[400px] bg-[#1A1A1A]">
         {isLoaded ? (
           <GoogleMap
             mapContainerStyle={{ width: '100%', height: '100%' }}
@@ -416,15 +416,15 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       <div className="p-4 sm:p-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
-            <div className="w-14 h-14 bg-gray-200 rounded-full flex items-center justify-center text-2xl">
+            <div className="w-14 h-14 bg-[#242424] rounded-full flex items-center justify-center text-2xl">
               👨‍✈️
             </div>
             <div>
-              <h3 className="font-bold text-lg text-gray-900">{booking.driverName}</h3>
-              <p className="text-sm text-gray-500">
+              <h3 className="font-bold text-lg text-white">{booking.driverName}</h3>
+              <p className="text-sm text-[#9CA3AF]">
                 {booking.carModel} • {booking.carColor}
               </p>
-              <div className="inline-block bg-blue-50 border border-blue-200 px-3 py-1 rounded text-sm font-mono font-bold mt-1 text-blue-900">
+              <div className="inline-block bg-[#3B82F6]/10 border border-[#3B82F6]/20 px-3 py-1 rounded text-sm font-mono font-bold mt-1 text-[#3B82F6]">
                 {booking.carPlate}
               </div>
             </div>
@@ -432,7 +432,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
           <div className="flex space-x-2">
             <button 
               onClick={() => setShowChat(true)}
-              className="p-3 bg-blue-100 text-blue-600 rounded-full hover:bg-blue-200 transition relative"
+              className="p-3 bg-[#3B82F6]/20 text-[#3B82F6] rounded-full hover:bg-[#3B82F6]/30 transition relative"
               title="Messagerie"
             >
               <FiMessageSquare className="w-5 h-5" />
@@ -447,17 +447,17 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
         </div>
 
         {/* Détails Trajet */}
-        <div className="space-y-4 border-t border-gray-100 pt-4">
+        <div className="space-y-4 border-t border-white/[0.06] pt-4">
           <div className="flex items-start">
             <div className="flex flex-col items-center mr-3 mt-1">
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-              <div className="w-0.5 h-8 bg-gray-200 my-1"></div>
+              <div className="w-0.5 h-8 bg-white/10 my-1"></div>
               <div className="w-3 h-3 bg-red-500 rounded-full"></div>
             </div>
             <div className="flex-1 space-y-6">
               <div>
                 <p className="text-xs text-gray-500 uppercase">Départ</p>
-                <p className="font-medium text-gray-900">{booking.pickup}</p>
+                <p className="font-medium text-white">{booking.pickup}</p>
               </div>
               <div>
                 <div className="flex items-center justify-between">
@@ -471,7 +471,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                     </button>
                   )}
                 </div>
-                <p className="font-medium text-gray-900">{booking.destination}</p>
+                <p className="font-medium text-white">{booking.destination}</p>
               </div>
             </div>
           </div>
@@ -479,25 +479,25 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
 
         {/* Suivi en temps réel (course en cours) */}
         {booking.status === 'in_progress' && realTimeDistance > 0 && (
-          <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-            <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center">
+          <div className="mt-4 p-4 bg-[#3B82F6]/5 border border-[#3B82F6]/10 rounded-lg">
+            <h4 className="text-sm font-bold text-white mb-3 flex items-center">
               <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               Suivi en temps réel
             </h4>
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-white rounded-lg p-3 shadow-sm">
-                <p className="text-xs text-gray-500 mb-1">Distance restante</p>
-                <p className="text-lg font-bold text-blue-600">{realTimeDistance.toFixed(1)} km</p>
+              <div className="bg-[#1A1A1A] border border-white/[0.06] rounded-lg p-3 shadow-sm">
+                <p className="text-xs text-[#9CA3AF] mb-1">Distance restante</p>
+                <p className="text-lg font-bold text-white">{realTimeDistance.toFixed(1)} km</p>
               </div>
-              <div className="bg-white rounded-lg p-3 shadow-sm">
-                <p className="text-xs text-gray-500 mb-1">Temps estimé</p>
-                <p className="text-lg font-bold text-blue-600">{realTimeDuration} min</p>
+              <div className="bg-[#1A1A1A] border border-white/[0.06] rounded-lg p-3 shadow-sm">
+                <p className="text-xs text-[#9CA3AF] mb-1">Temps estimé</p>
+                <p className="text-lg font-bold text-white">{realTimeDuration} min</p>
               </div>
             </div>
-            <div className="mt-3 bg-white rounded-lg p-3 shadow-sm">
-              <p className="text-xs text-gray-500 mb-1">Estimation tarifaire</p>
+            <div className="mt-3 bg-[#1A1A1A] border border-white/[0.06] rounded-lg p-3 shadow-sm">
+              <p className="text-xs text-[#9CA3AF] mb-1">Estimation tarifaire</p>
               <p className="text-xl font-bold text-green-600">
                 {(() => {
                   // Convertir Timestamp Firestore correctement
@@ -523,7 +523,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                   return `${estimatedPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`;
                 })()}
               </p>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-[#9CA3AF] mt-1">
                 Estimation basée sur le trajet en cours
               </p>
             </div>
@@ -531,17 +531,17 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
         )}
 
         {/* Actions */}
-        <div className="mt-6 pt-4 border-t border-gray-100">
+        <div className="mt-6 pt-4 border-t border-white/[0.06]">
            {booking.status !== 'in_progress' && (
             <button
               onClick={() => setShowCancelModal(true)}
-              className="w-full py-3 text-red-500 font-medium hover:bg-red-50 rounded-lg transition"
+              className="w-full py-3 text-[#EF4444] font-medium hover:bg-[#EF4444]/10 rounded-lg transition"
             >
               Annuler la course
             </button>
            )}
            {booking.status === 'in_progress' && (
-             <p className="text-center text-sm text-gray-500 italic">
+             <p className="text-center text-sm text-[#9CA3AF] italic">
                Course en cours... Détendez-vous ! 🎵
              </p>
            )}
@@ -551,9 +551,9 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
        {/* Modal de confirmation d'annulation */}
        {showCancelModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">Annuler ?</h3>
-            <p className="text-gray-600 text-sm text-center mb-6">
+          <div className="bg-[#1A1A1A] border border-white/[0.05] rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-white mb-2 text-center">Annuler ?</h3>
+            <p className="text-[#9CA3AF] text-sm text-center mb-6">
               Le chauffeur est déjà en route. Des frais peuvent s&apos;appliquer.
             </p>
             <div className="space-y-3">
@@ -566,7 +566,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               </button>
               <button
                 onClick={() => setShowCancelModal(false)}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-lg"
+                className="w-full bg-[#242424] hover:bg-white/10 text-white font-medium py-3 px-4 rounded-lg"
               >
                 Non, retour
               </button>
@@ -578,8 +578,8 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       {/* Modal de modification de destination */}
       {showEditDestModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Modifier la destination</h3>
+          <div className="bg-[#1A1A1A] border border-white/[0.05] rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-white mb-4">Modifier la destination</h3>
             
             <div className="mb-6">
               <AddressInput
@@ -591,7 +591,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                 autocompleteService={autocompleteService}
                 required
               />
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-[#9CA3AF] mt-2">
                 Le prix sera recalculé en fonction de la nouvelle destination.
               </p>
             </div>
@@ -606,7 +606,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               </button>
               <button
                 onClick={() => setShowEditDestModal(false)}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-lg"
+                className="w-full bg-[#242424] hover:bg-white/10 text-white font-medium py-3 px-4 rounded-lg"
               >
                 Annuler
               </button>

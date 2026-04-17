@@ -99,7 +99,7 @@ export const AddressInput = ({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label className="block text-sm font-medium text-[#9CA3AF] mb-1">
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
@@ -115,8 +115,8 @@ export const AddressInput = ({
           disabled={disabled}
           required={required}
           autoComplete="off"
-          className={`w-full p-3 sm:p-3.5 border rounded-lg text-[#101010] placeholder-gray-400 bg-white focus:ring-2 focus:ring-[#f29200] focus:border-transparent ${error ? 'border-red-500' : 'border-gray-300'
-            } ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+          className={`w-full p-3 sm:p-3.5 border rounded-lg text-white placeholder-gray-400 bg-[#1A1A1A] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] ${error ? 'border-red-500' : 'border-white/[0.08]'
+            } ${disabled ? 'bg-white/5 cursor-not-allowed' : ''}`}
           style={{ fontSize: '16px' }} // Évite le zoom automatique sur iOS
         />
 
@@ -128,23 +128,23 @@ export const AddressInput = ({
       </div>
 
       {error && (
-        <p className="mt-1 text-sm text-red-600">{error}</p>
+        <p className="mt-1 text-sm text-[#EF4444]">{error}</p>
       )}
 
       {/* Liste des suggestions */}
       {isFocused && suggestions.length > 0 && (
-        <ul className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto overscroll-contain">
+        <ul className="absolute z-50 w-full mt-1 bg-[#1A1A1A] border border-white/[0.08] rounded-lg shadow-lg max-h-60 overflow-auto overscroll-contain">
           {suggestions.map((suggestion, index) => (
             <li
               key={suggestion.place_id}
               onClick={() => handleSelectSuggestion(suggestion)}
               onTouchStart={(e) => e.currentTarget.classList.add('bg-[#f29200]', 'text-white')}
               onTouchEnd={(e) => e.currentTarget.classList.remove('bg-[#f29200]', 'text-white')}
-              className="p-3 active:bg-[#f29200] active:text-white hover:bg-[#f29200] hover:text-white cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 text-gray-900 touch-manipulation"
+              className="p-3 active:bg-[#f29200] active:text-white hover:bg-white/5 hover:text-white cursor-pointer transition-colors border-b border-white/[0.06] last:border-b-0 text-white touch-manipulation"
               style={{ minHeight: '48px' }}
             >
               <div className="flex items-start">
-                <svg className="w-5 h-5 mr-2 mt-0.5 text-gray-600 hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 mr-2 mt-0.5 text-[#4B5563] hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
