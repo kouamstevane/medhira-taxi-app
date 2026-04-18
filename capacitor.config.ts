@@ -1,4 +1,5 @@
 import { CapacitorConfig } from '@capacitor/cli';
+import { KeyboardResize, KeyboardStyle } from '@capacitor/keyboard';
 
 const config: CapacitorConfig = {
     appId: 'com.medjiraservice.medjiraserviceapp',
@@ -22,6 +23,11 @@ const config: CapacitorConfig = {
                 webClientId: '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com',
                 offlineAccess: true
             }
+        },
+        Keyboard: {
+            resize: KeyboardResize.None,
+            style: KeyboardStyle.Dark,
+            resizeOnFullScreen: true
         }
     }
 };

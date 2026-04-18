@@ -357,7 +357,7 @@ export default function RegisterPhoneContent() {
                     name="firstName"
                     value={formData.firstName}
                     onChange={handleChange}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
                     placeholder="Jean"
                     required
                   />
@@ -373,7 +373,7 @@ export default function RegisterPhoneContent() {
                     name="lastName"
                     value={formData.lastName}
                     onChange={handleChange}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
                     placeholder="Dupont"
                     required
                   />
@@ -430,7 +430,7 @@ export default function RegisterPhoneContent() {
                         setFormData({ ...formData, phone: value });
                         setError(null);
                       }}
-                      className="glass-input flex-1 rounded-r-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5 h-[48px]"
+                      className="glass-input flex-1 rounded-r-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5 h-[48px]"
                       placeholder={selectedCountry.defaultNumber}
                       required
                     />
@@ -450,7 +450,7 @@ export default function RegisterPhoneContent() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
                     placeholder="•••••••"
                     required
                   />
@@ -466,7 +466,7 @@ export default function RegisterPhoneContent() {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
                     placeholder="•••••••"
                     required
                   />
@@ -505,7 +505,7 @@ export default function RegisterPhoneContent() {
                       setCode(value.slice(0, 6));
                       setError(null);
                     }}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white placeholder-slate-500 bg-white/5 focus:ring-2 focus:ring-primary focus:border-primary"
+                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 bg-white/5 focus:ring-2 focus:ring-primary focus:border-primary"
                     placeholder="123456"
                     maxLength={6}
                   />

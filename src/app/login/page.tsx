@@ -138,7 +138,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => { setEmail(e.target.value); setError(null); }}
-              className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+              className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
               placeholder="Votre email"
               required
               autoComplete="email"
@@ -154,7 +154,7 @@ export default function LoginPage() {
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => { setPassword(e.target.value); setError(null); }}
-              className="glass-input w-full h-14 pl-12 pr-12 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+              className="glass-input w-full h-14 pl-12 pr-12 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
               placeholder="Mot de passe"
               required
               autoComplete="current-password"

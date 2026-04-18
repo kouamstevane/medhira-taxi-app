@@ -23,10 +23,10 @@ import "@fontsource/inter/700.css";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import LayoutClient from "./LayoutClient";
-import { Geist } from "next/font/google";
+import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 /**
  * Configuration du viewport pour le responsive et PWA
@@ -34,9 +34,11 @@ const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5,
-  userScalable: true,
+  maximumScale: 1,
+  userScalable: false,
   themeColor: "#f29200",
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
 };
 
 /**
@@ -140,7 +142,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" suppressHydrationWarning className={cn("dark font-sans", geist.variable)}>
+    <html lang="fr" suppressHydrationWarning className={cn("dark font-sans", inter.variable)}>
       <head>
         {/* Préconnexion aux domaines externes pour optimiser le chargement */}
         <link rel="preconnect" href="https://maps.googleapis.com" />

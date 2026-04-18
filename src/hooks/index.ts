@@ -9,3 +9,4 @@ export { useAuth } from './useAuth';
 export { useGoogleMaps } from './useGoogleMaps';
 export { usePlacesAutocomplete } from './usePlacesAutocomplete';
 export { useVoipCall } from './useVoipCall';
+export { useKeyboard } from './useKeyboard';

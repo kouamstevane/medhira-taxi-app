@@ -37,7 +37,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
   ) => {
     const baseInputClasses = `
       w-full px-4 py-3 border rounded-xl outline-none transition-all duration-200
-      bg-[#1A1A1A] text-white placeholder-[#4B5563]
+      bg-[#1A1A1A] text-white text-base placeholder-[#4B5563]
       focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]
       disabled:bg-white/5 disabled:cursor-not-allowed disabled:text-[#4B5563]
       shadow-sm active:scale-[0.99]

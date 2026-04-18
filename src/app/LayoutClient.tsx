@@ -12,6 +12,7 @@
 import React, { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useKeyboard } from '@/hooks/useKeyboard';
 import { Header } from '@/components/layout/Header';
 import { VoipCallProvider } from '@/context/VoipCallProvider';
 import { Toaster } from 'react-hot-toast';
@@ -45,6 +46,9 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   const pathname = usePathname();
   const { currentUser, userData, loading } = useAuth();
   const [showHeader, setShowHeader] = useState(false);
+  
+  // Initialize keyboard handling to fix white space issues
+  useKeyboard();
 
   /**
    * Déterminer si le header doit être affiché

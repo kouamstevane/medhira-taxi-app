@@ -198,7 +198,7 @@ export default function RegisterContent() {
                             name="firstName"
                             value={formData.firstName}
                             onChange={handleChange}
-                            className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                            className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
                             placeholder="Prénom"
                             required
                         />
@@ -214,7 +214,7 @@ export default function RegisterContent() {
                             name="lastName"
                             value={formData.lastName}
                             onChange={handleChange}
-                            className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                            className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
                             placeholder="Nom"
                             required
                         />
@@ -230,7 +230,7 @@ export default function RegisterContent() {
                             name="email"
                             value={formData.email}
                             onChange={handleChange}
-                            className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                            className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
                             placeholder="Email"
                             required
                             autoComplete="email"
@@ -248,7 +248,7 @@ export default function RegisterContent() {
                                 name="password"
                                 value={formData.password}
                                 onChange={handleChange}
-                                className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                                className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
                                 placeholder="Mot de passe"
                                 required
                                 minLength={6}
@@ -268,7 +268,7 @@ export default function RegisterContent() {
                             name="confirmPassword"
                             value={formData.confirmPassword}
                             onChange={handleChange}
-                            className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                            className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
                             placeholder="Confirmer le mot de passe"
                             required
                             autoComplete="new-password"
