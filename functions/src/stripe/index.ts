@@ -1,5 +1,5 @@
-/**
- * Cloud Functions — Webhooks Stripe
+﻿/**
+ * Cloud Functions — Webhooks Stripe + Callable Functions
  *
  * stripeWebhookInstant : 25 événements v1 (payload complet)
  *   URL : https://europe-west1-medjira-service.cloudfunctions.net/stripeWebhookInstant
@@ -7,13 +7,16 @@
  * stripeWebhookLight : 10 événements v2 (thin events)
  *   URL : https://europe-west1-medjira-service.cloudfunctions.net/stripeWebhookLight
  *
+ * createSetupIntent : Callable — Crée un SetupIntent pour sauvegarder
+ *   une carte bancaire (onboarding client).
+ *
  * Secrets requis (Firebase Secret Manager) :
  *   - STRIPE_SECRET_KEY
  *   - STRIPE_WEBHOOK_SECRET_INSTANT
  *   - STRIPE_WEBHOOK_SECRET_LIGHT
  */
 
-import { onRequest } from 'firebase-functions/v2/https';
+import { onRequest, onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
@@ -57,6 +60,81 @@ const PAYMENT_STATUS = {
   CANCELLED:       'cancelled',
   REQUIRES_ACTION: 'requires_action',
 } as const;
+
+// =============================================================================
+// createSetupIntent — Callable Function (client → serveur)
+// =============================================================================
+
+interface CreateSetupIntentResult {
+  clientSecret: string;
+  setupIntentId: string;
+}
+
+export const createSetupIntent = onCall(
+  {
+    region: 'europe-west1',
+    secrets: [stripeSecretKey],
+  },
+  async (request: CallableRequest<void>): Promise<CreateSetupIntentResult> => {
+    try {
+      // 1. Vérifier l'authentification
+      if (!request.auth) {
+        throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
+      }
+      const userId = request.auth.uid;
+
+      const stripeClient = getStripe();
+      const db = getDb();
+
+      // 2. Récupérer ou créer le customerId Stripe
+      const userDoc = await db.collection('users').doc(userId).get();
+      const userData = userDoc.exists ? userDoc.data() : {};
+      let customerId: string = userData?.stripeCustomerId ?? '';
+
+      if (!customerId) {
+        const customer = await stripeClient.customers.create({
+          metadata: { userId },
+          name: userData
+            ? `${userData.firstName ?? ''} ${userData.lastName ?? ''}`.trim() || undefined
+            : undefined,
+          email: userData?.email ?? undefined,
+        });
+        customerId = customer.id;
+
+        // Persister le customerId
+        await db.collection('users').doc(userId).set(
+          { stripeCustomerId: customerId },
+          { merge: true },
+        );
+      }
+
+      // 3. Créer le SetupIntent avec le Customer
+      const setupIntent = await stripeClient.setupIntents.create({
+        customer: customerId,
+        automatic_payment_methods: { enabled: true },
+        metadata: {
+          userId,
+          purpose: 'save_payment_method',
+        },
+      });
+
+      if (!setupIntent.client_secret) {
+        throw new HttpsError('internal', 'Impossible de créer le SetupIntent : client_secret manquant.');
+      }
+
+      console.log(`[createSetupIntent] SetupIntent ${setupIntent.id} créé pour user ${userId}`);
+
+      return {
+        clientSecret: setupIntent.client_secret,
+        setupIntentId: setupIntent.id,
+      };
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      console.error('[createSetupIntent] Erreur:', err);
+      throw new HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
+    }
+  },
+);
 
 // =============================================================================
 // stripeWebhookInstant — événements v1 (payload complet)

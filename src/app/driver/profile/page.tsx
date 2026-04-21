@@ -4,10 +4,26 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import { useDriverProfile } from '@/hooks/useDriverProfile';
 
+/**
+ * Normalise les documents du format nested { url, status } vers un format
+ * plat compatible avec l'affichage du profil. Gere les anciennes donnees
+ * (string) et les nouvelles donnees (objet avec url/status).
+ */
+function normalizeDocUrl(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value !== null && "url" in value) {
+    return ((value as Record<string, unknown>).url) as string || "";
+  }
+  return "";
+}
+
+
 export default function DriverProfilePage() {
   const router = useRouter();
   const {
     driver,
+    privateData,
     loading,
     error,
     editMode,
@@ -190,7 +206,7 @@ export default function DriverProfilePage() {
                 </div>
                 <div className="flex items-center justify-between py-2">
                   <span className="text-slate-400 text-sm">Numéro de permis</span>
-                  <span className="text-white text-sm">{driver.licenseNumber}</span>
+                  <span className="text-white text-sm">{driver.licenseNumber ?? 'Non spécifié'}</span>
                 </div>
               </div>
             )}
@@ -485,36 +501,36 @@ export default function DriverProfilePage() {
               <MaterialIcon name="description" size="md" className="text-primary" />
               Documents
             </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
-                <div className="flex items-center gap-2">
-                  <MaterialIcon name="badge" size="md" className="text-slate-400" />
-                  <span className="text-slate-300 text-sm">Permis de conduire</span>
-                </div>
-                <a
-                  href={driver.documents.licensePhoto}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary text-sm font-medium hover:underline"
-                >
-                  Voir
-                </a>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
-                <div className="flex items-center gap-2">
-                  <MaterialIcon name="receipt_long" size="md" className="text-slate-400" />
-                  <span className="text-slate-300 text-sm">Carte grise</span>
-                </div>
-                <a
-                  href={driver.documents.carRegistration}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary text-sm font-medium hover:underline"
-                >
-                  Voir
-                </a>
-              </div>
-            </div>
+             <div className="space-y-3">
+               <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
+                 <div className="flex items-center gap-2">
+                   <MaterialIcon name="badge" size="md" className="text-slate-400" />
+                   <span className="text-slate-300 text-sm">Permis de conduire</span>
+                 </div>
+                 <a
+                   href={normalizeDocUrl(privateData?.documents?.licensePhoto)}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   className={`text-sm font-medium ${normalizeDocUrl(privateData?.documents?.licensePhoto) ? 'text-primary hover:underline' : 'text-slate-500 pointer-events-none'}`}
+                 >
+                   {normalizeDocUrl(privateData?.documents?.licensePhoto) ? 'Voir' : 'Non disponible'}
+                 </a>
+               </div>
+               <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
+                 <div className="flex items-center gap-2">
+                   <MaterialIcon name="receipt_long" size="md" className="text-slate-400" />
+                   <span className="text-slate-300 text-sm">Carte grise</span>
+                 </div>
+                 <a
+                   href={normalizeDocUrl(privateData?.documents?.carRegistration)}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   className={`text-sm font-medium ${normalizeDocUrl(privateData?.documents?.carRegistration) ? 'text-primary hover:underline' : 'text-slate-500 pointer-events-none'}`}
+                 >
+                   {normalizeDocUrl(privateData?.documents?.carRegistration) ? 'Voir' : 'Non disponible'}
+                 </a>
+               </div>
+             </div>
           </div>
         </div>
       </div>

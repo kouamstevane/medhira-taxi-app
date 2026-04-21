@@ -258,7 +258,7 @@ class VoipService {
     } finally {
       await this.cleanup();
       this.updateState({
-        status: reason as CallStatus === 'declined' ? 'declined' : 'ended',
+        status: (reason as CallStatus) === 'declined' ? 'declined' : 'ended',
         callId: null,
         bookingId: null,
         channel: null,

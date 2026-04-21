@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db, storage, app } from '@/config/firebase';
-import { createUserWithEmailAndPassword, onAuthStateChanged, deleteUser } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp as firestoreServerTimestamp } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, onAuthStateChanged, deleteUser, type User } from 'firebase/auth';
+import { doc, getDoc, serverTimestamp as firestoreServerTimestamp, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AuthService } from '@/services';
@@ -15,7 +15,9 @@ import { StructuredLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
 import { redirectWithFallback } from '@/utils/navigation';
 import { useConnectivityMonitor, checkConnectivity } from '@/hooks/useConnectivityMonitor';
-import { DEFAULT_DRIVER_COUNTRY_CODE } from '@/utils/constants';
+import { DEFAULT_DRIVER_COUNTRY_CODE, ACTIVE_MARKET } from '@/utils/constants';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import type { Step1FormData } from '@/app/driver/register/components/Step1Intent';
 import type { Step2FormData } from '@/app/driver/register/components/Step2Identity';
 import type { Step3FormData } from '@/app/driver/register/components/Step3Vehicle';
@@ -39,6 +41,7 @@ export function useDriverRegistration() {
   const [error, setError] = useState<string | null>(null);
   const [isExistingUser, setIsExistingUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
   const [rejectionCode, setRejectionCode] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
@@ -62,6 +65,7 @@ export function useDriverRegistration() {
   const emailRetryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const browserListenerRef = useRef<{ remove: () => void } | null>(null);
   const hasRestoredProgressRef = useRef(false);
   const loggerRef = useRef<StructuredLogger>(new StructuredLogger(null, 'DriverRegistration'));
 
@@ -72,6 +76,7 @@ export function useDriverRegistration() {
       if (emailRetryTimerRef.current) clearTimeout(emailRetryTimerRef.current);
       if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      browserListenerRef.current?.remove();
     };
   }, []);
 
@@ -151,14 +156,23 @@ export function useDriverRegistration() {
             if (data.status === 'action_required' || data.status === 'rejected') {
               setRejectionCode(data.rejectionCode || 'R000');
               setRejectionReason(data.rejectionReason || data.rejectionMessage || 'Votre dossier nécessite une action.');
+              // RGPD #C2 : les PII (dob/nationality/address) vivent dans la
+              // sous-collection `drivers/{uid}/private/personal`.
+              let privateData: Record<string, unknown> = {};
+              try {
+                const privateDoc = await getDoc(doc(db, 'drivers', user.uid, 'private', 'personal'));
+                if (privateDoc.exists()) privateData = privateDoc.data() || {};
+              } catch (e) {
+                loggerRef.current.logWarning('PRIVATE_FETCH', 'Lecture private/personal échouée', { error: (e as Error).message });
+              }
               setStep2Data(prev => ({
                 ...prev,
                 firstName: data.firstName || '',
                 lastName: data.lastName || '',
-                dob: data.dob || '',
-                nationality: data.nationality || DEFAULT_DRIVER_COUNTRY_CODE,
+                dob: (privateData.dob as string) || '',
+                nationality: (privateData.nationality as string) || DEFAULT_DRIVER_COUNTRY_CODE,
                 ssn: '',
-                address: data.address || '',
+                address: (privateData.address as string) || '',
                 city: data.city || '',
                 zipCode: data.zipCode || '',
               }));
@@ -239,12 +253,17 @@ export function useDriverRegistration() {
   const handleStep1Next = async (data: Step1FormData) => {
     setLoading(true);
     setError(null);
+    // Référence capturée immédiatement après la création — protège contre
+    // les race conditions où auth.currentUser pourrait changer entre la
+    // création du compte et l'entrée dans le bloc catch (onAuthStateChanged async).
+    let newlyCreatedUser: User | null = null;
     try {
       if (!isExistingUser) {
         // Créer uniquement le compte Firebase Auth — le profil driver complet
         // est créé à Step5 via Cloud Function createDriverProfile.
         // Ne pas écrire dans users/ (réservé aux clients, userType='client').
-        await createUserWithEmailAndPassword(auth, data.email, data.password);
+        const credential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+        newlyCreatedUser = credential.user;
       }
       setStep1Data(data);
       // Envoyer le code OTP — Step1 reste visible en Phase B
@@ -255,17 +274,19 @@ export function useDriverRegistration() {
       }
       // Ne PAS appeler setCurrentStep(2) ici
     } catch (err: unknown) {
-      // Nettoyer le compte Auth si créé mais OTP échoué
-      if (!isExistingUser && auth.currentUser) {
+      // Nettoyer le compte Auth si créé dans cette session mais étape suivante échouée.
+      // On utilise newlyCreatedUser (capturé juste après la création) plutôt que
+      // auth.currentUser pour éviter les race conditions avec onAuthStateChanged.
+      if (newlyCreatedUser) {
         try {
-          await deleteUser(auth.currentUser);
+          await deleteUser(newlyCreatedUser);
         } catch (cleanupErr) {
-          console.error('[useDriverRegistration] Erreur suppression compte Auth après échec OTP:', cleanupErr);
+          console.error('[useDriverRegistration] Erreur suppression compte Auth orphelin après échec OTP:', cleanupErr);
         }
       }
       const error = err as { code?: string; message?: string };
       if (error?.code === 'auth/email-already-in-use') {
-        setError('Cet email est déjà utilisé. Essayez de vous connecter.');
+        setError('Un compte avec cet email existe déjà. Si vous avez commencé une inscription, connectez-vous pour reprendre votre dossier.');
       } else if (error?.code === 'auth/weak-password') {
         setError('Le mot de passe est trop faible. Utilisez au moins 6 caractères.');
       } else {
@@ -295,7 +316,13 @@ export function useDriverRegistration() {
 
   const handleStep3Next = (
     data: Step3FormData,
-    files: { registration: File; insurance?: File; techControl: File; interiorPhoto: File; exteriorPhoto: File }
+    files: {
+      registration?: File;
+      insurance?: File;
+      techControl?: File;
+      interiorPhoto?: File;
+      exteriorPhoto?: File;
+    }
   ) => {
     setStep3Data(data);
     setVehicleFiles(files);
@@ -307,15 +334,16 @@ export function useDriverRegistration() {
     setCurrentStep(5);
   };
 
-  const handleStep5FinalSubmit = async (data: Step5FormData) => {
-    if (isSubmitting) return;
-    setIsSubmitting(true);
+  const handleStep5FinalSubmit = async (_data: Step5FormData) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setLoading(true);
     setError(null);
 
     if (!checkConnectivity()) {
       setError("Vous n'êtes pas connecté à internet.");
       setLoading(false);
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       return;
     }
@@ -325,6 +353,7 @@ export function useDriverRegistration() {
     if (!userId || !user) {
       setError('Vous devez être connecté pour soumettre votre dossier.');
       setLoading(false);
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
       return;
     }
@@ -335,13 +364,31 @@ export function useDriverRegistration() {
     try {
       await user.getIdToken(true);
 
+      // Documents véhicule : uniquement pour les conducteurs (chauffeur/les_deux)
+      // OU les livreurs en voiture. Les livreurs vélo/scooter/moto ne fournissent
+      // PAS de carte grise, contrôle technique, assurance pro, photos int/ext.
+      const requiresVehicleDocs =
+        driverType === 'chauffeur' ||
+        driverType === 'les_deux' ||
+        (driverType === 'livreur' && vehicleType === 'voiture');
+
+      // Helper : skip l'upload si le fichier est absent ou vide (sécurité
+      // anti-File([]) vide). Retourne toujours un PromiseSettledResult pour
+      // conserver l'indexation stable du tableau uploadResults.
+      const uploadIfValid = (file: File | undefined | null, category: string) => {
+        if (!file || file.size === 0) {
+          return Promise.resolve(null) as Promise<string | null>;
+        }
+        return uploadFileWithRetry(file, category, userId);
+      };
+
       uploadResults = await Promise.allSettled([
         uploadFileWithRetry(biometricsPhoto, 'biometrics', userId),
-        uploadFileWithRetry(vehicleFiles.registration!, 'documents', userId),
-        uploadFileWithRetry(vehicleFiles.insurance || null, 'documents', userId),
-        uploadFileWithRetry(vehicleFiles.techControl!, 'documents', userId),
-        uploadFileWithRetry(vehicleFiles.exteriorPhoto!, 'vehicle_photos', userId),
-        uploadFileWithRetry(vehicleFiles.interiorPhoto!, 'vehicle_photos', userId),
+        requiresVehicleDocs ? uploadIfValid(vehicleFiles.registration, 'documents') : Promise.resolve(null),
+        requiresVehicleDocs ? uploadIfValid(vehicleFiles.insurance, 'documents') : Promise.resolve(null),
+        requiresVehicleDocs ? uploadIfValid(vehicleFiles.techControl, 'documents') : Promise.resolve(null),
+        requiresVehicleDocs ? uploadIfValid(vehicleFiles.exteriorPhoto, 'vehicle_photos') : Promise.resolve(null),
+        requiresVehicleDocs ? uploadIfValid(vehicleFiles.interiorPhoto, 'vehicle_photos') : Promise.resolve(null),
         uploadFileWithRetry(complianceFiles.idFront!, 'compliance', userId),
         uploadFileWithRetry(complianceFiles.idBack!, 'compliance', userId),
         uploadFileWithRetry(complianceFiles.licenseFront!, 'compliance', userId),
@@ -361,7 +408,8 @@ export function useDriverRegistration() {
         setError('Le numéro d\'assurance sociale est requis. Veuillez compléter l\'étape Identité.');
         setCurrentStep(2);
         setLoading(false);
-        setIsSubmitting(false);
+        isSubmittingRef.current = false;
+      setIsSubmitting(false);
         return;
       }
       let encryptedSsn = null;
@@ -382,33 +430,39 @@ export function useDriverRegistration() {
         techControlDate: step3Data.techControlDate,
       } : undefined;
 
-      const finalDriverData: Record<string, unknown> = {
+      // Construit la map documents conditionnellement : n'inclure une entrée
+      // que si l'upload a effectivement produit une URL (évite les faux documents
+      // "pending" avec url=null pour les livreurs non-voiture).
+      // RGPD #C2 : cette map vit dans la sous-collection `drivers/{uid}/private/personal`
+      // et NON à la racine du doc driver.
+      const documents: Record<string, { url: string; status: string }> = {};
+      const addDoc = (key: string, url: string | null) => {
+        if (url) documents[key] = { url, status: 'pending' };
+      };
+      addDoc('biometricPhoto', getValue(uploadResults[0]));
+      addDoc('carRegistration', getValue(uploadResults[1]));
+      addDoc('insurance', getValue(uploadResults[2]));
+      addDoc('techControl', getValue(uploadResults[3]));
+      addDoc('vehicleExterior', getValue(uploadResults[4]));
+      addDoc('vehicleInterior', getValue(uploadResults[5]));
+      addDoc('idFront', getValue(uploadResults[6]));
+      addDoc('idBack', getValue(uploadResults[7]));
+      addDoc('licenseFront', getValue(uploadResults[8]));
+      addDoc('licenseBack', getValue(uploadResults[9]));
+
+      // === RGPD #C2 : split public vs private ===
+      // Champs publics — doc racine `drivers/{uid}` (lisible par utilisateurs auth)
+      const publicData: Record<string, unknown> = {
         uid: userId,
         firstName: step2Data.firstName,
         lastName: step2Data.lastName,
         email: step1Data.email || auth.currentUser?.email || '',
         phone: step2Data.phone || step1Data.phone || '',
-        dob: step2Data.dob,
-        nationality: step2Data.nationality,
-        address: step2Data.address,
         city: step2Data.city,
         zipCode: step2Data.zipCode,
-        ssn: encryptedSsn,
         driverType,
         vehicleType,
         cityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',
-        documents: {
-          biometricPhoto: getValue(uploadResults[0]),
-          carRegistration: getValue(uploadResults[1]),
-          insurance: getValue(uploadResults[2]),
-          techControl: getValue(uploadResults[3]),
-          vehicleExterior: getValue(uploadResults[4]),
-          vehicleInterior: getValue(uploadResults[5]),
-          idFront: getValue(uploadResults[6]),
-          idBack: getValue(uploadResults[7]),
-          licenseFront: getValue(uploadResults[8]),
-          licenseBack: getValue(uploadResults[9]),
-        },
         status: 'pending',
         userType: 'chauffeur',
         createdAt: firestoreServerTimestamp(),
@@ -419,16 +473,33 @@ export function useDriverRegistration() {
       };
 
       if (carData) {
-        finalDriverData.car = carData;
+        publicData.car = carData;
       }
+
+      // Champs sensibles — sous-collection `drivers/{uid}/private/personal`
+      const privateData: Record<string, unknown> = {
+        dob: step2Data.dob,
+        nationality: step2Data.nationality,
+        address: step2Data.address,
+        ssn: encryptedSsn,
+        documents,
+        updatedAt: firestoreServerTimestamp(),
+      };
 
       await auth.currentUser?.getIdToken(true);
       const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
       const functions = getFunctions(app, functionsRegion);
       const createDriverProfile = httpsCallable(functions, 'createDriverProfile');
-      await retryWithBackoff(() => createDriverProfile({ driverId: userId, driverData: finalDriverData }), {
+      // 1) CF crée le doc racine (Admin SDK — seul moyen d'écrire userType='chauffeur')
+      await retryWithBackoff(() => createDriverProfile({ driverId: userId, driverData: publicData }), {
         maxAttempts: 3,
       });
+
+      // 2) Client écrit la sous-collection privée (owner uniquement via rules)
+      // Utilise un writeBatch pour garantir l'atomicité de l'écriture privée.
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'drivers', userId, 'private', 'personal'), privateData, { merge: true });
+      await batch.commit();
 
       await clearProgress();
       setSubmissionSuccess(true);
@@ -440,15 +511,15 @@ export function useDriverRegistration() {
           const connectRes = await fetch('/api/stripe/connect/account', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ email: auth.currentUser.email, country: 'CA' }),
+            body: JSON.stringify({ email: auth.currentUser.email, country: ACTIVE_MARKET }),
           });
           if (connectRes.ok || connectRes.status === 409) {
             const onboardRes = await fetch('/api/stripe/connect/onboard', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
               body: JSON.stringify({
-                returnUrl: `${window.location.origin}/driver/verify?onboarding=success`,
-                refreshUrl: `${window.location.origin}/driver/verify?onboarding=refresh`,
+                returnUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=success`,
+                refreshUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=refresh`,
               }),
             });
             if (onboardRes.ok) {
@@ -462,7 +533,17 @@ export function useDriverRegistration() {
       }
 
       if (stripeOnboardingUrl) {
-        window.location.href = stripeOnboardingUrl;
+        if (Capacitor.isNativePlatform()) {
+          browserListenerRef.current?.remove();
+          await Browser.open({ url: stripeOnboardingUrl });
+          const listener = await Browser.addListener('browserFinished', () => {
+            browserListenerRef.current = null;
+            router.push('/driver/dashboard?submission=1&stripe=pending');
+          });
+          browserListenerRef.current = listener;
+        } else {
+          window.location.href = stripeOnboardingUrl;
+        }
       } else {
         redirectTimeoutRef.current = redirectWithFallback(
           router,
@@ -485,11 +566,11 @@ export function useDriverRegistration() {
       }
 
       const error = err as { code?: string; message?: string };
-      let errorMessage = "Erreur lors de l'inscription. Veuillez réessayer.";
+      let errorMessage = "Erreur lors de la soumission. Vos fichiers ont été supprimés. Veuillez réessayer — si l'erreur persiste, reconnectez-vous pour reprendre votre dossier.";
       if (error?.code === 'permission-denied') {
-        errorMessage = 'Erreur de permissions. Veuillez vous reconnecter.';
+        errorMessage = 'Session expirée. Veuillez vous reconnecter puis reprendre votre inscription.';
       } else if (error?.code === 'storage/unauthorized') {
-        errorMessage = "Erreur lors de l'upload des fichiers.";
+        errorMessage = "Erreur lors de l'upload des fichiers. Veuillez réessayer.";
       } else if (error?.message) {
         errorMessage = `Erreur : ${error.message}`;
       }
@@ -497,6 +578,7 @@ export function useDriverRegistration() {
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -574,6 +656,16 @@ export function useDriverRegistration() {
       if (!data.success) {
         return { success: false, error: data.error, attemptsLeft: data.attemptsLeft };
       }
+
+      // CORRECTION BUG : Recharger le profil Firebase Auth côté client après
+      // que le Admin SDK a mis emailVerified: true via la Cloud Function verifyCode.
+      // Sans ce reload(), user.emailVerified reste false dans le cache client,
+      // ce qui provoque l'affichage erroné du message "Vérifiez votre email"
+      // sur le driver/dashboard immédiatement après l'inscription.
+      if (auth.currentUser) {
+        await auth.currentUser.reload();
+      }
+
       return { success: true };
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };

@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import { Loader2, ShieldCheck, Building2, Lock, CreditCard } from 'lucide-react';
+import { ACTIVE_MARKET } from '@/utils/constants';
 
 /**
  * Step5Monetization — Paiement & Monétisation
@@ -33,7 +34,7 @@ export default function Step5Monetization({
 }: Step5MonetizationProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmitFinal({ country: 'CA' });
+    onSubmitFinal({ country: ACTIVE_MARKET });
   };
 
   return (

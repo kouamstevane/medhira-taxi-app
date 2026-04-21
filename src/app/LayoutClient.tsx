@@ -10,9 +10,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useKeyboard } from '@/hooks/useKeyboard';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Header } from '@/components/layout/Header';
 import { VoipCallProvider } from '@/context/VoipCallProvider';
 import { Toaster } from 'react-hot-toast';
@@ -44,7 +45,9 @@ const NO_HEADER_ROUTES = [
  */
 export default function LayoutClient({ children }: LayoutClientProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { currentUser, userData, loading } = useAuth();
+  const { unreadCount } = useNotifications();
   const [showHeader, setShowHeader] = useState(false);
   
   // Initialize keyboard handling to fix white space issues
@@ -97,7 +100,13 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       />
 
       {/* Header conditionnel */}
-      {showHeader && <Header userData={userData} />}
+      {showHeader && (
+        <Header
+          userData={userData}
+          notifCount={unreadCount}
+          onNotificationClick={() => router.push('/notifications')}
+        />
+      )}
 
       {/* Contenu principal */}
       <main className={showHeader ? '' : ''}>

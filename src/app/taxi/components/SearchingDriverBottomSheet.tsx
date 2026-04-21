@@ -7,7 +7,6 @@
 
 'use client';
 
-import { useEffect } from 'react';
 import { FiX, FiClock } from 'react-icons/fi';
 
 interface SearchingDriverBottomSheetProps {
@@ -26,14 +25,6 @@ export function SearchingDriverBottomSheet({
   onCancel,
   isAutoSearching = false,
 }: SearchingDriverBottomSheetProps) {
-  // Animation pulsing
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Animation CSS gérée automatiquement
-    }, 1500);
-    return () => clearInterval(interval);
-  }, []);
-
   const progressPercent = ((60 - timeRemaining) / 60) * 100;
 
   return (

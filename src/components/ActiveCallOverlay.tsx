@@ -38,7 +38,7 @@ export function ActiveCallOverlay() {
   const otherParticipant = callState.direction === 'outgoing' ? callState.callee : callState.caller;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-between py-16 animate-[slideUp_0.3s_ease-out]">
+    <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-between py-16 animate-slide-up">
       {/* Header Info */}
       <div className="flex flex-col items-center gap-4 mt-8">
         <div className="relative">
@@ -110,12 +110,6 @@ export function ActiveCallOverlay() {
         </button>
       </div>
 
-      <style jsx global>{`
-        @keyframes slideUp {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }

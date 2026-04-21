@@ -6,7 +6,7 @@ import { db } from '@/config/firebase';
 import { logger } from '@/utils/logger';
 import { FiMessageSquare, FiEdit2 } from 'react-icons/fi';
 import { Booking, CarType, Location, PlaceSuggestion } from '@/types/booking';
-import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api';
+import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { updateDestination, updatePassengerLocation, getCarTypes } from '@/services/taxi.service';
 import { AddressInput } from './AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
@@ -54,10 +54,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   const { watchPosition } = useCapacitorGeolocation();
   const { showError, showSuccess, toasts, removeToast } = useToast();
 
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
-  });
+  const { isLoaded } = useGoogleMaps();
 
   const onLoad = useCallback(function callback(_map: google.maps.Map) {
     // Map instance available if needed

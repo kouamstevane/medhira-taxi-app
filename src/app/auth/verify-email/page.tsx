@@ -22,9 +22,9 @@ export default function VerifyEmailPage() {
       setEmail(user.email || '');
       setIsVerified(user.emailVerified || false);
 
-      // Si l'email est déjà vérifié, rediriger vers le dashboard
+      // Si l'email est déjà vérifié, rediriger vers la configuration paiement
       if (user.emailVerified) {
-        router.push('/dashboard');
+        router.push('/auth/setup-payment');
       }
     } else {
       // Si aucun utilisateur n'est connecté, rediriger vers la page de connexion
@@ -70,7 +70,7 @@ export default function VerifyEmailPage() {
       if (user.emailVerified) {
         setSuccess('Votre email a été vérifié avec succès ! Redirection en cours...');
         setTimeout(() => {
-          router.push('/dashboard');
+          router.push('/auth/setup-payment');
         }, 1500);
       } else {
         setError('Votre email n\'est pas encore vérifié. Veuillez vérifier votre boîte de réception.');

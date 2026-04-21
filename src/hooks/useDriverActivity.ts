@@ -49,7 +49,7 @@ export function useDriverActivity(uid: string): {
     }
 
     const taxiQuery = query(
-      collection(db, 'active_bookings'),
+      collection(db, 'bookings'),
       where('driverId', '==', uid),
       orderBy('createdAt', 'desc'),
       limit(50)

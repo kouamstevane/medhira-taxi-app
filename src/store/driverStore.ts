@@ -19,11 +19,8 @@ export interface DriverCoreData {
   profileImageUrl?: string;
   licenseNumber?: string;
   car: DriverCarData;
-  documents: {
-    licensePhoto?: string;
-    carRegistration?: string;
-    [key: string]: string | undefined;
-  };
+  // NOTE RGPD #C2 : `documents` a été déplacé dans la sous-collection
+  // `drivers/{uid}/private/personal` — voir useDriverPrivate / DriverPrivateData.
   rating?: number;
   tripsCompleted?: number;
   earnings?: number;
@@ -37,6 +34,21 @@ export interface DriverCoreData {
   deliveryEarnings?: number;
   ratingsCount?: number;
   fcmToken?: string;
+}
+
+/**
+ * RGPD #C2 — Données privées du driver (sous-collection private/personal).
+ * Hydratée par un fetch séparé (voir useDriverProfile / pages admin).
+ */
+export interface DriverPrivateData {
+  dob?: string;
+  nationality?: string;
+  address?: string;
+  documents?: {
+    licensePhoto?: string | { url: string | null; status: string; rejectionReason?: string };
+    carRegistration?: string | { url: string | null; status: string; rejectionReason?: string };
+    [key: string]: string | { url: string | null; status: string; rejectionReason?: string } | undefined;
+  };
 }
 
 interface DriverState {

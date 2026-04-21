@@ -65,14 +65,9 @@ export interface DriverCollection {
   phoneNumber: null              // Toujours null — interdiction d'auth par téléphone
   firstName: string
   lastName: string
-  dob: string
-  nationality: string
-  address: string
   city: string
   zipCode: string
   phone: string
-  ssn?: { data: string; iv: string; salt: string }
-  bank?: { data: string; iv: string; salt: string }
   status: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'action_required'
   isAvailable: boolean
   rating: number
@@ -110,23 +105,57 @@ export interface DriverCollection {
     plate: string                // anciennement `plateNumber`
   }
 
-  // Documents — nouvelle structure imbriquée (remplace { license, insurance, registration })
-  documents: {
-    [documentKey: string]: {
-      url: string | null
-      status: 'pending' | 'approved' | 'rejected' | 'not_submitted'
-      rejectionReason?: string
-      submittedAt?: Date
-      reviewedAt?: Date
-    }
-  }
-
   // Gains livreur
   deliveriesCompleted?: number
   deliveryEarnings?: number
 
   // Notation
   ratingsCount?: number
+
+  // NOTE RGPD (#C2) : Les champs sensibles suivants ont été retirés de la
+  // racine `drivers/{uid}` et vivent désormais dans la sous-collection
+  // `drivers/{uid}/private/personal` (voir interface `DriverPrivate`) :
+  //   - ssn, bank, address, dob, nationality, idNumber, documents
+}
+
+/**
+ * Sous-collection PRIVATE (dans DRIVERS)
+ * --------------------------------------
+ * Chemin : drivers/{uid}/private/personal
+ * Description : Données PII/sensibles (RGPD #C2) — séparées du doc racine.
+ *
+ * Règles de sécurité :
+ * - Read : Propriétaire uniquement OU admin
+ * - Write : Propriétaire uniquement (champs sensibles) OU admin
+ *
+ * Aucun autre chauffeur ni client authentifié ne peut lire ces champs.
+ */
+export interface DriverPrivate {
+  // Identité personnelle
+  dob?: string
+  nationality?: string
+  idNumber?: string
+
+  // Adresse complète
+  address?: string
+
+  // Données fiscales / bancaires (chiffrées AES-GCM)
+  ssn?: { data: string; iv: string; salt: string }
+  bank?: { data: string; iv: string; salt: string }
+
+  // Documents KYC (URLs Firebase Storage + statut de vérification)
+  documents?: {
+    [documentKey: string]: {
+      url: string | null
+      status: 'pending' | 'approved' | 'rejected' | 'not_submitted'
+      rejectionReason?: string
+      approvedBy?: string
+      submittedAt?: Date
+      reviewedAt?: Date
+    }
+  }
+
+  updatedAt?: Date
 }
 
 /**
@@ -486,7 +515,7 @@ export interface RestaurantCollection {
   address: string;
   phone: string;
   email: string;
-  cuisineType: string;
+  cuisineType: string[];
   avgPricePerPerson: number;
   commissionRate: number;
   status: 'pending_approval' | 'approved' | 'suspended' | 'rejected';
@@ -549,7 +578,7 @@ export interface FoodOrderCollection {
   basePrice: number;
   deliveryCost: number;
   totalOrderPrice: number;
-  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'delivering' | 'delivered' | 'cancelled';
+  status: 'pending_payment' | 'pending' | 'confirmed' | 'accepted' | 'preparing' | 'ready' | 'driver_heading_to_restaurant' | 'driver_arrived_restaurant' | 'picked_up' | 'out_for_delivery' | 'arriving' | 'delivering' | 'delivered' | 'no_driver_available' | 'cancelled' | 'cancelled_by_restaurant';
   pickupCode: string;
   paymentValidated: boolean;
   createdAt: Date;

@@ -35,7 +35,7 @@ export function IncomingCallOverlay() {
   const { caller } = callState;
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-between py-16 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 animate-[fadeIn_0.3s_ease-out]">
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-between py-16 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 animate-fade-in">
       <div className="flex flex-col items-center gap-6 mt-12">
         <div className="relative">
           <div className="absolute inset-0 bg-blue-500 rounded-full animate-ping opacity-20"></div>
@@ -81,12 +81,6 @@ export function IncomingCallOverlay() {
         </button>
       </div>
 
-      <style jsx global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-      `}</style>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { CURRENCY_CODE } from '@/utils/constants';
 
 export default function OrdersHistoryPage() {
   const router = useRouter();
-  const { currentUser: user } = useAuth() || { currentUser: { uid: 'user_123' } as unknown };
+  const { currentUser: user } = useAuth();
   const [orders, setOrders] = useState<FoodOrder[]>([]);
   const [loading, setLoading] = useState(true);
 

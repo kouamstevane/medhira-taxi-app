@@ -10,9 +10,9 @@ import {
   signInWithCredential,
   AuthErrorCodes,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { isValidPhoneNumber } from '@/lib/validation';
+import { isValidPhoneNumber, isValidPassword } from '@/lib/validation';
 import { SUPPORTED_COUNTRIES, ERROR_MESSAGES } from '@/utils/constants';
 
 export default function RegisterPhoneContent() {
@@ -84,8 +84,8 @@ export default function RegisterPhoneContent() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Le mot de passe doit contenir au moins 6 caractères');
+    if (!isValidPassword(formData.password)) {
+      setError('Le mot de passe doit contenir au moins 8 caractères avec majuscule, minuscule et chiffre');
       return;
     }
 
@@ -217,7 +217,7 @@ export default function RegisterPhoneContent() {
       const credential = PhoneAuthProvider.credential(verificationId, code);
       const userCredential = await signInWithCredential(auth, credential);
       await createUserDocument(userCredential.user);
-      router.push('/dashboard');
+      router.push('/auth/setup-payment');
     } catch (error: unknown) {
       handleAuthError(error);
     } finally {
@@ -236,8 +236,8 @@ export default function RegisterPhoneContent() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         userType: 'client',
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
         profileImageUrl: '',
         country: selectedCountry.code
       });
@@ -260,19 +260,21 @@ export default function RegisterPhoneContent() {
     let errorMessage = "Une erreur est survenue";
 
     // Envoi de l'erreur au serveur pour le debugging
-    try {
-      await fetch('/api/debug/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: err.message || "Unknown error",
-          code: err.code || "UNKNOWN_CODE",
-          stack: err.stack,
-          context: 'RegisterPhoneContent'
-        }),
-      });
-    } catch (e) {
-      // Ignorer les erreurs de log
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        await fetch('/api/debug/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: err.message || "Unknown error",
+            code: err.code || "UNKNOWN_CODE",
+            stack: err.stack,
+            context: 'RegisterPhoneContent'
+          }),
+        });
+      } catch (e) {
+        // Ignorer les erreurs de log
+      }
     }
 
     switch (err.code) {

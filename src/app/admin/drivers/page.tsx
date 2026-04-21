@@ -10,10 +10,12 @@ import {
   onSnapshot,
   startAfter,
   getDocs,
+  doc,
   DocumentSnapshot,
   Timestamp,
 } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
+import type { DriverPrivate } from '@/types/firestore-collections';
 import { suspendDriver, unsuspendDriver, deactivateDriver, reactivateDriver } from '@/services/admin.service';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { createLogger } from '@/utils/logger';
@@ -46,19 +48,8 @@ export interface Driver {
   carModel?: string;
   carPlate?: string;
   carColor?: string;
-  documents: {
-    licensePhoto: string;
-    licenseFront?: string;
-    licenseBack?: string;
-    idFront?: string;
-    idBack?: string;
-    carRegistration: string;
-    insurance?: string;
-    techControl?: string;
-    vehicleExterior?: string;
-    vehicleInterior?: string;
-    biometricPhoto?: string;
-  };
+  // RGPD #C2 : `documents` n'est plus à la racine — hydraté via
+  // `drivers/{uid}/private/personal` dans `selectedDriverPrivate`.
   createdAt: unknown;
   rejectionReason?: string;
   isSuspended?: boolean;
@@ -90,6 +81,8 @@ export default function AdminDriversPage() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [driverTypeFilter, setDriverTypeFilter] = useState<'all' | 'chauffeur' | 'livreur' | 'les_deux'>('all');
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  // RGPD #C2 : documents/PII depuis la sous-collection privée
+  const [selectedDriverPrivate, setSelectedDriverPrivate] = useState<DriverPrivate | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +116,22 @@ export default function AdminDriversPage() {
     setCurrentPage(0);
     setDrivers([]);
   }, [filter]);
+
+  // RGPD #C2 : souscrire à la sous-collection privée du driver sélectionné
+  useEffect(() => {
+    if (!selectedDriver) {
+      setSelectedDriverPrivate(null);
+      return;
+    }
+    const unsub = onSnapshot(
+      doc(db, 'drivers', selectedDriver.id, 'private', 'personal'),
+      (snap) => {
+        setSelectedDriverPrivate(snap.exists() ? (snap.data() as DriverPrivate) : {});
+      },
+      () => setSelectedDriverPrivate({})
+    );
+    return () => unsub();
+  }, [selectedDriver]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -657,18 +666,27 @@ export default function AdminDriversPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {[
-                    { label: 'Photo de profil', src: selectedDriver.documents.biometricPhoto, id: 'biometricPhoto' },
-                    { label: 'Permis (Recto)', src: selectedDriver.documents.licenseFront || selectedDriver.documents.licensePhoto, id: 'licensePhoto' },
-                    { label: 'Permis (Verso)', src: selectedDriver.documents.licenseBack, id: 'licenseBack' },
-                    { label: 'Identité (Recto)', src: selectedDriver.documents.idFront, id: 'idFront' },
-                    { label: 'Identité (Verso)', src: selectedDriver.documents.idBack, id: 'idBack' },
-                    { label: 'Carte grise', src: selectedDriver.documents.carRegistration, id: 'carRegistration' },
-                    { label: 'Assurance', src: selectedDriver.documents.insurance, id: 'insurance' },
-                    { label: 'Contrôle Technique', src: selectedDriver.documents.techControl, id: 'techControl' },
-                    { label: 'Véhicule (Extérieur)', src: selectedDriver.documents.vehicleExterior, id: 'vehicleExterior' },
-                    { label: 'Véhicule (Intérieur)', src: selectedDriver.documents.vehicleInterior, id: 'vehicleInterior' },
-                  ].map((doc, idx) => doc.src ? (
+                  {(() => {
+                    const pd = selectedDriverPrivate?.documents ?? {};
+                    const urlOf = (key: string): string | undefined => {
+                      const v = pd[key];
+                      if (!v) return undefined;
+                      if (typeof v === 'string') return v || undefined;
+                      return v.url ?? undefined;
+                    };
+                    return [
+                      { label: 'Photo de profil', src: urlOf('biometricPhoto'), id: 'biometricPhoto' },
+                      { label: 'Permis (Recto)', src: urlOf('licenseFront') || urlOf('licensePhoto'), id: 'licensePhoto' },
+                      { label: 'Permis (Verso)', src: urlOf('licenseBack'), id: 'licenseBack' },
+                      { label: 'Identité (Recto)', src: urlOf('idFront'), id: 'idFront' },
+                      { label: 'Identité (Verso)', src: urlOf('idBack'), id: 'idBack' },
+                      { label: 'Carte grise', src: urlOf('carRegistration'), id: 'carRegistration' },
+                      { label: 'Assurance', src: urlOf('insurance'), id: 'insurance' },
+                      { label: 'Contrôle Technique', src: urlOf('techControl'), id: 'techControl' },
+                      { label: 'Véhicule (Extérieur)', src: urlOf('vehicleExterior'), id: 'vehicleExterior' },
+                      { label: 'Véhicule (Intérieur)', src: urlOf('vehicleInterior'), id: 'vehicleInterior' },
+                    ];
+                  })().map((doc, idx) => doc.src ? (
                     <div key={idx} className="group flex flex-col gap-2">
                       <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{doc.label}</span>
                       <div className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-white/5 ring-1 ring-white/5 hover:ring-primary/50 transition-all duration-300">
@@ -688,7 +706,11 @@ export default function AdminDriversPage() {
                   ) : null)}
                 </div>
 
-                {Object.values(selectedDriver.documents).every(v => !v) && (
+                {(!selectedDriverPrivate?.documents || Object.values(selectedDriverPrivate.documents).every(v => {
+                  if (!v) return true;
+                  if (typeof v === 'string') return !v;
+                  return !v.url;
+                })) && (
                   <div className="p-8 text-center bg-white/5 border border-white/10 rounded-2xl">
                     <p className="text-slate-500 text-sm">Aucun document numérique disponible.</p>
                   </div>

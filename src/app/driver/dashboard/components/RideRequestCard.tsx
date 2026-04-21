@@ -2,20 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { RideCandidate } from '@/types';
 import { CURRENCY_CODE } from '@/utils/constants';
-
-interface RideRequest {
-  rideId: string;
-  candidate: RideCandidate;
-  bookingData?: {
-    pickup: string;
-    destination: string;
-    price: number;
-    distance?: number;
-    duration?: number;
-  };
-}
+import type { RideRequest } from '@/types/trip';
 
 interface RideRequestCardProps {
   request: RideRequest;

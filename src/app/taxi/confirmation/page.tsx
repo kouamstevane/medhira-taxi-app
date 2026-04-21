@@ -34,6 +34,7 @@ function ConfirmationContent() {
 
     const bookingRef = doc(db, "bookings", bookingId);
     let timeoutId: NodeJS.Timeout;
+    let unsubscribeDriver: (() => void) | null = null;
 
     const unsubscribe = onSnapshot(
       bookingRef,
@@ -61,7 +62,8 @@ function ConfirmationContent() {
         if (data.status === "accepted" && data.driverId) {
           // Charger la position du chauffeur
           const driverRef = doc(db, "drivers", data.driverId);
-          const unsubscribeDriver = onSnapshot(driverRef, (driverSnap: DocumentSnapshot<DocumentData>) => {
+          if (unsubscribeDriver) unsubscribeDriver();
+          unsubscribeDriver = onSnapshot(driverRef, (driverSnap: DocumentSnapshot<DocumentData>) => {
             if (driverSnap.exists()) {
               const driverData = driverSnap.data();
               if (driverData.lastLocation) {
@@ -69,6 +71,7 @@ function ConfirmationContent() {
                 
                 // Mettre à jour les directions si le point de départ est disponible
                 if (data.pickupLocation) {
+                  if (typeof google === 'undefined' || !google.maps) return;
                   const directionsService = new google.maps.DirectionsService();
                   directionsService.route(
                     {
@@ -88,10 +91,9 @@ function ConfirmationContent() {
               }
             }
           });
-          return () => unsubscribeDriver();
         }
 
-        if (data.status === "arrived") {
+        if (data.status === "driver_arrived") {
           setShowArrival(true);
           setTimeout(() => setShowArrival(false), 5000);
         }
@@ -112,6 +114,7 @@ function ConfirmationContent() {
     return () => {
       clearTimeout(timeoutId);
       unsubscribe();
+      if (unsubscribeDriver) unsubscribeDriver();
     };
   }, [bookingId]);
 
@@ -119,7 +122,7 @@ function ConfirmationContent() {
     if (!driverLocation || !booking?.pickupLocation) return "Calcul en cours...";
     
     // Utiliser les données d'itinéraire si disponibles
-    if (directions && directions.routes[0].legs[0].duration) {
+    if (directions?.routes?.[0]?.legs?.[0]?.duration) {
       return directions.routes[0].legs[0].duration.text;
     }
     
@@ -239,7 +242,7 @@ function ConfirmationContent() {
               </div>
             )}
 
-            {booking?.status === "arrived" && (
+            {booking?.status === "driver_arrived" && (
               <div className="text-center py-6">
                 <div className="w-14 h-14 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-500/20">
                   <MaterialIcon name="where_to_vote" className="text-green-400 text-[28px]" />

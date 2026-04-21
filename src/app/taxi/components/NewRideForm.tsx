@@ -32,7 +32,7 @@ import type { StripePaymentMethod } from '@/types/stripe';
 //  Schéma Zod de validation pour la création de course (medJira.md #85)
 const BookingSchema = z.object({
   userId: z.string().min(1, 'UID utilisateur requis'),
-  userEmail: z.string().email('Email invalide'),
+  userEmail: z.string().email('Email invalide').nullable().optional(),
   pickup: z.string().min(5, 'Adresse de départ trop courte (min 5 caractères)'),
   destination: z.string().min(5, 'Adresse de destination trop courte (min 5 caractères)'),
   pickupLocation: z.object({

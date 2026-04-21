@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/config/firebase-admin';
 import { z } from 'zod';
 import * as crypto from 'crypto';
+import { timingSafeEqual } from 'crypto';
 import * as admin from 'firebase-admin';
 
 export const runtime = 'nodejs';
@@ -16,7 +17,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Firebase Admin SDK non configuré.' }, { status: 503 });
   }
 
-  // Authentification
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 });
@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Token invalide ou expiré.' }, { status: 401 });
   }
 
-  // Validation
   const body = await request.json();
   const result = VerifyCodeSchema.safeParse(body);
   if (!result.success) {
@@ -39,7 +38,6 @@ export async function POST(request: NextRequest) {
 
   const { code } = result.data;
 
-  // Lire le document Firestore
   const docRef = adminDb.collection('emailVerificationCodes').doc(uid);
   const docSnap = await docRef.get();
 
@@ -52,7 +50,6 @@ export async function POST(request: NextRequest) {
 
   const data = docSnap.data()!;
 
-  // Vérifier l'expiration
   const expiresAt: admin.firestore.Timestamp = data.expiresAt;
   if (expiresAt.toMillis() < Date.now()) {
     await docRef.delete();
@@ -62,7 +59,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Vérifier les tentatives
   const attempts: number = data.attempts ?? 0;
   if (attempts >= 3) {
     await docRef.delete();
@@ -78,7 +74,10 @@ export async function POST(request: NextRequest) {
       err ? reject(err) : resolve(key.toString('hex'))
     )
   );
-  if (hashedSubmitted !== data.code) {
+
+  const submitted = Buffer.from(hashedSubmitted, 'hex');
+  const stored = Buffer.from(data.code, 'hex');
+  if (submitted.length !== stored.length || !timingSafeEqual(submitted, stored)) {
     const newAttempts = attempts + 1;
     if (newAttempts >= 3) {
       await docRef.delete();
@@ -94,20 +93,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Succès
   await docRef.delete();
 
-  // Mettre à jour Firebase Auth
   await adminAuth.updateUser(uid, { emailVerified: true });
 
-  // Mettre à jour Firestore drivers (ignore si le doc n'existe pas encore)
   try {
     await adminDb.collection('drivers').doc(uid).update({
       emailVerified: true,
       emailVerifiedAt: admin.firestore.Timestamp.now(),
     });
-  } catch {
-    // Document drivers pas encore créé — ignoré, Firebase Auth est la source de vérité
+  } catch (err) {
+    console.warn('[verify-code] Mise à jour drivers échouée (doc probablement inexistant):', err);
+  }
+
+  try {
+    await adminDb.collection('users').doc(uid).update({
+      emailVerified: true,
+      emailVerifiedAt: admin.firestore.Timestamp.now(),
+    });
+  } catch (err) {
+    console.warn('[verify-code] Mise à jour users échouée (doc probablement inexistant):', err);
   }
 
   return NextResponse.json({ success: true });

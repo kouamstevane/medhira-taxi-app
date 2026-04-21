@@ -137,63 +137,75 @@ service cloud.firestore {
     // Collection drivers - Les chauffeurs peuvent lire et écrire leurs propres données
     // Les admins peuvent modifier le statut
     // Les utilisateurs peuvent supprimer leur propre compte refusé pour permettre la recréation
+    //
+    // FIX #C2 (RGPD) : Le document racine drivers/{uid} ne contient que les champs PUBLICS
+    // (displayName, photo, rating, vehicleType, currentCity, isOnline, location, status, ...).
+    // Les champs SENSIBLES (ssn, bank, address, dob, nationality, documents, idNumber) DOIVENT
+    // être stockés dans la sous-collection privée /drivers/{uid}/private/{doc} (ex: personal).
+    // Règle serveur : tout champ listé dans SENSITIVE_FIELDS est refusé à la racine pour create/update owner.
     match /drivers/{driverId} {
       // Lecture d'un chauffeur spécifique (get) : authentifié
       // Permet aux clients de voir les infos du chauffeur assigné (confirmation page, tracking)
       // Permet au chauffeur de lire son propre profil
+      // Les champs sensibles vivent dans /drivers/{uid}/private/* (règle dédiée plus bas)
       allow get: if isAuthenticated();
-      
+
       // Liste des chauffeurs (query) : admin OU chauffeurs approuvés/disponibles uniquement
-      // Restriction RGPD : seuls les chauffeurs avec status 'approved' ou 'available' sont listables
-      // - 'approved' : chauffeurs vérifiés prêts à recevoir des courses
-      // - 'available' : chauffeurs actuellement en ligne et disponibles
-      // Les requêtes de matching filtrent par status='approved' ou status='available'
-      // TODO: Déplacer les champs sensibles (ssn, bank, address) dans une subcollection privée
       allow list: if isAdmin()
         || (isAuthenticated() && resource.data.status in ['approved', 'available']);
-      
+
       // Création : Les chauffeurs peuvent créer leur propre document
-      // CONTRAINTE : Les chauffeurs doivent s'inscrire par email UNIQUEMENT
-      // - L'UID doit correspondre à l'ID du document
-      // - L'email doit être présent (non null)
-      // - Le phoneNumber doit être null (interdiction de l'auth par téléphone)
-      // - Le userType doit être 'chauffeur'
-      // - Le statut initial doit être 'draft' ou 'pending'
-      //  FIX: L'email vérifié N'EST PAS requis lors de l'inscription (vérification après inscription)
+      // CONTRAINTE : Aucun champ sensible autorisé à la racine (doit aller en sous-collection private)
       allow create: if request.auth.uid == driverId &&
                        request.resource.data.email != null &&
                        request.resource.data.phoneNumber == null &&
                        request.resource.data.userType == 'chauffeur' &&
-                       (request.resource.data.status == 'draft' || request.resource.data.status == 'pending');
-      
-      // Mise à jour : Le propriétaire ou l'admin peuvent modifier les données
-      // Les chauffeurs peuvent modifier leur profil, mais pas leur statut (sauf pour passer de draft/action_required à pending)
-      // Les admins peuvent modifier le statut (pending -> approved/rejected/suspended)
-      // Le chauffeur doit avoir un email vérifié pour toute modification
-      // Lors de la transition vers 'pending', seuls certains champs sont autorisés (sécurité renforcée)
-      //  EXCEPTION : Le champ 'isAvailable' peut être modifié sans vérification d'email (fonctionnalité critique)
-      allow update: if (isOwner(driverId) && 
+                       (request.resource.data.status == 'draft' || request.resource.data.status == 'pending') &&
+                       !request.resource.data.keys().hasAny(
+                         ['ssn', 'bank', 'address', 'dob', 'nationality', 'documents', 'idNumber']
+                       );
+
+      // Mise à jour :
+      // - Le propriétaire ne peut JAMAIS modifier : documents, status, kycStatus, approvedBy (FIX #C3 — auto-approbation KYC)
+      // - Le propriétaire ne peut JAMAIS écrire les champs sensibles à la racine (FIX #C2 — RGPD)
+      // - Les admins peuvent tout modifier
+      allow update: if (isOwner(driverId) &&
+                        // FIX #C3 : empêcher l'auto-approbation KYC
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['documents', 'status', 'kycStatus', 'approvedBy']) &&
+                        // FIX #C2 : empêcher l'écriture de champs sensibles à la racine
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['ssn', 'bank', 'address', 'dob', 'nationality', 'idNumber']) &&
                         (
-                          // Autoriser la modification du profil/docs si en draft ou si l'email est déjà vérifié
-                          (request.resource.data.status == resource.data.status && 
-                           (isEmailVerified() || resource.data.status in ['draft', 'action_required'])) ||
-                          
-                          // Autoriser le passage à 'pending' (soumission) même si l'email n'est pas encore vérifié
-                          // Cela permet au chauffeur de soumettre et de vérifier son email juste après
-                          ((resource.data.status in ['draft', 'action_required', 'rejected']) &&
-                           isValidPendingTransition()) ||
-                          
-                          //  NOUVEAU : Autoriser la modification de 'isAvailable' sans vérification d'email
-                          // C'est une fonctionnalité critique pour le fonctionnement de l'application
-                          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailable', 'updatedAt']))
+                          // Cas 1 : email vérifié → modifications normales
+                          isEmailVerified() ||
+                          // Cas 2 : modification de isAvailable uniquement (fonctionnalité critique)
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailable', 'updatedAt'])
                         ))
                      || isAdmin();
-      
+
       // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé ou en brouillon
-      // Cela permet au chauffeur de recommencer son inscription
       allow delete: if isAdmin() ||
                     (isOwner(driverId) &&
                      resource.data.status in ['rejected', 'draft']);
+
+      // ========================================================================
+      // SOUS-COLLECTION PRIVATE (FIX #C2) — DONNÉES SENSIBLES RGPD
+      // ========================================================================
+      // Contient ssn, bank, address, dob, nationality, documents, idNumber.
+      // Lecture/écriture : UNIQUEMENT l'owner ou un admin.
+      // Les Cloud Functions (Admin SDK) contournent ces règles pour la vérification KYC.
+      match /private/{privateDocId} {
+        allow read: if isOwner(driverId) || isAdmin();
+        // L'owner peut créer/modifier ses propres données sensibles (chiffrées côté client si applicable)
+        // L'approbation KYC (documents.status) se fait uniquement via Admin SDK (Cloud Functions)
+        allow create, update: if (isOwner(driverId) &&
+                                  // Empêcher l'auto-approbation des documents depuis la sous-collection
+                                  (!('documents' in request.resource.data) ||
+                                   !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvedBy', 'kycStatus'])))
+                               || isAdmin();
+        allow delete: if isAdmin();
+      }
     }
     
     // ============================================================================
@@ -235,14 +247,15 @@ service cloud.firestore {
     // COLLECTION ADMINS
     // ============================================================================
     
-    // Collection admins - Permettre la lecture pour vérifier si on est admin
+    // Collection admins
+    // FIX #H7 : Ne PAS exposer la liste des admins aux utilisateurs authentifiés.
+    // La fonction helper isAdmin() utilise exists() qui fonctionne indépendamment des rules read.
+    // Seul un admin peut lister/lire les documents d'admins.
     match /admins/{adminId} {
-      // Lecture : Les utilisateurs authentifiés peuvent lire pour vérifier s'ils sont admin
-      // Permet aux requêtes avec where() de fonctionner
-      allow read: if isAuthenticated();
-      
-      // Écriture : Non autorisée via client SDK
-      // Seulement via Admin SDK ou console Firebase
+      // Lecture : réservée aux admins (get + list)
+      allow get, list: if isAdmin();
+
+      // Écriture : Non autorisée via client SDK (Admin SDK ou console Firebase uniquement)
       allow write: if false;
     }
     
@@ -327,13 +340,27 @@ service cloud.firestore {
                        request.resource.data.price > 0 &&
                        !('driverId' in request.resource.data);
       
-      // Mise à jour : Champs non-sensibles uniquement (notes, metadata, etc.)
-      // driverId et status sont protégés — les transitions ont leurs propres règles ci-dessous
+      // FIX #C13 : WHITELIST stricte (au lieu d'une blocklist). Les champs financiers
+      // (stripePaymentIntentId, paymentStatus, finalPrice, refundAmount, cancellationFee,
+      //  price, commission) ne peuvent PAS être modifiés par driver/passager via ce chemin.
+      //
+      // Whitelist driver assigné : champs opérationnels uniquement
       allow update: if isAuthenticated() &&
-                       (resource.data.userId == request.auth.uid ||
-                        resource.data.driverId == request.auth.uid) &&
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['price', 'userId', 'createdAt', 'driverId', 'status']);
+                       resource.data.driverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['driverLocation', 'driverStatus', 'pickupTime',
+                                   'completionTime', 'notes', 'updatedAt', 'rating',
+                                   'driverRoute']);
+
+      // Whitelist passager (propriétaire du booking) : rating, review, notes, annulation douce
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['rating', 'review', 'notes', 'updatedAt',
+                                   'cancellationReason']);
+
+      // Admin : accès complet
+      allow update: if isAdmin();
 
       // Mise à jour : Le chauffeur assigné peut faire avancer le statut de la course
       allow update: if isAuthenticated() &&
@@ -479,11 +506,26 @@ service cloud.firestore {
       allow create: if isAuthenticated() &&
                        request.resource.data.senderId == request.auth.uid;
       
-      // Mise à jour : L'expéditeur ou le chauffeur peuvent mettre à jour les colis
-      // Permet de modifier le statut de livraison
-      allow update: if isAuthenticated() && 
-                       (resource.data.senderId == request.auth.uid || 
-                        resource.data.driverId == request.auth.uid);
+      // FIX #C13 : WHITELIST pour /parcels/{id} (au lieu d'un accès complet)
+      // Empêche l'altération des champs financiers par sender/driver.
+      //
+      // Whitelist driver assigné : progression de la livraison
+      allow update: if isAuthenticated() &&
+                       resource.data.driverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'driverLocation', 'pickedUpAt',
+                                   'deliveredAt', 'notes', 'updatedAt',
+                                   'deliveryProofPhoto']);
+
+      // Whitelist sender (expéditeur) : notes et annulation douce
+      allow update: if isAuthenticated() &&
+                       resource.data.senderId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['notes', 'updatedAt', 'cancellationReason',
+                                   'receiverName', 'receiverPhone']);
+
+      // Admin : accès complet
+      allow update: if isAdmin();
       
       // Suppression : Non autorisée
       // Les colis ne doivent pas être supprimés pour conserver l'historique
@@ -651,10 +693,15 @@ service cloud.firestore {
                        request.resource.data.commissionRate is number &&
                        request.resource.data.name is string;
       
-      // Mise à jour : Propriétaire (sauf statut) OU admin (tout)
-      allow update: if (isAuthenticated() && 
+      // Mise à jour : Propriétaire (champs autorisés uniquement, pas de statut/commissionRate) OU admin (tout)
+      allow update: if (isAuthenticated() &&
                         resource.data.ownerId == request.auth.uid &&
-                        request.resource.data.status == resource.data.status) // Le proprio ne peut pas changer le statut
+                        request.resource.data.status == resource.data.status &&
+                        request.resource.data.commissionRate == resource.data.commissionRate &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['name', 'description', 'address', 'phone', 'email',
+                                    'cuisineType', 'avgPricePerPerson', 'imageUrl', 'coverImageUrl',
+                                    'isOpen', 'openingHours', 'location', 'updatedAt']))
                     || isAdmin();
       
       // Suppression : Admin uniquement
@@ -683,7 +730,6 @@ service cloud.firestore {
     // ============================================================================
     
     match /food_orders/{orderId} {
-      // Lecture : Client, chauffeur assigné, ou propriétaire du restaurant
       // Lecture : Client, chauffeur assigné, ou propriétaire du restaurant
       // get() sur un document inexistant retourne null → .ownerId == uid évalue à false
       // exists() préalable est donc redondant et coûte une lecture supplémentaire

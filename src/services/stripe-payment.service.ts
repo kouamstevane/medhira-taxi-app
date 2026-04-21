@@ -13,6 +13,7 @@
  * @module services/stripe-payment.service
  */
 
+import Stripe from 'stripe';
 import stripe from '@/lib/stripe';
 import type {
   CreatePaymentIntentResponse,
@@ -68,7 +69,9 @@ export async function createRidePaymentIntent(
   amount: number,
   currency: string,
   userId: string,
-  bookingId: string
+  bookingId: string,
+  customerId?: string,
+  paymentMethodId?: string
 ): Promise<CreatePaymentIntentResponse> {
   const metadata: PaymentIntentMetadata = {
     purpose: 'taxi_ride',
@@ -76,19 +79,32 @@ export async function createRidePaymentIntent(
     bookingId,
   };
 
-  const paymentIntent = await stripe.paymentIntents.create({
+  const baseParams: Stripe.PaymentIntentCreateParams = {
     amount: toStripeAmount(amount, currency),
     currency: currency.toLowerCase(),
-    capture_method: 'manual',   // Autorisation uniquement — capture après course
+    capture_method: 'manual',
     metadata: metadata as unknown as Record<string, string>,
     description: `Course taxi #${bookingId}`,
-    // Méthodes de paiement dynamiques — Stripe sélectionne automatiquement
-    // les meilleures méthodes selon la localisation du client
     automatic_payment_methods: {
       enabled: true,
-      allow_redirects: 'never', // In-app → pas de redirections
     },
-  });
+    setup_future_usage: 'off_session',
+  };
+
+  if (customerId && paymentMethodId) {
+    baseParams.customer = customerId;
+    baseParams.payment_method = paymentMethodId;
+    baseParams.confirm = true;
+    baseParams.off_session = true;
+    baseParams.return_url = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_BASE_URL
+      ? `${process.env.NEXT_PUBLIC_BASE_URL}/taxi/confirmation`
+      : 'https://medjira.app/taxi/confirmation';
+  }
+
+  const paymentIntent = await stripe.paymentIntents.create(
+    baseParams,
+    { idempotencyKey: `pi_${bookingId}_${toStripeAmount(amount, currency)}_taxi_ride` }
+  );
 
   if (!paymentIntent.client_secret) {
     throw new Error('Impossible de créer le PaymentIntent : client_secret manquant');
@@ -119,7 +135,9 @@ export async function captureRidePayment(
     ? { amount_to_capture: toStripeAmount(captureAmount, currency) }
     : undefined;
 
-  await stripe.paymentIntents.capture(paymentIntentId, params);
+  await stripe.paymentIntents.capture(paymentIntentId, params, {
+    idempotencyKey: `capture_${paymentIntentId}`,
+  });
 }
 
 /**
@@ -127,7 +145,9 @@ export async function captureRidePayment(
  * Appelé lorsque la course est annulée avant la capture.
  */
 export async function cancelRidePayment(paymentIntentId: string): Promise<void> {
-  await stripe.paymentIntents.cancel(paymentIntentId);
+  await stripe.paymentIntents.cancel(paymentIntentId, undefined, {
+    idempotencyKey: `cancel_${paymentIntentId}`,
+  });
 }
 
 /**
@@ -148,6 +168,10 @@ export async function refundRidePayment(
     payment_intent: paymentIntentId,
     reason,
     ...(amount && currency ? { amount: toStripeAmount(amount, currency) } : {}),
+  }, {
+    idempotencyKey: amount && currency
+      ? `refund_${paymentIntentId}_${toStripeAmount(amount, currency)}`
+      : `refund_${paymentIntentId}`,
   });
 }
 
@@ -166,14 +190,15 @@ export async function refundRidePayment(
 export async function createWalletRechargePaymentIntent(
   amount: number,
   currency: string,
-  userId: string
+  userId: string,
+  customerId?: string
 ): Promise<CreatePaymentIntentResponse> {
   const metadata: PaymentIntentMetadata = {
     purpose: 'wallet_recharge',
     userId,
   };
 
-  const paymentIntent = await stripe.paymentIntents.create({
+  const createParams: Stripe.PaymentIntentCreateParams = {
     amount: toStripeAmount(amount, currency),
     currency: currency.toLowerCase(),
     capture_method: 'automatic',
@@ -183,7 +208,17 @@ export async function createWalletRechargePaymentIntent(
       enabled: true,
       allow_redirects: 'never',
     },
-  });
+    setup_future_usage: 'off_session',
+  };
+
+  if (customerId) {
+    createParams.customer = customerId;
+  }
+
+  const paymentIntent = await stripe.paymentIntents.create(
+    createParams,
+    { idempotencyKey: `wallet_${userId}_${toStripeAmount(amount, currency)}` }
+  );
 
   if (!paymentIntent.client_secret) {
     throw new Error('Impossible de créer le PaymentIntent : client_secret manquant');

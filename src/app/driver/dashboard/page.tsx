@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '@/config/firebase';
 import {
   doc,
@@ -104,6 +104,13 @@ export default function DriverDashboard() {
     enabled: !!driver?.isAvailable || isTripActive,
   });
 
+  const listenersRef = useRef<{
+    currentTrip: (() => void) | null;
+    pendingTrips: (() => void) | null;
+    rideRequests: (() => void) | null;
+  }>({ currentTrip: null, pendingTrips: null, rideRequests: null });
+  const mountedRef = useRef(true);
+
   const getInitials = (firstName?: string, lastName?: string): string => {
     const firstChar = firstName?.[0] || 'D';
     const lastChar = lastName?.[0] || 'C';
@@ -115,7 +122,10 @@ export default function DriverDashboard() {
   };
 
   useEffect(() => {
+    let authChangeId = 0;
+    mountedRef.current = true;
     const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+      const thisChangeId = ++authChangeId;
       if (!user) {
         router.push('/driver/login');
         return;
@@ -124,6 +134,11 @@ export default function DriverDashboard() {
       // Mettre à jour l'état de l'utilisateur actuel
       setCurrentUser(user);
 
+      // Nettoyer les anciens listeners
+      if (listenersRef.current.currentTrip) { listenersRef.current.currentTrip(); listenersRef.current.currentTrip = null; }
+      if (listenersRef.current.pendingTrips) { listenersRef.current.pendingTrips(); listenersRef.current.pendingTrips = null; }
+      if (listenersRef.current.rideRequests) { listenersRef.current.rideRequests(); listenersRef.current.rideRequests = null; }
+
       // Initialiser les fonctions de cleanup comme no-ops pour éviter les appels invalides en cas d'erreur
       let unsubscribeCurrentTrip: () => void = () => {};
       let unsubscribe: () => void = () => {};
@@ -131,6 +146,7 @@ export default function DriverDashboard() {
 
       try {
         const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
+        if (!mountedRef.current || thisChangeId !== authChangeId) return;
         if (!driverDoc.exists()) {
           setError("Profil chauffeur non trouvé");
           setLoading(false);
@@ -192,10 +208,6 @@ export default function DriverDashboard() {
             model: 'Modèle non spécifié',
             plate: 'Non spécifié',
             color: 'Non spécifié'
-          },
-          documents: driverData.documents || {
-            licensePhoto: '',
-            carRegistration: ''
           },
           status: driverData.status || 'pending',
           isAvailable: Boolean(driverData.isAvailable),
@@ -268,6 +280,7 @@ export default function DriverDashboard() {
             }
           }
         });
+        listenersRef.current.currentTrip = unsubscribeCurrentTrip;
 
         // Écouter les courses en attente (ancien système)
         // Règle Section 4.1 : limit() obligatoire sur chaque requête
@@ -289,11 +302,15 @@ export default function DriverDashboard() {
           });
           setAvailableTrips(trips);
         });
+        listenersRef.current.pendingTrips = unsubscribe;
 
         // Écouter les nouvelles demandes de course (nouveau système de matching)
         unsubscribeRideRequests = subscribeToDriverRideRequests(user.uid, async (requests) => {
           setRideRequests(await fetchBookingsForRequests(requests));
         });
+
+        fetchDailyHistory(user.uid);
+        listenersRef.current.rideRequests = unsubscribeRideRequests;
 
         // Charger les demandes en attente au démarrage
         getPendingCandidatesForDriver(user.uid).then(async (requests) => {
@@ -305,22 +322,21 @@ export default function DriverDashboard() {
         setError("Erreur de chargement");
       } finally {
         setLoading(false);
-        if (user?.uid) fetchDailyHistory(user.uid);
       }
 
-      // Cleanup toujours retourné, même si le try a échoué
-      return () => {
-        try {
-          unsubscribeCurrentTrip();
-          unsubscribe();
-          unsubscribeRideRequests();
-        } catch {
-          // Silently ignore cleanup errors
-        }
-      };
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      mountedRef.current = false;
+      unsubscribeAuth();
+      try {
+        if (listenersRef.current.currentTrip) { listenersRef.current.currentTrip(); listenersRef.current.currentTrip = null; }
+        if (listenersRef.current.pendingTrips) { listenersRef.current.pendingTrips(); listenersRef.current.pendingTrips = null; }
+        if (listenersRef.current.rideRequests) { listenersRef.current.rideRequests(); listenersRef.current.rideRequests = null; }
+      } catch {
+        // Silently ignore cleanup errors
+      }
+    };
   }, [router]);
 
   const fetchDailyHistory = async (driverId: string) => {
@@ -556,7 +572,7 @@ export default function DriverDashboard() {
           </div>
           <button
             onClick={toggleAvailability}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
+            className={`flex items-center gap-2 px-3 py-2.5 min-h-[44px] rounded-full border transition-all ${
               driver.isAvailable
                 ? 'bg-green-500/10 border-green-500/20'
                 : 'bg-slate-700/50 border-white/10'

@@ -67,6 +67,8 @@ export async function createDriverConnectAccount(
       driverId,
       platform: 'medjira_taxi',
     },
+  }, {
+    idempotencyKey: `account_${driverId}`,
   });
 
   // Persister l'ID du compte dans Firestore
@@ -237,6 +239,7 @@ export async function processWeeklyPayouts(
       continue;
     }
 
+    let transferId: string | undefined;
     try {
       const db = getAdminDb();
       const driverRef = db.collection('drivers').doc(driverId);
@@ -275,13 +278,20 @@ export async function processWeeklyPayouts(
           week: getISOWeek(processedAt),
           platform: 'medjira_taxi',
         },
+      }, {
+        idempotencyKey: `payout_${driverId}_${getISOWeek(processedAt)}`,
       });
 
-      // Étape 3 : libérer le verrou + zéroter le solde + persister
+      transferId = transfer.id;
+
+      // Étape 3 : libérer le verrou + décrémenter le solde verrouillé + persister
+      // Re-lecture du solde courant pour préserver les gains crédités pendant le transfer
       await db.runTransaction(async (tx) => {
         const payoutRef = db.collection('driver_payouts').doc();
+        const freshSnap = await tx.get(driverRef);
+        const currentPending = freshSnap.data()?.pendingBalanceCents ?? 0;
         tx.update(driverRef, {
-          pendingBalanceCents: 0,
+          pendingBalanceCents: Math.max(0, currentPending - lockedBalance),
           lastPayoutAt: processedAt,
           payoutLockUntil: null,
         });
@@ -307,7 +317,7 @@ export async function processWeeklyPayouts(
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       // Extraire l'ID du transfer Stripe si disponible (pour réconciliation manuelle)
-      const stripeTransferId = (err as Record<string, unknown>)?.transferId as string | undefined;
+      const stripeTransferId = transferId;
       if (stripeTransferId) {
         console.error(
           `processWeeklyPayouts: transfer Stripe ${stripeTransferId} créé mais transaction Firestore échouée pour ${driverId} — réconciliation manuelle requise`,
@@ -435,13 +445,17 @@ export async function triggerManualPayout(
         type: 'manual',
         platform: 'medjira_taxi',
       },
+    }, {
+      idempotencyKey: `manual_${driverId}_${lockedBalance}_${processedAt.getTime()}`,
     });
 
-    // Étape 3 : libérer le verrou + zéroter le solde + persister
+    // Étape 3 : libérer le verrou + décrémenter le solde verrouillé + persister
     await db.runTransaction(async (tx) => {
       const payoutRef = db.collection('driver_payouts').doc();
+      const freshSnap = await tx.get(driverRef);
+      const currentPending = freshSnap.data()?.pendingBalanceCents ?? 0;
       tx.update(driverRef, {
-        pendingBalanceCents: 0,
+        pendingBalanceCents: Math.max(0, currentPending - lockedBalance),
         lastPayoutAt: processedAt,
         payoutLockUntil: null,
       });
@@ -498,3 +512,4 @@ function getISOWeek(date: Date): string {
 }
 
 export { DRIVER_SHARE_RATE, PLATFORM_COMMISSION_RATE };
+

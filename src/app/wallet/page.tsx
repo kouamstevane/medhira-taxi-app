@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getOrCreateWallet, getTransactionHistory } from '@/services/wallet.service';
@@ -18,6 +19,14 @@ export default function WalletPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get('success')) {
+      toast.success('Recharge effectuée avec succès !');
+      router.replace('/wallet');
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -129,7 +138,7 @@ export default function WalletPage() {
             ) : (
               transactions.map((t) => {
                 const style = TRANSACTION_ICONS[t.type] ?? TRANSACTION_ICONS.payment;
-                const isCredit = t.type === 'deposit';
+                const isCredit = t.type === 'deposit' || t.type === 'refund';
                 return (
                   <div key={t.id} className="p-4 flex items-center gap-3">
                     <div className={`size-10 rounded-full flex items-center justify-center shrink-0 ${style.bg}`}>

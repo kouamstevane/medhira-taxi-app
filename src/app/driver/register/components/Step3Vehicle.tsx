@@ -24,11 +24,19 @@ export type Step3FormData = z.infer<typeof step3Schema>;
 
 type VehicleDeliveryType = 'velo' | 'scooter' | 'moto' | 'voiture';
 
+export type Step3Files = {
+  registration?: File;
+  insurance?: File;
+  techControl?: File;
+  interiorPhoto?: File;
+  exteriorPhoto?: File;
+};
+
 interface Step3VehicleProps {
-  onNext: (data: Step3FormData, files: { registration: File; insurance?: File; techControl: File; interiorPhoto: File; exteriorPhoto: File }) => void;
+  onNext: (data: Step3FormData, files: Step3Files) => void;
   onBack: () => void;
   initialData?: Partial<Step3FormData>;
-  initialFiles?: { registration?: File; insurance?: File; techControl?: File; interiorPhoto?: File; exteriorPhoto?: File };
+  initialFiles?: Step3Files;
   loading?: boolean;
   driverType?: 'chauffeur' | 'livreur' | 'les_deux';
   onVehicleTypeChange?: (vehicleType: VehicleDeliveryType) => void;
@@ -153,7 +161,13 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
       showError("Veuillez fournir tous les documents obligatoires (Carte grise, Contrôle technique, Photos intérieur et extérieur).");
       return;
     }
-    onNext(data, files as { registration: File; insurance?: File; techControl: File; interiorPhoto: File; exteriorPhoto: File });
+    onNext(data, {
+      registration: files.registration,
+      insurance: files.insurance || undefined,
+      techControl: files.techControl,
+      interiorPhoto: files.interiorPhoto,
+      exteriorPhoto: files.exteriorPhoto,
+    });
   };
 
   const renderFileInput = (label: string, key: keyof typeof files, required = true, accept = "image/*,application/pdf") => (
@@ -242,7 +256,15 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
             type="button"
             onClick={() => {
               onVehicleTypeChange?.(selectedDeliveryVehicle);
-              onNext({} as Step3FormData, {} as { registration: File; techControl: File; interiorPhoto: File; exteriorPhoto: File });
+              // Livreur : seuls permis + pièce d'identité (Step4) sont requis
+              // côté KYC. Les documents véhicule (carte grise, contrôle technique,
+              // assurance pro, photos intérieur/extérieur) ne s'appliquent pas
+              // aux livreurs. On transmet donc un objet files vide — le handler
+              // parent conditionnera les uploads sur vehicleType.
+              onNext(
+                { carBrand: '-', carModel: '-', productionYear: '2024', carColor: '#FFFFFF', passengerSeats: 1, fuelType: 'Essence' as const, mileage: 0, techControlDate: '2099-12-31' },
+                {}
+              );
             }}
             disabled={loading}
             className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] shadow-[0_0_20px_rgba(242,146,0,0.4)] hover:bg-[#e68600] transition-colors"

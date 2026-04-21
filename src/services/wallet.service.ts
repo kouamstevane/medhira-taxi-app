@@ -1,9 +1,21 @@
 /**
- * Service de Gestion du Portefeuille
- * 
- * Gère le portefeuille utilisateur, les transactions,
- * et les opérations de rechargement/paiement.
- * 
+ * Service de Gestion du Portefeuille (côté client)
+ *
+ * ⚠️ Les MUTATIONS ont été déplacées vers des API routes serveur protégées
+ * par `verifyFirebaseToken` + Firebase Admin SDK. Ce module ne fait plus
+ * QUE :
+ *   - des appels `fetch('/api/wallet/...')` pour toute mutation
+ *   - des LECTURES Firestore directes (les rules sont read-only pour le client)
+ *
+ * Rationale : les rules Firestore ne peuvent pas empêcher un attaquant
+ * connecté de faire `runTransaction(db, tx => tx.update(walletRef, { balance: 999999 }))`
+ * depuis la console du navigateur si l'écriture passe uniquement par le SDK
+ * client. Seule une API serveur (admin SDK) peut valider la logique métier
+ * et garantir l'intégrité du solde.
+ *
+ * Les signatures publiques sont conservées pour éviter un refactor invasif
+ * des consommateurs (taxi.service.ts, food-delivery.service.ts, pages wallet, etc.).
+ *
  * @module services/wallet
  */
 
@@ -12,174 +24,193 @@ import {
   doc,
   getDoc,
   getDocs,
-  setDoc,
-  updateDoc,
   query,
   where,
   orderBy,
   limit as firestoreLimit,
   startAfter,
-  runTransaction,
-  serverTimestamp,
 } from 'firebase/firestore';
 import type { DocumentSnapshot } from 'firebase/firestore';
-import { db } from '@/config/firebase';
-import { typedServerTimestamp } from '@/lib/firebase-helpers';
+import { db, auth } from '@/config/firebase';
 import {
   Wallet,
   Transaction,
   TransactionType,
   TransactionStatus,
-  WalletPaymentMethod,
 } from '@/types';
 import { CURRENCY_CODE, LIMITS } from '@/utils/constants';
 
+// ============================================================================
+// Helpers internes — fetch authentifié
+// ============================================================================
+
+async function getAuthToken(): Promise<string> {
+  const current = auth.currentUser;
+  if (!current) {
+    throw new Error('Utilisateur non authentifié');
+  }
+  return current.getIdToken();
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const token = await getAuthToken();
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let message = `Erreur serveur (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data?.error) message = data.error as string;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+
+  // Tolère les réponses vides
+  const text = await res.text();
+  if (!text) return {} as T;
+  return JSON.parse(text) as T;
+}
+
+// ============================================================================
+// Wallet — lecture (client direct, rules read-only)
+// ============================================================================
+
 /**
- * Récupérer ou créer un portefeuille utilisateur
+ * Récupère ou crée le portefeuille de l'utilisateur authentifié.
+ * La création passe par l'API route (admin SDK) — la lecture peut rester
+ * côté client puisque les rules autorisent `read` sur son propre wallet.
+ *
+ * NOTE: le paramètre `userId` est conservé pour compat, mais l'API serveur
+ * ignore ce paramètre et utilise toujours l'uid du token. Passer un uid
+ * différent lancera malgré tout l'ensure pour l'utilisateur authentifié.
  */
 export const getOrCreateWallet = async (userId: string): Promise<Wallet> => {
+  // Lecture directe d'abord (évite un aller-retour réseau si le wallet existe)
   const walletRef = doc(db, 'wallets', userId);
   const walletSnap = await getDoc(walletRef);
-
   if (walletSnap.exists()) {
     return walletSnap.data() as Wallet;
   }
 
-  // Créer un nouveau portefeuille
-  const newWallet: Wallet = {
-    userId,
-    balance: 0,
-    currency: CURRENCY_CODE,
-    updatedAt: typedServerTimestamp(),
-  };
+  // Sinon, création côté serveur
+  const ensured = await postJson<{ balance: number; currency: string }>(
+    '/api/wallet/ensure',
+    {}
+  );
 
-  await setDoc(walletRef, newWallet);
-  return newWallet;
+  return {
+    userId,
+    balance: ensured.balance,
+    currency: ensured.currency ?? CURRENCY_CODE,
+    updatedAt: new Date(),
+  };
 };
 
 /**
- * Récupérer le solde du portefeuille
+ * Récupère le solde du portefeuille.
  */
 export const getWalletBalance = async (userId: string): Promise<number> => {
   const wallet = await getOrCreateWallet(userId);
   return wallet.balance;
 };
 
+// ============================================================================
+// Transactions — mutations (via API routes serveur)
+// ============================================================================
+
 /**
- * Créer une transaction
+ * Crée une transaction en statut "pending".
+ * Délègue à POST /api/wallet/create-transaction.
  */
 export const createTransaction = async (
   transactionData: Omit<Transaction, 'id' | 'status' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
-  const transactionsRef = collection(db, 'transactions');
-  const newTransactionRef = doc(transactionsRef);
-
-  const transaction: Transaction = {
-    ...transactionData,
-    id: newTransactionRef.id,
-    status: 'pending',
-    createdAt: typedServerTimestamp(),
-    updatedAt: typedServerTimestamp(),
-  };
-
-  await setDoc(newTransactionRef, transaction);
-  return newTransactionRef.id;
-};
-
-
-/**
- * Finaliser une transaction et mettre à jour le solde
- */
-export const completeTransaction = async (
-  transactionId: string,
-  userId: string,
-  amount: number
-): Promise<void> => {
-  const transactionRef = doc(db, 'transactions', transactionId);
-  const walletRef = doc(db, 'wallets', userId);
-
-  await runTransaction(db, async (transaction) => {
-    const walletDoc = await transaction.get(walletRef);
-    
-    if (!walletDoc.exists()) {
-      throw new Error('Portefeuille introuvable');
+  const { transactionId } = await postJson<{ transactionId: string }>(
+    '/api/wallet/create-transaction',
+    {
+      type: transactionData.type,
+      amount: transactionData.amount,
+      currency: transactionData.currency,
+      description: transactionData.description,
+      reference: transactionData.reference,
+      bookingId: transactionData.bookingId,
+      method: transactionData.method,
+      fees: transactionData.fees,
+      netAmount: transactionData.netAmount,
     }
-
-    const currentBalance = walletDoc.data().balance;
-    const newBalance = currentBalance + amount;
-
-    // Mettre à jour le solde
-    transaction.update(walletRef, {
-      balance: newBalance,
-      updatedAt: serverTimestamp(),
-    });
-
-    // Marquer la transaction comme complétée
-    transaction.update(transactionRef, {
-      status: 'completed',
-      updatedAt: serverTimestamp(),
-    });
-  });
-};
-
-/**
- * Payer une course avec le portefeuille
- * La vérification du solde est effectuée à l'intérieur de la transaction
- * pour éviter les race conditions (double débit, solde négatif).
- */
-export const payBooking = async (
-  userId: string,
-  bookingId: string,
-  amount: number
-): Promise<string> => {
-  const transactionRef_outer = doc(collection(db, 'transactions'));
-  const transactionId = transactionRef_outer.id;
-  const walletRef = doc(db, 'wallets', userId);
-
-  // Créer d'abord l'entrée pending
-  const transaction: Transaction = {
-    id: transactionId,
-    userId,
-    type: 'payment',
-    amount: -amount,
-    currency: CURRENCY_CODE,
-    description: 'Paiement de course',
-    bookingId,
-    status: 'pending',
-    createdAt: typedServerTimestamp(),
-    updatedAt: typedServerTimestamp(),
-  };
-  await setDoc(transactionRef_outer, transaction);
-
-  try {
-    // Vérification du solde ET débit dans la même transaction atomique
-    await runTransaction(db, async (tx) => {
-      const walletDoc = await tx.get(walletRef);
-      if (!walletDoc.exists()) throw new Error('Portefeuille introuvable');
-
-      const currentBalance = walletDoc.data().balance;
-      if (currentBalance < amount) throw new Error('Solde insuffisant');
-
-      tx.update(walletRef, {
-        balance: currentBalance - amount,
-        updatedAt: serverTimestamp(),
-      });
-      tx.update(transactionRef_outer, {
-        status: 'completed',
-        updatedAt: serverTimestamp(),
-      });
-    });
-  } catch (error) {
-    await failTransaction(transactionId, (error as Error).message);
-    throw error;
-  }
-
+  );
   return transactionId;
 };
 
 /**
- * Récupérer l'historique des transactions
+ * Finalise une transaction et crédite le wallet de `amount`.
+ * Idempotent côté serveur : si la transaction est déjà "completed",
+ * aucun double crédit n'est émis.
  */
+export const completeTransaction = async (
+  transactionId: string,
+  _userId: string,
+  amount: number
+): Promise<void> => {
+  await postJson('/api/wallet/complete-transaction', {
+    transactionId,
+    amount,
+  });
+};
+
+/**
+ * Paie une course / commande avec le wallet.
+ * Le débit est atomique côté serveur (check solde + débit + création tx).
+ */
+export const payBooking = async (
+  _userId: string,
+  bookingId: string,
+  amount: number
+): Promise<string> => {
+  const { transactionId } = await postJson<{ transactionId: string }>(
+    '/api/wallet/pay-booking',
+    { bookingId, amount }
+  );
+  return transactionId;
+};
+
+/**
+ * Marque une transaction comme échouée.
+ */
+export const failTransaction = async (
+  transactionId: string,
+  reason: string
+): Promise<void> => {
+  await postJson('/api/wallet/fail-transaction', { transactionId, reason });
+};
+
+/**
+ * Rembourse une transaction existante.
+ */
+export const refundTransaction = async (
+  originalTransactionId: string,
+  _userId: string
+): Promise<string> => {
+  const { refundId } = await postJson<{ refundId: string }>(
+    '/api/wallet/refund-transaction',
+    { originalTransactionId }
+  );
+  return refundId;
+};
+
+// ============================================================================
+// Transactions — lecture (client direct)
+// ============================================================================
+
 export const getTransactionHistory = (
   userId: string,
   limit: number = LIMITS.MAX_TRANSACTION_HISTORY
@@ -222,7 +253,9 @@ export const getTransactionHistoryPaginated = async (
   return { transactions, lastDocSnapshot, hasMore };
 };
 
-export const getTransactionById = async (transactionId: string): Promise<Transaction | null> => {
+export const getTransactionById = async (
+  transactionId: string
+): Promise<Transaction | null> => {
   const transactionRef = doc(db, 'transactions', transactionId);
   const transactionSnap = await getDoc(transactionRef);
 
@@ -233,44 +266,5 @@ export const getTransactionById = async (transactionId: string): Promise<Transac
   return null;
 };
 
-/**
- * Marquer une transaction comme échouée
- */
-export const failTransaction = async (transactionId: string, reason: string): Promise<void> => {
-  const transactionRef = doc(db, 'transactions', transactionId);
-  
-  await updateDoc(transactionRef, {
-    status: 'failed',
-    description: reason,
-    updatedAt: serverTimestamp(),
-  });
-};
-
-/**
- * Rembourser une transaction
- */
-export const refundTransaction = async (
-  originalTransactionId: string,
-  userId: string
-): Promise<string> => {
-  const originalTransaction = await getTransactionById(originalTransactionId);
-  
-  if (!originalTransaction) {
-    throw new Error('Transaction originale introuvable');
-  }
-
-  // Créer une transaction de remboursement
-  const refundTransactionId = await createTransaction({
-    userId,
-    type: 'refund',
-    amount: Math.abs(originalTransaction.amount),
-    currency: originalTransaction.currency,
-    description: `Remboursement de la transaction ${originalTransactionId}`,
-    reference: originalTransactionId,
-  });
-
-  // Créditer le portefeuille
-  await completeTransaction(refundTransactionId, userId, Math.abs(originalTransaction.amount));
-
-  return refundTransactionId;
-};
+// Re-exports de types pour compat
+export type { Transaction, TransactionType, TransactionStatus };

@@ -245,6 +245,14 @@ export const signInWithGoogle = async (
     }
   }
 
+  if (intendedUserType === 'chauffeur') {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (userDoc.exists()) {
+      await firebaseSignOut(auth);
+      throw new Error('Ce compte est un compte client. Veuillez utiliser la page de connexion client.');
+    }
+  }
+
   // Vérifier si l'utilisateur existe dans l'une des collections
   //  CORRECTION : Vérifier la collection correspondante au type attendu
   const collectionName = intendedUserType === 'chauffeur' ? 'drivers' : 'users';

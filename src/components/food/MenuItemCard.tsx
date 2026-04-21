@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { MenuItem, Restaurant } from '@/types/food-delivery';
 import { useCartStore } from '@/store/cartStore';
+import { CURRENCY_CODE } from '@/utils/constants';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -50,7 +51,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, restaurant }) 
           <div>
             <div className="flex justify-between items-start">
               <h4 className="font-semibold text-white">{item.name}</h4>
-              <span className="font-bold text-white">{item.price.toFixed(2)} €</span>
+              <span className="font-bold text-white">{item.price.toFixed(2)} {CURRENCY_CODE}</span>
             </div>
             {item.description && (
               <p className="text-sm text-slate-400 mt-1 line-clamp-2">{item.description}</p>

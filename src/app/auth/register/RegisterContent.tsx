@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db } from '@/config/firebase';
 import { updateProfile } from 'firebase/auth';
@@ -8,6 +8,7 @@ import { signUpWithEmail, signInWithGoogle } from '@/services/auth.service';
 import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { ERROR_MESSAGES } from '@/utils/constants';
+import { isValidPassword } from '@/lib/validation';
 
 export default function RegisterContent() {
     const router = useRouter();
@@ -21,9 +22,15 @@ export default function RegisterContent() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Rediriger si déjà connecté, vers le bon dashboard selon le rôle
+    // Flag pour empêcher le useEffect de rediriger pendant l'inscription
+    const isRegisteringRef = useRef(false);
+
+    // Rediriger si déjà connecté ET vérifié, sauf si une inscription est en cours
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
+            // Ne pas rediriger si une inscription est en cours
+            if (isRegisteringRef.current) return;
+
             if (user && user.emailVerified) {
                 try {
                     const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -31,10 +38,10 @@ export default function RegisterContent() {
                     if (userType === 'chauffeur') {
                         router.push('/driver/dashboard');
                     } else {
-                        router.push('/dashboard');
+                        router.push('/auth/setup-payment');
                     }
                 } catch {
-                    router.push('/dashboard');
+                    router.push('/auth/setup-payment');
                 }
             }
         });
@@ -64,8 +71,8 @@ export default function RegisterContent() {
             return;
         }
 
-        if (formData.password.length < 6) {
-            setError('Le mot de passe doit contenir au moins 6 caractères');
+        if (!isValidPassword(formData.password)) {
+            setError('Le mot de passe doit contenir au moins 8 caractères avec majuscule, minuscule et chiffre');
             return;
         }
 
@@ -76,6 +83,7 @@ export default function RegisterContent() {
         }
 
         setLoading(true);
+        isRegisteringRef.current = true;
 
         try {
             // Créer le compte avec email+password et créer le document Firestore
@@ -113,12 +121,14 @@ export default function RegisterContent() {
             }
         } finally {
             setLoading(false);
+            isRegisteringRef.current = false;
         }
     };
 
     const handleGoogleSignUp = async () => {
         setError(null);
         setLoading(true);
+        isRegisteringRef.current = true;
 
         try {
             const user = await signInWithGoogle();
@@ -127,7 +137,7 @@ export default function RegisterContent() {
             if (userType === 'chauffeur') {
                 router.push('/driver/dashboard');
             } else {
-                router.push('/dashboard');
+                router.push('/auth/setup-payment');
             }
         } catch (err: unknown) {
             console.error('Erreur connexion Google:', err);
@@ -144,6 +154,7 @@ export default function RegisterContent() {
             }
         } finally {
             setLoading(false);
+            isRegisteringRef.current = false;
         }
     };
 

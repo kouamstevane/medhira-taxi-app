@@ -90,7 +90,14 @@ export const useCartStore = create<CartState>()(
       name: 'medjira-cart-store',
       partialize: (state) => ({
         items: state.items,
-        restaurant: state.restaurant ? { id: state.restaurant.id } as Restaurant : null,
+        restaurant: state.restaurant
+          ? {
+              id: state.restaurant.id,
+              name: state.restaurant.name,
+              imageUrl: state.restaurant.imageUrl,
+              address: state.restaurant.address,
+            } as Restaurant
+          : null,
       }),
     }
   )

@@ -8,8 +8,10 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { getFirestoreErrorMessage, logFirestoreError } from '@/utils/firestore-error-handler';
 import { ACTIVE_MARKET } from '@/utils/constants';
-import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
+import { useDriverStore, type DriverCoreData, type DriverPrivateData } from '@/store/driverStore';
 import type { ConnectAccountStatus } from '@/types/stripe';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 export interface StripeConnectData {
   stripeAccountId: string | null;
@@ -22,11 +24,14 @@ export interface StripeConnectData {
 
 export function useDriverProfile() {
   const router = useRouter();
-  const { isEmailVerified, reloadUser } = useAuth();
+  const { isEmailVerified } = useAuth();
   const { driver, setDriver, updateDriver } = useDriverStore();
 
   const [loading, setLoading] = useState(!driver);
   const [error, setError] = useState<string | null>(null);
+  // RGPD #C2 : données privées (dob, nationality, address, documents)
+  // lues depuis `drivers/{uid}/private/personal`
+  const [privateData, setPrivateData] = useState<DriverPrivateData | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState<Partial<DriverCoreData>>({});
   const [profileImage, setProfileImage] = useState<File | null>(null);
@@ -39,11 +44,13 @@ export function useDriverProfile() {
 
   const mountedRef = useRef(true);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const browserListenerRef = useRef<{ remove: () => void } | null>(null);
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
       timeoutsRef.current.forEach(clearTimeout);
+      browserListenerRef.current?.remove();
     };
   }, []);
 
@@ -68,6 +75,22 @@ export function useDriverProfile() {
     }
   }, []);
 
+  // RGPD #C2 : fetch dédié des données privées (dob/nationality/address/documents)
+  const fetchPrivateData = useCallback(async (uid: string) => {
+    try {
+      const snap = await getDoc(doc(db, 'drivers', uid, 'private', 'personal'));
+      if (!mountedRef.current) return;
+      if (snap.exists()) {
+        setPrivateData(snap.data() as DriverPrivateData);
+      } else {
+        setPrivateData({});
+      }
+    } catch {
+      // Lecture non bloquante — si refusé, l'UI affiche simplement "Non disponible"
+      if (mountedRef.current) setPrivateData({});
+    }
+  }, []);
+
   useEffect(() => {
     if (driver) {
       setFormData({
@@ -78,6 +101,8 @@ export function useDriverProfile() {
       });
       setLoading(false);
       fetchStripeData();
+      const user = auth.currentUser;
+      if (user) fetchPrivateData(user.uid);
       return;
     }
 
@@ -99,6 +124,7 @@ export function useDriverProfile() {
           car: data.car,
         });
         fetchStripeData();
+        fetchPrivateData(user.uid);
       } else {
         setError('Profil chauffeur non trouvé');
       }
@@ -107,7 +133,7 @@ export function useDriverProfile() {
     }).finally(() => {
       setLoading(false);
     });
-  }, [router, driver, setDriver, fetchStripeData]);
+  }, [router, driver, setDriver, fetchStripeData, fetchPrivateData]);
 
   const handleUpdateProfile = async () => {
     if (!auth.currentUser || !formData) return;
@@ -162,7 +188,7 @@ export function useDriverProfile() {
       const data: { error?: string } = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      const baseUrl = window.location.origin;
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
       const linkRes = await fetch('/api/stripe/connect/onboard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -173,7 +199,19 @@ export function useDriverProfile() {
       });
       const linkData: { error?: string; url?: string } = await linkRes.json();
       if (!linkRes.ok) throw new Error(linkData.error);
-      if (linkData.url) window.location.href = linkData.url;
+      if (linkData.url) {
+        if (Capacitor.isNativePlatform()) {
+          browserListenerRef.current?.remove();
+          await Browser.open({ url: linkData.url });
+          const listener = await Browser.addListener('browserFinished', () => {
+            browserListenerRef.current = null;
+            if (mountedRef.current) fetchStripeData();
+          });
+          browserListenerRef.current = listener;
+        } else {
+          window.location.href = linkData.url;
+        }
+      }
     } catch (err) {
       setStripeError(err instanceof Error ? err.message : 'Erreur Stripe');
     } finally {
@@ -237,6 +275,7 @@ export function useDriverProfile() {
 
   return {
     driver,
+    privateData,
     loading,
     error,
     editMode,

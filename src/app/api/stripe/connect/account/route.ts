@@ -53,7 +53,10 @@ export async function POST(request: NextRequest) {
     }
 
     const snap = await getAdminDb().collection('drivers').doc(userId).get();
-    if (snap.exists && snap.data()?.stripeAccountId) {
+    if (!snap.exists) {
+      return NextResponse.json({ error: 'Réservé aux chauffeurs' }, { status: 403 });
+    }
+    if (snap.data()?.stripeAccountId) {
       return NextResponse.json({ error: 'Un compte Stripe Connect existe déjà' }, { status: 409 });
     }
 

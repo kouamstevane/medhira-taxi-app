@@ -4,8 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import Image from 'next/image';
 import { toast } from 'react-hot-toast';
-import { Timestamp } from 'firebase/firestore';
-import { auth } from '@/config/firebase';
+import { Timestamp, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db, auth } from '@/config/firebase';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { Restaurant } from '@/types/food-delivery';
 import AdminHeader from '@/components/admin/AdminHeader';
@@ -51,8 +51,18 @@ export default function AdminRestaurantsPage() {
       setLoading(true);
       setError(null);
       try {
-        // We use pending_approval by default as requested by the flow
-        const result = await FoodDeliveryService.getPendingRestaurants(50);
+        let result: Restaurant[];
+        if (filter === 'all') {
+          const q = query(collection(db, 'restaurants'), orderBy('createdAt', 'desc'), limit(50));
+          const snap = await getDocs(q);
+          result = snap.docs.map(d => ({ ...d.data(), id: d.id })) as Restaurant[];
+        } else if (filter === 'pending_approval') {
+          result = await FoodDeliveryService.getPendingRestaurants(50);
+        } else {
+          const q = query(collection(db, 'restaurants'), where('status', '==', filter), orderBy('createdAt', 'desc'), limit(50));
+          const snap = await getDocs(q);
+          result = snap.docs.map(d => ({ ...d.data(), id: d.id })) as Restaurant[];
+        }
         setRestaurants(result);
       } catch (err) {
         logger.error('Chargement des restaurants', err instanceof Error ? err : new Error(String(err)));
@@ -67,7 +77,7 @@ export default function AdminRestaurantsPage() {
     };
 
     fetchRestaurants();
-  }, [isAdmin]);
+  }, [isAdmin, filter]);
 
   const handleApproval = async (restaurantId: string, approve: boolean) => {
     if (!auth.currentUser) {

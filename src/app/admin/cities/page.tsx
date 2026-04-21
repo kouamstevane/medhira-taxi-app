@@ -1,29 +1,39 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, query, limit } from 'firebase/firestore'
-import { db } from '@/config/firebase'
+import { db, auth } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import type { CityDocument } from '@/types/firestore-collections'
+import { useAdminAuth } from '@/hooks/useAdminAuth'
 
 export default function AdminCitiesPage() {
-  const [cities, setCities] = useState<CityDocument[]>([])
+  const [cities, setCities] = useState<(CityDocument & { id: string })[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
   const [newCityId, setNewCityId] = useState('')
   const [newCityName, setNewCityName] = useState('')
+  const isAdmin = useAdminAuth()
 
   useEffect(() => {
+    if (!isAdmin) return
     const unsub = onSnapshot(query(collection(db, 'cities'), limit(100)), (snap) => {
-      setCities(snap.docs.map(d => d.data() as CityDocument))
+      setCities(snap.docs.map(d => ({ id: d.id, ...d.data() as CityDocument })))
       setLoading(false)
     })
     return () => unsub()
-  }, [])
+  }, [isAdmin])
+
+  const getAuthHeaders = async () => {
+    const token = await auth.currentUser?.getIdToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  }
 
   const manage = async (action: string, cityId: string) => {
     await fetch('/api/admin/manage-city', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ action, cityId }),
     })
   }
@@ -32,7 +42,7 @@ export default function AdminCitiesPage() {
     if (!newCityId || !newCityName) return
     await fetch('/api/admin/manage-city', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ action: 'create', cityId: newCityId, name: newCityName }),
     })
     setNewCityId('')
@@ -40,7 +50,9 @@ export default function AdminCitiesPage() {
     setShowCreate(false)
   }
 
-  if (loading) return <div className="flex justify-center pt-12"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+  if (isAdmin === null || loading) return <div className="flex justify-center pt-12"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+
+  if (!isAdmin) return null
 
   return (
     <div className="min-h-screen bg-background text-white p-4">

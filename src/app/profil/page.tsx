@@ -110,7 +110,7 @@ export default function ProfilPage() {
     };
 
     fetchUserData();
-  }, [currentUser, loading, router]);
+  }, [currentUser, router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;

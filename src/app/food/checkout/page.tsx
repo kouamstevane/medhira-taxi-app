@@ -7,13 +7,13 @@ import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
-import type { AuthContextType } from '@/types';
+
 import { CURRENCY_CODE } from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { currentUser: user, userData } = useAuth() || { currentUser: { uid: 'user_123' } as unknown as AuthContextType['currentUser'], userData: null }; // Mock fallback
+  const { currentUser: user, userData } = useAuth();
   const { items, restaurant, getSubtotal, clearCart } = useCartStore();
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -26,6 +26,20 @@ export default function CheckoutPage() {
 
   const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
   const deliveryAddress = userData?.address || "Veuillez définir votre adresse dans le profil";
+
+  // Guards auth / panier — déplacés hors du render sync pour éviter le warning
+  // React "Cannot update a component while rendering" et les hydration mismatches.
+  // router.replace() plutôt que push() : pas d'entrée history à un état invalide.
+  React.useEffect(() => {
+    if (!user) {
+      router.replace('/login?next=/food/checkout');
+      return;
+    }
+    if (!restaurant || items.length === 0) {
+      router.replace('/food');
+      return;
+    }
+  }, [user, restaurant, items.length, router]);
 
   // Calculate real delivery distance when restaurant and user address are available
   React.useEffect(() => {
@@ -46,8 +60,8 @@ export default function CheckoutPage() {
       .finally(() => setDistanceLoading(false));
   }, [restaurant, userData?.address]);
 
-  if (!restaurant || items.length === 0) {
-    router.push('/food');
+  // Pendant la vérification / redirection, on ne rend rien (pas de push inline).
+  if (!user || !restaurant || items.length === 0) {
     return null;
   }
 
@@ -62,7 +76,7 @@ export default function CheckoutPage() {
     try {
       // 1. Transformer les items pour le service
       const orderItems = items.map(item => ({
-        itemId: item.id!,
+        menuItemId: item.id!,
         itemName: item.name,
         itemQuantity: item.quantity,
         itemPrice: item.price

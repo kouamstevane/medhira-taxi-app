@@ -1,8 +1,10 @@
 "use client";
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { auth } from '@/config/firebase';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 function DriverVerifyContent() {
   const router = useRouter();
@@ -11,6 +13,11 @@ function DriverVerifyContent() {
 
   const [regenerating, setRegenerating] = useState(false);
   const [regenerateError, setRegenerateError] = useState('');
+  const browserListenerRef = useRef<{ remove: () => void } | null>(null);
+
+  useEffect(() => {
+    return () => { browserListenerRef.current?.remove(); };
+  }, []);
 
   // Cas standard : pas de paramètre onboarding → ancienne page de vérification
   const isStandardVerify = !onboardingStatus;
@@ -57,8 +64,8 @@ function DriverVerifyContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          returnUrl: `${window.location.origin}/driver/verify?onboarding=success`,
-          refreshUrl: `${window.location.origin}/driver/verify?onboarding=refresh`,
+          returnUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=success`,
+          refreshUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=refresh`,
         }),
       });
 
@@ -68,7 +75,17 @@ function DriverVerifyContent() {
       }
 
       const { url } = await res.json();
-      window.location.href = url;
+      if (Capacitor.isNativePlatform()) {
+        browserListenerRef.current?.remove();
+        await Browser.open({ url });
+        const listener = await Browser.addListener('browserFinished', () => {
+          browserListenerRef.current = null;
+          router.push('/driver/dashboard?stripe=pending');
+        });
+        browserListenerRef.current = listener;
+      } else {
+        window.location.href = url;
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erreur lors de la régénération du lien';
       setRegenerateError(msg);

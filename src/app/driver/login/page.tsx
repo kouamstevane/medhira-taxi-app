@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../../../config/firebase';
 import {
   signInWithEmailAndPassword
@@ -10,6 +10,10 @@ import Link from 'next/link';
 import { AuthService } from '@/services';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { ERROR_MESSAGES } from '@/utils/constants';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
+
+type DriverBlockedStatus = 'pending' | 'rejected' | 'suspended' | 'action_required' | null;
 
 export default function DriverLogin() {
   const [email, setEmail] = useState('');
@@ -17,7 +21,15 @@ export default function DriverLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blockedStatus, setBlockedStatus] = useState<DriverBlockedStatus>(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [loginMethod, setLoginMethod] = useState<'email' | 'google' | null>(null);
   const router = useRouter();
+  const browserListenerRef = useRef<{ remove: () => void } | null>(null);
+
+  useEffect(() => {
+    return () => { browserListenerRef.current?.remove(); };
+  }, []);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +40,8 @@ export default function DriverLogin() {
 
     setLoading(true);
     setError(null);
+    setBlockedStatus(null);
+    setLoginMethod('email');
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -47,7 +61,9 @@ export default function DriverLogin() {
         await auth.signOut().catch(() => {});
       }
       const message = error instanceof Error ? error.message : "Erreur de connexion";
-      if (!message.includes('Veuillez vérifier votre adresse email')) {
+      // '__blocked__' est une erreur interne levée quand le statut est géré
+      // via blockedStatus — pas besoin de l'afficher dans le bloc d'erreur générique
+      if (!message.includes('Veuillez vérifier votre adresse email') && message !== '__blocked__') {
         setError(message);
       }
     } finally {
@@ -65,22 +81,98 @@ export default function DriverLogin() {
     }
 
     const driverData = driverDoc.data();
-    if (driverData.status !== 'approved') {
-      throw new Error("Votre compte n'est pas encore approuvé");
+
+    if (driverData.status === 'approved') {
+      router.push('/driver/dashboard');
+      return;
     }
 
-    router.push('/driver/dashboard');
+    // Statuts bloquants : afficher un message différencié sans déconnecter immédiatement
+    // pour permettre la reprise de l'onboarding Stripe si nécessaire
+    if (
+      driverData.status === 'pending' ||
+      driverData.status === 'rejected' ||
+      driverData.status === 'suspended' ||
+      driverData.status === 'action_required'
+    ) {
+      setBlockedStatus(driverData.status as DriverBlockedStatus);
+      // Lever une erreur silencieuse pour déclencher le signOut dans le catch
+      throw new Error('__blocked__');
+    }
+
+    throw new Error("Votre compte n'est pas encore approuvé");
   };
 
   const handleGoogleLogin = async () => {
+    setBlockedStatus(null);
+    setLoginMethod('google');
     try {
       const user = await AuthService.signInWithGoogleForDriver();
+      if (user.email) setEmail(user.email);
       await verifyDriverAccount(user.uid);
     } catch (error: unknown) {
       if (auth.currentUser) {
         await auth.signOut().catch(() => {});
       }
-      setError(error instanceof Error ? error.message : "Erreur de connexion Google");
+      const message = error instanceof Error ? error.message : "Erreur de connexion Google";
+      if (message !== '__blocked__') {
+        setError(message);
+      }
+    }
+  };
+
+  const handleResumeStripeOnboarding = async () => {
+    setStripeLoading(true);
+    setError(null);
+    try {
+      let token: string;
+      if (loginMethod === 'google') {
+        const user = await AuthService.signInWithGoogleForDriver();
+        token = await user.getIdToken();
+      } else {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        token = await userCredential.user.getIdToken();
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+      const returnUrl = `${baseUrl}/driver/verify?onboarding=success`;
+      const refreshUrl = `${baseUrl}/driver/login`;
+
+      const res = await fetch('/api/stripe/connect/onboard', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ returnUrl, refreshUrl }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        await auth.signOut().catch(() => {});
+        throw new Error(data.error || "Impossible de générer le lien Stripe");
+      }
+
+      // Ne pas signOut avant la redirection — la session doit rester valide
+      // pour que /driver/verify?onboarding=success fonctionne au retour de Stripe
+      if (Capacitor.isNativePlatform()) {
+        browserListenerRef.current?.remove();
+        await Browser.open({ url: data.url });
+        const listener = await Browser.addListener('browserFinished', () => {
+          browserListenerRef.current = null;
+          router.push('/driver/dashboard?stripe=pending');
+        });
+        browserListenerRef.current = listener;
+      } else {
+        window.location.href = data.url;
+      }
+    } catch (err: unknown) {
+      await auth.signOut().catch(() => {});
+      const message = err instanceof Error ? err.message : "Erreur lors de la reprise de l'onboarding";
+      setError(message);
+    } finally {
+      setStripeLoading(false);
     }
   };
 
@@ -105,7 +197,74 @@ export default function DriverLogin() {
           <p className="text-slate-400 text-base font-normal">Connectez-vous à votre compte professionnel</p>
         </div>
 
-        {/* Error Message */}
+        {/* Bloc statut bloquant — messages différenciés par statut */}
+        {blockedStatus && (
+          <div className={`mx-6 mt-6 p-4 rounded-xl border ${
+            blockedStatus === 'rejected' || blockedStatus === 'suspended'
+              ? 'bg-destructive/10 border-destructive/30'
+              : blockedStatus === 'action_required'
+              ? 'bg-amber-500/10 border-amber-500/30'
+              : 'bg-blue-500/10 border-blue-500/20'
+          }`}>
+            <div className="flex items-start gap-2 mb-1">
+              <MaterialIcon
+                name={
+                  blockedStatus === 'rejected' || blockedStatus === 'suspended'
+                    ? 'block'
+                    : blockedStatus === 'action_required'
+                    ? 'warning'
+                    : 'hourglass_top'
+                }
+                size="md"
+                className={`mt-0.5 flex-shrink-0 ${
+                  blockedStatus === 'rejected' || blockedStatus === 'suspended'
+                    ? 'text-destructive'
+                    : blockedStatus === 'action_required'
+                    ? 'text-amber-400'
+                    : 'text-blue-400'
+                }`}
+              />
+              <span className={`text-sm font-medium ${
+                blockedStatus === 'rejected' || blockedStatus === 'suspended'
+                  ? 'text-destructive'
+                  : blockedStatus === 'action_required'
+                  ? 'text-amber-300'
+                  : 'text-blue-300'
+              }`}>
+                {blockedStatus === 'pending' && "Votre candidature est en cours d'examen. Vous serez notifié par email sous 48h."}
+                {blockedStatus === 'rejected' && "Votre candidature a été refusée. Contactez le support pour plus d'informations."}
+                {blockedStatus === 'suspended' && "Votre compte est suspendu. Contactez le support pour régulariser votre situation."}
+                {blockedStatus === 'action_required' && "Action requise : votre inscription Stripe est incomplète. Veuillez la finaliser pour accéder à votre espace chauffeur."}
+              </span>
+            </div>
+
+            {blockedStatus === 'action_required' && (
+              <button
+                type="button"
+                onClick={handleResumeStripeOnboarding}
+                disabled={stripeLoading || !email || (loginMethod === 'email' && !password)}
+                className="mt-3 w-full h-11 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {stripeLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Chargement...
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcon name="open_in_new" size="sm" />
+                    Reprendre l&apos;inscription Stripe
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Error Message (erreurs techniques) */}
         {error && (
           <div className="mx-6 mt-6 p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
             <MaterialIcon name="error" size="md" className="text-destructive mt-0.5" />

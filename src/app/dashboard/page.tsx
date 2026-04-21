@@ -33,6 +33,7 @@ export default function Dashboard() {
   routerRef.current = router;
   const [notifCount, setNotifCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
   const [isAuthLoading, setIsAuthLoading] = useState(true); // État de chargement de l'auth
   const [history, setHistory] = useState<Array<{
     id: string;
@@ -143,6 +144,9 @@ export default function Dashboard() {
         ]);
 
         const userDataFromDB = userDoc.exists() ? userDoc.data() : {};
+
+        // Vérifier si l'utilisateur a un moyen de paiement configuré
+        setHasPaymentMethod(!!userDataFromDB.defaultPaymentMethodId);
 
         setUserData(prev => ({
           ...prev,
@@ -308,6 +312,25 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="flex-1 px-4 overflow-y-auto pb-32">
+        {/* Payment Setup Banner — uniquement pour les clients */}
+        {!isAuthLoading && !hasPaymentMethod && userData.userType === 'client' && (
+          <div
+            onClick={() => router.push('/auth/setup-payment')}
+            className="mt-2 mb-6 p-4 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/20 cursor-pointer active:scale-[0.98] transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                <MaterialIcon name="credit_card" className="text-primary text-xl" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
+                <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sécurité</p>
+              </div>
+              <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
+            </div>
+          </div>
+        )}
+
         {/* Location Bar */}
         <div className="mt-2 mb-8">
           <GlassCard variant="elevated" className="flex items-center w-full h-14 px-4 gap-3">

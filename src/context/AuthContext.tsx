@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Forcer le refresh du token avant les lectures Firestore
       // Évite les erreurs permission-denied sur mobile (Capacitor) où le token
       // peut ne pas encore être propagé quand onAuthStateChanged se déclenche.
-      await user.getIdToken(true);
+      await user.getIdToken();
 
       // Essayer de trouver l'utilisateur dans 'users' puis 'drivers'
       const collections = ['users', 'drivers'];

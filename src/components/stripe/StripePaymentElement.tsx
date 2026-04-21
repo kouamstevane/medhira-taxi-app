@@ -65,25 +65,66 @@ function PaymentForm({
       elements,
       redirect: 'if_required',
       confirmParams: {
-        // Pas de return_url car allow_redirects: 'never' côté serveur
       },
     });
 
-    setProcessing(false);
-
     if (error) {
       const msg = error.message ?? 'Erreur de paiement';
+      setProcessing(false);
       setErrorMessage(msg);
       onError(msg);
       return;
     }
 
-    if (paymentIntent?.status === 'succeeded' || paymentIntent?.status === 'requires_capture') {
-      onSuccess(paymentIntent.id);
-    } else {
-      const msg = 'Paiement en attente ou non abouti';
-      setErrorMessage(msg);
-      onError(msg);
+    if (!paymentIntent) {
+      setProcessing(false);
+      return;
+    }
+
+    switch (paymentIntent.status) {
+      case 'succeeded':
+      case 'requires_capture':
+        setProcessing(false);
+        onSuccess(paymentIntent.id);
+        break;
+      case 'requires_action': {
+        if (!paymentIntent.client_secret) {
+          setProcessing(false);
+          setErrorMessage('Erreur interne: client_secret manquant');
+          onError('Erreur interne: client_secret manquant');
+          return;
+        }
+
+        const { error: actionError, paymentIntent: updatedPi } =
+          await stripe.handleNextAction({
+            clientSecret: paymentIntent.client_secret,
+          });
+
+        setProcessing(false);
+
+        if (actionError) {
+          const actionMsg = actionError.message ?? 'Authentification échouée';
+          setErrorMessage(actionMsg);
+          onError(actionMsg);
+        } else if (updatedPi) {
+          if (updatedPi.status === 'succeeded' || updatedPi.status === 'requires_capture') {
+            onSuccess(updatedPi.id);
+          } else {
+            setErrorMessage('Paiement non abouti après authentification');
+            onError('Paiement non abouti après authentification');
+          }
+        }
+        break;
+      }
+      case 'processing':
+        setProcessing(false);
+        setErrorMessage('Paiement en cours de traitement');
+        onError('Paiement en cours de traitement');
+        break;
+      default:
+        setProcessing(false);
+        setErrorMessage('Paiement non abouti');
+        onError('Paiement non abouti');
     }
   };
 

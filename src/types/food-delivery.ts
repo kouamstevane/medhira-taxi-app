@@ -117,10 +117,10 @@ export type FoodOrderStatus =
  * Représente un plat commandé avec quantité.
  */
 export interface OrderItem {
-  itemId: string;
+  menuItemId: string;
   itemName: string;
   itemQuantity: number;
-  itemPrice: number; // Prix unitaire au moment de la commande
+  itemPrice: number;
 }
 
 /**

@@ -9,7 +9,6 @@ const baseDriver: DriverCoreData = {
   status: 'approved',
   isAvailable: true,
   car: { model: 'Civic', plate: 'ABC-123', color: 'Blanc' },
-  documents: {},
 };
 
 beforeEach(() => {
@@ -128,20 +127,6 @@ describe('driverStore — tests complets', () => {
       expect(car?.model).toBe('Corolla');
       expect(car?.plate).toBe('XYZ-789');
       expect(car?.color).toBe('Noir');
-    });
-
-    it('met à jour les documents imbriqués', () => {
-      useDriverStore.getState().setDriver(baseDriver);
-      useDriverStore.getState().updateDriver({
-        documents: {
-          licensePhoto: 'https://storage/license.jpg',
-          carRegistration: 'https://storage/registration.pdf',
-        },
-      });
-
-      const docs = useDriverStore.getState().driver?.documents;
-      expect(docs?.licensePhoto).toBe('https://storage/license.jpg');
-      expect(docs?.carRegistration).toBe('https://storage/registration.pdf');
     });
 
     it('met à jour plusieurs champs en un seul appel', () => {

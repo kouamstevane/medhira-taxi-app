@@ -6,7 +6,7 @@ import { db, auth } from '@/config/firebase'
 import { suspendDriver } from '@/services/admin.service'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
-import type { DriverCollection } from '@/types/firestore-collections'
+import type { DriverCollection, DriverPrivate } from '@/types/firestore-collections'
 
 const DOC_LABELS: Record<string, string> = {
   photoProfile: 'Photo de profil', permitConduire: 'Permis de conduire',
@@ -16,11 +16,26 @@ const DOC_LABELS: Record<string, string> = {
   visiteTechniqueCommerciale: 'Visite technique', certificatVille: 'Certificat ville',
 }
 
+function normalizeDocuments(documents: Record<string, unknown> | undefined): Record<string, { status: string; url: string; rejectionReason?: string }> {
+  if (!documents) return {};
+  const normalized: Record<string, { status: string; url: string; rejectionReason?: string }> = {};
+  for (const [key, value] of Object.entries(documents)) {
+    if (typeof value === 'string') {
+      normalized[key] = { status: value ? 'approved' : 'not_submitted', url: value };
+    } else if (typeof value === 'object' && value !== null) {
+      normalized[key] = value as { status: string; url: string; rejectionReason?: string };
+    }
+  }
+  return normalized;
+}
+
 export default function AdminDriverDetailPage() {
   const params = useParams()
   const router = useRouter()
   const uid = params.uid as string
   const [driver, setDriver] = useState<DriverCollection | null>(null)
+  // RGPD #C2 : documents vivent dans drivers/{uid}/private/personal
+  const [privateData, setPrivateData] = useState<DriverPrivate | null>(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState<string | null>(null)
   const [rejectModalKey, setRejectModalKey] = useState<string | null>(null)
@@ -29,11 +44,22 @@ export default function AdminDriverDetailPage() {
 
   useEffect(() => {
     if (!isAdmin) return
-    const unsub = onSnapshot(doc(db, 'drivers', uid), (snap) => {
+    const unsubDriver = onSnapshot(doc(db, 'drivers', uid), (snap) => {
       setDriver(snap.exists() ? (snap.data() as DriverCollection) : null)
       setLoading(false)
     })
-    return () => unsub()
+    // RGPD #C2 : souscrire séparément à la sous-collection privée
+    const unsubPrivate = onSnapshot(
+      doc(db, 'drivers', uid, 'private', 'personal'),
+      (snap) => {
+        setPrivateData(snap.exists() ? (snap.data() as DriverPrivate) : null)
+      },
+      () => setPrivateData(null)
+    )
+    return () => {
+      unsubDriver()
+      unsubPrivate()
+    }
   }, [uid, isAdmin])
 
   const manageDriver = async (action: string, documentKey?: string, reason?: string) => {
@@ -73,7 +99,7 @@ export default function AdminDriverDetailPage() {
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
   if (!driver) return <div className="min-h-screen bg-background flex items-center justify-center text-slate-400">Driver introuvable</div>
 
-  const documents = driver.documents ?? {}
+  const documents = normalizeDocuments(privateData?.documents as Record<string, unknown> | undefined)
   const allRequiredApproved = Object.values(documents).every(d => d.status === 'approved')
 
   return (

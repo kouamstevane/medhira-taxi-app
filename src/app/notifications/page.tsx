@@ -5,11 +5,18 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { useNotifications } from "@/hooks/useNotifications";
+import { useAuth } from "@/hooks/useAuth";
 import { NotificationCollection } from "@/services/notification.service";
+import { driverNavItems, adminNavItems } from "@/components/ui/BottomNav";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const { userData } = useAuth();
   const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications();
+  const isAdmin = useAdminAuth();
+  const isDriver = userData?.userType === 'chauffeur';
+  const navItems = isDriver ? driverNavItems : isAdmin ? adminNavItems : undefined;
 
   const hasUnread = notifications.some((n) => !n.read);
 
@@ -161,7 +168,7 @@ export default function NotificationsPage() {
           </GlassCard>
         )}
       </main>
-      <BottomNav />
+      <BottomNav items={navItems} />
     </div>
   );
 }

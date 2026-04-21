@@ -52,6 +52,8 @@ export const unsuspendDriver = async (
   
   await updateDoc(driverRef, {
     isSuspended: false,
+    status: 'approved',
+    isAvailable: true,
     suspensionReason: null,
     suspendedAt: null,
     suspendedBy: null,

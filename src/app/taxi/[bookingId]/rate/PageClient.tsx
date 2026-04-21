@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { addDoc, collection, serverTimestamp, doc, getDoc } from 'firebase/firestore'
+import { addDoc, collection, serverTimestamp, doc, getDoc, query, where, limit, getDocs } from 'firebase/firestore'
 import { z } from 'zod'
 import { auth, db } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
@@ -108,6 +108,18 @@ export default function RateTaxiRidePage() {
 
     setSubmitting(true)
     try {
+      const existingQuery = query(
+        collection(db, 'driver_ratings'),
+        where('bookingId', '==', bookingId),
+        where('clientId', '==', auth.currentUser.uid),
+        limit(1)
+      );
+      const existingSnap = await getDocs(existingQuery);
+      if (!existingSnap.empty) {
+        setFetchError('Vous avez déjà noté cette course');
+        return;
+      }
+
       await addDoc(collection(db, 'driver_ratings'), {
         bookingId,
         orderId: bookingId,

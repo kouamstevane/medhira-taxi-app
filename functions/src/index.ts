@@ -22,7 +22,6 @@ import { defineSecret } from 'firebase-functions/params';
 // Définir la région par défaut pour toutes les fonctions v2
 setGlobalOptions({ region: 'europe-west1' });
 import * as admin from 'firebase-admin';
-import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import {
   validateBankData as validateBankDataValidator,
   BankDataValidationResult,
@@ -32,13 +31,17 @@ import {
 } from './utils/encryption.js';
 import { createNotification } from './utils/notificationService.js';
 import { BankDetailsSchema, EncryptionRequestSchema } from './validators/schemas.js';
-import { onDocumentWritten, onDocumentCreated } from 'firebase-functions/v2/firestore';
-import { isEncryptedData, hasRequiredFields } from './utils/validation.js';
+import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { hasRequiredFields } from './utils/validation.js';
 import * as crypto from 'crypto';
 import { getDatabase } from 'firebase-admin/database';
 import { CloudTasksClient } from '@google-cloud/tasks';
+import { OAuth2Client } from 'google-auth-library';
 import { DELIVERY_SHARE_RATE } from './config/stripe.js';
 import { selectNearestDriver } from './utils/matching.js';
+
+// Client OAuth utilisé pour la vérification des tokens OIDC émis par Cloud Tasks
+const oauthClient = new OAuth2Client();
 
 // Définir le secret de chiffrement depuis Firebase Secret Manager
 const encryptionMasterKey = defineSecret('ENCRYPTION_MASTER_KEY');
@@ -351,7 +354,10 @@ export const createDriverProfile = onCall(
       throw new HttpsError('failed-precondition', `status invalide. Attendu: ${allowedStatuses.join(', ')}, Reçu: ${status}`);
     }
 
-    const requiredFields = ['firstName', 'lastName', 'dob', 'nationality', 'address', 'city', 'zipCode', 'phone', 'documents']
+    // RGPD #C2 : dob/nationality/address/ssn/bank/documents ne sont plus
+    // envoyés dans driverData (ils vivent dans drivers/{uid}/private/personal,
+    // écrit côté client par l'utilisateur propriétaire via writeBatch).
+    const requiredFields = ['firstName', 'lastName', 'city', 'zipCode', 'phone']
     if (driverData.driverType === 'chauffeur' || driverData.driverType === 'les_deux') {
       requiredFields.push('car')
     }
@@ -363,12 +369,12 @@ export const createDriverProfile = onCall(
       throw new HttpsError('failed-precondition', 'Champs requis manquants.');
     }
 
-    if (driverData.ssn != null && !isEncryptedData(driverData.ssn)) {
-      throw new HttpsError('failed-precondition', 'SSN non chiffré.');
-    }
-
-    if (driverData.bank != null && !isEncryptedData(driverData.bank)) {
-      throw new HttpsError('failed-precondition', 'Données bancaires non chiffrées.');
+    // Ces champs ne devraient plus être présents mais si jamais legacy,
+    // refuser pour éviter de repolluer le doc racine.
+    for (const forbidden of ['ssn', 'bank', 'dob', 'nationality', 'address', 'idNumber', 'documents']) {
+      if (forbidden in driverData) {
+        throw new HttpsError('failed-precondition', `Champ '${forbidden}' interdit à la racine (RGPD #C2). Utiliser drivers/{uid}/private/personal.`)
+      }
     }
 
     const driverRef = admin.firestore().collection('drivers').doc(payload.driverId);
@@ -661,7 +667,7 @@ export { migrateCurrencyToCAD, migrateCurrencyToCADHTTP } from './migrateCurrenc
  * Règle 4 : Notification automatique des chauffeurs disponibles.
  * Le code de récupération est inclus dans la notification.
  */
-export const onFoodOrderCreated = onDocumentUpdated(
+export const onFoodOrderPaymentValidated = onDocumentUpdated(
   { document: 'food_orders/{orderId}', region: 'europe-west1' },
   async (event) => {
     if (!event.data) return
@@ -675,11 +681,13 @@ export const onFoodOrderCreated = onDocumentUpdated(
     const orderId = event.params.orderId
     const restaurantId = after.restaurantId
 
-    // 1. Générer orderNumber via compteur atomique par restaurant
+    // 1. Générer orderNumber via compteur atomique par restaurant + lire les infos restaurant
     const restaurantRef = admin.firestore().collection('restaurants').doc(restaurantId)
+    let restaurantData: FirebaseFirestore.DocumentData | undefined
     const orderNumber = await admin.firestore().runTransaction(async (tx) => {
       const restaurantDoc = await tx.get(restaurantRef)
-      const counter = (restaurantDoc.data()?.orderCounter || 0) + 1
+      restaurantData = restaurantDoc.data()
+      const counter = (restaurantData?.orderCounter || 0) + 1
       tx.update(restaurantRef, { orderCounter: counter })
       return `#${counter}`
     })
@@ -690,10 +698,6 @@ export const onFoodOrderCreated = onDocumentUpdated(
       ? crypto.randomInt(1000, 9999).toString()
       : null
 
-    // 3. Lire les infos restaurant pour dénormalisation
-    const restaurantDoc = await admin.firestore().collection('restaurants').doc(restaurantId).get()
-    const restaurantData = restaurantDoc.data()
-
     // 4. Enrichir food_orders avec les champs requis
     const updates: Record<string, unknown> = {
       orderNumber,
@@ -702,10 +706,15 @@ export const onFoodOrderCreated = onDocumentUpdated(
     }
     if (pinCode != null) updates.pinCode = pinCode
     if (!after.restaurantAddress && restaurantData) {
+      const lat = restaurantData.location?.lat
+      const lng = restaurantData.location?.lng
+      if (lat == null || lng == null) {
+        console.warn(`[FoodOrderPaymentValidated] Restaurant ${restaurantId} sans coordonnées, commande ${orderId}`)
+      }
       updates.restaurantAddress = {
         address: restaurantData.address,
-        lat: restaurantData.location?.lat ?? 0,
-        lng: restaurantData.location?.lng ?? 0,
+        lat: lat ?? 0,
+        lng: lng ?? 0,
       }
     }
     if (!after.restaurantPhone && restaurantData) {
@@ -812,7 +821,7 @@ export const onFoodOrderStatusChanged = onDocumentUpdated('food_orders/{orderId}
         type: 'food_order_update',
         orderId: event.params.orderId,
         status: newStatus,
-        click_action: 'FLUTTER_NOTIFICATION_CLICK', // Adapter selon Capacitor/Flutter
+        click_action: 'FOOD_ORDER_UPDATE',
       },
       token: fcmToken,
     };
@@ -830,11 +839,14 @@ export const onFoodOrderStatusChanged = onDocumentUpdated('food_orders/{orderId}
       metadata: { orderId: event.params.orderId, status: newStatus },
     });
 
-  } catch (error) {
-    const err = error as Record<string, unknown>;
-    if (err.code === 'messaging/invalid-registration-token' || err.code === 'messaging/registration-token-not-registered') {
+  } catch (error: unknown) {
+    const errorCode = (error as { code?: string })?.code;
+    if (errorCode === 'messaging/invalid-registration-token' || errorCode === 'messaging/registration-token-not-registered') {
       console.log(`[FoodOrderUpdate] Token invalide pour le client ${clientId}. Nettoyage.`);
-      // Nettoyage: on pourrait retirer le token du doc user ici
+      // Nettoyage: retirer le token du doc user
+      try {
+        await admin.firestore().collection('users').doc(clientId).update({ fcmToken: admin.firestore.FieldValue.delete() });
+      } catch { /* ignore */ }
     } else {
       console.error(`[FoodOrderUpdate] Erreur envoi notification:`, error);
     }
@@ -889,8 +901,15 @@ export const onFoodOrderAccepted = onDocumentUpdated(
       .filter((c): c is { id: string; data: FirebaseFirestore.DocumentData; loc: { lat: number; lng: number } } => c.loc != null)
 
     // 3. Sélectionner le livreur le plus proche
-    const restaurantAddress = after.restaurantAddress ?? { lat: 0, lng: 0 }
-    const nearest = selectNearestDriver(candidatesWithLocation, restaurantAddress)
+    if (!after.restaurantAddress || after.restaurantAddress.lat == null || after.restaurantAddress.lng == null) {
+      console.warn(`[FoodOrderAccepted] Commande ${orderId} sans restaurantAddress valide, impossible d'assigner un livreur.`)
+      await db.collection('food_orders').doc(orderId).update({
+        status: 'no_driver_available',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return
+    }
+    const nearest = selectNearestDriver(candidatesWithLocation, after.restaurantAddress)
 
     // 4. Aucun livreur disponible
     if (!nearest) {
@@ -963,14 +982,16 @@ export const onFoodOrderAccepted = onDocumentUpdated(
     const PROJECT_ID = process.env.GCLOUD_PROJECT ?? ''
     const LOCATION = 'europe-west1'
     const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net`
-    const tasksClient = new CloudTasksClient()
-    const queuePath = tasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout')
-    await tasksClient.createTask({
+    const queuePath = cloudTasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout')
+    await cloudTasksClient.createTask({
       parent: queuePath,
       task: {
         httpRequest: {
           httpMethod: 'POST',
           url: `${FUNCTION_URL}/onDeliveryOrderTimeout`,
+          oidcToken: {
+            serviceAccountEmail: `${PROJECT_ID}@appspot.gserviceaccount.com`,
+          },
           body: Buffer.from(JSON.stringify({ orderId, attemptNumber: 1 })).toString('base64'),
           headers: { 'Content-Type': 'application/json' },
         },
@@ -1103,20 +1124,19 @@ export const onDeliveryOrderCompleted = onDocumentUpdated(
     const orderId = event.params.orderId
     const driverId = after.driverId
 
-    await db.collection('drivers').doc(driverId).update({
+    const driverUpdate: Record<string, unknown> = {
       activeDeliveryOrderId: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-
-    await admin.auth().setCustomUserClaims(driverId, { activeDeliveryOrderId: null })
+    }
 
     if (after.status === 'delivered') {
-      await db.collection('drivers').doc(driverId).update({
-        deliveriesCompleted: admin.firestore.FieldValue.increment(1),
-        deliveryEarnings:    admin.firestore.FieldValue.increment(after.driverEarnings ?? 0),
-        updatedAt:           admin.firestore.FieldValue.serverTimestamp(),
-      })
+      driverUpdate.deliveriesCompleted = admin.firestore.FieldValue.increment(1)
+      driverUpdate.deliveryEarnings = admin.firestore.FieldValue.increment(after.driverEarnings ?? 0)
     }
+
+    await db.collection('drivers').doc(driverId).update(driverUpdate)
+
+    await admin.auth().setCustomUserClaims(driverId, { activeDeliveryOrderId: null })
 
     await rtdb.ref(`delivery_tracking/${orderId}`).remove()
   }
@@ -1125,9 +1145,56 @@ export const onDeliveryOrderCompleted = onDocumentUpdated(
 export const onDeliveryOrderTimeout = onRequest(
   { region: 'europe-west1' },
   async (req, res) => {
-    const queueName = req.headers['x-cloudtasks-queuename'] as string
-    if (queueName !== 'delivery-order-timeout') {
-      console.warn('[onDeliveryOrderTimeout] Unauthorized invocation', { queueName })
+    // ------------------------------------------------------------------
+    // Vérification OIDC stricte du token émis par Cloud Tasks
+    // ------------------------------------------------------------------
+    const authHeader = (req.headers['authorization'] as string | undefined) ?? ''
+    const match = authHeader.match(/^Bearer (.+)$/)
+    if (!match) {
+      console.warn('[onDeliveryOrderTimeout] Missing bearer token')
+      res.status(401).send('Missing bearer token')
+      return
+    }
+    const idToken = match[1]
+
+    const region = process.env.FUNCTION_REGION ?? 'europe-west1'
+    const projectId = process.env.GCLOUD_PROJECT ?? process.env.GOOGLE_CLOUD_PROJECT
+    if (!projectId) {
+      console.error('[onDeliveryOrderTimeout] GCLOUD_PROJECT not defined')
+      res.status(500).send('Server misconfigured')
+      return
+    }
+    const expectedAudience = `https://${region}-${projectId}.cloudfunctions.net/onDeliveryOrderTimeout`
+    const expectedServiceAccount = process.env.CLOUD_TASKS_SERVICE_ACCOUNT
+
+    try {
+      const ticket = await oauthClient.verifyIdToken({
+        idToken,
+        audience: expectedAudience,
+      })
+      const payload = ticket.getPayload()
+      if (!payload || payload.iss !== 'https://accounts.google.com') {
+        console.warn('[onDeliveryOrderTimeout] Invalid issuer', { iss: payload?.iss })
+        res.status(401).send('Invalid issuer')
+        return
+      }
+      // Défense en profondeur : si un SA est configuré, vérifier qu'il correspond
+      if (expectedServiceAccount && payload.email !== expectedServiceAccount) {
+        console.warn('[onDeliveryOrderTimeout] Unexpected caller service account', { email: payload.email })
+        res.status(403).send('Unauthorized caller')
+        return
+      }
+    } catch (e) {
+      console.warn('[onDeliveryOrderTimeout] OIDC token verification failed', e)
+      res.status(401).send('Invalid token')
+      return
+    }
+
+    // Défense en profondeur : headers Cloud Tasks (forgeables, mais utiles en cas
+    // de mauvaise configuration de route). Non bloquants si absents.
+    const queueName = req.headers['x-cloudtasks-queuename'] as string | undefined
+    if (queueName && queueName !== 'delivery-order-timeout') {
+      console.warn('[onDeliveryOrderTimeout] Unexpected queue', { queueName })
       res.status(403).send('Unauthorized')
       return
     }
@@ -1215,14 +1282,16 @@ export const onDeliveryOrderTimeout = onRequest(
 
     const PROJECT_ID = process.env.GCLOUD_PROJECT ?? ''
     const LOCATION = 'europe-west1'
-    const tasksClient = new CloudTasksClient()
-    const queuePath = tasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout')
-    await tasksClient.createTask({
+    const queuePath = cloudTasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout')
+    await cloudTasksClient.createTask({
       parent: queuePath,
       task: {
         httpRequest: {
           httpMethod: 'POST',
           url: `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/onDeliveryOrderTimeout`,
+          oidcToken: {
+            serviceAccountEmail: `${PROJECT_ID}@appspot.gserviceaccount.com`,
+          },
           body: Buffer.from(JSON.stringify({ orderId, attemptNumber: attemptNumber + 1 })).toString('base64'),
           headers: { 'Content-Type': 'application/json' },
         },
@@ -1273,7 +1342,7 @@ export const logPinFailure = onCall(
   { region: 'europe-west1' },
   async (request) => {
     const uid = request.auth?.uid
-    if (!uid) throw new Error('Unauthenticated')
+    if (!uid) throw new HttpsError('unauthenticated', 'Vous devez être connecté.')
 
     const { orderId, clientPhone } = request.data as { orderId: string; clientPhone: string }
 
@@ -1287,7 +1356,7 @@ export const logPinFailure = onCall(
 
       if (data && now < data.resetAt) {
         if (data.count >= PIN_FAILURE_MAX_ATTEMPTS) {
-          throw new Error('Rate limit exceeded')
+          throw new HttpsError('resource-exhausted', 'Trop de tentatives. Réessayez plus tard.')
         }
         tx.update(rateLimitRef, { count: admin.firestore.FieldValue.increment(1) })
       } else {
@@ -1310,25 +1379,34 @@ export const logPinFailure = onCall(
 /**
  * Cloud Function de sécurité sur le champ `documents`.
  *
+ * RGPD #C2 : Les documents KYC vivent dans la sous-collection
+ * `drivers/{uid}/private/personal` (et non plus à la racine du doc driver).
+ *
  * Empêche les transitions invalides de statut de documents:
  * - rejected → approved : INTERDIT (nécessite nouveau téléchargement)
  * - rejected → pending : AUTORISÉ (re-upload après rejet)
- * - pending → approved : INTERDIT côté client (admin only)
+ * - pending -> approved : VERIFIE via approvedBy (admin only, #C3)
  * - approved → rejected : AUTORISÉ (audit admin)
  * - approved → pending : INTERDIT
+ *
+ * Sécurité #C3 : si `approvedBy` change, vérifier que l'UID correspond
+ * à un admin existant dans `admins/{uid}`. Sinon rollback + incident.
  *
  * En cas de transition invalide, rollback vers l'état précédent.
  */
 export const onDriverDocumentsUpdated = onDocumentUpdated(
-  { document: 'drivers/{uid}', region: 'europe-west1' },
+  { document: 'drivers/{uid}/private/{docId}', region: 'europe-west1' },
   async (event) => {
     if (!event.data) return
+    // Ne traiter que le document `personal` (où vivent les documents KYC)
+    if (event.params.docId !== 'personal') return
+
     const before = event.data.before.data()
     const after = event.data.after.data()
     if (!before || !after) return
 
-    const beforeDocs = before.documents as Record<string, { status: string }> | undefined
-    const afterDocs = after.documents as Record<string, { status: string }> | undefined
+    const beforeDocs = before.documents as Record<string, { status: string; approvedBy?: string; url?: string | null; [key: string]: unknown }> | undefined
+    const afterDocs = after.documents as Record<string, { status: string; approvedBy?: string; url?: string | null; [key: string]: unknown }> | undefined
 
     if (!beforeDocs || !afterDocs) return
 
@@ -1336,8 +1414,19 @@ export const onDriverDocumentsUpdated = onDocumentUpdated(
       docKey: string
       from: string
       to: string
-      rollbackValue: { status: string; url?: string | null }
+      rollbackValue: { status: string; approvedBy?: string; url?: string | null; [key: string]: unknown }
+      reason?: string
     }> = []
+
+    // Cache des vérifications admin (évite lectures répétées)
+    const adminExistsCache = new Map<string, boolean>()
+    const isRealAdmin = async (uid: string): Promise<boolean> => {
+      if (adminExistsCache.has(uid)) return adminExistsCache.get(uid)!
+      const snap = await admin.firestore().collection('admins').doc(uid).get()
+      const exists = snap.exists
+      adminExistsCache.set(uid, exists)
+      return exists
+    }
 
     for (const [docKey, beforeEntry] of Object.entries(beforeDocs)) {
       const afterEntry = afterDocs[docKey]
@@ -1346,15 +1435,29 @@ export const onDriverDocumentsUpdated = onDocumentUpdated(
       const fromStatus = beforeEntry.status
       const toStatus = afterEntry.status
 
+      // #C3 : si `approvedBy` change, vérifier que l'UID est un vrai admin
+      if (afterEntry.approvedBy && afterEntry.approvedBy !== beforeEntry.approvedBy) {
+        const approvedBy = String(afterEntry.approvedBy)
+        const ok = await isRealAdmin(approvedBy)
+        if (!ok) {
+          invalidTransitions.push({
+            docKey,
+            from: fromStatus,
+            to: toStatus,
+            rollbackValue: beforeEntry,
+            reason: `approvedBy '${approvedBy}' is not a registered admin`,
+          })
+          continue
+        }
+      }
+
       // rejected → approved : INTERDIT
       if (fromStatus === 'rejected' && toStatus === 'approved') {
         invalidTransitions.push({ docKey, from: fromStatus, to: toStatus, rollbackValue: beforeEntry })
       }
-      // pending → approved : INTERDIT (réservé admin via CF)
+      // pending -> approved : securise via le champ approvedBy (renseigne par l'API route admin)
       else if (fromStatus === 'pending' && toStatus === 'approved') {
-        // @ts-expect-error Firestore triggers don't expose event.auth
-        const hasAdminClaim = event.auth?.token?.admin === true
-        if (!hasAdminClaim) {
+        if (!afterEntry.approvedBy) {
           invalidTransitions.push({ docKey, from: fromStatus, to: toStatus, rollbackValue: beforeEntry })
         }
       }
@@ -1370,7 +1473,13 @@ export const onDriverDocumentsUpdated = onDocumentUpdated(
         rollbackUpdates[`documents.${docKey}`] = rollbackValue
       }
 
-      await admin.firestore().collection('drivers').doc(event.params.uid).update(rollbackUpdates)
+      await admin
+        .firestore()
+        .collection('drivers')
+        .doc(event.params.uid)
+        .collection('private')
+        .doc('personal')
+        .update(rollbackUpdates)
 
       await admin.firestore().collection('audit_logs').add({
         type: 'driver_documents_invalid_transition',
@@ -1387,6 +1496,8 @@ export const onDriverDocumentsUpdated = onDocumentUpdated(
 // ============================================================================
 // Push Notification Topic Management
 // ============================================================================
+
+const cloudTasksClient = new CloudTasksClient();
 
 const ALLOWED_TOPIC_PATTERNS: RegExp[] = [
   /^all_drivers$/,
@@ -1636,5 +1747,5 @@ export const verifyCode = onCall(
   }
 );
 
-export { stripeWebhookInstant, stripeWebhookLight } from './stripe/index.js';
+export { stripeWebhookInstant, stripeWebhookLight, createSetupIntent } from './stripe/index.js';
 export { resendWebhook } from './emails/resend-webhook.js';

@@ -21,10 +21,21 @@
 /* eslint-disable */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+// FIX #C12 : vérification cryptographique de la signature JWT (Edge runtime compatible).
+// `jose` gère le cache JWKS en interne (HTTP Cache-Control respecté).
+import { jwtVerify, createRemoteJWKSet, type JWTPayload } from 'jose';
 
 const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'medjira-service';
 
-interface DecodedFirebaseToken {
+// JWKS endpoint officiel Google pour les tokens Firebase (securetoken).
+// Variable module-level → un seul fetch amorti sur toutes les requêtes.
+const FIREBASE_JWKS = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
+);
+
+const FIREBASE_ISSUER = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
+
+interface DecodedFirebaseToken extends JWTPayload {
   iss: string;
   aud: string;
   exp: number;
@@ -42,6 +53,8 @@ const PUBLIC_ROUTES = [
   '/auth/register',
   '/auth/reset-password',
   '/auth/verify-email',
+  '/auth/setup-payment',
+  '/auth/register/phone',
 ];
 
 const PROTECTED_ROUTES = [
@@ -83,53 +96,41 @@ function logEvent(type: 'AUTH_CHECK' | 'REDIRECT' | 'SECURITY', message: string,
   }
 }
 
-function decodeJwtPayload(token: string): DecodedFirebaseToken | null {
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-
-  try {
-    let payload = parts[1];
-    const pad = payload.length % 4;
-    if (pad) {
-      payload += '='.repeat(4 - pad);
-    }
-    const decoded = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
-    return decoded as DecodedFirebaseToken;
-  } catch {
-    return null;
-  }
-}
-
-function verifyFirebaseToken(token: string): { valid: boolean; decoded: DecodedFirebaseToken | null } {
+/**
+ * FIX #C12 : Vérifie CRYPTOGRAPHIQUEMENT un ID token Firebase.
+ *
+ * - Valide la signature RS256 via le JWKS Google (pas de fallback `alg:'none'`).
+ * - Valide issuer, audience, exp, nbf, iat côté `jose`.
+ * - Pas de décodage manuel : tout passe par jwtVerify.
+ * - Tout rejet = token invalide. Aucun fallback silencieux.
+ */
+async function verifyFirebaseToken(
+  token: string
+): Promise<{ valid: boolean; decoded: DecodedFirebaseToken | null }> {
   if (!token || typeof token !== 'string') {
     return { valid: false, decoded: null };
   }
 
-  const decoded = decodeJwtPayload(token);
-  if (!decoded) {
-    logEvent('SECURITY', 'Invalid JWT structure');
+  try {
+    const { payload } = await jwtVerify(token, FIREBASE_JWKS, {
+      issuer: FIREBASE_ISSUER,
+      audience: FIREBASE_PROJECT_ID,
+      algorithms: ['RS256'],
+    });
+
+    // jose valide déjà iss/aud/exp/nbf. On vérifie juste sub (Firebase garantit sa présence).
+    if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
+      logEvent('SECURITY', 'Firebase token missing sub claim');
+      return { valid: false, decoded: null };
+    }
+
+    return { valid: true, decoded: payload as DecodedFirebaseToken };
+  } catch (error) {
+    logEvent('SECURITY', 'JWT signature/claims verification failed', {
+      reason: error instanceof Error ? error.message : 'unknown',
+    });
     return { valid: false, decoded: null };
   }
-
-  const now = Math.floor(Date.now() / 1000);
-
-  if (typeof decoded.exp !== 'number' || decoded.exp <= now) {
-    logEvent('SECURITY', 'Token expired', { exp: decoded.exp, now });
-    return { valid: false, decoded: null };
-  }
-
-  const expectedIssuer = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
-  if (decoded.iss !== expectedIssuer) {
-    logEvent('SECURITY', 'Invalid token issuer', { iss: decoded.iss, expected: expectedIssuer });
-    return { valid: false, decoded: null };
-  }
-
-  if (decoded.aud !== FIREBASE_PROJECT_ID) {
-    logEvent('SECURITY', 'Invalid token audience', { aud: decoded.aud, expected: FIREBASE_PROJECT_ID });
-    return { valid: false, decoded: null };
-  }
-
-  return { valid: true, decoded };
 }
 
 function isAdminUser(decoded: DecodedFirebaseToken | null, userType: string | undefined): boolean {
@@ -144,8 +145,9 @@ function isAdminUser(decoded: DecodedFirebaseToken | null, userType: string | un
 
 /**
  * Middleware principal
+ * Async : la vérification JWT utilise jose.jwtVerify qui retourne une Promise.
  */
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const response = NextResponse.next();
 
@@ -154,7 +156,7 @@ export function middleware(request: NextRequest) {
   const authToken = request.cookies.get('auth-token')?.value;
   const userType = request.cookies.get('user-type')?.value;
 
-  const { valid: tokenValid, decoded: decodedToken } = verifyFirebaseToken(authToken || '');
+  const { valid: tokenValid, decoded: decodedToken } = await verifyFirebaseToken(authToken || '');
   const isAuthenticated = tokenValid;
 
   if (userType && !VALID_USER_TYPES.includes(userType)) {
@@ -240,7 +242,7 @@ export function middleware(request: NextRequest) {
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' blob: data: https://*.googleapis.com https://*.gstatic.com https://firebasestorage.googleapis.com;
     font-src 'self' data: https://fonts.gstatic.com;
-    connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://firestore.googleapis.com;
+    connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com;
     frame-src 'self' https://*.google.com;
     object-src 'none';
     base-uri 'self';

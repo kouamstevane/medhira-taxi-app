@@ -87,8 +87,8 @@ export default function WalletHistoriquePage() {
 
   const filtered = transactions; // Firestore filtre déjà par type, plus besoin de filtrage côté client
 
-  const totalCredits = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + (t.netAmount ?? t.amount), 0);
-  const totalDebits  = transactions.filter(t => t.type !== 'deposit').reduce((s, t) => s + (t.netAmount ?? t.amount), 0);
+  const totalCredits = transactions.filter(t => t.type === 'deposit' || t.type === 'refund').reduce((s, t) => s + (t.netAmount ?? t.amount), 0);
+  const totalDebits  = transactions.filter(t => t.type !== 'deposit' && t.type !== 'refund').reduce((s, t) => s + (t.netAmount ?? t.amount), 0);
 
   const formatDate = (date: Date) =>
     date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -164,7 +164,7 @@ export default function WalletHistoriquePage() {
                 <div className="space-y-2">
                   {txs.map(t => {
                     const style = TRANSACTION_ICONS[t.type] ?? TRANSACTION_ICONS.payment;
-                    const isCredit = t.type === 'deposit';
+                    const isCredit = t.type === 'deposit' || t.type === 'refund';
                     return (
                       <div key={t.id} className="glass-card p-4 rounded-2xl border border-white/5 flex items-center gap-3">
                         <div className={`size-10 rounded-full flex items-center justify-center shrink-0 ${style.bg}`}>
