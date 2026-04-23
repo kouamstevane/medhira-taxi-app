@@ -1,13 +1,46 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyFirebaseToken } from '@/lib/admin-guard';
+import { checkRateLimit } from '@/lib/rate-limit';
 
-export async function GET(request: Request) {
+export const runtime = 'nodejs';
+
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
+export async function GET(request: NextRequest) {
+    let userId: string;
+    try {
+        userId = await verifyFirebaseToken(request);
+    } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unauthorized';
+        return NextResponse.json({ error: message }, { status: 401 });
+    }
+
+    const rl = checkRateLimit({ identifier: userId, bucket: 'api:reverse-geocode', limit: RATE_LIMIT_MAX, windowMs: RATE_LIMIT_WINDOW_MS });
+    if (!rl.allowed) {
+        return NextResponse.json({ error: 'Trop de requêtes. Réessayez plus tard.' }, { status: 429, headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) } });
+    }
+
     const { searchParams } = new URL(request.url);
-    const lat = searchParams.get('lat');
-    const lng = searchParams.get('lng');
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const latRaw = searchParams.get('lat');
+    const lngRaw = searchParams.get('lng');
+    const apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY;
 
-    if (!lat || !lng) {
+    if (!latRaw || !lngRaw) {
         return NextResponse.json({ error: 'Latitude and longitude are required' }, { status: 400 });
+    }
+
+    const lat = Number(latRaw);
+    const lng = Number(lngRaw);
+    if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lng) ||
+        lat < -90 ||
+        lat > 90 ||
+        lng < -180 ||
+        lng > 180
+    ) {
+        return NextResponse.json({ error: 'Invalid latitude or longitude' }, { status: 400 });
     }
 
     if (!apiKey) {
@@ -15,10 +48,11 @@ export async function GET(request: Request) {
     }
 
     try {
-        const response = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
-        );
+        const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
+        url.searchParams.set('latlng', `${lat},${lng}`);
+        url.searchParams.set('key', apiKey);
 
+        const response = await fetch(url.toString());
         const data = await response.json();
 
         if (data.status === 'OK' && data.results && data.results.length > 0) {
@@ -28,9 +62,11 @@ export async function GET(request: Request) {
                 results: data.results
             });
         } else {
-            return NextResponse.json({ error: 'No results found', details: data }, { status: 404 });
+            console.warn('[api/reverse-geocode] No results', { status: data?.status });
+            return NextResponse.json({ error: 'No results found' }, { status: 404 });
         }
     } catch (error: unknown) {
-        return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+        console.error('[api/reverse-geocode] Erreur Geocoding:', error);
+        return NextResponse.json({ error: 'Une erreur est survenue. Veuillez réessayer.' }, { status: 500 });
     }
 }

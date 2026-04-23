@@ -1,26 +1,6 @@
 "use client";
 
-/**
- * Composant Stripe Payment Element — Réutilisable
- *
- * Affiche le formulaire de paiement Stripe sécurisé (Payment Element)
- * dans un style cohérent avec le design glass/dark de l'application.
- *
- * Utilisation :
- * ```tsx
- * <StripePaymentElement
- *   clientSecret="pi_xxx_secret_yyy"
- *   amount={15.50}
- *   currency="CAD"
- *   onSuccess={(paymentIntentId) => console.log('Payé :', paymentIntentId)}
- *   onError={(msg) => console.error(msg)}
- * />
- * ```
- *
- * @module components/stripe/StripePaymentElement
- */
-
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Elements,
   PaymentElement,
@@ -28,11 +8,9 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import { getStripe } from '@/lib/stripe-client';
+import { isNativeStripe } from '@/lib/stripe-adapters';
+import { NativeStripePayment } from '@/components/stripe/NativeStripePayment';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-
-// ============================================================================
-// Sous-composant interne du formulaire (doit être enfant de <Elements>)
-// ============================================================================
 
 interface PaymentFormProps {
   amount: number;
@@ -64,8 +42,7 @@ function PaymentForm({
     const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       redirect: 'if_required',
-      confirmParams: {
-      },
+      confirmParams: {},
     });
 
     if (error) {
@@ -135,13 +112,11 @@ function PaymentForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Récapitulatif du montant */}
       <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
         <span className="text-slate-400 text-sm">Montant à payer</span>
         <span className="text-white font-bold text-lg">{formattedAmount}</span>
       </div>
 
-      {/* Payment Element Stripe (thème night) */}
       <div className="rounded-xl overflow-hidden border border-white/10 bg-white/5 p-4">
         <PaymentElement
           options={{
@@ -151,7 +126,6 @@ function PaymentForm({
         />
       </div>
 
-      {/* Message d'erreur */}
       {errorMessage && (
         <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
           <MaterialIcon name="error" size="md" className="text-destructive mt-0.5 flex-shrink-0" />
@@ -159,7 +133,6 @@ function PaymentForm({
         </div>
       )}
 
-      {/* Bouton de confirmation */}
       <button
         type="submit"
         disabled={!stripe || processing}
@@ -181,7 +154,6 @@ function PaymentForm({
         )}
       </button>
 
-      {/* Badge sécurité */}
       <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
         <MaterialIcon name="verified_user" size="sm" />
         <span>Paiement sécurisé par Stripe · PCI DSS Niveau 1</span>
@@ -190,22 +162,12 @@ function PaymentForm({
   );
 }
 
-// ============================================================================
-// Composant exporté — inclut le Provider Elements
-// ============================================================================
-
 interface StripePaymentElementProps {
-  /** Client secret du PaymentIntent (obtenu via votre API route) */
   clientSecret: string;
-  /** Montant affiché à l'utilisateur */
   amount: number;
-  /** Code ISO de la devise (ex: 'CAD', 'EUR') */
   currency: string;
-  /** Callback appelé si le paiement réussit */
   onSuccess: (paymentIntentId: string) => void;
-  /** Callback appelé si une erreur survient */
   onError: (message: string) => void;
-  /** Texte du bouton de confirmation */
   submitLabel?: string;
 }
 
@@ -217,41 +179,59 @@ export function StripePaymentElement({
   onError,
   submitLabel,
 }: StripePaymentElementProps) {
-  const appearance = {
-    theme: 'night' as const,
-    variables: {
-      colorPrimary: '#f29200',
-      colorBackground: '#1a1a2e',
-      colorText: '#f1f5f9',
-      colorDanger: '#ef4444',
-      fontFamily: 'Inter, system-ui, sans-serif',
-      spacingUnit: '4px',
-      borderRadius: '12px',
-    },
-    rules: {
-      '.Input': {
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        color: '#f1f5f9',
+  if (isNativeStripe()) {
+    return (
+      <NativeStripePayment
+        clientSecret={clientSecret}
+        amount={amount}
+        currency={currency}
+        onSuccess={onSuccess}
+        onError={onError}
+        submitLabel={submitLabel}
+      />
+    );
+  }
+
+  const stripePromise = useMemo(() => getStripe(), []);
+
+  const options = useMemo(
+    () => ({
+      clientSecret,
+      appearance: {
+        theme: 'night' as const,
+        variables: {
+          colorPrimary: '#f29200',
+          colorBackground: '#1a1a2e',
+          colorText: '#f1f5f9',
+          colorDanger: '#ef4444',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          spacingUnit: '4px',
+          borderRadius: '12px',
+        },
+        rules: {
+          '.Input': {
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: '#f1f5f9',
+          },
+          '.Input:focus': {
+            border: '1px solid #f29200',
+            boxShadow: '0 0 0 1px #f29200',
+          },
+          '.Label': {
+            color: '#94a3b8',
+          },
+        },
       },
-      '.Input:focus': {
-        border: '1px solid #f29200',
-        boxShadow: '0 0 0 1px #f29200',
-      },
-      '.Label': {
-        color: '#94a3b8',
-      },
-    },
-  };
+      locale: 'fr' as const,
+    }),
+    [clientSecret]
+  );
 
   return (
     <Elements
-      stripe={getStripe()}
-      options={{
-        clientSecret,
-        appearance,
-        locale: 'fr',
-      }}
+      stripe={stripePromise}
+      options={options}
     >
       <PaymentForm
         amount={amount}

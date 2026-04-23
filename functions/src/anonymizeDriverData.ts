@@ -108,8 +108,8 @@ export const scheduleTripDataAnonymization = onDocumentUpdated(
     
     if (!beforeData || !afterData) return;
     
-    const beforeStatus = (beforeData as any).status;
-    const afterStatus = (afterData as any).status;
+    const beforeStatus = (beforeData as Record<string, unknown>).status as string;
+    const afterStatus = (afterData as Record<string, unknown>).status as string;
 
     // Vérification transition vers "completed"
     if (beforeStatus !== 'completed' && afterStatus === 'completed') {

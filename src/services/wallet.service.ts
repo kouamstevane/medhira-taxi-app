@@ -128,57 +128,16 @@ export const getWalletBalance = async (userId: string): Promise<number> => {
 // ============================================================================
 
 /**
- * Crée une transaction en statut "pending".
- * Délègue à POST /api/wallet/create-transaction.
- */
-export const createTransaction = async (
-  transactionData: Omit<Transaction, 'id' | 'status' | 'createdAt' | 'updatedAt'>
-): Promise<string> => {
-  const { transactionId } = await postJson<{ transactionId: string }>(
-    '/api/wallet/create-transaction',
-    {
-      type: transactionData.type,
-      amount: transactionData.amount,
-      currency: transactionData.currency,
-      description: transactionData.description,
-      reference: transactionData.reference,
-      bookingId: transactionData.bookingId,
-      method: transactionData.method,
-      fees: transactionData.fees,
-      netAmount: transactionData.netAmount,
-    }
-  );
-  return transactionId;
-};
-
-/**
- * Finalise une transaction et crédite le wallet de `amount`.
- * Idempotent côté serveur : si la transaction est déjà "completed",
- * aucun double crédit n'est émis.
- */
-export const completeTransaction = async (
-  transactionId: string,
-  _userId: string,
-  amount: number
-): Promise<void> => {
-  await postJson('/api/wallet/complete-transaction', {
-    transactionId,
-    amount,
-  });
-};
-
-/**
  * Paie une course / commande avec le wallet.
  * Le débit est atomique côté serveur (check solde + débit + création tx).
  */
 export const payBooking = async (
   _userId: string,
   bookingId: string,
-  amount: number
 ): Promise<string> => {
   const { transactionId } = await postJson<{ transactionId: string }>(
     '/api/wallet/pay-booking',
-    { bookingId, amount }
+    { bookingId }
   );
   return transactionId;
 };

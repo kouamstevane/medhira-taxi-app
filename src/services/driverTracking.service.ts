@@ -4,6 +4,7 @@ import { getDatabase, ref, set, onValue, off } from 'firebase/database';
 import { serverTimestamp } from 'firebase/firestore';
 import { getFirestore, doc, updateDoc } from 'firebase/firestore';
 import { z } from 'zod';
+import { ensureConsent, ConsentRequiredError } from '@/services/gdpr-consent.service';
 
 /**
  * Service de tracking conducteur
@@ -49,7 +50,7 @@ export interface TrackingConfig {
 }
 
 export interface TrackingError {
-    code: 'PERMISSION_DENIED' | 'GPS_UNAVAILABLE' | 'NETWORK_ERROR' | 'BATTERY_SAVER' | 'OFFLINE_MODE';
+    code: 'PERMISSION_DENIED' | 'GPS_UNAVAILABLE' | 'NETWORK_ERROR' | 'BATTERY_SAVER' | 'OFFLINE_MODE' | 'CONSENT_REQUIRED';
     message: string;
     recoverable: boolean;
 }
@@ -83,6 +84,24 @@ class DriverTrackingService {
         const user = auth.currentUser;
         if (!user || user.uid !== config.driverId) {
             throw new Error('AUTH_MISMATCH: Identifiant conducteur invalide');
+        }
+
+        // RGPD SEC-G01 : exiger un consentement explicite enregistré dans Firestore
+        // avant tout démarrage du tracking GPS continu. L'appelant (hook/UI) doit
+        // intercepter ConsentRequiredError et afficher une modale de consentement.
+        try {
+            await ensureConsent(config.driverId, 'geolocation');
+        } catch (err) {
+            if (err instanceof ConsentRequiredError) {
+                const trackingError: TrackingError = {
+                    code: 'CONSENT_REQUIRED',
+                    message: 'Consentement de géolocalisation requis (RGPD).',
+                    recoverable: false,
+                };
+                config.onError?.(trackingError);
+                throw trackingError;
+            }
+            throw err;
         }
 
         this.config = config;

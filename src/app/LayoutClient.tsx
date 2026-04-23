@@ -79,8 +79,8 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     setShowHeader(!shouldHideHeader);
   }, [pathname, currentUser, loading]);
 
-  return (
-    <VoipCallProvider>
+  const body = (
+    <>
       {/* Push notifications handler (invisible) */}
       <NotificationHandler />
 
@@ -109,11 +109,13 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       )}
 
       {/* Contenu principal */}
-      <main className={showHeader ? '' : ''}>
-        {children}
-      </main>
-    </VoipCallProvider>
+      <main>{children}</main>
+    </>
   );
+
+  // VoipCallProvider monte des listeners RTDB coûteux ; ne pas l'activer
+  // quand l'utilisateur n'est pas connecté.
+  return currentUser ? <VoipCallProvider>{body}</VoipCallProvider> : body;
 }
 
 

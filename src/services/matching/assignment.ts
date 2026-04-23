@@ -20,7 +20,6 @@ import {
   markCandidateAccepted,
   expireAllPendingCandidates,
 } from './broadcast';
-import { getDriverById } from '../driver.service';
 
 export interface AssignDriverResult {
   success: boolean;
@@ -65,14 +64,14 @@ export const assignDriver = async (
       }
 
       // Vérifier que le chauffeur peut accepter
-      const driver = await getDriverById(driverId);
-      if (!driver) {
+      const driverRef = doc(db, 'drivers', driverId);
+      const driverSnap = await transaction.get(driverRef);
+      if (!driverSnap.exists()) {
         throw new Error('Chauffeur non trouvé');
       }
-
-      // Vérifier la disponibilité (isAvailable peut être undefined, on considère comme disponible)
-      const isAvailable = driver.isAvailable !== undefined ? driver.isAvailable : true;
-      if (!isAvailable) {
+      const txDriverData = driverSnap.data();
+      const txIsAvailable = txDriverData.isAvailable !== undefined ? txDriverData.isAvailable : true;
+      if (!txIsAvailable) {
         throw new Error('Le chauffeur n\'est pas disponible');
       }
 
@@ -109,12 +108,11 @@ export const assignDriver = async (
         });
       }
 
-      // Récupérer les informations du chauffeur
-      const driverName = `${driver.firstName || ''} ${driver.lastName || ''}`.trim() || 'Chauffeur';
-      const driverPhone = driver.phone || driver.phoneNumber || '';
-      const carModel = driver.car?.model || driver.carModel || '';
-      const carPlate = driver.car?.plate || driver.carPlate || '';
-      const carColor = driver.car?.color || driver.carColor || '';
+      const driverName = `${txDriverData.firstName || ''} ${txDriverData.lastName || ''}`.trim() || 'Chauffeur';
+      const driverPhone = txDriverData.phone || txDriverData.phoneNumber || '';
+      const carModel = txDriverData.car?.model || txDriverData.carModel || '';
+      const carPlate = txDriverData.car?.plate || txDriverData.carPlate || '';
+      const carColor = txDriverData.car?.color || txDriverData.carColor || '';
 
       // Préparer les données de mise à jour (exclure les valeurs undefined)
       // Firestore n'accepte pas les valeurs undefined, donc on n'inclut que les champs définis
@@ -131,8 +129,8 @@ export const assignDriver = async (
       if (driverPhone) {
         updateData.driverPhone = driverPhone;
       }
-      if (driver.currentLocation) {
-        updateData.driverLocation = driver.currentLocation;
+      if (txDriverData.currentLocation) {
+        updateData.driverLocation = txDriverData.currentLocation;
       }
       if (carModel) {
         updateData.carModel = carModel;
@@ -148,8 +146,6 @@ export const assignDriver = async (
       logger.info('Mise à jour de la course avec les données:', { rideId, updateData });
       transaction.update(rideRef, updateData);
 
-      // Marquer le chauffeur comme indisponible dans la même transaction atomique
-      const driverRef = doc(db, 'drivers', driverId);
       transaction.update(driverRef, {
         isAvailable: false,
         status: 'on_trip',
@@ -191,45 +187,62 @@ export const cancelAssignment = async (
 ): Promise<void> => {
   try {
     const rideRef = doc(db, 'bookings', rideId);
-    const rideSnap = await getDoc(rideRef);
 
-    if (!rideSnap.exists()) {
-      throw new Error('Course non trouvée');
-    }
+    //  Transaction atomique : read ride + driver, valider, puis update
+    // les deux en une seule opération pour éviter un état incohérent
+    // (ride libéré mais driver toujours occupé, ou inversement).
+    const previousDriverId = await runTransaction(db, async (tx) => {
+      const rideSnap = await tx.get(rideRef);
+      if (!rideSnap.exists()) {
+        throw new Error('Course non trouvée');
+      }
 
-    const rideData = rideSnap.data();
-    const previousDriverId: string | null = rideData?.driverId ?? null;
+      const rideData = rideSnap.data();
 
-    await updateDoc(rideRef, {
-      status: 'pending',
-      driverId: null,
-      driverName: null,
-      driverPhone: null,
-      driverLocation: null,
-      carModel: null,
-      carPlate: null,
-      carColor: null,
-      cancelledAt: serverTimestamp(),
-      cancellationReason: reason,
-      updatedAt: serverTimestamp(),
-    });
+      const cancellableStatuses = ['pending', 'accepted', 'driver_arrived'];
+      if (!cancellableStatuses.includes(rideData.status)) {
+        throw new Error(
+          `Impossible d'annuler: statut actuel "${rideData.status}"`
+        );
+      }
 
-    // Libérer le chauffeur précédemment assigné
-    if (previousDriverId) {
-      try {
-        const driverRef = doc(db, 'drivers', previousDriverId);
-        await updateDoc(driverRef, {
+      const prevDriverId: string | null = rideData?.driverId ?? null;
+
+      // Lire le driver AVANT tout write (contrainte Firestore tx)
+      const driverRef = prevDriverId
+        ? doc(db, 'drivers', prevDriverId)
+        : null;
+      if (driverRef) {
+        await tx.get(driverRef);
+      }
+
+      tx.update(rideRef, {
+        status: 'pending',
+        driverId: null,
+        driverName: null,
+        driverPhone: null,
+        driverLocation: null,
+        carModel: null,
+        carPlate: null,
+        carColor: null,
+        cancelledAt: serverTimestamp(),
+        cancellationReason: reason,
+        updatedAt: serverTimestamp(),
+      });
+
+      if (driverRef) {
+        tx.update(driverRef, {
           isAvailable: true,
           status: 'available',
           currentBookingId: null,
           updatedAt: serverTimestamp(),
         });
-      } catch (driverError) {
-        logger.error('Erreur lors de la libération du chauffeur', { error: driverError, driverId: previousDriverId });
       }
-    }
 
-    logger.info('Attribution annulée', { rideId, reason });
+      return prevDriverId;
+    });
+
+    logger.info('Attribution annulée', { rideId, reason, previousDriverId });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Erreur lors de l\'annulation', { error: errorMessage, rideId });

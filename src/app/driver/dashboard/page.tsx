@@ -225,11 +225,8 @@ export default function DriverDashboard() {
           limit(1)
         );
         
-        console.log('[DRIVER] Initialisation listener courses actives pour:', user.uid);
-        
         unsubscribeCurrentTrip = onSnapshot(currentTripQuery, async (snapshot) => {
-          console.log('[DRIVER] Snapshot courses actives:', snapshot.size, 'résultat(s)');
-          
+
           if (!snapshot.empty) {
             const activeDoc = snapshot.docs[0]; // Prendre la première course active
             const data = activeDoc.data();

@@ -49,20 +49,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // peut ne pas encore être propagé quand onAuthStateChanged se déclenche.
       await user.getIdToken();
 
-      // Essayer de trouver l'utilisateur dans 'users' puis 'drivers'
-      const collections = ['users', 'drivers'];
-      let userDoc = null;
-      let collectionName = '';
+      // Lancer les deux lectures en parallèle pour éviter un RTT séquentiel.
+      // 'users' garde la priorité en cas d'existence simultanée (compte client).
+      const [usersSnap, driversSnap] = await Promise.all([
+        getDoc(doc(db, 'users', user.uid)),
+        getDoc(doc(db, 'drivers', user.uid)),
+      ]);
 
-      for (const coll of collections) {
-        const docRef = doc(db, coll, user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          userDoc = docSnap;
-          collectionName = coll;
-          break;
-        }
-      }
+      const userDoc = usersSnap.exists() ? usersSnap : driversSnap.exists() ? driversSnap : null;
+      const collectionName = usersSnap.exists() ? 'users' : driversSnap.exists() ? 'drivers' : '';
 
       console.log('[AuthContext] Document utilisateur récupéré', {
         exists: userDoc !== null,

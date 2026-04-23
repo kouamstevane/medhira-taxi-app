@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
-import { doc, onSnapshot, updateDoc, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, getDoc, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
 import { db } from "@/config/firebase";
 import { CURRENCY_CODE, LIMITS, DEFAULT_LOCALE } from "@/utils/constants";
 const ConfirmationMap = dynamic(() => import('./ConfirmationMap').then(m => ({ default: m.ConfirmationMap })), {
@@ -33,6 +33,7 @@ function ConfirmationContent() {
     }
 
     const bookingRef = doc(db, "bookings", bookingId);
+    let mounted = true;
     let timeoutId: NodeJS.Timeout;
     let unsubscribeDriver: (() => void) | null = null;
 
@@ -52,10 +53,17 @@ function ConfirmationContent() {
         clearTimeout(timeoutId);
 
         if (data.status === "pending") {
-          // Timeout après 60 secondes
-          timeoutId = setTimeout(() => {
-            setError("Aucun chauffeur disponible après 60 secondes.");
-            updateDoc(bookingRef, { status: "failed", reason: "timeout" });
+          timeoutId = setTimeout(async () => {
+            if (!mounted) return;
+            try {
+              const snap = await getDoc(bookingRef);
+              if (snap.exists() && snap.data().status === "pending") {
+                await updateDoc(bookingRef, { status: "failed", reason: "timeout" });
+                setError("Aucun chauffeur disponible après 60 secondes.");
+              }
+            } catch (err) {
+              console.error("Erreur mise à jour timeout:", err);
+            }
           }, LIMITS.DRIVER_SEARCH_TIMEOUT);
         }
 
@@ -64,6 +72,7 @@ function ConfirmationContent() {
           const driverRef = doc(db, "drivers", data.driverId);
           if (unsubscribeDriver) unsubscribeDriver();
           unsubscribeDriver = onSnapshot(driverRef, (driverSnap: DocumentSnapshot<DocumentData>) => {
+            if (!mounted) return;
             if (driverSnap.exists()) {
               const driverData = driverSnap.data();
               if (driverData.lastLocation) {
@@ -80,6 +89,7 @@ function ConfirmationContent() {
                       travelMode: google.maps.TravelMode.DRIVING,
                     },
                     (result, status) => {
+                      if (!mounted) return;
                       if (status === google.maps.DirectionsStatus.OK) {
                         setDirections(result);
                       } else {
@@ -112,6 +122,7 @@ function ConfirmationContent() {
     );
 
     return () => {
+      mounted = false;
       clearTimeout(timeoutId);
       unsubscribe();
       if (unsubscribeDriver) unsubscribeDriver();

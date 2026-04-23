@@ -1,11 +1,34 @@
 import admin from 'firebase-admin';
-import serviceAccount from '../src/config/keys/serviceAccountKey.json' with { type: 'json' };
 
-// Initialiser Firebase Admin
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  projectId: 'medjira-service'
-});
+/**
+ * Initialisation Firebase Admin via variables d'environnement (P0-1 sécurité).
+ *
+ * Options supportées :
+ *   1. GOOGLE_APPLICATION_CREDENTIALS=/chemin/vers/serviceAccountKey.json
+ *      (option recommandée — applicationDefault() lit le fichier indiqué)
+ *   2. FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY
+ *      (les \n échappés dans FIREBASE_PRIVATE_KEY sont convertis automatiquement)
+ *
+ * La clé privée NE DOIT JAMAIS être importée en dur depuis le repo.
+ */
+const projectId = process.env.FIREBASE_PROJECT_ID || 'medjira-service';
+
+if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    }),
+    projectId,
+  });
+} else {
+  // Utilise GOOGLE_APPLICATION_CREDENTIALS si défini, sinon ADC
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+    projectId,
+  });
+}
 
 const db = admin.firestore();
 

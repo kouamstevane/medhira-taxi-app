@@ -18,6 +18,7 @@ export function useDeliveryTracking(orderId: string | null): {
 } {
   const [location, setLocation] = useState<DriverLocation | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     if (!orderId) return
@@ -31,7 +32,14 @@ export function useDeliveryTracking(orderId: string | null): {
     return () => unsub()
   }, [orderId])
 
-  const isOnline = location != null && (Date.now() - location.updatedAt) < 10000
+  // Tick every 5s so isOnline flips to false when updates stop arriving
+  useEffect(() => {
+    if (!orderId) return
+    const id = setInterval(() => setNow(Date.now()), 5000)
+    return () => clearInterval(id)
+  }, [orderId])
+
+  const isOnline = location != null && (now - location.updatedAt) < 10000
 
   return {
     driverLocation: location ? { lat: location.lat, lng: location.lng, heading: location.heading } : null,

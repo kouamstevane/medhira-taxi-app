@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { collection, query, where, orderBy, limit, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 
@@ -73,6 +73,9 @@ export function useDriverActivity(uid: string): {
       taxiLoaded = true
       mergeAndSort()
       checkDone()
+    }, (error) => {
+      console.error('Driver activity snapshot error:', error)
+      setLoading(false)
     })
 
     const deliveryQuery = query(
@@ -100,6 +103,9 @@ export function useDriverActivity(uid: string): {
       deliveryLoaded = true
       mergeAndSort()
       checkDone()
+    }, (error) => {
+      console.error('Driver activity snapshot error:', error)
+      setLoading(false)
     })
 
     return () => {
@@ -108,11 +114,17 @@ export function useDriverActivity(uid: string): {
     }
   }, [uid])
 
-  const totals: ActivityTotals = {
-    total: records.reduce((s, r) => s + r.amount, 0),
-    taxi: records.filter(r => r.type === 'taxi').reduce((s, r) => s + r.amount, 0),
-    livraison: records.filter(r => r.type === 'livraison').reduce((s, r) => s + r.amount, 0),
-  }
+  const totals = useMemo<ActivityTotals>(() => {
+    let total = 0
+    let taxi = 0
+    let livraison = 0
+    for (const r of records) {
+      total += r.amount
+      if (r.type === 'taxi') taxi += r.amount
+      else if (r.type === 'livraison') livraison += r.amount
+    }
+    return { total, taxi, livraison }
+  }, [records])
 
   return { records, totals, loading }
 }

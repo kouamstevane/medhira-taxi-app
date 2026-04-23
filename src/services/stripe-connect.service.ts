@@ -50,37 +50,46 @@ export async function createDriverConnectAccount(
   email: string,
   country: string
 ): Promise<string> {
-  const account = await stripe.accounts.create({
-    type: 'custom',
-    country: country.toUpperCase(),
-    email,
-    controller: {
-      stripe_dashboard: { type: 'none' },
-      fees: { payer: 'application' },
-      losses: { payments: 'application' },
-      requirement_collection: 'application',
-    },
-    capabilities: {
-      transfers: { requested: true },
-    },
-    metadata: {
-      driverId,
-      platform: 'medjira_taxi',
-    },
-  }, {
-    idempotencyKey: `account_${driverId}`,
-  });
+  try {
+    const account = await stripe.accounts.create({
+      type: 'custom',
+      country: country.toUpperCase(),
+      email,
+      controller: {
+        stripe_dashboard: { type: 'none' },
+        fees: { payer: 'application' },
+        losses: { payments: 'application' },
+        requirement_collection: 'application',
+      },
+      capabilities: {
+        transfers: { requested: true },
+      },
+      metadata: {
+        driverId,
+        platform: 'medjira_taxi',
+      },
+    }, {
+      idempotencyKey: `account_${driverId}`,
+    });
 
-  // Persister l'ID du compte dans Firestore
-  await getAdminDb().collection('drivers').doc(driverId).update({
-    stripeAccountId: account.id,
-    stripeAccountStatus: 'pending',
-    weeklyPayoutEnabled: false,
-    lastPayoutAt: null,
-    pendingBalanceCents: 0,
-  });
+    try {
+      await getAdminDb().collection('drivers').doc(driverId).update({
+        stripeAccountId: account.id,
+        stripeAccountStatus: 'pending',
+        weeklyPayoutEnabled: false,
+        lastPayoutAt: null,
+        pendingBalanceCents: 0,
+      });
+    } catch (firestoreError) {
+      try { await stripe.accounts.del(account.id); } catch {}
+      throw firestoreError;
+    }
 
-  return account.id;
+    return account.id;
+  } catch (error) {
+    console.error('[stripe-connect.service] createDriverConnectAccount failed:', error);
+    throw error;
+  }
 }
 
 /**
@@ -97,14 +106,19 @@ export async function createOnboardingLink(
   returnUrl: string,
   refreshUrl: string
 ): Promise<string> {
-  const accountLink = await stripe.accountLinks.create({
-    account: accountId,
-    return_url: returnUrl,
-    refresh_url: refreshUrl,
-    type: 'account_onboarding',
-  });
+  try {
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      return_url: returnUrl,
+      refresh_url: refreshUrl,
+      type: 'account_onboarding',
+    });
 
-  return accountLink.url;
+    return accountLink.url;
+  } catch (error) {
+    console.error('[stripe-connect.service] createOnboardingLink failed:', error);
+    throw error;
+  }
 }
 
 /**
@@ -115,39 +129,44 @@ export async function syncDriverAccountStatus(
   driverId: string,
   accountId: string
 ): Promise<DriverStripeData['stripeAccountStatus']> {
-  const account = await stripe.accounts.retrieve(accountId);
+  try {
+    const account = await stripe.accounts.retrieve(accountId);
 
-  let status: DriverStripeData['stripeAccountStatus'];
+    let status: DriverStripeData['stripeAccountStatus'];
 
-  if (!account || ('deleted' in account && account.deleted)) {
-    status = 'disabled';
-  } else if (account.charges_enabled && account.payouts_enabled) {
-    status = 'active';
-  } else if (account.requirements?.disabled_reason) {
-    status = 'restricted';
-  } else {
-    status = 'pending';
-  }
+    if (!account || ('deleted' in account && account.deleted)) {
+      status = 'disabled';
+    } else if (account.charges_enabled && account.payouts_enabled) {
+      status = 'active';
+    } else if (account.requirements?.disabled_reason) {
+      status = 'restricted';
+    } else {
+      status = 'pending';
+    }
 
-  const updateData: {
-    stripeAccountStatus: DriverStripeData['stripeAccountStatus'];
-    requirements?: DriverStripeData['requirements'];
-  } = {
-    stripeAccountStatus: status,
-  };
-
-  if (account.requirements) {
-    const requirements: DriverStripeData['requirements'] = {
-      currently_due: account.requirements.currently_due ?? [],
-      current_deadline: account.requirements.current_deadline ?? null,
-      lastCheckedAt: new Date(),
+    const updateData: {
+      stripeAccountStatus: DriverStripeData['stripeAccountStatus'];
+      requirements?: DriverStripeData['requirements'];
+    } = {
+      stripeAccountStatus: status,
     };
-    updateData.requirements = requirements;
+
+    if (account.requirements) {
+      const requirements: DriverStripeData['requirements'] = {
+        currently_due: account.requirements.currently_due ?? [],
+        current_deadline: account.requirements.current_deadline ?? null,
+        lastCheckedAt: new Date(),
+      };
+      updateData.requirements = requirements;
+    }
+
+    await getAdminDb().collection('drivers').doc(driverId).update(updateData);
+
+    return status;
+  } catch (error) {
+    console.error('[stripe-connect.service] syncDriverAccountStatus failed:', error);
+    throw error;
   }
-
-  await getAdminDb().collection('drivers').doc(driverId).update(updateData);
-
-  return status;
 }
 
 // ============================================================================
@@ -167,20 +186,25 @@ export async function accumulateDriverEarnings(
   rideAmount: number,
   currency: string
 ): Promise<void> {
-  const driverShareCents = Math.round(
-    toStripeAmount(rideAmount, currency) * DRIVER_SHARE_RATE
-  );
+  try {
+    const driverShareCents = Math.round(
+      toStripeAmount(rideAmount, currency) * DRIVER_SHARE_RATE
+    );
 
-  const driverRef = getAdminDb().collection('drivers').doc(driverId);
+    const driverRef = getAdminDb().collection('drivers').doc(driverId);
 
-  await getAdminDb().runTransaction(async (tx) => {
-    const snap = await tx.get(driverRef);
-    const current = snap.data()?.pendingBalanceCents ?? 0;
-    tx.update(driverRef, {
-      pendingBalanceCents: current + driverShareCents,
-      currency: currency.toLowerCase(),
+    await getAdminDb().runTransaction(async (tx) => {
+      const snap = await tx.get(driverRef);
+      const current = snap.data()?.pendingBalanceCents ?? 0;
+      tx.update(driverRef, {
+        pendingBalanceCents: current + driverShareCents,
+        currency: currency.toLowerCase(),
+      });
     });
-  });
+  } catch (error) {
+    console.error('[stripe-connect.service] accumulateDriverEarnings failed:', error);
+    throw error;
+  }
 }
 
 // ============================================================================
@@ -210,8 +234,11 @@ export async function processWeeklyPayouts(
   let totalDriversScanned = 0;
 
   let lastDoc: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  let iterations = 0;
 
   do {
+    iterations++;
+    if (iterations > 50) { console.warn('processWeeklyPayouts: max iterations reached', iterations); break; }
     let q = getAdminDb()
       .collection('drivers')
       .where('weeklyPayoutEnabled', '==', true)
@@ -385,9 +412,14 @@ export async function setDriverWeeklyPayoutPreference(
   driverId: string,
   enabled: boolean
 ): Promise<void> {
-  await getAdminDb().collection('drivers').doc(driverId).update({
-    weeklyPayoutEnabled: enabled,
-  });
+  try {
+    await getAdminDb().collection('drivers').doc(driverId).update({
+      weeklyPayoutEnabled: enabled,
+    });
+  } catch (error) {
+    console.error('[stripe-connect.service] setDriverWeeklyPayoutPreference failed:', error);
+    throw error;
+  }
 }
 
 /**

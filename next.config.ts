@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Optimisation des images
   images: {
-    unoptimized: true,
+    unoptimized: isMobile,
     remotePatterns: [
       {
         protocol: 'https',

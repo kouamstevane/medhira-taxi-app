@@ -6,7 +6,6 @@
  * @module services/invoice
  */
 
-import jsPDF from "jspdf";
 import { Booking } from "@/types/booking";
 import { Timestamp } from "firebase/firestore";
 import { CURRENCY_CODE, DEFAULT_PRICING, DEFAULT_LOCALE } from "@/utils/constants";
@@ -108,8 +107,10 @@ export const extractInvoiceData = (booking: Booking): InvoiceData => {
 
 /**
  * Générer et télécharger une facture PDF
+ * Import dynamique de jsPDF pour ne pas gonfler le bundle initial.
  */
-export const generateInvoicePDF = (data: InvoiceData): void => {
+export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
+  const { default: jsPDF } = await import("jspdf");
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -354,9 +355,9 @@ export const generateInvoicePDF = (data: InvoiceData): void => {
 /**
  * Générer et télécharger une facture à partir d'un booking
  */
-export const downloadInvoiceFromBooking = (booking: Booking): void => {
+export const downloadInvoiceFromBooking = async (booking: Booking): Promise<void> => {
   const invoiceData = extractInvoiceData(booking);
-  generateInvoicePDF(invoiceData);
+  await generateInvoicePDF(invoiceData);
 };
 
 /**

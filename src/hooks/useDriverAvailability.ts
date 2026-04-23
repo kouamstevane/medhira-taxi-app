@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { getDatabase, ref, set } from 'firebase/database'
+import { getDatabase, ref, set, remove } from 'firebase/database'
 import { auth } from '@/config/firebase'
 import { useDriverStore } from '@/store/driverStore'
 
@@ -45,6 +45,8 @@ export function useDriverAvailability() {
             speed,
             heading: position.coords.heading ?? 0,
             timestamp: now,
+          }).catch((err) => {
+            console.error('[useDriverAvailability] RTDB location write failed:', err)
           })
         },
         (error) => {
@@ -66,7 +68,7 @@ export function useDriverAvailability() {
 
       // Supprimer la position RTDB
       const rtdb = getDatabase()
-      set(ref(rtdb, `driver_locations/${uid}`), null)
+      set(ref(rtdb, `driver_locations/${uid}`), null).catch(() => {})
 
       console.log('[useDriverAvailability] GPS tracking STOPPED')
     }
@@ -76,6 +78,8 @@ export function useDriverAvailability() {
       if (gpsWatchIdRef.current !== null) {
         navigator.geolocation.clearWatch(gpsWatchIdRef.current)
         gpsWatchIdRef.current = null
+        const rtdb = getDatabase()
+        remove(ref(rtdb, `driver_locations/${uid}`)).catch(() => {})
       }
     }
   }, [driver?.driverType, driver?.isAvailable, driver?.activeDeliveryOrderId])

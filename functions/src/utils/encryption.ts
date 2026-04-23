@@ -363,14 +363,15 @@ export async function decryptSensitiveData(
  * @param field - Les données chiffrées à valider
  * @returns true si la structure est valide, false sinon
  */
-export function isValidEncryptedData(field: any): boolean {
-  return field != null &&
-         typeof field.data === 'string' &&
-         field.data.length > 0 &&
-         typeof field.iv === 'string' &&
-         field.iv.length > 0 &&
-         typeof field.salt === 'string' &&
-         field.salt.length > 0;
+export function isValidEncryptedData(field: unknown): boolean {
+  if (field == null || typeof field !== 'object') return false;
+  const obj = field as Record<string, unknown>;
+  return typeof obj.data === 'string' &&
+          obj.data.length > 0 &&
+          typeof obj.iv === 'string' &&
+          obj.iv.length > 0 &&
+          typeof obj.salt === 'string' &&
+          obj.salt.length > 0;
 }
 
 /**

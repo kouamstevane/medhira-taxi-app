@@ -24,7 +24,7 @@ const step2Schema = z.object({
   }, "Vous devez avoir au moins 18 ans"),
   nationality: z.string().min(2, "Nationalité requise"),
   phone: z.string().regex(/^\+?[0-9\s\-()]{8,20}$/, ERROR_MESSAGES.INVALID_PHONE),
-  ssn: z.string().min(5, "Numéro de sécurité sociale requis"), // Modèle simplifié
+  ssn: z.string().regex(/^\d{3}[\s\-]?\d{3}[\s\-]?\d{3}$/, "NAS invalide (9 chiffres attendus, ex: 123 456 789)"),
   address: z.string().min(5, "Adresse requise"),
   city: z.string().min(2, "Ville requise"),
   zipCode: z.string().min(2, "Code postal requis"),

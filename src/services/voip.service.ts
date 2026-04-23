@@ -19,6 +19,7 @@ const VoipForeground = registerPlugin<VoipForegroundPlugin>('VoipForeground');
 class VoipService {
   private engine: IVoipEngine;
   private callDocUnsubscribe: (() => void) | null = null;
+  private isEnding = false;
 
   // État initial
   private state: VoipCallState = {
@@ -65,6 +66,7 @@ class VoipService {
       };
     } catch (error) {
       console.error('[voip.service] initEngine failed:', error);
+      this.updateState({ error: 'Initialisation moteur d\'appel échouée' });
     }
   }
 
@@ -231,6 +233,7 @@ class VoipService {
     } catch (error: unknown) {
       logger.error('Erreur acceptCall', { error });
       this.endCall('failed');
+      throw error;
     }
   }
 
@@ -245,8 +248,15 @@ class VoipService {
    * Termine un appel
    */
   async endCall(reason: string = 'user_ended'): Promise<void> {
+    // Re-entrance guard: endCall() is called from an onSnapshot listener
+    // (subscribeToCallDoc), and cleanup() unsubscribes that listener, which
+    // can itself trigger the listener callback again in some Firestore edge
+    // cases. Without this guard, recursive endCall() calls could stack.
+    if (this.isEnding) return;
+    this.isEnding = true;
+
     const callId = this.state.callId;
-    
+
     try {
       if (callId) {
         const functions = getFunctions();
@@ -256,14 +266,23 @@ class VoipService {
     } catch (error) {
       logger.error('Erreur endCall Cloud Function', { error });
     } finally {
-      await this.cleanup();
-      this.updateState({
-        status: (reason as CallStatus) === 'declined' ? 'declined' : 'ended',
-        callId: null,
-        bookingId: null,
-        channel: null,
-        token: null,
-      });
+      try {
+        await this.cleanup();
+      } catch (cleanupError) {
+        console.error('[VoipService] cleanup error:', cleanupError);
+      }
+      try {
+        this.updateState({
+          status: (reason as CallStatus) === 'declined' ? 'declined' : 'ended',
+          callId: null,
+          bookingId: null,
+          channel: null,
+          token: null,
+        });
+      } catch (stateError) {
+        console.error('[VoipService] state update error:', stateError);
+      }
+      this.isEnding = false;
     }
   }
 
@@ -272,8 +291,13 @@ class VoipService {
    */
   async toggleMute(): Promise<void> {
     const newMuted = !this.state.isMuted;
-    await this.engine.setMuted(newMuted);
-    this.updateState({ isMuted: newMuted });
+    try {
+      await this.engine.setMuted(newMuted);
+      this.updateState({ isMuted: newMuted });
+    } catch (error) {
+      logger.error('Erreur toggleMute', { error });
+      throw error;
+    }
   }
 
   /**
@@ -281,8 +305,13 @@ class VoipService {
    */
   async toggleSpeaker(): Promise<void> {
     const newSpeaker = !this.state.isSpeakerOn;
-    await this.engine.setSpeaker(newSpeaker);
-    this.updateState({ isSpeakerOn: newSpeaker });
+    try {
+      await this.engine.setSpeaker(newSpeaker);
+      this.updateState({ isSpeakerOn: newSpeaker });
+    } catch (error) {
+      logger.error('Erreur toggleSpeaker', { error });
+      throw error;
+    }
   }
 
   // --- Internals ---

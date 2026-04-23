@@ -271,16 +271,18 @@ export const useCapacitorGeolocation = () => {
         const { throttleMs = 1000, maxFrequencyHz = 1 } = options || {};
         let watchId: string | null = null;
         let lastCallbackTime = 0;
+        let cancelled = false;
 
         const startWatch = async () => {
             try {
-                watchId = await Geolocation.watchPosition(
+                const id = await Geolocation.watchPosition(
                     {
                         enableHighAccuracy: true,
                         timeout: 10000,
                         maximumAge: throttleMs // Accept cache within throttle window
                     },
                     (position, err) => {
+                        if (cancelled) return;
                         if (err) {
                             console.error('Erreur watch position:', err);
                             return;
@@ -290,7 +292,7 @@ export const useCapacitorGeolocation = () => {
                             const speed = position.coords.speed ?? 0;
                             const effectiveInterval = speed > 1 ? throttleMs : 5000;
                             const timeSinceLastCallback = now - lastCallbackTime;
-                            
+
                             if (timeSinceLastCallback >= effectiveInterval) {
                                 lastCallbackTime = now;
                                 const preciseLocation: PreciseLocation = {
@@ -307,6 +309,12 @@ export const useCapacitorGeolocation = () => {
                         }
                     }
                 );
+                if (cancelled) {
+                    // Unmounted between the await and here — clean up immediately
+                    await Geolocation.clearWatch({ id });
+                    return;
+                }
+                watchId = id;
             } catch (err: unknown) {
                 //  Typage correct de l'erreur (medJira.md #116)
                 console.error('Erreur démarrage watch:', err instanceof Error ? err.message : err);
@@ -316,6 +324,7 @@ export const useCapacitorGeolocation = () => {
         startWatch();
 
         return () => {
+            cancelled = true;
             if (watchId) {
                 Geolocation.clearWatch({ id: watchId });
             }

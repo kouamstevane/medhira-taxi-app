@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { ERROR_MESSAGES } from '@/utils/constants';
 import { isValidPassword } from '@/lib/validation';
+import { isFirebaseError, getErrorMessage } from '@/utils/error-utils';
 
 export default function RegisterContent() {
     const router = useRouter();
@@ -107,17 +108,20 @@ export default function RegisterContent() {
         } catch (err: unknown) {
             console.error('Erreur création compte:', err);
 
-            const error = err as { code?: string; message?: string };
-            if (error.code === 'auth/email-already-in-use') {
-                setError('Cette adresse email est déjà utilisée');
-            } else if (error.code === 'auth/invalid-email') {
-                setError(ERROR_MESSAGES.INVALID_EMAIL);
-            } else if (error.code === 'auth/weak-password') {
-                setError('Mot de passe trop faible (minimum 6 caractères)');
-            } else if (error.code === 'auth/network-request-failed') {
-                setError('Erreur de connexion. Vérifiez votre connexion internet');
+            if (isFirebaseError(err)) {
+                if (err.code === 'auth/email-already-in-use') {
+                    setError('Cette adresse email est déjà utilisée');
+                } else if (err.code === 'auth/invalid-email') {
+                    setError(ERROR_MESSAGES.INVALID_EMAIL);
+                } else if (err.code === 'auth/weak-password') {
+                    setError('Mot de passe trop faible (minimum 6 caractères)');
+                } else if (err.code === 'auth/network-request-failed') {
+                    setError('Erreur de connexion. Vérifiez votre connexion internet');
+                } else {
+                    setError(err.message);
+                }
             } else {
-                setError(error.message || 'Erreur lors de la création du compte');
+                setError(getErrorMessage(err, 'Erreur lors de la création du compte'));
             }
         } finally {
             setLoading(false);
@@ -141,16 +145,19 @@ export default function RegisterContent() {
             }
         } catch (err: unknown) {
             console.error('Erreur connexion Google:', err);
-            const error = err as { code?: string; message?: string };
 
-            if (error.code === 'auth/popup-closed-by-user' || error.message?.includes('cancelled')) {
-                setError('Connexion annulée');
-            } else if (error.code === 'auth/popup-blocked') {
-                setError('Popup bloquée. Veuillez autoriser les popups pour ce site');
-            } else if (error.code === 'auth/network-request-failed') {
-                setError('Erreur de connexion. Vérifiez votre connexion internet');
+            if (isFirebaseError(err)) {
+                if (err.code === 'auth/popup-closed-by-user' || err.message.includes('cancelled')) {
+                    setError('Connexion annulée');
+                } else if (err.code === 'auth/popup-blocked') {
+                    setError('Popup bloquée. Veuillez autoriser les popups pour ce site');
+                } else if (err.code === 'auth/network-request-failed') {
+                    setError('Erreur de connexion. Vérifiez votre connexion internet');
+                } else {
+                    setError(err.message);
+                }
             } else {
-                setError(error.message || 'Erreur lors de la connexion avec Google');
+                setError(getErrorMessage(err, 'Erreur lors de la connexion avec Google'));
             }
         } finally {
             setLoading(false);

@@ -161,6 +161,7 @@ export interface WeeklyPayoutSummary {
 export const PAYMENT_STATUS = {
   PENDING:      'pending',       // Aucun paiement initié
   AUTHORIZED:   'authorized',    // PaymentIntent créé, autorisation confirmée
+  PROCESSING:   'processing',    // Verrou atomique pendant capture/débit (anti-double-paiement)
   CAPTURED:     'captured',      // Paiement Stripe capturé (course terminée)
   CANCELLED:    'cancelled',     // Autorisation annulée (course annulée)
   FAILED:       'failed',        // Échec de capture ou de débit

@@ -1,27 +1,5 @@
 "use client";
 
-/**
- * Composant SetupPaymentContent
- *
- * Étape d'onboarding permettant à l'utilisateur d'ajouter une carte bancaire
- * via Stripe SetupIntent. L'utilisateur peut passer cette étape avec le
- * bouton "Plus tard".
- *
- * Flux :
- *  1. L'utilisateur arrive sur la page
- *  2. Un SetupIntent est créé via Firebase Callable Function (createSetupIntent)
- *  3. Le formulaire Stripe (PaymentElement) s'affiche
- *  4. L'utilisateur soumet → confirmSetup
- *  5. Le webhook Stripe onSetupIntentSucceeded persiste le payment_method
- *     dans Firestore automatiquement
- *  6. Redirection vers /dashboard
- *
- * Note : Utilise httpsCallable (Firebase Functions) au lieu de fetch API
- * pour fonctionner nativement sur mobile (Capacitor/Play Store).
- *
- * @module app/auth/setup-payment/SetupPaymentContent
- */
-
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -31,22 +9,16 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import { getStripe } from '@/lib/stripe-client';
+import { isNativeStripe } from '@/lib/stripe-adapters';
+import { NativeStripeSetup } from '@/components/stripe/NativeStripeSetup';
 import { auth, functions } from '@/config/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-
-// ============================================================================
-// Types
-// ============================================================================
 
 interface CreateSetupIntentResult {
   clientSecret: string;
   setupIntentId: string;
 }
-
-// ============================================================================
-// Sous-composant interne du formulaire (doit être enfant de <Elements>)
-// ============================================================================
 
 interface SetupFormProps {
   onSuccess: () => void;
@@ -82,18 +54,12 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
       return;
     }
 
-    // SetupIntent confirmé avec succès.
-    // Le webhook Stripe "onSetupIntentSucceeded" (Cloud Function)
-    // persiste automatiquement defaultPaymentMethodId dans Firestore.
-    // Pas besoin d'appel PUT supplémentaire.
-
     setProcessing(false);
     onSuccess();
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {/* Payment Element Stripe (thème night) */}
       <div className="rounded-xl overflow-hidden border border-white/10 bg-white/5 p-4">
         <PaymentElement
           options={{
@@ -103,7 +69,6 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
         />
       </div>
 
-      {/* Message d'erreur */}
       {errorMessage && (
         <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
           <MaterialIcon name="error" size="md" className="text-destructive mt-0.5 flex-shrink-0" />
@@ -111,7 +76,6 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
         </div>
       )}
 
-      {/* Bouton de confirmation */}
       <button
         type="submit"
         disabled={!stripe || processing}
@@ -133,7 +97,6 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
         )}
       </button>
 
-      {/* Badge sécurité */}
       <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
         <MaterialIcon name="verified_user" size="sm" />
         <span>Paiement sécurisé par Stripe · PCI DSS Niveau 1</span>
@@ -141,10 +104,6 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
     </form>
   );
 }
-
-// ============================================================================
-// Composant principal exporté
-// ============================================================================
 
 export default function SetupPaymentContent() {
   const router = useRouter();
@@ -154,8 +113,8 @@ export default function SetupPaymentContent() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const useNative = isNativeStripe();
 
-  // Nettoyage du timeout à la destruction du composant
   useEffect(() => {
     return () => {
       if (redirectTimeoutRef.current) {
@@ -164,7 +123,6 @@ export default function SetupPaymentContent() {
     };
   }, []);
 
-  // Fonction reutilisable pour creer un SetupIntent via Firebase Callable Function
   const fetchSetupIntent = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) {
@@ -193,7 +151,6 @@ export default function SetupPaymentContent() {
     }
   }, [router]);
 
-  // Charger le SetupIntent au montage
   useEffect(() => {
     fetchSetupIntent();
   }, [fetchSetupIntent]);
@@ -250,10 +207,8 @@ export default function SetupPaymentContent() {
     },
   };
 
-  // Memoriser le promise Stripe pour eviter les recreations a chaque render
   const stripePromise = useMemo(() => getStripe(), []);
 
-  // Écran de succès
   if (success) {
     return (
       <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
@@ -278,10 +233,8 @@ export default function SetupPaymentContent() {
   return (
     <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
       <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-hidden">
-        {/* Top Safe Area */}
         <div className="h-12 w-full" />
 
-        {/* Skip Link */}
         <div className="px-6">
           <button
             onClick={handleSkip}
@@ -292,14 +245,12 @@ export default function SetupPaymentContent() {
           </button>
         </div>
 
-        {/* Icon */}
         <div className="flex flex-col items-center justify-center pt-8 pb-6">
           <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
             <MaterialIcon name="credit_card" className="text-primary text-[40px]" />
           </div>
         </div>
 
-        {/* Heading */}
         <div className="px-6 text-center">
           <h1 className="text-white text-[28px] font-bold leading-tight mb-2">
             Ajoutez votre carte
@@ -309,7 +260,6 @@ export default function SetupPaymentContent() {
           </p>
         </div>
 
-        {/* Error State with Retry */}
         {error && !clientSecret && (
           <div className="mx-6 mt-6">
             <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
@@ -326,7 +276,6 @@ export default function SetupPaymentContent() {
           </div>
         )}
 
-        {/* Loading State */}
         {loading && (
           <div className="flex-1 flex items-center justify-center px-6">
             <div className="text-center">
@@ -336,27 +285,32 @@ export default function SetupPaymentContent() {
           </div>
         )}
 
-        {/* Affiche uniquement quand clientSecret ET setupIntentId sont disponibles.
-             setupIntentId sera utilise pour le fallback PUT si le webhook echoue. */}
-        {!loading && clientSecret && setupIntentId && (
+        {!loading && clientSecret && (
           <div className="mt-8 px-6">
-            <Elements
-              stripe={stripePromise}
-              options={{
-                clientSecret,
-                appearance,
-                locale: resolvedLocale,
-              }}
-            >
-              <SetupForm
+            {useNative ? (
+              <NativeStripeSetup
+                clientSecret={clientSecret}
                 onSuccess={handleSetupSuccess}
                 onError={handleSetupError}
               />
-            </Elements>
+            ) : (
+              <Elements
+                stripe={stripePromise}
+                options={{
+                  clientSecret,
+                  appearance,
+                  locale: resolvedLocale,
+                }}
+              >
+                <SetupForm
+                  onSuccess={handleSetupSuccess}
+                  onError={handleSetupError}
+                />
+              </Elements>
+            )}
           </div>
         )}
 
-        {/* Skip Button */}
         {!loading && (
           <div className="px-6 mt-6">
             <button
@@ -369,13 +323,11 @@ export default function SetupPaymentContent() {
           </div>
         )}
 
-        {/* Info */}
         <div className="px-6 mt-6 text-center text-xs text-slate-500 space-y-1">
           <p>Vous pourrez ajouter votre carte plus tard depuis votre profil.</p>
           <p>Aucun montant ne sera débité lors de cette étape.</p>
         </div>
 
-        {/* Footer */}
         <div className="mt-auto pb-10 pt-8 text-center px-6">
           <p className="text-slate-500 text-xs">
             En ajoutant une carte, vous acceptez nos{' '}

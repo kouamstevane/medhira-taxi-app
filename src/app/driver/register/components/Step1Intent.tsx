@@ -10,7 +10,6 @@ import OTPInput from '@/components/ui/OTPInput';
 
 const step1Schema = z.object({
   email: z.string().email(ERROR_MESSAGES.INVALID_EMAIL),
-  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, ERROR_MESSAGES.INVALID_PHONE),
   password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
 });
 
@@ -32,7 +31,6 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
     resolver: zodResolver(step1Schema),
     defaultValues: {
       email: initialData?.email || '',
-      phone: initialData?.phone || '',
       password: '',
     }
   });
@@ -124,15 +122,6 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
             label="Email"
             placeholder="votre@email.com"
             error={errors.email?.message}
-            required
-          />
-
-          <InputField
-            {...register('phone')}
-            type="tel"
-            label="Téléphone"
-            placeholder="+33612345678"
-            error={errors.phone?.message}
             required
           />
 

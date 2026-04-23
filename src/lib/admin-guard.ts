@@ -29,6 +29,26 @@ export async function verifyFirebaseToken(request: NextRequest): Promise<string>
   return decoded.uid;
 }
 
+export interface DecodedFirebaseToken {
+  uid: string;
+  email: string | undefined;
+  emailVerified: boolean;
+}
+
+export async function verifyFirebaseTokenFull(request: NextRequest): Promise<DecodedFirebaseToken> {
+  const authorization = request.headers.get('Authorization');
+  if (!authorization?.startsWith('Bearer ')) {
+    throw new Error('Token d\'authentification manquant');
+  }
+  const token = authorization.slice(7);
+  const decoded = await getAdminAuth().verifyIdToken(token);
+  return {
+    uid: decoded.uid,
+    email: decoded.email,
+    emailVerified: !!decoded.email_verified,
+  };
+}
+
 /** Réponse standard 503 quand Firebase Admin n'est pas initialisé */
 export function adminUnavailableResponse(): NextResponse {
   return NextResponse.json(

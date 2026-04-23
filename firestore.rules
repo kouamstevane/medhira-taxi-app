@@ -337,7 +337,7 @@ service cloud.firestore {
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.status == 'pending' &&
                        request.resource.data.price is number &&
-                       request.resource.data.price > 0 &&
+                       request.resource.data.price >= 1 &&
                        !('driverId' in request.resource.data);
       
       // FIX #C13 : WHITELIST stricte (au lieu d'une blocklist). Les champs financiers
@@ -364,10 +364,10 @@ service cloud.firestore {
 
       // Mise à jour : Le chauffeur assigné peut faire avancer le statut de la course
       allow update: if isAuthenticated() &&
-                       resource.data.driverId == request.auth.uid &&
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['status', 'updatedAt', 'startedAt', 'completedAt']) &&
-                       request.resource.data.status in ['in_progress', 'completed'];
+                        resource.data.driverId == request.auth.uid &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['status', 'updatedAt', 'startedAt', 'completedAt']) &&
+                        request.resource.data.status == 'in_progress';
       
       // Mise à jour : Permettre à un chauffeur d'accepter une course en attente
       // Un chauffeur peut mettre à jour un booking pending pour l'accepter
@@ -936,6 +936,64 @@ service cloud.firestore {
     // ============================================================================
 
     match /adminAlerts/{alertId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ============================================================================
+    // COLLECTIONS RÉSERVÉES À L'ADMIN SDK (deny explicite côté client)
+    // ============================================================================
+    //
+    // Ces collections stockent des données sensibles (rate limiting, paiements,
+    // payouts, refunds, disputes, tâches d'anonymisation) qui ne doivent JAMAIS
+    // être lues ou écrites depuis un client. Les Cloud Functions utilisent
+    // l'Admin SDK qui contourne ces règles.
+    //
+    // Sans règle explicite, Firestore deny par défaut — mais on déclare
+    // explicitement pour documenter l'intention et prévenir une règle catch-all
+    // future permissive.
+    // ============================================================================
+
+    match /rate_limits/{docId} {
+      allow read, write: if false;
+    }
+
+    match /pin_failure_rate_limits/{docId} {
+      allow read, write: if false;
+    }
+
+    // Nouveau bucket unifié utilisé par functions/src/utils/rateLimiter.ts
+    // (Admin SDK uniquement). Configurer TTL sur `expiresAt` en console GCP.
+    match /rateLimits/{docId} {
+      allow read, write: if false;
+    }
+
+    match /stripe_disputes/{docId} {
+      allow read, write: if false;
+    }
+
+    match /driver_payouts/{docId} {
+      allow read, write: if false;
+    }
+
+    match /platform_payouts/{docId} {
+      allow read, write: if false;
+    }
+
+    match /stripe_refunds/{docId} {
+      allow read, write: if false;
+    }
+
+    match /anonymization_tasks/{docId} {
+      allow read, write: if false;
+    }
+
+    // ============================================================================
+    // COLLECTION GDPR_DELETIONS (audit RGPD Art. 17 — droit à l'oubli)
+    // ============================================================================
+    // Stocke un hash SHA-256 de l'uid + timestamps + stats de suppression.
+    // Lecture admin (preuve de conformité). Écritures réservées à l'Admin SDK.
+    match /gdprDeletions/{uidHash} {
       allow read: if isAdmin();
       allow write: if false;
     }

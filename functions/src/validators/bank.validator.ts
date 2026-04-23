@@ -9,16 +9,36 @@
  */
 
 /**
- * Valide un IBAN selon la norme ISO 13616
- * 
+ * Valide un IBAN selon la norme ISO 13616 avec vérification mod-97.
+ *
+ * Les IBAN européens doivent commencer par un code pays ISO (2 lettres) suivi
+ * de 2 chiffres de contrôle. La validation mod-97 transforme l'IBAN en entier
+ * puis vérifie que le reste de la division par 97 vaut 1.
+ *
  * @param iban - L'IBAN à valider
  * @returns true si l'IBAN est valide, false sinon
  */
 export function validateIBAN(iban: string): boolean {
-  const cleanIban = iban.replace(/[\s]/g, '').toUpperCase();
-  // Permettre un format international large (5 à 34 caractères alphanumériques)
-  // au lieu de forcer le mod-97 strict de l'IBAN européen.
-  return /^[A-Z0-9]{5,34}$/.test(cleanIban);
+  const cleanIban = iban.replace(/\s/g, '').toUpperCase();
+  if (!/^[A-Z0-9]{5,34}$/.test(cleanIban)) return false;
+
+  // Si format IBAN européen (2 lettres pays + 2 chiffres contrôle + 7+ chars)
+  // appliquer la vérification mod-97 (ISO 13616).
+  if (/^[A-Z]{2}\d{2}[A-Z0-9]{7,30}$/.test(cleanIban)) {
+    const rearranged = cleanIban.slice(4) + cleanIban.slice(0, 4);
+    const numeric = rearranged
+      .split('')
+      .map((c) => (c >= '0' && c <= '9' ? c : (c.charCodeAt(0) - 55).toString()))
+      .join('');
+    let remainder = 0;
+    for (const digit of numeric) {
+      remainder = (remainder * 10 + Number(digit)) % 97;
+    }
+    return remainder === 1;
+  }
+
+  // Fallback pour les numéros de compte non-IBAN (ex: marchés hors Europe).
+  return true;
 }
 
 /**

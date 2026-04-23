@@ -313,11 +313,17 @@ class SecureStorageService {
     }
 
     /**
-     * Vide toutes les données stockées
+     * Vide uniquement les données stockées par ce service (préfixées),
+     * préservant les autres clés (salt de chiffrement, clé dérivée, préférences tierces).
      */
     async clear(): Promise<void> {
         try {
-            await Preferences.clear();
+            const { keys } = await Preferences.keys();
+            await Promise.all(
+                keys
+                    .filter(k => k.startsWith(ENCRYPTED_PREFIX))
+                    .map(k => Preferences.remove({ key: k }))
+            );
         } catch (error) {
             console.error('[SecureStorage] Error clearing storage:', error);
         }

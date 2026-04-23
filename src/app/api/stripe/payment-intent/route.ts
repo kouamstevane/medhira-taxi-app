@@ -20,10 +20,11 @@ import type {
   UpdatePaymentIntentRequest,
 } from '@/types/stripe';
 import { STRIPE_CURRENCY_BY_MARKET, PAYMENT_STATUS } from '@/types/stripe';
-import { ACTIVE_MARKET } from '@/utils/constants';
+import { ACTIVE_MARKET, DEFAULT_PRICING } from '@/utils/constants';
 import { z } from 'zod';
 
 const MAX_AMOUNT = 10000;
+const MIN_RIDE_PRICE = Math.max(1, DEFAULT_PRICING.BASE_PRICE > 0 ? DEFAULT_PRICING.BASE_PRICE * 0.5 : 1);
 
 const PostPaymentIntentSchema = z.object({
   bookingId: z.string().min(1, 'bookingId est requis'),
@@ -68,6 +69,14 @@ export async function POST(request: NextRequest) {
     const bookingOwner = bookingSnap.data()?.passengerId ?? bookingSnap.data()?.userId;
     if (bookingOwner !== userId) {
       return NextResponse.json({ error: 'Accès refusé : vous n\'êtes pas le passager de cette réservation' }, { status: 403 });
+    }
+
+    const bookingPrice = bookingSnap.data()?.price;
+    if (typeof bookingPrice !== 'number' || !Number.isFinite(bookingPrice) || bookingPrice < MIN_RIDE_PRICE) {
+      return NextResponse.json({ error: 'Prix de la réservation invalide' }, { status: 400 });
+    }
+    if (Math.abs(amount - bookingPrice) > 0.01) {
+      return NextResponse.json({ error: 'Le montant ne correspond pas au prix de la réservation' }, { status: 400 });
     }
 
     const currency = getStripeCurrency();

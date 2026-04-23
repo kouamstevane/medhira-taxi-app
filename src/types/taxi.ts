@@ -10,7 +10,7 @@ import { Location } from './booking';
 /**
  * Statut d'un chauffeur
  */
-export type DriverStatus = 'offline' | 'available' | 'busy' | 'unavailable';
+export type DriverStatus = 'offline' | 'available' | 'busy' | 'unavailable' | 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'action_required';
 
 /**
  * Interface pour les données d'un chauffeur
@@ -24,7 +24,7 @@ export interface Driver {
   phone?: string; // Alias pour compatibilité
   email?: string;
   profileImageUrl?: string;
-  status: DriverStatus | string; // Peut être 'approved', 'pending', etc.
+  status: DriverStatus;
   carModel?: string;
   carColor?: string;
   carPlate?: string;

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db, storage, app } from '@/config/firebase';
-import { createUserWithEmailAndPassword, onAuthStateChanged, deleteUser, type User } from 'firebase/auth';
+import { createUserWithEmailAndPassword, onAuthStateChanged, deleteUser, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp as firestoreServerTimestamp, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -39,6 +39,7 @@ export function useDriverRegistration() {
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [isExistingUser, setIsExistingUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -259,9 +260,10 @@ export function useDriverRegistration() {
     let newlyCreatedUser: User | null = null;
     try {
       if (!isExistingUser) {
-        // Créer uniquement le compte Firebase Auth — le profil driver complet
-        // est créé à Step5 via Cloud Function createDriverProfile.
-        // Ne pas écrire dans users/ (réservé aux clients, userType='client').
+        const methods = await fetchSignInMethodsForEmail(auth, data.email);
+        if (methods.length > 0) {
+          throw new Error('EMAIL_ALREADY_IN_USE');
+        }
         const credential = await createUserWithEmailAndPassword(auth, data.email, data.password);
         newlyCreatedUser = credential.user;
       }
@@ -285,7 +287,7 @@ export function useDriverRegistration() {
         }
       }
       const error = err as { code?: string; message?: string };
-      if (error?.code === 'auth/email-already-in-use') {
+      if (error?.code === 'auth/email-already-in-use' || error?.message === 'EMAIL_ALREADY_IN_USE') {
         setError('Un compte avec cet email existe déjà. Si vous avez commencé une inscription, connectez-vous pour reprendre votre dossier.');
       } else if (error?.code === 'auth/weak-password') {
         setError('Le mot de passe est trop faible. Utilisez au moins 6 caractères.');
@@ -315,7 +317,7 @@ export function useDriverRegistration() {
   };
 
   const handleStep3Next = (
-    data: Step3FormData,
+    data: Step3FormData | null,
     files: {
       registration?: File;
       insurance?: File;
@@ -324,7 +326,7 @@ export function useDriverRegistration() {
       exteriorPhoto?: File;
     }
   ) => {
-    setStep3Data(data);
+    if (data) setStep3Data(data);
     setVehicleFiles(files);
     setCurrentStep(4);
   };
@@ -457,7 +459,7 @@ export function useDriverRegistration() {
         firstName: step2Data.firstName,
         lastName: step2Data.lastName,
         email: step1Data.email || auth.currentUser?.email || '',
-        phone: step2Data.phone || step1Data.phone || '',
+        phone: step2Data.phone || '',
         city: step2Data.city,
         zipCode: step2Data.zipCode,
         driverType,
@@ -529,7 +531,7 @@ export function useDriverRegistration() {
           }
         }
       } catch {
-        // Non-bloquant
+        setWarning("L'inscription est enregistrée, mais la configuration des paiements Stripe a échoué. Vous pourrez la compléter depuis votre tableau de bord.");
       }
 
       if (stripeOnboardingUrl) {
@@ -681,6 +683,7 @@ export function useDriverRegistration() {
     currentStep,
     loading,
     error,
+    warning,
     isOnline: connectivityOnline,
     isSubmitting,
     submissionSuccess,

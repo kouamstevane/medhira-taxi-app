@@ -12,7 +12,9 @@ import { SelectField } from '@/components/forms/SelectField';
 const step3Schema = z.object({
   carBrand: z.string().min(2, "Marque requise"),
   carModel: z.string().min(2, "Modèle requis"),
-  productionYear: z.string().regex(/^(19|20)\d{2}$/, "Année invalide (ex: 2021)"),
+  productionYear: z.string()
+    .regex(/^(19|20)\d{2}$/, "Année invalide (ex: 2021)")
+    .refine((val) => parseInt(val, 10) >= 2010, "Le véhicule doit être de 2010 ou plus récent"),
   carColor: z.string().min(2, "Couleur requise"),
   passengerSeats: z.number().min(1).max(9),
   fuelType: z.enum(['Essence', 'Diesel', 'Électrique', 'Hybride']),
@@ -33,7 +35,7 @@ export type Step3Files = {
 };
 
 interface Step3VehicleProps {
-  onNext: (data: Step3FormData, files: Step3Files) => void;
+  onNext: (data: Step3FormData | null, files: Step3Files) => void;
   onBack: () => void;
   initialData?: Partial<Step3FormData>;
   initialFiles?: Step3Files;
@@ -173,7 +175,7 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
   const renderFileInput = (label: string, key: keyof typeof files, required = true, accept = "image/*,application/pdf") => (
     <div className="border border-white/[0.06] rounded-xl p-4 bg-[#1A1A1A] relative">
       <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
-        {label} {required && <span className="text-red-500">*</span>}
+        {label} {required ? <span className="text-red-500">*</span> : <span className="text-[#4B5563] text-xs">(facultatif)</span>}
       </label>
       
       {files[key] ? (
@@ -261,10 +263,7 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
               // assurance pro, photos intérieur/extérieur) ne s'appliquent pas
               // aux livreurs. On transmet donc un objet files vide — le handler
               // parent conditionnera les uploads sur vehicleType.
-              onNext(
-                { carBrand: '-', carModel: '-', productionYear: '2024', carColor: '#FFFFFF', passengerSeats: 1, fuelType: 'Essence' as const, mileage: 0, techControlDate: '2099-12-31' },
-                {}
-              );
+              onNext(null, {});
             }}
             disabled={loading}
             className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] shadow-[0_0_20px_rgba(242,146,0,0.4)] hover:bg-[#e68600] transition-colors"

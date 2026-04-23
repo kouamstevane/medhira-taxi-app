@@ -7,6 +7,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { RtcTokenBuilder, RtcRole } from 'agora-token';
+import { enforceRateLimit } from '../utils/rateLimiter.js';
 
 // Secrets Agora - migrés depuis functions.config() / process.env
 const agoraAppId = defineSecret('AGORA_APP_ID');
@@ -28,19 +29,27 @@ function getMessaging() {
   return getAdmin().messaging();
 }
 
-const voipRateLimits = new Map<string, { count: number; resetAt: number }>();
-function checkVoipRateLimit(uid: string, action: string, maxCalls: number, windowSeconds: number): void {
-  const key = `${uid}:${action}`;
-  const now = Date.now();
-  const entry = voipRateLimits.get(key);
-  if (entry && now < entry.resetAt) {
-    if (entry.count >= maxCalls) {
-      throw new HttpsError('resource-exhausted', `Rate limit exceeded for ${action}. Try again later.`);
-    }
-    entry.count++;
-  } else {
-    voipRateLimits.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
-  }
+/**
+ * VoIP rate-limit wrapper.
+ *
+ * Previously used a module-scope `Map` — reset on cold start and divergent
+ * across Cloud Function instances, allowing trivial bypass. Now delegates
+ * to the shared Firestore-backed limiter (see ../utils/rateLimiter.ts).
+ * Bucket names, limits and windows are preserved to keep behavior identical.
+ */
+async function checkVoipRateLimit(
+  uid: string,
+  action: string,
+  maxCalls: number,
+  windowSeconds: number,
+): Promise<void> {
+  await enforceRateLimit({
+    identifier: uid,
+    bucket: `voip:${action}`,
+    limit: maxCalls,
+    windowSec: windowSeconds,
+    message: `Rate limit exceeded for ${action}. Try again later.`,
+  });
 }
 
 
@@ -146,7 +155,7 @@ export const createCall = onCall(
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
 
-  checkVoipRateLimit(request.auth.uid, 'createCall', 10, 60);
+  await checkVoipRateLimit(request.auth.uid, 'createCall', 10, 60);
 
   const callerId = request.auth.uid;
   const data = request.data as { calleeId?: string; rideId?: string };
@@ -199,6 +208,7 @@ export const createCall = onCall(
   // 7. Créer le document d'appel — le token n'est PAS persisté en Firestore
   // pour éviter qu'un tiers authentifié puisse le lire et accéder au canal audio.
   // Le token est retourné uniquement à l'appelant via la réponse de la fonction.
+  const now = Date.now();
   const callRef = await getDb().collection('calls').add({
     callerId,
     calleeId,
@@ -211,7 +221,8 @@ export const createCall = onCall(
       avatar: callerData?.photoURL || null,
       role: callerRole,
       uid: callerId
-    }
+    },
+    expiresAt: getAdmin().firestore.Timestamp.fromMillis(now + 24 * 60 * 60 * 1000)
   });
 
   // 8. Envoyer la notification FCM au destinataire
@@ -293,7 +304,7 @@ export const answerCall = onCall(
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
 
-  checkVoipRateLimit(request.auth.uid, 'answerCall', 20, 60);
+  await checkVoipRateLimit(request.auth.uid, 'answerCall', 20, 60);
 
   const { callId } = request.data as { callId?: string };
   const userId = request.auth.uid;
@@ -347,7 +358,7 @@ export const endCall = onCall(
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
 
-  checkVoipRateLimit(request.auth.uid, 'endCall', 20, 60);
+  await checkVoipRateLimit(request.auth.uid, 'endCall', 20, 60);
 
   const { callId, reason } = request.data as { callId?: string; reason?: string };
   const userId = request.auth.uid;
@@ -409,7 +420,7 @@ export const getCallToken = onCall(
       throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
     }
 
-    checkVoipRateLimit(request.auth.uid, 'getCallToken', 20, 60);
+    await checkVoipRateLimit(request.auth.uid, 'getCallToken', 20, 60);
 
     const { callId } = request.data as { callId?: string };
     const userId = request.auth.uid;
@@ -465,12 +476,15 @@ export const sendSystemMessage = onCall(
     throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
   }
 
-  checkVoipRateLimit(request.auth.uid, 'sendSystemMessage', 10, 60);
+  await checkVoipRateLimit(request.auth.uid, 'sendSystemMessage', 10, 60);
 
   const { bookingId, content, recipient } = request.data as { bookingId?: string; content?: string; recipient?: string };
 
   if (!bookingId || !content) {
     throw new HttpsError('invalid-argument', 'bookingId et content requis');
+  }
+  if (typeof content !== 'string' || content.length > 500) {
+    throw new HttpsError('invalid-argument', 'Le contenu doit faire au maximum 500 caractères');
   }
 
   // Vérifier que l'appelant est participant à la course

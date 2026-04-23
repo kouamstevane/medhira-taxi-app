@@ -128,10 +128,7 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Erreur API delete-driver-complete:', error);
     return NextResponse.json(
-      {
-        error: 'Erreur serveur lors de la suppression',
-        details: error instanceof Error ? error.message : String(error)
-      },
+      { error: 'Erreur serveur lors de la suppression' },
       { status: 500 }
     );
   }

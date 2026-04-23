@@ -18,29 +18,9 @@ import { db } from '@/config/firebase';
 import { Location, AvailableDriver, FindDriversConfig } from '@/types';
 import { logger } from '@/utils/logger';
 import { LIMITS } from '@/utils/constants';
+import { haversineKm } from '@/utils/distance';
 
-/**
- * Calculer la distance entre deux points (formule de Haversine)
- */
-function calculateDistance(loc1: Location, loc2: Location): number {
-  const R = 6371; // Rayon de la Terre en km
-  const dLat = toRad(loc2.lat - loc1.lat);
-  const dLon = toRad(loc2.lng - loc1.lng);
-
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(loc1.lat)) *
-    Math.cos(toRad(loc2.lat)) *
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function toRad(degrees: number): number {
-  return degrees * (Math.PI / 180);
-}
+const calculateDistance = (loc1: Location, loc2: Location): number => haversineKm(loc1, loc2);
 
 /**
  * Estimer le temps de trajet en minutes basé sur la distance

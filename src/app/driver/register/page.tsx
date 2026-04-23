@@ -17,7 +17,7 @@ export default function DriverRegisterWizard() {
   const { toasts, removeToast, showWarning } = useToast();
   const isOnline = useConnectivityMonitor(showWarning);
   const {
-    currentStep, loading, error, isSubmitting, submissionSuccess,
+    currentStep, loading, error, warning, isSubmitting, submissionSuccess,
     rejectionCode, rejectionReason,
     driverType, setVehicleType,
     step1Data, step2Data, step3Data, biometricsPhoto, vehicleFiles, complianceFiles,
@@ -90,6 +90,14 @@ export default function DriverRegisterWizard() {
               <div className="flex-1">
                 <p className="font-medium text-destructive">{error}</p>
                 <p className="text-sm mt-1 text-slate-400">Si le problème persiste, contactez le support.</p>
+              </div>
+            </div>
+          )}
+          {warning && (
+            <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex">
+              <MaterialIcon name="warning" size="md" className="text-amber-400 mr-3 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium text-amber-300">{warning}</p>
               </div>
             </div>
           )}

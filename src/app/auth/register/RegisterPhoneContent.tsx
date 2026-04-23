@@ -14,6 +14,7 @@ import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { isValidPhoneNumber, isValidPassword } from '@/lib/validation';
 import { SUPPORTED_COUNTRIES, ERROR_MESSAGES } from '@/utils/constants';
+import { getErrorMessage, getErrorCode } from '@/utils/error-utils';
 
 export default function RegisterPhoneContent() {
   const router = useRouter();
@@ -142,9 +143,8 @@ export default function RegisterPhoneContent() {
       setVerificationId(confirmation.verificationId);
       setSuccess(`Code de vérification envoyé au ${fullPhoneNumber}`);
     } catch (error: unknown) {
-      // Retry strategy for development environment with real numbers
-      const err = error as { code?: string };
-      if (process.env.NODE_ENV === 'development' && err.code === 'auth/captcha-check-failed') {
+      const errorCode = getErrorCode(error);
+      if (process.env.NODE_ENV === 'development' && errorCode === 'auth/captcha-check-failed') {
         console.warn("Échec de la vérification test, nouvelle tentative avec vérification réelle...");
 
         try {
@@ -255,29 +255,16 @@ export default function RegisterPhoneContent() {
     setSuccess(null);
   };
 
-  const handleAuthError = async (error: unknown) => {
-    const err = error as { code?: string; message?: string; stack?: string };
-    let errorMessage = "Une erreur est survenue";
-
-    // Envoi de l'erreur au serveur pour le debugging
+  const handleAuthError = (error: unknown) => {
     if (process.env.NODE_ENV === 'development') {
-      try {
-        await fetch('/api/debug/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: err.message || "Unknown error",
-            code: err.code || "UNKNOWN_CODE",
-            stack: err.stack,
-            context: 'RegisterPhoneContent'
-          }),
-        });
-      } catch (e) {
-        // Ignorer les erreurs de log
-      }
+      console.error("Erreur d'authentification:", error);
     }
 
-    switch (err.code) {
+    let errorMessage = "Une erreur est survenue";
+    const errorCode = getErrorCode(error);
+    const errorMsg = getErrorMessage(error);
+
+    switch (errorCode) {
       case AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER:
         errorMessage = "Trop de tentatives. Veuillez réessayer plus tard.";
         break;
@@ -297,8 +284,7 @@ export default function RegisterPhoneContent() {
         errorMessage = "La vérification reCAPTCHA a échoué. Veuillez réessayer.";
         break;
       default:
-        // Gestion des erreurs techniques (comme "verifier?._reset is not a function")
-        if (err.message && (err.message.includes('verifier') || err.message.includes('_reset'))) {
+        if (errorMsg && (errorMsg.includes('verifier') || errorMsg.includes('_reset'))) {
           errorMessage = "Erreur interne lors de l'initialisation du captcha. Veuillez rafraîchir la page.";
         } else {
           errorMessage = "Une erreur est survenue lors de l'authentification. Veuillez réessayer.";
@@ -306,7 +292,6 @@ export default function RegisterPhoneContent() {
     }
 
     setError(errorMessage);
-    console.error("Erreur d'authentification:", error);
   };
 
   return (

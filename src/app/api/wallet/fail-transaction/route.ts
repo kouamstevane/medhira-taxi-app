@@ -32,18 +32,25 @@ export async function POST(request: NextRequest) {
     const db = getAdminDb();
     const transactionRef = db.collection('transactions').doc(transactionId);
 
-    const snap = await transactionRef.get();
-    if (!snap.exists) {
-      return NextResponse.json({ error: 'Transaction introuvable' }, { status: 404 });
-    }
-    if (snap.data()?.userId !== userId) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
-    }
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(transactionRef);
+      if (!snap.exists) {
+        throw new Error('Transaction introuvable');
+      }
+      if (snap.data()?.userId !== userId) {
+        throw new Error('Non autorisé');
+      }
 
-    await transactionRef.update({
-      status: 'failed',
-      failureReason: reason,
-      updatedAt: FieldValue.serverTimestamp(),
+      const currentStatus = snap.data()?.status;
+      if (currentStatus !== 'pending' && currentStatus !== 'processing') {
+        throw new Error(`Impossible de marquer comme échouée : statut actuel "${currentStatus}"`);
+      }
+
+      tx.update(transactionRef, {
+        status: 'failed',
+        failureReason: reason,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     });
 
     return NextResponse.json({ success: true });
@@ -55,6 +62,15 @@ export async function POST(request: NextRequest) {
     }
     if (message === 'SERVICE_UNAVAILABLE') {
       return NextResponse.json({ error: 'Service temporairement indisponible' }, { status: 503 });
+    }
+    if (message.includes('introuvable')) {
+      return NextResponse.json({ error: 'Transaction introuvable' }, { status: 404 });
+    }
+    if (message.includes('Non autorisé')) {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 403 });
+    }
+    if (message.includes('statut actuel')) {
+      return NextResponse.json({ error: message }, { status: 409 });
     }
     return NextResponse.json({ error: 'Une erreur est survenue. Veuillez réessayer.' }, { status: 500 });
   }

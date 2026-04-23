@@ -4,10 +4,16 @@ functions/node_modules/
 node_modulesOld-after/
 /.pnp
 .pnp.js
-*.txt
 
-# Ne jamais versionner les clés Firebase
+# Ne jamais versionner les clés Firebase / Service Accounts (P0-1)
 config/keys/serviceAccountKey.json
+src/config/keys/*
+!src/config/keys/README.md
+!src/config/keys/.gitkeep
+**/serviceAccountKey*.json
+**/service-account*.json
+**/*serviceAccount*.json
+**/firebase-adminsdk-*.json
 
 # Testing
 /coverage
@@ -33,7 +39,6 @@ pids
 *.pid
 *.seed
 *.pid.lock
-*.md
 
 # Logs
 logs
@@ -113,9 +118,7 @@ node_modules/**/__tests__/
 node_modules/**/*.test.*
 node_modules/**/*.spec.*
 .kilo/**/__tests__/
-.kilo/**/*.test.*clés
-"src/config/keys/serviceAccountKey.json" 
-src/config/keys/*.json
+.kilo/**/*.test.*
 
 # Android signing files (NE PAS COMMITTER - perte irréversible de l'app)
 android/keystore.properties
@@ -146,3 +149,7 @@ docs/
 # Test reports
 test-reports/
 nul
+.trae/
+.agent/
+plans/
+*.txt

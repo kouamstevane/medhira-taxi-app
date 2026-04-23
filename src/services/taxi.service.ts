@@ -22,12 +22,24 @@ import {
   limit,
   serverTimestamp,
   Timestamp,
+  runTransaction,
 } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
 import { calculateTripPrice, typedServerTimestamp } from '@/lib/firebase-helpers';
 import { CURRENCY_CODE, DEFAULT_PRICING, LIMITS } from '@/utils/constants';
 import { PAYMENT_STATUS } from '@/types/stripe';
+import { haversineKm } from '@/utils/distance';
+
+const activeSearches = new Map<string, Promise<void>>();
+const abortControllers = new Map<string, AbortController>();
+
+export const cancelActiveSearch = (bookingId: string): void => {
+  const controller = abortControllers.get(bookingId);
+  controller?.abort();
+  abortControllers.delete(bookingId);
+  activeSearches.delete(bookingId);
+};
 
 /**
  * Créer une nouvelle réservation
@@ -51,25 +63,26 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
 
   // Déclencher le matching automatique avec retry si une localisation est disponible
   if (bookingData.pickupLocation) {
-    const pickupLocation = bookingData.pickupLocation; // Capture pour TypeScript
-    
-    // Exécuter le matching en arrière-plan pour ne pas bloquer l'interface utilisateur
-    (async () => {
+    const pickupLocation = bookingData.pickupLocation;
+    const abortController = new AbortController();
+    abortControllers.set(newBookingRef.id, abortController);
+
+    const searchPromise = (async () => {
       try {
         const { findDriverWithRetry } = await import('./matching');
 
-        // Utiliser le retry automatique avec périmètre
-        // Plan A : 3-5 minutes initialement
+        if (abortController.signal.aborted) return;
+
         const result = await findDriverWithRetry(
           newBookingRef.id,
           pickupLocation,
           bookingData.destination,
           bookingData.price,
           bookingData.carType,
-          bookingData.bonus || 0, // Passer le bonus
+          bookingData.bonus || 0,
           {
-            initialPerimeterMinutes: 5, // Plan A: 5 min max
-            expandedPerimeterMinutes: 10, // Plan B: 10 min max
+            initialPerimeterMinutes: 5,
+            expandedPerimeterMinutes: 10,
             maxRetries: 3,
             timeoutSeconds: 30,
           }
@@ -82,11 +95,15 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
           finalPerimeter: result.finalPerimeter,
         });
       } catch (error: unknown) {
-        // Ne pas bloquer la création si le matching échoue
+        if ((error as Error).name === 'AbortError') return;
         const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
         logger.warn('Erreur lors du matching automatique', { error: errorMessage, bookingId: newBookingRef.id });
+      } finally {
+        activeSearches.delete(newBookingRef.id);
+        abortControllers.delete(newBookingRef.id);
       }
     })();
+    activeSearches.set(newBookingRef.id, searchPromise);
   }
 
   return newBookingRef.id;
@@ -153,30 +170,50 @@ export const updateBookingStatus = async (
  * Annuler une réservation et libérer le chauffeur assigné
  */
 export const cancelBooking = async (bookingId: string, reason?: string): Promise<void> => {
-  // Récupérer le booking pour libérer le chauffeur
   const bookingRef = doc(db, 'bookings', bookingId);
-  const bookingSnap = await getDoc(bookingRef);
+  const CANCELLABLE_STATUSES: BookingStatus[] = ['pending', 'accepted', 'driver_arrived'];
 
-  if (bookingSnap.exists()) {
-    const booking = bookingSnap.data() as Booking;
+  try {
+    await runTransaction(db, async (tx) => {
+      const bookingSnap = await tx.get(bookingRef);
 
-    // Libérer le chauffeur s'il y en a un assigné
-    if (booking.driverId) {
-      try {
-        const driverRef = doc(db, 'drivers', booking.driverId);
-        await updateDoc(driverRef, {
+      if (!bookingSnap.exists()) {
+        throw new Error('Réservation introuvable');
+      }
+
+      const booking = bookingSnap.data() as Booking;
+
+      if (!CANCELLABLE_STATUSES.includes(booking.status)) {
+        throw new Error(`Impossible d'annuler : statut actuel "${booking.status}"`);
+      }
+
+      const driverRef = booking.driverId
+        ? doc(db, 'drivers', booking.driverId)
+        : null;
+      if (driverRef) {
+        await tx.get(driverRef);
+      }
+
+      tx.update(bookingRef, {
+        status: 'cancelled',
+        reason: reason ?? null,
+        cancelledAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      if (driverRef) {
+        tx.update(driverRef, {
           status: 'available',
           isAvailable: true,
           currentBookingId: null,
           updatedAt: serverTimestamp(),
         });
-      } catch (error) {
-        logger.error('Erreur lors de la libération du chauffeur', { error, driverId: booking.driverId });
       }
-    }
+    });
+  } catch (error) {
+    logger.error('[cancelBooking] Échec transaction', { error, bookingId });
+    throw error;
   }
-
-  await updateBookingStatus(bookingId, 'cancelled', { reason });
 };
 
 /**
@@ -433,28 +470,7 @@ export const findNearbyDrivers = async (
 // qui utilise une transaction Firestore atomique (runTransaction) pour éviter les conflits de concurrence.
 // Ne pas utiliser de doublon ici.
 
-/**
- * Calculer la distance entre deux points (formule de Haversine)
- */
-function calculateDistance(point1: Location, point2: Location): number {
-  const R = 6371; // Rayon de la Terre en km
-  const dLat = toRad(point2.lat - point1.lat);
-  const dLon = toRad(point2.lng - point1.lng);
-
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(point1.lat)) *
-    Math.cos(toRad(point2.lat)) *
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-function toRad(degrees: number): number {
-  return degrees * (Math.PI / 180);
-}
+const calculateDistance = (point1: Location, point2: Location): number => haversineKm(point1, point2);
 
 /**
  * Mettre à jour la localisation du chauffeur pour une course
@@ -618,130 +634,47 @@ export const startTrip = async (bookingId: string): Promise<void> => {
 /**
  * Terminer la course et calculer le prix final
  * Affiche une facture détaillée au client
+ *
+ * Délègue le traitement au serveur (Admin SDK) pour contourner les
+ * Firestore rules qui bloquent les écritures client-side sur les champs
+ * financiers (paymentStatus, price, finalPrice, etc.).
  */
 export const completeTrip = async (bookingId: string): Promise<void> => {
   const bookingRef = doc(db, 'bookings', bookingId);
   const bookingSnap = await getDoc(bookingRef);
-  
   if (!bookingSnap.exists()) throw new Error('Booking not found');
   const booking = bookingSnap.data() as Booking;
 
-  // Calcul du prix final basé sur la durée réelle
-  const startTime = booking.startedAt instanceof Timestamp ? booking.startedAt.toDate() : new Date();
-  const endTime = new Date();
-  // Durée en minutes (minimum 1 minute)
-  const durationMinutes = Math.max(1, Math.ceil((endTime.getTime() - startTime.getTime()) / 60000));
-  
-  // Récupérer les tarifs
   const carTypes = await getCarTypes();
   const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
-  
-  // Recalculer le prix final
-  const finalPrice = calculateTripPrice(
-    booking.distance,
-    durationMinutes,
-    carType.basePrice,
-    carType.pricePerKm,
-    carType.pricePerMinute
-  );
 
-  // Traitement du paiement selon la méthode choisie par le passager
-  // Prévention double paiement : vérifier le statut actuel
-  const freshSnap = await getDoc(bookingRef);
-  const currentPaymentStatus = freshSnap.data()?.paymentStatus;
-  if (currentPaymentStatus === PAYMENT_STATUS.CAPTURED || currentPaymentStatus === PAYMENT_STATUS.WALLET_PAID) {
-    logger.warn('[completeTrip] Paiement déjà traité, évitement du double paiement', { bookingId, currentPaymentStatus });
-  } else if (booking.userId) {
-    const paymentMethod = booking.paymentMethod as string | undefined;
-    const stripePaymentIntentId = booking.stripePaymentIntentId as string | undefined;
-
-    if (paymentMethod === 'card' && stripePaymentIntentId) {
-      // Paiement par carte : capturer le PaymentIntent via l'API route
-      try {
-        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-        const captureRes = await fetch('/api/stripe/payment-intent', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            paymentIntentId: stripePaymentIntentId,
-            action: 'capture',
-            captureAmount: finalPrice,
-          }),
-        });
-        if (!captureRes.ok) {
-          const errData = await captureRes.json().catch(() => ({}));
-          throw new Error(errData.error || 'Échec capture Stripe');
-        }
-        // accumulateDriverEarnings est déjà appelé dans PUT /api/stripe/payment-intent
-      } catch (payError) {
-        logger.error('Erreur capture Stripe', { error: payError, bookingId, finalPrice });
-        await updateBookingStatus(bookingId, 'completed', {
-          finalPrice,
-          price: finalPrice,
-          actualDuration: durationMinutes,
-          completedAt: typedServerTimestamp(),
-          paymentStatus: PAYMENT_STATUS.FAILED,
-        });
-        if (booking.driverId) {
-          const driverRef = doc(db, 'drivers', booking.driverId);
-          await updateDoc(driverRef, { status: 'available', currentBookingId: null });
-        }
-        return;
-      }
-    } else if (paymentMethod === 'wallet' || !paymentMethod) {
-      // Paiement par wallet (ou méthode non spécifiée — ancien comportement)
-      try {
-        const { payBooking } = await import('@/services/wallet.service');
-        await payBooking(booking.userId, bookingId, finalPrice);
-      } catch (payError) {
-        logger.error('Erreur paiement wallet (solde insuffisant ?)', { error: payError, bookingId, finalPrice });
-        await updateBookingStatus(bookingId, 'completed', {
-          finalPrice,
-          price: finalPrice,
-          actualDuration: durationMinutes,
-          completedAt: typedServerTimestamp(),
-          paymentStatus: PAYMENT_STATUS.FAILED,
-        });
-        if (booking.driverId) {
-          const driverRef = doc(db, 'drivers', booking.driverId);
-          await updateDoc(driverRef, { status: 'available', currentBookingId: null });
-        }
-        return;
-      }
-    }
-  }
-
-  const finalPaymentStatus = (() => {
-    const method = booking.paymentMethod as string | undefined;
-    if (method === 'card') return PAYMENT_STATUS.CAPTURED;
-    if (method === 'wallet') return PAYMENT_STATUS.WALLET_PAID;
-    return PAYMENT_STATUS.WALLET_PAID; // rétrocompatibilité
-  })();
-
-  await updateBookingStatus(bookingId, 'completed', {
-    finalPrice: finalPrice,
-    price: finalPrice,
-    actualDuration: durationMinutes,
-    completedAt: typedServerTimestamp(),
-    paymentStatus: finalPaymentStatus,
+  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
+  const res = await fetch('/api/bookings/complete', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ bookingId }),
   });
 
-  // Libérer le chauffeur
-  if (booking.driverId) {
-    const driverRef = doc(db, 'drivers', booking.driverId);
-    await updateDoc(driverRef, {
-      status: 'available',
-      currentBookingId: null
-    });
+  let result: { success?: boolean; finalPrice?: number; durationMinutes?: number; paymentFailed?: boolean; error?: string } = {};
+  try {
+    result = await res.json();
+  } catch { /* ignore */ }
+
+  if (!res.ok && !result.paymentFailed) {
+    throw new Error(result.error || 'Échec de la complétion de la course');
   }
-  
-  // Envoyer la facture détaillée
+
+  const finalPrice = result.finalPrice ?? booking.price;
+  const durationMinutes = result.durationMinutes ?? 0;
+
   try {
     const { sendSystemMessage } = await import('@/services/chat.service');
-    const invoice = `🏁 Course terminée !\n\n📋 Facture détaillée :\n• Tarif de base : ${carType.basePrice} ${CURRENCY_CODE}\n• Distance (${booking.distance.toFixed(2)} km) : ${(booking.distance * carType.pricePerKm).toFixed(2)} ${CURRENCY_CODE}\n• Durée (${durationMinutes} min) : ${(durationMinutes * carType.pricePerMinute).toFixed(2)} ${CURRENCY_CODE}\n\n💰 Total : ${finalPrice.toFixed(2)} ${CURRENCY_CODE}\n\nMerci pour votre confiance ! 🙏`;
+    const invoice = carType
+      ? `🏁 Course terminée !\n\n📋 Facture détaillée :\n• Tarif de base : ${carType.basePrice} ${CURRENCY_CODE}\n• Distance (${booking.distance.toFixed(2)} km) : ${(booking.distance * carType.pricePerKm).toFixed(2)} ${CURRENCY_CODE}\n• Durée (${durationMinutes} min) : ${(durationMinutes * carType.pricePerMinute).toFixed(2)} ${CURRENCY_CODE}\n\n💰 Total : ${finalPrice.toFixed(2)} ${CURRENCY_CODE}\n\nMerci pour votre confiance ! 🙏`
+      : `🏁 Course terminée !\n\n💰 Total : ${finalPrice.toFixed(2)} ${CURRENCY_CODE}\n\nMerci pour votre confiance ! 🙏`;
     await sendSystemMessage(bookingId, invoice);
   } catch (error) {
     logger.error('Erreur envoi facture', { error, bookingId });
@@ -791,7 +724,7 @@ export const debitCancellationPenalty = async (
 
   try {
     const { payBooking } = await import('@/services/wallet.service');
-    await payBooking(userId, bookingId, penalty);
+        await payBooking(userId, bookingId);
     logger.info('Pénalité d\'annulation débitée', { bookingId, userId, penalty });
   } catch (error) {
     // Si le solde est insuffisant, on log mais on ne bloque pas l'annulation

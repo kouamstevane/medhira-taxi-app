@@ -21,6 +21,7 @@ import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
 import { DRIVER_SHARE_RATE } from '../config/stripe.js';
+import { enforceRateLimit } from '../utils/rateLimiter.js';
 
 // Type alias pour les événements Stripe (compatible Stripe v22 / NodeNext)
 type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;
@@ -42,6 +43,13 @@ function getDb(): FirebaseFirestore.Firestore {
   if (!admin.apps.length) admin.initializeApp();
   return admin.firestore();
 }
+
+// ── Server timestamp helper (SEC-Q06) ──────────────────────────────────────
+// Utilise l'horloge serveur Firestore plutôt que celle (potentiellement
+// divergente) de l'instance Cloud Function. Cast sûr pour passer le
+// sentinel dans des objets typés acceptant une Date/Timestamp.
+const serverTS = (): FirebaseFirestore.FieldValue =>
+  admin.firestore.FieldValue.serverTimestamp();
 
 // ── Stripe client factory ──────────────────────────────────────────────────
 let _stripe: InstanceType<typeof Stripe> | null = null;
@@ -82,6 +90,15 @@ export const createSetupIntent = onCall(
         throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
       }
       const userId = request.auth.uid;
+
+      // Rate limit: SetupIntent creation triggers Stripe API calls (cost +
+      // fraud surface). 10/min is comfortable for retries/UX but caps abuse.
+      await enforceRateLimit({
+        identifier: userId,
+        bucket: 'stripe:createSetupIntent',
+        limit: 10,
+        windowSec: 60,
+      });
 
       const stripeClient = getStripe();
       const db = getDb();
@@ -173,7 +190,8 @@ export const stripeWebhookInstant = onRequest(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[stripeWebhookInstant] Signature invalide:', msg);
-      res.status(400).json({ error: `Signature invalide: ${msg}` });
+      // Ne pas exposer les détails de la signature au client (surface d'attaque)
+      res.status(400).json({ error: 'Invalid signature' });
       return;
     }
 
@@ -296,13 +314,13 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
       const currentBalance = walletSnap.exists ? (walletSnap.data()?.balance ?? 0) : 0;
 
       if (walletSnap.exists) {
-        tx.update(walletRef, { balance: currentBalance + amount, updatedAt: new Date() });
+        tx.update(walletRef, { balance: currentBalance + amount, updatedAt: serverTS() });
       } else {
         tx.set(walletRef, {
           userId:    metadata.userId,
           balance:   amount,
           currency:  currency.toUpperCase(),
-          updatedAt: new Date(),
+          updatedAt: serverTS(),
         });
       }
 
@@ -316,8 +334,8 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
         currency:              currency.toUpperCase(),
         status:                'completed',
         stripePaymentIntentId: piId,
-        createdAt:             new Date(),
-        updatedAt:             new Date(),
+        createdAt:             serverTS(),
+        updatedAt:             serverTS(),
       });
     });
   }
@@ -362,8 +380,8 @@ async function onPaymentIntentFailed(pi: Record<string, unknown>): Promise<void>
       status:                'failed',
       error:                 errorMsg,
       stripePaymentIntentId: piId,
-      createdAt:             new Date(),
-      updatedAt:             new Date(),
+      createdAt:             serverTS(),
+      updatedAt:             serverTS(),
     });
   }
 }
@@ -437,7 +455,7 @@ async function syncDriverAccountStatus(driverId: string, accountId: string): Pro
     updateData.requirements = {
       currently_due:    account.requirements.currently_due ?? [],
       current_deadline: account.requirements.current_deadline ?? null,
-      lastCheckedAt:    new Date(),
+      lastCheckedAt:    serverTS(),
     };
   }
 
@@ -481,7 +499,7 @@ async function onCapabilityUpdated(capability: Record<string, unknown>): Promise
   if (!snap.empty) {
     await getDb().collection('drivers').doc(snap.docs[0].id).update({
       [`capabilities.${capId}`]: status,
-      capabilitiesUpdatedAt:     new Date(),
+      capabilitiesUpdatedAt:     serverTS(),
     });
   }
 }
@@ -495,9 +513,14 @@ async function onChargeRefunded(charge: Record<string, unknown>): Promise<void> 
 
   // Utiliser le montant du dernier remboursement (delta), pas le cumulatif charge.amount_refunded
   // charge.refunds.data est trié du plus récent au plus ancien
-  const refundsData      = (charge.refunds as any)?.data ?? [];
+  // Stripe refunds list on a Charge: shape is { data: Refund[] } (ApiList).
+  // We only need amount (in minor units) from the most recent refund.
+  type StripeRefundLike  = { amount: number };
+  type StripeRefundList  = { data: StripeRefundLike[] };
+  const refundsList      = charge.refunds as StripeRefundList | undefined;
+  const refundsData: StripeRefundLike[] = refundsList?.data ?? [];
   const lastRefundAmount: number = refundsData.length > 0
-    ? (refundsData[0].amount as number)
+    ? refundsData[0].amount
     : ((charge.amount_refunded as number) ?? 0);
   const refundAmount    = zeroDecimal ? lastRefundAmount : lastRefundAmount / 100;
   const driverShareCents = Math.round(lastRefundAmount * DRIVER_SHARE_RATE);
@@ -518,7 +541,7 @@ async function onChargeRefunded(charge: Record<string, unknown>): Promise<void> 
 
     if (metadata.bookingId) {
       const bookingRef = db.collection('bookings').doc(metadata.bookingId);
-      tx.update(bookingRef, { refundAmount, refundedAt: new Date() });
+      tx.update(bookingRef, { refundAmount, refundedAt: serverTS() });
     }
 
     if (metadata.userId) {
@@ -530,8 +553,8 @@ async function onChargeRefunded(charge: Record<string, unknown>): Promise<void> 
         currency:  currency.toUpperCase(),
         status:    'completed',
         bookingId: metadata.bookingId ?? null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        createdAt: serverTS(),
+        updatedAt: serverTS(),
       });
     }
 
@@ -557,8 +580,8 @@ async function onDisputeCreated(dispute: Record<string, unknown>): Promise<void>
       currency:  dispute.currency as string,
       reason:    dispute.reason as string,
       status:    dispute.status as string,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: serverTS(),
+      updatedAt: serverTS(),
     });
   });
   console.warn(`[Webhook] Litige créé: ${disputeId}`);
@@ -567,7 +590,7 @@ async function onDisputeCreated(dispute: Record<string, unknown>): Promise<void>
 async function onDisputeUpdated(dispute: Record<string, unknown>): Promise<void> {
   const disputeId = dispute.id as string;
   await getDb().collection('stripe_disputes').doc(disputeId).set(
-    { status: dispute.status as string, updatedAt: new Date() },
+    { status: dispute.status as string, updatedAt: serverTS() },
     { merge: true },
   );
 }
@@ -575,7 +598,7 @@ async function onDisputeUpdated(dispute: Record<string, unknown>): Promise<void>
 async function onDisputeClosed(dispute: Record<string, unknown>): Promise<void> {
   const disputeId = dispute.id as string;
   await getDb().collection('stripe_disputes').doc(disputeId).set(
-    { status: dispute.status as string, closedAt: new Date() },
+    { status: dispute.status as string, closedAt: serverTS() },
     { merge: true },
   );
 }
@@ -583,7 +606,7 @@ async function onDisputeClosed(dispute: Record<string, unknown>): Promise<void> 
 async function onDisputeFundsWithdrawn(dispute: Record<string, unknown>): Promise<void> {
   const disputeId = dispute.id as string;
   await getDb().collection('stripe_disputes').doc(disputeId).set(
-    { fundsWithdrawnAt: new Date() },
+    { fundsWithdrawnAt: serverTS() },
     { merge: true },
   );
   console.warn(`[Webhook] Fonds prélevés pour litige: ${disputeId}`);
@@ -592,7 +615,7 @@ async function onDisputeFundsWithdrawn(dispute: Record<string, unknown>): Promis
 async function onDisputeFundsReinstated(dispute: Record<string, unknown>): Promise<void> {
   const disputeId = dispute.id as string;
   await getDb().collection('stripe_disputes').doc(disputeId).set(
-    { fundsReinstatedAt: new Date() },
+    { fundsReinstatedAt: serverTS() },
     { merge: true },
   );
 }
@@ -619,7 +642,7 @@ async function onTransferCreated(transfer: Record<string, unknown>): Promise<voi
       currency:         transfer.currency as string,
       status:           'succeeded',
       type:             metadata.type ?? 'weekly',
-      processedAt:      new Date(),
+      processedAt:      serverTS(),
     });
   });
 }
@@ -627,7 +650,7 @@ async function onTransferCreated(transfer: Record<string, unknown>): Promise<voi
 async function onTransferReversed(transfer: Record<string, unknown>): Promise<void> {
   const transferId = transfer.id as string;
   await getDb().collection('driver_payouts').doc(transferId).set(
-    { status: 'reversed', reversedAt: new Date() },
+    { status: 'reversed', reversedAt: serverTS() },
     { merge: true },
   );
   console.warn(`[Webhook] Virement inversé: ${transferId}`);
@@ -647,7 +670,7 @@ async function onPayoutPaid(payout: Record<string, unknown>): Promise<void> {
       status:       'paid',
       arrivalDate:  arrivalDate ? new Date(arrivalDate * 1000) : null,
       metadata:     (payout.metadata ?? {}) as Record<string, string>,
-      createdAt:    new Date(),
+      createdAt:    serverTS(),
     });
   });
 }
@@ -666,7 +689,7 @@ async function onPayoutFailed(payout: Record<string, unknown>): Promise<void> {
       failureMessage: (payout.failure_message as string) ?? 'Raison inconnue',
       failureCode:    (payout.failure_code as string) ?? null,
       metadata:       (payout.metadata ?? {}) as Record<string, string>,
-      createdAt:      new Date(),
+      createdAt:      serverTS(),
     });
   });
 }
@@ -686,7 +709,7 @@ async function onPayoutCanceled(payout: Record<string, unknown>): Promise<void> 
     }
 
     // Conserver createdAt si le document existait déjà
-    const existingCreatedAt = snap.exists ? snap.data()?.createdAt : new Date();
+    const existingCreatedAt = snap.exists ? snap.data()?.createdAt : serverTS();
 
     tx.set(
       ref,
@@ -695,9 +718,9 @@ async function onPayoutCanceled(payout: Record<string, unknown>): Promise<void> 
         amountCents: payout.amount as number,
         currency:    (payout.currency as string).toUpperCase(),
         status:      'canceled',
-        canceledAt:  new Date(),
+        canceledAt:  serverTS(),
         metadata:    (payout.metadata ?? {}) as Record<string, string>,
-        createdAt:   existingCreatedAt ?? new Date(),
+        createdAt:   existingCreatedAt ?? serverTS(),
       },
       { merge: true },
     );
@@ -718,7 +741,7 @@ async function onRefundCreated(refund: Record<string, unknown>): Promise<void> {
       currency:  refund.currency as string,
       status:    refund.status as string,
       reason:    refund.reason as string | null,
-      createdAt: new Date(),
+      createdAt: serverTS(),
     });
   });
 }
@@ -726,7 +749,7 @@ async function onRefundCreated(refund: Record<string, unknown>): Promise<void> {
 async function onRefundFailed(refund: Record<string, unknown>): Promise<void> {
   const refundId = refund.id as string;
   await getDb().collection('stripe_refunds').doc(refundId).set(
-    { status: 'failed', failureReason: refund.failure_reason as string | null, failedAt: new Date() },
+    { status: 'failed', failureReason: refund.failure_reason as string | null, failedAt: serverTS() },
     { merge: true },
   );
   console.error(`[Webhook] Remboursement échoué: ${refundId}`);
@@ -739,7 +762,7 @@ async function onIdentityVerified(session: Record<string, unknown>): Promise<voi
   if (metadata.driverId) {
     await getDb().collection('drivers').doc(metadata.driverId).update({
       identityVerified:   true,
-      identityVerifiedAt: new Date(),
+      identityVerifiedAt: serverTS(),
       identitySessionId:  sessionId,
     });
   }
@@ -779,7 +802,7 @@ async function onSetupIntentSucceeded(si: Record<string, unknown>): Promise<void
     await getDb().collection('users').doc(metadata.userId).update({
       defaultPaymentMethodId: pmId,
       setupIntentId:          siId,
-      updatedAt:              new Date(),
+      updatedAt:              serverTS(),
     });
   }
 }
@@ -793,7 +816,7 @@ async function onSetupIntentFailed(si: Record<string, unknown>): Promise<void> {
     await getDb().collection('users').doc(metadata.userId).update({
       setupIntentError: lastError?.message ?? 'Échec de configuration',
       setupIntentId:    siId,
-      updatedAt:        new Date(),
+      updatedAt:        serverTS(),
     });
   }
 }
@@ -923,7 +946,7 @@ async function onV2AccountClosed(account: Record<string, unknown>): Promise<void
   if (!snap.empty) {
     await getDb().collection('drivers').doc(snap.docs[0].id).update({
       stripeAccountStatus:    'disabled',
-      stripeAccountClosedAt:  new Date(),
+      stripeAccountClosedAt:  serverTS(),
       isActive:               false,
     });
     console.warn(`[Webhook v2] Compte Connect fermé: ${accountId} — chauffeur désactivé`);
@@ -960,7 +983,7 @@ async function onV2AccountRequirementsUpdated(account: Record<string, unknown>):
     await getDb().collection('drivers').doc(snap.docs[0].id).update({
       'requirements.currently_due':    (requirements?.currently_due as string[]) ?? [],
       'requirements.current_deadline': (requirements?.current_deadline as number | null) ?? null,
-      'requirements.lastCheckedAt':    new Date(),
+      'requirements.lastCheckedAt':    serverTS(),
     });
   }
 }
@@ -981,7 +1004,7 @@ async function onV2AccountFutureRequirementsUpdated(account: Record<string, unkn
       futureRequirements: {
         currently_due:    (futureRequirements?.currently_due as string[]) ?? [],
         current_deadline: (futureRequirements?.current_deadline as number | null) ?? null,
-        lastCheckedAt:    new Date(),
+        lastCheckedAt:    serverTS(),
       },
     });
   }

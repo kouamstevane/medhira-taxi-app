@@ -158,7 +158,7 @@ export default function HistoriquePage() {
   };
 
   // Télécharger la facture d'une course
-  const handleDownloadInvoice = (item: Record<string, unknown>) => {
+  const handleDownloadInvoice = async (item: Record<string, unknown>) => {
     try {
       // Convertir l'item en Booking pour la génération de facture
       const booking: Booking = {
@@ -183,7 +183,7 @@ export default function HistoriquePage() {
         actualDuration: item.actualDuration as number,
       };
 
-      downloadInvoiceFromBooking(booking);
+      await downloadInvoiceFromBooking(booking);
     } catch (error) {
       console.error('Erreur téléchargement facture:', error);
       showError('Erreur lors du téléchargement de la facture');

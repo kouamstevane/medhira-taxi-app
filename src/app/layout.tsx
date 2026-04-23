@@ -16,10 +16,6 @@
  */
 
 import type { Metadata, Viewport } from "next";
-import "@fontsource/inter/400.css";
-import "@fontsource/inter/500.css";
-import "@fontsource/inter/600.css";
-import "@fontsource/inter/700.css";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import LayoutClient from "./LayoutClient";
@@ -34,8 +30,6 @@ const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   themeColor: "#f29200",
   viewportFit: "cover",
   interactiveWidget: "resizes-content",

@@ -22,6 +22,7 @@ import {
   serverTimestamp,
   Timestamp,
   writeBatch,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { findAvailableDrivers } from './findAvailableDrivers';
@@ -135,41 +136,51 @@ export const markCandidateAccepted = async (
 ): Promise<boolean> => {
   try {
     const candidateRef = doc(db, 'bookings', rideId, 'candidates', driverId);
-    const candidateSnap = await getDoc(candidateRef);
+    const rideRef = doc(db, 'bookings', rideId);
 
-    if (!candidateSnap.exists()) {
-      console.warn('[BROADCAST] Candidature non trouvée', { rideId, driverId });
-      return false;
-    }
+    //  Transaction atomique : read-check-write pour éviter que deux
+    // chauffeurs acceptent simultanément la même course (race condition).
+    const accepted = await runTransaction(db, async (tx) => {
+      const rideSnap = await tx.get(rideRef);
+      if (!rideSnap.exists()) return false;
+      if (rideSnap.data().status !== 'pending') return false;
 
-    const candidateData = candidateSnap.data();
+      const candidateSnap = await tx.get(candidateRef);
 
-    // Vérifier que la candidature est toujours en attente
-    if (candidateData.status !== 'pending') {
-      console.warn('[BROADCAST] Candidature déjà traitée', {
-        rideId,
-        driverId,
-        status: candidateData.status,
+      if (!candidateSnap.exists()) {
+        console.warn('[BROADCAST] Candidature non trouvée', { rideId, driverId });
+        return false;
+      }
+
+      const candidateData = candidateSnap.data();
+
+      if (candidateData.status !== 'pending') {
+        console.warn('[BROADCAST] Candidature déjà traitée', {
+          rideId,
+          driverId,
+          status: candidateData.status,
+        });
+        return false;
+      }
+
+      const expiresAt = candidateData.expiresAt?.toDate?.();
+      if (expiresAt && expiresAt < new Date()) {
+        console.warn('[BROADCAST] Candidature expirée', { rideId, driverId });
+        tx.update(candidateRef, { status: 'expired' });
+        return false;
+      }
+
+      tx.update(candidateRef, {
+        status: 'accepted',
+        acceptedAt: serverTimestamp(),
       });
-      return false;
-    }
-
-    // Vérifier que la candidature n'a pas expiré
-    const expiresAt = candidateData.expiresAt?.toDate();
-    if (expiresAt && expiresAt < new Date()) {
-      console.warn('[BROADCAST] Candidature expirée', { rideId, driverId });
-      await updateDoc(candidateRef, { status: 'expired' });
-      return false;
-    }
-
-    // Marquer comme acceptée
-    await updateDoc(candidateRef, {
-      status: 'accepted',
-      acceptedAt: serverTimestamp(),
+      return true;
     });
 
-    console.log('[BROADCAST] Candidature acceptée', { rideId, driverId });
-    return true;
+    if (accepted) {
+      console.log('[BROADCAST] Candidature acceptée', { rideId, driverId });
+    }
+    return accepted;
   } catch (error: unknown) {
     //  Typage correct de l'erreur (medJira.md #116)
     const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
@@ -187,16 +198,30 @@ export const markCandidateDeclined = async (
 ): Promise<void> => {
   try {
     const candidateRef = doc(db, 'bookings', rideId, 'candidates', driverId);
-    const candidateSnap = await getDoc(candidateRef);
 
-    if (!candidateSnap.exists()) {
-      console.warn('[BROADCAST] Candidature non trouvée pour refus', { rideId, driverId });
-      return;
-    }
+    await runTransaction(db, async (tx) => {
+      const candidateSnap = await tx.get(candidateRef);
 
-    await updateDoc(candidateRef, {
-      status: 'declined',
-      declinedAt: serverTimestamp(),
+      if (!candidateSnap.exists()) {
+        console.warn('[BROADCAST] Candidature non trouvée pour refus', { rideId, driverId });
+        return;
+      }
+
+      const candidateData = candidateSnap.data();
+
+      if (candidateData.status !== 'pending') {
+        console.warn('[BROADCAST] Candidature déjà traitée, refus ignoré', {
+          rideId,
+          driverId,
+          status: candidateData.status,
+        });
+        return;
+      }
+
+      tx.update(candidateRef, {
+        status: 'declined',
+        declinedAt: serverTimestamp(),
+      });
     });
 
     console.log('[BROADCAST] Candidature refusée', { rideId, driverId });
@@ -215,7 +240,6 @@ export const expireAllPendingCandidates = async (
 ): Promise<void> => {
   try {
     const candidatesRef = collection(db, 'bookings', rideId, 'candidates');
-    //  Ajout limit(100) pour optimiser les coûts Firestore (medJira.md #57)
     const pendingQuery = query(
       candidatesRef,
       where('status', '==', 'pending'),
@@ -224,18 +248,28 @@ export const expireAllPendingCandidates = async (
 
     const pendingSnapshot = await getDocs(pendingQuery);
 
-    const updatePromises = pendingSnapshot.docs.map((doc) =>
-      updateDoc(doc.ref, {
-        status: 'expired',
-        expiredAt: serverTimestamp(),
-      })
-    );
+    if (pendingSnapshot.empty) return;
 
-    await Promise.all(updatePromises);
+    await runTransaction(db, async (tx) => {
+      let expiredCount = 0;
 
-    console.log('[BROADCAST] Candidatures expirées', {
-      rideId,
-      count: pendingSnapshot.size,
+      for (const d of pendingSnapshot.docs) {
+        const freshSnap = await tx.get(d.ref);
+        if (freshSnap.exists() && freshSnap.data().status === 'pending') {
+          tx.update(d.ref, {
+            status: 'expired',
+            expiredAt: serverTimestamp(),
+          });
+          expiredCount++;
+        }
+      }
+
+      if (expiredCount > 0) {
+        console.log('[BROADCAST] Candidatures expirées', {
+          rideId,
+          count: expiredCount,
+        });
+      }
     });
   } catch (error: unknown) {
     //  Typage correct de l'erreur (medJira.md #116)

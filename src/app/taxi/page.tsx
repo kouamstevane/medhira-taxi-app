@@ -52,6 +52,8 @@ export default function TaxiPage() {
   const [isAutoSearching, setIsAutoSearching] = useState(false);
   // Stocké dans un ref pour ne pas déclencher de re-render ni invalider les useEffect
   const stopAutoSearchRef = useRef<(() => void) | null>(null);
+  const stepRef = useRef<Step>(step);
+  useEffect(() => { stepRef.current = step; }, [step]);
 
   // Récupérer la course active au chargement
   useEffect(() => {
@@ -167,13 +169,11 @@ export default function TaxiPage() {
     }
   };
 
-  // Écouter les changements du booking pour détecter l'acceptation d'un chauffeur
   useEffect(() => {
-    if (!bookingId || step !== 'searching') return;
+    if (!bookingId) return;
 
     logger.info('Écoute des changements du booking', { bookingId });
 
-    // Vérifier immédiatement le statut du booking
     const bookingRef = doc(db, 'bookings', bookingId);
     getDoc(bookingRef).then((snapshot) => {
       if (snapshot.exists()) {
@@ -184,7 +184,6 @@ export default function TaxiPage() {
           driverId: bookingData.driverId,
         });
 
-        // Si déjà accepté ou failed, mettre à jour immédiatement
         if (bookingData.status === 'accepted' && bookingData.driverId) {
           setStep('driver_found');
           return;
@@ -211,7 +210,6 @@ export default function TaxiPage() {
           driverId: bookingData.driverId,
         });
 
-        // Si un chauffeur a accepté
         if (bookingData.status === 'accepted' && bookingData.driverId) {
           logger.info('Chauffeur trouvé !', {
             bookingId,
@@ -222,7 +220,6 @@ export default function TaxiPage() {
           return;
         }
 
-        // Si la course a échoué
         if (bookingData.status === 'failed') {
           logger.warn('Aucun chauffeur disponible', { bookingId });
           setStep('failed');
@@ -234,22 +231,30 @@ export default function TaxiPage() {
       }
     );
 
-    // Timer de 60 secondes
+    return () => {
+      unsubscribe();
+      if (stopAutoSearchRef.current) {
+        stopAutoSearchRef.current();
+      }
+    };
+  }, [bookingId]);
+
+  useEffect(() => {
+    if (!bookingId || step !== 'searching') return;
+
     const timerInterval = setInterval(() => {
       setTimeRemaining((prev) => {
         const newTime = prev - 1;
         if (newTime <= 0) {
           clearInterval(timerInterval);
-          // Si toujours en attente après 60s, marquer comme failed
           logger.warn('Timeout de 60 secondes atteint', { bookingId });
 
-          // Vérifier une dernière fois le statut avant de marquer comme failed
           const bookingRef = doc(db, 'bookings', bookingId);
           getDoc(bookingRef).then((snapshot) => {
+            if (stepRef.current !== 'searching') return;
             if (snapshot.exists()) {
               const bookingData = snapshot.data();
               if (bookingData.status === 'pending') {
-                // Marquer comme failed si toujours pending
                 updateDoc(bookingRef, {
                   status: 'failed',
                   failureReason: 'Aucun chauffeur disponible après 60 secondes',
@@ -262,7 +267,6 @@ export default function TaxiPage() {
                   setStep('failed');
                 });
               } else {
-                // Déjà mis à jour, passer à l'état approprié
                 if (bookingData.status === 'failed') {
                   setStep('failed');
                 } else if (bookingData.status === 'accepted' && bookingData.driverId) {
@@ -270,12 +274,11 @@ export default function TaxiPage() {
                 }
               }
             } else {
-              // Booking n'existe plus, revenir au formulaire
               setStep('failed');
             }
           }).catch((error) => {
             logger.error('Erreur vérification finale timeout', { error, bookingId });
-            setStep('failed');
+            if (stepRef.current === 'searching') setStep('failed');
           }); return 0;
         }
         return newTime;
@@ -283,13 +286,9 @@ export default function TaxiPage() {
     }, 1000);
 
     return () => {
-      unsubscribe();
       clearInterval(timerInterval);
-      if (stopAutoSearchRef.current) {
-        stopAutoSearchRef.current();
-      }
     };
-  }, [bookingId, step]);
+  }, [step, bookingId]);
 
   return (
     <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">

@@ -71,26 +71,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Erreur API send-email:', error);
-    
-    let errorMessage = 'Erreur lors de l\'envoi de l\'email';
-    const errorLike = error instanceof Error ? error : null;
-    const code = errorLike && 'code' in errorLike ? (errorLike as { code?: string }).code : undefined;
-    let errorDetails = errorLike?.message || String(error);
-
-    if (code === 'EAUTH') {
-      errorMessage = 'Erreur d\'authentification SMTP';
-      errorDetails = 'Vérifiez vos identifiants SMTP (SMTP_USER et SMTP_PASS)';
-    } else if (code === 'ECONNECTION') {
-      errorMessage = 'Impossible de se connecter au serveur SMTP';
-      errorDetails = 'Vérifiez SMTP_HOST et SMTP_PORT';
-    }
 
     return NextResponse.json(
-      { 
-        error: errorMessage,
-        details: errorDetails,
-        code: code || 'UNKNOWN',
-      },
+      { error: 'Erreur lors de l\'envoi de l\'email' },
       { status: 500 }
     );
   }

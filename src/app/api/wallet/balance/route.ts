@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyFirebaseToken, getAdminDb } from '@/lib/admin-guard';
+import { CURRENCY_CODE } from '@/utils/constants';
 
 export const runtime = 'nodejs';
 
@@ -23,18 +24,23 @@ export async function GET(request: NextRequest) {
     const walletSnap = await db.collection('wallets').doc(userId).get();
 
     if (!walletSnap.exists) {
-      return NextResponse.json({ balance: 0, currency: 'CAD' });
+      return NextResponse.json({ balance: 0, currency: CURRENCY_CODE });
     }
 
     const data = walletSnap.data()!;
     return NextResponse.json({
       balance: data.balance ?? 0,
-      currency: data.currency ?? 'CAD',
+      currency: data.currency ?? CURRENCY_CODE,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Erreur interne';
+    const message = err instanceof Error ? err.message : '';
     console.error('[GET /api/wallet/balance]', message);
-    const status = message.includes('Token') ? 401 : message === 'SERVICE_UNAVAILABLE' ? 503 : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (message.includes('Token') || message.includes('auth')) {
+      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+    }
+    if (message === 'SERVICE_UNAVAILABLE') {
+      return NextResponse.json({ error: 'Service temporairement indisponible' }, { status: 503 });
+    }
+    return NextResponse.json({ error: 'Une erreur est survenue. Veuillez réessayer.' }, { status: 500 });
   }
 }

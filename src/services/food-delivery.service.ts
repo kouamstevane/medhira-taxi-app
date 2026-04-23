@@ -181,26 +181,22 @@ export const getApprovedRestaurants = async (
   limitCount: number = 20,
   lastVisible?: QueryDocumentSnapshot<DocumentData> | null
 ): Promise<{ restaurants: Restaurant[], lastDoc: QueryDocumentSnapshot<DocumentData> | null }> => {
+  try {
   const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
 
-  // Construction dynamique de la requête Firestore
-  //  limit() obligatoire sur chaque requête (medJira §4.1)
   const constraints: Parameters<typeof query>[1][] = [
     where('status', '==', 'approved'),
     limit(limitCount),
   ];
 
-  // Règle 9 : Filtre par type de cuisine (supporte tableau)
   if (filters?.cuisineType) {
     constraints.push(where('cuisineType', 'array-contains', filters.cuisineType));
   }
 
-  // Règle 10 : Filtre par prix moyen max
   if (filters?.maxAvgPricePerPerson) {
     constraints.push(where('avgPricePerPerson', '<=', filters.maxAvgPricePerPerson));
   }
 
-  // Pagination cursor-based (medJira §4.1)
   if (lastVisible) {
     constraints.push(startAfter(lastVisible));
   }
@@ -215,12 +211,10 @@ export const getApprovedRestaurants = async (
     id: docSnap.id,
   })) as Restaurant[];
 
-  // Filtre côté client pour le rating min (pas de contrainte Firestore complexe)
   if (filters?.minRating) {
     restaurants = restaurants.filter((r) => r.rating >= (filters.minRating ?? 0));
   }
 
-  // Filtre côté client pour la recherche textuelle
   if (filters?.searchQuery) {
     const search = filters.searchQuery.toLowerCase();
     restaurants = restaurants.filter(
@@ -234,12 +228,17 @@ export const getApprovedRestaurants = async (
   }
 
   return { restaurants, lastDoc };
+  } catch (error) {
+    console.error('[food-delivery.service] getApprovedRestaurants failed:', error);
+    throw error;
+  }
 };
 
 /**
  * Récupérer un restaurant par ID
  */
 export const getRestaurantById = async (restaurantId: string): Promise<Restaurant | null> => {
+  try {
   const restaurantRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId);
   const restaurantSnap = await getDoc(restaurantRef);
 
@@ -247,12 +246,17 @@ export const getRestaurantById = async (restaurantId: string): Promise<Restauran
     return { ...restaurantSnap.data(), id: restaurantSnap.id } as Restaurant;
   }
   return null;
+  } catch (error) {
+    console.error('[food-delivery.service] getRestaurantById failed:', error);
+    throw error;
+  }
 };
 
 /**
  * Récupérer le restaurant appartenant à un utilisateur
  */
 export const getRestaurantByOwner = async (ownerId: string): Promise<Restaurant | null> => {
+  try {
   const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
   const q = query(
     restaurantsRef,
@@ -265,6 +269,10 @@ export const getRestaurantByOwner = async (ownerId: string): Promise<Restaurant 
   
   const docSnap = querySnapshot.docs[0];
   return { ...docSnap.data(), id: docSnap.id } as Restaurant;
+  } catch (error) {
+    console.error('[food-delivery.service] getRestaurantByOwner failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -280,6 +288,7 @@ export const getRestaurantMenu = async (
   restaurantId: string,
   limitCount: number = 50
 ): Promise<MenuItem[]> => {
+  try {
   const menuRef = collection(
     db,
     FIRESTORE_COLLECTIONS.RESTAURANTS,
@@ -287,7 +296,6 @@ export const getRestaurantMenu = async (
     FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS
   );
 
-  //  limit() obligatoire (medJira §4.1)
   const q = query(
     menuRef,
     where('isAvailable', '==', true),
@@ -299,6 +307,10 @@ export const getRestaurantMenu = async (
     ...docSnap.data(),
     id: docSnap.id,
   })) as MenuItem[];
+  } catch (error) {
+    console.error('[food-delivery.service] getRestaurantMenu failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -312,7 +324,7 @@ export const getRestaurantMenu = async (
 export const createRestaurant = async (
   restaurantData: Omit<Restaurant, 'id' | 'status' | 'rating' | 'totalReviews' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
-  // Validation Zod
+  try {
   const validationResult = CreateRestaurantSchema.safeParse(restaurantData);
   if (!validationResult.success) {
     throw new Error(`Données de restaurant invalides: ${validationResult.error.message}`);
@@ -343,6 +355,10 @@ export const createRestaurant = async (
   });
 
   return newRestaurantRef.id;
+  } catch (error) {
+    console.error('[food-delivery.service] createRestaurant failed:', error);
+    throw error;
+  }
 };
 
 // ============================================================================
@@ -406,20 +422,18 @@ export const createFoodOrder = async (
     cityId?: string;
   }
 ): Promise<string> => {
-  // Validation Zod
+  try {
   const validationResult = CreateFoodOrderSchema.safeParse(orderData);
   if (!validationResult.success) {
     throw new Error(`Données de commande invalides: ${validationResult.error.message}`);
   }
 
-  // Calcul du prix total (Règles 5, 6, 7)
   const { basePrice, deliveryCost, totalOrderPrice } = calculateTotalOrderPrice(
     orderData.orderItems,
     orderData.deliveryDistance,
     orderData.isWeekend
   );
 
-  // Récupérer les infos du restaurant pour dénormalisation
   const restaurant = await getRestaurantById(orderData.restaurantId);
   if (!restaurant) {
     throw new Error('Restaurant introuvable');
@@ -442,49 +456,58 @@ export const createFoodOrder = async (
     isWeekend: orderData.isWeekend,
     deliveryAddress: orderData.deliveryAddress,
     deliveryLocation: orderData.deliveryLocation,
-    // Prix calculés
     basePrice,
     deliveryCost,
     totalOrderPrice,
-    // Statut initial : en attente de paiement (Règle 3)
     status: 'pending_payment',
-    pickupCode, // Règle 4 : code unique
+    pickupCode,
     paymentValidated: false,
-    // Infos restaurant (dénormalisées)
     restaurantName: restaurant.name,
     restaurantImage: restaurant.imageUrl,
-    // Champs livraison
     deliveryPreference: orderData.deliveryPreference ?? 'leave_at_door',
     deliveryInstructions: orderData.deliveryInstructions ?? undefined,
     customerPhone: orderData.customerPhone ?? '',
     clientNeighbourhood: orderData.clientNeighbourhood ?? '',
     cityId: orderData.cityId ?? 'edmonton',
-    // Timestamps
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
-  await setDoc(newOrderRef, order);
+  const walletRef = doc(db, 'wallets', orderData.userId);
 
-  // Règle 3 : débiter le wallet avant de confirmer la commande
   try {
-    const { payBooking } = await import('@/services/wallet.service');
-    await payBooking(orderData.userId, newOrderRef.id, totalOrderPrice);
-    // Paiement validé : confirmer la commande
-    await updateDoc(newOrderRef, {
-      status: 'confirmed',
-      paymentValidated: true,
-      confirmedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    await runTransaction(db, async (tx) => {
+      const walletSnap = await tx.get(walletRef);
+      if (!walletSnap.exists()) {
+        throw new Error('Portefeuille introuvable');
+      }
+      const walletData = walletSnap.data() as { balance?: number };
+      const currentBalance = walletData.balance ?? 0;
+      if (currentBalance < totalOrderPrice) {
+        throw new Error(
+          `Solde insuffisant: ${currentBalance} < ${totalOrderPrice}`
+        );
+      }
+
+      tx.update(walletRef, {
+        balance: currentBalance - totalOrderPrice,
+        updatedAt: serverTimestamp(),
+      });
+
+      tx.set(newOrderRef, {
+        ...order,
+        status: 'confirmed',
+        paymentValidated: true,
+        confirmedAt: serverTimestamp(),
+      });
     });
   } catch (payError) {
-    // Paiement échoué : annuler la commande
-    await updateDoc(newOrderRef, {
-      status: 'cancelled',
-      cancellationReason: `Paiement échoué: ${(payError as Error).message}`,
-      updatedAt: serverTimestamp(),
+    const msg = (payError as Error).message;
+    logger.error('Création commande livraison échouée', {
+      userId: orderData.userId,
+      error: msg,
     });
-    throw new Error(`Paiement échoué: ${(payError as Error).message}`);
+    throw new Error(`Paiement échoué: ${msg}`);
   }
 
   logger.info('Commande de livraison créée', {
@@ -495,12 +518,17 @@ export const createFoodOrder = async (
   });
 
   return newOrderRef.id;
+  } catch (error) {
+    console.error('[food-delivery.service] createFoodOrder failed:', error);
+    throw error;
+  }
 };
 
 /**
  * Récupérer une commande par ID
  */
 export const getFoodOrderById = async (orderId: string): Promise<FoodOrder | null> => {
+  try {
   const orderRef = doc(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS, orderId);
   const orderSnap = await getDoc(orderRef);
 
@@ -508,6 +536,10 @@ export const getFoodOrderById = async (orderId: string): Promise<FoodOrder | nul
     return { ...orderSnap.data(), id: orderSnap.id } as FoodOrder;
   }
   return null;
+  } catch (error) {
+    console.error('[food-delivery.service] getFoodOrderById failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -520,6 +552,7 @@ export const getUserFoodOrders = async (
   userId: string,
   limitCount: number = 20
 ): Promise<FoodOrder[]> => {
+  try {
   const ordersRef = collection(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS);
   const q = query(
     ordersRef,
@@ -533,6 +566,10 @@ export const getUserFoodOrders = async (
     ...docSnap.data(),
     id: docSnap.id,
   })) as FoodOrder[];
+  } catch (error) {
+    console.error('[food-delivery.service] getUserFoodOrders failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -547,6 +584,7 @@ export const updateFoodOrderStatus = async (
   status: FoodOrderStatus,
   additionalData?: Partial<FoodOrder>
 ): Promise<void> => {
+  try {
   const orderRef = doc(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS, orderId);
 
   const updateData: Record<string, unknown> = {
@@ -555,7 +593,6 @@ export const updateFoodOrderStatus = async (
     ...additionalData,
   };
 
-  // Ajouter des timestamps spécifiques selon le statut
   switch (status) {
     case 'picked_up':
       updateData.pickedUpAt = serverTimestamp();
@@ -571,6 +608,10 @@ export const updateFoodOrderStatus = async (
   await updateDoc(orderRef, updateData);
 
   logger.info('Statut commande mis à jour', { orderId, status });
+  } catch (error) {
+    console.error('[food-delivery.service] updateFoodOrderStatus failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -582,6 +623,7 @@ export const assignDriverToOrder = async (
   driverName: string,
   driverPhone?: string
 ): Promise<void> => {
+  try {
   const orderRef = doc(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS, orderId);
 
   await updateDoc(orderRef, {
@@ -592,6 +634,10 @@ export const assignDriverToOrder = async (
   });
 
   logger.info('Chauffeur assigné à la commande', { orderId, driverId });
+  } catch (error) {
+    console.error('[food-delivery.service] assignDriverToOrder failed:', error);
+    throw error;
+  }
 };
 
 // ============================================================================
@@ -607,6 +653,7 @@ export const assignDriverToOrder = async (
 export const submitRestaurantReview = async (
   review: Omit<RestaurantReview, 'id' | 'createdAt'>
 ): Promise<string> => {
+  try {
   if (review.rating < 1 || review.rating > 5) {
     throw new Error('La note doit être entre 1 et 5');
   }
@@ -617,7 +664,6 @@ export const submitRestaurantReview = async (
     createdAt: serverTimestamp(),
   });
 
-  // Mettre à jour la note moyenne du restaurant
   try {
     await updateRestaurantRating(review.restaurantId, review.rating);
   } catch (error) {
@@ -625,6 +671,10 @@ export const submitRestaurantReview = async (
   }
 
   return docRef.id;
+  } catch (error) {
+    console.error('[food-delivery.service] submitRestaurantReview failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -636,6 +686,7 @@ export const submitRestaurantReview = async (
 export const submitDeliveryReview = async (
   review: Omit<DeliveryReview, 'id' | 'createdAt'>
 ): Promise<string> => {
+  try {
   if (review.rating < 1 || review.rating > 5) {
     throw new Error('La note doit être entre 1 et 5');
   }
@@ -647,6 +698,10 @@ export const submitDeliveryReview = async (
   });
 
   return docRef.id;
+  } catch (error) {
+    console.error('[food-delivery.service] submitDeliveryReview failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -657,6 +712,7 @@ export const getRestaurantReviews = async (
   restaurantId: string,
   limitCount: number = 20
 ): Promise<RestaurantReview[]> => {
+  try {
   const reviewsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANT_REVIEWS);
   const q = query(
     reviewsRef,
@@ -670,6 +726,10 @@ export const getRestaurantReviews = async (
     ...docSnap.data(),
     id: docSnap.id,
   })) as RestaurantReview[];
+  } catch (error) {
+    console.error('[food-delivery.service] getRestaurantReviews failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -706,6 +766,7 @@ const updateRestaurantRating = async (restaurantId: string, newRating: number): 
 export const getPendingRestaurants = async (
   limitCount: number = 50
 ): Promise<Restaurant[]> => {
+  try {
   const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
   const q = query(
     restaurantsRef,
@@ -719,6 +780,10 @@ export const getPendingRestaurants = async (
     ...docSnap.data(),
     id: docSnap.id,
   })) as Restaurant[];
+  } catch (error) {
+    console.error('[food-delivery.service] getPendingRestaurants failed:', error);
+    throw error;
+  }
 };
 
 /**
@@ -729,6 +794,7 @@ export const updateRestaurantStatus = async (
   status: Restaurant['status'],
   additionalData?: Partial<Restaurant>
 ): Promise<void> => {
+  try {
   const restaurantRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId);
   const updateData: Record<string, unknown> = {
     status,
@@ -742,6 +808,10 @@ export const updateRestaurantStatus = async (
 
   await updateDoc(restaurantRef, updateData);
   logger.info('Statut restaurant mis à jour par admin', { restaurantId, status });
+  } catch (error) {
+    console.error('[food-delivery.service] updateRestaurantStatus failed:', error);
+    throw error;
+  }
 };
 
 export const FoodDeliveryService = {
@@ -765,16 +835,22 @@ export const FoodDeliveryService = {
    * Récupérer le menu complet (incluant articles indisponibles pour le gérant)
    */
   getRestaurantMenuFull: async (restaurantId: string): Promise<MenuItem[]> => {
+    try {
     const menuRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS);
     const q = query(menuRef, orderBy('category'), limit(100));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MenuItem));
+    } catch (error) {
+      console.error('[food-delivery.service] getRestaurantMenuFull failed:', error);
+      throw error;
+    }
   },
 
   /**
    * Ajouter ou modifier un article du menu
    */
   upsertMenuItem: async (restaurantId: string, itemData: Partial<MenuItem>): Promise<string> => {
+    try {
     const menuRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS);
     const itemId = itemData.id || doc(menuRef).id;
     const itemDocRef = doc(menuRef, itemId);
@@ -792,22 +868,30 @@ export const FoodDeliveryService = {
 
     await setDoc(itemDocRef, data, { merge: true });
     return itemId;
+    } catch (error) {
+      console.error('[food-delivery.service] upsertMenuItem failed:', error);
+      throw error;
+    }
   },
 
   /**
    * Supprimer un article du menu
    */
   deleteMenuItem: async (restaurantId: string, itemId: string): Promise<void> => {
+    try {
     const itemDocRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS, itemId);
-    await updateDoc(itemDocRef, { isAvailable: false, updatedAt: serverTimestamp() }); // Soft delete ou hard delete ? Les règles disent "Create/Update/Delete"
-    // Pour l'instant on garde le hard delete pour simplifier si autorisé
-    // await deleteDoc(itemDocRef); 
+    await updateDoc(itemDocRef, { isAvailable: false, updatedAt: serverTimestamp() });
+    } catch (error) {
+      console.error('[food-delivery.service] deleteMenuItem failed:', error);
+      throw error;
+    }
   },
 
   /**
    * Récupérer les commandes d'un restaurant
    */
   getRestaurantOrders: async (restaurantId: string, status?: FoodOrderStatus[]): Promise<FoodOrder[]> => {
+    try {
     const ordersRef = collection(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS);
     let q;
     
@@ -830,5 +914,9 @@ export const FoodDeliveryService = {
 
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as FoodOrder));
+    } catch (error) {
+      console.error('[food-delivery.service] getRestaurantOrders failed:', error);
+      throw error;
+    }
   },
 };

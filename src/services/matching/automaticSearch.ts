@@ -6,7 +6,7 @@
  * @module services/matching/automaticSearch
  */
 
-import { doc, updateDoc, getDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { logger } from '@/utils/logger';
 import { findDriverWithRetry } from './retry';
@@ -21,6 +21,17 @@ const DEFAULT_CONFIG: AutoSearchConfig = {
     intervalSeconds: 60, // 1 minute
     maxAttempts: 10,
 };
+
+/**
+ * Registre des intervalles actifs par bookingId, pour permettre à
+ * `stopAutomaticSearch` d'effectuer un vrai clearInterval côté client.
+ */
+const activeIntervals = new Map<string, NodeJS.Timeout>();
+/**
+ * Mutex par bookingId : empêche deux exécutions concurrentes de `attemptSearch`
+ * lorsqu'une tentative dure plus longtemps que `intervalSeconds`.
+ */
+const searchingLocks = new Set<string>();
 
 /**
  * Démarrer la recherche automatique
@@ -42,54 +53,76 @@ export const startAutomaticSearch = (
     const attemptSearch = async () => {
         if (!isRunning) return;
 
+        // C-RACE-01: mutex — si une tentative précédente est toujours en cours
+        // (findDriverWithRetry peut durer jusqu'à ~90s, > intervalSeconds par défaut),
+        // on ignore purement et simplement ce tick.
+        if (searchingLocks.has(bookingId)) {
+            logger.debug('Tentative recherche auto ignorée (déjà en cours)', { bookingId });
+            return;
+        }
+        searchingLocks.add(bookingId);
+
         try {
-            // Vérifier l'état actuel du booking
             const bookingRef = doc(db, 'bookings', bookingId);
-            const bookingSnap = await getDoc(bookingRef);
 
-            if (!bookingSnap.exists()) {
-                logger.warn('Booking introuvable, arrêt recherche auto', { bookingId });
-                stop();
-                return;
-            }
+            // C-RACE-02: check-then-update atomique.
+            // On lit le booking, vérifie son statut et pose `status: 'pending'`
+            // dans la même transaction pour éviter qu'un autre acteur (acceptation
+            // chauffeur, annulation, etc.) ne change l'état entre la lecture et l'écriture.
+            type TxOutcome =
+                | { kind: 'stop'; reason: string; status?: string }
+                | { kind: 'max' }
+                | { kind: 'proceed'; booking: Booking };
 
-            const booking = bookingSnap.data() as Booking;
+            const outcome = await runTransaction<TxOutcome>(db, async (tx) => {
+                const snap = await tx.get(bookingRef);
+                if (!snap.exists()) {
+                    return { kind: 'stop', reason: 'not_found' };
+                }
+                const booking = snap.data() as Booking;
 
-            // Arrêter si la course n'est plus en attente ou failed
-            if (booking.status !== 'pending' && booking.status !== 'failed') {
-                logger.info('Course acceptée ou annulée, arrêt recherche auto', {
-                    bookingId,
-                    status: booking.status
+                if (booking.status !== 'pending' && booking.status !== 'failed') {
+                    return { kind: 'stop', reason: 'status', status: booking.status };
+                }
+
+                if (attemptCount + 1 > finalConfig.maxAttempts) {
+                    return { kind: 'max' };
+                }
+                attemptCount++;
+
+                tx.update(bookingRef, {
+                    'automaticSearch.attemptCount': increment(1),
+                    'automaticSearch.lastAttemptAt': serverTimestamp(),
+                    status: 'pending',
+                    failureReason: null,
                 });
+
+                return { kind: 'proceed', booking };
+            });
+
+            if (outcome.kind === 'stop') {
+                if (outcome.reason === 'not_found') {
+                    logger.warn('Booking introuvable, arrêt recherche auto', { bookingId });
+                } else {
+                    logger.info('Course acceptée ou annulée, arrêt recherche auto', {
+                        bookingId,
+                        status: outcome.status,
+                    });
+                }
                 stop();
                 return;
             }
 
-            // Si c'est failed, on peut réessayer (le client a probablement cliqué sur "Recherche auto")
-            // Si c'est pending, on continue
-
-            attemptCount++;
-
-            if (attemptCount > finalConfig.maxAttempts) {
+            if (outcome.kind === 'max') {
                 logger.info('Nombre max de tentatives atteint', { bookingId });
-                // Ne pas marquer comme failed ici, laisser le client décider ou le timeout global
                 stop();
                 return;
             }
 
             logger.info(`Tentative recherche auto #${attemptCount}`, { bookingId });
 
-            // Mettre à jour les métriques de recherche auto
-            await updateDoc(bookingRef, {
-                'automaticSearch.attemptCount': increment(1),
-                'automaticSearch.lastAttemptAt': serverTimestamp(),
-                // Si c'était failed, remettre en pending
-                status: 'pending',
-                failureReason: null,
-            });
-
             // Relancer la recherche avec retry
-            // Note: On utilise les paramètres existants du booking
+            const booking = outcome.booking;
             if (booking.pickupLocation) {
                 await findDriverWithRetry(
                     bookingId,
@@ -99,7 +132,6 @@ export const startAutomaticSearch = (
                     booking.carType,
                     booking.bonus || 0,
                     {
-                        // Configuration spécifique pour une tentative périodique
                         timeoutSeconds: 90, // Aligné avec les autres configurations
                         maxRetries: 1, // Une seule tentative par cycle périodique
                     }
@@ -108,6 +140,8 @@ export const startAutomaticSearch = (
 
         } catch (error) {
             logger.error('Erreur tentative recherche auto', { error, bookingId });
+        } finally {
+            searchingLocks.delete(bookingId);
         }
     };
 
@@ -116,6 +150,7 @@ export const startAutomaticSearch = (
 
     // Configurer l'intervalle pour les tentatives suivantes
     intervalId = setInterval(attemptSearch, finalConfig.intervalSeconds * 1000);
+    activeIntervals.set(bookingId, intervalId);
 
     // Fonction de nettoyage
     const stop = () => {
@@ -123,6 +158,8 @@ export const startAutomaticSearch = (
             clearInterval(intervalId);
             intervalId = null;
         }
+        activeIntervals.delete(bookingId);
+        searchingLocks.delete(bookingId);
         isRunning = false;
         logger.info('Arrêt recherche automatique', { bookingId });
     };
@@ -136,6 +173,15 @@ export const startAutomaticSearch = (
  * mais ceci peut servir si on gère l'état via Firestore uniquement.
  */
 export const stopAutomaticSearch = async (bookingId: string): Promise<void> => {
+    // C-RACE-01: effectuer aussi un vrai clearInterval côté client si
+    // une recherche a été démarrée dans ce processus.
+    const intervalId = activeIntervals.get(bookingId);
+    if (intervalId) {
+        clearInterval(intervalId);
+        activeIntervals.delete(bookingId);
+    }
+    searchingLocks.delete(bookingId);
+
     try {
         const bookingRef = doc(db, 'bookings', bookingId);
         await updateDoc(bookingRef, {

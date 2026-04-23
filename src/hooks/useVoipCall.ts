@@ -4,6 +4,7 @@ import { voipService } from '@/services/voip.service';
 
 export function useVoipCall() {
   const [callState, setCallState] = useState<VoipCallState>(voipService.getState());
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = voipService.subscribe((state) => {
@@ -13,31 +14,67 @@ export function useVoipCall() {
   }, []);
 
   const startCall = useCallback(async (bookingId: string, caller: CallParticipant, callee: CallParticipant) => {
-    await voipService.startCall(bookingId, caller, callee);
+    try {
+      await voipService.startCall(bookingId, caller, callee);
+    } catch (error) {
+      console.error('[useVoipCall] startCall failed:', error);
+      setError(error instanceof Error ? error.message : 'Erreur appel');
+    }
   }, []);
 
   const acceptCall = useCallback(async () => {
-    await voipService.acceptCall();
+    try {
+      await voipService.acceptCall();
+    } catch (error) {
+      console.error('[useVoipCall] acceptCall failed:', error);
+      setError(error instanceof Error ? error.message : 'Erreur appel');
+    }
   }, []);
 
   const declineCall = useCallback(async () => {
-    await voipService.declineCall();
+    try {
+      await voipService.declineCall();
+    } catch (error) {
+      console.error('[useVoipCall] declineCall failed:', error);
+      setError(error instanceof Error ? error.message : 'Erreur appel');
+    }
   }, []);
 
   const endCall = useCallback(async () => {
-    await voipService.endCall();
+    try {
+      await voipService.endCall();
+    } catch (error) {
+      console.error('[useVoipCall] endCall failed:', error);
+      setError(error instanceof Error ? error.message : 'Erreur appel');
+    }
   }, []);
 
   const toggleMute = useCallback(async () => {
-    await voipService.toggleMute();
+    try {
+      await voipService.toggleMute();
+    } catch (error) {
+      console.error('[useVoipCall] toggleMute failed:', error);
+      setError(error instanceof Error ? error.message : 'Erreur appel');
+    }
   }, []);
 
   const toggleSpeaker = useCallback(() => {
-    voipService.toggleSpeaker();
+    try {
+      voipService.toggleSpeaker();
+    } catch (error) {
+      console.error('[useVoipCall] toggleSpeaker failed:', error);
+      setError(error instanceof Error ? error.message : 'Erreur appel');
+    }
+  }, []);
+
+  const clearError = useCallback(() => {
+    setError(null);
   }, []);
 
   return {
     callState,
+    error,
+    clearError,
     startCall,
     acceptCall,
     declineCall,

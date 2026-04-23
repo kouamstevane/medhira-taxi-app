@@ -27,10 +27,10 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
   
   const invoiceData = extractInvoiceData(booking);
   
-  const handleDownload = () => {
+  const handleDownload = async () => {
     setDownloading(true);
     try {
-      downloadInvoiceFromBooking(booking);
+      await downloadInvoiceFromBooking(booking);
       setDownloaded(true);
       setTimeout(() => setDownloaded(false), 3000);
     } catch (error) {

@@ -12,6 +12,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { ERROR_MESSAGES } from '@/utils/constants';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
+import { isFirebaseError, getErrorMessage } from '@/utils/error-utils';
 
 type DriverBlockedStatus = 'pending' | 'rejected' | 'suspended' | 'action_required' | null;
 
@@ -55,14 +56,23 @@ export default function DriverLogin() {
 
       await verifyDriverAccount(userCredential.user.uid);
     } catch (error: unknown) {
-      // Si l'utilisateur est connecté mais verifyDriverAccount a échoué,
-      // le déconnecter pour éviter un état authentifié en arrière-plan
       if (auth.currentUser) {
         await auth.signOut().catch(() => {});
       }
-      const message = error instanceof Error ? error.message : "Erreur de connexion";
-      // '__blocked__' est une erreur interne levée quand le statut est géré
-      // via blockedStatus — pas besoin de l'afficher dans le bloc d'erreur générique
+      let message: string;
+      if (isFirebaseError(error)) {
+        if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+          message = 'Email ou mot de passe incorrect';
+        } else if (error.code === 'auth/too-many-requests') {
+          message = 'Trop de tentatives. Réessayez plus tard';
+        } else if (error.code === 'auth/network-request-failed') {
+          message = ERROR_MESSAGES.NETWORK_ERROR;
+        } else {
+          message = error.message;
+        }
+      } else {
+        message = getErrorMessage(error, "Erreur de connexion");
+      }
       if (!message.includes('Veuillez vérifier votre adresse email') && message !== '__blocked__') {
         setError(message);
       }
@@ -114,7 +124,7 @@ export default function DriverLogin() {
       if (auth.currentUser) {
         await auth.signOut().catch(() => {});
       }
-      const message = error instanceof Error ? error.message : "Erreur de connexion Google";
+      const message = getErrorMessage(error, "Erreur de connexion Google");
       if (message !== '__blocked__') {
         setError(message);
       }
@@ -169,8 +179,7 @@ export default function DriverLogin() {
       }
     } catch (err: unknown) {
       await auth.signOut().catch(() => {});
-      const message = err instanceof Error ? err.message : "Erreur lors de la reprise de l'onboarding";
-      setError(message);
+      setError(getErrorMessage(err, "Erreur lors de la reprise de l'onboarding"));
     } finally {
       setStripeLoading(false);
     }

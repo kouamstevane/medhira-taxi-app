@@ -10,6 +10,7 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import { logger } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
+import { enforceRateLimit } from './utils/rateLimiter.js';
 
 // Initialiser l'admin SDK si ce n'est pas déjà fait
 if (!admin.apps.length) {
@@ -70,10 +71,10 @@ async function backupCollection(collectionName: string): Promise<void> {
   const backupFileName = `backups/${collectionName}_${Date.now()}.json`;
   const file = bucket.file(backupFileName);
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalDocs = 0;
   const batchSize = 500;
-  let allBackupData: any[] = [];
+  let allBackupData: Record<string, unknown>[] = [];
   
   while (true) {
     let query = db.collection(collectionName).orderBy('__name__').limit(batchSize);
@@ -113,7 +114,7 @@ async function backupCollection(collectionName: string): Promise<void> {
 async function migrateWallets(stats: MigrationStats, conversionRate: number = CONVERSION_RATE): Promise<void> {
   logger.info('🔄 Migration de la collection wallets...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -180,7 +181,7 @@ async function migrateWallets(stats: MigrationStats, conversionRate: number = CO
 async function migrateTransactions(stats: MigrationStats, conversionRate: number = CONVERSION_RATE): Promise<void> {
   logger.info('🔄 Migration de la collection transactions...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -204,7 +205,7 @@ async function migrateTransactions(stats: MigrationStats, conversionRate: number
         const data = doc.data();
         
         // Convertir les montants de FCFA à CAD
-        const updates: Record<string, any> = {
+        const updates: Record<string, unknown> = {
           currency: 'CAD',
           migratedAt: admin.firestore.FieldValue.serverTimestamp(),
           previousCurrency: 'FCFA'
@@ -262,7 +263,7 @@ async function migrateTransactions(stats: MigrationStats, conversionRate: number
 async function migrateBookings(stats: MigrationStats, conversionRate: number = CONVERSION_RATE): Promise<void> {
   logger.info('🔄 Migration de la collection bookings...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -286,7 +287,7 @@ async function migrateBookings(stats: MigrationStats, conversionRate: number = C
         const data = doc.data();
         
         // Convertir les montants de FCFA à CAD
-        const updates: Record<string, any> = {
+        const updates: Record<string, unknown> = {
           currency: 'CAD',
           migratedAt: admin.firestore.FieldValue.serverTimestamp(),
           previousCurrency: 'FCFA'
@@ -344,7 +345,7 @@ async function migrateBookings(stats: MigrationStats, conversionRate: number = C
 async function migrateCarTypes(stats: MigrationStats, conversionRate: number = CONVERSION_RATE): Promise<void> {
   logger.info('🔄 Migration de la collection carTypes...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -368,7 +369,7 @@ async function migrateCarTypes(stats: MigrationStats, conversionRate: number = C
         const data = doc.data();
         
         // Convertir les tarifs de FCFA à CAD
-        const updates: Record<string, any> = {
+        const updates: Record<string, unknown> = {
           currency: 'CAD',
           migratedAt: admin.firestore.FieldValue.serverTimestamp(),
           previousCurrency: 'FCFA'
@@ -421,7 +422,7 @@ async function migrateCarTypes(stats: MigrationStats, conversionRate: number = C
 async function migrateDrivers(stats: MigrationStats, conversionRate: number = CONVERSION_RATE): Promise<void> {
   logger.info('🔄 Migration de la collection drivers...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -445,7 +446,7 @@ async function migrateDrivers(stats: MigrationStats, conversionRate: number = CO
         const data = doc.data();
         
         // Convertir les tarifs de FCFA à CAD
-        const updates: Record<string, any> = {
+        const updates: Record<string, unknown> = {
           migratedAt: admin.firestore.FieldValue.serverTimestamp(),
           previousCurrency: 'FCFA'
         };
@@ -516,15 +517,24 @@ export const migrateCurrencyToCAD = onCall(
       );
     }
     
-    // Vérifier le rôle admin
-    const userDoc = await db.collection('users').doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data()?.role !== 'admin') {
+    // Vérifier le rôle admin via collection admins/{uid} (pattern canonique du projet)
+    const adminDoc = await db.collection('admins').doc(request.auth.uid).get();
+    if (!adminDoc.exists) {
       throw new HttpsError(
         'permission-denied',
         'Cette fonction est réservée aux administrateurs.'
       );
     }
-    
+
+    // Rate limit: migration is destructive and single-shot; never needs
+    // more than a couple of calls per hour even during incident recovery.
+    await enforceRateLimit({
+      identifier: request.auth.uid,
+      bucket: 'migrate:currencyToCAD',
+      limit: 3,
+      windowSec: 60 * 60,
+    });
+
     const data = request.data as {
       confirm?: string;
       conversionRate?: number;
@@ -686,8 +696,10 @@ export const migrateCurrencyToCADHTTP = onRequest(
       res.status(401).json({ error: 'Non authentifié' });
       return;
     }
+    let callerUid: string;
     try {
       const decodedToken = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+      callerUid = decodedToken.uid;
       const userDoc = await admin.firestore().collection('admins').where('userId', '==', decodedToken.uid).limit(1).get();
       if (userDoc.empty) {
         res.status(403).json({ error: 'Accès non autorisé — admin requis' });
@@ -695,6 +707,23 @@ export const migrateCurrencyToCADHTTP = onRequest(
       }
     } catch (error) {
       res.status(401).json({ error: 'Token invalide' });
+      return;
+    }
+
+    // Rate limit (3/hour per admin): HTTP variant of the migration —
+    // same destructive footprint as the onCall version.
+    try {
+      await enforceRateLimit({
+        identifier: callerUid,
+        bucket: 'migrate:currencyToCADHTTP',
+        limit: 3,
+        windowSec: 60 * 60,
+      });
+    } catch (err) {
+      const isRateLimit = err instanceof HttpsError && err.code === 'resource-exhausted';
+      res.status(isRateLimit ? 429 : 503).json({
+        error: isRateLimit ? 'Trop de requêtes' : 'Service indisponible',
+      });
       return;
     }
     
@@ -825,15 +854,23 @@ export const rollbackCurrencyMigration = onCall(
       );
     }
     
-    // Vérifier le rôle admin
-    const userDoc = await db.collection('users').doc(request.auth.uid).get();
-    if (!userDoc.exists || userDoc.data()?.role !== 'admin') {
+    // Vérifier le rôle admin via collection admins/{uid} (pattern canonique du projet)
+    const adminDoc = await db.collection('admins').doc(request.auth.uid).get();
+    if (!adminDoc.exists) {
       throw new HttpsError(
         'permission-denied',
         'Cette fonction est réservée aux administrateurs.'
       );
     }
-    
+
+    // Rate limit: rollback is destructive and should not be looped.
+    await enforceRateLimit({
+      identifier: request.auth.uid,
+      bucket: 'migrate:rollbackCurrency',
+      limit: 3,
+      windowSec: 60 * 60,
+    });
+
     const data = request.data as {
       confirm?: string;
     };
@@ -919,7 +956,7 @@ export const rollbackCurrencyMigration = onCall(
 async function rollbackWallets(stats: MigrationStats): Promise<void> {
   logger.info('⏪ Rollback de la collection wallets...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -982,7 +1019,7 @@ async function rollbackWallets(stats: MigrationStats): Promise<void> {
 async function rollbackTransactions(stats: MigrationStats): Promise<void> {
   logger.info('⏪ Rollback de la collection transactions...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -1007,7 +1044,7 @@ async function rollbackTransactions(stats: MigrationStats): Promise<void> {
         
         // Vérifier si le document a été migré
         if (data.previousCurrency === 'FCFA') {
-          const updates: Record<string, any> = {
+          const updates: Record<string, unknown> = {
             currency: 'FCFA',
             migratedAt: admin.firestore.FieldValue.delete(),
             previousCurrency: admin.firestore.FieldValue.delete()
@@ -1064,7 +1101,7 @@ async function rollbackTransactions(stats: MigrationStats): Promise<void> {
 async function rollbackBookings(stats: MigrationStats): Promise<void> {
   logger.info('⏪ Rollback de la collection bookings...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -1089,7 +1126,7 @@ async function rollbackBookings(stats: MigrationStats): Promise<void> {
         
         // Vérifier si le document a été migré
         if (data.previousCurrency === 'FCFA') {
-          const updates: Record<string, any> = {
+          const updates: Record<string, unknown> = {
             currency: 'FCFA',
             migratedAt: admin.firestore.FieldValue.delete(),
             previousCurrency: admin.firestore.FieldValue.delete()
@@ -1146,7 +1183,7 @@ async function rollbackBookings(stats: MigrationStats): Promise<void> {
 async function rollbackCarTypes(stats: MigrationStats): Promise<void> {
   logger.info('⏪ Rollback de la collection carTypes...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -1171,7 +1208,7 @@ async function rollbackCarTypes(stats: MigrationStats): Promise<void> {
         
         // Vérifier si le document a été migré
         if (data.previousCurrency === 'FCFA') {
-          const updates: Record<string, any> = {
+          const updates: Record<string, unknown> = {
             currency: 'FCFA',
             migratedAt: admin.firestore.FieldValue.delete(),
             previousCurrency: admin.firestore.FieldValue.delete()
@@ -1223,7 +1260,7 @@ async function rollbackCarTypes(stats: MigrationStats): Promise<void> {
 async function rollbackDrivers(stats: MigrationStats): Promise<void> {
   logger.info('⏪ Rollback de la collection drivers...');
   
-  let lastDoc: any = null;
+  let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalProcessed = 0;
   let totalFailed = 0;
   const batchSize = 500;
@@ -1248,7 +1285,7 @@ async function rollbackDrivers(stats: MigrationStats): Promise<void> {
         
         // Vérifier si le document a été migré
         if (data.previousCurrency === 'FCFA') {
-          const updates: Record<string, any> = {
+          const updates: Record<string, unknown> = {
             migratedAt: admin.firestore.FieldValue.delete(),
             previousCurrency: admin.firestore.FieldValue.delete()
           };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { notificationService, NotificationCollection } from '@/services/notification.service';
 
@@ -28,6 +28,11 @@ export function useNotifications(): UseNotificationsReturn {
   const [notifications, setNotifications] = useState<NotificationCollection[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const notificationsRef = useRef<NotificationCollection[]>([]);
+
+  useEffect(() => {
+    notificationsRef.current = notifications;
+  }, [notifications]);
 
   // Récupération initiale des notifications
   const refresh = useCallback(async () => {
@@ -68,9 +73,14 @@ export function useNotifications(): UseNotificationsReturn {
   }, []);
 
   const markAllAsRead = useCallback(async () => {
-    await notificationService.markAllAsRead(notifications);
+    const currentNotifications = notificationsRef.current;
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, [notifications]);
+    try {
+      await notificationService.markAllAsRead(currentNotifications);
+    } catch {
+      refresh();
+    }
+  }, [refresh]);
 
   return { notifications, unreadCount, isLoading, markAsRead, markAllAsRead, refresh };
 }

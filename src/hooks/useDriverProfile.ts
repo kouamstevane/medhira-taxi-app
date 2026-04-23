@@ -135,7 +135,7 @@ export function useDriverProfile() {
     });
   }, [router, driver, setDriver, fetchStripeData, fetchPrivateData]);
 
-  const handleUpdateProfile = async () => {
+  const handleUpdateProfile = useCallback(async () => {
     if (!auth.currentUser || !formData) return;
     if (!isEmailVerified) {
       setError('Vous devez vérifier votre email avant de modifier votre profil.');
@@ -159,21 +159,23 @@ export function useDriverProfile() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, isEmailVerified, profileImage, updateDriver]);
 
-  const toggleAvailability = async () => {
+  const toggleAvailability = useCallback(async () => {
     if (!auth.currentUser || !driver) return;
+    const prevValue = driver.isAvailable;
+    const newValue = !prevValue;
+    updateDriver({ isAvailable: newValue });
     try {
-      const newValue = !driver.isAvailable;
       await updateDoc(doc(db, 'drivers', auth.currentUser.uid), { isAvailable: newValue });
-      updateDriver({ isAvailable: newValue });
     } catch (err) {
+      updateDriver({ isAvailable: prevValue });
       logFirestoreError(err, 'changement de disponibilité');
       setError(getFirestoreErrorMessage(err, 'changement de statut'));
     }
-  };
+  }, [driver, updateDriver]);
 
-  const handleCreateStripeAccount = async () => {
+  const handleCreateStripeAccount = useCallback(async () => {
     const user = auth.currentUser;
     if (!user || !driver) return;
     setStripeLoading(true);
@@ -217,9 +219,9 @@ export function useDriverProfile() {
     } finally {
       setStripeLoading(false);
     }
-  };
+  }, [driver, fetchStripeData]);
 
-  const handleToggleWeeklyPayout = async (enabled: boolean) => {
+  const handleToggleWeeklyPayout = useCallback(async (enabled: boolean) => {
     const user = auth.currentUser;
     if (!user) return;
     setPayoutToggleLoading(true);
@@ -237,6 +239,7 @@ export function useDriverProfile() {
       setPayoutSuccess(data.message ?? '');
       const timeout = setTimeout(() => {
         if (mountedRef.current) setPayoutSuccess('');
+        timeoutsRef.current = timeoutsRef.current.filter(t => t !== timeout);
       }, 4000);
       timeoutsRef.current.push(timeout);
     } catch (err) {
@@ -244,9 +247,9 @@ export function useDriverProfile() {
     } finally {
       setPayoutToggleLoading(false);
     }
-  };
+  }, []);
 
-  const handleManualPayout = async () => {
+  const handleManualPayout = useCallback(async () => {
     const user = auth.currentUser;
     if (!user) return;
     setManualPayoutLoading(true);
@@ -263,6 +266,7 @@ export function useDriverProfile() {
       setPayoutSuccess(`Virement de ${data.amount} ${data.currency?.toUpperCase()} envoyé !`);
       const timeout = setTimeout(() => {
         if (mountedRef.current) setPayoutSuccess('');
+        timeoutsRef.current = timeoutsRef.current.filter(t => t !== timeout);
       }, 5000);
       timeoutsRef.current.push(timeout);
       await fetchStripeData();
@@ -271,7 +275,7 @@ export function useDriverProfile() {
     } finally {
       setManualPayoutLoading(false);
     }
-  };
+  }, [fetchStripeData]);
 
   return {
     driver,

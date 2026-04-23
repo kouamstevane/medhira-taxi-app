@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     console.error('Erreur API manage-restaurant:', error);
     return NextResponse.json(
-      { error: 'Erreur serveur', details: error instanceof Error ? error.message : String(error) },
+      { error: 'Erreur serveur' },
       { status: 500 }
     );
   }

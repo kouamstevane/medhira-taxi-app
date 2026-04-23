@@ -21,6 +21,9 @@ export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
     const [isOnline, setIsOnline] = useState(true); // État réseau (§11.2)
     const [lastLocation, setLastLocation] = useState<DriverLocation | null>(null);
     const [error, setError] = useState<TrackingError | null>(null);
+    // RGPD SEC-G01 : true => UI doit afficher la modale de consentement géoloc.
+    // TODO(Stevane) : brancher une modale qui appelle `grantConsent(uid, 'geolocation', 'ui_prompt')`
+    const [needsGeolocationConsent, setNeedsGeolocationConsent] = useState(false);
     
     // Ref pour éviter les problèmes de fermeture (§4.1)
     const isTrackingRef = useRef(false);
@@ -77,6 +80,9 @@ export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
             setError(error);
             setIsTracking(false);
             isTrackingRef.current = false;
+            if (error?.code === 'CONSENT_REQUIRED') {
+                setNeedsGeolocationConsent(true);
+            }
         }
     }, [currentUser?.uid, tripId]);
 
@@ -134,5 +140,6 @@ export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
         error,
         startTracking,
         stopTracking,
+        needsGeolocationConsent,
     };
 }

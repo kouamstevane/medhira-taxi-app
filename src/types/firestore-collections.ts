@@ -236,7 +236,7 @@ export interface BookingCollection {
   bookingId: string;
   userId: string; // Client
   driverId?: string; // Chauffeur assigné
-  status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
   pickup: {
     address: string;
     latitude: number;
@@ -259,9 +259,6 @@ export interface BookingCollection {
   cancelledBy?: 'client' | 'driver';
   cancellationReason?: string;
   
-  // SOUS-COLLECTIONS
-  candidates?: CandidateSubCollection[];
-  messages?: MessageSubCollection[];
 }
 
 /**
@@ -440,7 +437,7 @@ export interface CarTypeCollection {
  * - Read : Appelant OU appelé
  * - Create : Appelant uniquement
  * - Update : Appelant OU appelé
- * - Delete : Non autorisé (cleanup automatique après 24h)
+ * - Delete : Non autorisé (TTL Firestore natif sur `expiresAt`, 24h)
  * 
  * Statuts possibles :
  * - 'ringing' : En sonnerie
@@ -466,6 +463,7 @@ export interface CallCollection {
   answerTime?: Date;
   endTime?: Date;
   reason?: string;
+  expiresAt?: Date;
 }
 
 /**

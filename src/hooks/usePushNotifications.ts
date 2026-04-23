@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { pushNotifications, NotificationData, NOTIFICATION_TOPICS } from '@/services/pushNotifications.service';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { useAuth } from '@/hooks/useAuth';
@@ -109,6 +109,10 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
         };
     }, [enabled, currentUser?.uid]);
 
+    // Refs for latest callbacks — avoids stale closure in the listener below
+    const handleHapticFeedbackRef = useRef<(data: NotificationData) => void>(() => {});
+    const handleNotificationRef = useRef<(data: NotificationData) => void>(() => {});
+
     /**
      * Écoute les notifications
      */
@@ -119,18 +123,14 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
 
         const removeListener = pushNotifications.addListener((notification) => {
             const data = notification.notification.data as NotificationData;
-            
-            // Mettre à jour l'état
+
             setState(prev => ({
                 ...prev,
                 lastNotification: data,
             }));
 
-            // Feedback haptique selon le type de notification (§9.1)
-            handleHapticFeedback(data);
-
-            // Appeler le callback approprié
-            handleNotification(data);
+            handleHapticFeedbackRef.current(data);
+            handleNotificationRef.current(data);
         });
 
         return () => {
@@ -226,6 +226,11 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
         onPaymentReceived,
         onAlert,
     ]);
+
+    useEffect(() => {
+        handleHapticFeedbackRef.current = handleHapticFeedback;
+        handleNotificationRef.current = handleNotification;
+    }, [handleHapticFeedback, handleNotification]);
 
     /**
      * Met à jour le statut du conducteur

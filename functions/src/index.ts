@@ -30,7 +30,8 @@ import {
   encryptSensitiveData as encryptData,
 } from './utils/encryption.js';
 import { createNotification } from './utils/notificationService.js';
-import { BankDetailsSchema, EncryptionRequestSchema } from './validators/schemas.js';
+import { BankDetailsSchema, EncryptionRequestSchema, CreateDriverProfileRequestSchema } from './validators/schemas.js';
+import { z } from 'zod';
 import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { hasRequiredFields } from './utils/validation.js';
 import * as crypto from 'crypto';
@@ -39,6 +40,7 @@ import { CloudTasksClient } from '@google-cloud/tasks';
 import { OAuth2Client } from 'google-auth-library';
 import { DELIVERY_SHARE_RATE } from './config/stripe.js';
 import { selectNearestDriver } from './utils/matching.js';
+import { enforceRateLimit } from './utils/rateLimiter.js';
 
 // Client OAuth utilisé pour la vérification des tokens OIDC émis par Cloud Tasks
 const oauthClient = new OAuth2Client();
@@ -80,46 +82,44 @@ class RateLimiter {
     const docRef = this.db.collection('rate_limits').doc(`${keyPrefix}_${identifier}`);
 
     try {
-      const doc = await docRef.get();
+      // Transaction atomique : read-check-write en une seule opération pour éviter
+      // la race condition entre get() et update() sous charge concurrente.
+      return await this.db.runTransaction<boolean>(async (tx) => {
+        const doc = await tx.get(docRef);
 
-      if (!doc.exists) {
-        // Première requête
-        await docRef.set({
-          count: 1,
-          windowStart: now,
-          lastReset: now,
+        if (!doc.exists) {
+          tx.set(docRef, {
+            count: 1,
+            windowStart: now,
+            lastReset: now,
+          });
+          return true;
+        }
+
+        const data = doc.data()!;
+        const timeSinceReset = now - (data.lastReset || 0);
+
+        if (timeSinceReset >= this.windowMs) {
+          tx.update(docRef, {
+            count: 1,
+            lastReset: now,
+            windowStart: now,
+          });
+          return true;
+        }
+
+        if (data.count >= this.maxRequests) {
+          return false;
+        }
+
+        tx.update(docRef, {
+          count: admin.firestore.FieldValue.increment(1),
         });
         return true;
-      }
-
-      const data = doc.data()!;
-      const timeSinceReset = now - (data.lastReset || 0);
-
-      // Réinitialiser si la fenêtre est expirée
-      if (timeSinceReset >= this.windowMs) {
-        await docRef.update({
-          count: 1,
-          lastReset: now,
-          windowStart: now,
-        });
-        return true;
-      }
-
-      // Vérifier si la limite est atteinte
-      if (data.count >= this.maxRequests) {
-        return false;
-      }
-
-      // Incrémenter le compteur
-      await docRef.update({
-        count: admin.firestore.FieldValue.increment(1),
       });
-
-      return true;
     } catch (error) {
       console.error('Erreur Rate Limiter:', error);
-      // En cas d'erreur, bloquer la requête (fail-secure) pour éviter les abus
-      // Si le rate limiter est en panne, il vaut mieux bloquer que de permettre des abus
+      // Fail-secure : bloquer la requête si le rate limiter est en panne
       return false;
     }
   }
@@ -172,10 +172,11 @@ export const validateBankDetails = onCall(
     }
 
     const data = request.data;
+    // RGPD : ne pas logger les PII bancaires (accountHolder, BIC) ni l'IBAN même partiel
     console.log(`[validateBankDetails] Validation request from ${identifier}:`, {
-      accountHolder: data.accountHolder,
-      iban: data.iban ? `${data.iban.substring(0, 8)}...` : 'missing',
-      bic: data.bic
+      hasAccountHolder: Boolean(data.accountHolder),
+      hasIban: Boolean(data.iban),
+      hasBic: Boolean(data.bic),
     });
 
     // Validation Zod
@@ -297,17 +298,24 @@ export const createDriverProfile = onCall(
       throw new HttpsError('resource-exhausted', 'Trop de tentatives. Réessayez dans une minute.');
     }
 
-    const payload = request.data as {
-      driverId?: string;
-      driverData?: Record<string, unknown>;
-    };
-
-    if (!payload?.driverId || typeof payload.driverId !== 'string') {
-      throw new HttpsError('invalid-argument', 'driverId manquant ou invalide.');
-    }
-
-    if (!payload.driverData || typeof payload.driverData !== 'object') {
-      throw new HttpsError('invalid-argument', 'driverData manquant ou invalide.');
+    // Validation stricte de l'enveloppe via Zod (SEC-V01).
+    // Le schéma `.strict()` rejette automatiquement toute clé inconnue,
+    // y compris les champs RGPD #C2 interdits à la racine
+    // (ssn/bank/dob/nationality/address/idNumber/documents).
+    let payload;
+    try {
+      payload = CreateDriverProfileRequestSchema.parse(request.data);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        // Log détaillé côté serveur uniquement pour éviter de divulguer
+        // la structure du schéma à un attaquant.
+        console.warn('[createDriverProfile] Validation Zod échouée', {
+          uid: request.auth.uid,
+          issues: err.issues,
+        });
+        throw new HttpsError('invalid-argument', 'Données de profil chauffeur invalides.');
+      }
+      throw err;
     }
 
     if (request.auth.uid !== payload.driverId) {
@@ -317,41 +325,21 @@ export const createDriverProfile = onCall(
     const authEmail = request.auth.token.email as string | undefined;
     const driverData = payload.driverData;
 
-    if (!driverData.email) {
-      throw new HttpsError('invalid-argument', 'Email manquant dans les données du chauffeur.');
-    }
     if (authEmail && driverData.email !== authEmail) {
       throw new HttpsError('permission-denied', 'Email mismatch: L\'email fourni ne correspond pas à l\'email authentifié.');
     }
-
 
     if (driverData.phoneNumber != null) {
       throw new HttpsError('failed-precondition', 'phoneNumber doit être null.');
     }
 
-    if (driverData.userType !== 'chauffeur') {
-      throw new HttpsError('failed-precondition', 'userType invalide.');
-    }
-
-    // Valider driverType (nouveau) — userType reste toujours 'chauffeur'
-    const validDriverTypes = ['chauffeur', 'livreur', 'les_deux']
-    if (!validDriverTypes.includes(driverData.driverType as string)) {
-      throw new HttpsError('failed-precondition', 'driverType invalide. Valeurs acceptées: chauffeur, livreur, les_deux.')
-    }
-
     // ⚠️ CORRECTION : year < 2010 rejette les anciens véhicules (pas > 2010 !)
     if (
       (driverData.driverType === 'chauffeur' || driverData.driverType === 'les_deux') &&
-      (driverData.car as Record<string, unknown> | undefined)?.year != null &&
-      Number((driverData.car as Record<string, unknown>).year) < 2010   // REJETER si ANTÉRIEUR à 2010
+      driverData.car?.year != null &&
+      Number(driverData.car.year) < 2010
     ) {
       throw new HttpsError('failed-precondition', 'Véhicule trop ancien. Année minimale: 2010.')
-    }
-
-    const allowedStatuses = ['pending', 'action_required', 'rejected'];
-    const status = driverData.status as string | undefined;
-    if (!status || !allowedStatuses.includes(status)) {
-      throw new HttpsError('failed-precondition', `status invalide. Attendu: ${allowedStatuses.join(', ')}, Reçu: ${status}`);
     }
 
     // RGPD #C2 : dob/nationality/address/ssn/bank/documents ne sont plus
@@ -367,14 +355,6 @@ export const createDriverProfile = onCall(
 
     if (!hasRequiredFields(driverData, requiredFields)) {
       throw new HttpsError('failed-precondition', 'Champs requis manquants.');
-    }
-
-    // Ces champs ne devraient plus être présents mais si jamais legacy,
-    // refuser pour éviter de repolluer le doc racine.
-    for (const forbidden of ['ssn', 'bank', 'dob', 'nationality', 'address', 'idNumber', 'documents']) {
-      if (forbidden in driverData) {
-        throw new HttpsError('failed-precondition', `Champ '${forbidden}' interdit à la racine (RGPD #C2). Utiliser drivers/{uid}/private/personal.`)
-      }
     }
 
     const driverRef = admin.firestore().collection('drivers').doc(payload.driverId);
@@ -490,17 +470,19 @@ export const cleanupFailedUploads = onCall(
       );
     }
 
-    const data = request.data as {
-      fileUrls?: string[];
-    };
+    // Rate limit: cleanup is an I/O-heavy admin-ish operation; normal users
+    // call it at most a handful of times after a failed signup.
+    await enforceRateLimit({
+      identifier: request.auth.uid,
+      bucket: 'cleanup:failedUploads',
+      limit: 10,
+      windowSec: 60,
+    });
 
-    // Vérifier que les données requises sont présentes
-    if (!data.fileUrls || !Array.isArray(data.fileUrls) || data.fileUrls.length === 0) {
-      throw new HttpsError(
-        'invalid-argument',
-        'Aucun fichier à nettoyer.'
-      );
-    }
+    const cleanupSchema = z.object({
+      fileUrls: z.array(z.string().url()).min(1)
+    });
+    const data = cleanupSchema.parse(request.data);
 
     let deletedCount = 0;
     const errors: string[] = [];
@@ -511,8 +493,15 @@ export const cleanupFailedUploads = onCall(
         // Extraire le chemin du fichier depuis l'URL
         // Format: https://firebasestorage.googleapis.com/v0/b/bucket/o/drivers%2FuserId%2F...
         const url = new URL(fileUrl);
+
+        // Empêcher SSRF : n'accepter que l'hostname Firebase Storage officiel.
+        if (url.hostname !== 'firebasestorage.googleapis.com') {
+          errors.push(`Hôte non autorisé: ${url.hostname}`);
+          continue;
+        }
+
         const pathMatch = url.pathname.match(/\/o\/(.+)(?:\?|$)/);
-        
+
         if (!pathMatch) {
           errors.push(`URL invalide: ${fileUrl}`);
           continue;
@@ -1344,7 +1333,11 @@ export const logPinFailure = onCall(
     const uid = request.auth?.uid
     if (!uid) throw new HttpsError('unauthenticated', 'Vous devez être connecté.')
 
-    const { orderId, clientPhone } = request.data as { orderId: string; clientPhone: string }
+    const pinFailureSchema = z.object({
+      orderId: z.string().min(1),
+      clientPhone: z.string().min(1)
+    });
+    const { orderId, clientPhone } = pinFailureSchema.parse(request.data);
 
     // Rate limiting persistant via Firestore (résiste aux cold starts et multi-instances)
     const db = admin.firestore()
@@ -1536,6 +1529,15 @@ async function manageTopicSubscription(
     throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
   }
 
+  // Rate limit topic churn — 30 subscribe+unsubscribe ops/min per user is
+  // generous for legitimate reconnects but blocks enumeration / spam.
+  await enforceRateLimit({
+    identifier: request.auth.uid,
+    bucket: `fcm:topic:${operation}`,
+    limit: 30,
+    windowSec: 60,
+  });
+
   const { topic, token } = request.data as { topic?: string; token?: string };
 
   if (!topic || typeof topic !== 'string') {
@@ -1587,6 +1589,15 @@ export const sendVerificationCode = onCall(
 
     const uid = request.auth.uid;
     const tokenEmail = request.auth.token.email;
+
+    // Rate limit: verification codes cost money (Resend) and are a common
+    // spam/abuse vector. 5/hour is ample for a legitimate re-send flow.
+    await enforceRateLimit({
+      identifier: uid,
+      bucket: 'email:sendVerificationCode',
+      limit: 5,
+      windowSec: 60 * 60,
+    });
 
     const { email } = request.data as { email?: string };
     if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -1675,6 +1686,15 @@ export const verifyCode = onCall(
 
     const uid = request.auth.uid;
 
+    // Rate limit: brute-force guard on top of the per-code 3-attempts limit.
+    // 20/hour per uid stops guessing a freshly-issued code across resends.
+    await enforceRateLimit({
+      identifier: uid,
+      bucket: 'email:verifyCode',
+      limit: 20,
+      windowSec: 60 * 60,
+    });
+
     const { code } = request.data as { code?: string };
     if (!code || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
       throw new HttpsError('invalid-argument', 'Le code doit contenir exactement 6 chiffres.');
@@ -1712,7 +1732,10 @@ export const verifyCode = onCall(
       )
     );
 
-    if (hashedSubmitted !== data.code) {
+    if (
+      hashedSubmitted.length !== data.code.length ||
+      !crypto.timingSafeEqual(Buffer.from(hashedSubmitted, 'hex'), Buffer.from(data.code, 'hex'))
+    ) {
       const newAttempts = attempts + 1;
       if (newAttempts >= 3) {
         await docRef.delete();
@@ -1748,4 +1771,18 @@ export const verifyCode = onCall(
 );
 
 export { stripeWebhookInstant, stripeWebhookLight, createSetupIntent } from './stripe/index.js';
+
+// RGPD Article 17 — Droit à l'oubli
+export {
+  requestAccountDeletion,
+  adminForceAccountDeletion,
+} from './gdpr/deleteAccount.js';
+
+// Anonymisation des locations / suppression RTDB au delete Auth (déjà existants)
+export {
+  anonymizeDriverData,
+  deleteDriverOnAccountDelete,
+  scheduleTripDataAnonymization,
+  processAnonymizationTasks,
+} from './anonymizeDriverData.js';
 export { resendWebhook } from './emails/resend-webhook.js';

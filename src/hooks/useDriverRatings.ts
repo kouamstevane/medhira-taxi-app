@@ -1,8 +1,9 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type { DriverRating } from '@/types/firestore-collections'
+import { getTimestamp } from '@/utils/distance'
 
 type PeriodFilter = '7days' | '30days' | 'all'
 
@@ -25,7 +26,7 @@ export function useDriverRatings(uid: string, period: PeriodFilter = 'all') {
                        period === '30days' ? 30 * 86400000 : Infinity
       const allRatings = snap.docs.map(d => ({ ratingId: d.id, ...d.data() } as DriverRating))
       const filtered = msFilter === Infinity ? allRatings : allRatings.filter(r => {
-        const ts = (r.createdAt as unknown as { toMillis?: () => number }).toMillis?.() ?? 0
+        const ts = getTimestamp(r.createdAt)
         return (now - ts) < msFilter
       })
       setRatings(filtered)
@@ -38,9 +39,10 @@ export function useDriverRatings(uid: string, period: PeriodFilter = 'all') {
     return () => unsub()
   }, [uid, period])
 
-  const avgScore = ratings.length > 0
-    ? ratings.reduce((s, r) => s + r.score, 0) / ratings.length
-    : null
+  const avgScore = useMemo(
+    () => (ratings.length > 0 ? ratings.reduce((s, r) => s + r.score, 0) / ratings.length : null),
+    [ratings]
+  )
 
   return { ratings, avgScore, loading, error }
 }

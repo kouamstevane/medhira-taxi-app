@@ -170,9 +170,14 @@ export const signInWithGoogle = async (
     try {
       console.log('[AuthService] Initialisation SocialLogin natif');
 
+      const webClientId = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+      if (!webClientId) {
+        throw new Error('NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID non configuré');
+      }
+
       await SocialLogin.initialize({
         google: {
-          webClientId: process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID || '113581657187-6ks0rjk23dah979ngued5pjpe638fq85.apps.googleusercontent.com',
+          webClientId,
           mode: 'online',
         },
       });

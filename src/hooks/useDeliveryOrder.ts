@@ -1,6 +1,6 @@
 // src/hooks/useDeliveryOrder.ts
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { getDatabase, ref as rtdbRef, set } from 'firebase/database'
@@ -21,6 +21,10 @@ export function useDeliveryOrder(orderId: string) {
   const [order, setOrder] = useState<FoodDeliveryOrder | null>(null)
   const [loading, setLoading] = useState(true)
   const [localStatus, setLocalStatus] = useState<DeliveryStatus | null>(null)
+  // Miroir du statut utilisé par updateStatus pour capturer l'état courant sans dépendre
+  // de la closure (évite rollback incorrect si 2 appels rapides se suivent).
+  const localStatusRef = useRef<DeliveryStatus | null>(null)
+  useEffect(() => { localStatusRef.current = localStatus }, [localStatus])
   const gpsWatchIdRef = useRef<number | null>(null)
   const lastEmitTimeRef = useRef<number>(0)
 
@@ -63,6 +67,8 @@ export function useDeliveryOrder(orderId: string) {
             heading: position.coords.heading ?? 0,
             speed,
             updatedAt: now,
+          }).catch((err) => {
+            console.error('[useDeliveryOrder] RTDB location write failed:', err)
           })
         },
         (error) => {
@@ -85,7 +91,7 @@ export function useDeliveryOrder(orderId: string) {
 
   // Optimistic UI
   const updateStatus = useCallback(async (status: DeliveryStatus) => {
-    const previousStatus = localStatus
+    const previousStatus = localStatusRef.current
     setLocalStatus(status)
     try {
       await updateDoc(doc(db, 'food_delivery_orders', orderId), {
@@ -96,20 +102,32 @@ export function useDeliveryOrder(orderId: string) {
       setLocalStatus(previousStatus)
       throw new Error('Erreur de connexion — réessayez')
     }
-  }, [orderId, localStatus])
+  }, [orderId])
 
   const refuseOrder = useCallback(async () => {
-    await updateDoc(doc(db, 'food_delivery_orders', orderId), {
-      status: 'refused' as DeliveryStatus,
-      updatedAt: serverTimestamp(),
-    })
+    try {
+      await updateDoc(doc(db, 'food_delivery_orders', orderId), {
+        status: 'refused' as DeliveryStatus,
+        updatedAt: serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('[useDeliveryOrder] refuseOrder failed:', err)
+      setError('Erreur de connexion — réessayez')
+      throw new Error('Erreur de connexion — réessayez')
+    }
   }, [orderId])
 
   const confirmPickup = useCallback(async () => {
-    await updateDoc(doc(db, 'food_delivery_orders', orderId), {
-      status: 'picked_up' as DeliveryStatus,
-      updatedAt: serverTimestamp(),
-    })
+    try {
+      await updateDoc(doc(db, 'food_delivery_orders', orderId), {
+        status: 'picked_up' as DeliveryStatus,
+        updatedAt: serverTimestamp(),
+      })
+    } catch (err) {
+      console.error('[useDeliveryOrder] confirmPickup failed:', err)
+      setError('Erreur de connexion — réessayez')
+      throw new Error('Erreur de connexion — réessayez')
+    }
   }, [orderId])
 
   const uploadProofPhoto = useCallback(async (file: File): Promise<string> => {
@@ -131,7 +149,13 @@ export function useDeliveryOrder(orderId: string) {
       updatedAt: serverTimestamp(),
     }
     if (method === 'photo') update.proofPhotoUrl = payload
-    await updateDoc(doc(db, 'food_delivery_orders', orderId), update)
+    try {
+      await updateDoc(doc(db, 'food_delivery_orders', orderId), update)
+    } catch (err) {
+      console.error('[useDeliveryOrder] confirmDelivery failed:', err)
+      setError('Erreur de connexion — réessayez')
+      throw new Error('Erreur de connexion — réessayez')
+    }
   }, [orderId])
 
   const reportNotReady = useCallback(async () => {
@@ -139,16 +163,23 @@ export function useDeliveryOrder(orderId: string) {
     if (!order?.restaurantWaitingStartedAt) {
       updates.restaurantWaitingStartedAt = serverTimestamp()
     }
-    await updateDoc(doc(db, 'food_delivery_orders', orderId), updates)
+    try {
+      await updateDoc(doc(db, 'food_delivery_orders', orderId), updates)
+    } catch (err) {
+      console.error('[useDeliveryOrder] reportNotReady failed:', err)
+      setError('Erreur de connexion — réessayez')
+      throw new Error('Erreur de connexion — réessayez')
+    }
   }, [orderId, order])
 
   const localValidatePin = useCallback((pin: string): boolean => {
     return order?.pinCode != null ? validatePin(order.pinCode, pin) : false
   }, [order])
 
-  const effectiveOrder = order
-    ? { ...order, status: localStatus ?? order.status }
-    : null
+  const effectiveOrder = useMemo(
+    () => (order ? { ...order, status: localStatus ?? order.status } : null),
+    [order, localStatus]
+  )
 
   return {
     order: effectiveOrder,

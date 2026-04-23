@@ -31,6 +31,28 @@ import * as admin from 'firebase-admin';
 import { auditLoggingService, AuditLogLevel, AuditEventType } from '@/services/audit-logging.service';
 
 /**
+ * RGPD SEC-G02 — statuts considérés comme "terminés" et soumis à l'obligation
+ * comptable de conservation (~10 ans). On anonymise ces documents au lieu de
+ * les supprimer, pour préserver les pièces justificatives (IDs, montants, dates)
+ * tout en retirant les PII (nom, téléphone, adresses).
+ */
+const COMPLETED_STATUSES = [
+  'completed',
+  'delivered',
+  'cancelled',
+  'cancelled_by_restaurant',
+  'failed',
+];
+
+const ANON_SENTINEL = {
+  uid: 'ANONYMIZED_USER',
+  name: 'Utilisateur supprimé',
+  phone: '+00000000000',
+  address: 'Adresse anonymisée',
+  email: 'anonymized@deleted.local',
+};
+
+/**
  * Résultat de la suppression d'un chauffeur
  */
 export interface DriverDeletionResult {
@@ -106,19 +128,19 @@ class DriverDeletionService {
       await this.deleteVehicles(driverId, stats);
       console.log(` Véhicules associés supprimés`);
 
-      // 5. Supprimer les transactions du chauffeur
-      await this.deleteCollectionByField('transactions', 'driverId', driverId, stats);
-      console.log(` Transactions du chauffeur supprimées`);
+      // 5. ANONYMISER les transactions du chauffeur (obligation comptable ~10 ans)
+      await this.anonymizeCompletedByField('transactions', 'driverId', driverId, stats, false);
+      console.log(` Transactions du chauffeur anonymisées`);
 
-      // 6. Supprimer les réservations du chauffeur
-      await this.deleteCollectionByField('bookings', 'driverId', driverId, stats);
-      console.log(` Réservations du chauffeur supprimées`);
+      // 6. ANONYMISER les réservations terminées (SEC-G02 : conserver pour comptabilité)
+      await this.anonymizeCompletedByField('bookings', 'driverId', driverId, stats, true);
+      console.log(` Réservations terminées anonymisées`);
 
-      // 7. Supprimer les livraisons du chauffeur
-      await this.deleteCollectionByField('parcels', 'driverId', driverId, stats);
-      console.log(` Livraisons du chauffeur supprimées`);
+      // 7. ANONYMISER les livraisons terminées
+      await this.anonymizeCompletedByField('parcels', 'driverId', driverId, stats, true);
+      console.log(` Livraisons terminées anonymisées`);
 
-      // 8. Supprimer les courses actives
+      // 8. Supprimer les courses actives (temporaires, non soumises à conservation)
       await this.deleteCollectionByField('active_bookings', 'driverId', driverId, stats);
       console.log(` Courses actives supprimées`);
 
@@ -247,6 +269,87 @@ class DriverDeletionService {
       const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
       stats.errors.push(`${collectionName} (${fieldName}=${value}): ${errorMessage}`);
       console.warn(` Erreur suppression collection ${collectionName}:`, error);
+    }
+  }
+
+  /**
+   * RGPD SEC-G02 — anonymise (UPDATE, pas DELETE) les documents d'une collection
+   * où un champ correspond au driverId. Remplace les PII (nom, phone, adresses)
+   * par des sentinelles mais préserve IDs/montants/dates pour la comptabilité.
+   *
+   * @param onlyCompleted - Si true, ne traite que les docs en statut terminé.
+   */
+  private async anonymizeCompletedByField(
+    collectionName: string,
+    fieldName: string,
+    value: string,
+    stats: DeletionStats,
+    onlyCompleted: boolean,
+  ): Promise<void> {
+    try {
+      let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
+      let hasMore = true;
+
+      while (hasMore) {
+        let query: admin.firestore.Query = this.db
+          .collection(collectionName)
+          .where(fieldName, '==', value);
+
+        if (onlyCompleted) {
+          query = query.where('status', 'in', COMPLETED_STATUSES);
+        }
+
+        query = query.limit(this.MAX_BATCH_SIZE);
+        if (lastDoc) query = query.startAfter(lastDoc);
+
+        const snapshot = await query.get();
+        if (snapshot.empty) break;
+
+        const batch = this.db.batch();
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          const update: Record<string, unknown> = {
+            gdprAnonymized: true,
+            gdprAnonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
+          };
+          // Remplacer les FK PII seulement si elles ciblent l'uid supprimé
+          if (data.driverId === value) update.driverId = ANON_SENTINEL.uid;
+          if (data.userId === value) update.userId = ANON_SENTINEL.uid;
+          if (data.clientId === value) update.clientId = ANON_SENTINEL.uid;
+          if (data.senderId === value) update.senderId = ANON_SENTINEL.uid;
+          if (data.receiverId === value) update.receiverId = ANON_SENTINEL.uid;
+
+          // Champs PII embarqués
+          if (data.customerName !== undefined) update.customerName = ANON_SENTINEL.name;
+          if (data.customerEmail !== undefined) update.customerEmail = ANON_SENTINEL.email;
+          if (data.customerPhone !== undefined) update.customerPhone = ANON_SENTINEL.phone;
+          if (data.clientName !== undefined) update.clientName = ANON_SENTINEL.name;
+          if (data.clientPhone !== undefined) update.clientPhone = ANON_SENTINEL.phone;
+          if (data.driverName !== undefined) update.driverName = ANON_SENTINEL.name;
+          if (data.driverPhone !== undefined) update.driverPhone = ANON_SENTINEL.phone;
+          if (data.pickupAddress !== undefined) update.pickupAddress = ANON_SENTINEL.address;
+          if (data.dropoffAddress !== undefined) update.dropoffAddress = ANON_SENTINEL.address;
+          if (data.deliveryAddress !== undefined) update.deliveryAddress = ANON_SENTINEL.address;
+          if (data.pickup && typeof data.pickup === 'object' && 'address' in data.pickup) {
+            update['pickup.address'] = ANON_SENTINEL.address;
+          }
+          if (data.dropoff && typeof data.dropoff === 'object' && 'address' in data.dropoff) {
+            update['dropoff.address'] = ANON_SENTINEL.address;
+          }
+
+          batch.update(docSnap.ref, update);
+          lastDoc = docSnap;
+        }
+
+        await batch.commit();
+        this.incrementCollectionStat(`${collectionName}:anonymized`, stats, snapshot.docs.length);
+
+        if (snapshot.docs.length < this.MAX_BATCH_SIZE) hasMore = false;
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      stats.errors.push(`anonymize ${collectionName} (${fieldName}=${value}): ${errorMessage}`);
+      console.warn(` Erreur anonymisation ${collectionName}:`, error);
     }
   }
 
