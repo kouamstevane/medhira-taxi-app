@@ -1,0 +1,20 @@
+/**
+ * Export centralisé des composants UI
+ * 
+ * Permet d'importer plusieurs composants depuis un seul point d'entrée
+ * Exemple: import { Button, Alert, LoadingSpinner } from '@/components/ui'
+ */
+
+export { Button } from './Button';
+
+export { LoadingSpinner } from './LoadingSpinner';
+
+export { Alert } from './Alert';
+export type { AlertType } from './Alert';
+
+export { MapView } from './MapView';
+export { MapFallback } from './MapFallback';
+
+export { FloatingActionButton } from './FloatingActionButton';
+
+export { WalletPreview } from './WalletPreview';

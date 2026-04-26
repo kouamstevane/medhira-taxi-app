@@ -1,0 +1,99 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace "com.medjiraservice.medjiraserviceapp"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.medjiraservice.medjiraserviceapp"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        resConfigs 'fr', 'en'
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    
+    // Configuration pour générer des APK séparés par architecture (réduit la taille de ~40%)
+    splits {
+        abi {
+            enable true
+            reset()
+            include 'arm64-v8a', 'armeabi-v7a'
+            universalApk false
+        }
+    }
+    
+    buildTypes {
+        release {
+            // Activer la minification du code (R8)
+            minifyEnabled true
+            // Activer le shrinking des ressources inutilisées
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            crunchPngs true
+        }
+        debug {
+            // En mode debug, désactiver les optimisations pour éviter les problèmes d'installation
+            minifyEnabled false
+            shrinkResources false
+            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds true
+    }
+}
+
+// BLOC SUPPRIMÉ : Le dépôt flatDir a été déplacé vers settings.gradle
+
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
+    implementation 'com.google.firebase:firebase-database:21.0.0'
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+    
+    // Agora RTC SDK pour appels VoIP
+    implementation 'io.agora.rtc:voice-sdk:4.2.0'
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Force les versions AndroidX pour éviter les conflits de dépendances
+// entre Capacitor, Firebase Authentication et les plugins natifs
+// - androidx.core:core-ktx/core 1.15.0 : cohérent avec variables.gradle
+// - androidx.browser:browser 1.8.0 : requis pour Chrome Custom Tabs (OAuth)
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.core:core-ktx:1.15.0'
+        force 'androidx.core:core:1.15.0'
+        force 'androidx.browser:browser:1.8.0'
+    }
+}

@@ -1,343 +1,478 @@
+/**
+ * Page Dashboard - Tableau de bord utilisateur
+ * 
+ * Affiche les services disponibles, l'historique des commandes,
+ * et les informations utilisateur. Page protégée nécessitant l'authentification.
+ * 
+ * @page
+ */
+
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { auth, db } from "../lib/firebase";
+import Link from "next/link";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
+import { auth, db } from "@/config/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { notificationService } from '@/services/notification.service';
+import { FoodDeliveryService } from '@/services/food-delivery.service';
+import type { Restaurant } from '@/types';
+import { formatCurrencyWithCode } from '@/utils/format';
+import { DEFAULT_URLS } from '@/utils/constants';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { BottomNav } from '@/components/ui/BottomNav';
+import { redirectWithFallback } from '@/utils/navigation';
 
 export default function Dashboard() {
   const router = useRouter();
-  const [notifCount, setNotifCount] = useState(2);
-  const [userData, setUserData] = useState({
+  const routerRef = useRef(router);
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  routerRef.current = router;
+  const [notifCount, setNotifCount] = useState(0);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true); // État de chargement de l'auth
+  const [history, setHistory] = useState<Array<{
+    id: string;
+    type: string;
+    destination?: string;
+    receiverAddress?: string;
+    description?: string;
+    status: string;
+    createdAt: { seconds: number; toMillis: () => number };
+    price?: number;
+    amount?: number;
+  }>>([]);
+  const [userData, setUserData] = useState<{
+    phoneNumber: string;
+    firstName: string;
+    lastName: string;
+    profileImageUrl: string;
+    userType: 'client' | 'chauffeur' | 'restaurateur';
+  }>({
     phoneNumber: "",
     firstName: "",
     lastName: "",
-    photoURL: "/images/default.png",
-    userType: "client" // 'client' ou 'chauffeur'
+    profileImageUrl: DEFAULT_URLS.DEFAULT_AVATAR,
+    userType: "client"
   });
+  const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
+  const [isRestaurantLoading, setIsRestaurantLoading] = useState(false);
+  const unsubscribeNotifsRef = useRef<(() => void) | null>(null);
+
+  const fetchHistory = async (userId: string) => {
+    try {
+      // Obtenir la date du début de la journée (00:00:00)
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      
+      const bookingsQuery = query(
+        collection(db, 'bookings'),
+        where('userId', '==', userId),
+        where('createdAt', '>=', Timestamp.fromDate(todayStart)),
+        orderBy('createdAt', 'desc'),
+        limit(2)
+      );
+      const parcelsQuery = query(
+        collection(db, 'parcels'),
+        where('senderId', '==', userId),
+        where('createdAt', '>=', Timestamp.fromDate(todayStart)),
+        orderBy('createdAt', 'desc'),
+        limit(2)
+      );
+
+      const [bookingsSnapshot, parcelsSnapshot] = await Promise.all([
+        getDocs(bookingsQuery),
+        getDocs(parcelsQuery),
+      ]);
+
+      const bookings = bookingsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'Taxi',
+          destination: data.destination,
+          receiverAddress: data.receiverAddress,
+          description: data.description,
+          status: data.status,
+          createdAt: data.createdAt,
+          price: data.price,
+          amount: data.amount
+        };
+      });
+
+      const parcels = parcelsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: 'Livraison',
+          destination: data.destination,
+          receiverAddress: data.receiverAddress,
+          description: data.description,
+          status: data.status,
+          createdAt: data.createdAt,
+          price: data.price,
+          amount: data.amount
+        };
+      });
+
+      const combinedHistory = [...bookings, ...parcels].sort((a, b) => {
+        if (a.createdAt && b.createdAt) {
+          return b.createdAt.toMillis() - a.createdAt.toMillis();
+        }
+        return 0;
+      });
+
+      setHistory(combinedHistory.slice(0, 2));
+    } catch (error) {
+      console.error("Erreur chargement historique:", error);
+      // Ne pas bloquer l'affichage du dashboard si l'historique échoue
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
+        // Lire en parallèle : profil utilisateur, doc chauffeur
+        // (la lecture 'admins' est isolée car protégée par les rules et lèverait permission-denied pour les non-admins)
+        const [userDoc, driverDoc] = await Promise.all([
+          getDoc(doc(db, "users", user.uid)),
+          getDoc(doc(db, 'drivers', user.uid)),
+        ]);
+
         const userDataFromDB = userDoc.exists() ? userDoc.data() : {};
+
+        // Vérifier si l'utilisateur a un moyen de paiement configuré
+        setHasPaymentMethod(!!userDataFromDB.defaultPaymentMethodId);
 
         setUserData(prev => ({
           ...prev,
           phoneNumber: user.phoneNumber || "",
           firstName: userDataFromDB.firstName || "",
           lastName: userDataFromDB.lastName || "",
-          photoURL: userDataFromDB.profileImageUrl || user.photoURL || "/images/default.png",
+          profileImageUrl: userDataFromDB.profileImageUrl || user.photoURL || DEFAULT_URLS.DEFAULT_AVATAR,
           userType: userDataFromDB.userType || "client"
         }));
+
+        // Si restaurateur, charger les infos du restaurant
+        if (userDataFromDB.userType === 'restaurateur') {
+          setIsRestaurantLoading(true);
+          FoodDeliveryService.getRestaurantByOwner(user.uid)
+            .then(setRestaurantData)
+            .catch((error) => console.error("Erreur chargement restaurant:", error))
+            .finally(() => setIsRestaurantLoading(false));
+        }
+
+        // Charger l'historique des commandes
+        fetchHistory(user.uid);
+
+        // Vérifier si l'utilisateur est aussi chauffeur
+        if (driverDoc.exists() && driverDoc.data().status === 'approved') {
+          setUserData(prev => ({ ...prev, userType: 'chauffeur' }));
+        }
+
+        // Vérifier si l'utilisateur est admin (protégé : permission-denied attendu pour les non-admins)
+        try {
+          const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+          setIsAdmin(adminDoc.exists());
+        } catch {
+          setIsAdmin(false);
+        }
+
+        // Écouter les notifications non lues via le service isolé
+        unsubscribeNotifsRef.current?.();
+        unsubscribeNotifsRef.current = notificationService.listenUnreadCount(user.uid, setNotifCount);
+
+        // Authentification terminée
+        setIsAuthLoading(false);
       } else {
-        router.push("/login");
+        // Pas d'utilisateur connecté - confirmer et rediriger
+        setIsAuthLoading(false);
+        redirectTimeoutRef.current = redirectWithFallback(routerRef.current, '/login');
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      unsubscribeNotifsRef.current?.();
+      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const logout = async () => {
     try {
       await signOut(auth);
-      router.push("/login");
+      redirectTimeoutRef.current = redirectWithFallback(router, '/login', { timeoutMs: 2000 });
     } catch (error) {
       console.error("Erreur de déconnexion :", error);
-      alert("Erreur lors de la déconnexion");
+      window.location.replace('/login');
     }
   };
 
   const handleNotifications = () => {
-    alert("Voir les notifications");
-    setNotifCount(0);
+    router.push("/notifications");
   };
 
+  // Loading screen
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="relative w-24 h-24 mx-auto mb-8">
+            <div className="absolute inset-0 bg-primary rounded-full opacity-20 animate-ping" />
+            <div className="relative w-24 h-24 bg-primary rounded-full flex items-center justify-center shadow-2xl animate-pulse">
+              <MaterialIcon name="local_taxi" className="text-white text-[40px]" />
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Medjira</h2>
+          <p className="text-muted-foreground animate-pulse">Redirection...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const initials = `${userData.firstName?.[0] || ''}${userData.lastName?.[0] || ''}`.toUpperCase() || 'U';
+
   return (
-    <div className="min-h-screen bg-[#e6e6e6]">
-      {/* Entête fixe */}
-      <header className="bg-[#101010] text-white flex items-center justify-between px-4 sm:px-6 py-3 sticky top-0 z-50 shadow-lg border-b border-[#333]">
-        <h1 className="text-xl sm:text-2xl font-bold flex items-center">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-7 w-7 mr-2 text-[#f29200]"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="12" cy="12" r="3" />
-            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-          </svg>
-          Medjira Service
-        </h1>
-
-        <div className="flex items-center space-x-2 sm:space-x-4">
-          {/* Notifications */}
-          <button
-            onClick={handleNotifications}
-            className="relative p-2 rounded-full hover:bg-[#333] transition duration-200 group"
-            aria-label="Notifications"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6 text-white group-hover:text-[#f29200] transition"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.6 0 00-9.33-5.032"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13.73 21a2 2 0 01-3.46 0"
-              />
-            </svg>
-            {notifCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center animate-pulse">
-                {notifCount}
-              </span>
-            )}
-          </button>
-
-          {/* Profil avec menu déroulant */}
-          <div className="relative group">
-            <button className="flex items-center space-x-2 focus:outline-none">
-              <img
-                src={userData.photoURL}
+    <div className="min-h-screen bg-background text-slate-100 font-sans flex flex-col">
+      {/* Header */}
+      <header className="sticky top-0 z-50 px-4 pt-6 pb-4 bg-background/80 backdrop-blur-md">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {userData.profileImageUrl && userData.profileImageUrl !== DEFAULT_URLS.DEFAULT_AVATAR ? (
+              <Image
+                src={userData.profileImageUrl}
                 alt="Profil"
-                className="w-9 h-9 rounded-full object-cover border-2 border-[#f29200] shadow-sm"
+                width={40}
+                height={40}
+                className="size-10 rounded-full object-cover"
+                unoptimized={userData.profileImageUrl.includes('googleusercontent.com') || userData.profileImageUrl.startsWith('http')}
+                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_URLS.DEFAULT_AVATAR; }}
               />
-              <span className="hidden sm:inline text-sm font-medium text-white">{userData.firstName}</span>
+            ) : (
+              <div className="size-10 rounded-full bg-primary flex items-center justify-center text-background font-bold text-lg">
+                {initials}
+              </div>
+            )}
+            <h1 className="text-white text-[18px] font-bold tracking-tight">
+              Bonjour, {userData.firstName || 'Utilisateur'}
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Notifications */}
+            <button
+              onClick={handleNotifications}
+              className="relative p-2 bg-card rounded-full border border-white/5"
+              aria-label="Notifications"
+            >
+              <MaterialIcon name="notifications" size="md" className="text-slate-400 text-[22px]" />
+              {notifCount > 0 && (
+                <span className="absolute top-2 right-2 size-2 bg-primary rounded-full border border-background" />
+              )}
             </button>
 
-            {/* Menu déroulant */}
-            <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-xl py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <p className="font-semibold text-gray-900">{userData.firstName} {userData.lastName}</p>
-                <p className="text-xs text-gray-500 truncate">{userData.phoneNumber}</p>
-              </div>
+            {/* Wallet Badge */}
+            <Link
+              href="/wallet/historique"
+              className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-full"
+            >
+              <MaterialIcon name="account_balance_wallet" size="sm" className="text-primary text-[18px] font-bold" />
+              <span className="text-primary font-bold text-sm">Wallet</span>
+            </Link>
+
+            {/* Admin */}
+            {isAdmin && (
               <button
-                onClick={logout}
-                className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 transition"
+                onClick={() => router.push('/admin/drivers')}
+                className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-full"
+                aria-label="Administration"
               >
-                🔐 Déconnexion
+                <MaterialIcon name="admin_panel_settings" size="md" className="text-purple-400" />
               </button>
-            </div>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Contenu principal */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-        {/* Bannière de bienvenue */}
-        <div className="bg-gradient-to-br from-[#101010] via-[#1a1a1a] to-[#2a2a2a] text-white rounded-2xl p-6 mb-8 shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#f29200] opacity-10 rounded-full -translate-y-16 translate-x-16"></div>
-          <div className="relative flex flex-col sm:flex-row items-start">
-            <img
-              src={userData.photoURL}
-              alt="Profil"
-              className="w-20 h-20 rounded-full object-cover border-4 border-[#f29200] shadow-lg mb-4 sm:mb-0 sm:mr-6"
-            />
-            <div>
-              <h2 className="text-2xl sm:text-3xl font-bold mb-1">
-                👋 Bonjour, {userData.firstName}
-              </h2>
-              <p className="text-gray-300 text-sm mb-3">
-                Prêt à démarrer votre journée ?
-              </p>
-              <div className="space-y-2 text-sm">
-                <p className="flex items-center">
-                  <svg className="h-4 w-4 mr-2 text-[#f29200]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                  </svg>
-                  {userData.phoneNumber || "Non renseigné"}
-                </p>
-                <p className="flex items-center">
-                  <svg className="h-4 w-4 mr-2 text-[#f29200]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  <span className="font-medium">Statut :</span>
-                  <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-bold ${
-                    userData.userType === 'chauffeur'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-blue-100 text-blue-800'
-                  }`}>
-                    {userData.userType === 'chauffeur' ? 'Chauffeur' : 'Client'}
-                  </span>
-                </p>
+      {/* Main Content */}
+      <main className="flex-1 px-4 overflow-y-auto pb-32">
+        {/* Payment Setup Banner — uniquement pour les clients */}
+        {!isAuthLoading && !hasPaymentMethod && userData.userType === 'client' && (
+          <div
+            onClick={() => router.push('/auth/setup-payment')}
+            className="mt-2 mb-6 p-4 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/20 cursor-pointer active:scale-[0.98] transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                <MaterialIcon name="credit_card" className="text-primary text-xl" />
               </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
+                <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sécurité</p>
+              </div>
+              <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
             </div>
           </div>
+        )}
+
+        {/* Location Bar */}
+        <div className="mt-2 mb-8">
+          <GlassCard variant="elevated" className="flex items-center w-full h-14 px-4 gap-3">
+            <MaterialIcon name="location_on" className="text-primary" />
+            <span className="flex-1 text-slate-100 font-medium">Canada</span>
+            <MaterialIcon name="arrow_drop_down" className="text-slate-500" />
+          </GlassCard>
         </div>
 
-        {/* Services principaux */}
-        <section className="mb-8">
-          <h3 className="text-lg font-bold text-[#101010] mb-5 flex items-center">
-            <svg className="h-5 w-5 mr-2 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-              <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z" />
-            </svg>
-            Nos Services
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Taxi */}
-            <div
-              onClick={() => router.push("/taxi")}
-              className="group p-5 bg-white rounded-xl shadow-md hover:shadow-xl border border-gray-200 transition-all duration-300 cursor-pointer transform hover:-translate-y-1"
-            >
-              <div className="flex items-center">
-                <div className="w-14 h-14 bg-[#f29200] bg-opacity-10 rounded-full flex items-center justify-center mr-4 group-hover:scale-110 transition">
-                  <svg className="h-7 w-7 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                    <path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1a1 1 0 011-1h2a1 1 0 011 1v1a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1V5a1 1 0 00-1-1H3z" />
-                  </svg>
+        {/* Service Grid */}
+        <section className="mb-6">
+          <h2 className="text-white text-[20px] font-bold mb-4 px-1 tracking-tight">Que voulez-vous faire ?</h2>
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { icon: 'local_taxi', label: 'Réserver un taxi', sub: 'Dispo maintenant', subColor: 'text-emerald-500', route: '/taxi', highlight: true },
+              { icon: 'lunch_dining', label: 'Commander', sub: 'Restaurants', subColor: 'text-slate-400', route: '/food' },
+              { icon: 'package_2', label: 'Envoyer un colis', sub: 'Livraison rapide', subColor: 'text-slate-400', route: '/colis' },
+              { icon: 'favorite', label: 'Favoris', sub: '3 adresses', subColor: 'text-slate-400', route: '/profil' },
+            ].map((service) => (
+              <div
+                key={service.label}
+                onClick={() => router.push(service.route)}
+                className={`bg-card p-5 rounded-2xl border border-white/5 flex flex-col gap-4 shadow-lg cursor-pointer active:scale-[0.98] transition-transform ${
+                  service.highlight ? 'border-b-4 border-b-primary' : ''
+                }`}
+              >
+                <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <MaterialIcon name={service.icon} className="text-primary text-3xl" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-[#101010] group-hover:text-[#f29200] transition">Commander un taxi</h4>
-                  <p className="text-sm text-gray-600">Déplacement rapide et sécurisé</p>
+                  <p className="text-white font-bold text-[16px]">{service.label}</p>
+                  <p className={`${service.subColor} text-xs font-medium mt-0.5 flex items-center gap-1`}>
+                    {service.highlight && <span className="size-1.5 bg-emerald-500 rounded-full" />}
+                    {service.sub}
+                  </p>
                 </div>
               </div>
-            </div>
-
-            {/* Livraison */}
-            <div
-              onClick={() => router.push("/commander/livraison")}
-              className="group p-5 bg-white rounded-xl shadow-md hover:shadow-xl border border-gray-200 transition-all duration-300 cursor-pointer transform hover:-translate-y-1"
-            >
-              <div className="flex items-center">
-                <div className="w-14 h-14 bg-[#f29200] bg-opacity-10 rounded-full flex items-center justify-center mr-4 group-hover:scale-110 transition">
-                  <svg className="h-7 w-7 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="font-bold text-[#101010] group-hover:text-[#f29200] transition">Livraison express</h4>
-                  <p className="text-sm text-gray-600">Colis, repas, urgences</p>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
         </section>
 
-        {/* Section chauffeur */}
+        {/* Driver shortcut */}
         {userData.userType === 'chauffeur' && (
-          <section className="mb-8">
-            <h3 className="text-lg font-bold text-[#101010] mb-5 flex items-center">
-              <svg className="h-5 w-5 mr-2 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-              </svg>
-              Chauffeur
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div
-                onClick={() => router.push("/chauffeur/courses")}
-                className="p-5 bg-white rounded-xl shadow-md hover:shadow-xl border border-gray-200 transition-all cursor-pointer"
-              >
-                <h4 className="font-bold text-[#101010] mb-2">Courses en attente</h4>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-[#f29200] rounded-full mr-2 animate-pulse"></div>
-                  3 nouvelles demandes
+          <section className="mb-6">
+            <GlassCard
+              variant="bordered"
+              className="p-4 cursor-pointer"
+              onClick={() => router.push('/driver/dashboard')}
+            >
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                  <MaterialIcon name="directions_car" className="text-emerald-500" />
                 </div>
-              </div>
-              <div
-                onClick={() => router.push("/chauffeur/historique")}
-                className="p-5 bg-white rounded-xl shadow-md hover:shadow-xl border border-gray-200 transition-all cursor-pointer"
-              >
-                <h4 className="font-bold text-[#101010] mb-2">Historique</h4>
-                <div className="flex items-center text-sm text-gray-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                  15 courses ce mois
+                <div className="flex-1">
+                  <p className="text-white font-bold">Espace Chauffeur</p>
+                  <p className="text-emerald-500 text-xs font-medium">Voir les demandes en cours</p>
                 </div>
+                <MaterialIcon name="chevron_right" className="text-slate-400" />
               </div>
-            </div>
+            </GlassCard>
           </section>
         )}
 
-        {/* Historique des commandes */}
+        {/* Restaurateur shortcut */}
+        {userData.userType === 'restaurateur' && restaurantData && (
+          <section className="mb-6">
+            <GlassCard
+              variant="bordered"
+              className="p-4 cursor-pointer"
+              onClick={() => router.push(`/food/portal/${restaurantData.id}`)}
+            >
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                  <MaterialIcon name="storefront" className="text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-white font-bold">{restaurantData.name}</p>
+                  <p className="text-slate-400 text-xs">Gérer menus et commandes</p>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  restaurantData.status === 'approved' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'
+                }`}>
+                  {restaurantData.status === 'approved' ? 'Actif' : 'En attente'}
+                </span>
+              </div>
+            </GlassCard>
+          </section>
+        )}
+
+        {/* Recent Rides */}
         <section className="mb-8">
-          <div className="flex justify-between items-center mb-5">
-            <h3 className="text-lg font-bold text-[#101010] flex items-center">
-              <svg className="h-5 w-5 mr-2 text-[#f29200]" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 2a4 4 0 00-4 4v1H5a1 1 0 00-.994.89l-1 9A1 1 0 004 18h12a1 1 0 00.994-1.11l-1-9A1 1 0 0015 7h-1V6a4 4 0 00-4-4zm2 5V6a2 2 0 10-4 0v1h4zm-6 3a1 1 0 112 0 1 1 0 01-2 0zm7-1a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
-              </svg>
-              Dernières commandes
-            </h3>
-            <button
-              onClick={() => router.push("/commandes")}
-              className="text-sm text-[#f29200] hover:underline font-medium"
-            >
-              Voir tout →
-            </button>
+          <div className="flex items-center justify-between mb-4 px-1">
+            <h2 className="text-white text-[20px] font-bold tracking-tight">Courses récentes</h2>
+            <Link href="/historique" className="text-primary font-semibold text-sm">
+              Voir tout &rarr;
+            </Link>
           </div>
-          <div className="space-y-4">
-            <div
-              onClick={() => router.push("/commandes/1")}
-              className="p-4 bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition cursor-pointer"
-            >
-              <div className="flex justify-between items-center">
-                <h4 className="font-semibold text-[#101010]">Taxi - Centre ville</h4>
-                <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
-                  ✅ Complétée
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 mt-1">Hier à 14:30 • 1 500 FCFA</p>
-            </div>
-            <div
-              onClick={() => router.push("/commandes/2")}
-              className="p-4 bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition cursor-pointer"
-            >
-              <div className="flex justify-between items-center">
-                <h4 className="font-semibold text-[#101010]">Livraison - Restaurant</h4>
-                <span className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
-                  🚚 En cours
-                </span>
-              </div>
-              <p className="text-sm text-gray-600 mt-1">Aujourd’hui à 12:15 • 2 000 FCFA</p>
-            </div>
+          <div className="space-y-3">
+            {history.length > 0 ? (
+              history.map((item) => (
+                <GlassCard key={item.id} className="p-4 flex items-center gap-4">
+                  <div className="size-10 rounded-full bg-slate-800 flex items-center justify-center">
+                    <MaterialIcon
+                      name={item.type === 'Taxi' ? 'directions_car' : 'restaurant'}
+                      className="text-slate-400"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <p className="text-white font-medium text-[15px]">
+                        {item.destination || item.receiverAddress || item.description || 'Course'}
+                      </p>
+                      <span className="text-white font-bold">
+                        {formatCurrencyWithCode(item.price ?? item.amount ?? 0)}
+                      </span>
+                    </div>
+                    <p className={`text-xs font-medium mt-0.5 ${
+                      item.status === 'completed' || item.status === 'delivered'
+                        ? 'text-emerald-500'
+                        : item.status === 'cancelled'
+                        ? 'text-red-400'
+                        : 'text-amber-500'
+                    }`}>
+                      {item.status === 'completed' || item.status === 'delivered'
+                        ? 'Terminé'
+                        : item.status === 'cancelled'
+                        ? 'Annulé'
+                        : 'En cours'}
+                    </p>
+                  </div>
+                </GlassCard>
+              ))
+            ) : (
+              <GlassCard className="p-8 text-center">
+                <MaterialIcon name="receipt_long" className="text-slate-600 text-[40px] mx-auto mb-3" />
+                <p className="text-slate-400 font-medium">Aucune course aujourd&apos;hui</p>
+                <p className="text-sm text-slate-500 mt-1">Réservez un taxi pour commencer</p>
+              </GlassCard>
+            )}
           </div>
         </section>
 
-        {/* Bouton principal */}
-        <div className="text-center mb-10">
-          <button
-            onClick={() => router.push("/commander")}
-            className="inline-flex items-center space-x-2 bg-[#f29200] hover:bg-[#e68600] text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition transform hover:scale-105"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            <span>Commander maintenant</span>
-          </button>
+        {/* Promo Banner */}
+        <div className="p-6 rounded-2xl bg-gradient-to-br from-primary/20 to-transparent border border-primary/10 mb-8">
+          <p className="text-primary font-bold text-lg mb-1">Parrainez un ami</p>
+          <p className="text-slate-300 text-sm leading-relaxed">
+            Gagnez 500 XAF sur votre prochaine course en invitant vos proches.
+          </p>
         </div>
-
-        {/* Menu secondaire */}
-        <section className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-          {[
-            { icon: "📱", title: "Mon profil", route: "/profil" },
-            { icon: "💰", title: "Paiements", route: "/paiements" },
-            { icon: "📜", title: "Historique", route: "/historique" },
-            { icon: "🛡️", title: "Sécurité", route: "/securite" },
-          ].map((item, i) => (
-            <div
-              key={i}
-              onClick={() => router.push(item.route)}
-              className="p-4 bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-[#f29200] transition cursor-pointer text-center group"
-            >
-              <div className="text-2xl mb-2 group-hover:scale-110 transition">{item.icon}</div>
-              <span className="text-sm font-medium text-[#101010]">{item.title}</span>
-            </div>
-          ))}
-        </section>
       </main>
+
+      {/* Bottom Navigation */}
+      <BottomNav />
     </div>
   );
 }

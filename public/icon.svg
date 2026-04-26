@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#f29200" rx="120"/>
+  
+  <!-- Taxi Icon -->
+  <g transform="translate(106, 156)">
+    <!-- Car body -->
+    <path d="M80 160c-8.8 0-16 7.2-16 16v32c0 8.8 7.2 16 16 16h16.5c0 26.5 21.5 48 48 48s48-21.5 48-48h42c0 26.5 21.5 48 48 48s48-21.5 48-48H347c8.8 0 16-7.2 16-16v-32c0-8.8-7.2-16-16-16h-17.9L310.4 96H352c8.8 0 16-7.2 16-16V64c0-8.8-7.2-16-16-16H48c-8.8 0-16 7.2-16 16v16c0 8.8 7.2 16 16 16h41.6L71.1 160H80z" fill="white"/>
+    
+    <!-- Wheels -->
+    <circle cx="144.5" cy="240" r="24" fill="#101010"/>
+    <circle cx="282.5" cy="240" r="24" fill="#101010"/>
+    
+    <!-- Windows -->
+    <rect x="100" y="100" width="80" height="40" rx="8" fill="#4a90e2"/>
+    <rect x="220" y="100" width="80" height="40" rx="8" fill="#4a90e2"/>
+  </g>
+  
+  <!-- Text "M" -->
+  <text x="256" y="420" font-family="Arial, sans-serif" font-size="120" font-weight="bold" fill="white" text-anchor="middle">M</text>
+</svg>
+
+
+
+
+
+
+

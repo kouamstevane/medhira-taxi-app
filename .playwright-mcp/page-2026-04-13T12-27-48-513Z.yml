@@ -1,0 +1,30 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: wifi
+        - generic [ref=e7]: En ligne
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - heading "Gagnez de l'argent avec Medjira" [level=2] [ref=e48]
+          - paragraph [ref=e49]: Rejoignez notre réseau de chauffeurs et commencez à rouler aujourd'hui.
+        - generic [ref=e50]:
+          - button "Continuer avec Google" [disabled] [ref=e51]:
+            - img [ref=e52]
+            - text: Continuer avec Google
+          - generic [ref=e61]: ou inscription manuelle
+          - generic [ref=e62]:
+            - generic [ref=e63]:
+              - generic [ref=e64]: Email*
+              - textbox "votre@email.com" [ref=e66]: test-playwright@medjira.com
+            - generic [ref=e67]:
+              - generic [ref=e68]: Téléphone*
+              - textbox "+33612345678" [ref=e70]
+            - generic [ref=e71]:
+              - generic [ref=e72]: Mot de passe*
+              - textbox "••••••••" [ref=e74]: TestPassword123
+            - button "Chargement..." [disabled] [ref=e76]:
+              - generic [ref=e77]: Chargement...
+  - button "Open Next.js Dev Tools" [ref=e40] [cursor=pointer]:
+    - img [ref=e41]
+  - alert [ref=e44]

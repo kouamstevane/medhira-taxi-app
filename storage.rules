@@ -1,0 +1,79 @@
+rules_version = '2';
+
+// Règles de sécurité pour Firebase Storage
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // ========== AJOUTEZ CECI ==========
+    // Logo public pour les emails et l'application
+    match /logo/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+                    && request.resource.size < 2 * 1024 * 1024;
+    }
+    // ==================================
+
+    // Images de profil des utilisateurs
+    match /profile_images/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+    
+    // Documents des chauffeurs (permis, carte grise, etc.)
+    // SÉCURITÉ: Restreint l'accès en lecture au propriétaire uniquement
+    match /drivers/{driverId}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == driverId;
+      allow write: if request.auth != null
+                && request.auth.uid == driverId
+                && request.resource.size < 10 * 1024 * 1024
+                && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+      allow delete: if request.auth != null && request.auth.uid == driverId;
+    }
+    
+    // Documents généraux liés aux chauffeurs
+    // SÉCURITÉ: Restreint l'accès en lecture au propriétaire uniquement
+    match /driver_documents/{driverId}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == driverId;
+      allow write: if request.auth != null
+                && request.auth.uid == driverId
+                && request.resource.size < 10 * 1024 * 1024
+                && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
+      allow delete: if request.auth != null && request.auth.uid == driverId;
+    }
+    
+    // Images des véhicules
+    match /vehicles/{vehicleId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                    && request.resource.size < 5 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+    
+    // Documents de transaction/factures
+    match /receipts/{userId}/{receiptId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.size < 5 * 1024 * 1024;
+    }
+    
+    // Preuves de livraison (photos à la remise du colis)
+    match /delivery_proofs/{orderId}/{filename} {
+      allow write: if request.auth != null
+        && request.auth.token.activeDeliveryOrderId == orderId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      allow read: if request.auth != null;
+    }
+
+    // Bloquer tout le reste par défaut
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

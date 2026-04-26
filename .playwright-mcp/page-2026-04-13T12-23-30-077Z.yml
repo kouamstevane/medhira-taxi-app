@@ -1,0 +1,31 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: wifi
+        - generic [ref=e7]: En ligne
+      - generic [ref=e11]:
+        - heading "Quel est votre rôle ?" [level=2] [ref=e12]
+        - paragraph [ref=e13]: Choisissez comment vous souhaitez utiliser l'application.
+        - generic [ref=e14]:
+          - button "directions_car Chauffeur taxi Transportez des passagers avec votre véhicule" [ref=e15]:
+            - generic [ref=e17]: directions_car
+            - generic [ref=e18]:
+              - paragraph [ref=e19]: Chauffeur taxi
+              - paragraph [ref=e20]: Transportez des passagers avec votre véhicule
+          - button "delivery_dining Livreur de repas Livrez des commandes depuis les restaurants" [ref=e21]:
+            - generic [ref=e23]: delivery_dining
+            - generic [ref=e24]:
+              - paragraph [ref=e25]: Livreur de repas
+              - paragraph [ref=e26]: Livrez des commandes depuis les restaurants
+          - button "sync_alt Les deux Chauffeur et livreur selon la demande" [ref=e27]:
+            - generic [ref=e29]: sync_alt
+            - generic [ref=e30]:
+              - paragraph [ref=e31]: Les deux
+              - paragraph [ref=e32]: Chauffeur et livreur selon la demande
+        - button "Continuer arrow_forward" [disabled] [ref=e33]:
+          - text: Continuer
+          - generic [ref=e34]: arrow_forward
+  - button "Open Next.js Dev Tools" [ref=e40] [cursor=pointer]:
+    - img [ref=e41]
+  - alert [ref=e44]

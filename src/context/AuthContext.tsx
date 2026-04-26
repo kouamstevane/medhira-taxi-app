@@ -1,56 +1,164 @@
+/**
+ * Contexte d'Authentification
+ *
+ * Fournit l'état d'authentification à toute l'application via Context API.
+ * Utilise Firebase Auth pour gérer l'authentification et Firestore pour les données utilisateur.
+ *
+ * @module context/AuthContext
+ */
+
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '../app/lib/firebase';
 import { User, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '@/config/firebase';
+import { AuthContextType, UserData } from '@/types';
 
-interface AuthContextType {
-  currentUser: User | null;
-  loading: boolean;
-}
+/**
+ * Contexte d'authentification — valeur null par défaut pour détecter l'usage hors AuthProvider
+ */
+export const AuthContext = createContext<AuthContextType | null>(null);
 
-const AuthContext = createContext<AuthContextType>({
-  currentUser: null,
-  loading: true,
-});
-
+/**
+ * Provider d'authentification
+ *
+ * Wrapper qui fournit l'état d'authentification à tous les composants enfants.
+ */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+
+  /**
+   * Charger les données utilisateur depuis Firestore
+   *  AJOUT LOGS : Capture détaillée des erreurs pour diagnostic
+   */
+  const fetchUserData = async (user: User): Promise<void> => {
+    try {
+      console.log('[AuthContext] Début chargement données utilisateur', {
+        uid: user.uid,
+        email: user.email,
+        emailVerified: user.emailVerified
+      });
+
+      // Forcer le refresh du token avant les lectures Firestore
+      // Évite les erreurs permission-denied sur mobile (Capacitor) où le token
+      // peut ne pas encore être propagé quand onAuthStateChanged se déclenche.
+      await user.getIdToken();
+
+      // Lancer les deux lectures en parallèle pour éviter un RTT séquentiel.
+      // 'users' garde la priorité en cas d'existence simultanée (compte client).
+      const [usersSnap, driversSnap] = await Promise.all([
+        getDoc(doc(db, 'users', user.uid)),
+        getDoc(doc(db, 'drivers', user.uid)),
+      ]);
+
+      const userDoc = usersSnap.exists() ? usersSnap : driversSnap.exists() ? driversSnap : null;
+      const collectionName = usersSnap.exists() ? 'users' : driversSnap.exists() ? 'drivers' : '';
+
+      console.log('[AuthContext] Document utilisateur récupéré', {
+        exists: userDoc !== null,
+        uid: user.uid,
+        collection: collectionName
+      });
+
+      if (userDoc) {
+        const data = userDoc.data() as UserData; // Cast explicite pour TypeScript
+        console.log('[AuthContext] Données utilisateur chargées avec succès', {
+          uid: user.uid,
+          userType: data.userType,
+          collection: collectionName
+        });
+
+        setUserData({
+          uid: user.uid,
+          email: user.email,
+          phoneNumber: user.phoneNumber,
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          profileImageUrl: data.profileImageUrl || user.photoURL || '',
+          userType: data.userType || (collectionName === 'drivers' ? 'chauffeur' : 'client'),
+          status: data.status,
+          country: data.country,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        });
+      } else {
+        console.info('[AuthContext] Document utilisateur inexistant (peut être en cours de création)', {
+          uid: user.uid,
+          email: user.email
+        });
+        
+        setUserData(null);
+      }
+    } catch (err: unknown) {
+      const errorObj = err instanceof Error ? err : null;
+      const errorCode = (err as Record<string, unknown>)?.code as string | undefined;
+      const errorMessage = errorObj?.message ?? String(err);
+      if (errorCode === 'unavailable' || errorMessage.includes('offline')) {
+        console.warn('[AuthContext] Impossible de charger les données utilisateur (hors ligne):', {
+          uid: user.uid,
+          errorMessage
+        });
+      } else {
+        console.error('[AuthContext] Erreur lors du chargement des données utilisateur:', {
+          error: err,
+          uid: user.uid,
+          errorCode,
+          errorMessage,
+          errorName: errorObj?.name
+        });
+      }
+      setUserData(null);
+    }
+  };
 
   useEffect(() => {
-    console.log('Initializing auth state listener...'); // Debug
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed:', user); // Important pour le debug
+    // Écouter les changements d'état d'authentification Firebase
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
+
+      if (user) {
+        //  CORRECTION BUG #2 : Lire emailVerified directement depuis l'objet user
+        setIsEmailVerified(user.emailVerified || false);
+        await fetchUserData(user);
+      } else {
+        setIsEmailVerified(false);
+        setUserData(null);
+      }
+
       setLoading(false);
     });
 
-    // Vérification immédiate de l'état actuel
-    const currentUser = auth.currentUser;
-    console.log('Immediate auth check:', currentUser); // Debug
-    if (currentUser) {
-      setCurrentUser(currentUser);
-      setLoading(false);
-    }
-
-    return () => {
-      console.log('Cleaning up auth listener...'); // Debug
-      unsubscribe();
-    };
+    // Nettoyage de l'écouteur lors du démontage
+    return () => unsubscribe();
   }, []);
 
+  /**
+   * Recharger les données utilisateur (Auth + Firestore)
+   *  CORRECTION BUG #4 : Recharge également les données Firestore
+   */
+  const reloadUser = async () => {
+    if (auth.currentUser) {
+      try {
+        await auth.currentUser.reload();
+        const refreshedUser = auth.currentUser;
+        setCurrentUser(refreshedUser);
+        setIsEmailVerified(refreshedUser.emailVerified || false);
+        // Recharger aussi les données Firestore
+        await fetchUserData(refreshedUser);
+      } catch (err) {
+        console.error('Erreur lors du rechargement de l\'utilisateur:', err);
+      }
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ currentUser, loading }}>
+    <AuthContext.Provider value={{ currentUser, loading, userData, error, isEmailVerified, reloadUser }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 }

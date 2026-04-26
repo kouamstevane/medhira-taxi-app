@@ -1,0 +1,982 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ============================================================================
+    // RÈGLES DE SÉCURITÉ FIRESTORE - MEDJIRA TAXI APP
+    // ============================================================================
+    //
+    // Mise à jour : 18 janvier 2026
+    // Architecture d'authentification multi-méthodes
+    //
+    // Modifications apportées :
+    // - Renforcement de la sécurité du système d'authentification multi-méthodes
+    // - Ajout de contraintes pour les chauffeurs (email uniquement)
+    // - Ajout de contraintes pour la vérification email/téléphone
+    // - Amélioration des commentaires pour clarifier les règles
+    //
+    // Architecture d'authentification :
+    // - Clients : Peuvent créer un compte et se connecter par téléphone (SMS) OU email
+    // - Chauffeurs : Doivent utiliser exclusivement l'email avec vérification obligatoire
+    //
+    // ============================================================================
+    
+    // ============================================================================
+    // FONCTIONS HELPER
+    // ============================================================================
+    
+    // Fonction helper pour vérifier l'authentification
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Fonction helper pour vérifier si l'utilisateur accède à ses propres données
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Fonction helper pour vérifier si l'utilisateur est admin
+    // Vérifie si un document existe avec l'UID comme ID
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Fonction helper pour vérifier si l'email est vérifié dans Firebase Auth
+    function isEmailVerified() {
+      return isAuthenticated() && request.auth.token.email_verified == true;
+    }
+    
+    // Fonction helper pour valider le format des données chiffrées
+    // Vérifie que les données chiffrées ont la structure attendue {data, iv, salt}
+    function isValidEncryptedData(field) {
+      return field != null &&
+             field.data is string &&
+             field.data.length > 0 &&
+             field.iv is string &&
+             field.iv.length > 0 &&
+             field.salt is string &&
+             field.salt.length > 0;
+    }
+    
+    // ============================================================================
+    // COLLECTION USERS (CLIENTS)
+    // ============================================================================
+    //
+    // Les clients peuvent s'inscrire et se connecter par téléphone (SMS) OU email
+    // La vérification email OU téléphone est requise pour accéder au dashboard
+    //
+    // ============================================================================
+    
+    // Collection users - Les utilisateurs peuvent lire et écrire leurs propres données
+    match /users/{userId} {
+      // Lecture : chaque utilisateur peut lire uniquement son propre document.
+      // Les données client nécessaires aux chauffeurs doivent être dénormalisées dans les bookings.
+      allow read: if isOwner(userId);
+      
+      // Création : Les utilisateurs authentifiés peuvent créer leur propre document
+      // Permet la création de comptes clients par email ou téléphone
+      // SÉCURITÉ : Bloque la création d'un document client si l'utilisateur est déjà chauffeur
+      // (empêche la collision de rôles côté serveur, sans dépendre du check client-side)
+      allow create: if isOwner(userId) &&
+                       request.resource.data.userType == 'client' &&
+                       !exists(/databases/$(database)/documents/drivers/$(userId));
+      
+      // Mise à jour : Seul le propriétaire peut modifier ses propres données
+      // Permet aux clients de mettre à jour leur profil
+      // SÉCURITÉ : userType est immuable — impossible de s'auto-promouvoir restaurateur/admin
+      allow update: if isOwner(userId) &&
+                       request.resource.data.userType == resource.data.userType;
+      
+      // Suppression : Non autorisée pour les clients
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION DRIVERS (CHAUFFEURS)
+    // ============================================================================
+    //
+    // Les chauffeurs DOIVENT utiliser exclusivement l'email avec vérification obligatoire
+    // L'authentification par téléphone est INTERDITE pour les chauffeurs
+    //
+    // Contraintes :
+    // - Les chauffeurs doivent avoir un email non null
+    // - Les chauffeurs ne peuvent pas avoir de phoneNumber (null)
+    // - La vérification email est obligatoire
+    // - Le statut du compte doit être 'pending' à la création
+    //
+    // ============================================================================
+    
+    // Collection drivers - Les chauffeurs peuvent lire et écrire leurs propres données
+    // Les admins peuvent modifier le statut
+    // Les utilisateurs peuvent supprimer leur propre compte refusé pour permettre la recréation
+    //
+    // FIX #C2 (RGPD) : Le document racine drivers/{uid} ne contient que les champs PUBLICS
+    // (displayName, photo, rating, vehicleType, currentCity, isOnline, location, status, ...).
+    // Les champs SENSIBLES (ssn, bank, address, dob, nationality, documents, idNumber) DOIVENT
+    // être stockés dans la sous-collection privée /drivers/{uid}/private/{doc} (ex: personal).
+    // Règle serveur : tout champ listé dans SENSITIVE_FIELDS est refusé à la racine pour create/update owner.
+    match /drivers/{driverId} {
+      // Lecture d'un chauffeur spécifique (get) : authentifié
+      // Permet aux clients de voir les infos du chauffeur assigné (confirmation page, tracking)
+      // Permet au chauffeur de lire son propre profil
+      // Les champs sensibles vivent dans /drivers/{uid}/private/* (règle dédiée plus bas)
+      allow get: if isAuthenticated();
+
+      // Liste des chauffeurs (query) : admin OU chauffeurs approuvés/disponibles uniquement
+      allow list: if isAdmin()
+        || (isAuthenticated() && resource.data.status in ['approved', 'available']);
+
+      // Création : Les chauffeurs peuvent créer leur propre document
+      // CONTRAINTE : Aucun champ sensible autorisé à la racine (doit aller en sous-collection private)
+      allow create: if request.auth.uid == driverId &&
+                       request.resource.data.email != null &&
+                       request.resource.data.phoneNumber == null &&
+                       request.resource.data.userType == 'chauffeur' &&
+                       (request.resource.data.status == 'draft' || request.resource.data.status == 'pending') &&
+                       !request.resource.data.keys().hasAny(
+                         ['ssn', 'bank', 'address', 'dob', 'nationality', 'documents', 'idNumber']
+                       );
+
+      // Mise à jour :
+      // - Le propriétaire ne peut JAMAIS modifier : documents, status, kycStatus, approvedBy (FIX #C3 — auto-approbation KYC)
+      // - Le propriétaire ne peut JAMAIS écrire les champs sensibles à la racine (FIX #C2 — RGPD)
+      // - Les admins peuvent tout modifier
+      allow update: if (isOwner(driverId) &&
+                        // FIX #C3 : empêcher l'auto-approbation KYC
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['documents', 'status', 'kycStatus', 'approvedBy']) &&
+                        // FIX #C2 : empêcher l'écriture de champs sensibles à la racine
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['ssn', 'bank', 'address', 'dob', 'nationality', 'idNumber']) &&
+                        (
+                          // Cas 1 : email vérifié → modifications normales
+                          isEmailVerified() ||
+                          // Cas 2 : modification de isAvailable uniquement (fonctionnalité critique)
+                          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailable', 'updatedAt'])
+                        ))
+                     || isAdmin();
+
+      // Suppression : Permettre la suppression par l'admin OU par le propriétaire si le compte est refusé ou en brouillon
+      allow delete: if isAdmin() ||
+                    (isOwner(driverId) &&
+                     resource.data.status in ['rejected', 'draft']);
+
+      // ========================================================================
+      // SOUS-COLLECTION PRIVATE (FIX #C2) — DONNÉES SENSIBLES RGPD
+      // ========================================================================
+      // Contient ssn, bank, address, dob, nationality, documents, idNumber.
+      // Lecture/écriture : UNIQUEMENT l'owner ou un admin.
+      // Les Cloud Functions (Admin SDK) contournent ces règles pour la vérification KYC.
+      match /private/{privateDocId} {
+        allow read: if isOwner(driverId) || isAdmin();
+        // L'owner peut créer/modifier ses propres données sensibles (chiffrées côté client si applicable)
+        // L'approbation KYC (documents.status) se fait uniquement via Admin SDK (Cloud Functions)
+        // Sur CREATE : `resource` est null, on ne peut pas appeler .diff() — on autorise simplement l'owner.
+        // Sur UPDATE : on empêche l'owner de modifier approvedBy/kycStatus.
+        allow create: if isOwner(driverId) || isAdmin();
+        allow update: if (isOwner(driverId) &&
+                          (!('documents' in request.resource.data) ||
+                           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvedBy', 'kycStatus'])))
+                       || isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+    
+    // ============================================================================
+    // COLLECTION DRIVER_REQUESTS
+    // ============================================================================
+    //
+    // Collection optimisée pour les demandes de courses destinées aux chauffeurs
+    // Architecture hybride : bookings (source de vérité) + driver_requests (vue optimisée)
+    //
+    // Cette collection évite les requêtes collection group sur tous les bookings
+    // et simplifie les règles de sécurité pour les chauffeurs
+    //
+    // ============================================================================
+    
+    // Collection driver_requests - Demandes de courses pour les chauffeurs
+    match /driver_requests/{driverId} {
+      // Sous-collection requests - Demandes individuelles pour un chauffeur
+      match /requests/{requestId} {
+        // Lecture : Seul le chauffeur concerné peut lire ses demandes
+        // Permet aux chauffeurs de voir uniquement leurs propres demandes
+        allow read: if isAuthenticated() && request.auth.uid == driverId;
+        
+        // Création : Restreinte au propriétaire du booking (requestId == bookingId)
+        // Les Cloud Functions utilisent Admin SDK et contournent cette règle
+        allow create: if isAuthenticated() &&
+                         get(/databases/$(database)/documents/bookings/$(requestId)).data.userId == request.auth.uid;
+        
+        // Mise à jour : Le chauffeur peut mettre à jour ses propres demandes
+        // Permet aux chauffeurs d'accepter/refuser les demandes
+        allow update: if isAuthenticated() && request.auth.uid == driverId;
+        
+        // Suppression : Non autorisée via client SDK
+        // Les demandes expirées sont nettoyées par Cloud Functions
+        allow delete: if false;
+      }
+    }
+    
+    // ============================================================================
+    // COLLECTION ADMINS
+    // ============================================================================
+    
+    // Collection admins
+    // FIX #H7 : Ne PAS exposer la liste des admins aux utilisateurs authentifiés.
+    // La fonction helper isAdmin() utilise exists() qui fonctionne indépendamment des rules read.
+    // Seul un admin peut lister/lire les documents d'admins.
+    match /admins/{adminId} {
+      // Lecture : réservée aux admins (get + list)
+      allow get, list: if isAdmin();
+
+      // Écriture : Non autorisée via client SDK (Admin SDK ou console Firebase uniquement)
+      allow write: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION WALLETS
+    // ============================================================================
+    
+    // Collection wallets - Les utilisateurs peuvent lire et écrire leur propre wallet
+    match /wallets/{userId} {
+      // Lecture : Seul le propriétaire peut lire son wallet
+      allow read: if isOwner(userId);
+      
+      // Création : Seul le propriétaire peut créer son wallet
+      allow create: if isOwner(userId);
+      
+      // Mise à jour : INTERDITE via client SDK
+      // Le solde ne peut être modifié que par les Cloud Functions (Admin SDK)
+      // pour garantir l'intégrité financière
+      allow update: if false;
+      
+      // Suppression : Non autorisée
+      // Ne jamais permettre la suppression des wallets pour éviter la perte de données
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION TRANSACTIONS
+    // ============================================================================
+    
+    // Collection transactions - Les utilisateurs peuvent lire leurs propres transactions
+    match /transactions/{transactionId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire leurs propres transactions
+      // Le client peut lire ses transactions (userId == request.auth.uid)
+      // Le chauffeur peut lire les transactions où il est impliqué (driverId == request.auth.uid)
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || 
+                      resource.data.driverId == request.auth.uid);
+      
+      // Création : INTERDITE via client SDK
+      // Les transactions ne peuvent être créées que par les Cloud Functions (Admin SDK)
+      // pour garantir l'intégrité financière (montant, type, parties impliquées)
+      allow create: if false;
+      
+      // Mise à jour : Non autorisée
+      // Les transactions ne doivent pas être modifiées pour garantir l'intégrité
+      allow update: if false;
+      
+      // Suppression : Non autorisée
+      // Les transactions ne doivent pas être supprimées pour garantir l'intégrité
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION BOOKINGS
+    // ============================================================================
+    
+    // Collection bookings - Les utilisateurs et chauffeurs peuvent lire leurs propres réservations
+    match /bookings/{bookingId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire leurs propres réservations
+      // Permet aux clients de lire leurs propres réservations
+      // Permet aux chauffeurs de lire les réservations où ils sont assignés
+      allow read: if isAuthenticated() && 
+                     (resource.data.userId == request.auth.uid || 
+                      resource.data.driverId == request.auth.uid);
+      
+      // [INTENTIONNEL] Les deux règles allow read sont combinées avec OR logique (Firestore behavior).
+      // Cette seconde règle permet à tout chauffeur vérifié de lire les bookings en statut 'pending'
+      // pour le système de matching — les chauffeurs voient les courses disponibles à accepter.
+      allow read: if isAuthenticated() &&
+                     resource.data.status == 'pending' &&
+                     exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
+      
+      // Création : Validation obligatoire
+      // - userId doit appartenir à l'auteur
+      // - statut initial forcé à 'pending'
+      // - price doit être un nombre positif
+      // - driverId interdit à la création (assigné lors de l'acceptation)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.price is number &&
+                       request.resource.data.price >= 1 &&
+                       !('driverId' in request.resource.data);
+      
+      // FIX #C13 : WHITELIST stricte (au lieu d'une blocklist). Les champs financiers
+      // (stripePaymentIntentId, paymentStatus, finalPrice, refundAmount, cancellationFee,
+      //  price, commission) ne peuvent PAS être modifiés par driver/passager via ce chemin.
+      //
+      // Whitelist driver assigné : champs opérationnels uniquement
+      allow update: if isAuthenticated() &&
+                       resource.data.driverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['driverLocation', 'driverStatus', 'pickupTime',
+                                   'completionTime', 'notes', 'updatedAt', 'rating',
+                                   'driverRoute']);
+
+      // Whitelist passager (propriétaire du booking) : rating, review, notes, annulation douce
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['rating', 'review', 'notes', 'updatedAt',
+                                   'cancellationReason']);
+
+      // Admin : accès complet
+      allow update: if isAdmin();
+
+      // Mise à jour : Le chauffeur assigné peut faire avancer le statut de la course
+      allow update: if isAuthenticated() &&
+                        resource.data.driverId == request.auth.uid &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['status', 'updatedAt', 'startedAt', 'completedAt']) &&
+                        request.resource.data.status == 'in_progress';
+      
+      // Mise à jour : Permettre à un chauffeur d'accepter une course en attente
+      // Un chauffeur peut mettre à jour un booking pending pour l'accepter
+      // RESTRICTION : Seuls status, driverId et updatedAt peuvent être modifiés
+      allow update: if isAuthenticated() &&
+                       resource.data.status == 'pending' &&
+                       request.resource.data.status == 'accepted' &&
+                       request.resource.data.driverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'driverId', 'driverName', 'assignedAt',
+                                   'updatedAt', 'driverPhone', 'driverLocation',
+                                   'carModel', 'carPlate', 'carColor']);
+      
+      // Mise à jour : Permettre au client d'annuler sa propre commande
+      // Le client peut annuler sa commande même si elle a été acceptée
+      // RESTRICTION : Seuls les champs liés à l'annulation peuvent être modifiés
+      // NOTE: cancelledBy n'est pas toujours présent (certains flows ne l'incluent pas)
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       request.resource.data.status == 'cancelled' &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'cancelledBy', 'cancelledAt',
+                                   'cancellationReason', 'cancellationFee',
+                                   'reason', 'updatedAt']);
+      
+      // Suppression : Non autorisée
+      // Les réservations ne doivent pas être supprimées pour conserver l'historique
+      allow delete: if false;
+      
+      // ============================================================================
+      // SOUS-COLLECTION CANDIDATES (CANDIDATURES DES CHAUFFEURS)
+      // ============================================================================
+      
+      // Sous-collection candidates - Les chauffeurs peuvent lire et mettre à jour leurs candidatures
+      match /candidates/{candidateId} {
+        // Lecture : Permettre la lecture à un chauffeur si c'est sa propre candidature
+        // OU si le chauffeur est assigné à la course parente (pour lire les autres candidatures à expirer)
+        allow read: if isAuthenticated() && 
+                     (request.auth.uid == candidateId || 
+                      get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+        
+        // Création : Permettre la création par le client qui a créé le booking (pour le broadcast automatique)
+        // OU par un chauffeur pour sa propre candidature (cas edge, mais sécurisé)
+        allow create: if isAuthenticated() && 
+                         (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
+                          request.auth.uid == candidateId);
+        
+        // Mise à jour : Permettre la mise à jour si :
+        // 1. C'est la propre candidature du chauffeur (pour accepter/refuser)
+        // 2. Le chauffeur est assigné à la course et met à jour le statut à 'expired'
+        // 3. Le client propriétaire du booking (pour expirer les candidatures)
+        allow update: if isAuthenticated() && 
+                     (request.auth.uid == candidateId || 
+                      (get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid && 
+                       request.resource.data.status == 'expired') ||
+                      get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid);
+        
+        // Suppression : Non autorisée
+        allow delete: if false;
+      }
+      
+      // ============================================================================
+      // SOUS-COLLECTION MESSAGES (COMMUNICATIONS CLIENT-CHAUFFEUR)
+      // ============================================================================
+      
+      // Sous-collection messages - Communications client-chauffeur
+      match /messages/{messageId} {
+        // Lecture : Les deux parties peuvent lire tous les messages
+        // Permet au client et au chauffeur de voir l'historique des messages
+        allow read: if isAuthenticated() &&
+                     (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
+                      get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+        
+        // Création : Les deux parties peuvent créer des messages
+        // Permet au client et au chauffeur de s'envoyer des messages
+        allow create: if isAuthenticated() &&
+                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
+                        get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+        
+        // Mise à jour : Les deux parties peuvent mettre à jour (pour marquer comme lu)
+        // Permet au client et au chauffeur de marquer les messages comme lus
+        allow update: if isAuthenticated() &&
+                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
+                        get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+        
+        // Suppression : Non autorisée
+        // Les messages ne doivent pas être supprimés pour conserver l'historique
+        allow delete: if false;
+      }
+    }
+    
+    // ============================================================================
+    // COLLECTION ACTIVE_BOOKINGS
+    // ============================================================================
+    
+    // Collection active_bookings - Courses actuellement en cours
+    match /active_bookings/{bookingId} {
+      // Lecture : Seul le client propriétaire ou le chauffeur assigné peut lire
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid ||
+                      resource.data.driverId == request.auth.uid);
+      
+      // Création : Uniquement par un utilisateur authentifié pour sa propre course
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
+      
+      // Mise à jour : Seul le chauffeur assigné peut modifier les données de tracking
+      // Le client n'a besoin que de lire les données de tracking, pas de les modifier
+      // RESTRICTION : Les champs critiques (userId, driverId, bookingId) ne peuvent pas être modifiés
+      allow update: if isAuthenticated() &&
+                       resource.data.driverId == request.auth.uid &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['userId', 'driverId', 'bookingId']);
+      
+      // Suppression : Réservée aux admins ou Cloud Functions (Admin SDK)
+      // Interdite côté client pour éviter la perte de données de tracking critiques
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================================================
+    // COLLECTION PARCELS (COLIS)
+    // ============================================================================
+    
+    // Collection parcels - Les utilisateurs peuvent lire et créer leurs propres colis
+    match /parcels/{parcelId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire les colis où ils sont impliqués
+      // Permet à l'expéditeur, au destinataire et au chauffeur de voir les informations du colis
+      allow read: if isAuthenticated() && 
+                     (resource.data.senderId == request.auth.uid || 
+                      resource.data.receiverId == request.auth.uid ||
+                      resource.data.driverId == request.auth.uid);
+      
+      // Création : Les utilisateurs authentifiés peuvent créer des colis
+      // Permet aux clients de créer des demandes de livraison de colis
+      // VALIDATION : senderId doit correspondre à l'utilisateur authentifié
+      allow create: if isAuthenticated() &&
+                       request.resource.data.senderId == request.auth.uid;
+      
+      // FIX #C13 : WHITELIST pour /parcels/{id} (au lieu d'un accès complet)
+      // Empêche l'altération des champs financiers par sender/driver.
+      //
+      // Whitelist driver assigné : progression de la livraison
+      allow update: if isAuthenticated() &&
+                       resource.data.driverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'driverLocation', 'pickedUpAt',
+                                   'deliveredAt', 'notes', 'updatedAt',
+                                   'deliveryProofPhoto']);
+
+      // Whitelist sender (expéditeur) : notes et annulation douce
+      allow update: if isAuthenticated() &&
+                       resource.data.senderId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['notes', 'updatedAt', 'cancellationReason',
+                                   'receiverName', 'receiverPhone']);
+
+      // Admin : accès complet
+      allow update: if isAdmin();
+      
+      // Suppression : Non autorisée
+      // Les colis ne doivent pas être supprimés pour conserver l'historique
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION VEHICLES (VÉHICULES)
+    // ============================================================================
+    
+    // Collection vehicles - Les chauffeurs peuvent gérer leurs propres véhicules
+    match /vehicles/{vehicleId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire les informations des véhicules
+      // Permet aux clients de voir les informations sur les véhicules des chauffeurs
+      allow read: if isAuthenticated();
+      
+      // Création : Le chauffeur crée un véhicule — ownerId vérifié sur request.resource
+      // (resource n'existe pas encore lors d'un create)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.ownerId == request.auth.uid;
+
+      // Mise à jour : Seul le propriétaire peut modifier
+      allow update: if isAuthenticated() &&
+                       resource.data.ownerId == request.auth.uid &&
+                       request.resource.data.ownerId == resource.data.ownerId;
+
+      // Suppression : Seul le propriétaire peut supprimer
+      allow delete: if isAuthenticated() &&
+                       resource.data.ownerId == request.auth.uid;
+    }
+    
+    // ============================================================================
+    // COLLECTION CONFIG (CONFIGURATION)
+    // ============================================================================
+    
+    // Collection config - Lecture seule pour tous les utilisateurs authentifiés
+    match /config/{document} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire la configuration
+      // Permet d'accéder aux paramètres globaux de l'application
+      allow read: if isAuthenticated();
+      
+      // Écriture : Non autorisée via client SDK
+      // Seulement via Admin SDK
+      allow write: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION CARTYPES (TYPES DE VÉHICULES)
+    // ============================================================================
+    
+    // Collection carTypes - Lecture pour tous les utilisateurs authentifiés
+    match /carTypes/{carTypeId} {
+      // Lecture : Les utilisateurs authentifiés peuvent lire les types de véhicules
+      // Permet aux clients de voir les différentes catégories de véhicules disponibles
+      allow read: if isAuthenticated();
+      
+      // Écriture : Non autorisée via client SDK
+      // Seulement via Admin SDK
+      allow write: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION CALLS (APPELS VOIP)
+    // ============================================================================
+    //
+    // Gestion des appels vocaux entre clients et chauffeurs via Agora RTC
+    //
+    // ============================================================================
+    
+    match /calls/{callId} {
+      // Lecture : Seuls les participants (caller ou callee) peuvent lire l'appel
+      allow read: if isAuthenticated() &&
+        (resource.data.callerId == request.auth.uid ||
+         resource.data.calleeId == request.auth.uid);
+      
+      // Création : L'appelant peut créer un appel
+      // Validation :
+      // - L'appelant doit être authenticated
+      // - L'appelant doit être le callerId
+      // - Les champs requis doivent être présents
+      // - Le status initial doit être 'ringing'
+      allow create: if isAuthenticated() &&
+        request.auth.uid == request.resource.data.callerId &&
+        // FIX: Le callee peut être dans 'users' (clients) OU 'drivers' (chauffeurs)
+        (exists(/databases/$(database)/documents/users/$(request.resource.data.calleeId)) ||
+         exists(/databases/$(database)/documents/drivers/$(request.resource.data.calleeId))) &&
+        request.resource.data.calleeId is string &&
+        request.resource.data.rideId is string &&
+        request.resource.data.status == 'ringing' &&
+        request.resource.data.channel is string &&
+        request.resource.data.token is string &&
+        request.resource.data.callerMetadata is map &&
+        request.resource.data.callerMetadata.uid == request.auth.uid;
+      
+      // Mise à jour : Transitions de statut restreintes par rôle
+      // - Seul le callee peut accepter ou refuser
+      // - Le caller ou le callee peuvent terminer ou marquer comme échoué
+      // - Seuls certains champs sont modifiables
+      allow update: if isAuthenticated() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'answerTime', 'endTime', 'reason']) &&
+        (
+          // Le callee peut accepter ou refuser
+          (request.auth.uid == resource.data.calleeId &&
+           request.resource.data.status in ['accepted', 'declined']) ||
+          // L'un ou l'autre peut terminer ou signaler un échec
+          ((request.auth.uid == resource.data.callerId ||
+            request.auth.uid == resource.data.calleeId) &&
+           request.resource.data.status in ['ended', 'failed'])
+        );
+      
+      // Suppression : Interdite (cleanup automatique via Cloud Function après 24h)
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION AUDIT_LOGS (CONFORMITÉ RGPD)
+    // ============================================================================
+    
+    match /audit_logs/{logId} {
+      // Lecture : Réservée aux admins
+      allow read: if isAdmin();
+      
+      // Création : Utilisateur authentifié avec validation des champs requis
+      // Les logs d'audit client-side sont immuables après création
+      // TODO: Migrer vers Cloud Functions uniquement pour une traçabilité 100% fiable
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.eventType is string &&
+                       request.resource.data.action is string &&
+                       request.resource.data.timestamp != null;
+      
+      // Mise à jour : Interdite pour garantir l'intégrité de l'audit
+      allow update: if false;
+      
+      // Suppression : Réservée aux admins (pour le nettoyage RGPD)
+      allow delete: if isAdmin();
+    }
+    
+    // ============================================================================
+    // COLLECTION RESTAURANTS (LIVRAISON DE REPAS)
+    // ============================================================================
+    //
+    // Comptes restaurants partenaires pour le service de livraison de repas.
+    // Un restaurant n'est visible par les clients qu'après approbation admin (Règle 1).
+    //
+    // ============================================================================
+    
+    match /restaurants/{restaurantId} {
+      // Lecture : Filtrage par statut côté serveur (plus côté client)
+      // - Un client ne voit que les restaurants 'approved'
+      // - Le propriétaire voit son propre restaurant quel que soit son statut
+      // - L'admin voit tous les restaurants
+      allow read: if isAuthenticated() &&
+                     (resource.data.status == 'approved' ||
+                      resource.data.ownerId == request.auth.uid ||
+                      isAdmin());
+      
+      // Création : Utilisateur authentifié ayant le rôle 'restaurateur' peut créer un compte restaurant
+      // Le statut initial DOIT être 'pending_approval' (validation admin requise)
+      allow create: if isAuthenticated() &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'restaurateur' &&
+                       request.resource.data.ownerId == request.auth.uid &&
+                       request.resource.data.status == 'pending_approval' &&
+                       request.resource.data.commissionRate is number &&
+                       request.resource.data.name is string;
+      
+      // Mise à jour : Propriétaire (champs autorisés uniquement, pas de statut/commissionRate) OU admin (tout)
+      allow update: if (isAuthenticated() &&
+                        resource.data.ownerId == request.auth.uid &&
+                        request.resource.data.status == resource.data.status &&
+                        request.resource.data.commissionRate == resource.data.commissionRate &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['name', 'description', 'address', 'phone', 'email',
+                                    'cuisineType', 'avgPricePerPerson', 'imageUrl', 'coverImageUrl',
+                                    'isOpen', 'openingHours', 'location', 'updatedAt']))
+                    || isAdmin();
+      
+      // Suppression : Admin uniquement
+      allow delete: if isAdmin();
+      
+      // Sous-collection menu_items — Plats du restaurant (Règle 2)
+      match /menu_items/{itemId} {
+        // Lecture : Tous les authentifiés (menus visibles instantanément)
+        allow read: if isAuthenticated();
+        
+        // Écriture : Seul le propriétaire du restaurant parent
+        // Modifications immédiatement visibles (Règle 2)
+        allow create, update, delete: if isAuthenticated() &&
+          get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
+      }
+    }
+    
+    // ============================================================================
+    // COLLECTION FOOD_ORDERS (COMMANDES DE REPAS)
+    // ============================================================================
+    //
+    // Commandes de livraison de repas.
+    // Une commande n'est validée qu'après paiement (Règle 3).
+    // Les chauffeurs proches sont notifiés automatiquement (Règle 4).
+    //
+    // ============================================================================
+    
+    match /food_orders/{orderId} {
+      // Lecture : Client, chauffeur assigné, ou propriétaire du restaurant
+      // get() sur un document inexistant retourne null → .ownerId == uid évalue à false
+      // exists() préalable est donc redondant et coûte une lecture supplémentaire
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid ||
+                      resource.data.driverId == request.auth.uid ||
+                      get(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)).data.ownerId == request.auth.uid);
+      
+      // Création : Utilisateur authentifié — paymentValidated est false à la création, true après paiement
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.paymentValidated == false &&
+                       request.resource.data.totalOrderPrice is number &&
+                       request.resource.data.orderItems is list &&
+                       request.resource.data.deliveryAddress is string;
+      
+      // Mise à jour — Client : confirmation paiement ou annulation
+      // Permet aussi la cancellation suite à échec paiement
+      allow update: if isAuthenticated() &&
+                       resource.data.userId == request.auth.uid &&
+                       !request.resource.data.diff(resource.data).affectedKeys()
+                         .hasAny(['userId', 'restaurantId', 'driverId', 'driverName',
+                                  'driverPhone', 'totalOrderPrice', 'orderItems']);
+      
+      // Mise à jour — Chauffeur assigné : progression livraison
+      // RESTRICTION : status, timestamps de livraison et updatedAt
+      allow update: if isAuthenticated() &&
+                       resource.data.driverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'updatedAt', 'pickedUpAt', 'deliveredAt',
+                                   'cancelledAt', 'driverLocation']);
+      
+      // Mise à jour — Restaurateur : accepter/refuser des commandes
+      // Seul le propriétaire du restaurant peut modifier les commandes de son restaurant
+      allow update: if isAuthenticated() &&
+                       get(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)).data.ownerId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'updatedAt', 'driverId', 'driverName', 'driverPhone']);
+      
+      // Mise à jour — Admin : accès complet
+      allow update: if isAdmin();
+      
+      // Suppression : Non autorisée (conserver l'historique)
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // FONCTION HELPER TRANSITIONS DE STATUT LIVRAISON
+    // ============================================================================
+
+    function isValidStatusTransition(from, to) {
+      return (from == 'assigned'              && to == 'heading_to_restaurant')
+          || (from == 'assigned'              && to == 'refused')
+          || (from == 'heading_to_restaurant' && to == 'arrived_restaurant')
+          || (from == 'arrived_restaurant'    && to == 'waiting')
+          || (from == 'waiting'               && to == 'picked_up')
+          || (from == 'waiting'               && to == 'cancelled')
+          || (from == 'picked_up'             && to == 'heading_to_client')
+          || (from == 'heading_to_client'     && to == 'arrived_client')
+          || (from == 'arrived_client'        && to == 'delivered');
+    }
+
+    // ============================================================================
+    // COLLECTION FOOD_DELIVERY_ORDERS (COMMANDES EN COURS DE LIVRAISON)
+    // ============================================================================
+
+    match /food_delivery_orders/{orderId} {
+      allow read: if request.auth != null
+        && (resource.data.driverId == request.auth.uid
+            || resource.data.clientId == request.auth.uid
+            || isAdmin());
+
+      allow create: if false;
+
+      allow update: if request.auth.uid == resource.data.driverId
+        && (
+          // Transition de statut valide
+          isValidStatusTransition(resource.data.status, request.resource.data.status)
+          // Ou mise à jour sans changement de statut (ex: reportNotReady ajoute restaurantWaitingStartedAt)
+          || request.resource.data.status == resource.data.status
+        )
+        && request.resource.data.driverId == resource.data.driverId
+        && request.resource.data.clientId == resource.data.clientId
+        && request.resource.data.totalAmount == resource.data.totalAmount
+        && request.resource.data.driverEarnings == resource.data.driverEarnings
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'updatedAt', 'pickedUpAt', 'deliveredAt', 'cancelledAt', 'proofPhotoUrl', 'restaurantWaitingStartedAt']);
+
+      allow delete: if false;
+    }
+
+    // ============================================================================
+    // COLLECTION RESTAURANT_REVIEWS (AVIS RESTAURANTS) — Règle 11
+    // ============================================================================
+    
+    match /restaurant_reviews/{reviewId} {
+      // Lecture : Tous les authentifiés
+      allow read: if isAuthenticated();
+      
+      // Création : L'auteur doit être l'utilisateur connecté
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.rating is number &&
+                       request.resource.data.rating >= 1 &&
+                       request.resource.data.rating <= 5 &&
+                       request.resource.data.restaurantId is string &&
+                       request.resource.data.orderId is string;
+      
+      // Mise à jour et suppression : Non autorisées (immutabilité des avis)
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION DELIVERY_REVIEWS (AVIS LIVREURS) — Règle 12
+    // ============================================================================
+    
+    match /delivery_reviews/{reviewId} {
+      // Lecture : Tous les authentifiés
+      allow read: if isAuthenticated();
+      
+      // Création : L'auteur doit être l'utilisateur connecté
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       request.resource.data.rating is number &&
+                       request.resource.data.rating >= 1 &&
+                       request.resource.data.rating <= 5 &&
+                       request.resource.data.driverId is string &&
+                       request.resource.data.orderId is string;
+      
+      // Mise à jour et suppression : Non autorisées (immutabilité des avis)
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ============================================================================
+    // COLLECTION NOTIFICATIONS
+    // ============================================================================
+    //
+    // Historique des notifications push pour affichage dans le centre de notifications
+    //
+    // ============================================================================
+    
+    match /notifications/{notificationId} {
+      // Lecture : Seul le destinataire de la notification peut la lire
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Création : L'utilisateur ne peut créer une notification que pour lui-même
+      // Les Cloud Functions (Admin SDK) peuvent créer pour n'importe quel userId
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid;
+      
+      // Mise à jour : Le propriétaire peut mettre à jour (ex: marquer comme lu)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // Suppression : Le propriétaire ou l'admin
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+    
+    // ============================================================================
+    // COLLECTION DRIVER_RATINGS (ÉVALUATIONS DES CHAUFFEURS)
+    // ============================================================================
+
+    match /driver_ratings/{ratingId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.clientId == request.auth.uid
+        && request.resource.data.score is number
+        && request.resource.data.score >= 1
+        && request.resource.data.score <= 5
+        && request.resource.data.driverId is string
+        && request.resource.data.orderId is string;
+      allow update, delete: if isAdmin();
+    }
+
+    // ============================================================================
+    // COLLECTION CITIES (VILLES)
+    // ============================================================================
+
+    match /cities/{cityId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // ============================================================================
+    // COLLECTION EMAIL_VERIFICATION_CODES (CODES OTP EMAIL)
+    // ============================================================================
+
+    match /emailVerificationCodes/{uid} {
+      allow read, write: if false;
+    }
+
+    // ============================================================================
+    // COLLECTION EMAIL_LOGS (JOURNAUX D'ENVOI EMAIL)
+    // ============================================================================
+
+    match /emailLogs/{messageId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ============================================================================
+    // COLLECTION ADMIN_ALERTS (ALERTES ADMINISTRATEUR)
+    // ============================================================================
+
+    match /adminAlerts/{alertId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ============================================================================
+    // COLLECTIONS RÉSERVÉES À L'ADMIN SDK (deny explicite côté client)
+    // ============================================================================
+    //
+    // Ces collections stockent des données sensibles (rate limiting, paiements,
+    // payouts, refunds, disputes, tâches d'anonymisation) qui ne doivent JAMAIS
+    // être lues ou écrites depuis un client. Les Cloud Functions utilisent
+    // l'Admin SDK qui contourne ces règles.
+    //
+    // Sans règle explicite, Firestore deny par défaut — mais on déclare
+    // explicitement pour documenter l'intention et prévenir une règle catch-all
+    // future permissive.
+    // ============================================================================
+
+    match /rate_limits/{docId} {
+      allow read, write: if false;
+    }
+
+    match /pin_failure_rate_limits/{docId} {
+      allow read, write: if false;
+    }
+
+    // Nouveau bucket unifié utilisé par functions/src/utils/rateLimiter.ts
+    // (Admin SDK uniquement). Configurer TTL sur `expiresAt` en console GCP.
+    match /rateLimits/{docId} {
+      allow read, write: if false;
+    }
+
+    match /stripe_disputes/{docId} {
+      allow read, write: if false;
+    }
+
+    match /driver_payouts/{docId} {
+      allow read, write: if false;
+    }
+
+    match /platform_payouts/{docId} {
+      allow read, write: if false;
+    }
+
+    match /stripe_refunds/{docId} {
+      allow read, write: if false;
+    }
+
+    match /anonymization_tasks/{docId} {
+      allow read, write: if false;
+    }
+
+    // ============================================================================
+    // COLLECTION GDPR_DELETIONS (audit RGPD Art. 17 — droit à l'oubli)
+    // ============================================================================
+    // Stocke un hash SHA-256 de l'uid + timestamps + stats de suppression.
+    // Lecture admin (preuve de conformité). Écritures réservées à l'Admin SDK.
+    match /gdprDeletions/{uidHash} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ============================================================================
+    // FIN DES RÈGLES DE SÉCURITÉ
+    // ============================================================================
+  }
+}
+

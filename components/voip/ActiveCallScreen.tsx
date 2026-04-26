@@ -1,0 +1,157 @@
+'use client';
+
+/**
+ * Écran d'appel VoIP actif
+ * Affiché pendant un appel en cours
+ */
+
+import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
+import { Mic, MicOff, Volume2, VolumeX, PhoneOff } from 'lucide-react';
+import { Haptics } from '@capacitor/haptics';
+import { useVoipCall } from '../../hooks/useVoipCall';
+import { VoipCall } from '../../src/types/voip';
+
+interface ActiveCallScreenProps {
+  /** Document d'appel actif */
+  call: VoipCall;
+  /** Métadonnées de l'autre participant */
+  metadata: {
+    name: string;
+    avatar?: string;
+  };
+}
+
+/**
+ * Écran plein écran pour les appels en cours
+ */
+export function ActiveCallScreen({ call, metadata }: ActiveCallScreenProps) {
+  const { endCall, toggleMute, toggleSpeaker, isMuted, isSpeaker, callDuration } = useVoipCall();
+  const [isEnding, setIsEnding] = useState(false);
+
+  /**
+   * Formater la durée en MM:SS
+   */
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  /**
+   * Gérer la fin d'appel
+   */
+  const handleEndCall = async () => {
+    setIsEnding(true);
+    try {
+      await endCall('user_ended');
+    } catch (error) {
+      console.error('[ActiveCallScreen] Error ending call:', error);
+      setIsEnding(false);
+    }
+  };
+
+  const handleToggleMute = async () => {
+    try {
+      await toggleMute();
+      // Feedback haptique
+      await Haptics.vibrate({ duration: 50 });
+    } catch (error) {
+      console.error('[ActiveCallScreen] Error toggling mute:', error);
+    }
+  };
+
+  const handleToggleSpeaker = async () => {
+    try {
+      await toggleSpeaker();
+      // Feedback haptique
+      await Haptics.vibrate({ duration: 50 });
+    } catch (error) {
+      console.error('[ActiveCallScreen] Error toggling speaker:', error);
+    }
+  };
+
+  return (
+    <div className="active-call-screen">
+      <div className="active-call-content">
+        {/* Avatar de l'autre participant */}
+        <Image
+          src={metadata.avatar || '/default-avatar.png'}
+          alt={metadata.name}
+          className="active-call-avatar"
+          width={120}
+          height={120}
+          unoptimized
+        />
+
+        {/* Nom */}
+        <h2 className="active-call-name">{metadata.name}</h2>
+
+        {/* Durée d'appel */}
+        <div className="active-call-duration-container">
+          <div className="active-call-duration">{formatTime(callDuration)}</div>
+          <div className="active-call-duration-label">Durée d'appel</div>
+        </div>
+
+        {/* Indicateur d'état */}
+        <div className="active-call-status-container">
+          <div className="active-call-status-indicator active-call-status-active" />
+          <span className="active-call-status-text">Appel en cours</span>
+        </div>
+
+        {/* Contrôles d'appel */}
+        <div className="active-call-controls-container">
+          {/* Bouton mute */}
+          <button
+            onClick={handleToggleMute}
+            className={`active-call-control-button ${isMuted ? 'active-call-control-button-active' : ''}`}
+            aria-label={isMuted ? "Activer le micro" : "Couper le micro"}
+          >
+            {isMuted ? (
+              <MicOff size={24} color="white" />
+            ) : (
+              <Mic size={24} color="white" />
+            )}
+            <span className="active-call-control-label">
+              {isMuted ? 'Muet' : 'Micro'}
+            </span>
+          </button>
+
+          {/* Bouton haut-parleur */}
+          <button
+            onClick={handleToggleSpeaker}
+            className={`active-call-control-button ${isSpeaker ? 'active-call-control-button-active' : ''}`}
+            aria-label={isSpeaker ? "Désactiver le haut-parleur" : "Activer le haut-parleur"}
+          >
+            {isSpeaker ? (
+              <Volume2 size={24} color="white" />
+            ) : (
+              <VolumeX size={24} color="white" />
+            )}
+            <span className="active-call-control-label">
+              {isSpeaker ? 'Haut-parleur' : 'Écouteur'}
+            </span>
+          </button>
+
+          {/* Bouton terminer l'appel */}
+          <button
+            onClick={handleEndCall}
+            disabled={isEnding}
+            className="active-call-control-button active-call-end-button"
+            aria-label="Terminer l'appel"
+          >
+            <PhoneOff size={24} color="white" />
+            <span className="active-call-control-label">Terminer</span>
+          </button>
+        </div>
+
+        {/* Informations de course */}
+        <div className="active-call-ride-info">
+          <span className="active-call-ride-info-text">
+            Course #{call.rideId.slice(-6)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}

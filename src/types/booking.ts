@@ -1,0 +1,158 @@
+/**
+ * Types liés aux réservations de taxi
+ * 
+ * @module types/booking
+ */
+
+import { Timestamp } from 'firebase/firestore';
+import { PaymentStatus, StripePaymentMethod } from './stripe';
+
+/**
+ * Coordonnées géographiques
+ */
+export interface Location {
+  lat: number;
+  lng: number;
+}
+
+/**
+ * Coordonnées géographiques avec précision
+ * Utilisé pour garantir une localisation ultra-précise
+ */
+export interface PreciseLocation extends Location {
+  accuracy?: number; // Précision en mètres (plus petit = plus précis)
+  altitude?: number | null;
+  heading?: number | null; // Direction en degrés
+  speed?: number | null; // Vitesse en m/s
+  timestamp?: number; // Timestamp de la mesure GPS
+}
+
+/**
+ * Suggestion d'adresse pour l'autocomplétion Google Maps
+ */
+export interface PlaceSuggestion {
+  description: string;
+  place_id: string;
+}
+
+/**
+ * Statut d'une réservation
+ */
+export type BookingStatus = 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+
+/**
+ * Interface pour une réservation de taxi
+ */
+export interface Booking {
+  id: string;
+  userId: string;
+  userEmail?: string | null;
+  pickup: string;
+  destination: string;
+  pickupLocation?: PreciseLocation; // Maintenant avec précision
+  destinationLocation?: Location;
+  pickupLocationAccuracy?: number; // Précision du point de départ en mètres
+  distance: number;
+  duration: number;
+  price: number;
+  finalPrice?: number;
+  carType: string;
+  status: BookingStatus;
+  driverId?: string;
+  driverName?: string;
+  driverPhone?: string;
+  driverLocation?: Location;
+  passengerLocation?: Location;
+  carModel?: string;
+  carColor?: string;
+  carPlate?: string;
+  createdAt: Date | Timestamp;
+  updatedAt: Date | Timestamp;
+  completedAt?: Date | Timestamp;
+  cancelledAt?: Date | Timestamp;
+  startedAt?: Date | Timestamp; // Début de la course
+  actualDuration?: number; // Durée réelle en minutes
+  cancellationFee?: number; // Frais d'annulation 
+  paymentStatus?: PaymentStatus; // Statut du paiement
+  paymentMethod?: StripePaymentMethod; // Méthode de paiement (carte ou portefeuille)
+  stripePaymentIntentId?: string | null; // ID du PaymentIntent Stripe
+  paymentActionRequired?: string | null; // Type d'action requise (ex: 'redirect_to_url')
+  paymentActionClientSecret?: string | null; // Client secret pour 3D Secure
+  paymentError?: string | null; // Erreur de paiement
+  paymentCurrency?: string; // Devise du paiement
+  refundAmount?: number; // Montant remboursé
+  refundedAt?: Date | Timestamp; // Date du remboursement
+  reason?: string;
+
+  // Système de bonus (Plan B)
+  bonus?: number; // Montant du bonus 
+  bonusActivatedAt?: Date | Timestamp; // Date d'activation du bonus
+
+  // Messagerie In-App
+  lastMessage?: string;
+  lastMessageAt?: Timestamp;
+  unreadMessages?: {
+    client: number;
+    driver: number;
+  };
+
+  // Périmètre de recherche (Plan A)
+  searchPerimeter?: {
+    maxMinutes: number; // Périmètre en minutes (3-5 min par défaut)
+    expandedWithBonus: boolean; // Si élargi à 10 min avec bonus
+  };
+
+  // Recherche automatique
+  automaticSearch?: {
+    enabled: boolean;
+    intervalSeconds: number; // Intervalle entre tentatives (60-180s)
+    attemptCount: number; // Nombre de tentatives effectuées
+    maxAttempts: number; // Nombre max de tentatives (défaut: 10)
+    lastAttemptAt?: Date | Timestamp; // Date de la dernière tentative
+  };
+
+  failureReason?: string; // Raison d'échec (si status = 'failed')
+  cancellationReason?: string; // Raison d'annulation (si status = 'cancelled')
+}
+
+
+/**
+ * Type de véhicule disponible
+ */
+export interface CarType {
+  id: string;
+  name: string;
+  basePrice: number;
+  pricePerKm: number;
+  pricePerMinute: number;
+  image: string;
+  seats: number;
+  time: string;
+  order?: number;
+}
+
+/**
+ * Configuration de tarification
+ */
+export interface PricingConfig {
+  basePrice: number;
+  pricePerKm: number;
+  pricePerMinute: number;
+  peakHourMultiplier: number;
+  trafficMultiplier: number;
+  discountRate: number;
+}
+
+/**
+ * Résultat du calcul de prix (pour affichage détaillé)
+ */
+export interface PriceCalculation {
+  basePrice: number;
+  distancePrice: number;
+  durationPrice: number;
+  carTypeMultiplier: number;
+  peakHourMultiplier: number;
+  trafficMultiplier: number;
+  totalPrice: number;
+  currency: string;
+}
