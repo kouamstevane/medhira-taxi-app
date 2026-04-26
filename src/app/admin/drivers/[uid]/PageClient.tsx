@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { doc, onSnapshot } from 'firebase/firestore'
-import { db, auth } from '@/config/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, auth, functions } from '@/config/firebase'
 import { suspendDriver } from '@/services/admin.service'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
@@ -71,22 +72,14 @@ export default function AdminDriverDetailPage() {
         await suspendDriver(uid, reason || 'Suspension administrative', adminUid)
       } else {
         if (!auth.currentUser) throw new Error('Non authentifié')
-        const idToken = await auth.currentUser.getIdToken()
         const body: Record<string, unknown> = { action, driverId: uid }
         if (documentKey) body.documentKey = documentKey
         if (reason) {
           body.reason = reason
           body.documentRejectionReason = reason
         }
-        const res = await fetch('/api/admin/manage-driver', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`,
-          },
-          body: JSON.stringify(body),
-        })
-        if (!res.ok) throw new Error('Erreur API')
+        const adminManageDriver = httpsCallable(functions, 'adminManageDriver')
+        await adminManageDriver(body)
       }
     } catch (err) {
       console.error('manageDriver error:', err)

@@ -55,7 +55,20 @@ const serverTS = (): FirebaseFirestore.FieldValue =>
 let _stripe: InstanceType<typeof Stripe> | null = null;
 function getStripe(): InstanceType<typeof Stripe> {
   if (!_stripe) {
-    _stripe = new Stripe(stripeSecretKey.value(), { apiVersion: '2026-03-25.dahlia' });
+    const rawKey = stripeSecretKey.value();
+    // Defense-in-depth : un secret uploadé via shell peut contenir un \n / espace
+    // final qui casse le header Authorization (ERR_INVALID_CHAR côté Node).
+    const key = rawKey.trim();
+    if (key !== rawKey) {
+      console.warn('[Stripe] STRIPE_SECRET_KEY contained whitespace — trimmed', {
+        rawLen: rawKey.length,
+        trimmedLen: key.length,
+      });
+    }
+    if (!key) {
+      throw new Error('STRIPE_SECRET_KEY is empty');
+    }
+    _stripe = new Stripe(key, { apiVersion: '2026-03-25.dahlia' });
   }
   return _stripe;
 }
@@ -438,26 +451,59 @@ async function syncDriverAccountStatus(driverId: string, accountId: string): Pro
   const account = await getStripe().accounts.retrieve(accountId);
 
   let stripeAccountStatus: 'active' | 'pending' | 'restricted' | 'disabled';
+  let chargesEnabled = false;
+  let payoutsEnabled = false;
+  let detailsSubmitted = false;
+  let disabledReason: string | null = null;
 
   if (!account || ('deleted' in account && account.deleted)) {
     stripeAccountStatus = 'disabled';
-  } else if (account.charges_enabled && account.payouts_enabled) {
-    stripeAccountStatus = 'active';
-  } else if (account.requirements?.disabled_reason) {
-    stripeAccountStatus = 'restricted';
   } else {
-    stripeAccountStatus = 'pending';
+    chargesEnabled = !!account.charges_enabled;
+    payoutsEnabled = !!account.payouts_enabled;
+    detailsSubmitted = !!account.details_submitted;
+    disabledReason = account.requirements?.disabled_reason ?? null;
+
+    if (chargesEnabled && payoutsEnabled) {
+      stripeAccountStatus = 'active';
+    } else if (disabledReason) {
+      stripeAccountStatus = 'restricted';
+    } else {
+      stripeAccountStatus = 'pending';
+    }
   }
 
-  const updateData: Record<string, unknown> = { stripeAccountStatus };
+  const updateData: Record<string, unknown> = {
+    stripeAccountStatus,
+    stripeChargesEnabled: chargesEnabled,
+    stripePayoutsEnabled: payoutsEnabled,
+    stripeDetailsSubmitted: detailsSubmitted,
+    stripeDisabledReason: disabledReason,
+    stripeAccountSyncedAt: serverTS(),
+  };
 
   if (account.requirements) {
     updateData.requirements = {
       currently_due:    account.requirements.currently_due ?? [],
+      past_due:         account.requirements.past_due ?? [],
+      eventually_due:   account.requirements.eventually_due ?? [],
+      pending_verification: account.requirements.pending_verification ?? [],
+      disabled_reason:  account.requirements.disabled_reason ?? null,
       current_deadline: account.requirements.current_deadline ?? null,
       lastCheckedAt:    serverTS(),
     };
   }
+
+  console.log('[syncDriverAccountStatus] sync', {
+    driverId,
+    accountId,
+    stripeAccountStatus,
+    chargesEnabled,
+    payoutsEnabled,
+    detailsSubmitted,
+    disabledReason,
+    currentlyDueCount: account.requirements?.currently_due?.length ?? 0,
+  });
 
   await getDb().collection('drivers').doc(driverId).update(updateData);
 }
@@ -1044,3 +1090,556 @@ async function onV2AccountLinkReturned(accountLink: Record<string, unknown>): Pr
     console.log(`[Webhook v2] Onboarding terminé pour compte: ${accountId}`);
   }
 }
+
+// =============================================================================
+// createConnectAccount — Callable (mobile + web)
+// Crée le compte Stripe Connect du chauffeur. Remplace POST /api/stripe/connect/account
+// pour le build Capacitor (output:'export' n'expose pas les routes Next).
+// =============================================================================
+
+interface CreateConnectAccountInput {
+  country: string;
+  individual?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    // Format ISO YYYY-MM-DD
+    dob?: string;
+  };
+}
+
+interface CreateConnectAccountResult {
+  accountId: string;
+  status: 'pending' | 'existing';
+}
+
+// Conversion "YYYY-MM-DD" → { day, month, year } pour Stripe.
+// Retourne null si la date est invalide ou hors d'une plage raisonnable.
+function parseStripeDob(iso: string | undefined): { day: number; month: number; year: number } | null {
+  if (!iso || typeof iso !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (year < 1900 || year > new Date().getFullYear()) return null;
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 31) return null;
+  return { day, month, year };
+}
+
+// Sanitize une string courte avant envoi à Stripe : trim + cap longueur.
+function safeStr(v: unknown, maxLen = 100): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const t = v.trim();
+  return t.length > 0 && t.length <= maxLen ? t : undefined;
+}
+
+// Indicatif téléphonique par pays ISO-2 (marchés supportés par l'app).
+const COUNTRY_DIAL_CODE: Record<string, string> = {
+  CA: '1',
+  US: '1',
+  FR: '33',
+  BE: '32',
+  CM: '237',
+};
+
+/**
+ * Normalise un numéro de téléphone au format E.164 (`+<dial><digits>`).
+ * Retourne `undefined` si normalisation impossible — Stripe rejette les numéros
+ * non-E.164 et ferait planter toute la création de compte.
+ */
+function toE164(raw: string | undefined, country: string): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+
+  // Déjà au format international
+  if (trimmed.startsWith('+')) {
+    const digits = trimmed.slice(1).replace(/\D/g, '');
+    if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
+    return undefined;
+  }
+
+  // Sinon on retire tout sauf chiffres et on préfixe avec l'indicatif pays.
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return undefined;
+
+  const dial = COUNTRY_DIAL_CODE[country.toUpperCase()];
+  if (!dial) return undefined;
+
+  // Évite le double indicatif si l'utilisateur a tapé le code sans `+`
+  // (ex: "1418..." au Canada — déjà préfixé avec 1).
+  const normalized = digits.startsWith(dial) ? digits : dial + digits;
+  if (normalized.length < 8 || normalized.length > 15) return undefined;
+  return `+${normalized}`;
+}
+
+export const createConnectAccount = onCall(
+  {
+    region: 'europe-west1',
+    secrets: [stripeSecretKey],
+  },
+  async (request: CallableRequest<CreateConnectAccountInput>): Promise<CreateConnectAccountResult> => {
+    const t0 = Date.now();
+    if (!request.auth) {
+      console.warn('[createConnectAccount] unauthenticated call');
+      throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
+    }
+    const uid = request.auth.uid;
+    const tokenEmail = request.auth.token.email as string | undefined;
+    const emailVerified = request.auth.token.email_verified as boolean | undefined;
+    console.log('[createConnectAccount] start', {
+      uid,
+      hasEmail: !!tokenEmail,
+      emailVerified,
+      country: request.data?.country,
+    });
+
+    if (!tokenEmail) {
+      console.warn('[createConnectAccount] missing email on token', { uid });
+      throw new HttpsError('failed-precondition', 'Email manquant sur le token.');
+    }
+    if (!emailVerified) {
+      console.warn('[createConnectAccount] email not verified', { uid, tokenEmail });
+      throw new HttpsError('failed-precondition', 'Email vérifié requis.');
+    }
+
+    const country = (request.data?.country || '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(country)) {
+      console.warn('[createConnectAccount] invalid country', { uid, raw: request.data?.country });
+      throw new HttpsError('invalid-argument', 'Code pays invalide (ISO-2 attendu).');
+    }
+
+    await enforceRateLimit({
+      identifier: uid,
+      bucket: 'stripe:createConnectAccount',
+      limit: 5,
+      windowSec: 60,
+    });
+
+    const db = getDb();
+    const driverRef = db.collection('drivers').doc(uid);
+    const snap = await driverRef.get();
+    if (!snap.exists) {
+      console.warn('[createConnectAccount] driver doc missing', { uid });
+      throw new HttpsError('permission-denied', 'Réservé aux chauffeurs.');
+    }
+    // Pré-remplissage à partir de l'inscription chauffeur (réduit la friction
+    // côté formulaire Stripe — l'utilisateur peut quand même corriger sur Stripe).
+    const ind = request.data?.individual;
+    const firstName = safeStr(ind?.firstName);
+    const lastName = safeStr(ind?.lastName);
+    const rawPhone = safeStr(ind?.phone, 30);
+    const phone = toE164(rawPhone, country); // peut être undefined si non normalisable
+    const dob = parseStripeDob(ind?.dob);
+    const individual: Record<string, unknown> = {};
+    if (firstName) individual.first_name = firstName;
+    if (lastName) individual.last_name = lastName;
+    if (phone) individual.phone = phone;
+    if (dob) individual.dob = dob;
+    individual.email = tokenEmail;
+    console.log('[createConnectAccount] prefill summary', {
+      uid,
+      hasFirstName: !!firstName,
+      hasLastName: !!lastName,
+      hasRawPhone: !!rawPhone,
+      hasPhoneE164: !!phone,
+      phoneNormalizationDropped: !!rawPhone && !phone,
+      hasDob: !!dob,
+    });
+
+    const stripeClient = getStripe();
+
+    // Si compte déjà créé : tenter un accounts.update pour appliquer le pré-remplissage
+    // (cas d'un chauffeur qui retente l'onboarding sans avoir soumis le formulaire).
+    // On ne touche PAS si details_submitted=true (Stripe a déjà reçu les données du KYC).
+    const existing = snap.data()?.stripeAccountId as string | undefined;
+    if (existing) {
+      try {
+        const acct = await stripeClient.accounts.retrieve(existing);
+        if (acct && !('deleted' in acct && acct.deleted) && !acct.details_submitted) {
+          // On n'envoie l'update QUE si on a au moins un champ utile à pré-remplir.
+          const hasSomethingToPrefill = firstName || lastName || phone || dob;
+          if (hasSomethingToPrefill) {
+            console.log('[createConnectAccount] updating existing account with prefill', {
+              uid,
+              accountId: existing,
+              keys: Object.keys(individual),
+            });
+            // Retry-without-prefill : si Stripe rejette un champ (ex: phone invalide),
+            // on l'enlève et on retente — sans bloquer le retour.
+            let currentInd = { ...individual };
+            for (let attempt = 1; attempt <= 4; attempt++) {
+              try {
+                await stripeClient.accounts.update(existing, { individual: currentInd });
+                console.log('[createConnectAccount] update ok', { uid, accountId: existing, attempt });
+                break;
+              } catch (updErr) {
+                const e = updErr as { param?: string; code?: string; message?: string; raw?: { message?: string; param?: string; code?: string } };
+                const param = e.param ?? e.raw?.param;
+                const m = param ? /^individual\[([^\]]+)\]/.exec(param) : null;
+                if (m && m[1] in currentInd && attempt < 4) {
+                  console.warn('[createConnectAccount] update: Stripe rejected field — retrying without it', {
+                    uid,
+                    accountId: existing,
+                    removedField: m[1],
+                    stripeMessage: e.raw?.message ?? e.message,
+                  });
+                  delete currentInd[m[1]];
+                  continue;
+                }
+                console.warn('[createConnectAccount] update failed (non-blocking)', {
+                  uid,
+                  accountId: existing,
+                  stripeMessage: e.raw?.message ?? e.message,
+                });
+                break;
+              }
+            }
+          }
+        } else {
+          console.log('[createConnectAccount] existing account — skip prefill update', {
+            uid,
+            accountId: existing,
+            detailsSubmitted: acct && 'details_submitted' in acct ? acct.details_submitted : undefined,
+          });
+        }
+      } catch (retrErr) {
+        console.warn('[createConnectAccount] existing account retrieve failed (non-blocking)', {
+          uid,
+          accountId: existing,
+          message: (retrErr as Error).message,
+        });
+      }
+      console.log('[createConnectAccount] returning existing account', { uid, accountId: existing, durationMs: Date.now() - t0 });
+      return { accountId: existing, status: 'existing' };
+    }
+    const buildAccountPayload = (ind: Record<string, unknown>) => ({
+      country,
+      email: tokenEmail,
+      controller: {
+        stripe_dashboard: { type: 'none' as const },
+        fees: { payer: 'application' as const },
+        losses: { payments: 'application' as const },
+        requirement_collection: 'application' as const,
+      },
+      capabilities: { transfers: { requested: true } },
+      business_type: 'individual' as const,
+      individual: ind,
+      metadata: { driverId: uid, platform: 'medjira_taxi' },
+    });
+
+    // Helper : retire récursivement les clés `individual.<rejectedField>` puis retry.
+    // Stripe renvoie `param` au format "individual[phone]" → on extrait "phone".
+    const stripParamFromIndividual = (param: string | undefined, ind: Record<string, unknown>): { ind: Record<string, unknown>; removed: string | null } => {
+      if (!param) return { ind, removed: null };
+      const m = /^individual\[([^\]]+)\]/.exec(param);
+      if (!m) return { ind, removed: null };
+      const key = m[1];
+      if (!(key in ind)) return { ind, removed: null };
+      const next = { ...ind };
+      delete next[key];
+      return { ind: next, removed: key };
+    };
+
+    let account;
+    try {
+      let currentIndividual = individual;
+      let attempt = 0;
+      const MAX_FALLBACK_ATTEMPTS = 4;
+
+      /* eslint-disable no-constant-condition */
+      while (true) {
+        attempt++;
+        try {
+          console.log('[createConnectAccount] calling Stripe accounts.create', {
+            uid,
+            country,
+            email: tokenEmail,
+            attempt,
+            individualKeys: Object.keys(currentIndividual),
+          });
+          account = await stripeClient.accounts.create(buildAccountPayload(currentIndividual), {
+            // L'idempotencyKey doit changer entre attempts car le payload diffère.
+            idempotencyKey: `account_${uid}_v${attempt}`,
+          });
+          console.log('[createConnectAccount] Stripe account created', { uid, accountId: account.id, attempt });
+          break;
+        } catch (innerErr) {
+          const e = innerErr as { param?: string; code?: string; message?: string; raw?: { message?: string; param?: string; code?: string } };
+          const param = e.param ?? e.raw?.param;
+          const code = e.code ?? e.raw?.code;
+          const message = e.raw?.message ?? e.message ?? '';
+
+          // Si Stripe pointe un champ pré-rempli (ex: individual[phone]), on l'enlève
+          // et on retry — le chauffeur saisira la bonne valeur dans le formulaire Stripe.
+          const { ind: stripped, removed } = stripParamFromIndividual(param, currentIndividual);
+          if (removed && attempt < MAX_FALLBACK_ATTEMPTS) {
+            console.warn('[createConnectAccount] Stripe rejected prefill field — retrying without it', {
+              uid,
+              attempt,
+              removedField: removed,
+              stripeCode: code,
+              stripeMessage: message,
+            });
+            currentIndividual = stripped;
+            continue;
+          }
+          throw innerErr;
+        }
+      }
+      /* eslint-enable no-constant-condition */
+    } catch (err) {
+      const stripeErr = err as {
+        type?: string;
+        code?: string;
+        statusCode?: number;
+        requestId?: string;
+        param?: string;
+        message?: string;
+        raw?: { message?: string; code?: string; param?: string };
+      };
+      const stripeMessage = stripeErr.raw?.message || stripeErr.message || 'Erreur Stripe inconnue';
+      console.error('[createConnectAccount] Stripe accounts.create failed', {
+        uid,
+        country,
+        email: tokenEmail,
+        type: stripeErr.type,
+        code: stripeErr.code ?? stripeErr.raw?.code,
+        statusCode: stripeErr.statusCode,
+        param: stripeErr.param ?? stripeErr.raw?.param,
+        requestId: stripeErr.requestId,
+        message: stripeMessage,
+        durationMs: Date.now() - t0,
+      });
+      throw new HttpsError('internal', `Stripe: ${stripeMessage}`);
+    }
+
+    try {
+      await driverRef.update({
+        stripeAccountId: account.id,
+        stripeAccountStatus: 'pending',
+        weeklyPayoutEnabled: false,
+        lastPayoutAt: null,
+        pendingBalanceCents: 0,
+      });
+    } catch (firestoreErr) {
+      const fe = firestoreErr as { code?: string; message?: string };
+      try { await stripeClient.accounts.del(account.id); } catch (delErr) {
+        console.error('[createConnectAccount] rollback delete failed', { uid, accountId: account.id, err: (delErr as Error).message });
+      }
+      console.error('[createConnectAccount] Firestore update failed, account rolled back', {
+        uid,
+        accountId: account.id,
+        code: fe.code,
+        message: fe.message,
+      });
+      throw new HttpsError('internal', 'Erreur lors de l\'enregistrement du compte.');
+    }
+
+    console.log('[createConnectAccount] success', { uid, accountId: account.id, durationMs: Date.now() - t0 });
+    return { accountId: account.id, status: 'pending' };
+  },
+);
+
+// =============================================================================
+// createConnectOnboardLink — Callable (mobile + web)
+// Génère le lien d'onboarding KYC Stripe. Remplace POST /api/stripe/connect/onboard.
+// =============================================================================
+
+interface CreateConnectOnboardLinkInput {
+  returnUrl: string;
+  refreshUrl: string;
+}
+
+interface CreateConnectOnboardLinkResult {
+  url: string;
+}
+
+export const createConnectOnboardLink = onCall(
+  {
+    region: 'europe-west1',
+    secrets: [stripeSecretKey],
+  },
+  async (request: CallableRequest<CreateConnectOnboardLinkInput>): Promise<CreateConnectOnboardLinkResult> => {
+    const t0 = Date.now();
+    if (!request.auth) {
+      console.warn('[createConnectOnboardLink] unauthenticated call');
+      throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
+    }
+    const uid = request.auth.uid;
+
+    const { returnUrl, refreshUrl } = request.data || ({} as CreateConnectOnboardLinkInput);
+    console.log('[createConnectOnboardLink] start', { uid, returnUrl, refreshUrl });
+
+    const isHttpUrl = (u: string) => {
+      try {
+        const parsed = new URL(u);
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+      } catch { return false; }
+    };
+    if (!returnUrl || !isHttpUrl(returnUrl) || !refreshUrl || !isHttpUrl(refreshUrl)) {
+      console.warn('[createConnectOnboardLink] invalid URLs', { uid, returnUrl, refreshUrl });
+      throw new HttpsError('invalid-argument', 'returnUrl/refreshUrl invalides.');
+    }
+
+    await enforceRateLimit({
+      identifier: uid,
+      bucket: 'stripe:createConnectOnboardLink',
+      limit: 10,
+      windowSec: 60,
+    });
+
+    const snap = await getDb().collection('drivers').doc(uid).get();
+    const accountId = snap.data()?.stripeAccountId as string | undefined;
+    if (!accountId) {
+      console.warn('[createConnectOnboardLink] missing stripeAccountId', { uid });
+      throw new HttpsError('failed-precondition', 'Aucun compte Stripe Connect. Créez-en un d\'abord.');
+    }
+
+    try {
+      console.log('[createConnectOnboardLink] calling Stripe accountLinks.create', { uid, accountId });
+      const accountLink = await getStripe().accountLinks.create({
+        account: accountId,
+        return_url: returnUrl,
+        refresh_url: refreshUrl,
+        type: 'account_onboarding',
+      });
+      console.log('[createConnectOnboardLink] success', { uid, accountId, durationMs: Date.now() - t0 });
+      return { url: accountLink.url };
+    } catch (err) {
+      const stripeErr = err as {
+        type?: string;
+        code?: string;
+        statusCode?: number;
+        requestId?: string;
+        param?: string;
+        message?: string;
+        raw?: { message?: string; code?: string; param?: string };
+      };
+      const stripeMessage = stripeErr.raw?.message || stripeErr.message || 'Erreur Stripe inconnue';
+      console.error('[createConnectOnboardLink] Stripe accountLinks.create failed', {
+        uid,
+        accountId,
+        type: stripeErr.type,
+        code: stripeErr.code ?? stripeErr.raw?.code,
+        statusCode: stripeErr.statusCode,
+        param: stripeErr.param ?? stripeErr.raw?.param,
+        requestId: stripeErr.requestId,
+        message: stripeMessage,
+        durationMs: Date.now() - t0,
+      });
+      throw new HttpsError('internal', `Stripe: ${stripeMessage}`);
+    }
+  },
+);
+
+// =============================================================================
+// getStripeAccountStatus — Callable
+// Lit l'état Stripe Connect du chauffeur (live depuis Stripe + sync Firestore).
+// Utilisé par /driver/payments/setup pour décider quoi afficher après que le
+// chauffeur revient du formulaire d'onboarding (ou ferme le navigateur).
+// =============================================================================
+
+interface GetStripeAccountStatusResult {
+  accountId: string | null;
+  status: 'not_created' | 'pending' | 'active' | 'restricted' | 'disabled';
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  detailsSubmitted: boolean;
+  disabledReason: string | null;
+  requirements: {
+    currently_due: string[];
+    past_due: string[];
+    eventually_due: string[];
+    pending_verification: string[];
+    current_deadline: number | null;
+  };
+}
+
+export const getStripeAccountStatus = onCall(
+  {
+    region: 'europe-west1',
+    secrets: [stripeSecretKey],
+  },
+  async (request: CallableRequest<unknown>): Promise<GetStripeAccountStatusResult> => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
+    }
+    const uid = request.auth.uid;
+
+    await enforceRateLimit({
+      identifier: uid,
+      bucket: 'stripe:getStripeAccountStatus',
+      limit: 30,
+      windowSec: 60,
+    });
+
+    const driverSnap = await getDb().collection('drivers').doc(uid).get();
+    if (!driverSnap.exists) {
+      throw new HttpsError('permission-denied', 'Réservé aux chauffeurs.');
+    }
+    const accountId = driverSnap.data()?.stripeAccountId as string | undefined;
+    if (!accountId) {
+      console.log('[getStripeAccountStatus] no account', { uid });
+      return {
+        accountId: null,
+        status: 'not_created',
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+        disabledReason: null,
+        requirements: {
+          currently_due: [],
+          past_due: [],
+          eventually_due: [],
+          pending_verification: [],
+          current_deadline: null,
+        },
+      };
+    }
+
+    try {
+      // Sync DB côté serveur — source de vérité Stripe
+      await syncDriverAccountStatus(uid, accountId);
+      const fresh = await getDb().collection('drivers').doc(uid).get();
+      const d = fresh.data() ?? {};
+      const req = (d.requirements ?? {}) as Record<string, unknown>;
+
+      console.log('[getStripeAccountStatus] returning', {
+        uid,
+        accountId,
+        status: d.stripeAccountStatus,
+        chargesEnabled: d.stripeChargesEnabled,
+        payoutsEnabled: d.stripePayoutsEnabled,
+      });
+
+      return {
+        accountId,
+        status: (d.stripeAccountStatus as GetStripeAccountStatusResult['status']) ?? 'pending',
+        chargesEnabled: !!d.stripeChargesEnabled,
+        payoutsEnabled: !!d.stripePayoutsEnabled,
+        detailsSubmitted: !!d.stripeDetailsSubmitted,
+        disabledReason: (d.stripeDisabledReason as string | null) ?? null,
+        requirements: {
+          currently_due: Array.isArray(req.currently_due) ? (req.currently_due as string[]) : [],
+          past_due: Array.isArray(req.past_due) ? (req.past_due as string[]) : [],
+          eventually_due: Array.isArray(req.eventually_due) ? (req.eventually_due as string[]) : [],
+          pending_verification: Array.isArray(req.pending_verification) ? (req.pending_verification as string[]) : [],
+          current_deadline: (req.current_deadline as number | null) ?? null,
+        },
+      };
+    } catch (err) {
+      const e = err as { type?: string; code?: string; message?: string };
+      console.error('[getStripeAccountStatus] sync failed', {
+        uid,
+        accountId,
+        type: e.type,
+        code: e.code,
+        message: e.message,
+      });
+      throw new HttpsError('internal', `Stripe: ${e.message ?? 'Erreur de récupération du statut.'}`);
+    }
+  },
+);

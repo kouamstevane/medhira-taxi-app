@@ -65,8 +65,8 @@ export interface DriverCollection {
   phoneNumber: null              // Toujours null — interdiction d'auth par téléphone
   firstName: string
   lastName: string
-  city: string
-  zipCode: string
+  city?: string
+  zipCode?: string
   phone: string
   status: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'action_required'
   isAvailable: boolean
@@ -94,15 +94,15 @@ export interface DriverCollection {
 
   // Véhicule chauffeur — standardisé make→brand, plateNumber→plate, +3 nouveaux champs
   car?: {
-    brand: string                // anciennement `make`
-    model: string
-    year: number                 // >= 2010 obligatoire
-    color: string
-    seats: number
-    fuelType: string
-    mileage: number
-    techControlDate: string
-    plate: string                // anciennement `plateNumber`
+    brand?: string
+    model?: string
+    year: number
+    color?: string
+    seats?: number
+    fuelType?: string
+    mileage?: number
+    techControlDate?: string
+    plate?: string
   }
 
   // Gains livreur

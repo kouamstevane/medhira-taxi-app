@@ -5,6 +5,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/config/firebase';
+import { functions } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { CURRENCY_CODE, LIMITS, WALLET_PRESET_AMOUNTS, ACTIVE_MARKET } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -43,18 +45,9 @@ export default function RechargerPage() {
       }
 
       // Créer le PaymentIntent via l'API Stripe
-      const token = await user.getIdToken();
-      const res = await fetch('/api/stripe/wallet/recharge', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ amount: numericAmount }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Erreur lors de la création du paiement');
+      const rechargeFn = httpsCallable<{ amount: number }, { clientSecret: string }>(functions, 'stripeWalletRecharge');
+      const result = await rechargeFn({ amount: numericAmount });
+      const data = result.data;
 
       setStripeClientSecret(data.clientSecret);
       setStep('stripe_form');

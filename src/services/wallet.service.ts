@@ -1,20 +1,9 @@
 /**
  * Service de Gestion du Portefeuille (côté client)
  *
- * ⚠️ Les MUTATIONS ont été déplacées vers des API routes serveur protégées
- * par `verifyFirebaseToken` + Firebase Admin SDK. Ce module ne fait plus
- * QUE :
- *   - des appels `fetch('/api/wallet/...')` pour toute mutation
- *   - des LECTURES Firestore directes (les rules sont read-only pour le client)
- *
- * Rationale : les rules Firestore ne peuvent pas empêcher un attaquant
- * connecté de faire `runTransaction(db, tx => tx.update(walletRef, { balance: 999999 }))`
- * depuis la console du navigateur si l'écriture passe uniquement par le SDK
- * client. Seule une API serveur (admin SDK) peut valider la logique métier
- * et garantir l'intégrité du solde.
- *
- * Les signatures publiques sont conservées pour éviter un refactor invasif
- * des consommateurs (taxi.service.ts, food-delivery.service.ts, pages wallet, etc.).
+ * Les mutations passent par des Cloud Functions (httpsCallable) :
+ *   - walletEnsure, walletPayBooking, walletFailTransaction, walletRefundTransaction
+ * Les lectures restent côté client via Firestore (rules read-only).
  *
  * @module services/wallet
  */
@@ -31,7 +20,8 @@ import {
   startAfter,
 } from 'firebase/firestore';
 import type { DocumentSnapshot } from 'firebase/firestore';
-import { db, auth } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '@/config/firebase';
 import {
   Wallet,
   Transaction,
@@ -39,46 +29,6 @@ import {
   TransactionStatus,
 } from '@/types';
 import { CURRENCY_CODE, LIMITS } from '@/utils/constants';
-
-// ============================================================================
-// Helpers internes — fetch authentifié
-// ============================================================================
-
-async function getAuthToken(): Promise<string> {
-  const current = auth.currentUser;
-  if (!current) {
-    throw new Error('Utilisateur non authentifié');
-  }
-  return current.getIdToken();
-}
-
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const token = await getAuthToken();
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    let message = `Erreur serveur (${res.status})`;
-    try {
-      const data = await res.json();
-      if (data?.error) message = data.error as string;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(message);
-  }
-
-  // Tolère les réponses vides
-  const text = await res.text();
-  if (!text) return {} as T;
-  return JSON.parse(text) as T;
-}
 
 // ============================================================================
 // Wallet — lecture (client direct, rules read-only)
@@ -94,18 +44,17 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
  * différent lancera malgré tout l'ensure pour l'utilisateur authentifié.
  */
 export const getOrCreateWallet = async (userId: string): Promise<Wallet> => {
-  // Lecture directe d'abord (évite un aller-retour réseau si le wallet existe)
   const walletRef = doc(db, 'wallets', userId);
   const walletSnap = await getDoc(walletRef);
   if (walletSnap.exists()) {
     return walletSnap.data() as Wallet;
   }
 
-  // Sinon, création côté serveur
-  const ensured = await postJson<{ balance: number; currency: string }>(
-    '/api/wallet/ensure',
-    {}
+  const ensureWallet = httpsCallable<unknown, { balance: number; currency: string }>(
+    functions, 'walletEnsure'
   );
+  const result = await ensureWallet({});
+  const ensured = result.data;
 
   return {
     userId,
@@ -124,7 +73,7 @@ export const getWalletBalance = async (userId: string): Promise<number> => {
 };
 
 // ============================================================================
-// Transactions — mutations (via API routes serveur)
+// Transactions — mutations (via Cloud Functions)
 // ============================================================================
 
 /**
@@ -135,11 +84,11 @@ export const payBooking = async (
   _userId: string,
   bookingId: string,
 ): Promise<string> => {
-  const { transactionId } = await postJson<{ transactionId: string }>(
-    '/api/wallet/pay-booking',
-    { bookingId }
+  const callable = httpsCallable<{ bookingId: string }, { transactionId: string }>(
+    functions, 'walletPayBooking'
   );
-  return transactionId;
+  const result = await callable({ bookingId });
+  return result.data.transactionId;
 };
 
 /**
@@ -149,7 +98,10 @@ export const failTransaction = async (
   transactionId: string,
   reason: string
 ): Promise<void> => {
-  await postJson('/api/wallet/fail-transaction', { transactionId, reason });
+  const callable = httpsCallable<{ transactionId: string; reason: string }, unknown>(
+    functions, 'walletFailTransaction'
+  );
+  await callable({ transactionId, reason });
 };
 
 /**
@@ -159,11 +111,11 @@ export const refundTransaction = async (
   originalTransactionId: string,
   _userId: string
 ): Promise<string> => {
-  const { refundId } = await postJson<{ refundId: string }>(
-    '/api/wallet/refund-transaction',
-    { originalTransactionId }
+  const callable = httpsCallable<{ originalTransactionId: string }, { refundId: string }>(
+    functions, 'walletRefundTransaction'
   );
-  return refundId;
+  const result = await callable({ originalTransactionId });
+  return result.data.refundId;
 };
 
 // ============================================================================

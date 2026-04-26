@@ -12,6 +12,8 @@ import { useDriverStore, type DriverCoreData, type DriverPrivateData } from '@/s
 import type { ConnectAccountStatus } from '@/types/stripe';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/config/firebase';
 
 export interface StripeConnectData {
   stripeAccountId: string | null;
@@ -60,13 +62,19 @@ export function useDriverProfile() {
     setStripeLoading(true);
     setStripeError('');
     try {
-      const token = await user.getIdToken();
-      const res = await fetch('/api/stripe/connect/account', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data: StripeConnectData = await res.json();
-        setStripeData(data);
+      const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
+      if (driverDoc.exists()) {
+        const d = driverDoc.data();
+        const cur = (d.currency as string) ?? 'cad';
+        const isZeroDecimal = ['xaf', 'xof'].includes(cur.toLowerCase());
+        setStripeData({
+          stripeAccountId: d.stripeAccountId ?? null,
+          status: (d.stripeAccountStatus as ConnectAccountStatus) ?? 'not_created',
+          weeklyPayoutEnabled: d.weeklyPayoutEnabled ?? false,
+          pendingBalance: d.pendingBalanceCents ? (isZeroDecimal ? d.pendingBalanceCents : d.pendingBalanceCents / 100) : 0,
+          currency: cur,
+          lastPayoutAt: d.lastPayoutAt?.toDate?.()?.toISOString?.() ?? null,
+        });
       }
     } catch {
       // Stripe Connect optionnel
@@ -181,26 +189,16 @@ export function useDriverProfile() {
     setStripeLoading(true);
     setStripeError('');
     try {
-      const token = await user.getIdToken();
-      const res = await fetch('/api/stripe/connect/account', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email: driver.email, country: ACTIVE_MARKET }),
-      });
-      const data: { error?: string } = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const createAccountFn = httpsCallable(functions, 'createConnectAccount');
+      await createAccountFn({ country: ACTIVE_MARKET });
 
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-      const linkRes = await fetch('/api/stripe/connect/onboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          returnUrl: `${baseUrl}/driver/profile?stripe=success`,
-          refreshUrl: `${baseUrl}/driver/profile?stripe=refresh`,
-        }),
+      const createLinkFn = httpsCallable<{ returnUrl: string; refreshUrl: string }, { url: string }>(functions, 'createConnectOnboardLink');
+      const linkResult = await createLinkFn({
+        returnUrl: `${baseUrl}/driver/payments/setup?onboarding=success`,
+        refreshUrl: `${baseUrl}/driver/payments/setup?onboarding=refresh`,
       });
-      const linkData: { error?: string; url?: string } = await linkRes.json();
-      if (!linkRes.ok) throw new Error(linkData.error);
+      const linkData = linkResult.data;
       if (linkData.url) {
         if (Capacitor.isNativePlatform()) {
           browserListenerRef.current?.remove();
@@ -227,14 +225,9 @@ export function useDriverProfile() {
     setPayoutToggleLoading(true);
     setStripeError('');
     try {
-      const token = await user.getIdToken();
-      const res = await fetch('/api/stripe/connect/payout', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ weeklyPayoutEnabled: enabled }),
-      });
-      const data: { error?: string; message?: string } = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const payoutFn = httpsCallable<{ action: string; weeklyPayoutEnabled: boolean }, { success: boolean; message?: string }>(functions, 'stripeConnectPayout');
+      const result = await payoutFn({ action: 'toggle_weekly', weeklyPayoutEnabled: enabled });
+      const data = result.data;
       setStripeData(prev => prev ? { ...prev, weeklyPayoutEnabled: enabled } : prev);
       setPayoutSuccess(data.message ?? '');
       const timeout = setTimeout(() => {
@@ -255,14 +248,9 @@ export function useDriverProfile() {
     setManualPayoutLoading(true);
     setStripeError('');
     try {
-      const token = await user.getIdToken();
-      const res = await fetch('/api/stripe/connect/payout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: 'manual' }),
-      });
-      const data: { error?: string; amount?: number; currency?: string } = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const payoutFn = httpsCallable<{ action: string }, { amount?: number; currency?: string }>(functions, 'stripeConnectPayout');
+      const result = await payoutFn({ action: 'manual_payout' });
+      const data = result.data;
       setPayoutSuccess(`Virement de ${data.amount} ${data.currency?.toUpperCase()} envoyé !`);
       const timeout = setTimeout(() => {
         if (mountedRef.current) setPayoutSuccess('');

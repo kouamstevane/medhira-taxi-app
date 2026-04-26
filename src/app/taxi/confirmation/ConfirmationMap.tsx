@@ -1,6 +1,6 @@
 "use client";
 
-import { LoadScript, GoogleMap, Marker, DirectionsRenderer } from "@react-google-maps/api";
+import { useState, useEffect } from "react";
 
 const mapContainerStyle = { width: "100%", height: "200px" };
 const defaultCenter = { lat: 43.6532, lng: -79.3832 };
@@ -12,6 +12,22 @@ interface ConfirmationMapProps {
 }
 
 export function ConfirmationMap({ driverLocation, pickupLocation, directions }: ConfirmationMapProps) {
+  const [mapsApi, setMapsApi] = useState<any>(null);
+
+  useEffect(() => {
+    import("@react-google-maps/api").then(setMapsApi);
+  }, []);
+
+  if (!mapsApi) {
+    return (
+      <div style={mapContainerStyle} className="flex items-center justify-center bg-[#1A1A1A]">
+        <p className="text-[#9CA3AF]">Chargement de la carte...</p>
+      </div>
+    );
+  }
+
+  const { LoadScript, GoogleMap, Marker, DirectionsRenderer } = mapsApi;
+
   return (
     <LoadScript
       googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ""}

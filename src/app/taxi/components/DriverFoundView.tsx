@@ -4,9 +4,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { logger } from '@/utils/logger';
-import { FiMessageSquare, FiEdit2 } from 'react-icons/fi';
+import { MessageSquare, Pencil } from 'lucide-react';
 import { Booking, CarType, Location, PlaceSuggestion } from '@/types/booking';
-import { GoogleMap, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { updateDestination, updatePassengerLocation, getCarTypes } from '@/services/taxi.service';
 import { AddressInput } from './AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
@@ -49,12 +48,17 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
 
   const [cancelling, setCancelling] = useState(false);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
+  const [mapsApi, setMapsApi] = useState<any>(null);
 
   const { autocompleteService } = useGoogleMaps();
   const { watchPosition } = useCapacitorGeolocation();
   const { showError, showSuccess, toasts, removeToast } = useToast();
 
   const { isLoaded } = useGoogleMaps();
+
+  useEffect(() => {
+    import('@react-google-maps/api').then(setMapsApi);
+  }, []);
 
   const onLoad = useCallback(function callback(_map: google.maps.Map) {
     // Map instance available if needed
@@ -309,6 +313,10 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
 
   if (!booking) return null;
 
+  const GoogleMap = mapsApi?.GoogleMap;
+  const Marker = mapsApi?.Marker;
+  const DirectionsRenderer = mapsApi?.DirectionsRenderer;
+
   const getStatusMessage = () => {
     switch (booking.status) {
       case 'accepted': return 'Chauffeur en route';
@@ -333,7 +341,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       <div className="bg-[#0F0F0F] rounded-xl shadow-lg overflow-hidden">
       {/* Carte */}
       <div className="relative h-[300px] sm:h-[400px] bg-[#1A1A1A]">
-        {isLoaded ? (
+        {isLoaded && GoogleMap ? (
           <GoogleMap
             mapContainerStyle={{ width: '100%', height: '100%' }}
             center={booking.driverLocation || booking.pickupLocation || defaultCenter}
@@ -418,12 +426,16 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
             </div>
             <div>
               <h3 className="font-bold text-lg text-white">{booking.driverName}</h3>
-              <p className="text-sm text-[#9CA3AF]">
-                {booking.carModel} • {booking.carColor}
-              </p>
-              <div className="inline-block bg-[#3B82F6]/10 border border-[#3B82F6]/20 px-3 py-1 rounded text-sm font-mono font-bold mt-1 text-[#3B82F6]">
-                {booking.carPlate}
-              </div>
+              {booking.carModel && (
+                <p className="text-sm text-[#9CA3AF]">
+                  {[booking.carModel, booking.carColor].filter(Boolean).join(' • ')}
+                </p>
+              )}
+              {booking.carPlate && (
+                <div className="inline-block bg-[#3B82F6]/10 border border-[#3B82F6]/20 px-3 py-1 rounded text-sm font-mono font-bold mt-1 text-[#3B82F6]">
+                  {booking.carPlate}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex space-x-2">
@@ -432,7 +444,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               className="p-3 bg-[#3B82F6]/20 text-[#3B82F6] rounded-full hover:bg-[#3B82F6]/30 transition relative"
               title="Messagerie"
             >
-              <FiMessageSquare className="w-5 h-5" />
+              <MessageSquare className="w-5 h-5" />
               {/* Indicateur de message non lu */}
               {(booking.unreadMessages?.client || 0) > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-white">
@@ -464,7 +476,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                       onClick={() => setShowEditDestModal(true)}
                       className="text-xs text-[#f29200] font-medium flex items-center hover:underline"
                     >
-                      <FiEdit2 className="mr-1" /> Modifier
+                      <Pencil className="w-4 h-4 mr-1" /> Modifier
                     </button>
                   )}
                 </div>

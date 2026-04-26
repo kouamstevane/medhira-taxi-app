@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { MdPhone, MdCallEnd } from 'react-icons/md';
+import { Phone, PhoneOff } from 'lucide-react';
 import { Haptics } from '@capacitor/haptics';
 import { useVoipCall } from '../../hooks/useVoipCall';
 import { VoipCall } from '../../src/types/voip';
@@ -106,7 +106,7 @@ export function IncomingCallModal({ call, metadata, onClose }: IncomingCallModal
             className="incoming-call-button incoming-call-decline-button"
             aria-label="Refuser l'appel"
           >
-            <MdCallEnd size={32} color="white" />
+            <PhoneOff size={32} color="white" />
           </button>
 
           {/* Bouton répondre */}
@@ -121,7 +121,7 @@ export function IncomingCallModal({ call, metadata, onClose }: IncomingCallModal
                 <span>...</span>
               </div>
             ) : (
-              <MdPhone size={32} color="white" />
+              <Phone size={32} color="white" />
             )}
           </button>
         </div>

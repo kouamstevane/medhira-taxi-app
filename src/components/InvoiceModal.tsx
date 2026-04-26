@@ -145,7 +145,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
                 <div>
                   <p className="font-medium text-white">{invoiceData.driverName}</p>
                   <p className="text-sm text-slate-400">
-                    {invoiceData.carModel} • {invoiceData.carPlate}
+                    {[invoiceData.carModel, invoiceData.carPlate].filter(Boolean).join(' • ') || 'Véhicule non spécifié'}
                   </p>
                 </div>
               </div>

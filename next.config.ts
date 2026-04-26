@@ -12,13 +12,28 @@ const nextConfig: NextConfig = {
   output: isMobile ? 'export' : undefined,
   trailingSlash: !isMobile,
   skipTrailingSlashRedirect: isMobile,
-  // Désactiver les source maps en production pour réduire la taille
   productionBrowserSourceMaps: false,
-  // Optimisations agressives
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,
-  // Optimisation des images
+  experimental: {
+    optimizePackageImports: [
+      'firebase/auth',
+      'firebase/firestore',
+      'firebase/storage',
+      'firebase/functions',
+      'firebase/database',
+      'firebase/messaging',
+      'lucide-react',
+      'radix-ui',
+      'class-variance-authority',
+    ],
+  },
+  modularizeImports: {
+    'lucide-react': {
+      transform: 'lucide-react/dist/esm/icons/{{ kebabCase member }}',
+    },
+  },
   images: {
     unoptimized: isMobile,
     remotePatterns: [
@@ -38,10 +53,18 @@ const nextConfig: NextConfig = {
     formats: ['image/webp'],
     minimumCacheTTL: 60,
   },
-  // Configuration Turbopack (Next.js 16+)
-  turbopack: {
-    // Configuration vide car les optimisations sont gérées automatiquement
+  async headers() {
+    if (isMobile) return [];
+    return [
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+    ];
   },
+  turbopack: {},
 };
 
 export default nextConfig;

@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
 import { auth, db } from '../../../config/firebase';
+import { functions } from '../../../config/firebase';
+import { httpsCallable } from 'firebase/functions';
 import {
   signInWithEmailAndPassword
 } from 'firebase/auth';
@@ -92,7 +94,7 @@ export default function DriverLogin() {
 
     const driverData = driverDoc.data();
 
-    if (driverData.status === 'approved') {
+    if (driverData.status === 'approved' || driverData.status === 'active') {
       router.push('/driver/dashboard');
       return;
     }
@@ -106,11 +108,11 @@ export default function DriverLogin() {
       driverData.status === 'action_required'
     ) {
       setBlockedStatus(driverData.status as DriverBlockedStatus);
-      // Lever une erreur silencieuse pour déclencher le signOut dans le catch
       throw new Error('__blocked__');
     }
 
-    throw new Error("Votre compte n'est pas encore approuvé");
+    // Statut inconnu ou profil incomplet : rediriger vers l'inscription
+    router.push('/driver/register');
   };
 
   const handleGoogleLogin = async () => {
@@ -148,21 +150,9 @@ export default function DriverLogin() {
       const returnUrl = `${baseUrl}/driver/verify?onboarding=success`;
       const refreshUrl = `${baseUrl}/driver/login`;
 
-      const res = await fetch('/api/stripe/connect/onboard', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ returnUrl, refreshUrl }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        await auth.signOut().catch(() => {});
-        throw new Error(data.error || "Impossible de générer le lien Stripe");
-      }
+      const createLinkFn = httpsCallable<{ returnUrl: string; refreshUrl: string }, { url: string }>(functions, 'createConnectOnboardLink');
+      const result = await createLinkFn({ returnUrl, refreshUrl });
+      const data = result.data;
 
       // Ne pas signOut avant la redirection — la session doit rester valide
       // pour que /driver/verify?onboarding=success fonctionne au retour de Stripe

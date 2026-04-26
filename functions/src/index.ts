@@ -36,14 +36,28 @@ import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from 'firebas
 import { hasRequiredFields } from './utils/validation.js';
 import * as crypto from 'crypto';
 import { getDatabase } from 'firebase-admin/database';
-import { CloudTasksClient } from '@google-cloud/tasks';
-import { OAuth2Client } from 'google-auth-library';
 import { DELIVERY_SHARE_RATE } from './config/stripe.js';
 import { selectNearestDriver } from './utils/matching.js';
 import { enforceRateLimit } from './utils/rateLimiter.js';
 
-// Client OAuth utilisé pour la vérification des tokens OIDC émis par Cloud Tasks
-const oauthClient = new OAuth2Client();
+// Lazy imports pour éviter le timeout de déploiement (10s)
+let _cloudTasksClient: any = null;
+async function getCloudTasksClient() {
+  if (!_cloudTasksClient) {
+    const { CloudTasksClient } = await import('@google-cloud/tasks');
+    _cloudTasksClient = new CloudTasksClient();
+  }
+  return _cloudTasksClient;
+}
+
+let _oauthClient: any = null;
+async function getOAuthClient() {
+  if (!_oauthClient) {
+    const { OAuth2Client } = await import('google-auth-library');
+    _oauthClient = new OAuth2Client();
+  }
+  return _oauthClient;
+}
 
 // Définir le secret de chiffrement depuis Firebase Secret Manager
 const encryptionMasterKey = defineSecret('ENCRYPTION_MASTER_KEY');
@@ -345,7 +359,7 @@ export const createDriverProfile = onCall(
     // RGPD #C2 : dob/nationality/address/ssn/bank/documents ne sont plus
     // envoyés dans driverData (ils vivent dans drivers/{uid}/private/personal,
     // écrit côté client par l'utilisateur propriétaire via writeBatch).
-    const requiredFields = ['firstName', 'lastName', 'city', 'zipCode', 'phone']
+    const requiredFields = ['firstName', 'lastName', 'phone']
     if (driverData.driverType === 'chauffeur' || driverData.driverType === 'les_deux') {
       requiredFields.push('car')
     }
@@ -968,6 +982,7 @@ export const onFoodOrderAccepted = onDocumentUpdated(
     }
 
     // 9. Planifier timeout 90s via Cloud Tasks
+    const cloudTasksClient = await getCloudTasksClient();
     const PROJECT_ID = process.env.GCLOUD_PROJECT ?? ''
     const LOCATION = 'europe-west1'
     const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net`
@@ -1157,6 +1172,7 @@ export const onDeliveryOrderTimeout = onRequest(
     const expectedServiceAccount = process.env.CLOUD_TASKS_SERVICE_ACCOUNT
 
     try {
+      const oauthClient = await getOAuthClient();
       const ticket = await oauthClient.verifyIdToken({
         idToken,
         audience: expectedAudience,
@@ -1269,6 +1285,7 @@ export const onDeliveryOrderTimeout = onRequest(
       })
     }
 
+    const cloudTasksClient = await getCloudTasksClient();
     const PROJECT_ID = process.env.GCLOUD_PROJECT ?? ''
     const LOCATION = 'europe-west1'
     const queuePath = cloudTasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout')
@@ -1489,8 +1506,6 @@ export const onDriverDocumentsUpdated = onDocumentUpdated(
 // ============================================================================
 // Push Notification Topic Management
 // ============================================================================
-
-const cloudTasksClient = new CloudTasksClient();
 
 const ALLOWED_TOPIC_PATTERNS: RegExp[] = [
   /^all_drivers$/,
@@ -1770,7 +1785,43 @@ export const verifyCode = onCall(
   }
 );
 
-export { stripeWebhookInstant, stripeWebhookLight, createSetupIntent } from './stripe/index.js';
+export { stripeWebhookInstant, stripeWebhookLight, createSetupIntent, createConnectAccount, createConnectOnboardLink, getStripeAccountStatus } from './stripe/index.js';
+export { stripeConnectPayout } from './stripe/stripeConnectPayout.js';
+export { stripePaymentIntent } from './stripe/stripePaymentIntent.js';
+export { stripeWalletRecharge } from './stripe/stripeWalletRecharge.js';
+
+// ============================================================================
+// Migration Next.js → Cloud Functions onCall (groupes)
+// ============================================================================
+
+export {
+  adminDeleteDriverComplete,
+  adminManageCity,
+  adminManageDriver,
+  adminManageRestaurant,
+  adminManageUser,
+  adminSendEmail,
+} from './admin/index.js';
+
+export {
+  authSendVerificationCode,
+  authVerifyCode,
+} from './authApi/index.js';
+
+export {
+  walletGetBalance,
+  walletEnsure,
+  walletFailTransaction,
+  walletPayBooking,
+  walletRefundTransaction,
+} from './walletApi/index.js';
+
+export {
+  bookingsComplete,
+  distanceCalculate,
+  reverseGeocode,
+  debugLog,
+} from './utilsApi/index.js';
 
 // RGPD Article 17 — Droit à l'oubli
 export {

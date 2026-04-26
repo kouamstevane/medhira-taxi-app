@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { collection, onSnapshot, query, limit } from 'firebase/firestore'
-import { db, auth } from '@/config/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import type { CityDocument } from '@/types/firestore-collections'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
@@ -23,28 +24,15 @@ export default function AdminCitiesPage() {
     return () => unsub()
   }, [isAdmin])
 
-  const getAuthHeaders = async () => {
-    const token = await auth.currentUser?.getIdToken();
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    return headers;
-  }
-
   const manage = async (action: string, cityId: string) => {
-    await fetch('/api/admin/manage-city', {
-      method: 'POST',
-      headers: await getAuthHeaders(),
-      body: JSON.stringify({ action, cityId }),
-    })
+    const adminManageCity = httpsCallable(functions, 'adminManageCity')
+    await adminManageCity({ action, cityId })
   }
 
   const createCity = async () => {
     if (!newCityId || !newCityName) return
-    await fetch('/api/admin/manage-city', {
-      method: 'POST',
-      headers: await getAuthHeaders(),
-      body: JSON.stringify({ action: 'create', cityId: newCityId, name: newCityName }),
-    })
+    const adminManageCity = httpsCallable(functions, 'adminManageCity')
+    await adminManageCity({ action: 'create', cityId: newCityId, name: newCityName })
     setNewCityId('')
     setNewCityName('')
     setShowCreate(false)

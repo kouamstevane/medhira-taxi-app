@@ -24,7 +24,8 @@ import {
   Timestamp,
   runTransaction,
 } from 'firebase/firestore';
-import { auth, db } from '@/config/firebase';
+import { auth, db, functions } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
 import { calculateTripPrice, typedServerTimestamp } from '@/lib/firebase-helpers';
 import { CURRENCY_CODE, DEFAULT_PRICING, LIMITS } from '@/utils/constants';
@@ -648,23 +649,17 @@ export const completeTrip = async (bookingId: string): Promise<void> => {
   const carTypes = await getCarTypes();
   const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
 
-  const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-  const res = await fetch('/api/bookings/complete', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ bookingId }),
-  });
-
-  let result: { success?: boolean; finalPrice?: number; durationMinutes?: number; paymentFailed?: boolean; error?: string } = {};
+  let result: { success?: boolean; finalPrice?: number; durationMinutes?: number; paymentFailed?: boolean; error?: string; alreadyCompleted?: boolean } = {};
   try {
-    result = await res.json();
-  } catch { /* ignore */ }
-
-  if (!res.ok && !result.paymentFailed) {
-    throw new Error(result.error || 'Échec de la complétion de la course');
+    const callableFn = httpsCallable(functions, 'bookingsComplete');
+    const callableResult = await callableFn({ bookingId });
+    result = callableResult.data as typeof result;
+  } catch (err: any) {
+    if (err instanceof Error && 'code' in err && (err as any).data?.paymentFailed) {
+      result = (err as any).data as typeof result;
+    } else {
+      throw new Error(err instanceof Error ? err.message : 'Échec de la complétion de la course');
+    }
   }
 
   const finalPrice = result.finalPrice ?? booking.price;

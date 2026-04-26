@@ -20,6 +20,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut, User } from 'firebase/auth';
 import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { StripeOnboardingBanner } from '@/components/ui/StripeOnboardingBanner';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import {
@@ -364,6 +365,18 @@ export default function DriverDashboard() {
 
   const toggleAvailability = async () => {
     if (!auth.currentUser || !driver) return;
+    // Gating Stripe : interdire la mise en ligne tant que les virements ne sont
+    // pas activés — sinon le chauffeur prendrait des courses sans pouvoir être payé.
+    const goingOnline = !driver.isAvailable;
+    if (goingOnline) {
+      const stripeStatus = (driver as DriverCoreData & { stripeAccountStatus?: string; stripePayoutsEnabled?: boolean }).stripeAccountStatus;
+      const payoutsEnabled = (driver as DriverCoreData & { stripePayoutsEnabled?: boolean }).stripePayoutsEnabled;
+      if (stripeStatus !== 'active' || payoutsEnabled === false) {
+        showError("Configuration des paiements requise avant de passer en ligne. Vous allez être redirigé pour la terminer.");
+        router.push('/driver/payments/setup');
+        return;
+      }
+    }
     try {
       await updateDoc(doc(db, 'drivers', auth.currentUser.uid), {
         isAvailable: !driver.isAvailable
@@ -581,6 +594,11 @@ export default function DriverDashboard() {
             </span>
           </button>
         </header>
+
+        {/* Bandeau Stripe Onboarding — visible tant que le compte n'est pas actif */}
+        <div className="px-6">
+          <StripeOnboardingBanner />
+        </div>
 
         {/* Info Message */}
         {infoMessage && (

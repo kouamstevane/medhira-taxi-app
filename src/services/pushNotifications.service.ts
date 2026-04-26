@@ -1,7 +1,6 @@
 import { PushNotifications, ActionPerformed, Token } from '@capacitor/push-notifications';
 import { Capacitor } from '@capacitor/core';
 import { getAuth } from 'firebase/auth';
-import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import app from '@/config/firebase';
 import { z } from 'zod';
 
@@ -350,11 +349,11 @@ class PushNotificationService {
             return this.token;
         }
         
-        // Si pas de token, essayer de le récupérer via Firebase Messaging
         try {
-            const messaging = getMessaging(app);
+            const { getMessaging: getFirebaseMessaging, getToken: getFirebaseToken } = await import('firebase/messaging');
+            const messaging = getFirebaseMessaging(app);
             const vapidKey = process.env.NEXT_PUBLIC_FCM_VAPID_KEY;
-            const token = await getToken(messaging, vapidKey ? { vapidKey } : undefined);
+            const token = await getFirebaseToken(messaging, vapidKey ? { vapidKey } : undefined);
             this.token = token;
             return token;
         } catch (error) {

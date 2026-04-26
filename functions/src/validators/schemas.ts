@@ -29,10 +29,10 @@ export type EncryptionRequestInput = z.infer<typeof EncryptionRequestSchema>;
  * (ex: year >= 2010) reste dans la Cloud Function.
  */
 const CarSchema = z.object({
-  brand: z.string().min(1).max(80),
-  model: z.string().min(1).max(80),
+  brand: z.string().min(1).max(80).optional(),
+  model: z.string().min(1).max(80).optional(),
   year: z.coerce.number().int().min(1900).max(2100),
-  color: z.string().min(1).max(40),
+  color: z.string().min(1).max(40).optional(),
   seats: z.coerce.number().int().min(1).max(20).optional(),
   fuelType: z.string().min(1).max(40).optional(),
   mileage: z.coerce.number().min(0).max(10_000_000).optional(),
@@ -67,8 +67,8 @@ export const DriverProfilePublicDataSchema = z.object({
   email: z.string().email().max(254),
   phone: z.string().min(3).max(32),
   phoneNumber: z.null().optional(),
-  city: z.string().min(1).max(80),
-  zipCode: z.string().min(1).max(16),
+  city: z.string().min(1).max(80).optional(),
+  zipCode: z.string().min(1).max(16).optional(),
   userType: z.literal('chauffeur'),
   driverType: z.enum(['chauffeur', 'livreur', 'les_deux']),
   vehicleType: z.enum(['velo', 'scooter', 'moto', 'voiture']).optional(),
@@ -99,3 +99,27 @@ export const CreateDriverProfileRequestSchema = z.object({
 
 export type DriverProfilePublicDataInput = z.infer<typeof DriverProfilePublicDataSchema>;
 export type CreateDriverProfileRequestInput = z.infer<typeof CreateDriverProfileRequestSchema>;
+
+// ============================================================================
+// Wallet — Schémas de validation pour les Cloud Functions onCall
+// ============================================================================
+
+/** `walletFailTransaction` — body { transactionId, reason } */
+export const WalletFailTransactionSchema = z.object({
+  transactionId: z.string().min(1),
+  reason: z.string().min(1),
+});
+
+/** `walletPayBooking` — body { bookingId } */
+export const WalletPayBookingSchema = z.object({
+  bookingId: z.string().min(1),
+});
+
+/** `walletRefundTransaction` — body { originalTransactionId } */
+export const WalletRefundTransactionSchema = z.object({
+  originalTransactionId: z.string().min(1),
+});
+
+export type WalletFailTransactionInput = z.infer<typeof WalletFailTransactionSchema>;
+export type WalletPayBookingInput = z.infer<typeof WalletPayBookingSchema>;
+export type WalletRefundTransactionInput = z.infer<typeof WalletRefundTransactionSchema>;

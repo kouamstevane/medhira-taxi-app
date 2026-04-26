@@ -113,9 +113,7 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     </>
   );
 
-  // VoipCallProvider monte des listeners RTDB coûteux ; ne pas l'activer
-  // quand l'utilisateur n'est pas connecté.
-  return currentUser ? <VoipCallProvider>{body}</VoipCallProvider> : body;
+  return <VoipCallProvider>{body}</VoipCallProvider>;
 }
 
 

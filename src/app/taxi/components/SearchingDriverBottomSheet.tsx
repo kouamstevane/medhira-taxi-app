@@ -7,7 +7,7 @@
 
 'use client';
 
-import { FiX, FiClock } from 'react-icons/fi';
+import { X, Clock } from 'lucide-react';
 
 interface SearchingDriverBottomSheetProps {
   bookingId: string;
@@ -40,7 +40,7 @@ export function SearchingDriverBottomSheet({
             style={{ minHeight: '44px', minWidth: '44px' }}
             aria-label="Annuler la recherche"
           >
-            <FiX className="h-6 w-6 text-[#9CA3AF]" />
+            <X className="h-6 w-6 text-[#9CA3AF]" />
           </button>
         </div>
 
@@ -100,7 +100,7 @@ export function SearchingDriverBottomSheet({
           {/* Timer et barre de progression */}
           <div className="space-y-3">
             <div className="flex items-center justify-center space-x-2 text-white">
-              <FiClock className="h-5 w-5 text-[#f29200]" />
+              <Clock className="h-5 w-5 text-[#f29200]" />
               <span className="text-base sm:text-lg font-semibold">
                 {timeRemaining}s restantes
               </span>
@@ -152,7 +152,7 @@ export function SearchingDriverBottomSheet({
             className="w-full bg-[#1A1A1A] border border-white/10 hover:bg-white/10 active:bg-white/20 text-white font-bold py-4 rounded-xl transition touch-manipulation flex items-center justify-center space-x-2 shadow-sm"
             style={{ minHeight: '56px' }}
           >
-            <FiX className="h-5 w-5" />
+            <X className="h-5 w-5" />
             <span className="text-base sm:text-lg">Annuler la recherche</span>
           </button>
 

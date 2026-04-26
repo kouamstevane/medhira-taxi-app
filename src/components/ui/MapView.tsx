@@ -9,9 +9,9 @@
 
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { Capacitor } from '@capacitor/core';
 import { LoadingSpinner } from './LoadingSpinner';
 import { MapFallback } from './MapFallback';
@@ -77,15 +77,15 @@ export const MapView: React.FC<MapViewProps> = ({
 }) => {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapsApi, setMapsApi] = useState<any>(null);
 
   // Charger l'API Google Maps
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-  const { isLoaded, loadError } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: apiKey,
-    // Ne pas charger si la clé est vide pour éviter les erreurs
-    ...(apiKey ? {} : { preventGoogleFontsLoading: true }),
-  });
+  const { isLoaded, loadError } = useGoogleMaps();
+
+  useEffect(() => {
+    import('@react-google-maps/api').then(setMapsApi);
+  }, []);
 
   /**
    * Callback quand la carte est chargée
@@ -137,7 +137,7 @@ export const MapView: React.FC<MapViewProps> = ({
   }
 
   if (loadError) {
-    return <MapFallback error={loadError.message} apiKey={apiKey} />;
+    return <MapFallback error={loadError} apiKey={apiKey} />;
   }
 
   // Utiliser la carte native sur mobile
@@ -155,7 +155,7 @@ export const MapView: React.FC<MapViewProps> = ({
     );
   }
 
-  if (!isLoaded) {
+  if (!isLoaded || !mapsApi) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-[#1A1A1A]">
         <div className="text-center">
@@ -165,6 +165,8 @@ export const MapView: React.FC<MapViewProps> = ({
       </div>
     );
   }
+
+  const { GoogleMap, Marker } = mapsApi;
 
   return (
     <div className={`relative w-full h-full ${className}`}>

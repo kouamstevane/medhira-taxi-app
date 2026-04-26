@@ -77,7 +77,7 @@ export const signUpWithEmail = async (
 
 /**
  * Envoyer un email de vérification
- * @deprecated Utiliser POST /api/auth/send-verification-code à la place.
+ * @deprecated Utiliser la Cloud Function `sendVerificationCode` à la place.
  * L'envoi de code OTP remplace le lien email Firebase Auth.
  */
 export const sendVerificationEmail = async (user: User): Promise<void> => {
@@ -126,7 +126,7 @@ export const reloadUser = async (user: User): Promise<void> => {
  * } catch (error) {
  *   // Afficher un message d'erreur
  * }
- * @deprecated Utiliser POST /api/auth/send-verification-code à la place.
+ * @deprecated Utiliser la Cloud Function `sendVerificationCode` à la place.
  */
 export const resendVerificationEmail = async (
   user: User,

@@ -229,9 +229,9 @@ export default function DriverProfilePage() {
                     onChange={(e) => setFormData({
                       ...formData,
                       car: {
-                        model: e.target.value,
-                        plate: formData.car?.plate ?? '',
-                        color: formData.car?.color ?? ''
+                        model: e.target.value || undefined,
+                        plate: formData.car?.plate || undefined,
+                        color: formData.car?.color || undefined
                       }
                     })}
                     className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none transition-all"
@@ -245,9 +245,9 @@ export default function DriverProfilePage() {
                     onChange={(e) => setFormData({
                       ...formData,
                       car: {
-                        model: formData.car?.model ?? '',
-                        plate: e.target.value,
-                        color: formData.car?.color ?? ''
+                        model: formData.car?.model || undefined,
+                        plate: e.target.value || undefined,
+                        color: formData.car?.color || undefined
                       }
                     })}
                     className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none transition-all"
@@ -261,9 +261,9 @@ export default function DriverProfilePage() {
                     onChange={(e) => setFormData({
                       ...formData,
                       car: {
-                        model: formData.car?.model ?? '',
-                        plate: formData.car?.plate ?? '',
-                        color: e.target.value
+                        model: formData.car?.model || undefined,
+                        plate: formData.car?.plate || undefined,
+                        color: e.target.value || undefined
                       }
                     })}
                     className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none transition-all"
@@ -272,19 +272,19 @@ export default function DriverProfilePage() {
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="flex items-center justify-between py-2 border-b border-white/5">
-                  <span className="text-slate-400 text-sm">Modèle</span>
-                  <span className="text-white text-sm">{driver.car.model}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-white/5">
-                  <span className="text-slate-400 text-sm">Plaque</span>
-                  <span className="text-white text-sm">{driver.car.plate}</span>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-slate-400 text-sm">Couleur</span>
-                  <span className="text-white text-sm">{driver.car.color}</span>
-                </div>
-              </div>
+                 <div className="flex items-center justify-between py-2 border-b border-white/5">
+                   <span className="text-slate-400 text-sm">Modèle</span>
+                   <span className="text-white text-sm">{driver.car?.model ?? 'Non spécifié'}</span>
+                 </div>
+                 <div className="flex items-center justify-between py-2 border-b border-white/5">
+                   <span className="text-slate-400 text-sm">Plaque</span>
+                   <span className="text-white text-sm">{driver.car?.plate ?? 'Non spécifié'}</span>
+                 </div>
+                 <div className="flex items-center justify-between py-2">
+                   <span className="text-slate-400 text-sm">Couleur</span>
+                   <span className="text-white text-sm">{driver.car?.color ?? 'Non spécifié'}</span>
+                 </div>
+               </div>
             )}
 
             {/* Disponibilité toggle */}

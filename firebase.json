@@ -24,6 +24,7 @@
       "source": "functions",
       "codebase": "default",
       "disallowLegacyRuntimeConfig": true,
+      "region": "europe-west1",
       "ignore": [
         "node_modules",
         ".git",

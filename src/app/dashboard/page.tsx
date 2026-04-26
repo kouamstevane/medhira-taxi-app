@@ -136,11 +136,11 @@ export default function Dashboard() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Lire en parallèle : profil utilisateur, doc chauffeur, doc admin
-        const [userDoc, driverDoc, adminDoc] = await Promise.all([
+        // Lire en parallèle : profil utilisateur, doc chauffeur
+        // (la lecture 'admins' est isolée car protégée par les rules et lèverait permission-denied pour les non-admins)
+        const [userDoc, driverDoc] = await Promise.all([
           getDoc(doc(db, "users", user.uid)),
           getDoc(doc(db, 'drivers', user.uid)),
-          getDoc(doc(db, 'admins', user.uid)),
         ]);
 
         const userDataFromDB = userDoc.exists() ? userDoc.data() : {};
@@ -174,22 +174,11 @@ export default function Dashboard() {
           setUserData(prev => ({ ...prev, userType: 'chauffeur' }));
         }
 
-        // Vérifier si l'utilisateur est admin
+        // Vérifier si l'utilisateur est admin (protégé : permission-denied attendu pour les non-admins)
         try {
-          if (adminDoc.exists()) {
-            setIsAdmin(true);
-          } else {
-            // Fallback: chercher dans la collection où userId correspond à l'UID
-            const adminQuery = query(
-              collection(db, 'admins'),
-              where('userId', '==', user.uid),
-              limit(1)
-            );
-            const adminSnapshot = await getDocs(adminQuery);
-            setIsAdmin(!adminSnapshot.empty);
-          }
-        } catch (err) {
-          console.error('Erreur vérification admin:', err);
+          const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+          setIsAdmin(adminDoc.exists());
+        } catch {
           setIsAdmin(false);
         }
 

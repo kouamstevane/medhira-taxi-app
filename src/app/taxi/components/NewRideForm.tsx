@@ -12,7 +12,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod'; //  Ajout validation Zod (medJira.md #85)
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'; //  Ajout haptic (medJira.md #93)
 import { Capacitor } from '@capacitor/core';
-import { auth } from '@/config/firebase';
+import { auth, functions } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
@@ -377,24 +378,21 @@ useEffect(() => {
 
   // Étape 2 : passer à la sélection du paiement
   const handleProceedToPayment = async () => {
-    setWalletLoading(true);
-    try {
-      const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-      const res = await fetch('/api/wallet/balance', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
+      setWalletLoading(true);
+      try {
+        const getBalance = httpsCallable<unknown, { balance: number; currency: string }>(
+          functions, 'walletGetBalance'
+        );
+        const result = await getBalance({});
+        const data = result.data;
         setWalletBalance(data.balance ?? 0);
         setWalletCurrency(data.currency ?? 'CAD');
-        // Présélectionner wallet si le solde est suffisant
         if (data.balance >= (estimate?.price ?? 0)) {
           setSelectedPaymentMethod('wallet');
         } else {
           setSelectedPaymentMethod('card');
         }
-      }
-    } catch {
+      } catch {
       setWalletBalance(0);
       setSelectedPaymentMethod('card');
     } finally {
@@ -420,24 +418,14 @@ useEffect(() => {
       if (!bookingId) return;
 
       // 2. Créer le PaymentIntent
-      const token = await auth.currentUser!.getIdToken();
-      const piRes = await fetch('/api/stripe/payment-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          bookingId,
-          amount: (estimate.price ?? 0) + (bonus > 0 ? bonus : 0),
-          currency: 'cad',
-          userId: currentUser.uid,
-        }),
+      const createPiFn = httpsCallable<{ action: string; bookingId: string; amount: number }, { clientSecret: string }>(functions, 'stripePaymentIntent');
+      const piResult = await createPiFn({
+        action: 'create',
+        bookingId,
+        amount: (estimate.price ?? 0) + (bonus > 0 ? bonus : 0),
       });
 
-      if (!piRes.ok) {
-        const errData = await piRes.json().catch(() => ({}));
-        throw new Error(errData.error || 'Impossible de créer le paiement Stripe');
-      }
-
-      const { clientSecret } = await piRes.json();
+      const { clientSecret } = piResult.data;
       setStripeClientSecret(clientSecret);
       setPendingBookingId(bookingId);
       setModalStep('stripe');

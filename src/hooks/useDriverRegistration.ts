@@ -15,9 +15,6 @@ import { StructuredLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
 import { redirectWithFallback } from '@/utils/navigation';
 import { useConnectivityMonitor, checkConnectivity } from '@/hooks/useConnectivityMonitor';
-import { DEFAULT_DRIVER_COUNTRY_CODE, ACTIVE_MARKET } from '@/utils/constants';
-import { Capacitor } from '@capacitor/core';
-import { Browser } from '@capacitor/browser';
 import type { Step1FormData } from '@/app/driver/register/components/Step1Intent';
 import type { Step2FormData } from '@/app/driver/register/components/Step2Identity';
 import type { Step3FormData } from '@/app/driver/register/components/Step3Vehicle';
@@ -66,7 +63,6 @@ export function useDriverRegistration() {
   const emailRetryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const browserListenerRef = useRef<{ remove: () => void } | null>(null);
   const hasRestoredProgressRef = useRef(false);
   const loggerRef = useRef<StructuredLogger>(new StructuredLogger(null, 'DriverRegistration'));
 
@@ -77,7 +73,6 @@ export function useDriverRegistration() {
       if (emailRetryTimerRef.current) clearTimeout(emailRetryTimerRef.current);
       if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      browserListenerRef.current?.remove();
     };
   }, []);
 
@@ -171,11 +166,7 @@ export function useDriverRegistration() {
                 firstName: data.firstName || '',
                 lastName: data.lastName || '',
                 dob: (privateData.dob as string) || '',
-                nationality: (privateData.nationality as string) || DEFAULT_DRIVER_COUNTRY_CODE,
                 ssn: '',
-                address: (privateData.address as string) || '',
-                city: data.city || '',
-                zipCode: data.zipCode || '',
               }));
             } else if (['pending', 'approved', 'active'].includes(data.status)) {
               setError('Votre dossier est en cours de traitement ou déjà validé.');
@@ -384,7 +375,19 @@ export function useDriverRegistration() {
         return uploadFileWithRetry(file, category, userId);
       };
 
-      uploadResults = await Promise.allSettled([
+      // Validation SSN AVANT de lancer uploads + encryption (early-fail).
+      if (!step2Data.ssn || step2Data.ssn.trim().length < 5) {
+        setError('Le numéro d\'assurance sociale est requis. Veuillez compléter l\'étape Identité.');
+        setCurrentStep(2);
+        setLoading(false);
+        isSubmittingRef.current = false;
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Lance uploads ET encryption SSN EN PARALLÈLE — l'encryption ne dépend
+      // pas des uploads (gain ~1s sur la connexion lente).
+      const uploadsPromise = Promise.allSettled([
         uploadFileWithRetry(biometricsPhoto, 'biometrics', userId),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.registration, 'documents') : Promise.resolve(null),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.insurance, 'documents') : Promise.resolve(null),
@@ -397,6 +400,23 @@ export function useDriverRegistration() {
         uploadFileWithRetry(complianceFiles.licenseBack!, 'compliance', userId),
       ]);
 
+      const ssnPromise = retryWithBackoff(
+        () => serverEncryptionService.encryptSSN(step2Data.ssn!),
+        { maxAttempts: 3 }
+      );
+
+      const [uploadResultsValue, encryptedSsn] = await Promise.all([
+        uploadsPromise,
+        ssnPromise,
+      ]);
+      uploadResults = uploadResultsValue;
+
+      // Audit log fire-and-forget : ne bloque pas le flow utilisateur.
+      // Erreurs catchées pour éviter unhandled rejection — log côté serveur.
+      auditLoggingService.logSSNEncryption(userId, true).catch((err) => {
+        console.warn('[Registration] audit log SSN encryption failed (non-blocking)', err);
+      });
+
       const failedUploads = uploadResults.filter(r => r.status === 'rejected');
       if (failedUploads.length > 0) {
         setError("Erreur lors de l'upload de certains fichiers. Veuillez réessayer.");
@@ -406,30 +426,10 @@ export function useDriverRegistration() {
       const getValue = (r: PromiseSettledResult<string | null>) =>
         r.status === 'fulfilled' ? r.value : null;
 
-      if (!step2Data.ssn || step2Data.ssn.trim().length < 5) {
-        setError('Le numéro d\'assurance sociale est requis. Veuillez compléter l\'étape Identité.');
-        setCurrentStep(2);
-        setLoading(false);
-        isSubmittingRef.current = false;
-      setIsSubmitting(false);
-        return;
-      }
-      let encryptedSsn = null;
-      encryptedSsn = await retryWithBackoff(
-        () => serverEncryptionService.encryptSSN(step2Data.ssn!),
-        { maxAttempts: 3 }
-      );
-      await auditLoggingService.logSSNEncryption(userId, true);
-
       const carData = (driverType === 'chauffeur' || driverType === 'les_deux') ? {
-        brand: step3Data.carBrand,
-        model: step3Data.carModel,
         year: step3Data.productionYear,
-        color: step3Data.carColor,
         seats: step3Data.passengerSeats,
-        fuelType: step3Data.fuelType,
         mileage: step3Data.mileage,
-        techControlDate: step3Data.techControlDate,
       } : undefined;
 
       // Construit la map documents conditionnellement : n'inclure une entrée
@@ -460,35 +460,30 @@ export function useDriverRegistration() {
         lastName: step2Data.lastName,
         email: step1Data.email || auth.currentUser?.email || '',
         phone: step2Data.phone || '',
-        city: step2Data.city,
-        zipCode: step2Data.zipCode,
         driverType,
         vehicleType,
         cityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',
         status: 'pending',
         userType: 'chauffeur',
-        createdAt: firestoreServerTimestamp(),
-        updatedAt: firestoreServerTimestamp(),
         isAvailable: false,
         rating: 0,
         tripsCompleted: 0,
       };
 
-      if (carData) {
+      if (carData && carData.year != null) {
         publicData.car = carData;
       }
 
       // Champs sensibles — sous-collection `drivers/{uid}/private/personal`
       const privateData: Record<string, unknown> = {
         dob: step2Data.dob,
-        nationality: step2Data.nationality,
-        address: step2Data.address,
         ssn: encryptedSsn,
         documents,
         updatedAt: firestoreServerTimestamp(),
       };
 
-      await auth.currentUser?.getIdToken(true);
+      // Optim : pas de 2ème getIdToken(true) — le refresh fait en début de
+      // handleStep5FinalSubmit reste valide (TTL 1h) et la CF retry les erreurs auth.
       const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
       const functions = getFunctions(app, functionsRegion);
       const createDriverProfile = httpsCallable(functions, 'createDriverProfile');
@@ -506,52 +501,16 @@ export function useDriverRegistration() {
       await clearProgress();
       setSubmissionSuccess(true);
 
-      let stripeOnboardingUrl: string | null = null;
-      try {
-        const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-        if (token && auth.currentUser?.email) {
-          const connectRes = await fetch('/api/stripe/connect/account', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ email: auth.currentUser.email, country: ACTIVE_MARKET }),
-          });
-          if (connectRes.ok || connectRes.status === 409) {
-            const onboardRes = await fetch('/api/stripe/connect/onboard', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({
-                returnUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=success`,
-                refreshUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=refresh`,
-              }),
-            });
-            if (onboardRes.ok) {
-              const { url } = await onboardRes.json();
-              stripeOnboardingUrl = url;
-            }
-          }
-        }
-      } catch {
-        setWarning("L'inscription est enregistrée, mais la configuration des paiements Stripe a échoué. Vous pourrez la compléter depuis votre tableau de bord.");
-      }
-
-      if (stripeOnboardingUrl) {
-        if (Capacitor.isNativePlatform()) {
-          browserListenerRef.current?.remove();
-          await Browser.open({ url: stripeOnboardingUrl });
-          const listener = await Browser.addListener('browserFinished', () => {
-            browserListenerRef.current = null;
-            router.push('/driver/dashboard?submission=1&stripe=pending');
-          });
-          browserListenerRef.current = listener;
-        } else {
-          window.location.href = stripeOnboardingUrl;
-        }
-      } else {
-        redirectTimeoutRef.current = redirectWithFallback(
-          router,
-          '/driver/dashboard?submission=1&stripe=pending'
-        );
-      }
+      // === OPTIM : Stripe est délégué à /driver/payments/setup ===
+      // Avant : on appelait createConnectAccount + createConnectOnboardLink + Browser.open
+      // ici, bloquant l'utilisateur 3-5s sur le bouton "Soumettre ma candidature"
+      // après que les uploads + createDriverProfile soient déjà finis.
+      // Maintenant : redirection immédiate vers /driver/payments/setup qui :
+      //   - lit l'état Stripe (getStripeAccountStatus) — rapide, sync Firestore
+      //   - propose le bouton "Reprendre la configuration Stripe" qui ouvre le Browser
+      //   - gère seul les cas d'erreur Stripe avec UX retry
+      console.log('[Registration] profile created — redirecting to /driver/payments/setup');
+      router.push('/driver/payments/setup?onboarding=fresh');
     } catch (err: unknown) {
       // Cleanup des fichiers Storage orphelins uploadés avant l'échec de createDriverProfile
       const uploadedUrls = uploadResults

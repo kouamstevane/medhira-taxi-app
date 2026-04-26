@@ -246,7 +246,7 @@ function ConfirmationContent() {
                 {booking.driverName && (
                   <div className="mt-4 p-4 glass-card rounded-xl border border-white/5 space-y-1">
                     <p className="text-sm text-slate-300"><span className="text-slate-500">Chauffeur :</span> {booking.driverName}</p>
-                    <p className="text-sm text-slate-300"><span className="text-slate-500">Véhicule :</span> {booking.carColor} {booking.carModel} ({booking.carPlate})</p>
+                    {booking.carModel && <p className="text-sm text-slate-300"><span className="text-slate-500">Véhicule :</span> {[booking.carColor, booking.carModel].filter(Boolean).join(' ')}{booking.carPlate ? ` (${booking.carPlate})` : ''}</p>}
                     <p className="text-sm text-slate-300"><span className="text-slate-500">Téléphone :</span> {booking.driverPhone}</p>
                   </div>
                 )}

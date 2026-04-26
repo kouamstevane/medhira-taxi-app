@@ -5,7 +5,8 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import Image from 'next/image';
 import { toast } from 'react-hot-toast';
 import { Timestamp, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
-import { db, auth } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '@/config/firebase';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { Restaurant } from '@/types/food-delivery';
 import AdminHeader from '@/components/admin/AdminHeader';
@@ -87,28 +88,15 @@ export default function AdminRestaurantsPage() {
 
     setProcessing(restaurantId);
     try {
-      const idToken = await auth.currentUser.getIdToken(true);
       const action = approve ? 'approve' : 'reject';
 
-      const response = await fetch('/api/admin/manage-restaurant', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-          action,
-          restaurantId,
-          adminUid: auth.currentUser.uid,
-          reason: !approve ? rejectionReason : undefined
-        })
+      const adminManageRestaurant = httpsCallable(functions, 'adminManageRestaurant');
+      const result = await adminManageRestaurant({
+        action,
+        restaurantId,
+        reason: !approve ? rejectionReason : undefined,
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erreur lors de la mise à jour');
-      }
+      const data = result.data as { success: boolean; message: string };
 
       toast.success(approve ? 'Restaurant approuvé !' : 'Restaurant refusé.');
 

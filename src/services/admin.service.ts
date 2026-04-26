@@ -14,7 +14,7 @@
  * possède un document `admins/{uid}`. C'est une défense en profondeur :
  * la protection PRIMAIRE reste dans `firestore.rules` (fonction `isAdmin()` —
  * seul un admin peut update/delete un chauffeur qui ne lui appartient pas)
- * et dans les Cloud Functions / routes API (`/api/admin/manage-driver`).
+ * et dans les Cloud Functions callables (`adminManageDriver`).
  * Le check client évite les appels accidentels et fournit un feedback clair
  * si un utilisateur non-admin tente d'invoquer ces fonctions directement.
  *

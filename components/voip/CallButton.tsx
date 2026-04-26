@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { MdPhone } from 'react-icons/md';
+import { Phone } from 'lucide-react';
 import { useVoipCall } from '../../hooks/useVoipCall';
 
 interface CallButtonProps {
@@ -74,7 +74,7 @@ export function CallButton({
       {isLoading ? (
         <div className="call-button-spinner" />
       ) : (
-        <MdPhone size={size * 0.43} color="white" />
+        <Phone size={size * 0.43} color="white" />
       )}
     </button>
   );

@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { MdMic, MdMicOff, MdVolumeUp, MdVolumeOff, MdCallEnd } from 'react-icons/md';
+import { Mic, MicOff, Volume2, VolumeX, PhoneOff } from 'lucide-react';
 import { Haptics } from '@capacitor/haptics';
 import { useVoipCall } from '../../hooks/useVoipCall';
 import { VoipCall } from '../../src/types/voip';
@@ -108,9 +108,9 @@ export function ActiveCallScreen({ call, metadata }: ActiveCallScreenProps) {
             aria-label={isMuted ? "Activer le micro" : "Couper le micro"}
           >
             {isMuted ? (
-              <MdMicOff size={24} color="white" />
+              <MicOff size={24} color="white" />
             ) : (
-              <MdMic size={24} color="white" />
+              <Mic size={24} color="white" />
             )}
             <span className="active-call-control-label">
               {isMuted ? 'Muet' : 'Micro'}
@@ -124,9 +124,9 @@ export function ActiveCallScreen({ call, metadata }: ActiveCallScreenProps) {
             aria-label={isSpeaker ? "Désactiver le haut-parleur" : "Activer le haut-parleur"}
           >
             {isSpeaker ? (
-              <MdVolumeUp size={24} color="white" />
+              <Volume2 size={24} color="white" />
             ) : (
-              <MdVolumeOff size={24} color="white" />
+              <VolumeX size={24} color="white" />
             )}
             <span className="active-call-control-label">
               {isSpeaker ? 'Haut-parleur' : 'Écouteur'}
@@ -140,7 +140,7 @@ export function ActiveCallScreen({ call, metadata }: ActiveCallScreenProps) {
             className="active-call-control-button active-call-end-button"
             aria-label="Terminer l'appel"
           >
-            <MdCallEnd size={24} color="white" />
+            <PhoneOff size={24} color="white" />
             <span className="active-call-control-label">Terminer</span>
           </button>
         </div>

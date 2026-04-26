@@ -70,6 +70,7 @@ lerna-debug.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+Desktop.ini
 
 # Firebase
 .firebase/
@@ -148,6 +149,11 @@ docs/
 
 # Test reports
 test-reports/
+playwright-report/
+test-results/
+
+# SWC cache
+.swc/
 nul
 .trae/
 .agent/

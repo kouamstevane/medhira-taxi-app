@@ -10,6 +10,7 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        resConfigs 'fr', 'en'
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -23,7 +24,7 @@ android {
             enable true
             reset()
             include 'arm64-v8a', 'armeabi-v7a'
-            universalApk true  // Générer aussi un APK universel
+            universalApk false
         }
     }
     
@@ -34,6 +35,7 @@ android {
             // Activer le shrinking des ressources inutilisées
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            crunchPngs true
         }
         debug {
             // En mode debug, désactiver les optimisations pour éviter les problèmes d'installation
@@ -43,13 +45,13 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
     }
 
     lint {
         abortOnError false
-        checkReleaseBuilds false
+        checkReleaseBuilds true
     }
 }
 
@@ -70,7 +72,7 @@ dependencies {
     implementation project(':capacitor-cordova-android-plugins')
     
     // Agora RTC SDK pour appels VoIP
-    implementation 'io.agora.rtc:full-sdk:4.2.0'
+    implementation 'io.agora.rtc:voice-sdk:4.2.0'
 }
 
 apply from: 'capacitor.build.gradle'

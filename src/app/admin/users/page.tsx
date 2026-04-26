@@ -13,7 +13,8 @@ import {
 } from 'firebase/firestore';
 
 const PAGE_SIZE = 25;
-import { db, auth } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { toast } from 'react-hot-toast';
 import AdminHeader from '@/components/admin/AdminHeader';
@@ -115,22 +116,9 @@ export default function AdminUsersPage() {
 
     setProcessing(userId);
     try {
-      const idToken = await auth.currentUser.getIdToken(true);
-      const response = await fetch('/api/admin/manage-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-          userId,
-          role: newRole,
-          adminUid: auth.currentUser.uid
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Erreur lors de la mise à jour');
+      const adminManageUser = httpsCallable(functions, 'adminManageUser');
+      const result = await adminManageUser({ userId, role: newRole });
+      const data = result.data as { success: boolean; message: string };
 
       toast.success(data.message || 'Rôle mis à jour');
     } catch (err) {

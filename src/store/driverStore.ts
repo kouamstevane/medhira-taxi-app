@@ -3,9 +3,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export interface DriverCarData {
-  model: string;
-  plate: string;
-  color: string;
+  model?: string;
+  plate?: string;
+  color?: string;
 }
 
 export interface DriverCoreData {
@@ -18,7 +18,7 @@ export interface DriverCoreData {
   isAvailable: boolean;
   profileImageUrl?: string;
   licenseNumber?: string;
-  car: DriverCarData;
+  car?: DriverCarData;
   // NOTE RGPD #C2 : `documents` a été déplacé dans la sous-collection
   // `drivers/{uid}/private/personal` — voir useDriverPrivate / DriverPrivateData.
   rating?: number;

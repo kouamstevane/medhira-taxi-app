@@ -3,6 +3,8 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { auth } from '@/config/firebase';
+import { functions } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 
@@ -59,22 +61,13 @@ function DriverVerifyContent() {
         router.push('/driver/login');
         return;
       }
-      const token = await user.getIdToken();
-      const res = await fetch('/api/stripe/connect/onboard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          returnUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=success`,
-          refreshUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=refresh`,
-        }),
+      const createLinkFn = httpsCallable<{ returnUrl: string; refreshUrl: string }, { url: string }>(functions, 'createConnectOnboardLink');
+      const result = await createLinkFn({
+        returnUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=success`,
+        refreshUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=refresh`,
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Impossible de régénérer le lien');
-      }
-
-      const { url } = await res.json();
+      const { url } = result.data;
       if (Capacitor.isNativePlatform()) {
         browserListenerRef.current?.remove();
         await Browser.open({ url });

@@ -60,32 +60,6 @@ service cloud.firestore {
              field.salt.length > 0;
     }
     
-    // Fonction helper pour valider la transition vers 'pending'
-    // Vérifie que seuls les champs autorisés sont modifiés lors de la soumission
-    // ET que les champs sensibles sont correctement chiffrés
-    function isValidPendingTransition() {
-      // VALIDATION DU STATUT ET DES CHAMPS REQUIS
-      // Vérifier que le statut passe bien à 'pending'
-      // ET que tous les champs requis sont présents et non null
-      return request.resource.data.status == 'pending'
-        && request.resource.data.firstName != null
-        && request.resource.data.lastName != null
-        && request.resource.data.dob != null
-        && request.resource.data.nationality != null
-        && request.resource.data.address != null
-        && request.resource.data.city != null
-        && request.resource.data.zipCode != null
-        && request.resource.data.phone != null
-        && request.resource.data.car != null
-        && request.resource.data.documents != null
-        // VALIDATIONS SUPPLÉMENTAIRES POUR LES CHAMPS SENSIBLES
-        // Si le champ SSN est présent, il doit être chiffré
-        && (!('ssn' in request.resource.data) || request.resource.data.ssn == null || isValidEncryptedData(request.resource.data.ssn))
-        // Si le champ bank est présent, il doit être chiffré
-        && (!('bank' in request.resource.data) || request.resource.data.bank == null || isValidEncryptedData(request.resource.data.bank));
-    }
-    
-    
     // ============================================================================
     // COLLECTION USERS (CLIENTS)
     // ============================================================================
@@ -199,11 +173,13 @@ service cloud.firestore {
         allow read: if isOwner(driverId) || isAdmin();
         // L'owner peut créer/modifier ses propres données sensibles (chiffrées côté client si applicable)
         // L'approbation KYC (documents.status) se fait uniquement via Admin SDK (Cloud Functions)
-        allow create, update: if (isOwner(driverId) &&
-                                  // Empêcher l'auto-approbation des documents depuis la sous-collection
-                                  (!('documents' in request.resource.data) ||
-                                   !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvedBy', 'kycStatus'])))
-                               || isAdmin();
+        // Sur CREATE : `resource` est null, on ne peut pas appeler .diff() — on autorise simplement l'owner.
+        // Sur UPDATE : on empêche l'owner de modifier approvedBy/kycStatus.
+        allow create: if isOwner(driverId) || isAdmin();
+        allow update: if (isOwner(driverId) &&
+                          (!('documents' in request.resource.data) ||
+                           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['approvedBy', 'kycStatus'])))
+                       || isAdmin();
         allow delete: if isAdmin();
       }
     }

@@ -1,6 +1,6 @@
 "use client";
 import React from 'react';
-import { Loader2, ShieldCheck, Building2, Lock, CreditCard } from 'lucide-react';
+import { Loader2, ShieldCheck, Lock } from 'lucide-react';
 import { ACTIVE_MARKET } from '@/utils/constants';
 
 /**
@@ -59,59 +59,11 @@ export default function Step5Monetization({
         </div>
       </div>
 
-      {/* Processus expliqué */}
-      <div className="bg-[#1A1A1A] p-5 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-        <h3 className="text-sm font-semibold text-white border-b border-white/[0.08] pb-2">Comment ça fonctionne</h3>
-
-        <div className="space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="w-7 h-7 rounded-full bg-[#10B981]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-[#10B981]">1</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-white">Soumission de votre dossier</p>
-              <p className="text-xs text-[#9CA3AF]">Vos informations personnelles et documents sont enregistrés.</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <div className="w-7 h-7 rounded-full bg-[#635bff]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-[#635bff]">2</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-white">Formulaire bancaire Stripe</p>
-              <p className="text-xs text-[#9CA3AF]">Vous serez redirigé vers Stripe pour saisir vos coordonnées bancaires en toute sécurité.</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-3">
-            <div className="w-7 h-7 rounded-full bg-[#f29200]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-xs font-bold text-[#f29200]">3</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-white">Vérification et activation</p>
-              <p className="text-xs text-[#9CA3AF]">Stripe vérifie votre identité (KYC) et active les virements hebdomadaires.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Avantages */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-[#1A1A1A] rounded-xl p-3 text-center border border-white/[0.06]">
+      <div className="flex justify-center">
+        <div className="bg-[#1A1A1A] rounded-xl p-3 text-center border border-white/[0.06] w-32">
           <ShieldCheck className="w-6 h-6 text-green-600 mx-auto mb-1" />
           <p className="text-xs font-medium text-[#9CA3AF]">PCI DSS</p>
           <p className="text-xs text-[#4B5563]">Certifié</p>
-        </div>
-        <div className="bg-[#1A1A1A] rounded-xl p-3 text-center border border-white/[0.06]">
-          <Building2 className="w-6 h-6 text-blue-600 mx-auto mb-1" />
-          <p className="text-xs font-medium text-[#9CA3AF]">70% gains</p>
-          <p className="text-xs text-[#4B5563]">Hebdomadaire</p>
-        </div>
-        <div className="bg-[#1A1A1A] rounded-xl p-3 text-center border border-white/[0.06]">
-          <CreditCard className="w-6 h-6 text-[#635bff] mx-auto mb-1" />
-          <p className="text-xs font-medium text-[#9CA3AF]">Virement</p>
-          <p className="text-xs text-[#4B5563]">Automatique</p>
         </div>
       </div>
 

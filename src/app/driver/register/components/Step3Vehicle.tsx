@@ -7,19 +7,13 @@ import { Loader2, UploadCloud, X } from 'lucide-react';
 import { imageCompressionService } from '@/services/image-compression.service';
 import { useToast } from '@/hooks/useToast';
 import { InputField } from '@/components/forms/InputField';
-import { SelectField } from '@/components/forms/SelectField';
 
 const step3Schema = z.object({
-  carBrand: z.string().min(2, "Marque requise"),
-  carModel: z.string().min(2, "Modèle requis"),
   productionYear: z.string()
     .regex(/^(19|20)\d{2}$/, "Année invalide (ex: 2021)")
     .refine((val) => parseInt(val, 10) >= 2010, "Le véhicule doit être de 2010 ou plus récent"),
-  carColor: z.string().min(2, "Couleur requise"),
   passengerSeats: z.number().min(1).max(9),
-  fuelType: z.enum(['Essence', 'Diesel', 'Électrique', 'Hybride']),
   mileage: z.number().min(0, "Kilométrage invalide"),
-  techControlDate: z.string().min(1, "Date du contrôle technique requise"),
 });
 
 export type Step3FormData = z.infer<typeof step3Schema>;
@@ -54,17 +48,12 @@ const DELIVERY_VEHICLE_OPTIONS: { value: VehicleDeliveryType; label: string; ico
 export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles, loading, driverType = 'chauffeur', onVehicleTypeChange }: Step3VehicleProps) {
   const [selectedDeliveryVehicle, setSelectedDeliveryVehicle] = React.useState<VehicleDeliveryType>('scooter');
   const { showInfo, showError } = useToast();
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<Step3FormData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<Step3FormData>({
     resolver: zodResolver(step3Schema),
     defaultValues: {
-      carBrand: initialData?.carBrand || '',
-      carModel: initialData?.carModel || '',
       productionYear: initialData?.productionYear || '',
-      carColor: initialData?.carColor || '#FFFFFF',
       passengerSeats: initialData?.passengerSeats || 4,
-      fuelType: initialData?.fuelType || 'Essence',
       mileage: initialData?.mileage || 0,
-      techControlDate: initialData?.techControlDate || '',
     }
   });
 
@@ -91,14 +80,13 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validation du type MIME (JPG, PNG, PDF uniquement)
     const allowedMimeTypes = [
       'image/jpeg',
       'image/jpg',
       'image/png',
       'application/pdf'
     ];
-    
+
     if (!allowedMimeTypes.includes(file.type)) {
       setFileErrors(prev => ({
         ...prev,
@@ -107,7 +95,6 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
       return;
     }
 
-    // Limite 10MB coté client
     if (file.size > 10 * 1024 * 1024) {
       setFileErrors(prev => ({ ...prev, [key]: "Fichier trop lourd (Max 10Mo)" }));
       return;
@@ -117,7 +104,6 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
     setCompressionLoading(key);
 
     try {
-      // Compress if it's an image using the new async service
       let finalFile = file;
       if (file.type.startsWith('image/')) {
         const result = await imageCompressionService.compressImage(file, {
@@ -126,21 +112,19 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
           quality: 0.7,
           outputFormat: 'image/webp',
         });
-        
+
         finalFile = result.file;
-        
-        // Show compression info if significant
+
         if (result.compressionRatio > 20) {
           showInfo(`${file.name} compressé de ${result.compressionRatio.toFixed(0)}%`);
         }
-        
+
         console.log(`Compressed ${file.name}: ${(result.originalSize / 1024 / 1024).toFixed(2)}MB → ${(result.compressedSize / 1024 / 1024).toFixed(2)}MB`);
       }
-      
+
       setFiles(prev => ({ ...prev, [key]: finalFile }));
     } catch (error) {
       console.error("Compression err:", error);
-      // Fallback avec feedback utilisateur
       setFiles(prev => ({ ...prev, [key]: file }));
       setFileErrors(prev => ({
         ...prev,
@@ -177,7 +161,7 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
       <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
         {label} {required ? <span className="text-red-500">*</span> : <span className="text-[#4B5563] text-xs">(facultatif)</span>}
       </label>
-      
+
       {files[key] ? (
         <div className="flex items-center justify-between bg-[#242424] p-3 rounded-lg border border-white/[0.06]">
            <div className="flex items-center space-x-3 overflow-hidden">
@@ -195,12 +179,12 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
         </div>
       ) : (
         <div className="relative border-2 border-dashed border-white/[0.15] rounded-lg p-4 text-center hover:bg-white/5 transition-colors cursor-pointer">
-          <input 
-            type="file" 
+          <input
+            type="file"
             id={`file-${key}`}
-            accept={accept} 
-            onChange={(e) => handleFileChange(e, key)} 
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+            accept={accept}
+            onChange={(e) => handleFileChange(e, key)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
           {compressionLoading === key ? (
              <div className="flex flex-col items-center text-[#f29200]">
@@ -219,7 +203,6 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
     </div>
   );
 
-  // Rendu pour livreur uniquement
   if (driverType === 'livreur') {
     return (
       <div className="space-y-6">
@@ -258,11 +241,6 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
             type="button"
             onClick={() => {
               onVehicleTypeChange?.(selectedDeliveryVehicle);
-              // Livreur : seuls permis + pièce d'identité (Step4) sont requis
-              // côté KYC. Les documents véhicule (carte grise, contrôle technique,
-              // assurance pro, photos intérieur/extérieur) ne s'appliquent pas
-              // aux livreurs. On transmet donc un objet files vide — le handler
-              // parent conditionnera les uploads sur vehicleType.
               onNext(null, {});
             }}
             disabled={loading}
@@ -283,81 +261,35 @@ export default function Step3Vehicle({ onNext, onBack, initialData, initialFiles
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        
-        {/* Card 1: Vehicule Details */}
+
         <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
             <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Détails Véhicule</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InputField 
-                    {...register('carBrand')} 
-                    label="Marque"
-                    placeholder="ex: Toyota" 
-                    error={errors.carBrand?.message}
-                    required
-                />
-                <InputField 
-                    {...register('carModel')} 
-                    label="Modèle"
-                    placeholder="ex: Prius" 
-                    error={errors.carModel?.message}
-                    required
-                />
-            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <InputField 
-                    type="number" 
-                    {...register('productionYear')} 
+                <InputField
+                    type="number"
+                    {...register('productionYear')}
                     label="Année"
-                    placeholder="YYYY" 
+                    placeholder="YYYY"
                     error={errors.productionYear?.message}
                     required
                 />
-                <div className="space-y-1">
-                  <label className="block text-sm font-medium text-[#9CA3AF]">Couleur</label>
-                  <div className="flex items-center space-x-2">
-                      <input type="color" {...register('carColor')} className="h-11 w-16 p-1 border border-white/[0.1] rounded-lg cursor-pointer shadow-sm" />
-                      <span className="text-sm font-mono text-[#9CA3AF] uppercase">{watch('carColor')}</span>
-                  </div>
-                </div>
-                <SelectField 
-                    {...register('fuelType')} 
-                    label="Carburant"
-                    options={[
-                        { value: 'Essence', label: 'Essence' },
-                        { value: 'Diesel', label: 'Diesel' },
-                        { value: 'Électrique', label: 'Électrique' },
-                        { value: 'Hybride', label: 'Hybride' },
-                    ]}
-                    required
-                />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  <div className="space-y-2">
                      <label className="block text-sm font-medium text-[#9CA3AF]">Places Passagers: {seats}</label>
-                    <input type="range" min="1" max="9" step="1" {...register('passengerSeats', { valueAsNumber: true })} className="w-full accent-[#f29200]" />
+                     <input type="range" min="1" max="9" step="1" {...register('passengerSeats', { valueAsNumber: true })} className="w-full accent-[#f29200]" />
                      {errors.passengerSeats && <p className="text-red-500 text-xs mt-1">{errors.passengerSeats.message}</p>}
-                </div>
-                <InputField 
-                    type="number" 
-                    {...register('mileage', { valueAsNumber: true })} 
+                 </div>
+                <InputField
+                    type="number"
+                    {...register('mileage', { valueAsNumber: true })}
                     label="Kilométrage"
-                    placeholder="ex: 50000" 
+                    placeholder="ex: 50000"
                     error={errors.mileage?.message}
                     required
                 />
             </div>
-            <InputField 
-                type="date" 
-                {...register('techControlDate')} 
-                label="Date prochain contrôle technique"
-                error={errors.techControlDate?.message}
-                required
-            />
         </div>
 
-        {/* Card 2: Documents */}
         <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
             <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Documents Véhicule</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

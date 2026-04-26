@@ -3,7 +3,8 @@
  * Calculates real road distance between two points.
  * Falls back to 3.5 km if the API key is missing or the call fails.
  */
-import { auth } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/config/firebase';
 
 const FALLBACK_DISTANCE_KM = 3.5;
 
@@ -24,33 +25,17 @@ export async function getDeliveryDistance(
   const originStr  = typeof origin      === 'string' ? origin      : `${origin.lat},${origin.lng}`;
   const destStr    = typeof destination === 'string' ? destination : `${destination.lat},${destination.lng}`;
 
-  // Appel via la route API serveur pour éviter les erreurs CORS et les restrictions de clé
-  const params = new URLSearchParams({ origin: originStr, destination: destStr });
-  const url = `/api/distance?${params.toString()}`;
-
+  // Appel via Cloud Function pour éviter les erreurs CORS et les restrictions de clé
   try {
-    const token = auth.currentUser ? await auth.currentUser.getIdToken() : null;
-    const res = await fetch(url, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const distanceFn = httpsCallable<
+      { origin: string; destination: string },
+      { distanceKm: number; durationMinutes: number; isEstimate: boolean }
+    >(functions, 'distanceCalculate');
 
-    const data = await res.json();
+    const result = await distanceFn({ origin: originStr, destination: destStr });
+    const { distanceKm, durationMinutes, isEstimate } = result.data;
 
-    if (data.status !== 'OK') {
-      throw new Error(`Distance Matrix status: ${data.status}`);
-    }
-
-    const element = data.rows?.[0]?.elements?.[0];
-
-    if (!element || element.status !== 'OK') {
-      throw new Error(`Element status: ${element?.status ?? 'undefined'}`);
-    }
-
-    const distanceKm      = element.distance.value / 1000;          // metres → km
-    const durationMinutes = Math.ceil(element.duration.value / 60); // seconds → minutes
-
-    return { distanceKm, durationMinutes, isEstimate: false };
+    return { distanceKm, durationMinutes, isEstimate: isEstimate ?? false };
 
   } catch (err) {
     console.warn('[distance] Distance Matrix call failed, using fallback:', err);

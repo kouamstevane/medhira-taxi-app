@@ -14,7 +14,8 @@ import {
   DocumentSnapshot,
   Timestamp,
 } from 'firebase/firestore';
-import { db, auth } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '@/config/firebase';
 import type { DriverPrivate } from '@/types/firestore-collections';
 import { suspendDriver, unsuspendDriver, deactivateDriver, reactivateDriver } from '@/services/admin.service';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -204,26 +205,8 @@ export default function AdminDriversPage() {
       } else if (action === 'reactivate') {
         await reactivateDriver(driverId, adminUid);
       } else {
-        const idToken = await auth.currentUser.getIdToken(true);
-        const response = await fetch('/api/admin/manage-driver', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${idToken}`
-          },
-          body: JSON.stringify({
-            action,
-            driverId,
-            reason,
-            adminUid
-          })
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Erreur lors de l\'action');
-        }
+        const adminManageDriver = httpsCallable(functions, 'adminManageDriver');
+        await adminManageDriver({ action, driverId, reason });
       }
 
       setSuccess(`Action "${action}" effectuée avec succès`);
@@ -254,30 +237,16 @@ export default function AdminDriversPage() {
         throw new Error('Vous devez être connecté pour effectuer cette action');
       }
 
-      const idToken = await currentUser.getIdToken();
-
-      // 2. Appeler l'API de suppression complète
-      const response = await fetch('/api/admin/delete-driver-complete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({ driverId })
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erreur lors de la suppression complète');
-      }
+      const adminDeleteDriverComplete = httpsCallable(functions, 'adminDeleteDriverComplete');
+      const cfResult = await adminDeleteDriverComplete({ driverId });
+      const cfData = cfResult.data as DriverDeletionResult;
 
       setSuccess('Le compte chauffeur et toutes ses données ont été supprimés définitivement');
       setDeleteModalOpen(false);
       setDriverToDelete(null);
       setSelectedDriver(null);
 
-      return result as DriverDeletionResult;
+      return cfData;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la suppression du compte';
       logger.error('Suppression chauffeur', err instanceof Error ? err : new Error(String(err)));
