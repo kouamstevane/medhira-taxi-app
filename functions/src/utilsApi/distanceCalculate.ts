@@ -74,8 +74,19 @@ export const distanceCalculate = onCall(
     try {
       const res = await fetch(url.toString());
       const data = await res.json();
-      return data;
+
+      const elem = data?.rows?.[0]?.elements?.[0];
+      if (data.status !== 'OK' || !elem || elem.status !== 'OK') {
+        throw new HttpsError('not-found', `Distance Matrix: ${elem?.status ?? data.status}`);
+      }
+
+      return {
+        distanceKm: elem.distance.value / 1000,
+        durationMinutes: Math.ceil(elem.duration.value / 60),
+        isEstimate: false,
+      };
     } catch (err) {
+      if (err instanceof HttpsError) throw err;
       console.error('[distanceCalculate] Erreur Distance Matrix:', err);
       throw new HttpsError('unavailable', 'Erreur lors de la requête Distance Matrix.');
     }

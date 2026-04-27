@@ -101,7 +101,8 @@ export const stripePaymentIntent = onCall(
           throw new HttpsError('permission-denied', "Accès refusé : vous n'êtes pas le passager de cette réservation");
         }
 
-        const bookingPrice = bookingSnap.data()?.price;
+        const bookingRaw = bookingSnap.data()!;
+        const bookingPrice = (bookingRaw.price ?? 0) + (bookingRaw.bonus ?? 0);
         if (typeof bookingPrice !== 'number' || !Number.isFinite(bookingPrice) || bookingPrice <= 0) {
           throw new HttpsError('invalid-argument', 'Prix de la réservation invalide');
         }

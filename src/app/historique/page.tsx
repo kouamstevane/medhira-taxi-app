@@ -203,25 +203,40 @@ export default function HistoriquePage() {
           <h1 className="text-2xl font-bold text-white">Historique des commandes</h1>
         </div>
 
-        {/* Filtres */}
-        <GlassCard className="p-4 mb-6">
-          <p className="text-sm font-medium text-slate-400 mb-3">Période</p>
-          <div className="flex flex-wrap gap-2">
-            {FILTER_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setFilter(opt.value)}
-                className={`px-4 py-2 rounded-xl font-medium transition-all text-sm ${
-                  filter === opt.value
-                    ? 'bg-gradient-to-r from-primary to-[#ffae33] text-white primary-glow'
-                    : 'glass-card border border-white/10 text-slate-300 hover:bg-white/5'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+        {/* Hero card */}
+        <div className="relative overflow-hidden glass-card p-5 rounded-3xl border border-primary/20 mb-6">
+          <div className="absolute -top-16 -right-16 w-48 h-48 bg-primary/25 blur-3xl rounded-full pointer-events-none" />
+          <div className="absolute -bottom-20 -left-10 w-40 h-40 bg-primary/10 blur-3xl rounded-full pointer-events-none" />
+
+          <div className="relative flex items-center gap-3 mb-4">
+            <div className="size-10 rounded-full bg-primary/15 border border-primary/20 flex items-center justify-center">
+              <MaterialIcon name="history" className="text-primary" />
+            </div>
+            <div>
+              <p className="text-white font-bold">Toutes vos courses</p>
+              <p className="text-slate-400 text-xs">Filtrez par période ci-dessous</p>
+            </div>
           </div>
-        </GlassCard>
+
+          <div className="relative">
+            <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">Période</p>
+            <div className="flex flex-wrap gap-2">
+              {FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setFilter(opt.value)}
+                  className={`px-4 py-2 rounded-xl font-medium transition-all text-sm ${
+                    filter === opt.value
+                      ? 'bg-primary/20 text-primary border border-primary/40'
+                      : 'border border-white/10 text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
         {/* Liste des commandes */}
         {loading ? (

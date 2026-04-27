@@ -252,10 +252,14 @@ export default function ProfilPage() {
         )}
 
         {/* Profile Card */}
-        <GlassCard className="p-6">
+        <GlassCard className="relative overflow-hidden p-6">
+          {/* Halos orange subtils */}
+          <div className="absolute -top-20 -right-20 w-56 h-56 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
+          <div className="absolute -bottom-24 -left-16 w-48 h-48 bg-primary/10 blur-3xl rounded-full pointer-events-none" />
+
           {/* Avatar */}
-          <div className="flex flex-col items-center mb-6">
-            <div className="relative w-28 h-28 rounded-full overflow-hidden border-2 border-primary/40 mb-4">
+          <div className="relative flex flex-col items-center mb-6">
+            <div className="relative w-28 h-28 rounded-full overflow-hidden ring-1 ring-white/10 shadow-[0_0_30px_rgba(242,146,0,0.25)] mb-4">
               {profileImageUrl ? (
                 <Image
                   src={profileImageUrl}
@@ -292,6 +296,7 @@ export default function ProfilPage() {
           </div>
 
           {/* Form / View */}
+          <div className="relative">
           {editing ? (
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
 
@@ -415,17 +420,36 @@ export default function ProfilPage() {
                 <p className="text-sm text-slate-500">A propos</p>
                 <p className="font-medium text-white whitespace-pre-line">{userData.bio || 'Aucune description'}</p>
               </div>
-              <div className="flex justify-end pt-4">
+              <div className="pt-4">
                 <button
                   onClick={() => setEditing(true)}
-                  className="px-6 py-3 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all active:scale-[0.98]"
+                  className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                 >
+                  <MaterialIcon name="edit" size="md" />
                   Modifier le profil
                 </button>
               </div>
             </div>
           )}
+          </div>
         </GlassCard>
+
+        {/* Payment Setup Banner — Ajouter carte bancaire */}
+        <div
+          onClick={() => router.push('/auth/setup-payment')}
+          className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/20 cursor-pointer active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-3">
+            <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+              <MaterialIcon name="credit_card" className="text-primary text-xl" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
+              <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sécurité</p>
+            </div>
+            <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
+          </div>
+        </div>
 
         {/* Section Dernières commandes */}
         <div className="mt-8">

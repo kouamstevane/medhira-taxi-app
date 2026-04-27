@@ -23,7 +23,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user && user.emailVerified) {
+      if (user) {
         router.push('/dashboard');
       }
     });
@@ -41,12 +41,7 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      if (!userCredential.user.emailVerified) {
-        await auth.signOut();
-        setError('Veuillez vérifier votre adresse email avant de vous connecter.');
-        return;
-      }
+      await signInWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
     } catch (err: unknown) {
       handleAuthError(err);
@@ -178,15 +173,6 @@ export default function LoginPage() {
               Mot de passe oublié ?
             </Link>
           </div>
-
-          {/* Resend verification link */}
-          {error && error.includes('vérifier votre adresse email') && (
-            <div className="text-center">
-              <Link href="/auth/verify-email" className="text-sm text-primary hover:underline font-medium">
-                Renvoyer l&apos;email de vérification
-              </Link>
-            </div>
-          )}
 
           {/* CTA Button */}
           <div className="pt-4">

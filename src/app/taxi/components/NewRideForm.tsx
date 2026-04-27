@@ -225,7 +225,7 @@ useEffect(() => {
       const geocoder = new window.google.maps.Geocoder();
       
       // Utilisation de .then/.catch/.finally pour une meilleure lisibilité
-      geocoder.geocode({ location })
+      geocoder.geocode({ location: { lat: location.lat, lng: location.lng } })
         .then(response => {
           if (response.results && response.results[0]) {
             setPickupAddress(response.results[0].formatted_address);
@@ -387,7 +387,7 @@ useEffect(() => {
         const data = result.data;
         setWalletBalance(data.balance ?? 0);
         setWalletCurrency(data.currency ?? 'CAD');
-        if (data.balance >= (estimate?.price ?? 0)) {
+        if (data.balance >= ((estimate?.price ?? 0) + bonus)) {
           setSelectedPaymentMethod('wallet');
         } else {
           setSelectedPaymentMethod('card');
@@ -534,7 +534,7 @@ useEffect(() => {
 
   return (
     <div className="w-full max-w-2xl mx-auto px-2 sm:px-0">
-      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+      <form id="taxi-booking-form" onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
         {/* Message d'erreur GPS - affiché si la géolocalisation échoue */}
         {geoError && !pickupAddress && (
           <div className="bg-[#f29200]/10 border-l-4 border-orange-400 p-4 rounded-lg">
@@ -690,25 +690,38 @@ useEffect(() => {
           </div>
         )}
 
-        {/* Bouton de soumission */}
+      </form>
+
+      {/* Bouton de soumission - Sticky au-dessus de la BottomNav */}
+      <div className="sticky bottom-24 left-0 right-0 z-10 mt-4">
         <button
           type="submit"
+          form="taxi-booking-form"
           disabled={!pickupAddress || !destinationAddress || !selectedCarType || !estimate || loading || estimating}
-          className="w-full bg-[#f29200] hover:bg-[#e68600] active:bg-[#d67a00] text-white font-bold py-4 px-6 rounded-[28px] transition disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-base sm:text-lg shadow-[0_0_20px_rgba(242,146,0,0.4)]"
-          style={{ minHeight: '48px' }} // Zone tactile minimale pour mobile
+          className="w-full bg-gradient-to-r from-[#f29200] to-[#ffae33] active:scale-[0.98] text-white font-bold py-4 px-6 rounded-2xl transition-transform disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-base sm:text-lg primary-glow"
+          style={{ minHeight: '48px' }}
         >
           {loading ? 'Création en cours...' : 'Demander une course'}
         </button>
-      </form>
+      </div>
 
       {/* Modal de confirmation */}
       {showConfirmModal && estimate && selectedCarType && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-lg flex items-center justify-center p-2 sm:p-4 z-50 transition-opacity duration-300">
-          <div className="bg-[#1A1A1A] rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl transform transition-all duration-300 scale-100">
+          <div className="bg-[#1A1A1A] rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl transform transition-all duration-300 scale-100">
             {/* Header */}
-            <div className="bg-gradient-to-r from-[#f29200] to-[#e68600] p-4 sm:p-6 text-white">
-              <h2 className="text-xl sm:text-2xl font-bold mb-1">Confirmer la course</h2>
-              <p className="text-xs sm:text-sm text-white/90">Vérifiez les détails avant de confirmer</p>
+            <div className="relative overflow-hidden p-4 sm:p-6 border-b border-white/[0.06]">
+              <div className="absolute -top-12 -right-12 w-40 h-40 bg-primary/25 blur-3xl rounded-full pointer-events-none" />
+              <div className="absolute -bottom-16 -left-10 w-32 h-32 bg-primary/10 blur-3xl rounded-full pointer-events-none" />
+              <div className="relative flex items-center gap-3">
+                <div className="size-10 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center flex-shrink-0">
+                  <span className="text-primary text-xl">🚕</span>
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold text-white">Confirmer la course</h2>
+                  <p className="text-xs text-slate-400">Vérifiez les détails avant de confirmer</p>
+                </div>
+              </div>
             </div>
 
             <div className="p-4 sm:p-6">
@@ -742,18 +755,21 @@ useEffect(() => {
                 </div>
 
                 {/* Prix estimé - Mise en évidence */}
-                <div className="bg-gradient-to-r from-[#f29200] to-[#e68600] p-4 sm:p-5 rounded-lg shadow-lg">
-                  <p className="text-xs sm:text-sm font-semibold text-white/90 mb-2">Prix estimé</p>
-                  <p className="text-2xl sm:text-3xl font-bold text-white">
-                    {estimate.price ? formatCurrencyWithCode(estimate.price) : `0 ${CURRENCY_CODE}`}
-                  </p>
+                <div className="relative overflow-hidden glass-card p-4 sm:p-5 rounded-2xl border border-primary/20">
+                  <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/25 blur-3xl rounded-full pointer-events-none" />
+                  <div className="relative flex items-center justify-between mb-1">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Prix estimé</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-primary">
+                      {estimate.price ? formatCurrencyWithCode(estimate.price) : `0 ${CURRENCY_CODE}`}
+                    </p>
+                  </div>
                   {bonus > 0 && (
-                    <div className="mt-1 pt-1 border-t border-white/20 flex justify-between items-center text-white/90 text-sm">
+                    <div className="relative mt-2 pt-2 border-t border-white/[0.06] flex justify-between items-center text-slate-300 text-sm">
                       <span>+ Bonus chauffeur</span>
-                      <span className="font-bold">+{formatCurrencyWithCode(bonus)}</span>
+                      <span className="font-bold text-primary">+{formatCurrencyWithCode(bonus)}</span>
                     </div>
                   )}
-                  <p className="text-xs text-white/80 mt-2">* Le prix final peut varier selon le trafic</p>
+                  <p className="relative text-xs text-slate-500 mt-2">* Le prix final peut varier selon le trafic</p>
                 </div>
               </div>
 

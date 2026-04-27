@@ -57,7 +57,7 @@ export default function HomePage() {
         </div>
         {/* Wordmark */}
         <div className="relative z-10 flex items-center gap-3">
-          <MaterialIcon name="taxi_alert" className="text-primary !text-[40px]" />
+          <MaterialIcon name="local_taxi" className="text-primary !text-[40px]" />
           <h2 className="text-white text-[40px] font-extrabold tracking-tight">Medjira</h2>
         </div>
       </div>

@@ -29,13 +29,6 @@ import { SocialLogin } from '@capgo/capacitor-social-login';
  */
 export const signInWithEmail = async (email: string, password: string): Promise<User> => {
   const result = await signInWithEmailAndPassword(auth, email, password);
-
-  // Vérifier si l'email est vérifié
-  if (!result.user.emailVerified) {
-    await signOut();
-    throw new Error('Veuillez vérifier votre adresse email avant de vous connecter');
-  }
-
   return result.user;
 };
 
@@ -59,18 +52,6 @@ export const signUpWithEmail = async (
     lastName,
     userType,
   });
-
-  // Envoyer l'email de vérification
-  try {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://medjira-service.firebaseapp.com';
-    await sendEmailVerification(result.user, {
-      url: `${origin}/login`,
-      handleCodeInApp: false,
-    });
-  } catch (error) {
-    console.error('Erreur lors de l\'envoi de l\'email de vérification:', error);
-    // On continue quand même, l'utilisateur peut renvoyer l'email plus tard
-  }
 
   return result.user;
 };

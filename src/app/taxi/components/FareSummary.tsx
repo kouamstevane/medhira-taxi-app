@@ -45,29 +45,31 @@ export const FareSummary = ({
   }
 
   return (
-    <div className="bg-gradient-to-r from-[#f29200] to-[#ffaa33] text-white p-4 sm:p-6 rounded-lg shadow-lg">
-      <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Estimation de la course</h3>
-      
-      <div className="space-y-2 sm:space-y-3 mb-3 sm:mb-4">
+    <div className="glass-card p-4 sm:p-5 rounded-2xl">
+      <h3 className="text-sm font-semibold text-[#f29200] mb-3 uppercase tracking-wide">
+        Estimation de la course
+      </h3>
+
+      <div className="space-y-2 mb-3">
         <div className="flex justify-between items-center">
-          <span className="text-sm sm:text-base text-white/90">Distance</span>
-          <span className="text-sm sm:text-base font-semibold">{distance.toFixed(1)} km</span>
+          <span className="text-sm text-slate-400">Distance</span>
+          <span className="text-sm font-semibold text-white">{distance.toFixed(1)} km</span>
         </div>
-        
+
         <div className="flex justify-between items-center">
-          <span className="text-sm sm:text-base text-white/90">Durée estimée</span>
-          <span className="text-sm sm:text-base font-semibold">{duration} min</span>
-        </div>
-        
-        <div className="border-t border-white/30 pt-2 sm:pt-3 mt-2 sm:mt-3">
-          <div className="flex justify-between items-center">
-            <span className="text-base sm:text-lg font-semibold">Prix estimé</span>
-            <span className="text-xl sm:text-2xl font-bold">{formatCurrencyWithCode(price)}</span>
-          </div>
+          <span className="text-sm text-slate-400">Durée estimée</span>
+          <span className="text-sm font-semibold text-white">{duration} min</span>
         </div>
       </div>
-      
-      <p className="text-xs text-white/80 mt-2">
+
+      <div className="border-t border-white/[0.06] pt-3 mt-3">
+        <div className="flex justify-between items-center">
+          <span className="text-base font-semibold text-white">Prix estimé</span>
+          <span className="text-2xl font-bold text-[#f29200]">{formatCurrencyWithCode(price)}</span>
+        </div>
+      </div>
+
+      <p className="text-xs text-slate-500 mt-3">
         * Le prix final peut varier selon le trafic et les conditions de route
       </p>
     </div>

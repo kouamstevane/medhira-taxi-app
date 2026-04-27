@@ -154,6 +154,8 @@ export const bookingsComplete = onCall(
     const pricePerKm = ct?.pricePerKm ?? DEFAULT_PRICING.PRICE_PER_KM;
     const pricePerMinute = ct?.pricePerMinute ?? DEFAULT_PRICING.PRICE_PER_MINUTE;
 
+    const bookingBonus = typeof booking.bonus === 'number' ? booking.bonus : 0;
+
     let finalPrice = basePrice + ((booking.distance ?? 0) * pricePerKm) + (durationMinutes * pricePerMinute);
 
     const hours = endTime.getHours();
@@ -163,6 +165,8 @@ export const bookingsComplete = onCall(
     finalPrice = Math.round(finalPrice * 100) / 100;
 
     if (finalPrice < MIN_RIDE_PRICE) finalPrice = MIN_RIDE_PRICE;
+    finalPrice += bookingBonus;
+    finalPrice = Math.round(finalPrice * 100) / 100;
     if (finalPrice > MAX_PAY_AMOUNT) {
       throw new HttpsError('invalid-argument', 'Montant de course invalide');
     }
@@ -205,7 +209,7 @@ export const bookingsComplete = onCall(
             const currency = STRIPE_CURRENCY_BY_MARKET[ACTIVE_MARKET];
             if (!currency) throw new Error('Devise non supportée');
 
-            const price = Number(booking.price);
+            const price = Number(booking.price) + bookingBonus;
             const minCapture = Math.max(50, price * 0.5);
             const maxCapture = price * 1.5;
             let captureAmount = finalPrice;

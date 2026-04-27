@@ -287,14 +287,22 @@ export default function PortalClient() {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-primary to-[#ffae33] p-6 rounded-3xl text-white">
-              <h3 className="font-bold text-lg mb-2">Support Partenaire</h3>
-              <p className="text-white/80 text-sm mb-6 flex items-center gap-2">
-                Besoin d'aide avec une commande ou votre compte ?
+            <div className="relative overflow-hidden glass-card p-6 rounded-3xl border border-primary/20">
+              <div className="absolute -top-16 -right-16 w-48 h-48 bg-primary/25 blur-3xl rounded-full pointer-events-none" />
+              <div className="absolute -bottom-20 -left-10 w-40 h-40 bg-primary/10 blur-3xl rounded-full pointer-events-none" />
+
+              <div className="relative flex items-center gap-3 mb-3">
+                <div className="size-10 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
+                  <MaterialIcon name="support_agent" className="text-primary" />
+                </div>
+                <h3 className="font-bold text-lg text-white">Support Partenaire</h3>
+              </div>
+              <p className="relative text-slate-400 text-sm mb-6">
+                Besoin d&apos;aide avec une commande ou votre compte ?
               </p>
               <button
                 onClick={() => window.open('mailto:business@medjira.com', '_blank')}
-                className="w-full py-3 bg-white text-primary font-bold rounded-2xl hover:bg-white/90 transition text-sm"
+                className="relative w-full py-3 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform text-sm"
               >
                 Contacter Medjira Business
               </button>

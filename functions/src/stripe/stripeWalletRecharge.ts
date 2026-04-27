@@ -11,7 +11,18 @@ const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 let _stripe: InstanceType<typeof Stripe> | null = null;
 function getStripe(): InstanceType<typeof Stripe> {
   if (!_stripe) {
-    _stripe = new Stripe(stripeSecretKey.value(), { apiVersion: '2026-03-25.dahlia' });
+    const keyValue = stripeSecretKey.value();
+    if (!keyValue) {
+      console.error('[stripeWalletRecharge] STRIPE_SECRET_KEY is empty or not loaded');
+      throw new HttpsError('internal', 'Configuration error: Stripe key missing');
+    }
+    const trimmedKey = keyValue.trim();
+    if (!trimmedKey.startsWith('sk_')) {
+      console.error('[stripeWalletRecharge] STRIPE_SECRET_KEY has invalid format');
+      throw new HttpsError('internal', 'Configuration error: Stripe key invalid');
+    }
+    console.log('[stripeWalletRecharge] Initializing Stripe client with key starting with:', trimmedKey.substring(0, 10));
+    _stripe = new Stripe(trimmedKey, { apiVersion: '2026-03-25.dahlia' });
   }
   return _stripe;
 }

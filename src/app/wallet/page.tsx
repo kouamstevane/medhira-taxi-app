@@ -83,14 +83,24 @@ export default function WalletPage() {
         )}
 
         {/* Hero Balance Card */}
-        <div className="bg-gradient-to-br from-primary to-[#e68600] p-6 rounded-3xl primary-glow">
-          <p className="text-white/80 text-sm font-medium mb-2">Solde disponible</p>
+        <div className="relative overflow-hidden glass-card p-6 rounded-3xl border border-primary/20">
+          {/* Halo orange subtil */}
+          <div className="absolute -top-16 -right-16 w-48 h-48 bg-primary/30 blur-3xl rounded-full pointer-events-none" />
+          <div className="absolute -bottom-20 -left-10 w-40 h-40 bg-primary/10 blur-3xl rounded-full pointer-events-none" />
+
+          <div className="relative flex items-center justify-between mb-3">
+            <p className="text-slate-400 text-sm font-medium">Solde disponible</p>
+            <MaterialIcon name="account_balance_wallet" size="md" className="text-primary/70" />
+          </div>
+
           {loading ? (
-            <div className="h-10 w-40 bg-white/20 rounded-xl animate-pulse mb-2" />
+            <div className="h-10 w-40 bg-white/10 rounded-xl animate-pulse mb-2" />
           ) : (
-            <p className="text-4xl font-black text-white mb-1">{formatCurrencyWithCode(balance)}</p>
+            <p className="relative text-4xl font-black text-white mb-1 tracking-tight">
+              {formatCurrencyWithCode(balance)}
+            </p>
           )}
-          <p className="text-white/60 text-xs">Mis à jour maintenant</p>
+          <p className="relative text-slate-500 text-xs">Mis à jour maintenant</p>
         </div>
 
         {/* Quick Actions */}

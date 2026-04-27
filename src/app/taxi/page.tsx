@@ -305,7 +305,7 @@ export default function TaxiPage() {
         </header>
 
         {/* Content */}
-        <main className="flex-1 px-4 py-6">
+        <main className="flex-1 px-4 py-6 pb-28">
           {step === 'form' && (
             <div className="space-y-6">
               <NewRideForm
