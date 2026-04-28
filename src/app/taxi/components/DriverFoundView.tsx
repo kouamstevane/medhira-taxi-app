@@ -424,6 +424,16 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
 
       {/* Infos Chauffeur et Course */}
       <div className="p-4 sm:p-6">
+        {/* Mention réservation pour tiers */}
+        {booking.bookedForSomeoneElse && booking.passengerName && (
+          <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2">
+            <span className="text-lg">👤</span>
+            <p className="text-sm text-amber-300">
+              Course réservée pour <span className="font-bold text-white">{booking.passengerName}</span>
+            </p>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
             <div className="w-14 h-14 bg-[#242424] rounded-full flex items-center justify-center text-2xl">

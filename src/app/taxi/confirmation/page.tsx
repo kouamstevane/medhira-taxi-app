@@ -202,6 +202,16 @@ function ConfirmationContent() {
         </header>
 
         <main className="flex-1 p-4 space-y-4">
+          {/* Mention réservation pour tiers */}
+          {booking?.bookedForSomeoneElse && booking?.passengerName && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2">
+              <MaterialIcon name="person" size="md" className="text-amber-400" />
+              <p className="text-sm text-amber-300">
+                Course réservée pour <span className="font-bold text-white">{booking.passengerName}</span>
+              </p>
+            </div>
+          )}
+
           {/* Carte */}
           <div className="rounded-xl overflow-hidden border border-white/10">
             <ConfirmationMap

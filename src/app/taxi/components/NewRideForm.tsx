@@ -50,6 +50,10 @@ const BookingSchema = z.object({
   price: z.number().positive('Prix doit être positif'),
   carType: z.string().min(1, 'Type de véhicule requis'),
   bonus: z.number().min(0).optional(),
+  bookedForSomeoneElse: z.boolean().optional(),
+  passengerName: z.string().optional(),
+  passengerPhone: z.string().optional(),
+  passengerNotes: z.string().optional(),
 });
 
 interface NewRideFormProps {
@@ -87,6 +91,12 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   const [bonus, setBonus] = useState(0);
   const [showBonus, setShowBonus] = useState(false);
   const [autoSearchEnabled, setAutoSearchEnabled] = useState(false);
+
+  // États pour la réservation pour un tiers
+  const [bookForSomeoneElse, setBookForSomeoneElse] = useState(false);
+  const [passengerName, setPassengerName] = useState('');
+  const [passengerPhone, setPassengerPhone] = useState('');
+  const [passengerNotes, setPassengerNotes] = useState('');
 
   // États paiement
   const [modalStep, setModalStep] = useState<'summary' | 'payment' | 'stripe'>('summary');
@@ -370,6 +380,17 @@ useEffect(() => {
       return;
     }
 
+    if (bookForSomeoneElse) {
+      if (!passengerName.trim()) {
+        setError('Veuillez entrer le nom du passager');
+        return;
+      }
+      if (!passengerPhone.trim() || passengerPhone.trim().length < 8) {
+        setError('Veuillez entrer un numéro de téléphone valide pour le passager');
+        return;
+      }
+    }
+
     setModalStep('summary');
     setStripeClientSecret(null);
     setPendingBookingId(null);
@@ -469,6 +490,12 @@ useEffect(() => {
         ...(bonus > 0 && { bonus }),
         ...(autoSearchEnabled && {
           automaticSearch: { enabled: true, intervalSeconds: 60, attemptCount: 0, maxAttempts: 10 },
+        }),
+        ...(bookForSomeoneElse && {
+          bookedForSomeoneElse: true,
+          passengerName: passengerName.trim(),
+          passengerPhone: passengerPhone.trim(),
+          passengerNotes: passengerNotes.trim() || undefined,
         }),
       };
       BookingSchema.parse(bookingData);
@@ -680,6 +707,75 @@ useEffect(() => {
                 Réessayer automatiquement si aucun chauffeur n&apos;est trouvé immédiatement.
               </p>
             </div>
+          </div>
+
+          {/* Toggle Réservation pour un tiers */}
+          <div>
+            <div className="flex items-center gap-3 p-3 bg-[#f29200]/10 rounded-xl border border-[#f29200]/20">
+              <div className="flex items-center h-5">
+                <input
+                  id="book-someone-else"
+                  type="checkbox"
+                  checked={bookForSomeoneElse}
+                  onChange={(e) => setBookForSomeoneElse(e.target.checked)}
+                  className="w-5 h-5 text-[#f29200] border-white/[0.08] rounded focus:ring-[#f29200]"
+                />
+              </div>
+              <div className="flex-1">
+                <label htmlFor="book-someone-else" className="text-sm font-medium text-white cursor-pointer">
+                  Cette course est pour quelqu&apos;un d&apos;autre
+                </label>
+                <p className="text-xs text-[#9CA3AF]">
+                  Le passager recevra les informations du chauffeur par SMS.
+                </p>
+              </div>
+            </div>
+
+            {bookForSomeoneElse && (
+              <div className="mt-3 p-4 bg-[#1A1A1A] rounded-xl border border-[#f29200]/20 space-y-3">
+                <div>
+                  <label htmlFor="passenger-name" className="block text-sm font-medium text-[#9CA3AF] mb-1">
+                    Nom du passager <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="passenger-name"
+                    type="text"
+                    value={passengerName}
+                    onChange={(e) => setPassengerName(e.target.value)}
+                    placeholder="Ex: Jean Dupont"
+                    className="w-full px-4 py-3 bg-[#0F0F0F] border border-white/[0.08] rounded-lg text-white placeholder:text-[#555] focus:outline-none focus:ring-2 focus:ring-[#f29200]/50 focus:border-[#f29200]/50 transition"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="passenger-phone" className="block text-sm font-medium text-[#9CA3AF] mb-1">
+                    Téléphone du passager <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    id="passenger-phone"
+                    type="tel"
+                    value={passengerPhone}
+                    onChange={(e) => setPassengerPhone(e.target.value)}
+                    placeholder="+1 514 123 4567"
+                    className="w-full px-4 py-3 bg-[#0F0F0F] border border-white/[0.08] rounded-lg text-white placeholder:text-[#555] focus:outline-none focus:ring-2 focus:ring-[#f29200]/50 focus:border-[#f29200]/50 transition"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="passenger-notes" className="block text-sm font-medium text-[#9CA3AF] mb-1">
+                    Notes pour le chauffeur <span className="text-[#555]">(optionnel)</span>
+                  </label>
+                  <textarea
+                    id="passenger-notes"
+                    value={passengerNotes}
+                    onChange={(e) => setPassengerNotes(e.target.value)}
+                    placeholder="Ex: Porte rouge, 3e étage..."
+                    rows={2}
+                    className="w-full px-4 py-3 bg-[#0F0F0F] border border-white/[0.08] rounded-lg text-white placeholder:text-[#555] focus:outline-none focus:ring-2 focus:ring-[#f29200]/50 focus:border-[#f29200]/50 transition resize-none"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

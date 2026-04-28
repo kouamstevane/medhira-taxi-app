@@ -18,6 +18,7 @@ import {
   orderBy,
   limit as firestoreLimit,
   startAfter,
+  onSnapshot,
 } from 'firebase/firestore';
 import type { DocumentSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -70,6 +71,51 @@ export const getOrCreateWallet = async (userId: string): Promise<Wallet> => {
 export const getWalletBalance = async (userId: string): Promise<number> => {
   const wallet = await getOrCreateWallet(userId);
   return wallet.balance;
+};
+
+/**
+ * S'abonne aux changements du wallet en temps réel via Firestore.
+ * Retourne une fonction pour se désabonner.
+ */
+export const subscribeToWallet = (
+  userId: string,
+  onWalletUpdate: (wallet: Wallet) => void,
+  onError?: (error: Error) => void
+): (() => void) => {
+  const walletRef = doc(db, 'wallets', userId);
+  let ensureTriggered = false;
+  return onSnapshot(
+    walletRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        onWalletUpdate(snapshot.data() as Wallet);
+        return;
+      }
+      // Document inexistant : bootstrap via Cloud Function (une seule fois).
+      // Le walletEnsure créera le doc, ce qui déclenchera un nouveau snapshot.
+      if (ensureTriggered) return;
+      ensureTriggered = true;
+      const ensureWallet = httpsCallable<unknown, { balance: number; currency: string }>(
+        functions, 'walletEnsure'
+      );
+      ensureWallet({})
+        .then((result) => {
+          // Émission optimiste si Firestore n'a pas encore propagé l'écriture.
+          onWalletUpdate({
+            userId,
+            balance: result.data.balance,
+            currency: result.data.currency ?? CURRENCY_CODE,
+            updatedAt: new Date(),
+          });
+        })
+        .catch((err: unknown) => {
+          onError?.(err instanceof Error ? err : new Error(String(err)));
+        });
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
 };
 
 // ============================================================================

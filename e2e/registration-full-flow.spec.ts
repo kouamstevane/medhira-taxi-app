@@ -282,7 +282,10 @@ test.describe('Inscription Chauffeur — Parcours complet', () => {
     await page.locator('input[name="lastName"]').fill('Dupont');
     const dob = new Date();
     dob.setFullYear(dob.getFullYear() - 25);
-    await page.locator('input[type="date"]').fill(dob.toISOString().split('T')[0]);
+    const [dobYear, dobMonth, dobDay] = dob.toISOString().split('T')[0].split('-');
+    await page.locator('input[name="dobDay"]').fill(dobDay);
+    await page.locator('input[name="dobMonth"]').fill(dobMonth);
+    await page.locator('input[name="dobYear"]').fill(dobYear);
     await page.locator('input[name="phone"]').fill('+15141234567');
     await page.locator('input[name="ssn"]').fill('123456789');
     await page.locator('#web-camera-fallback').setInputFiles({
@@ -354,7 +357,10 @@ test.describe('Inscription Chauffeur — Parcours complet', () => {
     await page.locator('input[name="lastName"]').fill('Curie');
     const dob = new Date();
     dob.setFullYear(dob.getFullYear() - 30);
-    await page.locator('input[type="date"]').fill(dob.toISOString().split('T')[0]);
+    const [dobYear, dobMonth, dobDay] = dob.toISOString().split('T')[0].split('-');
+    await page.locator('input[name="dobDay"]').fill(dobDay);
+    await page.locator('input[name="dobMonth"]').fill(dobMonth);
+    await page.locator('input[name="dobYear"]').fill(dobYear);
     await page.locator('input[name="phone"]').fill('+15149876543');
     await page.locator('input[name="ssn"]').fill('987654321');
     await page.locator('#web-camera-fallback').setInputFiles({

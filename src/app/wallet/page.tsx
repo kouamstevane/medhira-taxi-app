@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getOrCreateWallet, getTransactionHistory } from '@/services/wallet.service';
+import { getTransactionHistory, subscribeToWallet } from '@/services/wallet.service';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -29,35 +29,48 @@ export default function WalletPage() {
   }, [searchParams, router]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    let unsubscribeWallet: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user) { router.push('/login'); return; }
 
-      try {
-        setLoading(true);
-        setError('');
+      setLoading(true);
+      setError('');
 
-        const [wallet, txData] = await Promise.all([
-          getOrCreateWallet(user.uid),
-          getTransactionHistory(user.uid, 3).catch(() => []),
-        ]);
+      // Charger l'historique des transactions (une fois)
+      getTransactionHistory(user.uid, 3)
+        .then(txData => {
+          setTransactions(txData.map(t => ({
+            ...t,
+            date: timestampToDate(t.createdAt),
+          } as Transaction)));
+        })
+        .catch(() => {
+          // Ignorer les erreurs silencieusement
+        });
 
-        setBalance(wallet.balance || 0);
-
-        setTransactions(txData.map(t => ({
-          ...t,
-          date: timestampToDate(t.createdAt),
-        } as Transaction)));
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        if (!errMsg.includes('offline') && !errMsg.includes('permission')) {
-          setError('Erreur lors du chargement du portefeuille');
+      // S'abonner au wallet en temps réel
+      if (unsubscribeWallet) unsubscribeWallet();
+      unsubscribeWallet = subscribeToWallet(
+        user.uid,
+        (wallet) => {
+          setBalance(wallet.balance || 0);
+          setLoading(false);
+        },
+        (err) => {
+          const errMsg = err.message;
+          if (!errMsg.includes('offline') && !errMsg.includes('permission')) {
+            setError('Erreur lors du chargement du portefeuille');
+          }
+          setLoading(false);
         }
-      } finally {
-        setLoading(false);
-      }
+      );
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeWallet) unsubscribeWallet();
+    };
   }, [router]);
 
   const formatDate = (date: Date) =>

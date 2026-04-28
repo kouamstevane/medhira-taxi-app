@@ -71,6 +71,16 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
 
           {request.bookingData && (
             <>
+              {/* Badge Tiers */}
+              {request.bookingData.bookedForSomeoneElse && (
+                <div className="flex items-center space-x-2 mb-2">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30">
+                    <MaterialIcon name="person" size="sm" />
+                    Pour un tiers
+                  </span>
+                </div>
+              )}
+
               {/* Départ */}
               <div className="flex items-start mt-2 bg-white/5 rounded-lg p-2">
                 <div className="w-2 h-2 rounded-full bg-green-500 mt-1 mr-2 flex-shrink-0"></div>
@@ -88,6 +98,28 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
                   <p className="text-xs sm:text-sm text-white break-words font-medium">{request.bookingData.destination}</p>
                 </div>
               </div>
+
+              {/* Infos passager tiers */}
+              {request.bookingData.bookedForSomeoneElse && request.bookingData.passengerName && (
+                <div className="mt-2 bg-amber-500/10 rounded-lg p-2 border border-amber-500/20 space-y-1">
+                  <div className="flex items-center space-x-1">
+                    <MaterialIcon name="person" size="sm" className="text-amber-400" />
+                    <span className="text-xs sm:text-sm text-white font-medium">{request.bookingData.passengerName}</span>
+                  </div>
+                  {request.bookingData.passengerPhone && (
+                    <div className="flex items-center space-x-1">
+                      <MaterialIcon name="phone" size="sm" className="text-amber-400" />
+                      <span className="text-xs sm:text-sm text-white">{request.bookingData.passengerPhone}</span>
+                    </div>
+                  )}
+                  {request.bookingData.passengerNotes && (
+                    <div className="flex items-start space-x-1">
+                      <MaterialIcon name="notes" size="sm" className="text-amber-400 mt-0.5" />
+                      <span className="text-xs sm:text-sm text-slate-300 italic">{request.bookingData.passengerNotes}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Infos course */}
               <div className="flex items-center space-x-4 mt-2 text-xs text-slate-400">

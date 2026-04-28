@@ -79,6 +79,10 @@ async function fetchBookingsForRequests(
         price: bookingData.price as number,
         distance: bookingData.distance as number | undefined,
         duration: bookingData.duration as number | undefined,
+        bookedForSomeoneElse: bookingData.bookedForSomeoneElse as boolean | undefined,
+        passengerName: bookingData.passengerName as string | undefined,
+        passengerPhone: bookingData.passengerPhone as string | undefined,
+        passengerNotes: bookingData.passengerNotes as string | undefined,
       };
     }
     return result;
@@ -248,7 +252,9 @@ export default function DriverDashboard() {
               setCurrentTrip({
                 id: activeDoc.id,
                 userId: data.userId,
-                passengerName: data.userEmail || "Client",
+                passengerName: (data.bookedForSomeoneElse && data.passengerName)
+                  ? data.passengerName
+                  : (data.userEmail || "Client"),
                 pickup: data.pickup,
                 destination: data.destination,
                 price: data.price,
@@ -259,7 +265,10 @@ export default function DriverDashboard() {
                 pickupLocationAccuracy: data.pickupLocationAccuracy,
                 destinationLocation: data.destinationLocation,
                 driverLocation: data.driverLocation,
-                passengerLocation: data.passengerLocation
+                passengerLocation: data.passengerLocation,
+                bookedForSomeoneElse: data.bookedForSomeoneElse || false,
+                passengerPhone: data.passengerPhone,
+                passengerNotes: data.passengerNotes,
               });
           } else {
             // Aucune course active, réinitialiser
@@ -290,12 +299,17 @@ export default function DriverDashboard() {
             trips.push({
               id: doc.id,
               userId: data.userId || '',
-              passengerName: data.passengerName || "Client",
+              passengerName: (data.bookedForSomeoneElse && data.passengerName)
+                ? data.passengerName
+                : (data.passengerName || "Client"),
               pickup: data.pickup,
               destination: data.destination,
               price: data.price,
               status: "pending",
-              createdAt: data.createdAt
+              createdAt: data.createdAt,
+              bookedForSomeoneElse: data.bookedForSomeoneElse || false,
+              passengerPhone: data.passengerPhone,
+              passengerNotes: data.passengerNotes,
             });
           });
           setAvailableTrips(trips);
@@ -415,7 +429,9 @@ export default function DriverDashboard() {
         setCurrentTrip({
           id: rideId,
           userId: bookingData.userId,
-          passengerName: bookingData.userEmail || "Client",
+          passengerName: (bookingData.bookedForSomeoneElse && bookingData.passengerName)
+            ? bookingData.passengerName
+            : (bookingData.userEmail || "Client"),
           pickup: bookingData.pickup,
           destination: bookingData.destination,
           price: bookingData.price,
@@ -426,7 +442,10 @@ export default function DriverDashboard() {
           pickupLocationAccuracy: bookingData.pickupLocationAccuracy,
             destinationLocation: bookingData.destinationLocation,
             driverLocation: bookingData.driverLocation,
-            passengerLocation: bookingData.passengerLocation
+            passengerLocation: bookingData.passengerLocation,
+            bookedForSomeoneElse: bookingData.bookedForSomeoneElse || false,
+            passengerPhone: bookingData.passengerPhone,
+            passengerNotes: bookingData.passengerNotes,
         });
       }
     } catch (err: unknown) {
@@ -479,7 +498,9 @@ export default function DriverDashboard() {
         setCurrentTrip({
           id: tripId,
           userId: bookingData.userId,
-          passengerName: bookingData.userEmail || "Client",
+          passengerName: (bookingData.bookedForSomeoneElse && bookingData.passengerName)
+            ? bookingData.passengerName
+            : (bookingData.userEmail || "Client"),
           pickup: bookingData.pickup,
           destination: bookingData.destination,
           price: bookingData.price,
@@ -490,7 +511,10 @@ export default function DriverDashboard() {
           pickupLocationAccuracy: bookingData.pickupLocationAccuracy,
           destinationLocation: bookingData.destinationLocation,
           driverLocation: bookingData.driverLocation,
-          passengerLocation: bookingData.passengerLocation
+          passengerLocation: bookingData.passengerLocation,
+          bookedForSomeoneElse: bookingData.bookedForSomeoneElse || false,
+          passengerPhone: bookingData.passengerPhone,
+          passengerNotes: bookingData.passengerNotes,
         });
       }
     } catch (err: unknown) {
@@ -733,8 +757,38 @@ export default function DriverDashboard() {
                           <div className="flex items-center gap-2">
                             <span className="text-2xl font-black text-white">{formatCurrencyWithCode(trip.price)}</span>
                           </div>
+                          {trip.bookedForSomeoneElse && (
+                            <div className="mt-2">
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30">
+                                <MaterialIcon name="person" size="sm" />
+                                Pour un tiers
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
+                      {trip.bookedForSomeoneElse && (trip.passengerName || trip.passengerPhone) && (
+                        <div className="mb-4 p-2 bg-amber-500/10 rounded-lg border border-amber-500/20 space-y-1">
+                          {trip.passengerName && trip.passengerName !== 'Client' && (
+                            <div className="flex items-center gap-1">
+                              <MaterialIcon name="person" size="sm" className="text-amber-400" />
+                              <span className="text-sm text-white font-medium">{trip.passengerName}</span>
+                            </div>
+                          )}
+                          {trip.passengerPhone && (
+                            <div className="flex items-center gap-1">
+                              <MaterialIcon name="phone" size="sm" className="text-amber-400" />
+                              <span className="text-sm text-white">{trip.passengerPhone}</span>
+                            </div>
+                          )}
+                          {trip.passengerNotes && (
+                            <div className="flex items-start gap-1">
+                              <MaterialIcon name="notes" size="sm" className="text-amber-400 mt-0.5" />
+                              <span className="text-sm text-slate-300 italic">{trip.passengerNotes}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="space-y-4 mb-6 relative">
                         <div className="absolute left-[7px] top-3 bottom-3 w-[1.5px] bg-slate-700" />
                         <div className="flex items-start gap-4">
