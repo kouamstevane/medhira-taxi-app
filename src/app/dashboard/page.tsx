@@ -320,15 +320,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Location Bar */}
-        <div className="mt-2 mb-8">
-          <GlassCard variant="elevated" className="flex items-center w-full h-14 px-4 gap-3">
-            <MaterialIcon name="location_on" className="text-primary" />
-            <span className="flex-1 text-slate-100 font-medium">Canada</span>
-            <MaterialIcon name="arrow_drop_down" className="text-slate-500" />
-          </GlassCard>
-        </div>
-
         {/* Service Grid */}
         <section className="mb-6">
           <h2 className="text-white text-[20px] font-bold mb-4 px-1 tracking-tight">Que voulez-vous faire ?</h2>
@@ -461,14 +452,6 @@ export default function Dashboard() {
             )}
           </div>
         </section>
-
-        {/* Promo Banner */}
-        <div className="p-6 rounded-2xl bg-gradient-to-br from-primary/20 to-transparent border border-primary/10 mb-8">
-          <p className="text-primary font-bold text-lg mb-1">Parrainez un ami</p>
-          <p className="text-slate-300 text-sm leading-relaxed">
-            Gagnez 500 XAF sur votre prochaine course en invitant vos proches.
-          </p>
-        </div>
       </main>
 
       {/* Bottom Navigation */}

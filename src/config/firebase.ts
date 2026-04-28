@@ -53,7 +53,7 @@ if (typeof window !== 'undefined') {
 
 export const db: Firestore = firestoreInstance;
 export const storage: FirebaseStorage = getStorage(app);
-export const functions: Functions = getFunctions(app);
+export const functions: Functions = getFunctions(app, 'europe-west1');
 export const rtdb: Database = getDatabase(app);
 
 export { app };

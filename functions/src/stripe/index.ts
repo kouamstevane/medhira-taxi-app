@@ -97,15 +97,15 @@ export const createSetupIntent = onCall(
     secrets: [stripeSecretKey],
   },
   async (request: CallableRequest<void>): Promise<CreateSetupIntentResult> => {
+    const t0 = Date.now();
     try {
-      // 1. Vérifier l'authentification
       if (!request.auth) {
+        console.warn('[createSetupIntent] unauthenticated call');
         throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
       }
       const userId = request.auth.uid;
+      console.log('[createSetupIntent] start', { userId });
 
-      // Rate limit: SetupIntent creation triggers Stripe API calls (cost +
-      // fraud surface). 10/min is comfortable for retries/UX but caps abuse.
       await enforceRateLimit({
         identifier: userId,
         bucket: 'stripe:createSetupIntent',
@@ -116,43 +116,87 @@ export const createSetupIntent = onCall(
       const stripeClient = getStripe();
       const db = getDb();
 
-      // 2. Récupérer ou créer le customerId Stripe
+      // 1) Récupérer ou créer le customerId Stripe
       const userDoc = await db.collection('users').doc(userId).get();
       const userData = userDoc.exists ? userDoc.data() : {};
       let customerId: string = userData?.stripeCustomerId ?? '';
+      console.log('[createSetupIntent] userDoc', {
+        userId,
+        userDocExists: userDoc.exists,
+        hasStripeCustomerId: !!customerId,
+      });
 
       if (!customerId) {
-        const customer = await stripeClient.customers.create({
-          metadata: { userId },
-          name: userData
-            ? `${userData.firstName ?? ''} ${userData.lastName ?? ''}`.trim() || undefined
-            : undefined,
-          email: userData?.email ?? undefined,
-        });
-        customerId = customer.id;
+        try {
+          console.log('[createSetupIntent] creating Stripe customer', { userId });
+          const customer = await stripeClient.customers.create({
+            metadata: { userId },
+            name: userData
+              ? `${userData.firstName ?? ''} ${userData.lastName ?? ''}`.trim() || undefined
+              : undefined,
+            email: userData?.email ?? undefined,
+          });
+          customerId = customer.id;
+          console.log('[createSetupIntent] Stripe customer created', { userId, customerId });
+        } catch (err) {
+          const e = err as { type?: string; code?: string; statusCode?: number; requestId?: string; param?: string; message?: string; raw?: { message?: string; code?: string; param?: string } };
+          const msg = e.raw?.message || e.message || 'Erreur Stripe inconnue';
+          console.error('[createSetupIntent] Stripe customers.create failed', {
+            userId,
+            type: e.type,
+            code: e.code ?? e.raw?.code,
+            statusCode: e.statusCode,
+            param: e.param ?? e.raw?.param,
+            requestId: e.requestId,
+            message: msg,
+          });
+          throw new HttpsError('internal', `Stripe (customer): ${msg}`);
+        }
 
-        // Persister le customerId
         await db.collection('users').doc(userId).set(
           { stripeCustomerId: customerId },
           { merge: true },
         );
       }
 
-      // 3. Créer le SetupIntent avec le Customer
-      const setupIntent = await stripeClient.setupIntents.create({
-        customer: customerId,
-        automatic_payment_methods: { enabled: true },
-        metadata: {
+      // 2) Créer le SetupIntent
+      let setupIntent;
+      try {
+        console.log('[createSetupIntent] creating SetupIntent', { userId, customerId });
+        setupIntent = await stripeClient.setupIntents.create({
+          customer: customerId,
+          automatic_payment_methods: { enabled: true },
+          metadata: {
+            userId,
+            purpose: 'save_payment_method',
+          },
+        });
+      } catch (err) {
+        const e = err as { type?: string; code?: string; statusCode?: number; requestId?: string; param?: string; message?: string; raw?: { message?: string; code?: string; param?: string } };
+        const msg = e.raw?.message || e.message || 'Erreur Stripe inconnue';
+        console.error('[createSetupIntent] Stripe setupIntents.create failed', {
           userId,
-          purpose: 'save_payment_method',
-        },
-      });
-
-      if (!setupIntent.client_secret) {
-        throw new HttpsError('internal', 'Impossible de créer le SetupIntent : client_secret manquant.');
+          customerId,
+          type: e.type,
+          code: e.code ?? e.raw?.code,
+          statusCode: e.statusCode,
+          param: e.param ?? e.raw?.param,
+          requestId: e.requestId,
+          message: msg,
+        });
+        throw new HttpsError('internal', `Stripe (setup_intent): ${msg}`);
       }
 
-      console.log(`[createSetupIntent] SetupIntent ${setupIntent.id} créé pour user ${userId}`);
+      if (!setupIntent.client_secret) {
+        console.error('[createSetupIntent] missing client_secret on returned SetupIntent', { userId, setupIntentId: setupIntent.id });
+        throw new HttpsError('internal', 'Stripe: client_secret manquant sur le SetupIntent.');
+      }
+
+      console.log('[createSetupIntent] success', {
+        userId,
+        setupIntentId: setupIntent.id,
+        durationMs: Date.now() - t0,
+      });
 
       return {
         clientSecret: setupIntent.client_secret,
@@ -160,8 +204,13 @@ export const createSetupIntent = onCall(
       };
     } catch (err) {
       if (err instanceof HttpsError) throw err;
-      console.error('[createSetupIntent] Erreur:', err);
-      throw new HttpsError('internal', 'Une erreur est survenue. Veuillez réessayer.');
+      const e = err as { code?: string; message?: string };
+      console.error('[createSetupIntent] uncaught error', {
+        code: e.code,
+        message: e.message,
+        durationMs: Date.now() - t0,
+      });
+      throw new HttpsError('internal', `Erreur inattendue : ${e.message ?? 'inconnue'}`);
     }
   },
 );
@@ -193,17 +242,30 @@ export const stripeWebhookInstant = onRequest(
       return;
     }
 
-    let event: StripeEvent;
-    try {
-      event = getStripe().webhooks.constructEvent(
-        rawBody,
-        sig,
-        webhookSecretInstant.value(),
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[stripeWebhookInstant] Signature invalide:', msg);
-      // Ne pas exposer les détails de la signature au client (surface d'attaque)
+    // Plusieurs destinations Stripe peuvent pointer ici (ex: une pour le compte
+    // plateforme, une pour les comptes connectés). Chaque destination a son
+    // propre signing secret. On accepte une liste séparée par virgule dans
+    // STRIPE_WEBHOOK_SECRET_INSTANT et on essaie chaque secret jusqu'à ce que
+    // la signature valide.
+    const secrets = webhookSecretInstant
+      .value()
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    let event: StripeEvent | null = null;
+    let lastErr = '';
+    for (const secret of secrets) {
+      try {
+        event = getStripe().webhooks.constructEvent(rawBody, sig, secret);
+        break;
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    if (!event) {
+      console.error('[stripeWebhookInstant] Signature invalide pour tous les secrets:', lastErr);
       res.status(400).json({ error: 'Invalid signature' });
       return;
     }
@@ -306,10 +368,15 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
   const amountReceived = (pi.amount_received as number) ?? 0;
   const currency       = (pi.currency as string) ?? 'cad';
 
+  console.log(`[onPaymentIntentSucceeded] piId=${piId} purpose=${metadata.purpose ?? 'none'} userId=${metadata.userId ?? 'none'} amountReceived=${amountReceived} currency=${currency}`);
+
   if (metadata.purpose === 'wallet_recharge' && metadata.userId) {
     const db        = getDb();
     const walletRef = db.collection('wallets').doc(metadata.userId);
     const txRef     = db.collection('transactions').doc(piId);
+
+    let creditedAmount = 0;
+    let alreadyProcessed = false;
 
     await db.runTransaction(async (tx) => {
       const [txSnap, walletSnap] = await Promise.all([
@@ -318,6 +385,7 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
       ]);
 
       if (txSnap.exists) {
+        alreadyProcessed = true;
         console.warn(`[Webhook] payment_intent.succeeded déjà traité: ${piId}`);
         return;
       }
@@ -325,6 +393,7 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
       const zeroDecimal    = ['xaf', 'xof'].includes(currency);
       const amount         = zeroDecimal ? amountReceived : amountReceived / 100;
       const currentBalance = walletSnap.exists ? (walletSnap.data()?.balance ?? 0) : 0;
+      creditedAmount = amount;
 
       if (walletSnap.exists) {
         tx.update(walletRef, { balance: currentBalance + amount, updatedAt: serverTS() });
@@ -351,6 +420,14 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
         updatedAt:             serverTS(),
       });
     });
+
+    if (alreadyProcessed) {
+      console.log(`[onPaymentIntentSucceeded] wallet_recharge skip (idempotent) userId=${metadata.userId} piId=${piId}`);
+    } else {
+      console.log(`[onPaymentIntentSucceeded] wallet_recharge OK userId=${metadata.userId} amount=${creditedAmount} ${currency.toUpperCase()}`);
+    }
+  } else {
+    console.log(`[onPaymentIntentSucceeded] no wallet_recharge branch (purpose=${metadata.purpose ?? 'none'}, userId=${metadata.userId ?? 'none'})`);
   }
 
   if (metadata.purpose === 'taxi_ride' && metadata.bookingId) {
@@ -1175,6 +1252,57 @@ function toE164(raw: string | undefined, country: string): string | undefined {
   return `+${normalized}`;
 }
 
+// =============================================================================
+// Business profile Medjira — pré-rempli côté serveur pour éviter au chauffeur
+// l'écran "Informations sur votre entreprise" dans Stripe-hosted onboarding.
+//
+// Pour changer ces valeurs (ex: nouveau site web officiel) :
+//   1. Modifier ci-dessous
+//   2. Redéployer : firebase deploy --only functions:createConnectAccount
+//
+// MCC (Merchant Category Code) :
+//   - 4121 = Limousines and Taxicabs (chauffeurs taxi)
+//   - 4215 = Courier Services: Air and Ground (livreurs)
+// =============================================================================
+const MEDJIRA_BUSINESS_PROFILE = {
+  url: 'https://medjira-service.firebaseapp.com',
+  supportEmail: 'medjira@medjira.com',
+  mccTaxi: '4121',
+  mccDelivery: '4215',
+  productDescriptionTaxi: 'Service de transport de personnes via l\'application Medjira.',
+  productDescriptionDelivery: 'Service de livraison de repas et colis via l\'application Medjira.',
+  productDescriptionMixed: 'Services de transport de personnes et de livraison via l\'application Medjira.',
+};
+
+/**
+ * Construit l'objet `business_profile` à pré-remplir côté Stripe selon le
+ * type de chauffeur (taxi, livreur, ou les deux).
+ */
+function buildBusinessProfile(driverType: string | undefined): Record<string, unknown> {
+  let mcc: string;
+  let product_description: string;
+  switch (driverType) {
+    case 'livreur':
+      mcc = MEDJIRA_BUSINESS_PROFILE.mccDelivery;
+      product_description = MEDJIRA_BUSINESS_PROFILE.productDescriptionDelivery;
+      break;
+    case 'les_deux':
+      mcc = MEDJIRA_BUSINESS_PROFILE.mccTaxi; // activité principale = taxi
+      product_description = MEDJIRA_BUSINESS_PROFILE.productDescriptionMixed;
+      break;
+    case 'chauffeur':
+    default:
+      mcc = MEDJIRA_BUSINESS_PROFILE.mccTaxi;
+      product_description = MEDJIRA_BUSINESS_PROFILE.productDescriptionTaxi;
+  }
+  return {
+    mcc,
+    product_description,
+    url: MEDJIRA_BUSINESS_PROFILE.url,
+    support_email: MEDJIRA_BUSINESS_PROFILE.supportEmail,
+  };
+}
+
 export const createConnectAccount = onCall(
   {
     region: 'europe-west1',
@@ -1239,14 +1367,21 @@ export const createConnectAccount = onCall(
     if (phone) individual.phone = phone;
     if (dob) individual.dob = dob;
     individual.email = tokenEmail;
+
+    // Business profile Medjira — évite l'écran "Informations sur votre entreprise".
+    const driverType = (snap.data()?.driverType as string | undefined) ?? 'chauffeur';
+    const businessProfile = buildBusinessProfile(driverType);
+
     console.log('[createConnectAccount] prefill summary', {
       uid,
+      driverType,
       hasFirstName: !!firstName,
       hasLastName: !!lastName,
       hasRawPhone: !!rawPhone,
       hasPhoneE164: !!phone,
       phoneNormalizationDropped: !!rawPhone && !phone,
       hasDob: !!dob,
+      mcc: businessProfile.mcc,
     });
 
     const stripeClient = getStripe();
@@ -1259,43 +1394,46 @@ export const createConnectAccount = onCall(
       try {
         const acct = await stripeClient.accounts.retrieve(existing);
         if (acct && !('deleted' in acct && acct.deleted) && !acct.details_submitted) {
-          // On n'envoie l'update QUE si on a au moins un champ utile à pré-remplir.
-          const hasSomethingToPrefill = firstName || lastName || phone || dob;
-          if (hasSomethingToPrefill) {
-            console.log('[createConnectAccount] updating existing account with prefill', {
-              uid,
-              accountId: existing,
-              keys: Object.keys(individual),
-            });
-            // Retry-without-prefill : si Stripe rejette un champ (ex: phone invalide),
-            // on l'enlève et on retente — sans bloquer le retour.
-            let currentInd = { ...individual };
-            for (let attempt = 1; attempt <= 4; attempt++) {
-              try {
-                await stripeClient.accounts.update(existing, { individual: currentInd });
-                console.log('[createConnectAccount] update ok', { uid, accountId: existing, attempt });
-                break;
-              } catch (updErr) {
-                const e = updErr as { param?: string; code?: string; message?: string; raw?: { message?: string; param?: string; code?: string } };
-                const param = e.param ?? e.raw?.param;
-                const m = param ? /^individual\[([^\]]+)\]/.exec(param) : null;
-                if (m && m[1] in currentInd && attempt < 4) {
-                  console.warn('[createConnectAccount] update: Stripe rejected field — retrying without it', {
-                    uid,
-                    accountId: existing,
-                    removedField: m[1],
-                    stripeMessage: e.raw?.message ?? e.message,
-                  });
-                  delete currentInd[m[1]];
-                  continue;
-                }
-                console.warn('[createConnectAccount] update failed (non-blocking)', {
+          // On envoie TOUJOURS le business_profile (Medjira-wide). On ajoute
+          // l'individual seulement s'il y a au moins un champ utile à pré-remplir.
+          const hasIndividualPrefill = firstName || lastName || phone || dob;
+          console.log('[createConnectAccount] updating existing account with prefill', {
+            uid,
+            accountId: existing,
+            individualKeys: hasIndividualPrefill ? Object.keys(individual) : [],
+            withBusinessProfile: true,
+          });
+          // Retry-without-prefill : si Stripe rejette un champ (ex: phone invalide),
+          // on l'enlève et on retente — sans bloquer le retour.
+          let currentInd = { ...individual };
+          for (let attempt = 1; attempt <= 4; attempt++) {
+            try {
+              const updatePayload: Record<string, unknown> = { business_profile: businessProfile };
+              if (hasIndividualPrefill) updatePayload.individual = currentInd;
+              await stripeClient.accounts.update(existing, updatePayload);
+              console.log('[createConnectAccount] update ok', { uid, accountId: existing, attempt });
+              break;
+            } catch (updErr) {
+              const e = updErr as { param?: string; code?: string; message?: string; raw?: { message?: string; param?: string; code?: string } };
+              const param = e.param ?? e.raw?.param;
+              const m = param ? /^individual\[([^\]]+)\]/.exec(param) : null;
+              if (m && m[1] in currentInd && attempt < 4) {
+                console.warn('[createConnectAccount] update: Stripe rejected individual field — retrying without it', {
                   uid,
                   accountId: existing,
+                  removedField: m[1],
                   stripeMessage: e.raw?.message ?? e.message,
                 });
-                break;
+                delete currentInd[m[1]];
+                continue;
               }
+              console.warn('[createConnectAccount] update failed (non-blocking)', {
+                uid,
+                accountId: existing,
+                stripeParam: param,
+                stripeMessage: e.raw?.message ?? e.message,
+              });
+              break;
             }
           }
         } else {
@@ -1327,6 +1465,7 @@ export const createConnectAccount = onCall(
       capabilities: { transfers: { requested: true } },
       business_type: 'individual' as const,
       individual: ind,
+      business_profile: businessProfile,
       metadata: { driverId: uid, platform: 'medjira_taxi' },
     });
 

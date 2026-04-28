@@ -101,6 +101,39 @@ export function CurrentTripCard({
           </div>
         )}
         <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+          {/* Badge Tiers */}
+          {trip.bookedForSomeoneElse && (
+            <div className="mb-3 p-2 bg-amber-500/10 rounded-lg border border-amber-500/20">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30">
+                  <MaterialIcon name="person" size="sm" />
+                  Pour un tiers
+                </span>
+              </div>
+              <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center gap-1">
+                  <MaterialIcon name="person" size="sm" className="text-amber-400" />
+                  <span className="text-sm text-white font-medium">{trip.passengerName || 'Passager'}</span>
+                </div>
+                {trip.passengerPhone && (
+                  <a
+                    href={`tel:${trip.passengerPhone}`}
+                    className="flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 font-medium"
+                  >
+                    <MaterialIcon name="phone" size="sm" />
+                    {trip.passengerPhone}
+                  </a>
+                )}
+              </div>
+              {trip.passengerNotes && (
+                <p className="text-xs text-slate-400 italic mt-1">
+                  <MaterialIcon name="notes" size="sm" className="text-amber-400 mr-1 align-text-bottom" />
+                  {trip.passengerNotes}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="font-semibold text-white">Client</p>

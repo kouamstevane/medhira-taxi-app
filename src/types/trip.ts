@@ -20,12 +20,14 @@ export interface BaseTrip {
     client: number;
     driver: number;
   };
-  // Coordonnées GPS précises pour la navigation
   pickupLocation?: PreciseLocation;
-  pickupLocationAccuracy?: number; // Précision en mètres
+  pickupLocationAccuracy?: number;
   destinationLocation?: PreciseLocation;
   driverLocation?: PreciseLocation;
   passengerLocation?: PreciseLocation;
+  bookedForSomeoneElse?: boolean;
+  passengerPhone?: string;
+  passengerNotes?: string;
 }
 
 export type Trip = BaseTrip;
@@ -39,5 +41,9 @@ export interface RideRequest {
     price: number;
     distance?: number;
     duration?: number;
+    bookedForSomeoneElse?: boolean;
+    passengerName?: string;
+    passengerPhone?: string;
+    passengerNotes?: string;
   };
 }

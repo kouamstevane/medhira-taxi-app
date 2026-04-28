@@ -22,36 +22,42 @@ export const VehicleOption = ({ carType, selected, onSelect, disabled = false }:
       type="button"
       onClick={() => !disabled && onSelect(carType)}
       disabled={disabled}
-      className={`w-full p-3 sm:p-4 border-2 rounded-lg transition-all text-left touch-manipulation ${
+      className={`relative w-full overflow-hidden p-4 border rounded-2xl transition-all text-left touch-manipulation ${
         disabled
           ? 'border-white/[0.04] bg-[#1A1A1A]/50 cursor-not-allowed opacity-60'
           : selected
-          ? 'border-[#f29200] bg-[#f29200] bg-opacity-10 active:bg-opacity-20'
-          : 'border-white/[0.08] bg-[#1A1A1A] active:border-[#f29200] hover:border-[#f29200] hover:bg-white/5'
+          ? 'border-primary/40 bg-primary/[0.08] active:bg-primary/[0.12] shadow-[0_0_24px_-8px_rgba(242,146,0,0.4)]'
+          : 'border-white/[0.08] glass-card active:border-primary/30 hover:border-primary/30 hover:bg-white/[0.03]'
       }`}
       style={{ minHeight: '60px' }}
     >
-      <div className="flex items-center justify-between gap-2 sm:gap-4">
+      {selected && !disabled && (
+        <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
+      )}
+
+      <div className="relative flex items-center justify-between gap-2 sm:gap-4">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-base sm:text-lg text-white">{carType.name}</h3>
-          <p className="text-xs sm:text-sm text-[#9CA3AF] mt-1">
-            {carType.seats} places • {carType.time} d'attente
+          <h3 className={`font-semibold text-base sm:text-lg ${selected ? 'text-primary' : 'text-white'}`}>
+            {carType.name}
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            {carType.seats} places • {carType.time} d&apos;attente
           </p>
           <div className="mt-2 flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
-            <span className="text-[#9CA3AF]">
-              Base: <span className="font-medium text-white">{carType.basePrice} {CURRENCY_CODE}</span>
+            <span className="text-slate-500">
+              Base: <span className="font-medium text-slate-200">{carType.basePrice} {CURRENCY_CODE}</span>
             </span>
-            <span className="text-[#9CA3AF]">
-              Par km: <span className="font-medium text-white">{carType.pricePerKm} {CURRENCY_CODE}</span>
+            <span className="text-slate-500">
+              Par km: <span className="font-medium text-slate-200">{carType.pricePerKm} {CURRENCY_CODE}</span>
             </span>
-            <span className="text-[#9CA3AF]">
-              Par min: <span className="font-medium text-white">{carType.pricePerMinute} {CURRENCY_CODE}</span>
+            <span className="text-slate-500">
+              Par min: <span className="font-medium text-slate-200">{carType.pricePerMinute} {CURRENCY_CODE}</span>
             </span>
           </div>
         </div>
-        <div className={`ml-4 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+        <div className={`ml-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
           selected
-            ? 'border-[#f29200] bg-[#f29200]'
+            ? 'border-primary bg-primary'
             : 'border-white/20'
         }`}>
           {selected && (

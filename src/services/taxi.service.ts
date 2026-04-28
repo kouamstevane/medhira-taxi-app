@@ -62,11 +62,12 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
 
   await setDoc(newBookingRef, booking);
 
-  // Déclencher le matching automatique avec retry si une localisation est disponible
   if (bookingData.pickupLocation) {
     const pickupLocation = bookingData.pickupLocation;
     const abortController = new AbortController();
     abortControllers.set(newBookingRef.id, abortController);
+
+    const isAutoSearch = bookingData.automaticSearch?.enabled === true;
 
     const searchPromise = (async () => {
       try {
@@ -84,8 +85,8 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
           {
             initialPerimeterMinutes: 5,
             expandedPerimeterMinutes: 10,
-            maxRetries: 3,
-            timeoutSeconds: 30,
+            maxRetries: isAutoSearch ? 1 : 3,
+            timeoutSeconds: isAutoSearch ? 60 : 30,
           }
         );
 
@@ -170,7 +171,7 @@ export const updateBookingStatus = async (
 /**
  * Annuler une réservation et libérer le chauffeur assigné
  */
-export const cancelBooking = async (bookingId: string, reason?: string): Promise<void> => {
+export const cancelBooking = async (bookingId: string, reason?: string, extraFields?: Record<string, unknown>): Promise<void> => {
   const bookingRef = doc(db, 'bookings', bookingId);
   const CANCELLABLE_STATUSES: BookingStatus[] = ['pending', 'accepted', 'driver_arrived'];
 
@@ -200,6 +201,7 @@ export const cancelBooking = async (bookingId: string, reason?: string): Promise
         reason: reason ?? null,
         cancelledAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        ...(extraFields ?? {}),
       });
 
       if (driverRef) {

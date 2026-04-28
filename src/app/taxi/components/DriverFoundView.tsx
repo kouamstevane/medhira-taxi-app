@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { doc, getDoc, onSnapshot, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, serverTimestamp, Timestamp, type DocumentData } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { logger } from '@/utils/logger';
 import { MessageSquare, Pencil } from 'lucide-react';
@@ -47,6 +47,8 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   const [activeCarType, setActiveCarType] = useState<CarType | null>(null);
 
   const [cancelling, setCancelling] = useState(false);
+  const [cancellationFee, setCancellationFee] = useState(0);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
   const [mapsApi, setMapsApi] = useState<any>(null);
 
@@ -161,45 +163,48 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       }
 
       const bookingData = bookingSnap.data();
-      let cancellationFee = 0;
 
-      // Calculer les pénalités si la course est en cours
       if (bookingData.status === 'in_progress') {
         const { calculateCancellationPenalty } = await import('@/services/taxi.service');
-        cancellationFee = await calculateCancellationPenalty(bookingId);
-
-        const confirmMsg = `Attention !\n\nVous êtes sur le point d'annuler une course en cours.\n\nPénalité d'annulation : ${cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}\n\nVoulez-vous vraiment continuer ?`;
-
-        if (!confirm(confirmMsg)) {
-          setCancelling(false);
-          return;
-        }
+        const fee = await calculateCancellationPenalty(bookingId);
+        setCancellationFee(fee);
+        setShowCancelConfirm(true);
+        setCancelling(false);
+        return;
       }
 
-      // Utiliser cancelBooking du service qui libère aussi le chauffeur
-      const { cancelBooking } = await import('@/services/taxi.service');
-      await cancelBooking(bookingId, 'Annulé par le client');
+      await executeCancel(bookingData, 0);
+    } catch (error) {
+      logger.error('Erreur lors de l\'annulation', { error, bookingId });
+      showError('Erreur lors de l\'annulation. Veuillez réessayer.');
+    } finally {
+      setCancelling(false);
+    }
+  };
 
-      // Mettre à jour les champs supplémentaires
-      await updateDoc(bookingRef, {
+  const executeCancel = async (bookingData: DocumentData, fee: number) => {
+    setCancelling(true);
+    try {
+      const { cancelBooking } = await import('@/services/taxi.service');
+      await cancelBooking(bookingId, 'Annulé par le client', {
         cancelledBy: 'client',
-        cancellationFee: cancellationFee,
+        cancellationFee: fee,
       });
 
-      // Débiter la pénalité du portefeuille si applicable
-      if (cancellationFee > 0 && bookingData.userId) {
+      if (fee > 0 && bookingData.userId) {
         try {
           const { debitCancellationPenalty } = await import('@/services/taxi.service');
-          await debitCancellationPenalty(bookingId, bookingData.userId, cancellationFee);
+          await debitCancellationPenalty(bookingId, bookingData.userId, fee);
         } catch (penaltyError) {
           logger.error('Erreur débit pénalité', { error: penaltyError });
         }
       }
 
       setShowCancelModal(false);
+      setShowCancelConfirm(false);
 
-      if (cancellationFee > 0) {
-        showError(`Course annulée.\n\nDes frais d'annulation de ${cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE} ont été débités de votre portefeuille.`);
+      if (fee > 0) {
+        showError(`Course annulée.\n\nDes frais d'annulation de ${fee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE} ont été débités de votre portefeuille.`);
       } else {
         showSuccess('Commande annulée avec succès.');
       }
@@ -419,6 +424,16 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
 
       {/* Infos Chauffeur et Course */}
       <div className="p-4 sm:p-6">
+        {/* Mention réservation pour tiers */}
+        {booking.bookedForSomeoneElse && booking.passengerName && (
+          <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2">
+            <span className="text-lg">👤</span>
+            <p className="text-sm text-amber-300">
+              Course réservée pour <span className="font-bold text-white">{booking.passengerName}</span>
+            </p>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
             <div className="w-14 h-14 bg-[#242424] rounded-full flex items-center justify-center text-2xl">
@@ -557,8 +572,8 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
         </div>
       </div>
 
-       {/* Modal de confirmation d'annulation */}
-       {showCancelModal && (
+      {/* Modal de confirmation d'annulation */}
+      {showCancelModal && !showCancelConfirm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#1A1A1A] border border-white/[0.05] rounded-2xl shadow-2xl max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-white mb-2 text-center">Annuler ?</h3>
@@ -578,6 +593,58 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                 className="w-full bg-[#242424] hover:bg-white/10 text-white font-medium py-3 px-4 rounded-lg"
               >
                 Non, retour
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmation pénalité d'annulation (course en cours) */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1A1A1A] border border-red-500/30 rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="w-14 h-14 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+              <svg className="w-7 h-7 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2 text-center">Annulation en cours</h3>
+            <p className="text-[#9CA3AF] text-sm text-center mb-4">
+              Vous annulez une course en cours. Des frais s&apos;appliquent.
+            </p>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6 text-center">
+              <p className="text-xs text-red-400 uppercase font-semibold mb-1">Frais d&apos;annulation</p>
+              <p className="text-2xl font-bold text-red-400">
+                {cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
+              </p>
+            </div>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  const bookingRef = doc(db, 'bookings', bookingId);
+                  getDoc(bookingRef).then(snap => {
+                    if (snap.exists()) {
+                      executeCancel(snap.data(), cancellationFee);
+                    } else {
+                      showError('Réservation introuvable. Veuillez réessayer.');
+                      setShowCancelConfirm(false);
+                    }
+                  }).catch((err) => {
+                    logger.error('Erreur lors de la vérification de la réservation', { error: err, bookingId });
+                    showError('Erreur réseau. Veuillez réessayer.');
+                    setShowCancelConfirm(false);
+                  });
+                }}
+                disabled={cancelling}
+                className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg"
+              >
+                {cancelling ? 'Annulation...' : `Confirmer (${cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE})`}
+              </button>
+              <button
+                onClick={() => { setShowCancelConfirm(false); setShowCancelModal(false); }}
+                className="w-full bg-[#242424] hover:bg-white/10 text-white font-medium py-3 px-4 rounded-lg"
+              >
+                Non, garder la course
               </button>
             </div>
           </div>

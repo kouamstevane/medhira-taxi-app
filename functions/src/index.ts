@@ -1837,3 +1837,9 @@ export {
   processAnonymizationTasks,
 } from './anonymizeDriverData.js';
 export { resendWebhook } from './emails/resend-webhook.js';
+
+// Notifications SMS Twilio pour les réservations « pour un tiers »
+export {
+  onTaxiBookingAccepted,
+  onTaxiBookingDriverArrived,
+} from './bookingNotifications/index.js';

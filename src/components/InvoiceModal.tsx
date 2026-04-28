@@ -50,15 +50,17 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
       <div className="glass-card rounded-2xl border border-white/10 max-w-md w-full max-h-[90vh] overflow-y-auto">
-        {/* En-tête avec gradient */}
-        <div className="bg-gradient-to-r from-primary to-[#ffae33] text-white p-6 rounded-t-2xl">
-          <div className="flex items-center justify-center mb-4">
-            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
-              <MaterialIcon name="check_circle" className="text-[40px]" />
+        {/* En-tête */}
+        <div className="relative overflow-hidden p-6 rounded-t-2xl border-b border-white/[0.06]">
+          <div className="absolute -top-16 -right-16 w-48 h-48 bg-primary/25 blur-3xl rounded-full pointer-events-none" />
+          <div className="absolute -bottom-20 -left-12 w-40 h-40 bg-primary/10 blur-3xl rounded-full pointer-events-none" />
+          <div className="relative flex items-center justify-center mb-4">
+            <div className="w-16 h-16 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(242,146,0,0.25)]">
+              <MaterialIcon name="check_circle" className="text-primary text-[40px]" />
             </div>
           </div>
-          <h2 className="text-2xl font-bold text-center">Course terminée !</h2>
-          <p className="text-white/80 text-center mt-1">Voici le récapitulatif de votre trajet</p>
+          <h2 className="relative text-2xl font-bold text-center text-white">Course terminée !</h2>
+          <p className="relative text-slate-400 text-center text-sm mt-1">Voici le récapitulatif de votre trajet</p>
         </div>
         
         {/* Contenu */}

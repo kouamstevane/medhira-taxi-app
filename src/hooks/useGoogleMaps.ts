@@ -151,7 +151,9 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
     // Debug: Afficher quelle clé est utilisée
-    console.log('🔑 [useGoogleMaps] Clé depuis .env:', apiKey ? apiKey.substring(0, 20) + '...' : 'NON DÉFINIE');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[useGoogleMaps] Clé depuis .env:', apiKey ? apiKey.substring(0, 10) + '...' : 'NON DÉFINIE');
+    }
 
     if (!apiKey) {
       setLoadError('Clé API Google Maps manquante.');

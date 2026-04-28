@@ -22,6 +22,8 @@ export default function RegisterContent() {
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     // Flag pour empêcher le useEffect de rediriger pendant l'inscription
     const isRegisteringRef = useRef(false);
@@ -103,8 +105,8 @@ export default function RegisterContent() {
 
             console.log(' Compte client créé avec succès:', user.uid);
 
-            // Redirection vers la page de vérification email
-            router.push('/auth/verify-email');
+            // Pas de vérification email côté client : on enchaîne directement sur la configuration paiement
+            router.push('/auth/setup-payment');
         } catch (err: unknown) {
             console.error('Erreur création compte:', err);
 
@@ -209,7 +211,7 @@ export default function RegisterContent() {
                     {/* Prénom */}
                     <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <MaterialIcon name="person" size="md" className="text-slate-500" />
+                            <MaterialIcon name="person" size="md" className="text-primary/70" />
                         </div>
                         <input
                             type="text"
@@ -225,7 +227,7 @@ export default function RegisterContent() {
                     {/* Nom */}
                     <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <MaterialIcon name="person" size="md" className="text-slate-500" />
+                            <MaterialIcon name="person" size="md" className="text-primary/70" />
                         </div>
                         <input
                             type="text"
@@ -241,7 +243,7 @@ export default function RegisterContent() {
                     {/* Email */}
                     <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <MaterialIcon name="mail" size="md" className="text-slate-500" />
+                            <MaterialIcon name="mail" size="md" className="text-primary/70" />
                         </div>
                         <input
                             type="email"
@@ -259,19 +261,27 @@ export default function RegisterContent() {
                     <div>
                         <div className="relative group">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <MaterialIcon name="lock" size="md" className="text-slate-500" />
+                                <MaterialIcon name="lock" size="md" className="text-primary/70" />
                             </div>
                             <input
-                                type="password"
+                                type={showPassword ? 'text' : 'password'}
                                 name="password"
                                 value={formData.password}
                                 onChange={handleChange}
-                                className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                                className="glass-input w-full h-14 pl-12 pr-12 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
                                 placeholder="Mot de passe"
                                 required
                                 minLength={6}
                                 autoComplete="new-password"
                             />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((v) => !v)}
+                                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                                className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-primary transition-colors"
+                            >
+                                <MaterialIcon name={showPassword ? 'visibility_off' : 'visibility'} size="md" />
+                            </button>
                         </div>
                         <p className="mt-1.5 text-xs text-slate-500 pl-1">Minimum 6 caractères</p>
                     </div>
@@ -279,18 +289,26 @@ export default function RegisterContent() {
                     {/* Confirmation mot de passe */}
                     <div className="relative group">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                            <MaterialIcon name="lock" size="md" className="text-slate-500" />
+                            <MaterialIcon name="lock" size="md" className="text-primary/70" />
                         </div>
                         <input
-                            type="password"
+                            type={showConfirmPassword ? 'text' : 'password'}
                             name="confirmPassword"
                             value={formData.confirmPassword}
                             onChange={handleChange}
-                            className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                            className="glass-input w-full h-14 pl-12 pr-12 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
                             placeholder="Confirmer le mot de passe"
                             required
                             autoComplete="new-password"
                         />
+                        <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword((v) => !v)}
+                            aria-label={showConfirmPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-primary transition-colors"
+                        >
+                            <MaterialIcon name={showConfirmPassword ? 'visibility_off' : 'visibility'} size="md" />
+                        </button>
                     </div>
 
                     {/* Bouton de soumission */}

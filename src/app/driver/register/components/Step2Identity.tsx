@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -16,9 +16,9 @@ minDate.setFullYear(minDate.getFullYear() - 18);
 const step2Schema = z.object({
   firstName: z.string().min(2, "Prénom requis"),
   lastName: z.string().min(2, "Nom requis"),
-  dob: z.string().refine((val) => {
+  dob: z.string().min(1, "Date de naissance requise").refine((val) => {
     const date = new Date(val);
-    return date <= minDate;
+    return !isNaN(date.getTime()) && date <= minDate;
   }, "Vous devez avoir au moins 18 ans"),
   phone: z.string().regex(/^\+?[0-9\s\-()]{8,20}$/, ERROR_MESSAGES.INVALID_PHONE),
   ssn: z.string().regex(/^\d{3}[\s\-]?\d{3}[\s\-]?\d{3}$/, "NAS invalide (9 chiffres attendus, ex: 123 456 789)"),
@@ -36,7 +36,7 @@ interface Step2IdentityProps {
 
 export default function Step2Identity({ onNext, onBack, initialData, initialPhoto, loading }: Step2IdentityProps) {
   const { showError } = useToast();
-  const { register, handleSubmit, formState: { errors } } = useForm<Step2FormData>({
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<Step2FormData>({
     resolver: zodResolver(step2Schema),
     defaultValues: {
       firstName: initialData?.firstName || '',
@@ -46,6 +46,55 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
       ssn: initialData?.ssn || '',
     }
   });
+
+  const dayRef = useRef<HTMLInputElement>(null);
+  const monthRef = useRef<HTMLInputElement>(null);
+  const yearRef = useRef<HTMLInputElement>(null);
+
+  const parsedInitial = initialData?.dob ? initialData.dob.split('-') : ['', '', ''];
+  const [dayVal, setDayVal] = useState(parsedInitial[2] || '');
+  const [monthVal, setMonthVal] = useState(parsedInitial[1] || '');
+  const [yearVal, setYearVal] = useState(parsedInitial[0] || '');
+
+  const assembleDob = useCallback((day: string, month: string, year: string) => {
+    if (year.length === 4 && month.length === 2 && day.length === 2) {
+      setValue('dob', `${year}-${month}-${day}`, { shouldValidate: true });
+    } else {
+      setValue('dob', '', { shouldValidate: false });
+    }
+  }, [setValue]);
+
+  const handleDobFieldChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: 'day' | 'month' | 'year',
+    maxLen: number,
+    nextRef: React.RefObject<HTMLInputElement | null>,
+  ) => {
+    const raw = e.target.value.replace(/\D/g, '').slice(0, maxLen);
+    e.target.value = raw;
+
+    if (field === 'day') setDayVal(raw);
+    else if (field === 'month') setMonthVal(raw);
+    else setYearVal(raw);
+
+    const d = field === 'day' ? raw : dayVal;
+    const m = field === 'month' ? raw : monthVal;
+    const y = field === 'year' ? raw : yearVal;
+    assembleDob(d, m, y);
+
+    if (raw.length === maxLen && nextRef.current) {
+      nextRef.current.focus();
+    }
+  };
+
+  const handleDobKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    prevRef: React.RefObject<HTMLInputElement | null>,
+  ) => {
+    if (e.key === 'Backspace' && (e.target as HTMLInputElement).value === '' && prevRef.current) {
+      prevRef.current.focus();
+    }
+  };
 
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(initialPhoto || null);
@@ -174,13 +223,61 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InputField
-                    type="date"
-                    {...register('dob')}
-                    label="Date de naissance"
-                    error={errors.dob?.message}
-                    required
-                />
+                <div className="w-full">
+                    <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
+                        Date de naissance<span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <input
+                            ref={dayRef}
+                            name="dobDay"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={2}
+                            placeholder="JJ"
+                            value={dayVal}
+                            onChange={(e) => handleDobFieldChange(e, 'day', 2, monthRef)}
+                            onKeyDown={(e) => handleDobKeyDown(e, dayRef)}
+                            className="w-[4.5rem] px-3 py-3 border rounded-xl outline-none transition-all duration-200 bg-[#1A1A1A] text-white text-base text-center placeholder-[#4B5563] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] border-white/[0.08] shadow-sm"
+                        />
+                        <span className="text-[#4B5563] text-lg font-medium select-none">/</span>
+                        <input
+                            ref={monthRef}
+                            name="dobMonth"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={2}
+                            placeholder="MM"
+                            value={monthVal}
+                            onChange={(e) => handleDobFieldChange(e, 'month', 2, yearRef)}
+                            onKeyDown={(e) => handleDobKeyDown(e, dayRef)}
+                            className="w-[4.5rem] px-3 py-3 border rounded-xl outline-none transition-all duration-200 bg-[#1A1A1A] text-white text-base text-center placeholder-[#4B5563] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] border-white/[0.08] shadow-sm"
+                        />
+                        <span className="text-[#4B5563] text-lg font-medium select-none">/</span>
+                        <input
+                            ref={yearRef}
+                            name="dobYear"
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={4}
+                            placeholder="AAAA"
+                            value={yearVal}
+                            onChange={(e) => handleDobFieldChange(e, 'year', 4, { current: null })}
+                            onKeyDown={(e) => handleDobKeyDown(e, monthRef)}
+                            className="w-[6rem] px-3 py-3 border rounded-xl outline-none transition-all duration-200 bg-[#1A1A1A] text-white text-base text-center placeholder-[#4B5563] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] border-white/[0.08] shadow-sm"
+                        />
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">Format : JJ / MM / AAAA</p>
+                    {errors.dob?.message && (
+                        <p className="mt-1 text-sm text-red-600 flex items-center">
+                            <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            {errors.dob.message}
+                        </p>
+                    )}
+                    <input type="hidden" {...register('dob')} />
+                </div>
                 <InputField
                     type="tel"
                     label="Numéro de Téléphone"

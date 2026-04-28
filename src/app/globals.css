@@ -199,8 +199,64 @@ input, textarea, select {
   font-size: 16px;
 }
 
+/*
+ * Bouton primaire raffiné — applique un highlight intérieur (effet rétroéclairé),
+ * un léger gradient vertical par-dessus le gradient Tailwind existant et un glow
+ * extérieur doux. Conçu pour tous les boutons utilisant `bg-gradient-to-r
+ * from-primary to-[#ffae33]` (ou variantes).
+ */
 .primary-glow {
-  box-shadow: 0 4px 20px -2px var(--medjira-primary-glow);
+  position: relative;
+  isolation: isolate;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 8px 24px -8px rgba(242, 146, 0, 0.42);
+  transition: box-shadow 200ms ease, transform 150ms ease;
+}
+
+/* Brillance subtile en haut du bouton */
+.primary-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0.04) 45%,
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* S'assure que le contenu reste au-dessus du voile */
+.primary-glow > * {
+  position: relative;
+  z-index: 2;
+}
+
+.primary-glow:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+    0 2px 4px rgba(0, 0, 0, 0.2),
+    0 12px 32px -8px rgba(242, 146, 0, 0.55);
+}
+
+.primary-glow:active {
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.15),
+    0 4px 12px -4px rgba(242, 146, 0, 0.35);
+}
+
+.primary-glow:disabled {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .hero-gradient {

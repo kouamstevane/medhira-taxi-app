@@ -113,6 +113,12 @@ export interface Booking {
 
   failureReason?: string; // Raison d'échec (si status = 'failed')
   cancellationReason?: string; // Raison d'annulation (si status = 'cancelled')
+
+  // Réservation pour tiers (Book for someone else)
+  bookedForSomeoneElse?: boolean; // Indique si c'est une réservation pour un tiers
+  passengerName?: string; // Nom du passager
+  passengerPhone?: string; // Téléphone du passager
+  passengerNotes?: string; // Notes optionnelles pour le chauffeur
 }
 
 

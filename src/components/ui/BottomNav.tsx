@@ -19,7 +19,7 @@ interface BottomNavProps {
 const defaultUserItems: NavItem[] = [
   { href: '/dashboard', icon: 'home', label: 'Accueil' },
   { href: '/historique', icon: 'history', label: 'Historique' },
-  { href: '/wallet/historique', icon: 'account_balance_wallet', label: 'Wallet' },
+  { href: '/wallet', icon: 'account_balance_wallet', label: 'Wallet' },
   { href: '/profil', icon: 'person', label: 'Profil' },
 ];
 

@@ -120,22 +120,23 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
       )}
       <div className="glass-card w-full sm:max-w-md sm:mx-4 h-[90vh] sm:h-[600px] sm:rounded-2xl border border-white/10 flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-primary to-[#ffae33] text-white p-4 flex items-center justify-between sm:rounded-t-2xl">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+        <div className="relative overflow-hidden p-4 flex items-center justify-between sm:rounded-t-2xl border-b border-white/[0.06]">
+          <div className="absolute -top-12 -right-12 w-40 h-40 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
+          <div className="relative flex items-center space-x-3">
+            <div className="w-10 h-10 bg-primary/15 border border-primary/30 rounded-full flex items-center justify-center text-primary">
               👤
             </div>
             <div>
-              <h3 className="font-bold">{getOtherPartyName()}</h3>
-              <p className="text-xs text-white/80">Conversation active</p>
+              <h3 className="font-bold text-white">{getOtherPartyName()}</h3>
+              <p className="text-xs text-slate-400">Conversation active</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="relative flex items-center space-x-2">
             <button
               onClick={handleCall}
               disabled={initiatingCall}
               className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                initiatingCall ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'bg-[#f29200] hover:bg-[#e68600] text-white'
+                initiatingCall ? 'opacity-50 cursor-not-allowed bg-white/10 text-slate-400' : 'bg-primary/15 border border-primary/30 hover:bg-primary/25 text-primary'
               }`}
               aria-label="Appeler"
             >
@@ -147,7 +148,7 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
             </button>
             <button
               onClick={onClose}
-              className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition"
+              className="p-2 glass-card border border-white/10 hover:bg-white/5 rounded-full transition text-slate-300"
             >
               <MaterialIcon name="close" size="md" />
             </button>

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { auth } from '@/config/firebase';
 import { getTransactionHistoryPaginated, type TransactionPageCursor } from '@/services/wallet.service';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -113,6 +114,13 @@ export default function WalletHistoriquePage() {
           <MaterialIcon name="arrow_back" size="md" className="text-white" />
         </button>
         <h1 className="text-xl font-bold text-white flex-1">Historique</h1>
+        <Link
+          href="/wallet/recharger"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 active:scale-95 transition-all"
+        >
+          <MaterialIcon name="add_card" size="sm" />
+          <span>Recharger</span>
+        </Link>
       </header>
 
       <main className="px-4 py-6 space-y-5">
