@@ -1,5 +1,3 @@
-import CryptoJS from 'crypto-js'
-
 interface DeriveKeyMessage {
   type: 'deriveKey'
   seed: string
@@ -12,19 +10,31 @@ interface DeriveKeyResponse {
   key: string
 }
 
-self.onmessage = (e: MessageEvent<DeriveKeyMessage>) => {
+self.onmessage = async (e: MessageEvent<DeriveKeyMessage>) => {
   const { type, seed, salt, iterations } = e.data
 
   if (type === 'deriveKey') {
     try {
-      const derivedKey = CryptoJS.PBKDF2(seed, salt, {
-        keySize: 256 / 32,
-        iterations,
-      }).toString()
+      const enc = new TextEncoder()
+      const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        enc.encode(seed),
+        'PBKDF2',
+        false,
+        ['deriveBits']
+      )
+      const bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt: enc.encode(salt), iterations, hash: 'SHA-256' },
+        keyMaterial,
+        256
+      )
+      const hex = Array.from(new Uint8Array(bits))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
 
       const response: DeriveKeyResponse = {
         type: 'deriveKeyResult',
-        key: derivedKey,
+        key: hex,
       }
       self.postMessage(response)
     } catch (error) {

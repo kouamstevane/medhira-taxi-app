@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, storage, db } from '@/config/firebase'
+import { auth, getFirebaseStorage, db } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { retryWithBackoff } from '@/utils/retry'
 
@@ -53,7 +53,7 @@ export default function DocumentReuploadPage() {
     setError(null)
     try {
       const uid = auth.currentUser.uid
-      const storageRef = ref(storage, `driver_documents/${uid}/${docKey}_${Date.now()}`)
+      const storageRef = ref(getFirebaseStorage(), `driver_documents/${uid}/${docKey}_${Date.now()}`)
 
       const downloadUrl = await retryWithBackoff(
         async () => {

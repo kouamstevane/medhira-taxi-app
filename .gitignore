@@ -159,3 +159,10 @@ nul
 .agent/
 plans/
 *.txt
+.opencode/
+functions/lib/
+.playwright-mcp/
+playwright-report/
+test-results/
+e2e/screenshots/
+opencode.json

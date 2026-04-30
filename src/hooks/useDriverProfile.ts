@@ -1,7 +1,7 @@
 // src/hooks/useDriverProfile.ts
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { auth, db, storage } from '@/config/firebase';
+import { auth, db, getFirebaseStorage } from '@/config/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
@@ -154,7 +154,7 @@ export function useDriverProfile() {
     try {
       const updates: Partial<DriverCoreData> = { ...formData };
       if (profileImage) {
-        const storageRef = ref(storage, `drivers/${auth.currentUser.uid}/profile`);
+        const storageRef = ref(getFirebaseStorage(), `drivers/${auth.currentUser.uid}/profile`);
         await uploadBytes(storageRef, profileImage);
         updates.profileImageUrl = await getDownloadURL(storageRef);
       }

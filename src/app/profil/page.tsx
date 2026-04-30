@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { auth, db, storage } from '@/config/firebase';
+import { auth, db, getFirebaseStorage } from '@/config/firebase';
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/hooks/useAuth';
@@ -137,7 +137,7 @@ export default function ProfilPage() {
     try {
       let imageUrl = profileImageUrl;
       if (profileImage) {
-        const storageRef = ref(storage, `profile_images/${currentUser?.uid}`);
+        const storageRef = ref(getFirebaseStorage(), `profile_images/${currentUser?.uid}`);
         const snapshot = await uploadBytes(storageRef, profileImage);
         imageUrl = await getDownloadURL(snapshot.ref);
       }

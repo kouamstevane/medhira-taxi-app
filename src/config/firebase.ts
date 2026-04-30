@@ -8,9 +8,9 @@ import {
   persistentMultipleTabManager,
   persistentSingleTabManager
 } from "firebase/firestore";
-import { getStorage, FirebaseStorage } from "firebase/storage";
 import { getFunctions, Functions } from "firebase/functions";
-import { getDatabase, Database } from "firebase/database";
+import type { FirebaseStorage } from "firebase/storage";
+import type { Database } from "firebase/database";
 import { Capacitor } from "@capacitor/core";
 
 export const firebaseConfig = {
@@ -52,9 +52,25 @@ if (typeof window !== 'undefined') {
 }
 
 export const db: Firestore = firestoreInstance;
-export const storage: FirebaseStorage = getStorage(app);
 export const functions: Functions = getFunctions(app, 'europe-west1');
-export const rtdb: Database = getDatabase(app);
+
+let _storage: FirebaseStorage | undefined;
+export const getFirebaseStorage = (): FirebaseStorage => {
+  if (!_storage) {
+    const { getStorage } = require("firebase/storage") as typeof import("firebase/storage");
+    _storage = getStorage(app);
+  }
+  return _storage;
+};
+
+let _rtdb: Database | undefined;
+export const getFirebaseDatabase = (): Database => {
+  if (!_rtdb) {
+    const { getDatabase } = require("firebase/database") as typeof import("firebase/database");
+    _rtdb = getDatabase(app);
+  }
+  return _rtdb;
+};
 
 export { app };
 export default app;

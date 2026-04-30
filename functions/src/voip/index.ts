@@ -1,17 +1,21 @@
 /**
  * Cloud Functions Firebase pour les appels VoIP
- * Gère la création, réponse et fin des appels via Agora RTC
+ * Gère la création, réponse et fin des appels via Twilio Voice
  */
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import { RtcTokenBuilder, RtcRole } from 'agora-token';
+import twilio from 'twilio';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 
-// Secrets Agora - migrés depuis functions.config() / process.env
-const agoraAppId = defineSecret('AGORA_APP_ID');
-const agoraAppCertificate = defineSecret('AGORA_APP_CERTIFICATE');
+const AccessToken = twilio.jwt.AccessToken;
+const VoiceGrant = AccessToken.VoiceGrant;
+
+const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
+const twilioApiKey = defineSecret('TWILIO_API_KEY');
+const twilioApiSecret = defineSecret('TWILIO_API_SECRET');
+const twilioOutgoingApplicationSid = defineSecret('TWILIO_OUTGOING_APPLICATION_SID');
 
 // Initialiser Firebase Admin si pas déjà fait
 function getAdmin() {
@@ -96,51 +100,44 @@ async function getUserFcmToken(userId: string): Promise<string | undefined> {
 }
 
 /**
- * Génère un nom de channel Agora unique
+ * Génère un nom de channel unique
  */
-function generateAgoraChannel(rideId: string): string {
+function generateChannel(rideId: string): string {
   return `call_${rideId}_${Date.now()}`;
 }
 
 /**
- * Génère un token Agora signé pour un channel et un uid
- * En dev (sans certificat), retourne '' (Agora autorise les tests sans token)
- * 
+ * Génère un Twilio Access Token pour les appels vocaux
+ *
  *  FIX: Les valeurs des secrets sont passées en paramètres pour éviter
  * les dépendances implicites sur defineSecret().value() en dehors du contexte
  * de la Cloud Function.
  */
-function generateAgoraToken(
-  channel: string,
+function generateTwilioToken(
   uid: string,
-  appId: string,
-  appCertificate: string
+  accountSid: string,
+  apiKey: string,
+  apiSecret: string,
+  outgoingApplicationSid: string
 ): string {
-  if (!appCertificate) {
-    // Mode développement: Agora permet les tests sans token si App Certificate est désactivé
-    console.warn('[VoIP] AGORA_APP_CERTIFICATE non configuré — token vide (mode dev uniquement)');
-    return '';
-  }
-
   try {
-    const expirationTimeInSeconds = 3600; // 1 heure
-    const currentTimestamp = Math.floor(Date.now() / 1000);
-    const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
+    const expirationTimeInSeconds = 3600;
+    const token = new AccessToken(accountSid, apiKey, apiSecret, {
+      identity: uid,
+      ttl: expirationTimeInSeconds,
+    });
 
-    // Utiliser 0 comme UID int pour permettre à n'importe quel UID string de rejoindre
-    return RtcTokenBuilder.buildTokenWithUid(
-      appId,
-      appCertificate,
-      channel,
-      0, // UID 0 = wildcard
-      RtcRole.PUBLISHER,
-      privilegeExpiredTs,
-      privilegeExpiredTs // Token expire time (même que privilegeExpiredTs)
-    );
+    const voiceGrant = new VoiceGrant({
+      outgoingApplicationSid,
+      incomingAllow: true,
+    });
+
+    token.addGrant(voiceGrant);
+
+    return token.toJwt();
   } catch (error) {
-    console.error('[VoIP] Erreur génération token Agora:', error);
-    console.error('[VoIP] Assurez-vous que le package agora-token est installé: npm install agora-token');
-    return '';
+    console.error('[VoIP] Erreur génération token Twilio:', error);
+    throw error;
   }
 }
 
@@ -148,7 +145,7 @@ function generateAgoraToken(
  * Crée un nouvel appel VoIP
  */
 export const createCall = onCall(
-  { secrets: [agoraAppId, agoraAppCertificate] },
+  { secrets: [twilioAccountSid, twilioApiKey, twilioApiSecret, twilioOutgoingApplicationSid] },
   async (request: CallableRequest) => {
   // 1. Vérifier l'authentification
   if (!request.auth) {
@@ -196,13 +193,14 @@ export const createCall = onCall(
   const rideData = rideDoc.data() as { userId: string; driverId: string } | undefined;
   const callerRole = rideData?.userId === callerId ? 'client' : 'chauffeur';
 
-  // 6. Générer le channel et token Agora
-  const channel = generateAgoraChannel(rideId);
-  const token = generateAgoraToken(
-    channel,
+  // 6. Générer le channel et token Twilio
+  const channel = generateChannel(rideId);
+  const token = generateTwilioToken(
     callerId,
-    agoraAppId.value(),
-    agoraAppCertificate.value()
+    twilioAccountSid.value(),
+    twilioApiKey.value(),
+    twilioApiSecret.value(),
+    twilioOutgoingApplicationSid.value()
   );
 
   // 7. Créer le document d'appel — le token n'est PAS persisté en Firestore
@@ -240,7 +238,7 @@ export const createCall = onCall(
         callId: callRef.id,
         rideId,
         channel,
-        // Le token Agora n'est pas inclus dans FCM : le destinataire doit appeler
+        // Le token Twilio n'est pas inclus dans FCM : le destinataire doit appeler
         // la Cloud Function getCallToken(callId) pour obtenir son propre token sécurisé.
         callerName: callerData?.displayName || callerData?.name || 'Utilisateur',
         callerAvatar: callerData?.photoURL || '',
@@ -410,11 +408,11 @@ export const endCall = onCall(
 
 
 /**
- * Récupère un token Agora pour rejoindre un canal d'appel existant
+ * Récupère un token Twilio pour rejoindre un canal d'appel existant
  * Le destinataire d'un appel utilise cette fonction après réception du FCM
  */
 export const getCallToken = onCall(
-  { secrets: [agoraAppId, agoraAppCertificate] },
+  { secrets: [twilioAccountSid, twilioApiKey, twilioApiSecret, twilioOutgoingApplicationSid] },
   async (request: CallableRequest) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Utilisateur non authentifié');
@@ -425,43 +423,52 @@ export const getCallToken = onCall(
     const { callId } = request.data as { callId?: string };
     const userId = request.auth.uid;
 
-    if (!callId) {
-      throw new HttpsError('invalid-argument', 'callId manquant');
+    if (callId) {
+      const callDoc = await getDb().collection('calls').doc(callId).get();
+
+      if (!callDoc.exists) {
+        throw new HttpsError('not-found', 'Appel non trouvé');
+      }
+
+      const callData = callDoc.data() as {
+        callerId: string;
+        calleeId: string;
+        status: string;
+        channel: string;
+      } | undefined;
+
+      if (callData?.callerId !== userId && callData?.calleeId !== userId) {
+        throw new HttpsError('permission-denied', 'Vous n\'êtes pas participant à cet appel');
+      }
+
+      if (callData?.status === 'ended' || callData?.status === 'missed' || callData?.status === 'rejected') {
+        throw new HttpsError('failed-precondition', 'Cet appel est terminé');
+      }
+
+      const token = generateTwilioToken(
+        userId,
+        twilioAccountSid.value(),
+        twilioApiKey.value(),
+        twilioApiSecret.value(),
+        twilioOutgoingApplicationSid.value()
+      );
+
+      return {
+        token,
+        channel: callData.channel,
+        uid: userId
+      };
     }
 
-    const callDoc = await getDb().collection('calls').doc(callId).get();
-
-    if (!callDoc.exists) {
-      throw new HttpsError('not-found', 'Appel non trouvé');
-    }
-
-    const callData = callDoc.data() as {
-      callerId: string;
-      calleeId: string;
-      status: string;
-      channel: string;
-    } | undefined;
-
-    if (callData?.callerId !== userId && callData?.calleeId !== userId) {
-      throw new HttpsError('permission-denied', 'Vous n\'êtes pas participant à cet appel');
-    }
-
-    if (callData?.status === 'ended' || callData?.status === 'missed' || callData?.status === 'rejected') {
-      throw new HttpsError('failed-precondition', 'Cet appel est terminé');
-    }
-
-    const token = generateAgoraToken(
-      callData.channel,
+    const token = generateTwilioToken(
       userId,
-      agoraAppId.value(),
-      agoraAppCertificate.value()
+      twilioAccountSid.value(),
+      twilioApiKey.value(),
+      twilioApiSecret.value(),
+      twilioOutgoingApplicationSid.value()
     );
 
-    return {
-      token,
-      channel: callData.channel,
-      uid: userId
-    };
+    return { token, uid: userId };
   }
 );
 

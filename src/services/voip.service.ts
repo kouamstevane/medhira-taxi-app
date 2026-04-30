@@ -7,7 +7,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core';
 import { db } from '@/config/firebase';
 import { VoipCallState, CallStatus, CallParticipant, IVoipEngine } from '@/types/voip';
 import { logger } from '@/utils/logger';
-import { AgoraVoipEngine } from './voip/engines/agora.engine';
+import { TwilioVoipEngine } from './voip/engines/twilio.engine';
 
 interface VoipForegroundPlugin {
   startService(options: { callerName: string; callId: string }): Promise<void>;
@@ -41,8 +41,8 @@ class VoipService {
   private listeners: ((state: VoipCallState) => void)[] = [];
 
   constructor(engine?: IVoipEngine) {
-    // Par défaut on utilise Agora, mais on peut injecter un autre engine (ex: Zego)
-    this.engine = engine || new AgoraVoipEngine();
+    // Par défaut on utilise Twilio, mais on peut injecter un autre engine
+    this.engine = engine || new TwilioVoipEngine();
     
     if (typeof window !== 'undefined') {
       this.initEngine();
@@ -122,8 +122,8 @@ class VoipService {
 
     try {
       // Sur Android, les permissions sont gérées par le manifest et demandées au runtime
-      // Sur iOS, les permissions sont demandées automatiquement par le SDK Agora
-      // On retourne true pour laisser le SDK Agora gérer les permissions
+      // Sur iOS, les permissions sont demandées automatiquement par le SDK Twilio
+      // On retourne true pour laisser le SDK Twilio gérer les permissions
       return true;
     } catch (error) {
       logger.error('Error checking microphone permission', { error });

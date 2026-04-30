@@ -1,17 +1,16 @@
 import { Preferences } from '@capacitor/preferences';
 import { Device } from '@capacitor/device';
 import { getAuth } from 'firebase/auth';
-import CryptoJS from 'crypto-js';
 
 /**
  * Service de stockage sécurisé pour données sensibles
- * Remplace @capacitor/secure-storage avec Preferences + Crypto-js
+ * Remplace @capacitor/secure-storage avec Preferences + chiffrement natif
  * Conforme à medJiraV2.md §6.1, §8.2 (RGPD)
  * 
  *  CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * 
  * Fonctionnalités:
- * - Chiffrement AES-256 pour toutes les données
+ * - Chiffrement AES-256-GCM pour toutes les données
  * - Clé de chiffrement dérivée (device + user) - JAMAIS exposée côté client
  * - TTL automatique pour les données temporaires
  * - Cache lastKnownPosition avec expiration 5min
@@ -30,13 +29,94 @@ const LEGACY_STATIC_SEED_SUFFIX = 'medjira-taxi-salt-2024';
 
 const PBKDF2_ITERATIONS = 100000;
 
+function hexToBytes(hex: string): Uint8Array {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+    }
+    return bytes;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function randomHex(byteCount: number): string {
+    const array = new Uint8Array(byteCount);
+    crypto.getRandomValues(array);
+    return bytesToHex(array);
+}
+
+async function pbkdf2DeriveHex(seed: string, salt: string, iterations: number): Promise<string> {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        enc.encode(seed),
+        'PBKDF2',
+        false,
+        ['deriveBits']
+    );
+    const bits = await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', salt: enc.encode(salt), iterations, hash: 'SHA-256' },
+        keyMaterial,
+        256
+    );
+    return bytesToHex(new Uint8Array(bits));
+}
+
+async function aesGcmEncrypt(data: string, hexKey: string): Promise<string> {
+    const enc = new TextEncoder();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await crypto.subtle.importKey(
+        'raw',
+        hexToBytes(hexKey),
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt']
+    );
+    const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        enc.encode(data)
+    );
+    const result = new Uint8Array(iv.length + encrypted.byteLength);
+    result.set(iv, 0);
+    result.set(new Uint8Array(encrypted), iv.length);
+    let binary = '';
+    for (let i = 0; i < result.length; i++) {
+        binary += String.fromCharCode(result[i]);
+    }
+    return btoa(binary);
+}
+
+async function aesGcmDecrypt(encryptedBase64: string, hexKey: string): Promise<string> {
+    const binary = atob(encryptedBase64);
+    const data = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        data[i] = binary.charCodeAt(i);
+    }
+    const iv = data.slice(0, 12);
+    const encrypted = data.slice(12);
+    const key = await crypto.subtle.importKey(
+        'raw',
+        hexToBytes(hexKey),
+        { name: 'AES-GCM' },
+        false,
+        ['decrypt']
+    );
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        encrypted
+    );
+    return new TextDecoder().decode(decrypted);
+}
+
 async function getOrCreateDeviceSalt(): Promise<string> {
     const { value } = await Preferences.get({ key: SALT_KEY });
     if (value) return value;
 
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    const salt = Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('');
+    const salt = randomHex(32);
     await Preferences.set({ key: SALT_KEY, value: salt });
     return salt;
 }
@@ -45,32 +125,26 @@ async function deriveKeyInWorker(seed: string, salt: string, iterations: number)
     try {
         const { getCryptoWorker } = await import('@/workers')
         const worker = getCryptoWorker()
-        
+
         if (!worker) {
-            return CryptoJS.PBKDF2(seed, salt, {
-                keySize: 256 / 32,
-                iterations,
-            }).toString()
+            return await pbkdf2DeriveHex(seed, salt, iterations)
         }
 
-        return new Promise((resolve) => {
+        const workerResult = await new Promise<string>((resolve) => {
             const handler = (e: MessageEvent) => {
                 if (e.data.type === 'deriveKeyResult') {
                     worker.removeEventListener('message', handler)
-                    resolve(e.data.key || CryptoJS.PBKDF2(seed, salt, {
-                        keySize: 256 / 32,
-                        iterations,
-                    }).toString())
+                    resolve(e.data.key || '')
                 }
             }
             worker.addEventListener('message', handler)
             worker.postMessage({ type: 'deriveKey', seed, salt, iterations })
         })
+
+        if (workerResult) return workerResult
+        return await pbkdf2DeriveHex(seed, salt, iterations)
     } catch {
-        return CryptoJS.PBKDF2(seed, salt, {
-            keySize: 256 / 32,
-            iterations,
-        }).toString()
+        return await pbkdf2DeriveHex(seed, salt, iterations)
     }
 }
 
@@ -90,7 +164,7 @@ async function generateDerivedEncryptionKey(): Promise<string> {
         return derivedKey;
     } catch (error) {
         console.error('[SecureStorage] Error generating derived key:', error);
-        return CryptoJS.lib.WordArray.random(256 / 8).toString();
+        return randomHex(32);
     }
 }
 
@@ -146,7 +220,7 @@ async function getEncryptionKey(): Promise<string> {
     } catch (error) {
         console.error('[SecureStorage] Error getting encryption key:', error);
         // En cas d'erreur critique, générer une clé temporaire
-        const tempKey = CryptoJS.lib.WordArray.random(256 / 8).toString();
+        const tempKey = randomHex(32);
         cachedEncryptionKey = tempKey;
         return tempKey;
     }
@@ -187,18 +261,18 @@ interface StoredPosition {
 }
 
 /**
- * Service de stockage sécurisé avec chiffrement AES-256
+ * Service de stockage sécurisé avec chiffrement AES-256-GCM
  *  CHIFFREMENT RÉACTIVÉ - Conformité RGPD article 32
  * 🔒 Conforme à §8.2 (RGPD) et §12 (Anti-Patterns)
  */
 class SecureStorageService {
     /**
-     * Chiffre une donnée avec AES-256 en utilisant la clé dérivée
+     * Chiffre une donnée avec AES-256-GCM en utilisant la clé dérivée
      *  CHIFFREMENT RÉACTIVÉ
      */
     private async encrypt(data: string): Promise<string> {
         const encryptionKey = await getEncryptionKey();
-        return CryptoJS.AES.encrypt(data, encryptionKey).toString();
+        return aesGcmEncrypt(data, encryptionKey);
     }
 
     /**
@@ -207,17 +281,16 @@ class SecureStorageService {
      */
     private async decrypt(encryptedData: string): Promise<string> {
         const encryptionKey = await getEncryptionKey();
-        const bytes = CryptoJS.AES.decrypt(encryptedData, encryptionKey);
-        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
-        if (decrypted) return decrypted;
+        try {
+            return await aesGcmDecrypt(encryptedData, encryptionKey);
+        } catch {}
 
         const legacyKey = await generateLegacyDerivedEncryptionKey();
         if (!legacyKey) throw new Error('Decryption failed');
-        const legacyBytes = CryptoJS.AES.decrypt(encryptedData, legacyKey);
-        const legacyDecrypted = legacyBytes.toString(CryptoJS.enc.Utf8);
-        if (!legacyDecrypted) throw new Error('Decryption failed');
-
-        return legacyDecrypted;
+        try {
+            return await aesGcmDecrypt(encryptedData, legacyKey);
+        } catch {}
+        throw new Error('Decryption failed');
     }
 
     /**
@@ -265,20 +338,22 @@ class SecureStorageService {
                 return null;
             }
 
-            let decrypted: string;
+            let decrypted: string | null = null;
             const encryptionKey = await getEncryptionKey();
-            const bytes = CryptoJS.AES.decrypt(value, encryptionKey);
-            decrypted = bytes.toString(CryptoJS.enc.Utf8);
+            try {
+                decrypted = await aesGcmDecrypt(value, encryptionKey);
+            } catch {}
 
             if (!decrypted) {
                 const legacyKey = await generateLegacyDerivedEncryptionKey();
                 if (legacyKey) {
-                    const legacyBytes = CryptoJS.AES.decrypt(value, legacyKey);
-                    const legacyDecrypted = legacyBytes.toString(CryptoJS.enc.Utf8);
-                    if (legacyDecrypted) {
-                        decrypted = legacyDecrypted;
-                        this.setItem(key, JSON.parse(legacyDecrypted).data ?? JSON.parse(legacyDecrypted)).catch(() => {});
-                    }
+                    try {
+                        const legacyDecrypted = await aesGcmDecrypt(value, legacyKey);
+                        if (legacyDecrypted) {
+                            decrypted = legacyDecrypted;
+                            this.setItem(key, JSON.parse(legacyDecrypted).data ?? JSON.parse(legacyDecrypted)).catch(() => {});
+                        }
+                    } catch {}
                 }
             }
 
