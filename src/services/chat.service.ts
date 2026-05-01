@@ -1,13 +1,16 @@
 /**
- * Service de Messagerie In-App
- * 
- * Gère les communications entre clients et chauffeurs sans échange de numéros personnels
+ * Service de Messagerie In-App (multi-domaines : taxi, food, parcel)
+ *
+ * Architecture :
+ * - Top-level collection `conversations/{conversationId}` avec sous-collection `messages/`
+ * - conversationId déterministe : `${type}_${entityId}_${uidA__uidB}` (uids triés)
  */
 
 import {
   collection,
   doc,
   addDoc,
+  setDoc,
   updateDoc,
   query,
   where,
@@ -15,30 +18,79 @@ import {
   onSnapshot,
   serverTimestamp,
   getDocs,
+  getDoc,
   increment,
   limit,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Message, MessageType } from '@/types/chat';
+import {
+  ConversationContext,
+  ConversationParticipant,
+  buildConversationId,
+} from '@/types/conversation';
 import { logger } from '@/utils/logger';
 
 /**
- * Envoyer un message dans une conversation de course
+ * Crée le document de conversation s'il n'existe pas, et retourne son id.
+ * Idempotent : safe à appeler plusieurs fois.
+ */
+export const ensureConversation = async (
+  context: ConversationContext
+): Promise<string> => {
+  const conversationId = buildConversationId(
+    context.type,
+    context.entityId,
+    context.participantA.uid,
+    context.participantB.uid
+  );
+
+  const convRef = doc(db, 'conversations', conversationId);
+  const snap = await getDoc(convRef);
+
+  if (!snap.exists()) {
+    const participantsMap: Record<string, ConversationParticipant> = {
+      [context.participantA.uid]: context.participantA,
+      [context.participantB.uid]: context.participantB,
+    };
+
+    await setDoc(convRef, {
+      type: context.type,
+      entityId: context.entityId,
+      participants: participantsMap,
+      participantUids: [context.participantA.uid, context.participantB.uid],
+      lastMessage: null,
+      lastMessageAt: null,
+      unreadCount: {
+        [context.participantA.uid]: 0,
+        [context.participantB.uid]: 0,
+      },
+      createdAt: serverTimestamp(),
+    });
+
+    logger.info('Conversation créée', { conversationId, type: context.type });
+  }
+
+  return conversationId;
+};
+
+/**
+ * Envoyer un message dans une conversation.
  */
 export const sendMessage = async (
-  bookingId: string,
+  conversationId: string,
   senderId: string,
   senderName: string,
-  senderType: 'client' | 'chauffeur',
+  senderType: string,
   content: string,
   type: MessageType = 'text'
 ): Promise<string> => {
   try {
-    const messagesRef = collection(db, 'bookings', bookingId, 'messages');
-    
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+
     const messageData = {
-      bookingId,
+      conversationId,
       senderId,
       senderName,
       senderType,
@@ -49,50 +101,56 @@ export const sendMessage = async (
     };
 
     const docRef = await addDoc(messagesRef, messageData);
-    
-    // Mettre à jour le compteur de messages non lus
-    // Note: Les champs Firestore utilisent encore 'driver' pour la compatibilité
-    const bookingRef = doc(db, 'bookings', bookingId);
-    const unreadField = senderType === 'client' 
-      ? 'unreadMessages.driver' 
-      : 'unreadMessages.client';
-    
-    await updateDoc(bookingRef, {
-      lastMessage: content,
-      lastMessageAt: serverTimestamp(),
-      [unreadField]: increment(1),
-    });
 
-    logger.info('Message envoyé', { bookingId, senderId, type });
+    // Mettre à jour le doc parent : lastMessage + compteurs unread (par uid)
+    const convRef = doc(db, 'conversations', conversationId);
+    const convSnap = await getDoc(convRef);
+
+    if (convSnap.exists()) {
+      const data = convSnap.data();
+      const participantUids: string[] =
+        data.participantUids || Object.keys(data.participants || {});
+      const updates: Record<string, unknown> = {
+        lastMessage: content,
+        lastMessageAt: serverTimestamp(),
+      };
+      participantUids.forEach((uid) => {
+        if (uid !== senderId) {
+          updates[`unreadCount.${uid}`] = increment(1);
+        }
+      });
+      await updateDoc(convRef, updates);
+    }
+
+    logger.info('Message envoyé', { conversationId, senderId, type });
     return docRef.id;
   } catch (error) {
-    logger.error('Erreur envoi message', { error, bookingId });
+    logger.error('Erreur envoi message', { error, conversationId });
     throw error;
   }
 };
 
 /**
- * Écouter les messages d'une course en temps réel
+ * Écouter les messages d'une conversation en temps réel.
  */
 export const subscribeToMessages = (
-  bookingId: string,
+  conversationId: string,
   callback: (messages: Message[]) => void
 ): (() => void) => {
-  const messagesRef = collection(db, 'bookings', bookingId, 'messages');
+  const messagesRef = collection(db, 'conversations', conversationId, 'messages');
   const q = query(messagesRef, orderBy('createdAt', 'asc'), limit(200));
 
   const unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      const messages: Message[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const messages: Message[] = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
       })) as Message[];
-      
       callback(messages);
     },
     (error) => {
-      logger.error('Erreur écoute messages', { error, bookingId });
+      logger.error('Erreur écoute messages', { error, conversationId });
     }
   );
 
@@ -100,19 +158,19 @@ export const subscribeToMessages = (
 };
 
 /**
- * Marquer tous les messages comme lus
+ * Marque tous les messages reçus par `userId` comme lus, et reset le compteur.
  */
 export const markMessagesAsRead = async (
-  bookingId: string,
-  userId: string,
-  userType: 'client' | 'chauffeur'
+  conversationId: string,
+  userId: string
 ): Promise<void> => {
   try {
-    const messagesRef = collection(db, 'bookings', bookingId, 'messages');
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    // Marquer comme lus uniquement les messages NON envoyés par l'utilisateur courant.
     const q = query(
       messagesRef,
       where('read', '==', false),
-      where('senderType', '==', userType === 'client' ? 'chauffeur' : 'client'),
+      where('senderId', '!=', userId),
       limit(200)
     );
 
@@ -129,53 +187,47 @@ export const markMessagesAsRead = async (
       await batch.commit();
     }
 
-    // Réinitialiser le compteur
-    // Note: Les champs Firestore utilisent encore 'driver' pour la compatibilité
-    const bookingRef = doc(db, 'bookings', bookingId);
-    const unreadField = userType === 'client' 
-      ? 'unreadMessages.client' 
-      : 'unreadMessages.driver';
-    
-    await updateDoc(bookingRef, {
-      [unreadField]: 0,
+    // Réinitialiser le compteur unread pour cet utilisateur
+    const convRef = doc(db, 'conversations', conversationId);
+    await updateDoc(convRef, {
+      [`unreadCount.${userId}`]: 0,
     });
 
-    logger.info('Messages marqués comme lus', { bookingId, userId });
+    logger.info('Messages marqués comme lus', { conversationId, userId });
   } catch (error) {
-    logger.error('Erreur marquage messages lus', { error, bookingId });
+    logger.error('Erreur marquage messages lus', { error, conversationId });
   }
 };
 
 /**
- * Démarrer un appel vocal (enregistre l'événement)
+ * Démarrer un appel vocal (enregistre l'événement comme message).
  */
 export const initiateCall = async (
-  bookingId: string,
+  conversationId: string,
   callerId: string,
   callerName: string,
-  callerType: 'client' | 'chauffeur'
+  callerRole: string
 ): Promise<void> => {
   try {
     await sendMessage(
-      bookingId,
+      conversationId,
       callerId,
       callerName,
-      callerType,
+      callerRole,
       `${callerName} souhaite vous appeler`,
       'voice_call'
     );
-    
-    logger.info('Appel initié', { bookingId, callerId });
+    logger.info('Appel initié', { conversationId, callerId });
   } catch (error) {
-    logger.error('Erreur initiation appel', { error, bookingId });
+    logger.error('Erreur initiation appel', { error, conversationId });
     throw error;
   }
 };
 
 /**
- * Envoyer un message système automatique
- * Utilise une Cloud Function car les security rules Firestore
- * ne permettent pas d'écrire avec senderId='system'
+ * Envoyer un message système automatique.
+ * Note : la signature reste basée sur bookingId pour rétrocompat avec la Cloud Function existante.
+ * Une future refonte backend devra accepter conversationId.
  */
 export const sendSystemMessage = async (
   bookingId: string,
@@ -186,13 +238,16 @@ export const sendSystemMessage = async (
     const { getFunctions, httpsCallable } = await import('firebase/functions');
     const functions = getFunctions();
     const sendSystemMsg = httpsCallable(functions, 'sendSystemMessage');
-    
-    // Mapper 'chauffeur' vers 'driver' pour la Cloud Function (compatibilité backend)
+
     const recipientForBackend = recipient === 'chauffeur' ? 'driver' : recipient;
-    
+
     await sendSystemMsg({ bookingId, content, recipient: recipientForBackend });
-    
-    logger.info('Message système envoyé via Cloud Function', { bookingId, content, recipient });
+
+    logger.info('Message système envoyé via Cloud Function', {
+      bookingId,
+      content,
+      recipient,
+    });
   } catch (error) {
     logger.error('Erreur message système', { error, bookingId });
   }

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
+import DriverFoodContacts from './DriverFoodContacts'
 
 interface Props {
   order: FoodDeliveryOrder
@@ -23,6 +24,7 @@ export default function Level2_HeadingToRestaurant({ order, updateStatus }: Prop
           className="flex items-center gap-2 text-primary border border-primary/30 rounded-xl px-4 py-2 text-sm">
           <MaterialIcon name="phone" className="text-[16px]" /> Appeler le restaurant
         </a>
+        <DriverFoodContacts order={order} target="restaurant" />
       </div>
       <button
         onClick={async () => { setLoading(true); try { await updateStatus('arrived_restaurant') } finally { setLoading(false) } }}

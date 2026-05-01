@@ -8,6 +8,7 @@ interface TwilioDevice {
   destroy(): void;
   on(event: string, callback: (...args: unknown[]) => void): void;
   register(): Promise<void>;
+  updateToken(token: string): void;
 }
 
 interface TwilioConnection {
@@ -72,6 +73,20 @@ export class TwilioVoipEngine implements IVoipEngine {
 
     this.device.on('offline', () => {
       this.onError('Périphérique Twilio hors ligne');
+    });
+
+    this.device.on('tokenWillExpire', async () => {
+      try {
+        const getTokenFn = httpsCallable(functions, 'getCallToken');
+        const result = await getTokenFn({}) as { data: { token: string } };
+        const newToken = result.data.token;
+        if (this.device && newToken) {
+          this.device.updateToken(newToken);
+          logger.info('Twilio token rafraîchi avec succès');
+        }
+      } catch (e) {
+        logger.error('Failed to refresh Twilio token', { e });
+      }
     });
   }
 

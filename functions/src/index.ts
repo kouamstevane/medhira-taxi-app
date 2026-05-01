@@ -624,9 +624,10 @@ export const cleanupOrphanedFiles = onSchedule(
 // ============================================================================
 // Export des fonctions VoIP
 // ============================================================================
-// Ces fonctions gèrent les appels via Agora RTC pour la fonctionnalité d'appel
+// Ces fonctions gèrent les appels via Twilio Voice pour la fonctionnalité d'appel
 // entre passagers et chauffeurs.
 export { createCall, answerCall, endCall, getCallToken, sendSystemMessage } from './voip/index.js';
+export { twimlWebhook } from './voip/twiml.js';
 
 export const onDriverRegistration = onDocumentWritten("drivers/{driverId}", async (event) => {
   const beforeData = event.data?.before.data();
@@ -1843,3 +1844,9 @@ export {
   onTaxiBookingAccepted,
   onTaxiBookingDriverArrived,
 } from './bookingNotifications/index.js';
+
+// Livraison de colis : matching automatique + SMS au destinataire
+export {
+  onParcelCreated,
+  onParcelStatusChanged,
+} from './parcels/index.js';

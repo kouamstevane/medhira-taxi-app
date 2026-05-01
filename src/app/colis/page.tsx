@@ -14,11 +14,12 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import {
   createParcelOrder,
   estimateParcelPrice,
+  isCountrySupported,
+  ParcelValidationError,
   PARCEL_SIZE_LABELS,
   type ParcelLocation,
   type ParcelSizeCategory,
 } from '@/services/parcel.service';
-import { CURRENCY_CODE } from '@/utils/constants';
 import type { PlaceSuggestion } from '@/types';
 
 type Step = 'form' | 'submitting' | 'success' | 'error';
@@ -77,7 +78,7 @@ export default function ColisPage() {
   const [step, setStep] = useState<Step>('form');
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [priceEstimate, setPriceEstimate] = useState<{ price: number; distance: number; duration: number } | null>(null);
+  const [priceEstimate, setPriceEstimate] = useState<{ price: number; distance: number; duration: number; currency: string } | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -94,11 +95,15 @@ export default function ColisPage() {
           }
         });
       });
-      const loc = result[0].geometry.location;
+      const first = result[0];
+      const loc = first.geometry.location;
+      const countryComp = first.address_components.find((c) => c.types.includes('country'));
+      const country = countryComp?.short_name || '';
       return {
         address: suggestion.description,
         latitude: loc.lat(),
         longitude: loc.lng(),
+        country,
       };
     } catch {
       return null;
@@ -110,6 +115,30 @@ export default function ColisPage() {
       setPriceEstimate(null);
       return;
     }
+    // Validation pays côté client avant l'appel Distance Matrix
+    const pickupOk = isCountrySupported(formData.pickupLocation.country);
+    const dropoffOk = isCountrySupported(formData.dropoffLocation.country);
+    if (!pickupOk || !dropoffOk) {
+      setPriceEstimate(null);
+      setFieldErrors((prev) => ({
+        ...prev,
+        ...(pickupOk ? {} : { pickup: 'Service disponible uniquement au Cameroun et au Canada' }),
+        ...(dropoffOk ? {} : { dropoff: 'Service disponible uniquement au Cameroun et au Canada' }),
+      }));
+      return;
+    }
+    if (formData.pickupLocation.country !== formData.dropoffLocation.country) {
+      setPriceEstimate(null);
+      setFieldErrors((prev) => ({
+        ...prev,
+        dropoff: 'Envoi national uniquement — retrait et livraison doivent être dans le même pays',
+      }));
+      return;
+    }
+    setFieldErrors((prev) => {
+      const { pickup: _p, dropoff: _d, ...rest } = prev;
+      return rest;
+    });
     setPriceLoading(true);
     try {
       const estimate = await estimateParcelPrice(
@@ -117,9 +146,12 @@ export default function ColisPage() {
         formData.dropoffLocation,
         formData.sizeCategory
       );
-      setPriceEstimate(estimate);
-    } catch {
+      setPriceEstimate({ ...estimate, currency: estimate.currency });
+    } catch (err) {
       setPriceEstimate(null);
+      if (err instanceof ParcelValidationError && err.field) {
+        setFieldErrors((prev) => ({ ...prev, [err.field!]: err.message }));
+      }
     } finally {
       setPriceLoading(false);
     }
@@ -170,6 +202,14 @@ export default function ColisPage() {
       setStep('success');
     } catch (err) {
       await triggerHaptic('error');
+      if (err instanceof ParcelValidationError) {
+        setErrorMsg(err.message);
+        if (err.field) {
+          setFieldErrors((prev) => ({ ...prev, [err.field!]: err.message }));
+        }
+        setStep('form');
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Une erreur est survenue lors de la création du colis';
       setErrorMsg(message);
       setStep('error');
@@ -210,7 +250,7 @@ export default function ColisPage() {
               <div className="glass-card p-4 rounded-xl border border-white/5 mb-6">
                 <div className="flex justify-between items-center text-lg font-bold text-white">
                   <span>Prix estimé</span>
-                  <span>{priceEstimate.price.toFixed(2)} {CURRENCY_CODE}</span>
+                  <span>{priceEstimate.price.toFixed(2)} {priceEstimate.currency}</span>
                 </div>
               </div>
             )}
@@ -261,6 +301,14 @@ export default function ColisPage() {
             <p className="text-sm text-yellow-400">{loadError}</p>
           </div>
         )}
+
+        <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2">
+          <MaterialIcon name="info" size="sm" className="text-blue-400 mt-0.5" />
+          <p className="text-xs text-blue-300/90">
+            Service d&apos;envoi de colis <strong>urbain et national</strong> au Cameroun et au Canada.
+            L&apos;envoi à l&apos;international n&apos;est pas pris en charge.
+          </p>
+        </div>
 
         <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -429,7 +477,7 @@ export default function ColisPage() {
               </div>
               <div className="border-t border-white/10 pt-3 flex justify-between items-center text-lg font-bold text-white">
                 <span>Prix estimé</span>
-                <span className="text-primary">{priceEstimate.price.toFixed(2)} {CURRENCY_CODE}</span>
+                <span className="text-primary">{priceEstimate.price.toFixed(2)} {priceEstimate.currency}</span>
               </div>
             </div>
           </section>
@@ -461,7 +509,7 @@ export default function ColisPage() {
               Envoi en cours…
             </>
           ) : priceEstimate ? (
-            `Confirmer — ${priceEstimate.price.toFixed(2)} ${CURRENCY_CODE}`
+            `Confirmer — ${priceEstimate.price.toFixed(2)} ${priceEstimate.currency}`
           ) : (
             'Confirmer l\'envoi'
           )}

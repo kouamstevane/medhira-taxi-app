@@ -438,7 +438,7 @@ export const createFoodOrder = async (
   if (!restaurant) {
     throw new Error('Restaurant introuvable');
   }
-  if (restaurant.status !== 'approved' || !restaurant.isOpen) {
+  if (restaurant.status !== 'approved' || restaurant.isOpen === false) {
     throw new Error('Ce restaurant n\'est pas disponible actuellement');
   }
 
@@ -447,7 +447,7 @@ export const createFoodOrder = async (
 
   const pickupCode = generatePickupCode();
 
-  const order: Omit<FoodOrder, 'createdAt' | 'updatedAt'> & { createdAt: ReturnType<typeof serverTimestamp>; updatedAt: ReturnType<typeof serverTimestamp> } = {
+  const order: Record<string, unknown> = {
     id: newOrderRef.id,
     userId: orderData.userId,
     restaurantId: orderData.restaurantId,
@@ -455,7 +455,6 @@ export const createFoodOrder = async (
     deliveryDistance: orderData.deliveryDistance,
     isWeekend: orderData.isWeekend,
     deliveryAddress: orderData.deliveryAddress,
-    deliveryLocation: orderData.deliveryLocation,
     basePrice,
     deliveryCost,
     totalOrderPrice,
@@ -463,15 +462,19 @@ export const createFoodOrder = async (
     pickupCode,
     paymentValidated: false,
     restaurantName: restaurant.name,
-    restaurantImage: restaurant.imageUrl,
     deliveryPreference: orderData.deliveryPreference ?? 'leave_at_door',
-    deliveryInstructions: orderData.deliveryInstructions ?? undefined,
     customerPhone: orderData.customerPhone ?? '',
     clientNeighbourhood: orderData.clientNeighbourhood ?? '',
     cityId: orderData.cityId ?? 'edmonton',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+
+  // Only set optional fields when defined — Firestore rejects `undefined` values
+  // (ignoreUndefinedProperties is not enabled).
+  if (orderData.deliveryLocation) order.deliveryLocation = orderData.deliveryLocation;
+  if (restaurant.imageUrl) order.restaurantImage = restaurant.imageUrl;
+  if (orderData.deliveryInstructions) order.deliveryInstructions = orderData.deliveryInstructions;
 
   const walletRef = doc(db, 'wallets', orderData.userId);
 

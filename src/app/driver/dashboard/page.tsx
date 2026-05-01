@@ -592,7 +592,7 @@ export default function DriverDashboard() {
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
-      <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-24">
+      <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-28">
         {/* Header */}
         <header className="p-6 flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-xl z-50">
           <div className="flex items-center gap-3">

@@ -5,7 +5,7 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { db } from '@/config/firebase';
-import { VoipCallState, CallStatus, CallParticipant, IVoipEngine } from '@/types/voip';
+import { VoipCallState, CallStatus, CallParticipant, IVoipEngine, DEFAULT_CALL_TIMEOUTS } from '@/types/voip';
 import { logger } from '@/utils/logger';
 import { TwilioVoipEngine } from './voip/engines/twilio.engine';
 
@@ -20,12 +20,14 @@ class VoipService {
   private engine: IVoipEngine;
   private callDocUnsubscribe: (() => void) | null = null;
   private isEnding = false;
+  private ringTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   // État initial
   private state: VoipCallState = {
     status: 'idle',
     direction: null,
     callId: null,
+    conversationId: null,
     bookingId: null,
     channel: null,
     token: null,
@@ -134,23 +136,26 @@ class VoipService {
   /**
    * Initialise un appel (appelant)
    */
-  async startCall(bookingId: string, caller: CallParticipant, callee: CallParticipant): Promise<void> {
+  async startCall(conversationId: string, caller: CallParticipant, callee: CallParticipant): Promise<void> {
     try {
       this.updateState({
         status: 'calling',
         direction: 'outgoing',
-        bookingId,
+        conversationId,
+        bookingId: conversationId, // alias rétrocompat
         caller,
         callee,
         error: null,
       });
 
       const functions = getFunctions();
-      
+
       const response = await this.retryWithBackoff(async () => {
         const createCallFn = httpsCallable(functions, 'createCall');
         return await createCallFn({
-          rideId: bookingId,
+          // Le backend attend `rideId` — on lui passe le conversationId
+          // (string opaque), aucune modif des Cloud Functions nécessaire.
+          rideId: conversationId,
           calleeId: callee.uid,
         }) as { data: { callId: string, channel: string, token: string } };
       });
@@ -160,6 +165,16 @@ class VoipService {
       // Utilisation des noms génériques
       this.updateState({ callId, channel, token });
       this.subscribeToCallDoc(callId);
+
+      // Ring timeout: si l'appelé ne décroche pas dans le délai imparti,
+      // marquer l'appel comme manqué (no_answer).
+      this.clearRingTimeout();
+      this.ringTimeoutId = setTimeout(() => {
+        if (this.state.status === 'ringing' || this.state.status === 'calling') {
+          logger.info('Ring timeout reached, ending call as no_answer', { callId });
+          this.endCall('no_answer');
+        }
+      }, DEFAULT_CALL_TIMEOUTS.ringTimeout);
 
       // Check permissions before joining
       const hasPermission = await this.ensureMicrophonePermission();
@@ -203,7 +218,7 @@ class VoipService {
     try {
       const functions = getFunctions();
       const answerCallFn = httpsCallable(functions, 'answerCall');
-      
+
       await answerCallFn({ callId: this.state.callId });
 
       // Check permissions before joining
@@ -225,10 +240,22 @@ class VoipService {
         }
       }
 
-      if (this.state.channel && this.state.token && this.state.callee) {
-        await this.engine.join(this.state.channel, this.state.token, this.state.callee.uid);
+      // Le callee n'a pas de token (jamais stocké en Firestore pour des raisons de sécurité).
+      // On le récupère via la Cloud Function getCallToken juste avant de rejoindre le canal.
+      if (this.state.channel && this.state.callee) {
+        const getCallTokenFn = httpsCallable(functions, 'getCallToken');
+        const tokenResponse = await getCallTokenFn({
+          callId: this.state.callId,
+          channel: this.state.channel,
+        }) as { data: { token: string; channel?: string; uid?: string } };
+
+        const freshToken = tokenResponse.data.token;
+        this.updateState({ token: freshToken });
+
+        await this.engine.join(this.state.channel, freshToken, this.state.callee.uid);
       }
-      
+
+      this.clearRingTimeout();
       this.updateState({ status: 'accepted' });
     } catch (error: unknown) {
       logger.error('Erreur acceptCall', { error });
@@ -255,6 +282,8 @@ class VoipService {
     if (this.isEnding) return;
     this.isEnding = true;
 
+    this.clearRingTimeout();
+
     const callId = this.state.callId;
 
     try {
@@ -272,9 +301,20 @@ class VoipService {
         console.error('[VoipService] cleanup error:', cleanupError);
       }
       try {
+        let finalStatus: CallStatus;
+        if (reason === 'declined') {
+          finalStatus = 'declined';
+        } else if (reason === 'no_answer' || reason === 'timeout') {
+          finalStatus = 'missed';
+        } else if (reason === 'failed' || reason === 'connection_failed') {
+          finalStatus = 'failed';
+        } else {
+          finalStatus = 'ended';
+        }
         this.updateState({
-          status: (reason as CallStatus) === 'declined' ? 'declined' : 'ended',
+          status: finalStatus,
           callId: null,
+          conversationId: null,
           bookingId: null,
           channel: null,
           token: null,
@@ -328,14 +368,22 @@ class VoipService {
       const data = snapshot.data();
       const status = data.status as CallStatus;
 
-      if (status === 'ended' || status === 'declined') {
+      if (status === 'ended' || status === 'declined' || status === 'missed' || status === 'failed') {
         this.endCall(status);
       } else if (status === 'accepted' && this.state.status !== 'accepted') {
+        this.clearRingTimeout();
         this.updateState({ status: 'accepted', startTime: Date.now() });
       } else if (status === 'ringing' && this.state.status === 'calling') {
         this.updateState({ status: 'ringing' });
       }
     });
+  }
+
+  private clearRingTimeout() {
+    if (this.ringTimeoutId) {
+      clearTimeout(this.ringTimeoutId);
+      this.ringTimeoutId = null;
+    }
   }
 
   private async cleanup() {
@@ -381,29 +429,36 @@ class VoipService {
   /**
    * Détecte un appel entrant depuis une notification ou un listener externe
    */
-  handleIncomingCall(callId: string, bookingId: string, channel: string, token: string, caller: CallParticipant) {
+  handleIncomingCall(callId: string, conversationId: string, channel: string, caller: CallParticipant, calleeUid: string) {
     // Double-check to prevent race conditions
     if (this.state.status !== 'idle') {
-      logger.warn('Rejected incoming call: already in a call', { 
+      logger.warn('Rejected incoming call: already in a call', {
         currentStatus: this.state.status,
-        incomingCallId: callId 
+        incomingCallId: callId
       });
       return;
     }
 
     // Set status to 'ringing' immediately to prevent duplicate handling
+    // Note: pas de token ici — le callee obtiendra le sien via getCallToken au moment d'accepter.
+    // Rôle du callee : on devine via le rôle de l'appelant (taxi only).
+    // Pour food/parcel, le rôle réel sera réajusté par le composant à l'acceptation.
+    const guessedCalleeRole: CallParticipant['role'] =
+      caller.role === 'client' ? 'chauffeur' : 'client';
+
     this.updateState({
       status: 'ringing',
       direction: 'incoming',
       callId,
-      bookingId,
+      conversationId,
+      bookingId: conversationId,
       channel,
-      token,
+      token: null,
       caller,
-      callee: { 
-        uid: caller.uid === this.state.callee?.uid ? this.state.caller?.uid || '' : this.state.callee?.uid || '',
+      callee: {
+        uid: calleeUid,
         name: 'Moi',
-        role: caller.role === 'client' ? 'chauffeur' : 'client'
+        role: guessedCalleeRole
       },
       error: null
     });

@@ -55,12 +55,13 @@ export function VoipCallProvider({ children }: { children: ReactNode }) {
         };
 
         // Set status immediately to prevent duplicate handling
+        // Note: le token n'est jamais stocké en Firestore — le callee le récupère via getCallToken au moment d'accepter.
         voipService.handleIncomingCall(
           doc.id,
           data.rideId,
           data.channel,
-          data.token,
-          caller
+          caller,
+          currentUser.uid
         );
       }
     });
@@ -88,8 +89,8 @@ export function VoipCallProvider({ children }: { children: ReactNode }) {
           data.callId,
           data.rideId,
           '', // channel (sera récupéré par le snapshot)
-          '', // token (sera récupéré par le snapshot)
-          caller
+          caller,
+          currentUser.uid
         );
       }
     });

@@ -117,7 +117,7 @@ export default function NotificationsPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-[430px] mx-auto px-4 py-6">
+      <main className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
         {isLoading ? (
           <div className="flex justify-center items-center py-20">
             <MaterialIcon name="refresh" className="animate-spin text-primary text-[40px]" />

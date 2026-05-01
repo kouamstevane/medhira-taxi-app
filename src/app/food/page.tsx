@@ -83,7 +83,7 @@ export default function FoodHomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background pb-20 max-w-[430px] mx-auto">
+    <div className="min-h-screen bg-background pb-28 max-w-[430px] mx-auto">
       {/* Header */}
       <div className="relative overflow-hidden p-6 rounded-b-[2rem] border-b border-white/[0.06]">
         <div className="absolute -top-20 -right-20 w-72 h-72 bg-primary/25 blur-3xl rounded-full pointer-events-none" />

@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
+import DriverFoodContacts from './DriverFoodContacts'
 
 interface Props {
   order: FoodDeliveryOrder
@@ -26,6 +27,7 @@ export default function Level3_ArrivedRestaurant({ order, updateStatus }: Props)
             </div>
           ))}
         </div>
+        <DriverFoodContacts order={order} target="restaurant" />
       </div>
       <button
         onClick={async () => { setLoading(true); try { await updateStatus('waiting') } finally { setLoading(false) } }}

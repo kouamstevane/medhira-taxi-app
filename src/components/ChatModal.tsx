@@ -1,23 +1,150 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Message } from '@/types/chat';
-import { subscribeToMessages, sendMessage, markMessagesAsRead, sendSystemMessage } from '@/services/chat.service';
+import {
+  ConversationContext,
+  ConversationParticipant,
+  buildConversationId,
+  getRoleLabel,
+} from '@/types/conversation';
+import {
+  subscribeToMessages,
+  sendMessage,
+  markMessagesAsRead,
+  ensureConversation,
+} from '@/services/chat.service';
 import { useVoipCall } from '@/hooks/useVoipCall';
 import { useAuth } from '@/hooks/useAuth';
 
-interface ChatModalProps {
+/**
+ * Nouvelle signature recommandée :
+ *   <ChatModal context={...} currentUserUid={uid} onClose={...} />
+ *
+ * Signature legacy (rétrocompat) :
+ *   <ChatModal bookingId={...} driverName={...} driverId={...} userType="client" onClose={...} />
+ *   - construira automatiquement un context taxi en lisant le booking depuis Firestore
+ */
+interface ChatModalNewProps {
+  context: ConversationContext;
+  currentUserUid: string;
+  onClose: () => void;
+}
+
+interface ChatModalLegacyProps {
   bookingId: string;
   driverName: string;
-  driverId?: string; // Optionnel car non utilisé actuellement
+  driverId?: string;
   userType: 'client' | 'chauffeur';
   onClose: () => void;
 }
 
-export function ChatModal({ bookingId, driverName, driverId, userType, onClose }: ChatModalProps) {
+type ChatModalProps =
+  | (ChatModalNewProps & Partial<ChatModalLegacyProps>)
+  | (ChatModalLegacyProps & Partial<ChatModalNewProps>);
+
+export function ChatModal(props: ChatModalProps) {
   const { currentUser } = useAuth();
-  const { startCall, callState } = useVoipCall();
+  const { startCall } = useVoipCall();
+
+  // ----- Résolution du contexte (rétrocompat) -----
+  const [resolvedContext, setResolvedContext] = useState<ConversationContext | null>(
+    props.context ?? null
+  );
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
+
+  // currentUserUid = nouveau prop, sinon fallback sur currentUser.uid
+  const currentUserUid = props.currentUserUid ?? currentUser?.uid ?? null;
+
+  // Si on est en mode legacy, on construit le context depuis le booking
+  useEffect(() => {
+    if (resolvedContext || !currentUserUid) return;
+
+    const legacyBookingId = (props as ChatModalLegacyProps).bookingId;
+    const legacyDriverName = (props as ChatModalLegacyProps).driverName;
+    const legacyDriverId = (props as ChatModalLegacyProps).driverId;
+    const legacyUserType = (props as ChatModalLegacyProps).userType;
+
+    if (!legacyBookingId || !legacyUserType) return;
+
+    console.warn(
+      '[ChatModal] Legacy props (bookingId/userType) detected — please migrate to `context`+`currentUserUid`.'
+    );
+
+    (async () => {
+      try {
+        const bookingSnap = await getDoc(doc(db, 'bookings', legacyBookingId));
+        if (!bookingSnap.exists()) {
+          setResolutionError('Course introuvable');
+          return;
+        }
+        const data = bookingSnap.data();
+        const clientUid: string | undefined = data.userId;
+        const driverUid: string | undefined = data.driverId || legacyDriverId;
+        if (!clientUid || !driverUid) {
+          setResolutionError('Participants incomplets pour cette course');
+          return;
+        }
+
+        const clientParticipant: ConversationParticipant = {
+          uid: clientUid,
+          name: legacyUserType === 'client'
+            ? (currentUser?.displayName || 'Client')
+            : 'Client',
+          role: 'client',
+        };
+        const driverParticipant: ConversationParticipant = {
+          uid: driverUid,
+          name: legacyDriverName || 'Chauffeur',
+          role: 'chauffeur',
+        };
+
+        setResolvedContext({
+          type: 'taxi',
+          entityId: legacyBookingId,
+          participantA: clientParticipant,
+          participantB: driverParticipant,
+        });
+      } catch (err) {
+        console.error('[ChatModal] legacy context resolution failed', err);
+        setResolutionError('Impossible de charger la conversation');
+      }
+    })();
+  }, [resolvedContext, currentUserUid, props, currentUser?.displayName]);
+
+  // S'assurer que le doc conversation existe et récupérer son id
+  useEffect(() => {
+    if (!resolvedContext) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const id = await ensureConversation(resolvedContext);
+        if (!cancelled) setConversationId(id);
+      } catch (err) {
+        console.error('[ChatModal] ensureConversation failed', err);
+        if (!cancelled) {
+          // Fallback : on calcule l'id même si la création a échoué (les rules pourront le refuser)
+          setConversationId(
+            buildConversationId(
+              resolvedContext.type,
+              resolvedContext.entityId,
+              resolvedContext.participantA.uid,
+              resolvedContext.participantB.uid
+            )
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedContext]);
+
+  // ----- État interne -----
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
@@ -25,50 +152,58 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Détermination du "moi" et de "l'autre"
+  const { meParticipant, otherParticipant } = useMemo(() => {
+    if (!resolvedContext || !currentUserUid) {
+      return { meParticipant: null, otherParticipant: null };
+    }
+    const isA = resolvedContext.participantA.uid === currentUserUid;
+    return {
+      meParticipant: isA ? resolvedContext.participantA : resolvedContext.participantB,
+      otherParticipant: isA ? resolvedContext.participantB : resolvedContext.participantA,
+    };
+  }, [resolvedContext, currentUserUid]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    if (!bookingId) return;
-
-    const unsubscribe = subscribeToMessages(bookingId, (msgs) => {
+    if (!conversationId) return;
+    const unsubscribe = subscribeToMessages(conversationId, (msgs) => {
       setMessages(msgs);
     });
-
     return () => unsubscribe();
-  }, [bookingId]);
+  }, [conversationId]);
 
-  // Marquer les messages comme lus quand ils arrivent et que le modal est ouvert
   useEffect(() => {
-    if (currentUser && messages.length > 0) {
-      const hasUnread = messages.some(m => m.senderId !== currentUser.uid && !m.read);
+    if (conversationId && currentUserUid && messages.length > 0) {
+      const hasUnread = messages.some((m) => m.senderId !== currentUserUid && !m.read);
       if (hasUnread) {
-        markMessagesAsRead(bookingId, currentUser.uid, userType);
+        markMessagesAsRead(conversationId, currentUserUid);
       }
     }
-  }, [messages, bookingId, currentUser, userType]);
+  }, [messages, conversationId, currentUserUid]);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !currentUser) return;
-
+    if (!newMessage.trim() || !meParticipant || !conversationId) return;
     setSending(true);
     try {
       await sendMessage(
-        bookingId,
-        currentUser.uid,
-        currentUser.displayName || 'Utilisateur',
-        userType,
+        conversationId,
+        meParticipant.uid,
+        meParticipant.name,
+        meParticipant.role,
         newMessage.trim()
       );
       setNewMessage('');
     } catch (error) {
       console.error('Erreur envoi message:', error);
-      setToast({ message: 'Erreur lors de l\'envoi du message', type: 'error' });
+      setToast({ message: "Erreur lors de l'envoi du message", type: 'error' });
       setTimeout(() => setToast(null), 3000);
     } finally {
       setSending(false);
@@ -76,41 +211,33 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
   };
 
   const handleCall = async () => {
-    if (!driverId || !currentUser || initiatingCall) return;
-
+    if (!meParticipant || !otherParticipant || !conversationId || initiatingCall) return;
     setInitiatingCall(true);
     try {
-      await startCall(
-        bookingId,
-        {
-          uid: currentUser.uid,
-          name: currentUser.displayName || 'Moi',
-          role: userType
-        },
-        {
-          uid: driverId,
-          name: driverName,
-          role: userType === 'client' ? 'chauffeur' : 'client'
-        }
-      );
-      setToast({ message: '📞 Appel initié ! Le ' + (userType === 'client' ? 'chauffeur' : 'client') + ' a été notifié.', type: 'success' });
+      await startCall(conversationId, meParticipant, otherParticipant);
+      setToast({
+        message: `📞 Appel initié ! ${otherParticipant.name} a été notifié.`,
+        type: 'success',
+      });
       setTimeout(() => setToast(null), 4000);
     } catch (error) {
       console.error('Erreur lors du lancement de l\'appel:', error);
-      setToast({ message: 'Impossible de lancer l\'appel', type: 'error' });
+      setToast({ message: "Impossible de lancer l'appel", type: 'error' });
       setTimeout(() => setToast(null), 4000);
     } finally {
       setInitiatingCall(false);
     }
   };
 
-  const getOtherPartyName = () => {
-    return userType === 'client' ? driverName : 'Client';
-  };
+  const headerName = otherParticipant?.name
+    || (otherParticipant ? getRoleLabel(otherParticipant.role) : 'Conversation');
+
+  const headerSub = otherParticipant
+    ? `Chat avec ${getRoleLabel(otherParticipant.role)}`
+    : 'Conversation active';
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
-      {/* Toast notification */}
       {toast && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all animate-[fadeIn_0.2s_ease-in] ${
           toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
@@ -127,16 +254,18 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
               👤
             </div>
             <div>
-              <h3 className="font-bold text-white">{getOtherPartyName()}</h3>
-              <p className="text-xs text-slate-400">Conversation active</p>
+              <h3 className="font-bold text-white">{headerName}</h3>
+              <p className="text-xs text-slate-400">{headerSub}</p>
             </div>
           </div>
           <div className="relative flex items-center space-x-2">
             <button
               onClick={handleCall}
-              disabled={initiatingCall}
+              disabled={initiatingCall || !conversationId}
               className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
-                initiatingCall ? 'opacity-50 cursor-not-allowed bg-white/10 text-slate-400' : 'bg-primary/15 border border-primary/30 hover:bg-primary/25 text-primary'
+                initiatingCall || !conversationId
+                  ? 'opacity-50 cursor-not-allowed bg-white/10 text-slate-400'
+                  : 'bg-primary/15 border border-primary/30 hover:bg-primary/25 text-primary'
               }`}
               aria-label="Appeler"
             >
@@ -147,7 +276,7 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
               )}
             </button>
             <button
-              onClick={onClose}
+              onClick={props.onClose}
               className="p-2 glass-card border border-white/10 hover:bg-white/5 rounded-full transition text-slate-300"
             >
               <MaterialIcon name="close" size="md" />
@@ -157,15 +286,18 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-background">
-          {messages.length === 0 && (
+          {resolutionError && (
+            <div className="text-center text-red-400 text-sm mt-8">{resolutionError}</div>
+          )}
+          {!resolutionError && messages.length === 0 && (
             <div className="text-center text-slate-500 mt-8">
               <p className="text-sm">Aucun message pour le moment</p>
               <p className="text-xs mt-2">Envoyez un message pour démarrer la conversation</p>
             </div>
           )}
-          
+
           {messages.map((message) => {
-            const isOwnMessage = message.senderId === currentUser?.uid;
+            const isOwnMessage = message.senderId === currentUserUid;
             const isSystemMessage = message.type === 'system';
             const isCallMessage = message.type === 'voice_call';
 
@@ -215,12 +347,10 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
                     {isOwnMessage && (
                       <span className="ml-1 inline-flex items-center">
                         {message.read ? (
-                          // Double coche bleue pour Lu (plus visible sur fond orange)
                           <div className="flex -space-x-1">
-                             <MaterialIcon name="done_all" className="text-blue-400 text-[12px]" />
+                            <MaterialIcon name="done_all" className="text-blue-400 text-[12px]" />
                           </div>
                         ) : (
-                          // Coche simple blanche pour Envoyé
                           <MaterialIcon name="check" className="text-white text-[12px]" />
                         )}
                       </span>
@@ -243,11 +373,11 @@ export function ChatModal({ bookingId, driverName, driverId, userType, onClose }
               onKeyDown={(e) => e.key === 'Enter' && !sending && handleSendMessage()}
               placeholder="Écrivez votre message..."
               className="glass-input flex-1 px-4 py-3 rounded-full text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none"
-              disabled={sending}
+              disabled={sending || !conversationId}
             />
             <button
               onClick={handleSendMessage}
-              disabled={!newMessage.trim() || sending}
+              disabled={!newMessage.trim() || sending || !conversationId}
               className="p-3 bg-primary hover:bg-primary/90 text-white rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <MaterialIcon name="send" size="md" />

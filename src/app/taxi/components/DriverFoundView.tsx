@@ -11,6 +11,8 @@ import { AddressInput } from './AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { ChatModal } from '@/components/ChatModal';
 import { InvoiceModal } from '@/components/InvoiceModal';
+import { useAuth } from '@/hooks/useAuth';
+import type { ConversationContext } from '@/types/conversation';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 import { CURRENCY_CODE, DEFAULT_PRICING, DEFAULT_LOCALE } from '@/utils/constants';
 import { useToast } from '@/hooks/useToast';
@@ -32,6 +34,7 @@ const defaultCenter = {
 };
 
 export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps) {
+  const { currentUser, userData } = useAuth();
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -691,15 +694,34 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
         </div>
       )}
       {/* Modal de Chat */}
-      {showChat && booking.driverId && (
-        <ChatModal
-          bookingId={bookingId}
-          driverName={booking.driverName || 'Chauffeur'}
-          driverId={booking.driverId}
-          userType="client"
-          onClose={() => setShowChat(false)}
-        />
-      )}
+      {showChat && booking.driverId && currentUser && (() => {
+        const conversationContext: ConversationContext = {
+          type: 'taxi',
+          entityId: bookingId,
+          participantA: {
+            uid: currentUser.uid,
+            name:
+              [userData?.firstName, userData?.lastName].filter(Boolean).join(' ').trim() ||
+              currentUser.displayName ||
+              'Client',
+            role: 'client',
+            avatar: userData?.profileImageUrl || currentUser.photoURL || null,
+          },
+          participantB: {
+            uid: booking.driverId,
+            name: booking.driverName || 'Chauffeur',
+            role: 'chauffeur',
+            avatar: null,
+          },
+        };
+        return (
+          <ChatModal
+            context={conversationContext}
+            currentUserUid={currentUser.uid}
+            onClose={() => setShowChat(false)}
+          />
+        );
+      })()}
       
       {/* Modal de Facture - affiché quand la course est terminée */}
       {showInvoiceModal && completedBooking && (

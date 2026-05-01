@@ -1,7 +1,8 @@
 # Dependencies
 node_modules/
-functions/node_modules/
+functions/node_modules
 node_modulesOld-after/
+functions/node_modules.bak/
 /.pnp
 .pnp.js
 

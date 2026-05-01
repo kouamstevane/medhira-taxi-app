@@ -347,25 +347,44 @@ export interface ActiveBookingCollection {
 export interface ParcelCollection {
   parcelId: string;
   senderId: string;
+  /** UID du destinataire si trouvé par téléphone, sinon chaîne vide (invité) */
   receiverId: string;
-  driverId?: string;
+  /** Téléphone E.164 du destinataire (toujours rempli, sert au SMS) */
+  recipientPhone: string;
+  recipientName: string;
+  /** true si le destinataire n'a PAS de compte → notifié par SMS uniquement */
+  recipientIsGuest: boolean;
+  driverId: string | null;
   status: 'pending' | 'accepted' | 'in_transit' | 'delivered' | 'cancelled';
-  pickup: {
+  pickupLocation: {
     address: string;
     latitude: number;
     longitude: number;
+    country: string; // ISO 3166-1 alpha-2 (CM, CA)
   };
-  dropoff: {
+  dropoffLocation: {
     address: string;
     latitude: number;
     longitude: number;
+    country: string;
   };
-  description?: string;
-  weight?: number;
-  estimatedPrice?: number;
-  finalPrice?: number;
+  description: string;
+  weight: number;
+  sizeCategory: 'small' | 'medium' | 'large';
+  pickupInstructions?: string;
+  estimatedPrice: number;
+  finalPrice: number | null;
+  price: number;
+  currency: string;
+  distanceKm: number;
+  durationMinutes: number;
   createdAt: Date;
+  updatedAt: Date;
+  acceptedAt?: Date;
+  pickedUpAt?: Date;
   deliveredAt?: Date;
+  cancelledAt?: Date;
+  cancellationReason?: string;
 }
 
 /**

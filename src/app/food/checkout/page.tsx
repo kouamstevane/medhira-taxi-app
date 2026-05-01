@@ -16,6 +16,7 @@ export default function CheckoutPage() {
   const { currentUser: user, userData } = useAuth();
   const { items, restaurant, getSubtotal, clearCart } = useCartStore();
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [deliveryPreference, setDeliveryPreference] = useState<'leave_at_door' | 'meet_outside' | 'meet_at_door'>('leave_at_door');
   const [deliveryInstructions, setDeliveryInstructions] = useState('');
@@ -31,6 +32,7 @@ export default function CheckoutPage() {
   // React "Cannot update a component while rendering" et les hydration mismatches.
   // router.replace() plutôt que push() : pas d'entrée history à un état invalide.
   React.useEffect(() => {
+    if (submitted) return; // order succeeded — let handleCreateOrder navigate to the tracking page
     if (!user) {
       router.replace('/login?next=/food/checkout');
       return;
@@ -39,7 +41,7 @@ export default function CheckoutPage() {
       router.replace('/food');
       return;
     }
-  }, [user, restaurant, items.length, router]);
+  }, [user, restaurant, items.length, router, submitted]);
 
   // Calculate real delivery distance when restaurant and user address are available
   React.useEffect(() => {
@@ -61,7 +63,10 @@ export default function CheckoutPage() {
   }, [restaurant, userData?.address]);
 
   // Pendant la vérification / redirection, on ne rend rien (pas de push inline).
-  if (!user || !restaurant || items.length === 0) {
+  if (!submitted && (!user || !restaurant || items.length === 0)) {
+    return null;
+  }
+  if (!restaurant) {
     return null;
   }
 
@@ -94,9 +99,10 @@ export default function CheckoutPage() {
         deliveryInstructions,
       });
 
-      // 3. Vider le panier et rediriger vers le suivi
-      clearCart();
+      // 3. Marquer comme soumis pour neutraliser le useEffect, rediriger, puis vider le panier
+      setSubmitted(true);
       router.push(`/food/orders/${orderId}`);
+      clearCart();
     } catch (error) {
       console.error('Erreur lors de la validation:', error);
       setErrorMsg('Une erreur est survenue lors de la validation de votre commande.');

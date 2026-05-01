@@ -380,8 +380,19 @@ export const endCall = onCall(
 
   const endTime = getAdmin().firestore.Timestamp.now();
   
+  let mappedStatus: 'ended' | 'declined' | 'missed' | 'failed';
+  if (reason === 'declined') {
+    mappedStatus = 'declined';
+  } else if (reason === 'no_answer' || reason === 'timeout') {
+    mappedStatus = 'missed';
+  } else if (reason === 'failed' || reason === 'connection_failed') {
+    mappedStatus = 'failed';
+  } else {
+    mappedStatus = 'ended';
+  }
+
   await callRef.update({
-    status: 'ended',
+    status: mappedStatus,
     endTime,
     reason: reason || 'user_ended'
   });

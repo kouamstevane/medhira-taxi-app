@@ -1,17 +1,26 @@
-export type CallStatus = 'idle' | 'calling' | 'ringing' | 'accepted' | 'ended' | 'failed' | 'declined';
+export type CallStatus = 'idle' | 'calling' | 'ringing' | 'accepted' | 'ended' | 'failed' | 'declined' | 'missed';
 export type CallDirection = 'outgoing' | 'incoming';
 
 export interface CallParticipant {
   uid: string;
   name: string;
   avatar?: string | null;
-  role: 'client' | 'chauffeur';
+  /**
+   * Rôle de l'appelant. Élargi pour supporter food/parcel.
+   * - taxi : 'client' | 'chauffeur'
+   * - food : 'client' | 'restaurant' | 'livreur'
+   * - parcel : 'expediteur' | 'chauffeur' | 'client'
+   */
+  role: 'client' | 'chauffeur' | 'restaurant' | 'livreur' | 'expediteur';
 }
 
 export interface VoipCallState {
   status: CallStatus;
   direction: CallDirection | null;
   callId: string | null;
+  /** ID générique de conversation (taxi/food/parcel). Remplace bookingId. */
+  conversationId: string | null;
+  /** @deprecated Alias de conversationId conservé pour rétrocompat. */
   bookingId: string | null;
   channel: string | null;
   token: string | null;
@@ -25,7 +34,7 @@ export interface VoipCallState {
 }
 
 /**
- * Interface pour les moteurs VoIP (Agora, ZEGOCLOUD, etc.)
+ * Interface pour les moteurs VoIP (Twilio Voice, etc.)
  * Permet de changer de fournisseur sans impacter le reste de l'app.
  */
 export interface IVoipEngine {
@@ -47,7 +56,7 @@ export type CallEndReason = 'user_ended' | 'no_answer' | 'declined' | 'failed' |
 export interface CallerMetadata {
   name: string;
   avatar?: string;
-  role: 'client' | 'driver' | 'chauffeur';
+  role: 'client' | 'driver' | 'chauffeur' | 'restaurant' | 'livreur' | 'expediteur';
   uid: string;
 }
 
@@ -79,14 +88,6 @@ export interface LocalCallState {
   isSpeaker: boolean;
   isInCall: boolean;
   duration: number;
-}
-
-export interface AgoraConfig {
-  mode: string;
-  codec: string;
-  audioScenario?: string;
-  enableAudioVolumeIndication?: boolean;
-  cpuUsage?: string;
 }
 
 export interface CallQualityMetrics {

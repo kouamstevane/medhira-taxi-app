@@ -8,10 +8,13 @@ export type MessageType = 'text' | 'voice_call' | 'system';
 
 export interface Message {
   id: string;
-  bookingId: string;
+  /** @deprecated Utiliser `conversationId`. Conservé pour rétrocompatibilité. */
+  bookingId?: string;
+  conversationId?: string;
   senderId: string;
   senderName: string;
-  senderType: 'client' | 'driver';
+  /** Rôle générique de l'expéditeur — voir ParticipantRole pour la liste complète */
+  senderType: string;
   type: MessageType;
   content: string;
   read: boolean;
