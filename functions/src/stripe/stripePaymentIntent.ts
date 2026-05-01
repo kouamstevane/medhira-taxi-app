@@ -142,8 +142,16 @@ export const stripePaymentIntent = onCall(
             );
           } catch (stripeErr: unknown) {
             if (stripeErr instanceof Stripe.errors.StripeError) {
+              console.error('[stripePaymentIntent] Stripe error', {
+                type: stripeErr.type,
+                code: stripeErr.code,
+                statusCode: stripeErr.statusCode,
+                message: stripeErr.message,
+                requestId: stripeErr.requestId,
+              });
               throw new HttpsError('internal', `Stripe error: ${stripeErr.message}`);
             }
+            console.error('[stripePaymentIntent] Non-Stripe error during PI create', stripeErr);
             throw new HttpsError('internal', 'Échec de la création du PaymentIntent');
           }
         } else {
@@ -162,8 +170,16 @@ export const stripePaymentIntent = onCall(
             );
           } catch (stripeErr: unknown) {
             if (stripeErr instanceof Stripe.errors.StripeError) {
+              console.error('[stripePaymentIntent] Stripe error', {
+                type: stripeErr.type,
+                code: stripeErr.code,
+                statusCode: stripeErr.statusCode,
+                message: stripeErr.message,
+                requestId: stripeErr.requestId,
+              });
               throw new HttpsError('internal', `Stripe error: ${stripeErr.message}`);
             }
+            console.error('[stripePaymentIntent] Non-Stripe error during PI create', stripeErr);
             throw new HttpsError('internal', 'Échec de la création du PaymentIntent');
           }
         }

@@ -451,7 +451,11 @@ useEffect(() => {
       setPendingBookingId(bookingId);
       setModalStep('stripe');
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur lors de la configuration du paiement';
+      const raw = err instanceof Error ? err.message : '';
+      const isConnectionErr = /connection to Stripe|retried\s+\d+\s+times|ECONNRESET|ETIMEDOUT|network/i.test(raw);
+      const msg = isConnectionErr
+        ? 'Impossible de joindre Stripe pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.'
+        : raw || 'Erreur lors de la configuration du paiement';
       setError(msg);
     } finally {
       setLoading(false);
@@ -803,7 +807,7 @@ useEffect(() => {
 
       {/* Modal de confirmation */}
       {showConfirmModal && estimate && selectedCarType && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-lg flex items-center justify-center p-2 sm:p-4 z-50 transition-opacity duration-300">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-lg flex items-center justify-center p-2 sm:p-4 z-[60] transition-opacity duration-300">
           <div className="bg-[#1A1A1A] rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl transform transition-all duration-300 scale-100">
             {/* Header */}
             <div className="relative overflow-hidden p-4 sm:p-6 border-b border-white/[0.06]">
