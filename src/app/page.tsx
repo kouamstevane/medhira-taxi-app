@@ -78,7 +78,7 @@ export default function HomePage() {
         <div className="flex justify-center gap-3 py-6">
           {[
             { emoji: '🚕', label: 'Taxi' },
-            { emoji: '🍔', label: 'Food' },
+            { emoji: '🍔', label: 'Repas' },
             { emoji: '📦', label: 'Colis' },
           ].map((service) => (
             <div
