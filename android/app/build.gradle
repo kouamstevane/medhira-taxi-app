@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+// ========================================
+// Configuration de signature pour le release
+// Lit android/keystore.properties (non versionné)
+// ========================================
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+def hasKeystore = keystorePropertiesFile.exists()
+if (hasKeystore) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace "com.medjiraservice.medjiraserviceapp"
     compileSdk rootProject.ext.compileSdkVersion
@@ -8,7 +19,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0"
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         resConfigs 'fr', 'en'
         aaptOptions {
@@ -19,12 +30,26 @@ android {
     }
     
     // Configuration pour générer des APK séparés par architecture (réduit la taille de ~40%)
+    // Désactivé automatiquement pour bundleRelease (AAB) : Play Store gère lui-même
+    // le découpage par ABI, et la combinaison splits + AAB est interdite par AGP.
+    def isBundleBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains('bundle') }
     splits {
         abi {
-            enable true
+            enable !isBundleBuild
             reset()
             include 'arm64-v8a', 'armeabi-v7a'
             universalApk false
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (hasKeystore) {
+                storeFile file(keystoreProperties['MEDJIRA_KEYSTORE_FILE'])
+                storePassword keystoreProperties['MEDJIRA_KEYSTORE_PASSWORD']
+                keyAlias keystoreProperties['MEDJIRA_KEY_ALIAS']
+                keyPassword keystoreProperties['MEDJIRA_KEY_PASSWORD']
+            }
         }
     }
     
@@ -42,6 +67,10 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             crunchPngs true
+            // Signature release uniquement si keystore.properties est présent
+            if (hasKeystore) {
+                signingConfig signingConfigs.release
+            }
         }
         debug {
             // En mode debug, désactiver les optimisations pour éviter les problèmes d'installation

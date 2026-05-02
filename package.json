@@ -15,6 +15,8 @@
     "mobile:open:ios": "npx cap open ios",
     "mobile:run:android": "npx cap run android",
     "mobile:run:android:live": "npx cap run android --live-reload",
+    "android:bundle": "node scripts/mobile-build.js && cd android && gradlew bundleRelease",
+    "android:apk:release": "node scripts/mobile-build.js && cd android && gradlew assembleRelease",
     "start": "next start -p $PORT",
     "lint": "next lint .",
     "test": "jest --watch",
