@@ -450,7 +450,7 @@ export interface CarTypeCollection {
 /**
  * Collection CALLS
  * ----------------
- * Description : Appels VoIP entre clients et chauffeurs (Agora RTC)
+ * Description : Appels VoIP entre clients et chauffeurs (Twilio Voice)
  * 
  * Règles de sécurité :
  * - Read : Appelant OU appelé

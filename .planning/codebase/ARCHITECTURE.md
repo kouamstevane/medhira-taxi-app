@@ -126,8 +126,8 @@ All real-time data uses Firestore `onSnapshot`. Key subscriptions:
 
 ## VoIP (In-App Calling)
 
-- Engine: Agora RTC SDK (`agora-rtc-sdk-ng`), loaded dynamically client-side only to avoid SSR errors
-- Architecture: Plugin pattern — `IVoipEngine` interface in `src/types/voip.ts`, concrete `AgoraVoipEngine` in `src/services/voip/engines/agora.engine.ts`
+- Engine: Twilio Voice SDK (`@twilio/voice-sdk`), loaded dynamically client-side only to avoid SSR errors
+- Architecture: Plugin pattern — `IVoipEngine` interface in `src/types/voip.ts`, concrete `TwilioVoipEngine` in `src/services/voip/engines/twilio.engine.ts`
 - Signaling: Firestore `calls` collection (status: `ringing` → `answered` → `ended`)
 - State: Singleton `voipService` in `src/services/voip.service.ts`, exposed to React via `useVoipCall` hook and `VoipCallProvider` context
 - UI: `IncomingCallOverlay` and `ActiveCallOverlay` rendered globally in `LayoutClient`

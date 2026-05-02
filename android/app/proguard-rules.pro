@@ -23,9 +23,6 @@
 # ── Capacitor ──────────────────────────────────────────────────────
 -keep class com.getcapacitor.** { *; }
 
-# ── Agora Voice SDK ────────────────────────────────────────────────
--keep class io.agora.** { *; }
-
 # ── Firebase ───────────────────────────────────────────────────────
 -keep class com.google.firebase.** { *; }
 

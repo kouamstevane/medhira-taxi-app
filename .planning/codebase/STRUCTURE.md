@@ -190,7 +190,7 @@ Each service file corresponds to a domain. Naming convention: `{domain}.service.
 | `auth.service.ts` | Email verification, password reset helpers |
 | `driver.service.ts` | Driver profile updates, stats (accepted/declined trips) |
 | `driverTracking.service.ts` | GPS location publishing to Firestore (singleton `driverTracking`) |
-| `voip.service.ts` | VoIP call lifecycle, Agora engine management (singleton `voipService`) |
+| `voip.service.ts` | VoIP call lifecycle, Twilio engine management (singleton `voipService`) |
 | `wallet.service.ts` | Wallet balance reads/writes |
 | `notification.service.ts` | In-app notification CRUD |
 | `pushNotifications.service.ts` | FCM token registration, push send |
@@ -214,7 +214,7 @@ Each service file corresponds to a domain. Naming convention: `{domain}.service.
 - `automaticSearch.ts` — Client-side automatic search orchestration
 
 **`src/services/voip/engines/`**:
-- `agora.engine.ts` — Agora RTC SDK implementation of `IVoipEngine`
+- `twilio.engine.ts` — Twilio Voice SDK implementation of `IVoipEngine`
 
 ---
 
