@@ -100,12 +100,45 @@ export const onParcelCreated = onDocumentCreated(
       return;
     }
 
-    await snap.ref.update({
-      driverId: matched.id,
-      status: 'accepted',
-      acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    // Filter out drivers already on an active delivery (food or parcel)
+    const driverDoc = await db.collection('drivers').doc(matched.id).get();
+    if (driverDoc.data()?.activeDeliveryOrderId) {
+      console.info(`[onParcelCreated] ${parcel.parcelId} : driver ${matched.id} déjà occupé`);
+      return;
+    }
+
+    await db.runTransaction(async (tx) => {
+      tx.update(snap.ref, {
+        driverId: matched.id,
+        status: 'accepted',
+        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      tx.update(db.collection('drivers').doc(matched.id), {
+        activeDeliveryOrderId: parcel.parcelId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     });
+
+    // Custom claim required by RTDB rule on delivery_tracking/{parcelId}/location
+    await admin.auth().setCustomUserClaims(matched.id, { activeDeliveryOrderId: parcel.parcelId });
+
+    // FCM notification to driver
+    const fcmToken = driverDoc.data()?.fcmToken;
+    if (fcmToken) {
+      try {
+        await admin.messaging().send({
+          token: fcmToken,
+          notification: {
+            title: 'Nouveau colis à transporter',
+            body: `Retrait : ${parcel.pickupLocation.address}`,
+          },
+          data: { type: 'parcel_assigned', parcelId: parcel.parcelId },
+        });
+      } catch (err) {
+        console.warn(`[onParcelCreated] FCM push échec ${parcel.parcelId}:`, err);
+      }
+    }
 
     console.log(`[onParcelCreated] ${parcel.parcelId} → driver ${matched.id}`);
   },
@@ -127,12 +160,11 @@ export const onParcelStatusChanged = onDocumentUpdated(
     const after = event.data.after.data() as ParcelDoc | undefined;
     if (!before || !after) return;
     if (before.status === after.status) return;
-    if (!after.recipientPhone) return;
 
     const greeting = after.recipientName ? `${after.recipientName}, ` : '';
     let body: string | null = null;
 
-    switch (after.status) {
+    if (after.recipientPhone) switch (after.status) {
       case 'accepted':
         body = `${greeting}un colis vous est destiné via Medjira. Un chauffeur a été assigné et va récupérer le colis sous peu.`;
         break;
@@ -147,15 +179,30 @@ export const onParcelStatusChanged = onDocumentUpdated(
         break;
     }
 
-    if (!body) return;
+    if (body) {
+      const result = await sendSms({ to: after.recipientPhone, body });
+      if (!result.success) {
+        console.error(`[onParcelStatusChanged] SMS échec ${event.params.parcelId}:`, result.error);
+      } else {
+        console.log(
+          `[onParcelStatusChanged] SMS envoyé ${event.params.parcelId} status=${after.status} sid=${result.sid}`,
+        );
+      }
+    }
 
-    const result = await sendSms({ to: after.recipientPhone, body });
-    if (!result.success) {
-      console.error(`[onParcelStatusChanged] SMS échec ${event.params.parcelId}:`, result.error);
-    } else {
-      console.log(
-        `[onParcelStatusChanged] SMS envoyé ${event.params.parcelId} status=${after.status} sid=${result.sid}`,
-      );
+    // Free the driver and clean up tracking when the parcel reaches a terminal state
+    if ((after.status === 'delivered' || after.status === 'cancelled') && after.driverId) {
+      const db = admin.firestore();
+      try {
+        await db.collection('drivers').doc(after.driverId).update({
+          activeDeliveryOrderId: null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        await admin.auth().setCustomUserClaims(after.driverId, { activeDeliveryOrderId: null });
+        await admin.database().ref(`delivery_tracking/${event.params.parcelId}`).remove();
+      } catch (err) {
+        console.error(`[onParcelStatusChanged] cleanup driver/tracking failed ${event.params.parcelId}:`, err);
+      }
     }
   },
 );

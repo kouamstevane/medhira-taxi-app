@@ -321,10 +321,25 @@ export default function HistoriquePage() {
                   {type === 'Livraison' && (
                     <div className="border-t border-white/10 pt-3">
                       <p className="text-sm text-slate-400">{description || 'Aucune description'}</p>
-                      {destination && (
-                        <p className="text-sm text-slate-500 mt-1">
-                          <span className="font-medium text-slate-300">Destination :</span> {destination}
-                        </p>
+                      {(() => {
+                        const dropoff = item.dropoffLocation as { address?: string } | undefined;
+                        const dropoffAddr = dropoff?.address || destination;
+                        return dropoffAddr ? (
+                          <p className="text-sm text-slate-500 mt-1">
+                            <span className="font-medium text-slate-300">Destination :</span> {dropoffAddr}
+                          </p>
+                        ) : null;
+                      })()}
+                      {status && status !== 'delivered' && status !== 'cancelled' && id && (
+                        <div className="mt-3 pt-3 border-t border-white/10">
+                          <Link
+                            href={`/client/parcel/${id}/tracking`}
+                            className="flex items-center justify-center w-full px-4 py-2.5 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all hover:opacity-90 active:scale-[0.98]"
+                          >
+                            <MaterialIcon name="my_location" size="sm" className="mr-2" />
+                            Suivre le colis
+                          </Link>
+                        </div>
                       )}
                     </div>
                   )}

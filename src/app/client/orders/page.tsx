@@ -115,7 +115,7 @@ const getOrderDetailPath = (order: UnifiedOrder): string => {
     case 'food':
       return `/food/orders/${order.id}`;
     case 'parcel':
-      return `/client/order/${order.id}/tracking`;
+      return `/client/parcel/${order.id}/tracking`;
     default:
       return '#';
   }

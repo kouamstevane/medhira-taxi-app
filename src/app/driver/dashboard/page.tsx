@@ -39,6 +39,7 @@ import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
 import ModeSwitch from './components/ModeSwitch';
 import DeliveryOrdersList from './components/DeliveryOrdersList';
+import ParcelOrdersList from './components/ParcelOrdersList';
 import { getDriverDashboardInfoMessage } from '@/utils/driver.utils';
 import type { Trip, RideRequest } from '@/types/trip';
 import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
@@ -705,6 +706,15 @@ export default function DriverDashboard() {
           <div className="px-6 mb-8">
             <h2 className="text-lg font-bold text-white mb-4">Commandes de livraison</h2>
             <DeliveryOrdersList uid={driver.uid} />
+          </div>
+        )}
+
+        {/* Section colis — toujours affichée si le chauffeur est assigné à un colis,
+            indépendamment du driverType (l'assignation peut concerner tout chauffeur approuvé) */}
+        {driver && (
+          <div className="px-6 mb-8">
+            <h2 className="text-lg font-bold text-white mb-4">Colis à transporter</h2>
+            <ParcelOrdersList uid={driver.uid} />
           </div>
         )}
 
