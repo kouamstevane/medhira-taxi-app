@@ -1,29 +1,35 @@
-# Spec — Onboarding multi-rôles & espace Restaurateur
+# Spec — Onboarding multi-rôles & espace Restaurateur (v2)
 
 **Date :** 2026-05-03
-**Statut :** En revue (à approuver par l'utilisateur avant écriture du plan d'implémentation)
+**Version :** 2 (intègre 2 passes de revue)
+**Statut :** À approuver avant écriture du plan d'implémentation
 **Branche cible :** `my-new-interface`
-**Approche retenue :**
-- **A** pour le point d'entrée d'inscription (sélecteur de rôle plein écran après tap sur "Créer un compte")
-- **B** pour le wizard restaurateur (3 étapes légères, complétion post-approbation)
-- **Modèle "Client = base universelle"** pour la cohabitation des rôles (un compte ↔ un humain ↔ N rôles)
+**Contexte critique :** **App pré-production, aucun utilisateur réel.** Toutes les décisions du spec exploitent cette liberté (clean break sur `userType`, pas de migration prod, pas de rollback ceremony).
+
+**Approches retenues :**
+- **A** — sélecteur de rôle plein écran après tap sur « Créer un compte ».
+- **B** — wizard restaurateur **4 étapes** (compte → vérification email → restaurant → horaires) obtenu **par refactor** de `/food/create`, pas par duplication.
+- Modèle « **Client = base universelle** » pour la cohabitation des rôles.
+- **Single source of truth** : statut canonique sur les collections métier (`drivers/{uid}.status`, `restaurants/{id}.status`), `users.roles.*` ne stocke que les références.
+- **Stripe Connect restaurateur in-scope** (le parcours bout-en-bout doit être fonctionnel à 100%).
 
 ---
 
 ## 1. Contexte et problème
 
-L'application Medjira propose aujourd'hui trois rôles fonctionnels — **Client**, **Chauffeur/Livreur**, **Restaurateur** — mais leur onboarding souffre de trois défauts :
+L'application Medjira propose trois rôles fonctionnels — **Client**, **Chauffeur/Livreur**, **Restaurateur** — mais leur onboarding souffre de quatre défauts :
 
-1. **Aucun choix de rôle explicite à l'inscription.** Le bouton « Créer un compte » de la landing crée toujours un compte `userType: 'client'`. Un chauffeur qui clique dessus se retrouve client par erreur.
-2. **Pas d'espace Restaurateur.** Il n'existe ni route `/restaurant/register`, ni wizard, ni `userType: 'restaurateur'` natif dans le service auth. Un restaurateur doit aujourd'hui s'inscrire comme client puis aller sur `/food/create` pour soumettre son restaurant — friction et incohérence avec le flux chauffeur.
-3. **`userType` exclusif.** Le type est `'client' | 'chauffeur' | 'restaurateur'` (cf. `src/types/user.ts:14`). Un humain ne peut donc pas être à la fois chauffeur et client, alors qu'en pratique il l'est presque toujours (un chauffeur commande aussi des courses ou des repas).
+1. **Aucun choix de rôle explicite à l'inscription.** Le bouton « Créer un compte » de la landing crée toujours `userType: 'client'`. Un chauffeur ou restaurateur qui clique se retrouve client par erreur.
+2. **Pas d'espace Restaurateur dédié.** `/food/create` existe (wizard 3 étapes) mais il suppose un user déjà loggué et il n'est pas exposé depuis la landing — friction et incohérence avec le flux chauffeur.
+3. **`userType` exclusif.** `'client' | 'chauffeur' | 'restaurateur'` (cf. `src/types/user.ts:14`) — un humain ne peut pas être à la fois chauffeur et client. Or un chauffeur commande aussi des courses ou des repas en pratique.
+4. **Aucune monétisation effective côté restaurateur.** Pas de parcours Stripe Connect comme pour les drivers, donc le flux n'est pas réellement utilisable bout en bout.
 
-L'objectif est de livrer un onboarding où :
+Ce chantier livre :
 
-- Le rôle choisi à l'inscription est **explicite et impossible à confondre**.
-- Le restaurateur dispose d'un parcours dédié, de qualité équivalente à celui des chauffeurs.
-- Un même utilisateur peut **cumuler plusieurs rôles** sans dupliquer son compte, et basculer entre les espaces.
-- La **landing actuelle** (logo Medjira, tagline, chips Taxi/Repas/Colis, deux boutons) reste **inchangée visuellement**.
+- Onboarding où le rôle est **explicite et impossible à confondre**.
+- Espace restaurateur de qualité équivalente au flux chauffeur, **fonctionnel jusqu'à la réception de paiements**.
+- Compte unique cumulant **plusieurs rôles** (un humain ↔ un compte ↔ N rôles), avec switcher dans le header.
+- Landing actuelle (logo Medjira, tagline, chips Taxi/Repas/Colis, deux boutons) **inchangée visuellement** sauf retrait du lien « Espace Chauffeur » bas de page.
 
 ---
 
@@ -31,29 +37,39 @@ L'objectif est de livrer un onboarding où :
 
 ### Objectifs (in-scope)
 
-1. **Refonte du modèle d'identité** : passage de `userType` exclusif à `roles` cumulatif, avec migration non destructive des comptes existants.
+1. **Refonte du modèle d'identité** : `userType` est **supprimé** (suppression nette, possible parce qu'il n'y a pas de prod). Une seule source de vérité côté user : `roles`.
 2. **Sélecteur de rôle plein écran** (`/auth/role`) déclenché au tap sur « Créer un compte ».
-3. **Wizard restaurateur** en 3 étapes (`/restaurant/register`) avec création du compte client de base + ajout du rôle `restaurant` en `pending_approval`.
-4. **Login unifié** sur `/login` qui route automatiquement vers le bon dashboard en fonction des rôles présents (avec écran « Continuer en tant que… » si plusieurs rôles).
-5. **Switcher de rôle** dans le header des dashboards (style Uber).
-6. **Encart « Devenir pro »** dans le dashboard client (ajout d'un rôle chauffeur ou restaurateur sur un compte existant).
-7. **Règles Firestore** mises à jour pour autoriser l'accès en fonction des `roles`, pas plus du `userType`.
-8. **Tests automatisés** couvrant la migration, le routage post-login, et les trois flux d'inscription.
+3. **Wizard restaurateur** en 4 étapes (`/restaurant/register`), obtenu par **refactor** de `/food/create` :
+   - Étape 1 — Compte gérant (nouvelle).
+   - Étape 2 — Vérification email (réutilise le système existant).
+   - Étape 3 — Restaurant (issue de `/food/create` step 1+2).
+   - Étape 4 — Disponibilité / horaires (issue de `/food/create` step 3).
+4. **Stripe Connect restaurateur** post-approbation : route dédiée, restaurant non visible côté client tant que Stripe Connect n'est pas configuré.
+5. **Login unifié** sur `/login` qui route automatiquement selon `roles`. `/driver/login` devient un redirect.
+6. **Switcher de rôle** (Uber-style) dans le header de chaque dashboard.
+7. **Encart « Devenir pro »** dans le dashboard client, visible si **au moins un** rôle pro est manquant.
+8. **Driver `pending`** : accès dashboard driver en lecture seule + bannière « Candidature en cours ».
+9. **Notification admin** : badge compteur dans dashboard admin **+ email transactionnel** à chaque nouvelle soumission restaurateur.
+10. **Règles Firestore** réécrites pour s'appuyer sur `roles` + statut canonique des collections métier, avec immutabilité serveur des champs sensibles.
+11. **Tests automatisés** couvrant les flux d'inscription, le routage post-login, la sécurité (self-promotion impossible) et la persistance cross-device du brouillon.
 
 ### Non-objectifs (out-of-scope)
 
 - Refonte visuelle de la landing.
-- Refonte des wizards chauffeur (étapes 0–5) ou client existants — on ne touche que leur câblage à la nouvelle entrée et leur écriture des `roles`.
-- Refonte du dashboard restaurateur lui-même (les pages post-approbation : menu, photos, Stripe Connect, commandes). On suppose qu'elles existent ou seront ajoutées dans un chantier ultérieur ; ce spec couvre uniquement l'**onboarding** jusqu'à l'approbation admin.
-- Suppression de compte / RGPD (autre chantier).
-- SSO / OAuth (autre chantier).
+- Refonte des étapes 1–5 du wizard chauffeur (logique métier inchangée, seule l'écriture vers `roles` change).
+- Refonte du dashboard restaurateur post-approbation hors la **page Stripe Connect** (gestion menu, photos détaillées, gestion commandes — autres chantiers).
+- Multi-restaurants par compte (1 restaurant par user, règle existante préservée).
+- Suppression de compte / RGPD.
+- SSO / OAuth.
+- Onboarding mobile natif (Capacitor) — l'écran web responsive suffit.
 
 ### Critères d'arrêt explicites
 
 Le chantier est terminé quand :
-- Les 8 critères d'acceptation de la section 12 sont validés avec preuves (logs, captures, tests verts).
-- Aucun compte existant n'est cassé après migration (vérifié par script de validation post-migration).
-- La revue de phase 1 (sécurité Firestore) et la revue de phase 2 (UX cross-rôle) sont closes sans bloquant.
+- Les **9 critères d'acceptation** de la section 12 sont validés avec preuves (tests verts, captures, logs).
+- Plus aucune référence à `userType` dans `src/`, `functions/src/`, `firestore.rules`, ou les tests.
+- Les 5 revues R1–R5 sont closes sans bloquant.
+- Le parcours bout-en-bout restaurateur (signup → vérif email → wizard → soumission → approbation admin → Stripe Connect → restaurant visible côté client) est démontré sur émulateurs.
 
 ---
 
@@ -61,22 +77,27 @@ Le chantier est terminé quand :
 
 | Décision | Choix | Raison |
 |---|---|---|
-| Modèle d'identité | `roles: { client, driver?, restaurant? }` cumulatif | Reflète la réalité (un humain peut être client + pro), aligné Uber/Bolt |
-| Rôle de base | `roles.client = true` toujours présent | Tout user peut commander, pas de fonctionnalité perdue |
-| Champ legacy `userType` | Conservé temporairement, dérivé de `roles` | Compatibilité Cloud Functions et écrans non-migrés |
-| Champ `activeRole` | Stocké côté user, modifiable | Permet au switcher de mémoriser le dernier choix |
-| Sélecteur de rôle | Route plein écran `/auth/role` | UX forte, choix obligatoire, pas une rustine modale |
-| Login | Unifié sur `/login`, `/driver/login` devient redirect | Une seule porte d'entrée, routage par rôles |
-| Wizard restaurateur | 3 étapes légères, complétion post-approbation | Réduit friction, conforme au standard du marché |
-| Statut par rôle | Indépendant : `roles.driver.status` et `roles.restaurant.status` | Suspension/validation ciblée par rôle |
-| Migration | Script Firebase Admin one-shot, idempotent, dry-run | Cohérent avec le précédent (`feature livreur`) |
-| Règles Firestore | Vérifient `roles.X.status == 'approved'`, fallback `userType` pour rétrocompat | Sécurité granulaire sans casser l'existant |
+| Modèle d'identité | `roles: { client, driver?, restaurant? }` cumulatif | Reflète la réalité, aligné Uber/Bolt |
+| Rôle de base | `roles.client` toujours présent | Tout user peut commander |
+| Champ legacy `userType` | **Supprimé nettement** | Pas de prod = clean break possible et préférable |
+| Source de vérité du statut | Collections métier (`drivers/{uid}.status`, `restaurants/{id}.status`) | Évite la divergence avec `users.roles.*.status` |
+| `users.roles.driver` / `restaurant` | Stocke uniquement `{ joinedAt }` (driver) ou `{ restaurantId, joinedAt }` (restaurant) | Pas de status dupliqué |
+| Champ `lastActiveRole` | Sur le user, mémorise automatiquement | Comportement « remember » sans UX explicite |
+| Sélecteur de rôle | Route plein écran `/auth/role` | UX forte, choix obligatoire |
+| Wizard restaurateur | 4 étapes via **refactor de `/food/create`** | Pas de duplication, vérification email en step 2 |
+| Login | Unifié sur `/login` | Une seule porte d'entrée |
+| Statut driver `pending` | Accès dashboard driver en lecture seule | Q5 = (b) |
+| Stripe Connect restaurateur | In-scope, post-approbation | Q2 — flux fonctionnel bout-en-bout |
+| Notification admin | Badge dashboard + email transactionnel | Q4 = (b) |
+| Brouillon wizard | **Firestore** (`users.draftRestaurant`), pas localStorage | Cross-device pour parcours pro |
+| Migration | Script dev unique, sans backup/rollback | Pas de prod |
+| Immutabilité | Règles Firestore interdisent au user de modifier `roles.*` sur son propre doc (sauf création initiale validée) | Anti self-promotion |
 
 ---
 
 ## 4. Modèle de données
 
-### 4.1 Nouveau type `UserData` (refonte de `src/types/user.ts`)
+### 4.1 Type `UserData` (refonte de `src/types/user.ts`)
 
 ```ts
 export interface RoleClient {
@@ -85,19 +106,12 @@ export interface RoleClient {
 }
 
 export interface RoleDriver {
-  status: 'draft' | 'pending' | 'approved' | 'suspended' | 'rejected';
-  driverType: 'chauffeur' | 'livreur' | 'les_deux';
-  joinedAt: Timestamp;
-  approvedAt?: Timestamp;
-  suspensionReason?: string;
+  joinedAt: Timestamp;                        // PAS de status ici (lu sur drivers/{uid})
 }
 
 export interface RoleRestaurant {
-  status: 'pending_approval' | 'approved' | 'suspended' | 'rejected';
-  restaurantId: string;                       // référence à /restaurants/{restaurantId}
-  joinedAt: Timestamp;
-  approvedAt?: Timestamp;
-  rejectionReason?: string;
+  restaurantId: string;                       // référence à restaurants/{id}
+  joinedAt: Timestamp;                        // PAS de status ici (lu sur restaurants/{id})
 }
 
 export interface UserRoles {
@@ -112,123 +126,140 @@ export interface UserData {
   uid: string;
   email?: string | null;
   phoneNumber?: string | null;
+  emailVerified: boolean;                     // confirmation explicite
   firstName: string;
   lastName: string;
   profileImageUrl?: string | null;
 
-  // Nouveau modèle de rôles (source de vérité)
-  roles: UserRoles;
-  activeRole: ActiveRole;                     // dernier espace ouvert
+  roles: UserRoles;                           // SOURCE DE VÉRITÉ pour les rôles
+  activeRole: ActiveRole;                     // espace actuellement ouvert
+  lastActiveRole?: ActiveRole;                // dernier choix mémorisé pour login
 
-  // Champ legacy maintenu pour rétrocompat — dérivé automatiquement de `roles`
-  // Voir section 4.3 pour la règle de dérivation
-  userType: 'client' | 'chauffeur' | 'restaurateur';
+  // Brouillon wizard restaurateur — purgé après soumission ou TTL 30 j
+  // Apparaît à partir du wizard step 3 (restaurant), avant le compte n'existe pas
+  draftRestaurant?: {
+    currentStep: 3 | 4;                       // aligné sur la numérotation du wizard
+    data: Partial<RestaurantDraftData>;       // forme = entrée de FoodDeliveryService.createRestaurant
+    updatedAt: Timestamp;
+  };
 
   country?: string;
   address?: string;
-  createdAt: Date | Timestamp;
-  updatedAt: Date | Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+
+  // ⚠️ Champ supprimé : `userType`. Plus aucune référence dans le code après P1.
 }
 ```
 
-### 4.2 Pourquoi conserver `userType`
+### 4.2 Statut effectif d'un rôle (lecture indirecte)
 
-`userType` est utilisé par au moins :
-- Cloud Functions (cf. mention `feature livreur` : « JAMAIS modifié — compatibilité Cloud Function »).
-- Règles Firestore historiques.
-- Composants UI non encore migrés.
+Pour savoir si un user est un driver approuvé :
+```ts
+const driverDoc = await getDoc(doc(db, 'drivers', uid));
+const isApprovedDriver = user.roles.driver != null
+                       && driverDoc.exists()
+                       && driverDoc.data().status === 'approved';
+```
 
-Le supprimer d'un coup casse la prod. On le **conserve** comme champ dérivé, mis à jour par le service `userService.syncUserType(uid)` chaque fois que `roles` change. Il est marqué `@deprecated` dans le type ; suppression future planifiée dans un chantier dédié.
+Pour un restaurateur :
+```ts
+const restoDoc = await getDoc(doc(db, 'restaurants', user.roles.restaurant!.restaurantId));
+const isApprovedRestaurateur = user.roles.restaurant != null
+                              && restoDoc.exists()
+                              && restoDoc.data().status === 'approved'
+                              && restoDoc.data().ownerId === user.uid;       // intégrité (B9)
+```
 
-### 4.3 Règle de dérivation `userType` ← `roles`
+Cette logique est encapsulée dans `src/services/roles.service.ts` (helpers `getEffectiveRoleStatus`, `isApprovedDriver`, `isApprovedRestaurateur`).
 
-Priorité (premier match gagne) :
-1. `roles.driver?.status === 'approved'` → `userType = 'chauffeur'`
-2. `roles.restaurant?.status === 'approved'` → `userType = 'restaurateur'`
-3. sinon → `userType = 'client'`
+### 4.3 Extension du type `Restaurant`
 
-Cette règle est volontairement simple ; un user multi-pro reste classé sur son rôle pro **principal** (driver prioritaire — choix arbitraire, à confirmer en revue). Le vrai aiguillage runtime se fait via `roles` et `activeRole`, pas via `userType`.
+Ajout de deux champs dans `src/types/food-delivery.ts` (interface `Restaurant`) :
 
-### 4.4 Document `users/{uid}` après migration — exemple
+```ts
+stripeConnectStatus: 'not_started' | 'in_progress' | 'active' | 'restricted';
+stripeAccountId?: string;                     // rempli après onboarding réussi
+```
 
+Conséquence sur les requêtes catalogue côté client : ajouter `where('stripeConnectStatus', '==', 'active')` aux requêtes de listing publiques (cf. `food-delivery.service.ts:188`).
+
+### 4.4 Document `users/{uid}` après création — exemples
+
+**Client pur :**
 ```json
 {
   "uid": "abc123",
   "email": "marie@example.com",
+  "emailVerified": true,
   "firstName": "Marie",
   "lastName": "Dupont",
-  "roles": {
-    "client": { "enabled": true, "joinedAt": "2025-01-15T..." },
-    "restaurant": {
-      "status": "approved",
-      "restaurantId": "rest_xyz",
-      "joinedAt": "2025-02-10T...",
-      "approvedAt": "2025-02-12T..."
-    }
-  },
-  "activeRole": "restaurant",
-  "userType": "restaurateur",
-  "createdAt": "2025-01-15T...",
-  "updatedAt": "2026-05-03T..."
+  "roles": { "client": { "enabled": true, "joinedAt": "..." } },
+  "activeRole": "client",
+  "createdAt": "...",
+  "updatedAt": "..."
 }
 ```
 
+**Restaurateur (post-soumission, en attente d'approbation) :**
+```json
+{
+  "uid": "def456",
+  "email": "marc@bistro.fr",
+  "emailVerified": true,
+  "firstName": "Marc",
+  "lastName": "Lefèvre",
+  "roles": {
+    "client": { "enabled": true, "joinedAt": "..." },
+    "restaurant": { "restaurantId": "rest_xyz", "joinedAt": "..." }
+  },
+  "activeRole": "restaurant",
+  "lastActiveRole": "restaurant"
+}
+```
+Le statut effectif de son restaurant est lu via `restaurants/rest_xyz.status` (`'pending_approval'` ici).
+
 ---
 
-## 5. Migration des comptes existants
+## 5. Migration des données de dev
 
-### 5.1 Script `scripts/migrate-users-to-roles.ts`
+### 5.1 Pourquoi version simplifiée
 
-- Exécution Firebase Admin SDK avec service account.
-- **Dry-run par défaut** (flag `--apply` requis pour écrire).
-- Backup automatique : export JSON de la collection `users` dans `backups/users-pre-roles-YYYYMMDD.json` avant écriture.
-- Idempotent : si `roles` existe déjà sur un document, on skip.
+Pré-production, comptes de test uniquement. Pas besoin de backup/rollback/dry-run/staging. Un seul script `scripts/dev-migrate-users-to-roles.ts` exécutable sur émulateur ET projet Firebase de dev.
 
-### 5.2 Logique de migration par compte
+### 5.2 Script
 
 ```
 Pour chaque doc users/{uid} :
   Si doc.roles existe → SKIP (déjà migré)
 
-  roles = { client: { enabled: true, joinedAt: doc.createdAt } }
+  roles = { client: { enabled: true, joinedAt: doc.createdAt ?? now } }
   activeRole = 'client'
 
-  Si doc.userType === 'chauffeur' :
-    Lire drivers/{uid}
-    Si trouvé → roles.driver = {
-      status: drivers.status,
-      driverType: drivers.driverType ?? 'chauffeur',
-      joinedAt: drivers.createdAt,
-      approvedAt: drivers.approvedAt
-    }
+  Si drivers/{uid} existe :
+    roles.driver = { joinedAt: drivers.createdAt ?? now }
     activeRole = 'driver'
 
-  Si doc.userType === 'restaurateur' :
-    Chercher restaurants where ownerId == uid
-    Si trouvé → roles.restaurant = {
-      status: restaurants[0].status === 'approved' ? 'approved' : 'pending_approval',
-      restaurantId: restaurants[0].id,
-      joinedAt: restaurants[0].createdAt,
-      approvedAt: restaurants[0].approvedAt
-    }
+  Si restaurants where ownerId == uid existe :
+    roles.restaurant = { restaurantId: restaurants[0].id, joinedAt: restaurants[0].createdAt ?? now }
     activeRole = 'restaurant'
 
-  Update users/{uid} avec roles + activeRole + updatedAt
+  emailVerified = doc.emailVerified ?? firebase_auth.user.emailVerified
+
+  Update users/{uid} :
+    set roles, activeRole, lastActiveRole = activeRole, emailVerified
+    delete userType                            # suppression du champ legacy
 ```
+
+Idempotent (skip si `roles` existe). Loggue toute anomalie (driver sans doc, restaurant orphelin) sans bloquer.
 
 ### 5.3 Validation post-migration
 
-Script séparé `scripts/validate-roles-migration.ts` qui vérifie pour chaque user :
-- Présence de `roles.client`.
-- Cohérence `userType` ⇄ `roles` selon règle 4.3.
-- Si `roles.driver`, présence d'un doc `drivers/{uid}`.
-- Si `roles.restaurant`, présence d'un doc `restaurants/{restaurantId}` avec `ownerId === uid`.
-
-Sortie : rapport `migration-report-YYYYMMDD.json` listant les anomalies. **Bloquant** : si > 0 anomalie, on rollback depuis le backup.
+Pas de script séparé. Une fois la migration jouée sur émulateurs, exécution des tests d'intégration (`jest --config jest.firestore.config.js`) qui vérifient la cohérence : tout user a `roles.client`, tout user avec `roles.driver` a un doc `drivers/{uid}`, tout user avec `roles.restaurant` a un doc `restaurants/{restaurantId}` valide. Test rouge = bloquant.
 
 ### 5.4 Rollback
 
-Procédure documentée : restaurer la collection `users` depuis le backup JSON via script `scripts/rollback-roles-migration.ts`. Testée en local sur l'émulateur Firestore avant exécution prod.
+En dev : suppression de la collection `users` et re-seed via fixtures. Pas de procédure formelle.
 
 ---
 
@@ -238,184 +269,339 @@ Procédure documentée : restaurer la collection `users` depuis le backup JSON v
 
 ```
 [Landing /]
-   │
    │ tap "Créer un compte"
    ▼
 [/auth/role]  — sélecteur 3 cartes (Client / Chauffeur / Restaurateur)
    │
    ├─ Client       → /auth/register?role=client
-   ├─ Chauffeur    → /driver/register (existant, inchangé)
-   └─ Restaurateur → /restaurant/register (NOUVEAU)
+   ├─ Chauffeur    → /driver/register
+   └─ Restaurateur → /restaurant/register
 ```
 
-L'écran `/auth/role` :
+Écran `/auth/role` :
 - Titre : « Je suis… »
-- 3 cartes verticales pleine largeur (mobile-first), même langage visuel que la landing (`glass-card`, accent orange).
-- Chaque carte : icône Material, titre, 1 phrase de promesse, chevron `arrow_forward`.
-- Footer : « Vous avez déjà un compte ? [Se connecter] »
+- 3 cartes verticales (mobile-first), `glass-card`, accent orange.
+- Footer : « Vous avez déjà un compte ? [Se connecter] ».
+- **Accès direct par URL `/restaurant/register`** : autorisé (lien partageable). Le sélecteur n'est pas un péage.
 
 ### 6.2 Inscription Client (`/auth/register?role=client`)
 
-Inchangée fonctionnellement. Modification mineure :
-- Lit le query param `role` (défaut : `client`).
-- Au moment de la création, écrit `roles: { client: {...} }` au lieu de `userType: 'client'` seul (le service met à jour les deux).
+Modifications mineures du composant `RegisterContent.tsx` :
+- Lit `?role=` (défaut : `client`).
+- Crée `users/{uid}` avec `roles: { client: {...} }, activeRole: 'client'`.
 
 ### 6.3 Inscription Chauffeur (`/driver/register`)
 
-Inchangée fonctionnellement. Modification :
-- Lors de la création initiale (étape 0 ou 1), le service écrit `roles.client + roles.driver` au lieu de `userType: 'chauffeur'`.
-- `userType` est dérivé après écriture (règle 4.3).
+Logique métier des étapes inchangée. Modifications :
+- Step0 (sélection driverType) inchangée.
+- Lors de la création initiale (après Step0), le service écrit :
+  - `users/{uid}` avec `roles: { client: {...}, driver: { joinedAt } }, activeRole: 'driver'`.
+  - `drivers/{uid}` avec `status: 'draft'` (puis `'pending'` après step5).
 
-### 6.4 Inscription Restaurateur (`/restaurant/register`) — NOUVEAU
+### 6.4 Inscription Restaurateur (`/restaurant/register`) — refactor de `/food/create`
 
-Wizard 3 étapes, structure inspirée de `useDriverRegistration` :
+Wizard 4 étapes, hook orchestrateur `useRestaurantRegistration`.
 
-**Étape 1 — Compte gérant**
-- Champs : prénom, nom, email, mot de passe (min 8 caractères), téléphone (avec sélecteur pays existant).
-- Validation côté client.
-- Soumission : crée Firebase Auth user, crée doc `users/{uid}` avec `roles: { client: {...} }` (le rôle restaurant sera ajouté à l'étape 3).
-- Conserve l'utilisateur authentifié pour les étapes suivantes.
+**Étape 1 — Compte gérant** (NOUVELLE)
+- Champs : prénom, nom, email, mot de passe (≥ 8 car.), téléphone (sélecteur pays existant).
+- Création atomique :
+  1. `createUserWithEmailAndPassword` (Firebase Auth).
+  2. `setDoc(users/{uid}, { roles: { client }, activeRole: 'restaurant', emailVerified: false, ... })`.
+  3. Si (2) échoue : `deleteUser` côté Auth pour éviter les orphelins (transaction manuelle, pas de Firestore transactions cross-Auth).
+- Mapping erreur Firebase :
+  - `auth/email-already-in-use` → message « Cet email est déjà utilisé. [Connectez-vous] » avec lien `/login`.
+  - autres erreurs réseau → toast retry.
 
-**Étape 2 — Restaurant**
-- Champs : nom, type(s) de cuisine (multi-sélection prédéfinie), adresse via `usePlacesAutocomplete`, fourchette de prix (€, €€, €€€).
-- Photo de couverture **optionnelle** (peut être ajoutée après approbation).
+**Étape 2 — Vérification email** (NOUVELLE — réutilise le système existant)
+- Réutilise le composant et le service de `docs/superpowers/specs/2026-04-10-email-verification-code-design.md`.
+- L'utilisateur reçoit un code, le saisit, on flag `emailVerified: true` dans `users/{uid}`.
+- **Bloquant** : impossible de passer à l'étape 3 sans email vérifié. Bouton « Renvoyer le code » disponible.
 
-**Étape 3 — Disponibilité**
-- Horaires d'ouverture par jour (réutilise le composant existant de `/food/create` page.tsx).
-- Soumission finale :
-  1. Création du doc `restaurants/{restaurantId}` avec `status: 'pending_approval'` et `ownerId: uid`.
-  2. Mise à jour `users/{uid}.roles.restaurant = { status: 'pending_approval', restaurantId, joinedAt: now }`.
-  3. Mise à jour `activeRole: 'restaurant'`.
-  4. Recalcul `userType` (règle 4.3) → `'restaurateur'` après approbation, ou reste `'client'` tant que pending.
-- Redirection vers `/restaurant/pending` (page d'attente).
+**Étape 3 — Restaurant** (extraite de l'actuel `/food/create` step 1 + 2)
+- Champs : nom, description, type(s) de cuisine (multi-sélection `CUISINE_TYPES`), adresse via `usePlacesAutocomplete`, téléphone du restaurant, fourchette de prix.
+- Image de couverture **optionnelle** à ce stade.
+- Préfill possible : si user a un brouillon en `users.draftRestaurant`, restauration auto.
 
-**Reprise après abandon.** L'état du wizard (étape courante + données saisies) est persisté dans `localStorage` sous la clé `restaurant-registration-draft-{uid}`. Si l'utilisateur abandonne entre l'étape 1 (compte créé) et l'étape 3 (restaurant soumis), au prochain login il atterrit sur son dashboard client avec une bannière « Vous avez une inscription restaurateur en cours — Reprendre ». Le draft est purgé au succès de l'étape 3 ou après 30 jours d'inactivité.
+**Étape 4 — Disponibilité** (extraite de l'actuel `/food/create` step 3)
+- Horaires d'ouverture par jour (composant existant, déplacé).
+- Soumission finale (transaction Firestore atomique) :
+  1. Création `restaurants/{restaurantId}` (auto-id) avec `status: 'pending_approval'`, `ownerId: uid`, `stripeConnectStatus: 'not_started'`.
+  2. Update `users/{uid}.roles.restaurant = { restaurantId, joinedAt }`.
+  3. Purge de `users.draftRestaurant`.
+  4. Trigger Cloud Function `notifyAdminNewRestaurant` (badge + email).
+- Redirection vers `/restaurant/pending`.
+
+**Persistance du brouillon (cross-device)**
+- À partir de l'étape 3 (le compte existe), à chaque modification (debounced 1.5s), écriture de `users/{uid}.draftRestaurant = { currentStep, data, updatedAt }`.
+- Au login suivant, si `draftRestaurant` existe et restaurant non encore créé, bannière « Vous avez une inscription restaurateur en cours — Reprendre » sur le dashboard client.
+- Cloud Function planifiée (TTL 30 j) qui purge les `draftRestaurant.updatedAt < now - 30d`.
 
 **Page d'attente `/restaurant/pending`**
-- Message « Votre dossier est en cours de validation ». Délai indicatif. Email de notification à l'approbation (réutiliser le système existant de notification chauffeur).
-- Bouton « Retour à mon espace client » (active le rôle client, route vers `/dashboard`).
+- Message « Votre dossier est en cours de validation ». Statut effectif lu sur `restaurants/{restaurantId}.status`.
+- Email automatique à l'approbation (réutilise le système existant de notif chauffeur, à confirmer présent).
+- Boutons : « Retour à mon espace client » (active client + redirige `/dashboard`), « Modifier mon dossier » si `status === 'rejected'`.
 
-### 6.5 Connexion (`/login`)
+### 6.5 Stripe Connect restaurateur — post-approbation
+
+Une fois `restaurants/{id}.status === 'approved'` :
+
+```
+[/restaurant/dashboard]
+   │ bannière "Configurez vos paiements pour recevoir des commandes"
+   ▼
+[/restaurant/onboarding/payments]
+   │ Stripe Connect Express onboarding
+   ▼
+Cloud Function: stripe webhook account.updated
+   │ met à jour restaurants/{id}.stripeConnectStatus = 'active' + stripeAccountId
+   ▼
+Restaurant devient visible côté client (catalogue /food)
+```
+
+Tant que `stripeConnectStatus !== 'active'` :
+- Le restaurant est **filtré côté requête client** (`status === 'approved' && stripeConnectStatus === 'active'`).
+- L'admin voit le restaurant approuvé mais signalé « En attente Stripe Connect ».
+
+Réutilise au maximum le code existant `functions/src/stripe/stripeConnectPayout.ts` (3 occurrences `userType` à migrer).
+
+### 6.6 Connexion (`/login`)
 
 ```
 [/login] — email + password
-   │
    │ auth réussie
    ▼
-Lire users/{uid}.roles
+Lire users/{uid}
    │
-   ├─ 1 seul rôle (client uniquement) ──→ /dashboard
+   ├─ 1 seul rôle (client) ──→ /dashboard
    │
-   ├─ 2+ rôles, activeRole défini, "remember" ON ──→ dashboard de activeRole
+   ├─ 2+ rôles, lastActiveRole défini ──→ dashboard de lastActiveRole
    │
-   └─ 2+ rôles, sinon ──→ /auth/continue-as
-                              │
-                              ▼
-                          Choix → met à jour activeRole → dashboard correspondant
+   └─ 2+ rôles, lastActiveRole absent ──→ /auth/continue-as
+                                              │
+                                              ▼
+                                           Choix → écrit lastActiveRole
+                                                   + activeRole → dashboard
 ```
 
-**Fallback `activeRole` invalide.** Si `activeRole` pointe vers un rôle absent (suppression) ou non utilisable (statut `rejected` ou `suspended`), le service de routage applique l'ordre suivant : (1) premier rôle pro `approved` trouvé, (2) sinon `client`. `activeRole` est alors corrigé en base et un toast informe l'utilisateur du basculement automatique.
+**Fallback `activeRole` invalide** : pointe vers un rôle absent ou non-utilisable (ex : restaurant `rejected`). Ordre de fallback :
+1. premier rôle pro avec statut `approved` (lecture indirecte sur drivers/{uid} ou restaurants/{id}),
+2. sinon `client`.
+`activeRole` corrigé en base, toast informatif.
 
-### 6.6 Switcher de rôle (header dashboard)
+`/driver/login` → redirect 301 vers `/login` (préserve les bookmarks).
 
-Composant `<RoleSwitcher />` à intégrer dans le header de chaque dashboard.
-- Affiche le rôle actif avec son icône.
-- Au tap : dropdown (web) ou bottom-sheet (mobile) listant les rôles disponibles.
-- Rôles `pending` ou `suspended` affichés en grisé avec badge de statut, non sélectionnables.
-- Sélection : update `activeRole` en Firestore + redirect vers le dashboard correspondant.
+### 6.7 Switcher de rôle (header dashboards)
 
-### 6.7 Devenir pro (depuis dashboard client)
+`<RoleSwitcher />` dans le header des trois dashboards.
+- Affiche le rôle actif (icône + libellé).
+- Tap → dropdown desktop ou bottom-sheet mobile listant les rôles disponibles avec **statut effectif** :
+  - Client : toujours sélectionnable.
+  - Driver : selon `drivers/{uid}.status` — `approved` cliquable, `pending`/`rejected`/`suspended` grisé avec badge.
+  - Restaurant : selon `restaurants/{restaurantId}.status` + `stripeConnectStatus`.
+- Sélection → met à jour `activeRole` + `lastActiveRole` dans `users/{uid}` + redirect dashboard.
 
-Carte `<BecomeProCard />` visible uniquement si `roles.driver === undefined && roles.restaurant === undefined`.
-- Texte : « Vous êtes professionnel ? Devenez chauffeur ou ajoutez votre restaurant. »
-- Tap → `/auth/become-pro` qui propose 2 cartes (chauffeur / restaurateur).
-- Chaque carte → wizard correspondant, **en sautant l'étape compte** (utilisateur déjà authentifié).
+### 6.8 Driver `pending` — accès lecture seule (Q5)
 
-### 6.8 Conflit d'usage : chauffeur en course active
+Un user avec `roles.driver` mais `drivers/{uid}.status === 'pending'` :
+- Peut basculer sur `activeRole = 'driver'` via le switcher.
+- Le dashboard driver s'affiche avec **bannière persistante en haut** : « Votre candidature est en cours d'examen — Vos données sont en lecture seule jusqu'à approbation ».
+- Tous les boutons d'action (accepter une course, modifier le profil pro, etc.) sont désactivés (HTML `disabled` + tooltip).
+- Modes possibles côté store : `viewOnly: boolean` calculé depuis le statut effectif.
 
-Règle UI : si `roles.driver` actif et qu'une course est en cours (à détecter via `rides` collection ou store côté driver), le switcher Client devient grisé avec tooltip « Terminez votre course pour basculer ». Pas de blocage côté restaurateur — un restaurateur peut commander un taxi à tout moment.
+### 6.9 Devenir pro (depuis dashboard client)
+
+`<BecomeProCard />` visible si **au moins un rôle pro est manquant** (corrigé depuis v1) :
+- `roles.driver === undefined && roles.restaurant === undefined` → carte « Devenir chauffeur ou restaurateur ».
+- `roles.driver === undefined && roles.restaurant !== undefined` → carte « Devenir chauffeur ».
+- `roles.driver !== undefined && roles.restaurant === undefined` → carte « Ouvrir un restaurant ».
+
+`/auth/become-pro` propose les rôles pertinents et lance le wizard correspondant **en sautant l'étape compte gérant** (utilisateur déjà authentifié + email déjà vérifié).
+
+### 6.10 Conflit d'usage : chauffeur en course active
+
+Si `activeRole = 'driver'` ET course en cours (lue depuis `rides` collection ou store driver) :
+- Switcher Client grisé, tooltip « Terminez votre course pour basculer ».
+- Re-sélection automatique possible à la fin de la course (toast « Course terminée — vous pouvez basculer »).
+
+Pas de blocage symétrique côté restaurateur (un restaurateur peut commander un taxi à tout moment).
 
 ---
 
 ## 7. Composants & fichiers
 
-### 7.1 Nouveaux fichiers
+### 7.1 Refactor / déplacement
+
+| Source | Destination | Nature |
+|---|---|---|
+| `src/app/food/create/page.tsx` | `src/app/restaurant/register/page.tsx` (wrapper) + `Step3Restaurant.tsx` + `Step4Hours.tsx` | Découpage du composant monolithique en sous-étapes |
+| `src/app/food/create/` (route entière) | redirect `/food/create` → `/restaurant/register` | Préserve les liens existants |
+
+### 7.2 Nouveaux fichiers
 
 | Fichier | Rôle |
 |---|---|
-| `src/app/auth/role/page.tsx` | Sélecteur de rôle plein écran (3 cartes) |
-| `src/app/auth/continue-as/page.tsx` | Choix de l'espace au login multi-rôle |
+| `src/app/auth/role/page.tsx` | Sélecteur de rôle plein écran |
+| `src/app/auth/continue-as/page.tsx` | Choix d'espace au login multi-rôle |
 | `src/app/auth/become-pro/page.tsx` | Choix d'ajout de rôle pro depuis dashboard client |
 | `src/app/restaurant/register/page.tsx` | Wrapper wizard restaurateur |
-| `src/app/restaurant/register/Step1Account.tsx` | Étape compte gérant |
-| `src/app/restaurant/register/Step2Info.tsx` | Étape restaurant |
-| `src/app/restaurant/register/Step3Hours.tsx` | Étape horaires |
+| `src/app/restaurant/register/Step1Account.tsx` | Étape compte gérant (NOUVELLE) |
+| `src/app/restaurant/register/Step2EmailVerification.tsx` | Vérification email (réutilise composant existant) |
+| `src/app/restaurant/register/Step3Restaurant.tsx` | Issue du refactor `/food/create` step 1+2 |
+| `src/app/restaurant/register/Step4Hours.tsx` | Issue du refactor `/food/create` step 3 |
 | `src/app/restaurant/pending/page.tsx` | Page d'attente post-soumission |
-| `src/hooks/useRestaurantRegistration.ts` | Hook orchestrant le wizard restaurateur |
-| `src/services/restaurant.service.ts` | (si absent) création + mise à jour de `restaurants/{id}` |
-| `src/services/roles.service.ts` | Ajout/suppression de rôles, recalcul `userType` |
-| `src/components/role/RoleSwitcher.tsx` | Switcher dans header dashboards |
+| `src/app/restaurant/onboarding/payments/page.tsx` | Stripe Connect Express onboarding |
+| `src/app/restaurant/dashboard/page.tsx` | Dashboard restaurateur (point d'entrée minimal — bannière Stripe Connect, lien menu, etc.) |
+| `src/hooks/useRestaurantRegistration.ts` | Hook orchestrateur du wizard |
+| `src/services/roles.service.ts` | `addRole`, `removeRole`, `getEffectiveRoleStatus`, `setActiveRole` |
+| `src/components/role/RoleSwitcher.tsx` | Switcher header |
 | `src/components/role/BecomeProCard.tsx` | Encart dashboard client |
-| `scripts/migrate-users-to-roles.ts` | Migration one-shot |
-| `scripts/validate-roles-migration.ts` | Validation post-migration |
-| `scripts/rollback-roles-migration.ts` | Rollback depuis backup |
+| `src/components/restaurant/RegistrationDraftBanner.tsx` | Bannière reprise brouillon |
+| `functions/src/admin/notifyAdminNewRestaurant.ts` | Cloud Function : email + badge admin (Q4) |
+| `functions/src/scheduled/purgeRestaurantDrafts.ts` | Cloud Function planifiée TTL 30 j |
+| `scripts/dev-migrate-users-to-roles.ts` | Migration dev (1 fichier — pas de backup/rollback/validation séparés) |
 
-### 7.2 Fichiers modifiés
+### 7.3 Fichiers modifiés (suppression de `userType`)
 
-| Fichier | Modification |
-|---|---|
-| `src/types/user.ts` | Ajout types `RoleClient/Driver/Restaurant`, `UserRoles`, `ActiveRole` ; refonte `UserData` |
-| `src/types/firestore-collections.ts` | Cohérence avec nouveau modèle de rôles |
-| `src/services/auth.service.ts` | `signUpWithEmail` accepte `roleToAdd: 'client' \| 'driver' \| 'restaurant'`, écrit `roles` |
-| `src/hooks/useDriverRegistration.ts` | Écrit `roles.driver` au lieu de `userType: 'chauffeur'` |
-| `src/app/auth/register/RegisterContent.tsx` | Lit query `?role=`, écrit `roles.client` |
-| `src/app/page.tsx` | Suppression du lien « Espace Chauffeur » bas de page |
-| `src/app/login/page.tsx` (ou existant) | Routage post-auth selon `roles` |
-| `src/app/driver/login/page.tsx` | Devient redirect vers `/login` |
-| `src/app/dashboard/page.tsx` | Intègre `<RoleSwitcher />` + `<BecomeProCard />` |
-| `firestore.rules` | Vérifications via `roles.X.status` + fallback `userType` |
-| `functions/src/*` | Cloud Functions qui lisent `userType` : ajouter lecture `roles` en parallèle |
+Inventaire exhaustif réalisé : **115 occurrences dans 29 fichiers**. Liste complète :
 
-### 7.3 Inventaire à compléter avant l'implémentation
-
-> **Action de revue P0** : avant le plan d'implémentation, faire un `grep -rn "userType" src/` exhaustif pour lister **tous** les usages et décider, fichier par fichier, s'il faut migrer vers `roles` ou laisser l'usage legacy. Cet inventaire alimente directement le découpage en tâches.
+| Fichier | Occurrences | Action |
+|---|---|---|
+| `src/services/auth.service.ts` | 16 | Refonte `signUpWithEmail` (paramètre `roleToAdd`), suppression toutes les écritures `userType` |
+| `tests/firestore.rules.test.ts` | 13 | Récriture des fixtures vers `roles` |
+| `middleware.ts` | 11 | Routage utilise `roles` |
+| `src/services/pushNotifications.service.ts` | 9 | Routage des notifs par `roles` |
+| `src/app/dashboard/page.tsx` | 8 | Affiche switcher + BecomeProCard |
+| `src/app/admin/users/page.tsx` | 6 | Filtres admin par `roles` |
+| `src/hooks/usePushNotifications.ts` | 5 | Adaptation aux roles |
+| `src/components/notifications/NotificationHandler.tsx` | 5 | Adaptation aux roles |
+| `src/components/ChatModal.tsx` | 4 | Adaptation aux roles |
+| `src/types/firestore-collections.ts` | 4 | Suppression du champ `userType` |
+| `src/app/auth/register/RegisterContent.tsx` | 4 | Lit `?role=`, écrit `roles.client` |
+| `firestore.rules` | 5 | Réécriture (cf. §8) |
+| `functions/src/stripe/stripeConnectPayout.ts` | 3 | Adapte aux roles |
+| `src/context/AuthContext.tsx` | 2 | Expose `roles` au lieu de `userType` |
+| `src/hooks/useDriverRegistration.ts` | 2 | Écrit `roles.driver` |
+| `src/__tests__/security/security.test.ts` | 2 | Tests roles |
+| `src/__tests__/integration/phone-registration.test.tsx` | 2 | Tests roles |
+| `src/types/user.ts` | 1 | Suppression `UserType`, ajout types `Role*` |
+| `src/utils/test-helpers.ts` | 1 | Helpers roles |
+| `functions/src/index.ts` | 1 | Adaptation |
+| `functions/src/admin/adminManageUser.ts` | 1 | Adaptation |
+| `functions/src/admin/adminManageRestaurant.ts` | 1 | Adaptation (déclenchement notification — Q4) |
+| `functions/src/validators/schemas.ts` | 1 | Schema roles |
+| `src/app/notifications/page.tsx` | 1 | Adaptation |
+| `src/app/auth/register/RegisterPhoneContent.tsx` | 1 | Adaptation |
+| `src/__tests__/e2e/e2e-flow.test.tsx` | 1 | Adaptation |
+| `scripts/restore-collections.ts` | 1 | Adaptation |
+| `.planning/codebase/CONVENTIONS.md` | 2 | Doc à jour |
+| `.planning/codebase/ARCHITECTURE.md` | 2 | Doc à jour |
+| `src/app/page.tsx` | 0 (mais modifié) | Retrait du lien « Espace Chauffeur » |
+| `src/app/driver/login/page.tsx` | 0 (modifié) | Devient redirect vers `/login` |
+| `src/app/login/page.tsx` (existant ou nouveau) | — | Routage post-auth selon `roles` |
 
 ---
 
 ## 8. Règles Firestore
 
-Stratégie : **double check** pendant la phase de transition.
+Stratégie : **règles strictes, immutabilité côté serveur, lecture indirecte du statut**.
 
-```
+```javascript
+function userDoc() {
+  return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+}
+
 function hasRole(roleName) {
-  return get(/databases/$(database)/documents/users/$(request.auth.uid))
-           .data.roles[roleName] != null;
+  return userDoc().roles[roleName] != null;
 }
 
 function isApprovedDriver() {
-  let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-  return user.roles.driver != null && user.roles.driver.status == 'approved';
+  return hasRole('driver')
+      && get(/databases/$(database)/documents/drivers/$(request.auth.uid)).data.status == 'approved';
 }
 
 function isApprovedRestaurateur(restaurantId) {
-  let user = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-  return user.roles.restaurant != null
-      && user.roles.restaurant.status == 'approved'
-      && user.roles.restaurant.restaurantId == restaurantId;
+  return hasRole('restaurant')
+      && userDoc().roles.restaurant.restaurantId == restaurantId
+      && get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.status == 'approved'
+      && get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.stripeConnectStatus == 'active';
 }
 
-// Restaurants : lecture publique, écriture par owner approuvé
+// USERS — immutabilité des rôles côté user (anti self-promotion)
+match /users/{uid} {
+  allow read: if isOwner(uid) || isAdmin();
+
+  // Création initiale : roles autorisé uniquement si :
+  //   - roles.client présent et enabled=true
+  //   - roles.driver absent OU roles.restaurant absent (ajout via wizard contrôlé)
+  allow create: if isOwner(uid)
+                && request.resource.data.roles.client.enabled == true;
+
+  // Update : un user ne peut pas s'ajouter/modifier un rôle pro lui-même au runtime.
+  // Les ajouts de rôle pro passent par les wizards qui :
+  //   - créent le doc drivers/{uid} OU restaurants/{id} en premier
+  //   - puis ajoutent roles.driver ou roles.restaurant en référence
+  // La règle vérifie que la collection métier correspondante existe et appartient à l'user.
+  allow update: if isOwner(uid)
+                && (
+                  // Pas de modif des rôles
+                  request.resource.data.roles == resource.data.roles
+                  // OU ajout de roles.driver, mais drivers/{uid} doit exister avec ownerId=uid
+                  || (
+                    request.resource.data.roles.driver != null
+                    && resource.data.roles.driver == null
+                    && exists(/databases/$(database)/documents/drivers/$(uid))
+                  )
+                  // OU ajout de roles.restaurant avec restaurantId valide et propriété confirmée
+                  || (
+                    request.resource.data.roles.restaurant != null
+                    && resource.data.roles.restaurant == null
+                    && exists(/databases/$(database)/documents/restaurants/$(request.resource.data.roles.restaurant.restaurantId))
+                    && get(/databases/$(database)/documents/restaurants/$(request.resource.data.roles.restaurant.restaurantId)).data.ownerId == uid
+                  )
+                )
+                || isAdmin();
+
+  allow delete: if isAdmin();
+}
+
+// RESTAURANTS — un user crée son resto (1 seul), admin gère statut
 match /restaurants/{restaurantId} {
-  allow read: if true;
+  allow read: if true;                        // catalogue public
   allow create: if request.auth != null
                 && request.resource.data.ownerId == request.auth.uid
-                && request.resource.data.status == 'pending_approval';
-  allow update: if isApprovedRestaurateur(restaurantId)
-                || isAdmin();
+                && request.resource.data.status == 'pending_approval'
+                && request.resource.data.stripeConnectStatus == 'not_started';
+  // Update interdit au owner sur status et stripeConnectStatus (admin ou Cloud Function uniquement)
+  allow update: if (
+                  resource.data.ownerId == request.auth.uid
+                  && request.resource.data.status == resource.data.status
+                  && request.resource.data.stripeConnectStatus == resource.data.stripeConnectStatus
+                ) || isAdmin();
+  allow delete: if isAdmin();
+}
+
+// DRIVERS — analogue
+match /drivers/{driverUid} {
+  allow read: if isOwner(driverUid) || isAdmin();
+  allow create: if isOwner(driverUid)
+                && request.resource.data.status == 'draft';
+  allow update: if (
+                  isOwner(driverUid)
+                  // status modifiable par owner uniquement: draft → pending (soumission)
+                  && (
+                    request.resource.data.status == resource.data.status
+                    || (resource.data.status == 'draft' && request.resource.data.status == 'pending')
+                  )
+                ) || isAdmin();
+  allow delete: if isAdmin();
 }
 ```
 
-> **Action de revue P0** : faire valider ces règles par revue de sécurité dédiée (cf. section 11) avant déploiement.
+**Tests Firestore obligatoires** (cf. §10) :
+- Un user ne peut pas écrire `users.roles.driver` sans avoir un doc `drivers/{uid}` préalable.
+- Un user ne peut pas écrire `users.roles.restaurant.restaurantId = "X"` si `restaurants/X.ownerId !== uid`.
+- Un owner ne peut pas modifier `restaurants/{id}.status` (seul admin/Cloud Function).
+- Un owner ne peut pas auto-promouvoir `drivers/{uid}.status` à `'approved'`.
 
 ---
 
@@ -423,14 +609,18 @@ match /restaurants/{restaurantId} {
 
 | # | Cas | Règle |
 |---|---|---|
-| C1 | Inscription chauffeur ou restaurateur sur un email déjà client | Détection au step compte → message « Cet email est déjà utilisé. Connectez-vous puis ajoutez le rôle pro depuis votre espace. » avec lien vers `/login`. |
-| C2 | User sans `roles` (compte non migré ou bug) | Service `roles.service.ts` détecte l'absence et crée `roles.client` à la volée au premier accès. Logué pour audit. |
-| C3 | Suspension du rôle pro | Switcher affiche le rôle en grisé avec badge « Suspendu » + raison. Dashboard pro inaccessible, dashboard client toujours accessible. |
-| C4 | Rejet de candidature chauffeur ou restaurateur | `roles.X.status = 'rejected'` + `rejectionReason`. UI propose « Soumettre un nouveau dossier » qui passe le statut à `pending` et relance le wizard. |
-| C5 | Chauffeur en course active veut basculer client | Switcher Client grisé avec tooltip ; déblocage automatique à la fin de la course. |
-| C6 | Suppression du rôle pro (« quitter ») | `roles.driver` supprimé du document, historique préservé. Confirmation modale. Re-création possible plus tard. |
-| C7 | Migration : doc `users` sans `userType` | Skip avec warning logué, sera traité manuellement. |
-| C8 | Cloud Function legacy lit `userType` après migration | `userType` est toujours présent (dérivé), donc compatible. |
+| C1 | Inscription chauffeur ou restaurateur sur un email déjà client | Erreur `auth/email-already-in-use` au step 1 → message « Cet email est déjà utilisé. [Connectez-vous] » → après login, encart « Devenir pro » disponible. |
+| C2 | User sans `roles` (incohérence post-migration ou bug) | `roles.service.ts` détecte au premier accès et écrit `roles.client` à la volée + log audit. |
+| C3 | Suspension d'un rôle pro (admin) | Status sur la collection métier passe à `'suspended'`. Switcher affiche le rôle grisé avec badge. Dashboard pro inaccessible, client toujours OK. |
+| C4 | Rejet de candidature | `restaurants/{id}.status = 'rejected'` + `rejectionReason`. Page `/restaurant/pending` propose « Modifier mon dossier » qui rouvre le wizard à l'étape 3 (pré-rempli) puis repasse en `pending_approval`. |
+| C5 | Chauffeur en course active veut basculer client | Switcher Client grisé + tooltip ; déblocage automatique fin de course. |
+| C6 | Suppression d'un rôle pro par l'utilisateur | `users.roles.driver` (ou `restaurant`) supprimé du doc + collection métier passe en `archived` (admin gère). Confirmation modale obligatoire. |
+| C7 | Step 1 wizard : Firebase Auth réussit, Firestore échoue | `deleteUser` côté Auth + message d'erreur retry. Pas d'orphelin. |
+| C8 | Brouillon `draftRestaurant` > 30 j | Cloud Function planifiée le purge. Au login suivant, plus de bannière de reprise. |
+| C9 | Driver `pending` ouvre dashboard driver | Affichage en lecture seule + bannière candidature en cours (Q5b). |
+| C10 | Restaurant approuvé sans Stripe Connect | Filtré côté catalogue client (`stripeConnectStatus !== 'active'`). Banner persistant côté dashboard restaurateur. |
+| C11 | User déjà restaurateur tente de créer un 2ème restaurant | Wizard step 3 vérifie `getRestaurantByOwner`. Si déjà un restaurant → blocage avec message « Un seul restaurant par compte ». Règle Firestore renforce (`allow create` if no existing). |
+| C12 | Sélecteur de rôle accédé alors que user déjà connecté | Détecté dans `useEffect` → redirect vers `lastActiveRole` dashboard. |
 
 ---
 
@@ -438,84 +628,96 @@ match /restaurants/{restaurantId} {
 
 ### 10.1 Tests unitaires (Jest)
 
-- `roles.service.test.ts` : addRole, removeRole, deriveUserType, syncUserType.
-- `useRestaurantRegistration.test.ts` : transitions d'étapes, validation, soumission, gestion d'erreurs.
-- Logique de routage post-login (pure function).
+- `roles.service.test.ts` : `addRole`, `removeRole`, `getEffectiveRoleStatus`, `setActiveRole`, fallback `activeRole` invalide.
+- `useRestaurantRegistration.test.ts` : transitions, validation par étape, persistance brouillon Firestore (mock), gestion erreur step 1 (Auth/Firestore).
+- Logique de routage post-login (pure function avec mocks Firestore).
 
-### 10.2 Tests d'intégration Firestore (jest.firestore)
+### 10.2 Tests d'intégration Firestore (`jest --config jest.firestore.config.js`)
 
-- Création compte client → `roles.client` présent, `userType = 'client'`.
-- Création compte chauffeur → `roles.client + roles.driver`, `userType = 'chauffeur'` après approbation.
-- Création compte restaurateur → `roles.client + roles.restaurant`, `userType` reste `'client'` tant que pending.
-- Règles Firestore : un user `pending` ne peut pas écrire dans `restaurants/{id}` ; un user `approved` peut.
+- Création client → doc avec `roles.client`, pas de `userType`.
+- Création driver → user + drivers/{uid} en `draft`.
+- Création restaurant → user + restaurants/{id} en `pending_approval` + `stripeConnectStatus: 'not_started'`.
+- Lecture indirecte du statut effectif (4 cas : approved driver, pending driver, approved resto Stripe ON, approved resto Stripe OFF).
+- **Sécurité** :
+  - User ne peut pas écrire `users.roles.driver` sans `drivers/{uid}` préalable → `permission-denied`.
+  - User ne peut pas écrire un `restaurantId` qu'il ne possède pas → `permission-denied`.
+  - User ne peut pas modifier `restaurants/{id}.status` → `permission-denied`.
+  - User ne peut pas auto-promouvoir `drivers/{uid}.status` à `approved` → `permission-denied`.
+- Brouillon `draftRestaurant` : écriture, lecture cross-session, purge.
 
 ### 10.3 Tests E2E (Playwright)
 
-- Parcours complet : landing → carte Restaurateur → wizard 3 étapes → page pending.
-- Login multi-rôle : compte avec `client + restaurant approved` → écran `continue-as` → switch → dashboard restaurateur.
-- Devenir pro : compte client existant → carte « Devenir pro » → wizard chauffeur sans étape compte.
+- **E2E-1** Parcours restaurateur complet : landing → /auth/role → carte Restaurateur → step 1 → email verif → step 3 → step 4 → /restaurant/pending. Approbation admin (via Cloud Function ou seed). Login → /restaurant/dashboard. Onboarding Stripe (mocké) → restaurant visible côté catalogue client.
+- **E2E-2** Login multi-rôle : compte avec `client + restaurant approved + Stripe active` → /auth/continue-as → choix → dashboard correspondant. Bascule via switcher.
+- **E2E-3** Devenir pro : login client → dashboard → carte « Ouvrir un restaurant » → wizard sans étape compte → submit → /restaurant/pending.
+- **E2E-4** Driver pending : compte chauffeur en `pending` → bascule sur dashboard driver → bannière + actions disabled.
+- **E2E-5** Reprise brouillon cross-device : step 1 + step 3 partiel sur navigateur A → login navigateur B → bannière reprise → finalisation step 4.
+- **E2E-6** Notification admin : soumission restaurant → dashboard admin badge incrémenté + email reçu (Mailtrap ou stub).
 
-### 10.4 Tests de migration
+### 10.4 Tests migration
 
-- Script `migrate-users-to-roles.test.ts` : 4 cas (client pur, chauffeur, restaurateur, déjà migré) sur émulateur.
-- Idempotence : ré-exécution ne modifie rien.
-- Rollback : backup → migration → rollback → état identique au backup.
+- `dev-migrate-users-to-roles.test.ts` sur émulateur : 4 cas (client, chauffeur approved, restaurateur approved, déjà migré). Vérifier idempotence et absence de `userType` post-migration.
 
 ---
 
 ## 11. Plan de revue (review gates)
 
-L'utilisateur a demandé explicitement « des revues que tu feras pour être sûr que tout est complet ». Le chantier est découpé en **5 phases avec une revue obligatoire à la fin de chacune**. Aucune phase ne démarre tant que la précédente n'a pas passé sa revue.
+5 phases, 5 revues obligatoires.
 
-### Revue R1 — Modèle de données & migration (fin Phase 1)
+### Revue R1 — Modèle de données & migration dev (fin Phase 1)
 
 **Critères :**
-- [ ] Types `UserRoles`, `RoleDriver`, `RoleRestaurant` revus, pas d'incohérence avec `firestore-collections.ts`.
-- [ ] Script de migration exécuté en dry-run sur un export prod, rapport sans anomalie.
-- [ ] Backup vérifiable (taille, lisibilité du JSON).
-- [ ] Plan de rollback testé sur émulateur.
+- [ ] Types `UserData`, `UserRoles`, `Role*` revus, cohérents avec `firestore-collections.ts`.
+- [ ] **Inventaire `userType` validé** : 0 occurrence restante dans `src/`, `functions/src/`, `firestore.rules` (vérification `grep` automatisée dans CI).
+- [ ] Script `dev-migrate-users-to-roles.ts` exécuté sur émulateurs avec données fixtures, exit code 0.
+- [ ] Tests d'intégration Firestore verts post-migration.
+- [ ] Doc `users` orphelins, drivers orphelins, restaurants orphelins → tous loggés (warning) mais pas bloquants.
 
 **Livrable :** rapport `R1-data-model-review.md`.
 
 ### Revue R2 — Sécurité Firestore (fin Phase 2)
 
 **Critères :**
-- [ ] Toutes les règles Firestore relues par section.
-- [ ] Tests négatifs : un user non-restaurateur ne peut pas écrire dans `restaurants/{id}` ; un user `pending` non plus.
-- [ ] Cloud Functions inventoriées : lesquelles lisent `userType`, lesquelles doivent migrer.
-- [ ] Aucune règle ne dépend exclusivement du legacy `userType` pour autoriser une écriture sensible.
+- [ ] `firestore.rules` réécrites, relues section par section.
+- [ ] **Tests de sécurité (10.2) tous verts**, dont les 4 tests négatifs anti self-promotion.
+- [ ] Cloud Functions inventoriées et migrées (lecture des `roles` + collections métier au lieu de `userType`).
+- [ ] Aucune règle ne dépend du legacy `userType`.
 
-**Livrable :** rapport `R2-firestore-security-review.md` + tests passants.
+**Livrable :** rapport `R2-firestore-security-review.md` + suite tests passants.
 
-### Revue R3 — UX rôles & flux d'inscription (fin Phase 3)
-
-**Critères :**
-- [ ] Capture d'écran de chaque écran (sélecteur de rôle, 3 étapes restaurateur, page pending, continue-as, switcher).
-- [ ] Vérif manuelle : on ne peut pas finir avec le mauvais rôle, peu importe le chemin.
-- [ ] Accessibilité : labels ARIA présents, navigation clavier fonctionnelle.
-- [ ] Mobile-first : aucun débordement à 360px de large.
-- [ ] Chargements et états d'erreur testés (réseau coupé, email déjà pris, mot de passe trop court).
-
-**Livrable :** rapport `R3-ux-flows-review.md` + captures.
-
-### Revue R4 — Intégration cross-rôle (fin Phase 4)
+### Revue R3 — UX flows inscription (fin Phase 3)
 
 **Critères :**
-- [ ] User multi-rôles (client + restaurant approved) testé bout en bout.
-- [ ] Switcher fonctionne, mémorise le choix, gère les rôles suspendus/pending.
-- [ ] Encart « Devenir pro » apparaît/disparaît selon les rôles présents.
-- [ ] Conflit chauffeur en course → switcher Client grisé.
-- [ ] Aucune régression sur les flux existants (login client, wizard chauffeur).
+- [ ] Captures de chaque écran : `/auth/role`, 4 étapes wizard restaurateur, `/restaurant/pending`, `/auth/continue-as`, switcher, `<BecomeProCard />`, bannière reprise brouillon.
+- [ ] Vérif manuelle : impossible de finir avec le mauvais rôle, peu importe le chemin (URL directe, navigation arrière, refresh).
+- [ ] Reprise brouillon cross-device validée manuellement.
+- [ ] Accessibilité : labels ARIA, navigation clavier, contraste.
+- [ ] Mobile-first 360px : pas de débordement.
+- [ ] Erreurs : email déjà pris, mot de passe faible, réseau coupé, code email invalide → tous affichés correctement.
+
+**Livrable :** rapport `R3-ux-flows-review.md` + captures + vidéo screencast cross-device.
+
+### Revue R4 — Intégration cross-rôle + Stripe Connect (fin Phase 4)
+
+**Critères :**
+- [ ] User multi-rôle (client + restaurant approved + Stripe active) testé bout-en-bout.
+- [ ] Switcher : mémorise via `lastActiveRole`, gère pending/suspended/rejected, conflit course active OK.
+- [ ] `<BecomeProCard />` apparaît/disparaît correctement (3 variantes selon rôles présents).
+- [ ] **Stripe Connect Express** : onboarding → webhook → `stripeConnectStatus = 'active'` → restaurant visible catalogue client.
+- [ ] Driver pending : dashboard accessible en lecture seule, bannière, actions désactivées.
+- [ ] Notification admin : badge incrémenté + email reçu (Mailtrap).
+- [ ] **Aucune régression** sur flux existants (login client, wizard chauffeur 1-5, paiement client).
 
 **Livrable :** rapport `R4-cross-role-integration-review.md`.
 
 ### Revue R5 — Acceptation finale (fin Phase 5)
 
 **Critères :**
-- [ ] Les 8 critères d'acceptation de la section 12 cochés avec preuves.
-- [ ] Tests E2E verts sur CI.
-- [ ] Migration prod jouée sur staging, rapport de validation propre.
-- [ ] Revue de code (`gsd:review` ou `code-review`) sans bloquant.
+- [ ] Les **9 critères d'acceptation** (§12) cochés avec preuves.
+- [ ] E2E-1 à E2E-6 verts en CI.
+- [ ] Code review (skill `superpowers:requesting-code-review` ou `code-review`) sans bloquant.
+- [ ] Lint / build / tests verts.
+- [ ] `grep -rn "userType"` retourne 0 dans `src/` + `functions/src/` + `firestore.rules` + tests (sauf docs `.planning/`).
 
 **Livrable :** rapport `R5-acceptance-review.md` + go/no-go pour merge.
 
@@ -523,16 +725,15 @@ L'utilisateur a demandé explicitement « des revues que tu feras pour être sû
 
 ## 12. Critères d'acceptation
 
-Chaque critère doit être vérifiable et accompagné d'une preuve (test, capture, log).
-
-1. **AC1** — Depuis la landing, taper « Créer un compte » ouvre `/auth/role` avec 3 cartes ; aucune carte n'est pré-sélectionnée par défaut.
-2. **AC2** — Un nouveau restaurateur peut compléter le wizard 3 étapes en moins de 3 minutes (chrono manuel) et arrive sur la page `/restaurant/pending`.
-3. **AC3** — Après approbation admin, le restaurateur se connecte et arrive directement sur le dashboard restaurateur sans repasser par le sélecteur de rôle.
-4. **AC4** — Un user existant qui était chauffeur avant migration conserve son statut `approved` post-migration, et son flux de connexion l'amène toujours au dashboard chauffeur.
-5. **AC5** — Un user qui a `client + restaurant` peut basculer dans son header sans relogin et sans perte d'état.
-6. **AC6** — Un user client peut taper « Devenir restaurateur » depuis son dashboard et compléter le wizard sans recréer de compte ; un seul `users/{uid}` existe à la fin.
-7. **AC7** — Tests Firestore négatifs : un user `pending_approval` ne peut pas modifier un document `restaurants/{id}` (échoue avec `permission-denied`).
-8. **AC8** — Suppression du lien « Espace Chauffeur » de la landing confirmée par capture d'écran.
+1. **AC1** — Depuis la landing, taper « Créer un compte » ouvre `/auth/role` avec 3 cartes ; aucune pré-sélection.
+2. **AC2** — Wizard restaurateur 4 étapes : un nouveau user complète le happy path en E2E sans erreur, atterrit sur `/restaurant/pending`. (Remplace l'AC2 v1 « < 3 min chrono manuel ».)
+3. **AC3** — Après approbation admin **et** Stripe Connect actif, le restaurateur connecté arrive directement sur `/restaurant/dashboard`. Le restaurant apparaît dans `/food` côté client.
+4. **AC4** — Compte de test pré-existant migré (driver `approved`) conserve son accès au dashboard driver post-migration. `grep "userType"` post-migration : 0 dans `src/`.
+5. **AC5** — User `client + restaurant approved` bascule via switcher en < 1s, sans relogin, sans perte d'état.
+6. **AC6** — User client tape « Ouvrir un restaurant » → wizard sans étape compte → un seul `users/{uid}` existe à la fin, avec `roles.restaurant` ajouté.
+7. **AC7** — Tests Firestore négatifs : 4 cas anti self-promotion tous `permission-denied` (cf. §8).
+8. **AC8** — Lien « Espace Chauffeur » retiré de la landing (capture).
+9. **AC9** — Driver `pending` accède dashboard driver en lecture seule avec bannière. Tous les boutons d'action `disabled` (capture + test E2E-4).
 
 ---
 
@@ -540,33 +741,37 @@ Chaque critère doit être vérifiable et accompagné d'une preuve (test, captur
 
 | Risque | Probabilité | Impact | Mitigation |
 |---|---|---|---|
-| Migration corrompt des comptes prod | Faible | Critique | Dry-run obligatoire, backup automatique, validation post-migration, rollback testé |
-| Cloud Function legacy plante après refonte `userType` | Moyenne | Élevé | `userType` conservé et synchronisé ; tests sur émulateur Functions avant déploiement |
-| Régression UX sur le wizard chauffeur | Moyenne | Moyen | Tests E2E existants exécutés à chaque PR ; pas de modification de la logique métier des étapes 1–5 |
-| Conflit d'email pour passer client → pro | Faible | Faible | Cas C1 traité explicitement, message clair vers `/login` |
-| Charge Firestore : `get(users/...)` dans chaque règle | Moyenne | Moyen | Mesure du nombre de reads avant/après en staging ; cache éventuel via custom claims si > 20% d'augmentation |
-| Le switcher en course fait basculer accidentellement | Faible | Élevé | UI grisée + tooltip + double-confirm si bascule en course (cas C5) |
+| Inventaire `userType` (115 occurrences) incomplet → fuite legacy | Moyenne | Élevé | CI check `grep "userType"` bloquant à la fin de P1 |
+| Cloud Functions oubliées dans la migration → bug runtime | Moyenne | Élevé | Tests sur émulateur Functions avant fin P2, parcourir `functions/src/` exhaustivement |
+| Charge Firestore : `get(users/...) + get(drivers/...) + get(restaurants/...)` dans règles | Moyenne | Moyen | Mesure reads/op en émulateur ; envisager custom claims si > seuil acceptable (mitigation P5 si besoin) |
+| Refactor `/food/create` casse l'admin existant `/admin/restaurants` | Moyenne | Élevé | Tests régression admin en R2 + R4 |
+| Stripe Connect mocking E2E complexe | Moyenne | Moyen | Utiliser `stripe-mock` ou stub côté webhook ; documenter procédure dans tests |
+| Brouillon `draftRestaurant` corrompt user doc (mauvaise écriture) | Faible | Moyen | Tests unitaires hook + debounce d'écriture + retry idempotent |
+| Email transactionnel admin échoue silencieusement | Faible | Moyen | Cloud Function loggue échec + retry policy ; alerte si > N échecs |
+| Conflit course driver — switcher mal grisé | Faible | Élevé | Test E2E dédié + double-confirm en cas de bascule en course |
 
 ---
 
 ## 14. Hors-scope (à plus tard)
 
-- Suppression effective du champ `userType` (chantier après stabilisation).
-- Custom claims Firebase Auth pour les rôles (optimisation perf).
-- Mode « les_deux » pour restaurateur (un user qui possède plusieurs restaurants distincts).
-- Migration des `restaurants` existants pour aligner `status` sur les nouveaux libellés si écart.
-- Onboarding mobile natif (Capacitor) — l'écran web responsif suffit.
+- **Multi-restaurants** par compte (1 restaurant par user dans cette V1, règle préservée).
+- **Refonte du dashboard restaurateur** au-delà de la page Stripe Connect (gestion menu détaillé, gestion commandes en temps réel — chantier suivant).
+- **Custom claims Firebase Auth** pour les rôles (optimisation perf, à mesurer en P5 si besoin).
+- **Onboarding mobile natif Capacitor** spécifique.
+- **Suppression de compte / RGPD**.
+- **SSO / OAuth**.
+- **i18n** au-delà du français (tout est en FR pour cette V1).
 
 ---
 
 ## 15. Phases d'implémentation (vue d'ensemble)
 
-| Phase | Contenu | Revue |
+| Phase | Contenu principal | Revue |
 |---|---|---|
-| **P1** | Types + service `roles.service.ts` + script de migration + dry-run + backup | R1 |
-| **P2** | Règles Firestore + adaptation auth.service + Cloud Functions + tests sécurité | R2 |
-| **P3** | Sélecteur `/auth/role` + wizard restaurateur + page pending + RegisterContent adaptation | R3 |
-| **P4** | Login unifié + écran continue-as + switcher + encart « devenir pro » | R4 |
-| **P5** | E2E + migration staging + revue de code + critères d'acceptation | R5 |
+| **P1** | Types `roles` + service `roles.service.ts` + script migration dev + **suppression `userType`** dans les 29 fichiers + adaptation `auth.service.ts` + tests intégration | R1 |
+| **P2** | Réécriture `firestore.rules` + tests sécurité (anti self-promotion) + adaptation Cloud Functions + adaptation `middleware.ts` | R2 |
+| **P3** | Sélecteur `/auth/role` + refactor `/food/create` → wizard `/restaurant/register` 4 étapes + persistance brouillon Firestore + page `/restaurant/pending` + retrait lien landing | R3 |
+| **P4** | Login unifié + `/auth/continue-as` + `<RoleSwitcher />` + `<BecomeProCard />` + driver pending lecture seule + Stripe Connect restaurateur + Cloud Function notification admin | R4 |
+| **P5** | E2E-1 à E2E-6 + tests régression + code review + critères d'acceptation + nettoyage final | R5 |
 
-Le **plan d'implémentation détaillé** (tâches atomiques, ordre, dépendances, commandes de vérification, points de commit) sera produit par la skill `superpowers:writing-plans` dans un document séparé après approbation de ce spec.
+Le **plan d'implémentation détaillé** (tâches atomiques, dépendances, commandes de vérification, points de commit, gates de revue) sera produit par `superpowers:writing-plans` après approbation de ce spec v2.
