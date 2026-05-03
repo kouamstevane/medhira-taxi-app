@@ -2,12 +2,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { auth, db, getFirebaseStorage } from '@/config/firebase';
+import { auth, db, functions, getFirebaseStorage } from '@/config/firebase';
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
-import { onAuthStateChanged, User } from "firebase/auth";
+import { signOut } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
@@ -45,6 +46,10 @@ export default function ProfilPage() {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<Array<Record<string, unknown>>>([]);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
   const { currentUser } = useAuth();
 
@@ -214,6 +219,41 @@ export default function ProfilPage() {
     }
   };
 
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await signOut(auth);
+      router.push('/login');
+    } catch (err) {
+      console.error('Erreur de déconnexion:', err);
+      showError("Impossible de vous déconnecter. Réessayez.");
+      setLoggingOut(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'SUPPRIMER') return;
+    setDeleting(true);
+    try {
+      const requestAccountDeletion = httpsCallable(functions, 'requestAccountDeletion');
+      await requestAccountDeletion({ confirm: 'DELETE_MY_ACCOUNT' });
+      try { await signOut(auth); } catch {}
+      showSuccess('Votre compte a été supprimé.');
+      router.push('/login');
+    } catch (err: unknown) {
+      const error = err as { code?: string; message?: string };
+      console.error('Erreur suppression compte:', error);
+      let msg = "Impossible de supprimer le compte. Réessayez plus tard.";
+      if (error?.message?.includes('courses') || error?.message?.includes('commandes')) {
+        msg = "Vous avez des courses ou commandes en cours. Annulez-les ou attendez leur fin avant de supprimer le compte.";
+      } else if (error?.code === 'functions/resource-exhausted') {
+        msg = "Trop de tentatives. Réessayez dans une heure.";
+      }
+      showError(msg);
+      setDeleting(false);
+    }
+  };
 
   const countries = ['Canada', 'France', 'Belgique', 'Cameroun', 'Autre'];
 
@@ -450,6 +490,112 @@ export default function ProfilPage() {
             <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
           </div>
         </div>
+
+        {/* Account Settings */}
+        <div className="mt-8">
+          <h2 className="text-xl font-bold text-white mb-4">Paramètres du compte</h2>
+          <GlassCard className="p-2 divide-y divide-white/[0.06]">
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="w-full flex items-center gap-3 p-4 text-left hover:bg-white/5 transition rounded-xl disabled:opacity-50"
+            >
+              <div className="size-10 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0">
+                <MaterialIcon name="logout" className="text-slate-300" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-medium text-sm">Se déconnecter</p>
+                <p className="text-slate-400 text-xs mt-0.5">Quitter votre session sur cet appareil</p>
+              </div>
+              {loggingOut ? (
+                <MaterialIcon name="refresh" className="animate-spin text-slate-400" size="sm" />
+              ) : (
+                <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
+              )}
+            </button>
+
+            <button
+              onClick={() => { setDeleteConfirmText(''); setShowDeleteModal(true); }}
+              className="w-full flex items-center gap-3 p-4 text-left hover:bg-destructive/5 transition rounded-xl"
+            >
+              <div className="size-10 rounded-full bg-destructive/15 flex items-center justify-center flex-shrink-0">
+                <MaterialIcon name="delete_forever" className="text-destructive" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-destructive font-medium text-sm">Supprimer mon compte</p>
+                <p className="text-slate-400 text-xs mt-0.5">Action irréversible — toutes vos données seront effacées</p>
+              </div>
+              <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
+            </button>
+          </GlassCard>
+        </div>
+
+        {/* Delete Account Confirmation Modal */}
+        {showDeleteModal && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => !deleting && setShowDeleteModal(false)}
+          >
+            <div
+              className="w-full max-w-md bg-[#1A1A1A] border border-white/10 rounded-3xl p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-col items-center text-center mb-4">
+                <div className="size-14 rounded-full bg-destructive/15 flex items-center justify-center mb-3">
+                  <MaterialIcon name="warning" className="text-destructive text-[32px]" />
+                </div>
+                <h3 className="text-xl font-bold text-white">Supprimer votre compte ?</h3>
+                <p className="text-slate-400 text-sm mt-2">
+                  Cette action est <strong className="text-destructive">irréversible</strong>. Vos données personnelles seront supprimées et votre historique de courses sera anonymisé conformément au RGPD.
+                </p>
+              </div>
+
+              <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-4 text-xs text-slate-300 space-y-1">
+                <p>• Profil, photos et documents : supprimés</p>
+                <p>• Historique financier : anonymisé (obligation légale)</p>
+                <p>• Vous serez immédiatement déconnecté</p>
+              </div>
+
+              <label className="block text-sm text-slate-300 mb-2">
+                Tapez <span className="font-mono font-bold text-destructive">SUPPRIMER</span> pour confirmer :
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                disabled={deleting}
+                placeholder="SUPPRIMER"
+                className="glass-input w-full rounded-xl p-3 text-white placeholder:text-slate-500 outline-none transition-all focus:ring-2 focus:ring-destructive mb-4"
+              />
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deleting}
+                  className="flex-1 glass-card border border-white/10 text-slate-300 px-4 py-3 font-medium rounded-2xl hover:bg-white/5 transition-all disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteAccount}
+                  disabled={deleting || deleteConfirmText !== 'SUPPRIMER'}
+                  className="flex-1 bg-destructive text-white px-4 py-3 font-bold rounded-2xl transition-all hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {deleting ? (
+                    <>
+                      <MaterialIcon name="refresh" className="animate-spin" size="sm" />
+                      Suppression...
+                    </>
+                  ) : (
+                    'Supprimer'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Section Dernières commandes */}
         <div className="mt-8">

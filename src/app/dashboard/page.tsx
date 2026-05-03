@@ -327,7 +327,7 @@ export default function Dashboard() {
             {[
               { icon: 'local_taxi', label: 'Réserver un taxi', sub: 'Dispo maintenant', subColor: 'text-emerald-500', route: '/taxi', highlight: true },
               { icon: 'lunch_dining', label: 'Commander', sub: 'Restaurants', subColor: 'text-slate-400', route: '/food' },
-              { icon: 'package_2', label: 'Envoyer un colis', sub: 'Livraison rapide', subColor: 'text-slate-400', route: '/colis' },
+              { icon: 'package_2', label: 'Transporter un colis', sub: 'Transport rapide', subColor: 'text-slate-400', route: '/colis' },
               { icon: 'favorite', label: 'Favoris', sub: '3 adresses', subColor: 'text-slate-400', route: '/profil' },
             ].map((service) => (
               <div

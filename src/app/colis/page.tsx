@@ -131,7 +131,7 @@ export default function ColisPage() {
       setPriceEstimate(null);
       setFieldErrors((prev) => ({
         ...prev,
-        dropoff: 'Envoi national uniquement — retrait et livraison doivent être dans le même pays',
+        dropoff: 'Transport national uniquement — retrait et livraison doivent être dans le même pays',
       }));
       return;
     }
@@ -174,7 +174,7 @@ export default function ColisPage() {
 
   const handleSubmit = async () => {
     if (!currentUser) {
-      setErrorMsg('Vous devez être connecté pour envoyer un colis');
+      setErrorMsg('Vous devez être connecté pour demander le transport d\'un colis');
       return;
     }
     if (!validate()) {
@@ -242,9 +242,9 @@ export default function ColisPage() {
             <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto border border-green-500/20 mb-5">
               <MaterialIcon name="check_circle" className="text-green-500 text-[32px]" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Colis enregistré !</h2>
+            <h2 className="text-xl font-bold text-white mb-2">Demande enregistrée !</h2>
             <p className="text-sm text-slate-400 mb-6">
-              Votre envoi a été créé. Un chauffeur sera bientôt assigné.
+              Votre demande de transport a été créée. Un chauffeur sera bientôt assigné.
             </p>
             {priceEstimate && (
               <div className="glass-card p-4 rounded-xl border border-white/5 mb-6">
@@ -259,7 +259,7 @@ export default function ColisPage() {
               className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
             >
               <MaterialIcon name="receipt_long" size="md" />
-              Voir mes envois
+              Voir mes colis
             </button>
             <button
               onClick={() => {
@@ -271,7 +271,7 @@ export default function ColisPage() {
               }}
               className="w-full mt-3 h-14 glass-card text-slate-300 font-semibold rounded-2xl border border-white/10 active:scale-[0.98] transition-transform flex items-center justify-center"
             >
-              Nouvel envoi
+              Nouveau transport
             </button>
           </div>
         </div>
@@ -291,7 +291,7 @@ export default function ColisPage() {
         >
           <MaterialIcon name="arrow_back" size="md" />
         </button>
-        <h1 className="text-lg font-bold text-white">Envoyer un colis</h1>
+        <h1 className="text-lg font-bold text-white">Transport de colis</h1>
         <div className="w-10" />
       </header>
 
@@ -305,8 +305,8 @@ export default function ColisPage() {
         <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2">
           <MaterialIcon name="info" size="sm" className="text-blue-400 mt-0.5" />
           <p className="text-xs text-blue-300/90">
-            Service d&apos;envoi de colis <strong>urbain et national</strong> au Cameroun et au Canada.
-            L&apos;envoi à l&apos;international n&apos;est pas pris en charge.
+            Service de transport de colis <strong>urbain et national</strong> au Cameroun et au Canada.
+            Le transport à l&apos;international n&apos;est pas pris en charge.
           </p>
         </div>
 
@@ -495,26 +495,27 @@ export default function ColisPage() {
             {errorMsg}
           </div>
         )}
-      </main>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/5 z-20 max-w-[430px] mx-auto">
-        <button
-          onClick={handleSubmit}
-          disabled={step === 'submitting' || !formData.pickupLocation || !formData.dropoffLocation}
-          className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-lg py-4 rounded-xl hover:opacity-90 transition-all flex justify-center items-center gap-2 disabled:opacity-70"
-        >
-          {step === 'submitting' ? (
-            <>
-              <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
-              Envoi en cours…
-            </>
-          ) : priceEstimate ? (
-            `Confirmer — ${priceEstimate.price.toFixed(2)} ${priceEstimate.currency}`
-          ) : (
-            'Confirmer l\'envoi'
-          )}
-        </button>
-      </div>
+        <div className="mt-4">
+          <button
+            onClick={handleSubmit}
+            disabled={step === 'submitting' || !formData.pickupLocation || !formData.dropoffLocation}
+            className="w-full bg-gradient-to-r from-primary to-[#ffae33] active:scale-[0.98] text-white font-bold py-4 px-6 rounded-2xl transition-transform disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-base sm:text-lg primary-glow flex justify-center items-center gap-2"
+            style={{ minHeight: '48px' }}
+          >
+            {step === 'submitting' ? (
+              <>
+                <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
+                Création en cours…
+              </>
+            ) : priceEstimate ? (
+              `Confirmer — ${priceEstimate.price.toFixed(2)} ${priceEstimate.currency}`
+            ) : (
+              'Confirmer le transport'
+            )}
+          </button>
+        </div>
+      </main>
 
       <BottomNav />
     </div>
