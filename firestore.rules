@@ -75,19 +75,17 @@ service cloud.firestore {
       // Les données client nécessaires aux chauffeurs doivent être dénormalisées dans les bookings.
       allow read: if isOwner(userId);
       
-      // Création : Les utilisateurs authentifiés peuvent créer leur propre document
-      // Permet la création de comptes clients par email ou téléphone
-      // SÉCURITÉ : Bloque la création d'un document client si l'utilisateur est déjà chauffeur
-      // (empêche la collision de rôles côté serveur, sans dépendre du check client-side)
-      allow create: if isOwner(userId) &&
-                       request.resource.data.userType == 'client' &&
-                       !exists(/databases/$(database)/documents/drivers/$(userId));
-      
-      // Mise à jour : Seul le propriétaire peut modifier ses propres données
-      // Permet aux clients de mettre à jour leur profil
-      // SÉCURITÉ : userType est immuable — impossible de s'auto-promouvoir restaurateur/admin
-      allow update: if isOwner(userId) &&
-                       request.resource.data.userType == resource.data.userType;
+      // CRÉATION : roles.client présent + enabled, pas de roles pro à la création initiale
+      // (l'ajout de roles.driver/restaurant passe par Cloud Function admin — cf. P2 §8)
+      allow create: if isOwner(userId)
+                    && request.resource.data.roles.client.enabled == true
+                    && !('driver' in request.resource.data.roles)
+                    && !('restaurant' in request.resource.data.roles);
+
+      // UPDATE : pour P1, on autorise tout update owner sauf modification de roles.
+      // La règle complète anti self-promotion §8 est livrée en P2.
+      allow update: if isOwner(userId)
+                    && request.resource.data.roles == resource.data.roles;
       
       // Suppression : Non autorisée pour les clients
       allow delete: if false;
@@ -133,7 +131,6 @@ service cloud.firestore {
       allow create: if request.auth.uid == driverId &&
                        request.resource.data.email != null &&
                        request.resource.data.phoneNumber == null &&
-                       request.resource.data.userType == 'chauffeur' &&
                        (request.resource.data.status == 'draft' || request.resource.data.status == 'pending') &&
                        !request.resource.data.keys().hasAny(
                          ['ssn', 'bank', 'address', 'dob', 'nationality', 'documents', 'idNumber']
@@ -730,10 +727,12 @@ service cloud.firestore {
                       resource.data.ownerId == request.auth.uid ||
                       isAdmin());
       
-      // Création : Utilisateur authentifié ayant le rôle 'restaurateur' peut créer un compte restaurant
-      // Le statut initial DOIT être 'pending_approval' (validation admin requise)
+      // Création : Utilisateur authentifié ayant le rôle restaurateur (roles.restaurant présent)
+      // peut créer un compte restaurant. Le statut initial DOIT être 'pending_approval'
+      // (validation admin requise). L'attribution de roles.restaurant passe par Cloud Function
+      // admin — cf. P2 §8 (qui restreindra cette création à admin uniquement).
       allow create: if isAuthenticated() &&
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'restaurateur' &&
+                       'restaurant' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles &&
                        request.resource.data.ownerId == request.auth.uid &&
                        request.resource.data.status == 'pending_approval' &&
                        request.resource.data.commissionRate is number &&
