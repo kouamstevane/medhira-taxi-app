@@ -9,30 +9,45 @@
  * Basé sur : firestore.rules et firestore.indexes.json
  */
 
+import { Timestamp } from 'firebase/firestore';
+import type { UserRoles, ActiveRole, RestaurantDraftData } from './user';
+
 // ============================================================================
 // COLLECTIONS PRINCIPALES
 // ============================================================================
 
 /**
- * Collection USERS (Clients)
- * --------------------------
- * Description : Utilisateurs clients de l'application
+ * Collection USERS (Modèle V1 : roles cumulatifs)
+ * -----------------------------------------------
+ * Description : Utilisateurs de l'application (client + rôles pro optionnels)
  * Authentification : Téléphone (SMS) OU Email
- * 
+ *
+ * Modèle V1 : `roles` cumulatifs ({ client, driver?, restaurant? }).
+ * Le statut effectif d'un rôle pro est lu sur sa collection métier
+ * (drivers/{uid}.status, restaurants/{id}.status), jamais dupliqué ici.
+ *
  * Règles de sécurité :
  * - Read : Tous les utilisateurs authentifiés
- * - Create : Propriétaire uniquement (userType = 'client')
+ * - Create : Propriétaire uniquement
  * - Update : Propriétaire uniquement
  * - Delete : Non autorisé
  */
 export interface UserCollection {
   userId: string;
-  userType: 'client';
   email?: string;
   phoneNumber?: string;
+  emailVerified: boolean;
   firstName?: string;
   lastName?: string;
   profileImage?: string;
+  roles: UserRoles;
+  activeRole: ActiveRole;
+  lastActiveRole?: ActiveRole;
+  draftRestaurant?: {
+    currentStep: 3 | 4;
+    data: Partial<RestaurantDraftData>;
+    updatedAt: Timestamp;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

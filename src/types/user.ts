@@ -1,39 +1,72 @@
 /**
- * Types liés aux utilisateurs et à l'authentification
+ * Types liés aux utilisateurs et à l'authentification.
  *
- * @module types/user
+ * Modèle V1 : roles cumulatifs ({ client, driver?, restaurant? }).
+ * Le statut effectif d'un rôle pro est lu sur sa collection métier
+ * (drivers/{uid}.status, restaurants/{id}.status), jamais dupliqué ici.
  */
 
 import { User as FirebaseUser } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 
-/**
- * Type d'utilisateur dans l'application
- *  CORRECTION : 'chauffeur' unifié avec les règles Firestore (était 'driver')
- */
-export type UserType = 'client' | 'chauffeur' | 'restaurateur';
+export interface RoleClient {
+  enabled: true;
+  joinedAt: Timestamp;
+}
 
-/**
- * Données utilisateur stockées dans Firestore
- */
+export interface RoleDriver {
+  joinedAt: Timestamp;
+}
+
+export interface RoleRestaurant {
+  restaurantId: string;
+  joinedAt: Timestamp;
+}
+
+export interface UserRoles {
+  client: RoleClient;
+  driver?: RoleDriver;
+  restaurant?: RoleRestaurant;
+}
+
+export type ActiveRole = 'client' | 'driver' | 'restaurant';
+
+export interface RestaurantDraftData {
+  name?: string;
+  description?: string;
+  cuisineTypes?: string[];
+  address?: string;
+  phoneNumber?: string;
+  avgPricePerPerson?: number;
+  openingHours?: Record<string, { open: string; close: string; closed: boolean }>;
+  coverImageUrl?: string;
+}
+
 export interface UserData {
   uid: string;
   email?: string | null;
   phoneNumber?: string | null;
+  emailVerified: boolean;
   firstName: string;
   lastName: string;
-  profileImageUrl?: string|null;
-  userType: UserType;
+  profileImageUrl?: string | null;
+
+  roles: UserRoles;
+  activeRole: ActiveRole;
+  lastActiveRole?: ActiveRole;
+
+  draftRestaurant?: {
+    currentStep: 3 | 4;
+    data: Partial<RestaurantDraftData>;
+    updatedAt: Timestamp;
+  };
+
   country?: string;
   address?: string;
-  status?: string; // Optionnel : utilisé pour les chauffeurs ('draft', 'pending', 'approved')
-  createdAt: Date | Timestamp;
-  updatedAt: Date | Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
-/**
- * Contexte d'authentification
- */
 export interface AuthContextType {
   currentUser: FirebaseUser | null;
   loading: boolean;
@@ -43,28 +76,32 @@ export interface AuthContextType {
   reloadUser: () => Promise<void>;
 }
 
-/**
- * Configuration d'un pays supporté
- */
 export interface Country {
   code: string;
   dialCode: string;
   name: string;
   flag: string;
   defaultNumber: string;
-  phoneLength: number; // Longueur du numéro national (sans indicatif)
+  phoneLength: number;
 }
 
-/**
- * Profil utilisateur étendu (pour les paramètres avancés)
- */
 export interface UserProfile extends UserData {
-  address?: string;
   city?: string;
   zipCode?: string;
   dateOfBirth?: Date;
   verificationStatus?: 'pending' | 'verified' | 'rejected';
 }
 
-// Re-export Firebase User type
 export type { FirebaseUser };
+
+export function isClientOnly(user: UserData): boolean {
+  return user.roles.driver == null && user.roles.restaurant == null;
+}
+
+export function hasRole<R extends ActiveRole>(
+  user: UserData,
+  role: R,
+): user is UserData & { roles: UserRoles & Required<Pick<UserRoles, R>> } {
+  if (role === 'client') return true;
+  return user.roles[role] != null;
+}
