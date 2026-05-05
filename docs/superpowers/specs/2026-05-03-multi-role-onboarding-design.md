@@ -1,7 +1,7 @@
 # Spec — Onboarding multi-rôles & espace Restaurateur (v2)
 
 **Date :** 2026-05-03
-**Version :** 2 (intègre 2 passes de revue)
+**Version :** 2.1 (intègre 2 passes de revue + auto-revue code-vérifiée)
 **Statut :** À approuver avant écriture du plan d'implémentation
 **Branche cible :** `my-new-interface`
 **Contexte critique :** **App pré-production, aucun utilisateur réel.** Toutes les décisions du spec exploitent cette liberté (clean break sur `userType`, pas de migration prod, pas de rollback ceremony).
@@ -81,7 +81,9 @@ Le chantier est terminé quand :
 | Rôle de base | `roles.client` toujours présent | Tout user peut commander |
 | Champ legacy `userType` | **Supprimé nettement** | Pas de prod = clean break possible et préférable |
 | Source de vérité du statut | Collections métier (`drivers/{uid}.status`, `restaurants/{id}.status`) | Évite la divergence avec `users.roles.*.status` |
-| `users.roles.driver` / `restaurant` | Stocke uniquement `{ joinedAt }` (driver) ou `{ restaurantId, joinedAt }` (restaurant) | Pas de status dupliqué |
+| `users.roles.driver` / `restaurant` | Stocke uniquement `{ joinedAt }` (driver) ou `{ joinedAt }` (restaurant — le `restaurantId` est implicite : `= uid`) | Pas de status dupliqué |
+| Clé du doc restaurant | `restaurants/{uid}` (au lieu d'un auto-id) | Garantit l'unicité « 1 resto / compte » au niveau Firestore rules sans `count()` |
+| Champ `UserData.status` legacy | **Supprimé** (était sur `users/{uid}`, dupliquait le statut chauffeur) | Source de vérité = collections métier |
 | Champ `lastActiveRole` | Sur le user, mémorise automatiquement | Comportement « remember » sans UX explicite |
 | Sélecteur de rôle | Route plein écran `/auth/role` | UX forte, choix obligatoire |
 | Wizard restaurateur | 4 étapes via **refactor de `/food/create`** | Pas de duplication, vérification email en step 2 |
@@ -110,8 +112,8 @@ export interface RoleDriver {
 }
 
 export interface RoleRestaurant {
-  restaurantId: string;                       // référence à restaurants/{id}
-  joinedAt: Timestamp;                        // PAS de status ici (lu sur restaurants/{id})
+  joinedAt: Timestamp;                        // PAS de status ici (lu sur restaurants/{uid})
+  // PAS de restaurantId : la clé du doc restaurant est l'uid de l'owner (restaurants/{uid})
 }
 
 export interface UserRoles {
@@ -148,7 +150,10 @@ export interface UserData {
   createdAt: Timestamp;
   updatedAt: Timestamp;
 
-  // ⚠️ Champ supprimé : `userType`. Plus aucune référence dans le code après P1.
+  // ⚠️ Champs supprimés :
+  //   - `userType` : remplacé par `roles`. 0 référence dans le code après P1.
+  //   - `status`   : était utilisé pour dupliquer le statut chauffeur. Source de vérité
+  //                  désormais sur `drivers/{uid}.status` / `restaurants/{uid}.status`.
 }
 ```
 
@@ -164,11 +169,11 @@ const isApprovedDriver = user.roles.driver != null
 
 Pour un restaurateur :
 ```ts
-const restoDoc = await getDoc(doc(db, 'restaurants', user.roles.restaurant!.restaurantId));
+const restoDoc = await getDoc(doc(db, 'restaurants', user.uid));   // clé = uid de l'owner
 const isApprovedRestaurateur = user.roles.restaurant != null
                               && restoDoc.exists()
                               && restoDoc.data().status === 'approved'
-                              && restoDoc.data().ownerId === user.uid;       // intégrité (B9)
+                              && restoDoc.data().ownerId === user.uid;       // intégrité (redondant mais défensif)
 ```
 
 Cette logique est encapsulée dans `src/services/roles.service.ts` (helpers `getEffectiveRoleStatus`, `isApprovedDriver`, `isApprovedRestaurateur`).
@@ -211,13 +216,13 @@ Conséquence sur les requêtes catalogue côté client : ajouter `where('stripeC
   "lastName": "Lefèvre",
   "roles": {
     "client": { "enabled": true, "joinedAt": "..." },
-    "restaurant": { "restaurantId": "rest_xyz", "joinedAt": "..." }
+    "restaurant": { "joinedAt": "..." }
   },
   "activeRole": "restaurant",
   "lastActiveRole": "restaurant"
 }
 ```
-Le statut effectif de son restaurant est lu via `restaurants/rest_xyz.status` (`'pending_approval'` ici).
+Le statut effectif de son restaurant est lu via `restaurants/def456.status` (clé = uid, `'pending_approval'` ici).
 
 ---
 
@@ -240,15 +245,19 @@ Pour chaque doc users/{uid} :
     roles.driver = { joinedAt: drivers.createdAt ?? now }
     activeRole = 'driver'
 
-  Si restaurants where ownerId == uid existe :
-    roles.restaurant = { restaurantId: restaurants[0].id, joinedAt: restaurants[0].createdAt ?? now }
+  Si restaurants/{uid} existe (la clé est l'uid de l'owner) :
+    roles.restaurant = { joinedAt: restaurants/{uid}.createdAt ?? now }
     activeRole = 'restaurant'
+  Sinon, si un doc restaurants avec ownerId == uid existe sous une autre clé (legacy auto-id) :
+    Re-créer restaurants/{uid} en copiant le contenu, supprimer l'ancien doc, idem pour menu_items.
+    (En pratique, DB de dev vide → cas non rencontré, mais le script gère par sécurité.)
 
-  emailVerified = doc.emailVerified ?? firebase_auth.user.emailVerified
+  emailVerified = doc.emailVerified ?? firebase_auth.user.emailVerified  # via Admin SDK
 
   Update users/{uid} :
     set roles, activeRole, lastActiveRole = activeRole, emailVerified
     delete userType                            # suppression du champ legacy
+    delete status                              # suppression du champ legacy (statut chauffeur dupliqué)
 ```
 
 Idempotent (skip si `roles` existe). Loggue toute anomalie (driver sans doc, restaurant orphelin) sans bloquer.
@@ -325,8 +334,8 @@ Wizard 4 étapes, hook orchestrateur `useRestaurantRegistration`.
 **Étape 4 — Disponibilité** (extraite de l'actuel `/food/create` step 3)
 - Horaires d'ouverture par jour (composant existant, déplacé).
 - Soumission finale (transaction Firestore atomique) :
-  1. Création `restaurants/{restaurantId}` (auto-id) avec `status: 'pending_approval'`, `ownerId: uid`, `stripeConnectStatus: 'not_started'`.
-  2. Update `users/{uid}.roles.restaurant = { restaurantId, joinedAt }`.
+  1. Création `restaurants/{uid}` (clé déterministe = uid de l'owner — garantit 1 resto / compte) avec `status: 'pending_approval'`, `ownerId: uid`, `stripeConnectStatus: 'not_started'`.
+  2. Update `users/{uid}.roles.restaurant = { joinedAt }` (le `restaurantId` est implicite : `= uid`).
   3. Purge de `users.draftRestaurant`.
   4. Trigger Cloud Function `notifyAdminNewRestaurant` (badge + email).
 - Redirection vers `/restaurant/pending`.
@@ -519,22 +528,25 @@ function isApprovedDriver() {
       && get(/databases/$(database)/documents/drivers/$(request.auth.uid)).data.status == 'approved';
 }
 
-function isApprovedRestaurateur(restaurantId) {
+function isApprovedRestaurateur(uid) {
+  // Clé du doc restaurant = uid de l'owner (cf. §3 + §6.4 step 4)
   return hasRole('restaurant')
-      && userDoc().roles.restaurant.restaurantId == restaurantId
-      && get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.status == 'approved'
-      && get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.stripeConnectStatus == 'active';
+      && get(/databases/$(database)/documents/restaurants/$(uid)).data.status == 'approved'
+      && get(/databases/$(database)/documents/restaurants/$(uid)).data.stripeConnectStatus == 'active';
 }
 
 // USERS — immutabilité des rôles côté user (anti self-promotion)
 match /users/{uid} {
   allow read: if isOwner(uid) || isAdmin();
 
-  // Création initiale : roles autorisé uniquement si :
+  // Création initiale stricte :
   //   - roles.client présent et enabled=true
-  //   - roles.driver absent OU roles.restaurant absent (ajout via wizard contrôlé)
+  //   - aucun rôle pro à la création (driver/restaurant doivent être ajoutés via update,
+  //     branche qui vérifie l'existence des collections métier — anti-self-promotion)
   allow create: if isOwner(uid)
-                && request.resource.data.roles.client.enabled == true;
+                && request.resource.data.roles.client.enabled == true
+                && !('driver' in request.resource.data.roles)
+                && !('restaurant' in request.resource.data.roles);
 
   // Update : un user ne peut pas s'ajouter/modifier un rôle pro lui-même au runtime.
   // Les ajouts de rôle pro passent par les wizards qui :
@@ -551,12 +563,13 @@ match /users/{uid} {
                     && resource.data.roles.driver == null
                     && exists(/databases/$(database)/documents/drivers/$(uid))
                   )
-                  // OU ajout de roles.restaurant avec restaurantId valide et propriété confirmée
+                  // OU ajout de roles.restaurant : exige que restaurants/{uid} existe
+                  // (la clé étant l'uid, l'unicité et la propriété sont garanties par construction)
                   || (
                     request.resource.data.roles.restaurant != null
                     && resource.data.roles.restaurant == null
-                    && exists(/databases/$(database)/documents/restaurants/$(request.resource.data.roles.restaurant.restaurantId))
-                    && get(/databases/$(database)/documents/restaurants/$(request.resource.data.roles.restaurant.restaurantId)).data.ownerId == uid
+                    && exists(/databases/$(database)/documents/restaurants/$(uid))
+                    && get(/databases/$(database)/documents/restaurants/$(uid)).data.ownerId == uid
                   )
                 )
                 || isAdmin();
@@ -564,10 +577,14 @@ match /users/{uid} {
   allow delete: if isAdmin();
 }
 
-// RESTAURANTS — un user crée son resto (1 seul), admin gère statut
+// RESTAURANTS — clé = uid de l'owner (1 resto / compte garanti par construction)
 match /restaurants/{restaurantId} {
   allow read: if true;                        // catalogue public
+  // Création : la clé du doc DOIT être l'uid de l'auteur. Cela rend l'unicité
+  // « 1 restaurant par owner » impossible à contourner depuis le client (pas besoin
+  // d'un count() inaccessible aux rules).
   allow create: if request.auth != null
+                && restaurantId == request.auth.uid
                 && request.resource.data.ownerId == request.auth.uid
                 && request.resource.data.status == 'pending_approval'
                 && request.resource.data.stripeConnectStatus == 'not_started';
@@ -598,9 +615,11 @@ match /drivers/{driverUid} {
 ```
 
 **Tests Firestore obligatoires** (cf. §10) :
+- Un user ne peut pas créer son doc `users/{uid}` avec `roles.driver` ou `roles.restaurant` (rejet de l'auto-promotion à la création).
 - Un user ne peut pas écrire `users.roles.driver` sans avoir un doc `drivers/{uid}` préalable.
-- Un user ne peut pas écrire `users.roles.restaurant.restaurantId = "X"` si `restaurants/X.ownerId !== uid`.
-- Un owner ne peut pas modifier `restaurants/{id}.status` (seul admin/Cloud Function).
+- Un user ne peut pas créer un doc `restaurants/{X}` si `X !== request.auth.uid` (clé doit = uid).
+- Un user ne peut pas écrire `users.roles.restaurant` sans avoir un doc `restaurants/{uid}` préalable lui appartenant.
+- Un owner ne peut pas modifier `restaurants/{id}.status` ni `stripeConnectStatus` (seul admin/Cloud Function).
 - Un owner ne peut pas auto-promouvoir `drivers/{uid}.status` à `'approved'`.
 
 ---
@@ -769,7 +788,7 @@ match /drivers/{driverUid} {
 | Phase | Contenu principal | Revue |
 |---|---|---|
 | **P1** | Types `roles` + service `roles.service.ts` + script migration dev + **suppression `userType`** dans les 29 fichiers + adaptation `auth.service.ts` + tests intégration | R1 |
-| **P2** | Réécriture `firestore.rules` + tests sécurité (anti self-promotion) + adaptation Cloud Functions + adaptation `middleware.ts` | R2 |
+| **P2** | **(Pré-requis)** Audit `useDriverRegistration` : confirmer que `drivers/{uid}` racine n'est jamais créé directement avec `status: 'pending'` (la nouvelle règle §8 n'autorise que `'draft'` à la création). Si oui, adapter le code pour passer par `draft → update vers pending`. **Puis** : réécriture `firestore.rules` + tests sécurité (anti self-promotion) + adaptation Cloud Functions + adaptation `middleware.ts`. | R2 |
 | **P3** | Sélecteur `/auth/role` + refactor `/food/create` → wizard `/restaurant/register` 4 étapes + persistance brouillon Firestore + page `/restaurant/pending` + retrait lien landing | R3 |
 | **P4** | Login unifié + `/auth/continue-as` + `<RoleSwitcher />` + `<BecomeProCard />` + driver pending lecture seule + Stripe Connect restaurateur + Cloud Function notification admin | R4 |
 | **P5** | E2E-1 à E2E-6 + tests régression + code review + critères d'acceptation + nettoyage final | R5 |

@@ -1,6 +1,29 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { PlaceSuggestion } from '@/types';
 
+const ALLOWED_COUNTRIES = ['cm', 'ca'] as const;
+
+const detectCountryFromLocation = (
+  location?: { lat: number; lng: number } | null
+): string[] => {
+  if (!location) return [...ALLOWED_COUNTRIES];
+  // Cameroun: lat ~1.6 à 13.1, lng ~8.4 à 16.2
+  if (
+    location.lat >= 1.6 && location.lat <= 13.1 &&
+    location.lng >= 8.4 && location.lng <= 16.2
+  ) {
+    return ['cm'];
+  }
+  // Canada: lat ~41.6 à 83.1, lng ~-141.0 à -52.6
+  if (
+    location.lat >= 41.6 && location.lat <= 83.1 &&
+    location.lng >= -141.0 && location.lng <= -52.6
+  ) {
+    return ['ca'];
+  }
+  return [...ALLOWED_COUNTRIES];
+};
+
 interface UsePlacesAutocompleteProps {
   autocompleteService: google.maps.places.AutocompleteService | null;
   location?: { lat: number; lng: number } | null;
@@ -49,6 +72,7 @@ export const usePlacesAutocomplete = ({
 
         const request: google.maps.places.AutocompletionRequest = {
           input,
+          componentRestrictions: { country: detectCountryFromLocation(location) },
         };
 
         if (location) {
