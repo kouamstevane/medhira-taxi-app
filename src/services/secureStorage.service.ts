@@ -238,7 +238,8 @@ export type StorageKey =
     | 'user_preferences'
     | 'driver_settings'
     | 'booking_cache'
-    | 'driver_registration_progress'; // Progression du formulaire d'inscription chauffeur
+    | 'driver_registration_progress'
+    | 'detected_country';
 
 interface SecureStorageOptions {
     ttl?: number; // Time to live en millisecondes
