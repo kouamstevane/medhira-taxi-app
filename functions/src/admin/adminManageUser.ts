@@ -39,8 +39,10 @@ export const adminManageUser = onCall(
       throw new HttpsError('not-found', 'Utilisateur introuvable');
     }
 
+    // TODO P2: refactor for proper roles add/remove via Cloud Function
+    // (cas C6 spec §9 — addProRole/removeProRole). Pour P1, on ne touche plus
+    // au champ legacy `userType` ; cette callable devient un no-op tracé.
     await userRef.update({
-      userType: role,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       lastModifiedBy: uid,
     });

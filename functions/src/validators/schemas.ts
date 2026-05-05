@@ -69,7 +69,9 @@ export const DriverProfilePublicDataSchema = z.object({
   phoneNumber: z.null().optional(),
   city: z.string().min(1).max(80).optional(),
   zipCode: z.string().min(1).max(16).optional(),
-  userType: z.literal('chauffeur'),
+  // TODO P2: legacy field — kept to accept current `useDriverRegistration` payload.
+  // Will be dropped when payload switches to `submitDriverApplication`.
+  userType: z.literal('chauffeur').optional(),
   driverType: z.enum(['chauffeur', 'livreur', 'les_deux']),
   vehicleType: z.enum(['velo', 'scooter', 'moto', 'voiture']).optional(),
   cityId: z.string().min(1).max(64).optional(),
@@ -123,3 +125,18 @@ export const WalletRefundTransactionSchema = z.object({
 export type WalletFailTransactionInput = z.infer<typeof WalletFailTransactionSchema>;
 export type WalletPayBookingInput = z.infer<typeof WalletPayBookingSchema>;
 export type WalletRefundTransactionInput = z.infer<typeof WalletRefundTransactionSchema>;
+
+// ============================================================================
+// User Roles — spec §7.3 (remplace l'ancien champ scalaire `userType`)
+// ============================================================================
+//
+// `joinedAt` est un Firestore Timestamp côté Cloud Function ; on l'accepte en
+// `z.any()` car la validation stricte (Timestamp instance vs serverTimestamp
+// sentinel vs ISO string en provenance d'un client) est trop bruyante ici.
+export const UserRolesSchema = z.object({
+  client: z.object({ enabled: z.literal(true), joinedAt: z.any() }),
+  driver: z.object({ joinedAt: z.any() }).optional(),
+  restaurant: z.object({ restaurantId: z.string(), joinedAt: z.any() }).optional(),
+});
+
+export type UserRolesInput = z.infer<typeof UserRolesSchema>;

@@ -315,14 +315,17 @@ export const getRestaurantMenu = async (
 
 /**
  * Créer un nouveau restaurant
- * 
+ *
  * Règle 1 : Restaurant visible uniquement après approbation admin
- * 
+ *
+ * TODO P2: convertir en wrapper de la Cloud Function callable submitRestaurantApplication
+ * (rules §8 interdiront alors la création directe côté client).
+ *
  * @param restaurantData - Données du restaurant
  * @returns ID du restaurant créé
  */
 export const createRestaurant = async (
-  restaurantData: Omit<Restaurant, 'id' | 'status' | 'rating' | 'totalReviews' | 'createdAt' | 'updatedAt'>
+  restaurantData: Omit<Restaurant, 'id' | 'status' | 'rating' | 'totalReviews' | 'stripeConnectStatus' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
   try {
   const validationResult = CreateRestaurantSchema.safeParse(restaurantData);
@@ -342,6 +345,7 @@ export const createRestaurant = async (
     status: 'pending_approval', // Règle 1
     rating: 2.5, // Note par défaut (ou 0)
     totalReviews: 0,
+    stripeConnectStatus: 'not_started',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };

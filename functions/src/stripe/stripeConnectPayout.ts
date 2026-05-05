@@ -51,13 +51,10 @@ interface TransferResult {
 }
 
 async function getUserRole(uid: string): Promise<'admin' | 'driver' | 'user'> {
+  // TODO P4: discriminate via account.metadata.accountType (cf. spec §3 décision 14, §15.3)
   const db = getDb();
   const adminSnap = await db.collection('admins').doc(uid).get();
   if (adminSnap.exists) return 'admin';
-  const userSnap = await db.collection('users').doc(uid).get();
-  const userType = userSnap.exists ? (userSnap.data()?.userType as string | undefined) : undefined;
-  if (userType === 'admin') return 'admin';
-  if (userType === 'chauffeur') return 'driver';
   const driverSnap = await db.collection('drivers').doc(uid).get();
   if (driverSnap.exists) return 'driver';
   return 'user';

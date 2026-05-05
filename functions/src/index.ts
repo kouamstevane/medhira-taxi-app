@@ -389,7 +389,7 @@ export const createDriverProfile = onCall(
           uid: payload.driverId,
           email: driverData.email,
           phoneNumber: null,
-          userType: 'chauffeur',
+          // userType supprimé (P1 spec §7.3) — discrimination via doc drivers/{uid}.
           status: 'pending',
           updatedAt: now,
           driverType: driverData.driverType,
