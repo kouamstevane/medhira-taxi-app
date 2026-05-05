@@ -230,16 +230,26 @@ export default function RegisterPhoneContent() {
     const docSnapshot = await getDoc(userDocRef);
 
     if (!docSnapshot.exists()) {
+      // V1 (spec §6.2/§7.3) : roles cumulatifs + activeRole.
+      // Inscription téléphone P1 ⇒ rôle client uniquement.
       await setDoc(userDocRef, {
+        uid: user.uid,
         phoneNumber: user.phoneNumber || null,
         email: null,
+        emailVerified: false,
         firstName: formData.firstName,
         lastName: formData.lastName,
-        userType: 'client',
+        roles: {
+          client: {
+            enabled: true,
+            joinedAt: serverTimestamp(),
+          },
+        },
+        activeRole: 'client',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         profileImageUrl: '',
-        country: selectedCountry.code
+        country: selectedCountry.code,
       });
     }
   };

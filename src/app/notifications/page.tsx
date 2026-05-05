@@ -15,7 +15,8 @@ export default function NotificationsPage() {
   const { userData } = useAuth();
   const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications();
   const isAdmin = useAdminAuth();
-  const isDriver = userData?.userType === 'chauffeur';
+  // Capacité conducteur (spec §6.2) : présence de roles.driver
+  const isDriver = userData?.roles?.driver != null;
   const navItems = isDriver ? driverNavItems : isAdmin ? adminNavItems : undefined;
 
   const hasUnread = notifications.some((n) => !n.read);

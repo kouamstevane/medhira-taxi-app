@@ -464,6 +464,7 @@ export function useDriverRegistration() {
         vehicleType,
         cityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',
         status: 'pending',
+        // TODO P2: createDriverProfile renamed/refactored to submitDriverApplication, drop userType payload
         userType: 'chauffeur',
         isAvailable: false,
         rating: 0,

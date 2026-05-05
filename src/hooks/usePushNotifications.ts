@@ -44,16 +44,16 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
         onAlert,
     } = options;
 
-    const { currentUser } = useAuth();
+    const { currentUser, userData } = useAuth();
     const [state, setState] = useState<PushNotificationsState>({
         isInitialized: false,
         hasPermission: false,
         token: null,
         lastNotification: null,
     });
-    
-    // Récupérer le type d'utilisateur depuis les données utilisateur
-    const [userType, setUserType] = useState<'driver' | 'passenger' | null>(null);
+
+    // Capacité conducteur : présence de roles.driver (V1, spec §6.2)
+    const isDriverCapable = userData?.roles?.driver != null;
 
     /**
      * Initialise le service de push notifications
@@ -88,19 +88,6 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
                 }
             }
         };
-
-        if (currentUser) {
-            currentUser.getIdTokenResult().then((idTokenResult) => {
-                const claims = idTokenResult.claims;
-                if (claims.role === 'driver' || claims.driver === true) {
-                    if (mounted) setUserType('driver');
-                } else if (claims.role === 'passenger' || claims.passenger === true) {
-                    if (mounted) setUserType('passenger');
-                }
-            }).catch((err) => {
-                console.warn('[usePushNotifications] Could not get user claims:', err);
-            });
-        }
 
         init();
 
@@ -237,7 +224,7 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
      * Pour s'abonner/désabonner du topic AVAILABLE_DRIVERS
      */
     const updateDriverStatus = useCallback(async (isAvailable: boolean) => {
-        if (userType !== 'driver') {
+        if (!isDriverCapable) {
             console.warn('[usePushNotifications] Utilisateur non-conducteur');
             return;
         }
@@ -247,7 +234,7 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
         } catch (error) {
             console.error('[usePushNotifications] Erreur mise à jour statut:', error);
         }
-    }, [userType]);
+    }, [isDriverCapable]);
 
     /**
      * Récupère le token FCM actuel
@@ -285,8 +272,8 @@ export function usePushNotifications(options: UsePushNotificationsOptions = {}) 
         updateDriverStatus,
         getToken,
         cleanup,
-        isDriver: userType === 'driver',
-        isPassenger: userType === 'passenger',
+        isDriver: isDriverCapable,
+        isPassenger: !isDriverCapable,
     };
 }
 

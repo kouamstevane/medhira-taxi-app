@@ -25,7 +25,8 @@ import { CURRENCY_CODE } from '@/utils/constants';
 export function NotificationHandler() {
     const router = useRouter();
     const { currentUser, userData } = useAuth();
-    const userType: 'client' | 'chauffeur' | 'restaurateur' | undefined = userData?.userType;
+    // Capacité conducteur (spec §6.2) : présence de roles.driver
+    const isDriverCapable = userData?.roles?.driver != null;
     
     const {
         isInitialized,
@@ -90,7 +91,7 @@ export function NotificationHandler() {
      * Met à jour le statut du conducteur selon son état actuel
      */
     useEffect(() => {
-        if (!isInitialized || userType !== 'chauffeur') {
+        if (!isInitialized || !isDriverCapable) {
             return;
         }
 
@@ -116,7 +117,7 @@ export function NotificationHandler() {
         };
 
         updateDriverTopicSubscription();
-    }, [isInitialized, userType, currentUser?.uid]);
+    }, [isInitialized, isDriverCapable, currentUser?.uid]);
 
     /**
      * Log les informations de debug
@@ -125,10 +126,10 @@ export function NotificationHandler() {
         if (isInitialized) {
             console.log('[NotificationHandler] Service initialisé:', {
                 hasPermission,
-                userType,
+                isDriverCapable,
             });
         }
-    }, [isInitialized, hasPermission, userType]);
+    }, [isInitialized, hasPermission, isDriverCapable]);
 
     /**
      * Log les notifications reçues

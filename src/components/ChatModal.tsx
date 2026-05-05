@@ -25,7 +25,7 @@ import { useAuth } from '@/hooks/useAuth';
  *   <ChatModal context={...} currentUserUid={uid} onClose={...} />
  *
  * Signature legacy (rétrocompat) :
- *   <ChatModal bookingId={...} driverName={...} driverId={...} userType="client" onClose={...} />
+ *   <ChatModal bookingId={...} driverName={...} driverId={...} currentRole="client" onClose={...} />
  *   - construira automatiquement un context taxi en lisant le booking depuis Firestore
  */
 interface ChatModalNewProps {
@@ -38,7 +38,8 @@ interface ChatModalLegacyProps {
   bookingId: string;
   driverName: string;
   driverId?: string;
-  userType: 'client' | 'chauffeur';
+  // Perspective de l'utilisateur dans la conversation (spec §6.3 — activeRole-like)
+  currentRole: 'client' | 'chauffeur';
   onClose: () => void;
 }
 
@@ -67,12 +68,12 @@ export function ChatModal(props: ChatModalProps) {
     const legacyBookingId = (props as ChatModalLegacyProps).bookingId;
     const legacyDriverName = (props as ChatModalLegacyProps).driverName;
     const legacyDriverId = (props as ChatModalLegacyProps).driverId;
-    const legacyUserType = (props as ChatModalLegacyProps).userType;
+    const legacyCurrentRole = (props as ChatModalLegacyProps).currentRole;
 
-    if (!legacyBookingId || !legacyUserType) return;
+    if (!legacyBookingId || !legacyCurrentRole) return;
 
     console.warn(
-      '[ChatModal] Legacy props (bookingId/userType) detected — please migrate to `context`+`currentUserUid`.'
+      '[ChatModal] Legacy props (bookingId/currentRole) detected — please migrate to `context`+`currentUserUid`.'
     );
 
     (async () => {
@@ -92,7 +93,7 @@ export function ChatModal(props: ChatModalProps) {
 
         const clientParticipant: ConversationParticipant = {
           uid: clientUid,
-          name: legacyUserType === 'client'
+          name: legacyCurrentRole === 'client'
             ? (currentUser?.displayName || 'Client')
             : 'Client',
           role: 'client',
