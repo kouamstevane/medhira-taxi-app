@@ -161,38 +161,39 @@ class PushNotificationService {
                 getDoc(doc(db, 'users', user.uid)),
             ]);
 
-            let userType = 'passenger';
+            // V1 (spec §3) : routage par CAPACITÉ — un user multi-rôle reçoit toutes ses notifs.
+            // Source de vérité : users/{uid}.roles. Fallback à drivers/{uid} pour compat.
+            const userData = userDoc.exists() ? userDoc.data() : null;
+            const roles = (userData?.roles as { client?: unknown; driver?: unknown; restaurant?: unknown } | undefined) ?? undefined;
 
-            if (driverDoc.exists()) {
-                userType = 'driver';
-            } else if (userDoc.exists()) {
-                userType = (userDoc.data()?.userType as string) || 'passenger';
-            } else {
+            const hasDriverRole = roles?.driver != null || driverDoc.exists();
+            const hasRestaurantRole = roles?.restaurant != null;
+
+            if (!userDoc.exists() && !driverDoc.exists()) {
                 // Utilisateur inconnu — ni driver ni client existant
                 // Ne PAS créer de document fantôme (ex: chauffeur en attente de Cloud Function)
                 console.warn('[PushNotifications] Document utilisateur non trouvé pour uid:', user.uid);
                 return;
             }
-            
-            // Sauvegarder le token dans la collection appropriée
-            const collectionName = userType === 'driver' ? 'drivers' : 'passengers';
-            const userRef = doc(db, collectionName, user.uid);
-            
-            await setDoc(userRef, {
-                fcmToken: token,
-                tokenUpdatedAt: serverTimestamp(),
-            }, { merge: true });
 
-            // Sauvegarder dans users/ UNIQUEMENT pour les clients (les chauffeurs n'ont PAS de doc users/)
-            if (userType !== 'driver') {
+            // Sauvegarder le token dans drivers/{uid} si user a la capacité driver.
+            if (hasDriverRole) {
+                await setDoc(doc(db, 'drivers', user.uid), {
+                    fcmToken: token,
+                    tokenUpdatedAt: serverTimestamp(),
+                }, { merge: true });
+            }
+
+            // Sauvegarder dans users/ pour les notifs client (tout user a roles.client).
+            if (userDoc.exists()) {
                 await setDoc(doc(db, 'users', user.uid), {
                     fcmToken: token,
                     tokenUpdatedAt: serverTimestamp(),
                 }, { merge: true });
             }
-            
-            // S'abonner aux topics appropriés (medJiraV2.md §6.1)
-            await this.subscribeToTopics(userType);
+
+            // S'abonner aux topics par capacité (multi-rôle = tous les topics applicables).
+            await this.subscribeToTopicsByRoles({ hasDriverRole, hasRestaurantRole });
             
             console.log('[PushNotifications] Token sauvegardé et topics configurés');
         } catch (error) {
@@ -201,24 +202,25 @@ class PushNotificationService {
     }
 
     /**
-     * S'abonne aux topics Firebase appropriés
-     * Conforme à medJiraV2.md §6.1 (Segmentation conducteur/passager)
+     * S'abonne aux topics Firebase par capacité (V1 §3 — multi-rôle).
+     * Tout user a roles.client → ALL_PASSENGERS. roles.driver != null → ALL_DRIVERS aussi.
      */
-    private async subscribeToTopics(userType: string): Promise<void> {
+    private async subscribeToTopicsByRoles(roles: {
+        hasDriverRole: boolean;
+        hasRestaurantRole: boolean;
+    }): Promise<void> {
         try {
-            // S'abonner au topic général selon le type d'utilisateur
-            const generalTopic = userType === 'driver'
-                ? NOTIFICATION_TOPICS.ALL_DRIVERS 
-                : NOTIFICATION_TOPICS.ALL_PASSENGERS;
-            
-            await this.subscribeToTopic(generalTopic);
-            console.log(`[PushNotifications] Abonné au topic: ${generalTopic}`);
-            
-            // S'abonner aux topics spécifiques pour les conducteurs
-            if (userType === 'driver') {
-                // Le conducteur sera ajouté aux topics disponibles quand il se met en ligne
-                // via Cloud Functions
+            // Tout user (a au minimum roles.client) reçoit les notifs passagers.
+            await this.subscribeToTopic(NOTIFICATION_TOPICS.ALL_PASSENGERS);
+            console.log(`[PushNotifications] Abonné au topic: ${NOTIFICATION_TOPICS.ALL_PASSENGERS}`);
+
+            if (roles.hasDriverRole) {
+                await this.subscribeToTopic(NOTIFICATION_TOPICS.ALL_DRIVERS);
+                console.log(`[PushNotifications] Abonné au topic: ${NOTIFICATION_TOPICS.ALL_DRIVERS}`);
+                // L'abonnement à AVAILABLE_DRIVERS se fait via updateDriverStatus quand le chauffeur passe en ligne.
             }
+
+            // roles.hasRestaurantRole : pas de topic dédié en V1 (les notifs resto passent par doc orders/listeners).
         } catch (error) {
             console.error('[PushNotifications] Erreur abonnement topics:', error);
         }

@@ -25,6 +25,8 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { redirectWithFallback } from '@/utils/navigation';
+import { getDashboardRouteFor } from '@/services/roles.service';
+import type { ActiveRole, UserRoles } from '@/types/user';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -51,13 +53,15 @@ export default function Dashboard() {
     firstName: string;
     lastName: string;
     profileImageUrl: string;
-    userType: 'client' | 'chauffeur' | 'restaurateur';
+    activeRole: ActiveRole;
+    roles: Partial<UserRoles>;
   }>({
     phoneNumber: "",
     firstName: "",
     lastName: "",
     profileImageUrl: DEFAULT_URLS.DEFAULT_AVATAR,
-    userType: "client"
+    activeRole: "client",
+    roles: {},
   });
   const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
   const [isRestaurantLoading, setIsRestaurantLoading] = useState(false);
@@ -148,17 +152,35 @@ export default function Dashboard() {
         // Vérifier si l'utilisateur a un moyen de paiement configuré
         setHasPaymentMethod(!!userDataFromDB.defaultPaymentMethodId);
 
+        // V1 (spec §3) : roles cumulatifs + activeRole. /dashboard = espace CLIENT.
+        // Si activeRole !== 'client', le user a switché vers un autre espace → redirect.
+        const activeRole = (userDataFromDB.activeRole as ActiveRole | undefined) ?? 'client';
+        const roles = (userDataFromDB.roles as Partial<UserRoles> | undefined) ?? {};
+
+        if (activeRole !== 'client') {
+          // Routage défensif : la page restaurateur/chauffeur gère ses propres pré-conditions de statut.
+          redirectTimeoutRef.current = redirectWithFallback(
+            routerRef.current,
+            getDashboardRouteFor(activeRole),
+          );
+          return;
+        }
+
         setUserData(prev => ({
           ...prev,
           phoneNumber: user.phoneNumber || "",
           firstName: userDataFromDB.firstName || "",
           lastName: userDataFromDB.lastName || "",
           profileImageUrl: userDataFromDB.profileImageUrl || user.photoURL || DEFAULT_URLS.DEFAULT_AVATAR,
-          userType: userDataFromDB.userType || "client"
+          activeRole,
+          roles,
         }));
 
-        // Si restaurateur, charger les infos du restaurant
-        if (userDataFromDB.userType === 'restaurateur') {
+        // Charger l'historique des commandes
+        fetchHistory(user.uid);
+
+        // Si l'user a la capacité restaurant, charger les infos pour le shortcut.
+        if (roles?.restaurant != null) {
           setIsRestaurantLoading(true);
           FoodDeliveryService.getRestaurantByOwner(user.uid)
             .then(setRestaurantData)
@@ -166,13 +188,9 @@ export default function Dashboard() {
             .finally(() => setIsRestaurantLoading(false));
         }
 
-        // Charger l'historique des commandes
-        fetchHistory(user.uid);
-
-        // Vérifier si l'utilisateur est aussi chauffeur
-        if (driverDoc.exists() && driverDoc.data().status === 'approved') {
-          setUserData(prev => ({ ...prev, userType: 'chauffeur' }));
-        }
+        // Note : on ne touche PAS à activeRole ici (la page = espace CLIENT).
+        // Le switcher d'espace pro est géré via TODO P4 (RoleSwitcher).
+        void driverDoc;
 
         // Vérifier si l'utilisateur est admin (protégé : permission-denied attendu pour les non-admins)
         try {
@@ -301,8 +319,11 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="flex-1 px-4 overflow-y-auto pb-32">
-        {/* Payment Setup Banner — uniquement pour les clients */}
-        {!isAuthLoading && !hasPaymentMethod && userData.userType === 'client' && (
+        {/* TODO P4: <RoleSwitcher /> */}
+        {/* TODO P4: <BecomeProCard /> (si !roles.driver && !roles.restaurant) */}
+
+        {/* Payment Setup Banner — la page /dashboard est implicitement client (espace client). */}
+        {!isAuthLoading && !hasPaymentMethod && (
           <div
             onClick={() => router.push('/auth/setup-payment')}
             className="mt-2 mb-6 p-4 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/20 cursor-pointer active:scale-[0.98] transition-transform"
@@ -352,8 +373,9 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* Driver shortcut */}
-        {userData.userType === 'chauffeur' && (
+        {/* Driver shortcut — V1 : capacité (roles.driver != null), pas activeRole.
+            Le switch vers l'espace driver passera par <RoleSwitcher /> (TODO P4). */}
+        {userData.roles?.driver != null && (
           <section className="mb-6">
             <GlassCard
               variant="bordered"
@@ -374,8 +396,8 @@ export default function Dashboard() {
           </section>
         )}
 
-        {/* Restaurateur shortcut */}
-        {userData.userType === 'restaurateur' && restaurantData && (
+        {/* Restaurateur shortcut — capacité roles.restaurant. */}
+        {userData.roles?.restaurant != null && restaurantData && (
           <section className="mb-6">
             <GlassCard
               variant="bordered"
