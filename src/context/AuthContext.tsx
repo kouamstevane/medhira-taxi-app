@@ -9,11 +9,12 @@
 
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { AuthContextType, UserData } from '@/types';
+import type { UserRoles } from '@/types/user';
 
 /**
  * Contexte d'authentification — valeur null par défaut pour détecter l'usage hors AuthProvider
@@ -29,12 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   /**
-   * Charger les données utilisateur depuis Firestore
-   *  AJOUT LOGS : Capture détaillée des erreurs pour diagnostic
+   * Charger les données utilisateur depuis Firestore.
+   *
+   * Lecture exclusive de `users/{uid}` (modèle V1, spec §3.1). Le statut effectif
+   * d'un rôle pro (driver, restaurant) est lu à la demande via roles.service.
    */
   const fetchUserData = async (user: User): Promise<void> => {
     try {
@@ -49,40 +52,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // peut ne pas encore être propagé quand onAuthStateChanged se déclenche.
       await user.getIdToken();
 
-      // Lancer les deux lectures en parallèle pour éviter un RTT séquentiel.
-      // 'users' garde la priorité en cas d'existence simultanée (compte client).
-      const [usersSnap, driversSnap] = await Promise.all([
-        getDoc(doc(db, 'users', user.uid)),
-        getDoc(doc(db, 'drivers', user.uid)),
-      ]);
-
-      const userDoc = usersSnap.exists() ? usersSnap : driversSnap.exists() ? driversSnap : null;
-      const collectionName = usersSnap.exists() ? 'users' : driversSnap.exists() ? 'drivers' : '';
+      const usersSnap = await getDoc(doc(db, 'users', user.uid));
+      const userDoc = usersSnap.exists() ? usersSnap : null;
 
       console.log('[AuthContext] Document utilisateur récupéré', {
         exists: userDoc !== null,
         uid: user.uid,
-        collection: collectionName
       });
 
       if (userDoc) {
-        const data = userDoc.data() as UserData; // Cast explicite pour TypeScript
+        const data = userDoc.data() as UserData;
+
+        // Cas C2 (spec §8) : doc utilisateur sans `roles` (legacy/corruption).
+        // Auto-réparation fire-and-forget via ensureClientRole + fallback local
+        // pour ne pas bloquer le rendu.
+        let safeRoles: UserRoles;
+        if (!data.roles) {
+          console.warn('[AuthContext] User without roles, auto-repairing roles.client', {
+            uid: user.uid,
+          });
+          safeRoles = {
+            client: { enabled: true as const, joinedAt: data.createdAt },
+          };
+          // fire-and-forget — ne pas await pour éviter de bloquer le rendu
+          import('@/services/roles.service')
+            .then((m) =>
+              m.ensureClientRole(data).catch((e) =>
+                console.error('[AuthContext] ensureClientRole failed', e),
+              ),
+            )
+            .catch((e) =>
+              console.error('[AuthContext] roles.service import failed', e),
+            );
+        } else {
+          safeRoles = data.roles;
+        }
+
         console.log('[AuthContext] Données utilisateur chargées avec succès', {
           uid: user.uid,
-          userType: data.userType,
-          collection: collectionName
+          activeRole: data.activeRole,
+          roles: Object.keys(safeRoles),
         });
 
         setUserData({
           uid: user.uid,
           email: user.email,
           phoneNumber: user.phoneNumber,
+          emailVerified: user.emailVerified,
           firstName: data.firstName || '',
           lastName: data.lastName || '',
           profileImageUrl: data.profileImageUrl || user.photoURL || '',
-          userType: data.userType || (collectionName === 'drivers' ? 'chauffeur' : 'client'),
-          status: data.status,
+          roles: safeRoles,
+          activeRole: data.activeRole ?? 'client',
+          lastActiveRole: data.lastActiveRole,
           country: data.country,
+          address: data.address,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
         });
@@ -91,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           uid: user.uid,
           email: user.email
         });
-        
+
         setUserData(null);
       }
     } catch (err: unknown) {
