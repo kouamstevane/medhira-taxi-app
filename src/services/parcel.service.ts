@@ -16,7 +16,6 @@ import {
   getMarketByCountryCode,
   getSupportedCountryNames,
   applyRounding,
-  type MarketCode,
 } from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
 import { logger } from '@/utils/logger';
