@@ -26,7 +26,8 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { redirectWithFallback } from '@/utils/navigation';
 import { getDashboardRouteFor } from '@/services/roles.service';
-import type { ActiveRole, UserRoles } from '@/types/user';
+import type { ActiveRole, UserRoles, UserData } from '@/types/user';
+import { RegistrationDraftBanner } from '@/components/restaurant/RegistrationDraftBanner';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -55,6 +56,7 @@ export default function Dashboard() {
     profileImageUrl: string;
     activeRole: ActiveRole;
     roles: Partial<UserRoles>;
+    draftRestaurant?: UserData['draftRestaurant'];
   }>({
     phoneNumber: "",
     firstName: "",
@@ -174,6 +176,7 @@ export default function Dashboard() {
           profileImageUrl: userDataFromDB.profileImageUrl || user.photoURL || DEFAULT_URLS.DEFAULT_AVATAR,
           activeRole,
           roles,
+          draftRestaurant: userDataFromDB.draftRestaurant,
         }));
 
         // Charger l'historique des commandes
@@ -321,6 +324,9 @@ export default function Dashboard() {
       <main className="flex-1 px-4 overflow-y-auto pb-32">
         {/* TODO P4: <RoleSwitcher /> */}
         {/* TODO P4: <BecomeProCard /> (si !roles.driver && !roles.restaurant) */}
+        {userData?.draftRestaurant && !userData.roles?.restaurant && (
+          <RegistrationDraftBanner />
+        )}
 
         {/* Payment Setup Banner — la page /dashboard est implicitement client (espace client). */}
         {!isAuthLoading && !hasPaymentMethod && (
