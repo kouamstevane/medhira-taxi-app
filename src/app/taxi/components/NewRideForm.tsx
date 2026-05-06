@@ -17,6 +17,7 @@ import { httpsCallable } from 'firebase/functions';
 import { onAuthStateChanged } from 'firebase/auth';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { useCountryDetection } from '@/hooks/useCountryDetection';
 import { estimateFare, createBooking, getCarTypes, FareEstimate } from '@/services/taxi.service';
 import { CarType, PlaceSuggestion, Location, PreciseLocation as BookingPreciseLocation } from '@/types';
 import { AddressInput } from './AddressInput';
@@ -125,6 +126,12 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     getCurrentPosition,
     getAccuracyQuality 
   } = useCapacitorGeolocation();
+
+  const { country: detectedCountry } = useCountryDetection({
+    location: currentLocation,
+    enabled: mapsLoaded,
+  });
+
   const [loadingAddress, setLoadingAddress] = useState(false);
 
   // Récupérer la position GPS //ceci est OK
@@ -616,6 +623,7 @@ useEffect(() => {
           required
           error={error && !pickupAddress ? error : undefined}
           externalLoading={geoLoading || loadingAddress}
+          countryRestriction={detectedCountry ? [detectedCountry.toLowerCase()] : undefined}
         />
 
         {/* Destination */}
@@ -628,6 +636,7 @@ useEffect(() => {
           autocompleteService={autocompleteService}
           location={currentLocation}
           required
+          countryRestriction={detectedCountry ? [detectedCountry.toLowerCase()] : undefined}
         />
 
         {/* Types de véhicules */}
