@@ -88,12 +88,6 @@ export function useCountryDetection({
   const isDetectingRef = useRef(false);
 
   useEffect(() => {
-    secureStorage.getItem<CachedCountry>('detected_country').then((cached) => {
-      if (cached) memCacheRef.current = cached;
-    }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
     if (!memoizedLocation || !enabled) {
       setCountry(null);
       setLoading(false);
@@ -102,25 +96,35 @@ export function useCountryDetection({
 
     if (isDetectingRef.current) return;
 
-    const cached = memCacheRef.current;
-    if (
-      cached &&
-      Date.now() - cached.timestamp < CACHE_TTL_MS &&
-      haversineKm(
-        { lat: cached.lat, lng: cached.lng },
-        { lat: memoizedLocation.lat, lng: memoizedLocation.lng }
-      ) < DISTANCE_THRESHOLD_KM
-    ) {
-      setCountry(cached.country);
-      return;
-    }
-
     let cancelled = false;
-    isDetectingRef.current = true;
-    setLoading(true);
 
     (async () => {
       try {
+        let cached: CachedCountry | null = memCacheRef.current;
+
+        if (!cached) {
+          try {
+            cached = await secureStorage.getItem<CachedCountry>('detected_country');
+            if (cached) memCacheRef.current = cached;
+          } catch {
+          }
+        }
+
+        if (
+          cached &&
+          Date.now() - cached.timestamp < CACHE_TTL_MS &&
+          haversineKm(
+            { lat: cached.lat, lng: cached.lng },
+            { lat: memoizedLocation.lat, lng: memoizedLocation.lng }
+          ) < DISTANCE_THRESHOLD_KM
+        ) {
+          if (!cancelled) setCountry(cached.country);
+          return;
+        }
+
+        isDetectingRef.current = true;
+        if (!cancelled) setLoading(true);
+
         const fastResult = detectByBoundingBox(memoizedLocation);
         if (fastResult && !cancelled) setCountry(fastResult);
 

@@ -52,6 +52,7 @@ beforeEach(() => {
 
 afterEach(() => {
   unmockGoogleMaps();
+  jest.useRealTimers();
 });
 
 describe('useCountryDetection', () => {
@@ -214,15 +215,17 @@ describe('useCountryDetection', () => {
     );
 
     await act(async () => {
+      await Promise.resolve();
       jest.advanceTimersByTime(4000);
+      await Promise.resolve();
     });
+
+    jest.useRealTimers();
 
     await waitFor(() => {
       expect(result.current.country).toBe('CM');
       expect(result.current.loading).toBe(false);
     });
-
-    jest.useRealTimers();
   });
 
   it('ne déclenche pas de re-detection pour un nouvel objet même lat/lng', async () => {
