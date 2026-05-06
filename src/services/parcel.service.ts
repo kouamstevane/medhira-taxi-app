@@ -12,24 +12,23 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { typedServerTimestamp } from '@/lib/firebase-helpers';
-import { ACTIVE_MARKET, CURRENCY_CODE } from '@/utils/constants';
+import {
+  getMarketByCountryCode,
+  getSupportedCountryNames,
+  applyRounding,
+  type MarketCode,
+} from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
 import { logger } from '@/utils/logger';
 import { z } from 'zod';
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
 
-/** Pays autorisés pour l'envoi de colis (urbain + national uniquement). */
-export const ALLOWED_PARCEL_COUNTRIES = ['CM', 'CA'] as const;
-export type AllowedParcelCountry = typeof ALLOWED_PARCEL_COUNTRIES[number];
-
-/** Distance maximum entre le retrait et la livraison (km). National uniquement. */
 export const MAX_PARCEL_DISTANCE_KM = 800;
 
 export interface ParcelLocation {
   address: string;
   latitude: number;
   longitude: number;
-  /** ISO 3166-1 alpha-2. Renseigné via Google Geocoder côté UI. */
   country: string;
 }
 
@@ -41,44 +40,13 @@ export const PARCEL_SIZE_LABELS: Record<ParcelSizeCategory, { label: string; des
   large: { label: 'Grand', description: '15-30 kg · Colis volumineux', weightMax: 30 },
 };
 
-/**
- * Tarification colis par marché.
- * Indépendante du tarif food : un colis a une logistique différente
- * (poids, manutention, prise en charge dédiée).
- */
-interface ParcelPricingConfig {
-  basePrice: number;
-  pricePerKm: number;
-  /** Multiplicateur appliqué selon la taille. */
-  sizeMultiplier: Record<ParcelSizeCategory, number>;
-}
-
-const PARCEL_PRICING: Record<AllowedParcelCountry, ParcelPricingConfig> = {
-  CM: {
-    basePrice: 1500,        // 1 500 FCFA prise en charge
-    pricePerKm: 200,        // 200 FCFA/km
-    sizeMultiplier: { small: 1.0, medium: 1.4, large: 1.8 },
-  },
-  CA: {
-    basePrice: 5,           // 5 CAD prise en charge
-    pricePerKm: 1.25,       // 1.25 CAD/km
-    sizeMultiplier: { small: 1.0, medium: 1.4, large: 1.8 },
-  },
-};
-
-/** Map pays → devise utilisée pour le colis (cohérent avec le marché). */
-const COUNTRY_CURRENCY: Record<AllowedParcelCountry, string> = {
-  CM: 'FCFA',
-  CA: 'CAD',
-};
-
 const LocationSchema = z.object({
   address: z.string().min(5, "L'adresse est requise"),
   latitude: z.number(),
   longitude: z.number(),
   country: z.string().refine(
-    (c) => (ALLOWED_PARCEL_COUNTRIES as readonly string[]).includes(c),
-    { message: 'Service disponible uniquement au Cameroun et au Canada' },
+    (c) => getMarketByCountryCode(c) !== null,
+    { message: `Service disponible uniquement dans les pays supportés` }
   ),
 });
 
@@ -106,14 +74,6 @@ export class ParcelValidationError extends Error {
   }
 }
 
-/**
- * Valide qu'une adresse est dans un pays desservi.
- * À utiliser dès la sélection d'adresse pour feedback immédiat.
- */
-export const isCountrySupported = (country: string): country is AllowedParcelCountry => {
-  return (ALLOWED_PARCEL_COUNTRIES as readonly string[]).includes(country);
-};
-
 export interface PriceEstimate {
   price: number;
   distance: number;
@@ -126,15 +86,16 @@ export const estimateParcelPrice = async (
   dropoff: ParcelLocation,
   sizeCategory: ParcelSizeCategory
 ): Promise<PriceEstimate> => {
-  if (!isCountrySupported(pickup.country)) {
+  const pickupMarket = getMarketByCountryCode(pickup.country);
+  if (!pickupMarket) {
     throw new ParcelValidationError(
-      `Le retrait doit être au Cameroun ou au Canada (pays détecté : ${pickup.country || 'inconnu'})`,
+      `Le retrait doit être dans un pays supporté (${getSupportedCountryNames()}) (pays détecté : ${pickup.country || 'inconnu'})`,
       'pickup'
     );
   }
-  if (!isCountrySupported(dropoff.country)) {
+  if (!getMarketByCountryCode(dropoff.country)) {
     throw new ParcelValidationError(
-      `La livraison doit être au Cameroun ou au Canada (pays détecté : ${dropoff.country || 'inconnu'})`,
+      `La livraison doit être dans un pays supporté (${getSupportedCountryNames()}) (pays détecté : ${dropoff.country || 'inconnu'})`,
       'dropoff'
     );
   }
@@ -157,26 +118,20 @@ export const estimateParcelPrice = async (
     );
   }
 
-  const config = PARCEL_PRICING[pickup.country];
-  const baseDelivery = distanceKm * config.pricePerKm;
-  const multiplier = config.sizeMultiplier[sizeCategory];
-  const rawPrice = (config.basePrice + baseDelivery) * multiplier;
-  const price = pickup.country === 'CM'
-    ? Math.round(rawPrice / 50) * 50  // Arrondi au 50 FCFA
-    : Math.round(rawPrice * 100) / 100; // 2 décimales CAD
+  const pricing = pickupMarket.config.parcelPricing;
+  const baseDelivery = distanceKm * pricing.pricePerKm;
+  const multiplier = pricing.sizeMultiplier[sizeCategory];
+  const rawPrice = (pricing.basePrice + baseDelivery) * multiplier;
+  const price = applyRounding(rawPrice, pricing.roundingStrategy);
 
   return {
     price,
     distance: distanceKm,
     duration: durationMinutes,
-    currency: COUNTRY_CURRENCY[pickup.country],
+    currency: pickupMarket.config.currencyCode,
   };
 };
 
-/**
- * Cherche un utilisateur existant par numéro de téléphone (E.164 strict).
- * Retourne l'UID si trouvé, sinon null (destinataire invité).
- */
 const lookupRecipientByPhone = async (phone: string): Promise<string | null> => {
   const normalized = phone.replace(/\s+/g, '');
   if (normalized.length < 8) return null;
@@ -205,7 +160,6 @@ export const createParcelOrder = async (data: CreateParcelInput): Promise<string
     data.sizeCategory
   );
 
-  // Lookup destinataire : si compte existe, on lie ; sinon invité (SMS uniquement)
   const receiverId = await lookupRecipientByPhone(data.recipientPhone);
   const recipientIsGuest = receiverId === null;
 

@@ -14,12 +14,12 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import {
   createParcelOrder,
   estimateParcelPrice,
-  isCountrySupported,
   ParcelValidationError,
   PARCEL_SIZE_LABELS,
   type ParcelLocation,
   type ParcelSizeCategory,
 } from '@/services/parcel.service';
+import { getMarketByCountryCode, getSupportedCountryNames } from '@/utils/constants';
 import type { PlaceSuggestion } from '@/types';
 
 type Step = 'form' | 'submitting' | 'success' | 'error';
@@ -115,15 +115,15 @@ export default function ColisPage() {
       setPriceEstimate(null);
       return;
     }
-    // Validation pays côté client avant l'appel Distance Matrix
-    const pickupOk = isCountrySupported(formData.pickupLocation.country);
-    const dropoffOk = isCountrySupported(formData.dropoffLocation.country);
+    const pickupOk = getMarketByCountryCode(formData.pickupLocation.country) !== null;
+    const dropoffOk = getMarketByCountryCode(formData.dropoffLocation.country) !== null;
+    const supportedNames = getSupportedCountryNames();
     if (!pickupOk || !dropoffOk) {
       setPriceEstimate(null);
       setFieldErrors((prev) => ({
         ...prev,
-        ...(pickupOk ? {} : { pickup: 'Service disponible uniquement au Cameroun et au Canada' }),
-        ...(dropoffOk ? {} : { dropoff: 'Service disponible uniquement au Cameroun et au Canada' }),
+        ...(pickupOk ? {} : { pickup: `Service disponible uniquement dans les pays supportés (${supportedNames})` }),
+        ...(dropoffOk ? {} : { dropoff: `Service disponible uniquement dans les pays supportés (${supportedNames})` }),
       }));
       return;
     }
@@ -305,7 +305,7 @@ export default function ColisPage() {
         <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2">
           <MaterialIcon name="info" size="sm" className="text-blue-400 mt-0.5" />
           <p className="text-xs text-blue-300/90">
-            Service de transport de colis <strong>urbain et national</strong> au Cameroun et au Canada.
+            Service de transport de colis <strong>urbain et national</strong> dans les pays supportés.
             Le transport à l&apos;international n&apos;est pas pris en charge.
           </p>
         </div>
