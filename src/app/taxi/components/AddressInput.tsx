@@ -22,6 +22,7 @@ interface AddressInputProps {
   required?: boolean;
   error?: string;
   externalLoading?: boolean;
+  countryRestriction?: string[];
 }
 
 export const AddressInput = ({
@@ -36,6 +37,7 @@ export const AddressInput = ({
   required = false,
   error,
   externalLoading = false,
+  countryRestriction,
 }: AddressInputProps) => {
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -44,6 +46,7 @@ export const AddressInput = ({
   const { suggestions, loading, getSuggestions, clearSuggestions } = usePlacesAutocomplete({
     autocompleteService,
     location,
+    countryRestriction,
   });
 
   // Réessayer l'autocomplétion si le service devient disponible et qu'il y a déjà du texte
