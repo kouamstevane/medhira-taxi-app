@@ -69,9 +69,6 @@ export const DriverProfilePublicDataSchema = z.object({
   phoneNumber: z.null().optional(),
   city: z.string().min(1).max(80).optional(),
   zipCode: z.string().min(1).max(16).optional(),
-  // TODO P2: legacy field — kept to accept current `useDriverRegistration` payload.
-  // Will be dropped when payload switches to `submitDriverApplication`.
-  userType: z.literal('chauffeur').optional(),
   driverType: z.enum(['chauffeur', 'livreur', 'les_deux']),
   vehicleType: z.enum(['velo', 'scooter', 'moto', 'voiture']).optional(),
   cityId: z.string().min(1).max(64).optional(),
@@ -102,6 +99,9 @@ export const CreateDriverProfileRequestSchema = z.object({
 export type DriverProfilePublicDataInput = z.infer<typeof DriverProfilePublicDataSchema>;
 export type CreateDriverProfileRequestInput = z.infer<typeof CreateDriverProfileRequestSchema>;
 
+export const SubmitDriverApplicationRequestSchema = CreateDriverProfileRequestSchema;
+export type SubmitDriverApplicationRequestInput = CreateDriverProfileRequestInput;
+
 // ============================================================================
 // Wallet — Schémas de validation pour les Cloud Functions onCall
 // ============================================================================
@@ -127,7 +127,7 @@ export type WalletPayBookingInput = z.infer<typeof WalletPayBookingSchema>;
 export type WalletRefundTransactionInput = z.infer<typeof WalletRefundTransactionSchema>;
 
 // ============================================================================
-// User Roles — spec §7.3 (remplace l'ancien champ scalaire `userType`)
+// User Roles — spec §7.3
 // ============================================================================
 //
 // `joinedAt` est un Firestore Timestamp côté Cloud Function ; on l'accepte en
@@ -140,3 +140,33 @@ export const UserRolesSchema = z.object({
 });
 
 export type UserRolesInput = z.infer<typeof UserRolesSchema>;
+
+export const RestaurantApplicationDataSchema = z.object({
+  name: z.string().min(2).max(120),
+  description: z.string().min(10).max(2000),
+  address: z.string().min(5).max(500),
+  phone: z.string().min(8).max(32),
+  email: z.string().email().max(254),
+  cuisineType: z.array(z.string().min(1)).min(1).max(10),
+  avgPricePerPerson: z.number().positive().optional(),
+  commissionRate: z.number().min(0).max(100).optional(),
+  imageUrl: z.string().max(1024).optional(),
+  coverImageUrl: z.string().max(1024).optional(),
+  openingHours: z.record(
+    z.string(),
+    z.object({
+      open: z.string(),
+      close: z.string(),
+      closed: z.boolean(),
+    }),
+  ).optional(),
+  location: z.object({ lat: z.number(), lng: z.number() }).optional(),
+}).strict();
+
+export const SubmitRestaurantApplicationRequestSchema = z.object({
+  restaurantId: z.string().min(1).optional(),
+  data: RestaurantApplicationDataSchema,
+}).strict();
+
+export type RestaurantApplicationDataInput = z.infer<typeof RestaurantApplicationDataSchema>;
+export type SubmitRestaurantApplicationRequestInput = z.infer<typeof SubmitRestaurantApplicationRequestSchema>;

@@ -30,10 +30,9 @@ import {
   encryptSensitiveData as encryptData,
 } from './utils/encryption.js';
 import { createNotification } from './utils/notificationService.js';
-import { BankDetailsSchema, EncryptionRequestSchema, CreateDriverProfileRequestSchema } from './validators/schemas.js';
+import { BankDetailsSchema, EncryptionRequestSchema } from './validators/schemas.js';
 import { z } from 'zod';
 import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
-import { hasRequiredFields } from './utils/validation.js';
 import * as crypto from 'crypto';
 import { getDatabase } from 'firebase-admin/database';
 import { DELIVERY_SHARE_RATE } from './config/stripe.js';
@@ -142,7 +141,6 @@ class RateLimiter {
 // Initialiser les rate limiters
 const bankValidationLimiter = new RateLimiter(10, 60 * 1000); // 10 requêtes / minute
 const encryptionLimiter = new RateLimiter(20, 60 * 1000); // 20 requêtes / minute
-const driverCreationLimiter = new RateLimiter(5, 60 * 1000);
 
 /**
  * Cloud Function: validateBankDetails
@@ -295,164 +293,8 @@ export const encryptSensitiveData = onCall(
   }
 );
 
-export const createDriverProfile = onCall(
-  { cors: true },
-  async (request: CallableRequest) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Vous devez être connecté pour effectuer cette action.');
-    }
-
-    if (!request.auth.uid) {
-      throw new HttpsError('unauthenticated', 'UID manquant. Vous devez être connecté.');
-    }
-
-    const identifier = request.auth.uid;
-    const allowed = await driverCreationLimiter.check(identifier, 'driver_profile_create');
-    if (!allowed) {
-      throw new HttpsError('resource-exhausted', 'Trop de tentatives. Réessayez dans une minute.');
-    }
-
-    // Validation stricte de l'enveloppe via Zod (SEC-V01).
-    // Le schéma `.strict()` rejette automatiquement toute clé inconnue,
-    // y compris les champs RGPD #C2 interdits à la racine
-    // (ssn/bank/dob/nationality/address/idNumber/documents).
-    let payload;
-    try {
-      payload = CreateDriverProfileRequestSchema.parse(request.data);
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        // Log détaillé côté serveur uniquement pour éviter de divulguer
-        // la structure du schéma à un attaquant.
-        console.warn('[createDriverProfile] Validation Zod échouée', {
-          uid: request.auth.uid,
-          issues: err.issues,
-        });
-        throw new HttpsError('invalid-argument', 'Données de profil chauffeur invalides.');
-      }
-      throw err;
-    }
-
-    if (request.auth.uid !== payload.driverId) {
-      throw new HttpsError('permission-denied', 'UID mismatch.');
-    }
-
-    const authEmail = request.auth.token.email as string | undefined;
-    const driverData = payload.driverData;
-
-    if (authEmail && driverData.email !== authEmail) {
-      throw new HttpsError('permission-denied', 'Email mismatch: L\'email fourni ne correspond pas à l\'email authentifié.');
-    }
-
-    if (driverData.phoneNumber != null) {
-      throw new HttpsError('failed-precondition', 'phoneNumber doit être null.');
-    }
-
-    // ⚠️ CORRECTION : year < 2010 rejette les anciens véhicules (pas > 2010 !)
-    if (
-      (driverData.driverType === 'chauffeur' || driverData.driverType === 'les_deux') &&
-      driverData.car?.year != null &&
-      Number(driverData.car.year) < 2010
-    ) {
-      throw new HttpsError('failed-precondition', 'Véhicule trop ancien. Année minimale: 2010.')
-    }
-
-    // RGPD #C2 : dob/nationality/address/ssn/bank/documents ne sont plus
-    // envoyés dans driverData (ils vivent dans drivers/{uid}/private/personal,
-    // écrit côté client par l'utilisateur propriétaire via writeBatch).
-    const requiredFields = ['firstName', 'lastName', 'phone']
-    if (driverData.driverType === 'chauffeur' || driverData.driverType === 'les_deux') {
-      requiredFields.push('car')
-    }
-    if (driverData.driverType === 'livreur' && driverData.vehicleType !== 'velo' && !driverData.deliveryVehicle) {
-      throw new HttpsError('failed-precondition', 'Véhicule livreur manquant.')
-    }
-
-    if (!hasRequiredFields(driverData, requiredFields)) {
-      throw new HttpsError('failed-precondition', 'Champs requis manquants.');
-    }
-
-    const driverRef = admin.firestore().collection('drivers').doc(payload.driverId);
-    const now = admin.firestore.FieldValue.serverTimestamp();
-
-    // Utiliser une transaction pour éviter les race conditions
-    try {
-      const result = await admin.firestore().runTransaction(async (transaction) => {
-        const snapshot = await transaction.get(driverRef);
-        const existingStatus = snapshot.exists ? (snapshot.data()?.status as string | undefined) : undefined;
-
-        if (existingStatus && !['draft', 'action_required', 'rejected', 'pending'].includes(existingStatus)) {
-          throw new HttpsError('failed-precondition', 'Compte déjà actif.');
-        }
-
-        const sanitizedData = {
-          ...driverData,
-          uid: payload.driverId,
-          email: driverData.email,
-          phoneNumber: null,
-          // userType supprimé (P1 spec §7.3) — discrimination via doc drivers/{uid}.
-          status: 'pending',
-          updatedAt: now,
-          driverType: driverData.driverType,
-          cityId: driverData.cityId || 'edmonton',
-          vehicleType: driverData.vehicleType ?? (driverData.driverType === 'chauffeur' ? 'voiture' : null),
-          activeMode: driverData.driverType === 'les_deux' ? 'taxi' : null,
-          activeDeliveryOrderId: null,
-          deliveriesCompleted: 0,
-          deliveryEarnings: 0,
-          ratingsCount: 0,
-        };
-
-        if (snapshot.exists) {
-          // Préserver les champs de rejet importants lors du merge
-          const existingData = snapshot.data();
-          if (!existingData) {
-            // Si existingData est undefined, utiliser sanitizedData tel quel
-            transaction.set(driverRef, sanitizedData, { merge: true });
-            return { success: true, existed: true };
-          }
-          
-          const rejectionFieldsToPreserve = [
-            'rejectionReason',
-            'rejectionDate',
-            'rejectionDetails',
-            'rejectionCount',
-            'lastRejectionBy'
-          ];
-          
-          const preservedFields = rejectionFieldsToPreserve.reduce((acc, field) => {
-            if (field in existingData && existingData[field] !== null && existingData[field] !== undefined) {
-              acc[field] = existingData[field];
-            }
-            return acc;
-          }, {} as Record<string, unknown>);
-          
-          transaction.set(driverRef, {
-            ...sanitizedData,
-            ...preservedFields,
-          }, { merge: true });
-          
-          return { success: true, existed: true };
-        } else {
-          transaction.set(driverRef, {
-            ...sanitizedData,
-            createdAt: now,
-          });
-          
-          return { success: true, existed: false };
-        }
-      });
-      
-      return result;
-    } catch (transactionError) {
-      // Si l'erreur est déjà une HttpsError, la renvoyer telle quelle
-      if (transactionError instanceof HttpsError) {
-        throw transactionError;
-      }
-      // Sinon, envelopper l'erreur de transaction dans une HttpsError
-      throw new HttpsError('internal', 'Erreur lors de la création du profil chauffeur.');
-    }
-  }
-);
+export { submitDriverApplication, createDriverProfile } from './driver/submitDriverApplication.js';
+export { submitRestaurantApplication } from './restaurant/submitRestaurantApplication.js';
 
 /**
  * Cloud Function: cleanupFailedUploads
