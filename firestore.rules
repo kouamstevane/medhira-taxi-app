@@ -57,7 +57,15 @@ service cloud.firestore {
              field.iv is string &&
              field.iv.length > 0 &&
              field.salt is string &&
-             field.salt.length > 0;
+              field.salt.length > 0;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(roleName) {
+      return isAuthenticated() && userDoc().roles[roleName] != null;
     }
     
     // ============================================================================
@@ -73,7 +81,7 @@ service cloud.firestore {
     match /users/{userId} {
       // Lecture : chaque utilisateur peut lire uniquement son propre document.
       // Les données client nécessaires aux chauffeurs doivent être dénormalisées dans les bookings.
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
       
       // CRÉATION : roles.client présent + enabled, pas de roles pro à la création initiale
       // (l'ajout de roles.driver/restaurant passe par Cloud Function admin — cf. P2 §8)
@@ -82,13 +90,18 @@ service cloud.firestore {
                     && !('driver' in request.resource.data.roles)
                     && !('restaurant' in request.resource.data.roles);
 
-      // UPDATE : pour P1, on autorise tout update owner sauf modification de roles.
-      // La règle complète anti self-promotion §8 est livrée en P2.
       allow update: if isOwner(userId)
-                    && request.resource.data.roles == resource.data.roles;
-      
-      // Suppression : Non autorisée pour les clients
-      allow delete: if false;
+                    && (
+                      request.resource.data.roles == resource.data.roles
+                      || (
+                        !('client' in resource.data.roles)
+                        && request.resource.data.roles.client.enabled == true
+                        && request.resource.data.roles.diff(resource.data.roles).affectedKeys().hasOnly(['client'])
+                      )
+                    )
+                    || isAdmin();
+
+      allow delete: if isAdmin();
     }
     
     // ============================================================================
@@ -126,15 +139,7 @@ service cloud.firestore {
       allow list: if isAdmin()
         || (isAuthenticated() && resource.data.status in ['approved', 'available']);
 
-      // Création : Les chauffeurs peuvent créer leur propre document
-      // CONTRAINTE : Aucun champ sensible autorisé à la racine (doit aller en sous-collection private)
-      allow create: if request.auth.uid == driverId &&
-                       request.resource.data.email != null &&
-                       request.resource.data.phoneNumber == null &&
-                       (request.resource.data.status == 'draft' || request.resource.data.status == 'pending') &&
-                       !request.resource.data.keys().hasAny(
-                         ['ssn', 'bank', 'address', 'dob', 'nationality', 'documents', 'idNumber']
-                       );
+      allow create: if isAdmin();
 
       // Mise à jour :
       // - Le propriétaire ne peut JAMAIS modifier : documents, status, kycStatus, approvedBy (FIX #C3 — auto-approbation KYC)
@@ -727,22 +732,15 @@ service cloud.firestore {
                       resource.data.ownerId == request.auth.uid ||
                       isAdmin());
       
-      // Création : Utilisateur authentifié ayant le rôle restaurateur (roles.restaurant présent)
-      // peut créer un compte restaurant. Le statut initial DOIT être 'pending_approval'
-      // (validation admin requise). L'attribution de roles.restaurant passe par Cloud Function
-      // admin — cf. P2 §8 (qui restreindra cette création à admin uniquement).
-      allow create: if isAuthenticated() &&
-                       'restaurant' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles &&
-                       request.resource.data.ownerId == request.auth.uid &&
-                       request.resource.data.status == 'pending_approval' &&
-                       request.resource.data.commissionRate is number &&
-                       request.resource.data.name is string;
+      allow create: if isAdmin();
       
-      // Mise à jour : Propriétaire (champs autorisés uniquement, pas de statut/commissionRate) OU admin (tout)
       allow update: if (isAuthenticated() &&
                         resource.data.ownerId == request.auth.uid &&
                         request.resource.data.status == resource.data.status &&
                         request.resource.data.commissionRate == resource.data.commissionRate &&
+                        request.resource.data.stripeConnectStatus == resource.data.stripeConnectStatus &&
+                        request.resource.data.stripeAccountId == resource.data.stripeAccountId &&
+                        request.resource.data.ownerId == resource.data.ownerId &&
                         request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['name', 'description', 'address', 'phone', 'email',
                                     'cuisineType', 'avgPricePerPerson', 'imageUrl', 'coverImageUrl',
