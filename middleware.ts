@@ -76,6 +76,18 @@ const DRIVER_PUBLIC_ROUTES = [
   '/driver/register',
 ];
 
+const RESTAURANT_ROUTES = [
+  '/restaurant/dashboard',
+  '/restaurant/pending',
+  '/restaurant/suspended',
+  '/restaurant/onboarding',
+  '/restaurant/register',
+];
+
+const RESTAURANT_PUBLIC_ROUTES = [
+  '/restaurant/register',
+];
+
 const ADMIN_ROUTES = [
   '/admin',
 ];
@@ -174,7 +186,9 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = matchesRoute(pathname, PUBLIC_ROUTES);
   const isDriverPublicRoute = matchesRoute(pathname, DRIVER_PUBLIC_ROUTES);
 
-  if (isAuthenticated && (isPublicRoute || isDriverPublicRoute)) {
+  const isRestaurantPublicRoute = matchesRoute(pathname, RESTAURANT_PUBLIC_ROUTES);
+
+  if (isAuthenticated && (isPublicRoute || isDriverPublicRoute || isRestaurantPublicRoute)) {
     const excludedRoutes = ['/'];
     const shouldRedirect = !excludedRoutes.includes(pathname);
 
@@ -216,6 +230,27 @@ export async function middleware(request: NextRequest) {
     // fin (roles.driver != null + statut effectif via roles.service).
     if (activeRole !== 'driver') {
       logEvent('REDIRECT', 'Non-driver active role accessing driver route → /dashboard', {
+        activeRole,
+        from: pathname,
+      });
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // Routes restaurant
+  const isRestaurantRoute = matchesRoute(pathname, RESTAURANT_ROUTES) &&
+    !matchesRoute(pathname, RESTAURANT_PUBLIC_ROUTES);
+
+  if (isRestaurantRoute) {
+    if (!isAuthenticated) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      logEvent('REDIRECT', 'Unauthenticated user on restaurant route → /login', { from: pathname });
+      return NextResponse.redirect(loginUrl);
+    }
+
+    if (activeRole !== 'restaurant') {
+      logEvent('REDIRECT', 'Non-restaurant active role accessing restaurant route → /dashboard', {
         activeRole,
         from: pathname,
       });
