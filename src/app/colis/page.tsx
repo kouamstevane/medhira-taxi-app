@@ -20,6 +20,8 @@ import {
   type ParcelSizeCategory,
 } from '@/services/parcel.service';
 import { getMarketByCountryCode, getSupportedCountryNames } from '@/utils/constants';
+import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { useCountryDetection } from '@/hooks/useCountryDetection';
 import type { PlaceSuggestion } from '@/types';
 
 type Step = 'form' | 'submitting' | 'success' | 'error';
@@ -75,6 +77,19 @@ export default function ColisPage() {
   const { currentUser } = useAuth();
   const { isLoaded, loadError, autocompleteService } = useGoogleMaps();
 
+  const { preciseLocation, error: geoError, loading: geoLoading, getCurrentPosition } = useCapacitorGeolocation();
+
+  const gpsLocation = preciseLocation ? { lat: preciseLocation.lat, lng: preciseLocation.lng } : null;
+
+  const { country: detectedCountry } = useCountryDetection({
+    location: gpsLocation,
+    enabled: isLoaded,
+  });
+
+  useEffect(() => {
+    if (isLoaded) getCurrentPosition();
+  }, [isLoaded, getCurrentPosition]);
+
   const [step, setStep] = useState<Step>('form');
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -117,7 +132,7 @@ export default function ColisPage() {
     }
     const pickupOk = getMarketByCountryCode(formData.pickupLocation.country) !== null;
     const dropoffOk = getMarketByCountryCode(formData.dropoffLocation.country) !== null;
-    const supportedNames = getSupportedCountryNames();
+    const supportedNames = getSupportedCountryNames(detectedCountry);
     if (!pickupOk || !dropoffOk) {
       setPriceEstimate(null);
       setFieldErrors((prev) => ({
@@ -305,7 +320,7 @@ export default function ColisPage() {
         <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2">
           <MaterialIcon name="info" size="sm" className="text-blue-400 mt-0.5" />
           <p className="text-xs text-blue-300/90">
-            Service de transport de colis <strong>urbain et national</strong> dans les pays supportés.
+            Service de transport de colis <strong>urbain et national</strong> dans les pays supportés ({getSupportedCountryNames(detectedCountry)}).
             Le transport à l&apos;international n&apos;est pas pris en charge.
           </p>
         </div>
@@ -329,6 +344,8 @@ export default function ColisPage() {
             placeholder="Où récupérer le colis ?"
             autocompleteService={autocompleteService}
             error={fieldErrors.pickup}
+            location={gpsLocation}
+            countryRestriction={detectedCountry ? [detectedCountry.toLowerCase()] : undefined}
           />
 
           <AddressInput
@@ -344,6 +361,8 @@ export default function ColisPage() {
             placeholder="Où livrer le colis ?"
             autocompleteService={autocompleteService}
             error={fieldErrors.dropoff}
+            location={gpsLocation}
+            countryRestriction={detectedCountry ? [detectedCountry.toLowerCase()] : undefined}
           />
         </section>
 
