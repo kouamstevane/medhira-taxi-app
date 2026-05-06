@@ -165,7 +165,7 @@ describe('useCountryDetection', () => {
     });
   });
 
-  it('slow-path Geocoder retourne CA pour Montréal', async () => {
+  it('fast-path + Geocoder confirment CA pour Montréal', async () => {
     mockGoogleMapsGeocoder();
     mockGeocoder.geocode.mockImplementation((_req: unknown, cb: (results: unknown[], status: string) => void) => {
       cb(

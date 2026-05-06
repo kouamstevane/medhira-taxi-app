@@ -123,7 +123,10 @@ export function useCountryDetection({
         }
 
         isDetectingRef.current = true;
-        if (!cancelled) setLoading(true);
+        if (!cancelled) {
+          setLoading(true);
+          setError(null);
+        }
 
         const fastResult = detectByBoundingBox(memoizedLocation);
         if (fastResult && !cancelled) setCountry(fastResult);
