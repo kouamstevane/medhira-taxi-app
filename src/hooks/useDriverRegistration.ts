@@ -464,8 +464,6 @@ export function useDriverRegistration() {
         vehicleType,
         cityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',
         status: 'pending',
-        // TODO P2: createDriverProfile renamed/refactored to submitDriverApplication, drop userType payload
-        userType: 'chauffeur',
         isAvailable: false,
         rating: 0,
         tripsCompleted: 0,
@@ -487,9 +485,9 @@ export function useDriverRegistration() {
       // handleStep5FinalSubmit reste valide (TTL 1h) et la CF retry les erreurs auth.
       const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
       const functions = getFunctions(app, functionsRegion);
-      const createDriverProfile = httpsCallable(functions, 'createDriverProfile');
-      // 1) CF crée le doc racine (Admin SDK — seul moyen d'écrire userType='chauffeur')
-      await retryWithBackoff(() => createDriverProfile({ driverId: userId, driverData: publicData }), {
+      const submitApplication = httpsCallable(functions, 'submitDriverApplication');
+      // 1) CF crée drivers/{uid} + update users/{uid}.roles.driver (Admin SDK)
+      await retryWithBackoff(() => submitApplication({ driverId: userId, driverData: publicData }), {
         maxAttempts: 3,
       });
 

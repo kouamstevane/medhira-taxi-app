@@ -55,10 +55,18 @@ export const adminManageRestaurant = onCall(
           approvedBy: uid,
           updatedAt: now,
         });
-        // TODO P2: l'ajout du rôle restaurant (`roles.restaurant`) sur le user
-        // owner sera géré par la Cloud Function `submitRestaurantApplication` /
-        // approbation admin (spec §9). Le champ legacy `userType` est supprimé.
-        void ownerId;
+        if (ownerId) {
+          try {
+            await admin.firestore().collection('users').doc(ownerId).set({
+              roles: { restaurant: { restaurantId, joinedAt: now } },
+              activeRole: 'restaurant',
+              lastActiveRole: 'restaurant',
+              updatedAt: now,
+            }, { merge: true });
+          } catch (e) {
+            console.warn('[adminManageRestaurant] Failed to write roles.restaurant on user', { ownerId, error: e });
+          }
+        }
         return { success: true, message: 'Restaurant approuvé avec succès' };
 
       case 'reject':

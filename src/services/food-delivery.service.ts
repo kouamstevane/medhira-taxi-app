@@ -40,6 +40,8 @@ import {
   setDoc,
   Timestamp
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getApps, getApp } from 'firebase/app';
 import { db } from '@/config/firebase';
 import type {
   FoodOrder,
@@ -313,53 +315,32 @@ export const getRestaurantMenu = async (
   }
 };
 
-/**
- * Créer un nouveau restaurant
- *
- * Règle 1 : Restaurant visible uniquement après approbation admin
- *
- * TODO P2: convertir en wrapper de la Cloud Function callable submitRestaurantApplication
- * (rules §8 interdiront alors la création directe côté client).
- *
- * @param restaurantData - Données du restaurant
- * @returns ID du restaurant créé
- */
 export const createRestaurant = async (
   restaurantData: Omit<Restaurant, 'id' | 'status' | 'rating' | 'totalReviews' | 'stripeConnectStatus' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
   try {
-  const validationResult = CreateRestaurantSchema.safeParse(restaurantData);
-  if (!validationResult.success) {
-    throw new Error(`Données de restaurant invalides: ${validationResult.error.message}`);
-  }
+    const validationResult = CreateRestaurantSchema.safeParse(restaurantData);
+    if (!validationResult.success) {
+      throw new Error(`Données de restaurant invalides: ${validationResult.error.message}`);
+    }
 
-  const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
-  const newRestaurantRef = doc(restaurantsRef);
+    const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+    const app = getApps().length ? getApp() : undefined;
+    if (!app) throw new Error('Firebase app not initialized');
+    const functions = getFunctions(app, functionsRegion);
+    const submit = httpsCallable(functions, 'submitRestaurantApplication');
 
-  const restaurant: Omit<Restaurant, 'createdAt' | 'updatedAt'> & {
-    createdAt: ReturnType<typeof serverTimestamp>;
-    updatedAt: ReturnType<typeof serverTimestamp>;
-  } = {
-    ...restaurantData,
-    id: newRestaurantRef.id,
-    status: 'pending_approval', // Règle 1
-    rating: 2.5, // Note par défaut (ou 0)
-    totalReviews: 0,
-    stripeConnectStatus: 'not_started',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
+    const result = await submit({ data: restaurantData });
+    const data = result.data as { restaurantId: string };
 
-  await setDoc(newRestaurantRef, restaurant);
+    logger.info('Demande de création de restaurant envoyée via callable', {
+      restaurantId: data.restaurantId,
+      ownerId: restaurantData.ownerId,
+      name: restaurantData.name,
+    });
 
-  logger.info('Demande de création de restaurant envoyée', {
-    restaurantId: newRestaurantRef.id,
-    ownerId: restaurantData.ownerId,
-    name: restaurantData.name,
-  });
-
-  return newRestaurantRef.id;
-  } catch (error) {
+    return data.restaurantId;
+  } catch (error: unknown) {
     console.error('[food-delivery.service] createRestaurant failed:', error);
     throw error;
   }
