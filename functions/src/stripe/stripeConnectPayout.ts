@@ -50,13 +50,16 @@ interface TransferResult {
   error?: string;
 }
 
-async function getUserRole(uid: string): Promise<'admin' | 'driver' | 'user'> {
-  // TODO P4: discriminate via account.metadata.accountType (cf. spec §3 décision 14, §15.3)
+async function getUserRole(uid: string): Promise<'admin' | 'driver' | 'restaurant' | 'user'> {
   const db = getDb();
   const adminSnap = await db.collection('admins').doc(uid).get();
   if (adminSnap.exists) return 'admin';
-  const driverSnap = await db.collection('drivers').doc(uid).get();
-  if (driverSnap.exists) return 'driver';
+  const userSnap = await db.collection('users').doc(uid).get();
+  if (userSnap.exists) {
+    const roles = userSnap.data()?.roles;
+    if (roles?.driver != null) return 'driver';
+    if (roles?.restaurant != null) return 'restaurant';
+  }
   return 'user';
 }
 

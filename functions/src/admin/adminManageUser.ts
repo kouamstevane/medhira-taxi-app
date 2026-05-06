@@ -6,7 +6,8 @@ import { enforceRateLimit } from '../utils/rateLimiter.js';
 
 const ManageUserSchema = z.object({
   userId: z.string().min(1),
-  role: z.enum(['client', 'restaurateur', 'chauffeur', 'admin']),
+  action: z.enum(['add_role', 'remove_role']),
+  role: z.enum(['driver', 'restaurant']),
 });
 
 export const adminManageUser = onCall(
@@ -30,7 +31,7 @@ export const adminManageUser = onCall(
       );
     }
 
-    const { userId, role } = parsed.data;
+    const { userId, action, role } = parsed.data;
 
     const userRef = admin.firestore().collection('users').doc(userId);
     const userDoc = await userRef.get();
@@ -39,17 +40,53 @@ export const adminManageUser = onCall(
       throw new HttpsError('not-found', 'Utilisateur introuvable');
     }
 
-    // TODO P2: refactor for proper roles add/remove via Cloud Function
-    // (cas C6 spec §9 — addProRole/removeProRole). Pour P1, on ne touche plus
-    // au champ legacy `userType` ; cette callable devient un no-op tracé.
-    await userRef.update({
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      lastModifiedBy: uid,
-    });
+    const now = admin.firestore.FieldValue.serverTimestamp();
 
-    return {
-      success: true,
-      message: `Rôle de l'utilisateur mis à jour vers ${role}`,
-    };
+    if (action === 'add_role') {
+      if (role === 'driver') {
+        await userRef.set({
+          roles: { driver: { joinedAt: now } },
+          updatedAt: now,
+          lastModifiedBy: uid,
+        }, { merge: true });
+      } else if (role === 'restaurant') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Pour ajouter le rôle restaurant, utilisez adminManageRestaurant (approve).',
+        );
+      }
+      return { success: true, message: `Rôle ${role} ajouté à l'utilisateur` };
+    }
+
+    if (action === 'remove_role') {
+      const userData = userDoc.data()!;
+      const update: Record<string, unknown> = {
+        updatedAt: now,
+        lastModifiedBy: uid,
+      };
+
+      if (role === 'driver') {
+        update['roles.driver'] = admin.firestore.FieldValue.delete();
+        if (userData.activeRole === 'driver') {
+          update.activeRole = 'client';
+        }
+        if (userData.lastActiveRole === 'driver') {
+          update.lastActiveRole = userData.roles?.restaurant ? 'restaurant' : 'client';
+        }
+      } else if (role === 'restaurant') {
+        update['roles.restaurant'] = admin.firestore.FieldValue.delete();
+        if (userData.activeRole === 'restaurant') {
+          update.activeRole = 'client';
+        }
+        if (userData.lastActiveRole === 'restaurant') {
+          update.lastActiveRole = userData.roles?.driver ? 'driver' : 'client';
+        }
+      }
+
+      await userRef.update(update);
+      return { success: true, message: `Rôle ${role} retiré de l'utilisateur` };
+    }
+
+    throw new HttpsError('invalid-argument', 'Action non supportée');
   },
 );
