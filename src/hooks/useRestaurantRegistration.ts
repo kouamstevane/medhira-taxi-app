@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   createUserWithEmailAndPassword,
@@ -197,6 +197,21 @@ export function useRestaurantRegistration() {
     }
   }, []);
 
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveDraftDebounced = useCallback((data: Partial<Step3Data>, step: 3 | 4) => {
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      handleDraftSave(data, step);
+    }, 1500);
+  }, [handleDraftSave]);
+
+  useEffect(() => {
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
+  }, []);
+
   const handleSubmit = useCallback(async (data: Step4Data) => {
     setLoading(true);
     setIsSubmitting(true);
@@ -257,6 +272,77 @@ export function useRestaurantRegistration() {
     return () => unsubscribe();
   }, [fromBecomePro, router]);
 
+  useEffect(() => {
+    if (currentStep !== 1 && !fromBecomePro) return;
+    setRestoringDraft(true);
+    const unsubscribe = onAuthStateChanged(getAuth(), async (user) => {
+      if (!user) {
+        setRestoringDraft(false);
+        return;
+      }
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          if (data.draftRestaurant && data.draftRestaurant.data) {
+            const draftData = { ...data.draftRestaurant.data } as Record<string, unknown>;
+            if ('cuisineTypes' in draftData) {
+              (draftData as Record<string, unknown>).cuisineType = draftData.cuisineTypes;
+              delete draftData.cuisineTypes;
+            }
+            setStep3DataState((prev) => ({ ...prev, ...draftData }));
+            if (data.draftRestaurant.currentStep === 3) {
+              setCurrentStep(3);
+            } else if (data.draftRestaurant.currentStep === 4) {
+              setStep4DataState((prev) => ({
+                ...prev,
+                openingHours: data.draftRestaurant.data?.openingHours || prev.openingHours,
+              }));
+              setCurrentStep(4);
+            }
+          }
+        }
+      } catch {
+        // silent — draft restoration is best-effort
+      } finally {
+        setRestoringDraft(false);
+      }
+    });
+    return () => unsubscribe();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromBecomePro]);
+
+  useEffect(() => {
+    if (!resubmitRestaurantId) return;
+    const unsubscribe = onAuthStateChanged(getAuth(), async (user) => {
+      if (!user) return;
+      try {
+        const snap = await getDoc(doc(db, 'restaurants', resubmitRestaurantId));
+        if (snap.exists()) {
+          const r = snap.data();
+          setStep3DataState({
+            name: r.name || '',
+            description: r.description || '',
+            cuisineType: r.cuisineType || [],
+            address: r.address || '',
+            phone: r.phone || '',
+            email: r.email || '',
+            avgPricePerPerson: r.avgPricePerPerson,
+            imageUrl: r.imageUrl,
+            coverImageUrl: r.coverImageUrl,
+            location: r.location,
+          });
+          if (r.openingHours) {
+            setStep4DataState({ openingHours: r.openingHours });
+          }
+        }
+      } catch {
+        // silent — pre-fill is best-effort
+      }
+    });
+    return () => unsubscribe();
+  }, [resubmitRestaurantId]);
+
   return {
     currentStep,
     loading,
@@ -279,6 +365,7 @@ export function useRestaurantRegistration() {
     handleStep1Submit,
     handleStep2Verified,
     handleDraftSave,
+    saveDraftDebounced,
     handleSubmit,
   };
 }
