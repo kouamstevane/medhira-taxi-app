@@ -11,21 +11,10 @@ import { ToastContainer } from '@/components/ui/Toast';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { onAuthStateChanged } from 'firebase/auth';
 import { RESTAURANT_DEFAULTS } from '@/utils/constants';
+import { CUISINE_TYPES, RESTAURANT_DAYS } from '@/utils/restaurant-constants';
 import type { Restaurant } from '@/types/food-delivery';
 
-const CUISINE_TYPES = [
-  "Africaine", "Européenne", "Asiatique", "Fast Food", "Pâtisserie", "Pizza", "Burger", "Santé/Bio", "Desserts"
-];
-
-const DAYS = [
-  { id: 'monday', label: 'Lundi' },
-  { id: 'tuesday', label: 'Mardi' },
-  { id: 'wednesday', label: 'Mercredi' },
-  { id: 'thursday', label: 'Jeudi' },
-  { id: 'friday', label: 'Vendredi' },
-  { id: 'saturday', label: 'Samedi' },
-  { id: 'sunday', label: 'Dimanche' },
-];
+const DAYS = RESTAURANT_DAYS.map(d => ({ id: d.key, label: d.label }));
 
 export default function CreateRestaurantPage() {
   const router = useRouter();
