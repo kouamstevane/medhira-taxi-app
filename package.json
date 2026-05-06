@@ -24,6 +24,9 @@
     "test:coverage": "jest --coverage",
     "test:firestore": "jest --config jest.firestore.config.js",
     "test:firestore:emulators": "firebase emulators:exec \"jest --config jest.firestore.config.js\"",
+    "test:e2e": "playwright test",
+    "test:e2e:ci": "playwright test --reporter=list",
+    "test:regression": "playwright test e2e/registration-full-flow.spec.ts e2e/registration-otp.spec.ts",
     "optimize:images": "node optimize-images.js",
     "convert:svg": "node convert-svg-to-webp.js"
   },

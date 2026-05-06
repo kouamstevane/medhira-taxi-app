@@ -42,13 +42,26 @@ class VoipService {
 
   private listeners: ((state: VoipCallState) => void)[] = [];
 
+  private isEngineInitialized = false;
+  private engineInitPromise: Promise<void> | null = null;
+
   constructor(engine?: IVoipEngine) {
-    // Par défaut on utilise Twilio, mais on peut injecter un autre engine
+    // Par défaut on utilise Twilio, mais on peut injecter un autre engine.
+    // L'initialisation est différée jusqu'à ce qu'un utilisateur soit authentifié
+    // (voir VoipCallProvider) car le moteur Twilio appelle getCallToken qui
+    // exige une session Firebase Auth valide.
     this.engine = engine || new TwilioVoipEngine();
-    
-    if (typeof window !== 'undefined') {
-      this.initEngine();
-    }
+  }
+
+  /** À appeler une fois que l'utilisateur est authentifié (idempotent). */
+  public async ensureEngineInitialized(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    if (this.isEngineInitialized) return;
+    if (this.engineInitPromise) return this.engineInitPromise;
+    this.engineInitPromise = this.initEngine().finally(() => {
+      this.engineInitPromise = null;
+    });
+    return this.engineInitPromise;
   }
 
   private async initEngine() {
@@ -66,6 +79,8 @@ class VoipService {
       this.engine.onError = (message) => {
         this.updateState({ error: message });
       };
+
+      this.isEngineInitialized = true;
     } catch (error) {
       console.error('[voip.service] initEngine failed:', error);
       this.updateState({ error: 'Initialisation moteur d\'appel échouée' });

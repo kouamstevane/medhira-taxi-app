@@ -22,6 +22,7 @@ import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
 import { DRIVER_SHARE_RATE } from '../config/stripe.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { createStripeClient } from './stripe-client.js';
 
 // Type alias pour les événements Stripe (compatible Stripe v22 / NodeNext)
 type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;
@@ -68,7 +69,7 @@ function getStripe(): InstanceType<typeof Stripe> {
     if (!key) {
       throw new Error('STRIPE_SECRET_KEY is empty');
     }
-    _stripe = new Stripe(key, { apiVersion: '2026-03-25.dahlia' });
+    _stripe = createStripeClient(key);
   }
   return _stripe;
 }

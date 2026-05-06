@@ -1,0 +1,11 @@
+services:
+  stripe-mock:
+    image: stripe/stripe-mock:latest
+    ports:
+      - "12111:12111"
+      - "12112:12112"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:12111/v1/charges"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

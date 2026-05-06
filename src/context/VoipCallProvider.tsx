@@ -27,6 +27,13 @@ export function VoipCallProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   const { callState } = useVoipCall();
 
+  // 0. Initialiser le moteur VoIP uniquement quand l'utilisateur est authentifié
+  // (le moteur Twilio appelle getCallToken qui exige une session Firebase Auth).
+  useEffect(() => {
+    if (!currentUser) return;
+    voipService.ensureEngineInitialized();
+  }, [currentUser]);
+
   // 1. Écouter les appels entrants via Firestore
   useEffect(() => {
     if (!currentUser) return;

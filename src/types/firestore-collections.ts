@@ -60,7 +60,7 @@ export interface UserCollection {
  * 
  * Règles de sécurité :
  * - Read : Tous les utilisateurs authentifiés
- * - Create : Propriétaire uniquement (email obligatoire, phoneNumber = null, userType = 'chauffeur')
+ * - Create : Cloud Function uniquement (Admin SDK)
  * - Update : Propriétaire OU admin
  * - Delete : Admin OU propriétaire (si statut = 'rejected' ou 'draft')
  * 
@@ -75,7 +75,6 @@ export interface UserCollection {
 export interface DriverCollection {
   // === Champs existants (inchangés) ===
   driverId: string
-  userType: 'chauffeur'          // JAMAIS modifié — compatibilité Cloud Function
   email: string
   phoneNumber: null              // Toujours null — interdiction d'auth par téléphone
   firstName: string

@@ -105,3 +105,7 @@ export function hasRole<R extends ActiveRole>(
   if (role === 'client') return true;
   return user.roles[role] != null;
 }
+
+export function isApprovedRoleStatus(status: string | undefined): boolean {
+  return status === 'approved';
+}

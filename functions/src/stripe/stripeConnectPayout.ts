@@ -1,16 +1,17 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import Stripe from 'stripe';
 import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import Stripe from 'stripe';
+import { createStripeClient } from './stripe-client.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
 let _stripe: InstanceType<typeof Stripe> | null = null;
 function getStripe(): InstanceType<typeof Stripe> {
   if (!_stripe) {
-    _stripe = new Stripe(stripeSecretKey.value(), { apiVersion: '2026-03-25.dahlia' });
+    _stripe = createStripeClient(stripeSecretKey.value());
   }
   return _stripe;
 }

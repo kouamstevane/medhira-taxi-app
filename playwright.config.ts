@@ -7,6 +7,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
+  globalSetup: './e2e/helpers/global-setup.ts',
+  globalTeardown: './e2e/helpers/global-teardown.ts',
   use: {
     baseURL: 'http://localhost:3001',
     trace: 'on-first-retry',

@@ -22,6 +22,16 @@
 
 # ── Capacitor ──────────────────────────────────────────────────────
 -keep class com.getcapacitor.** { *; }
+-keep @com.getcapacitor.annotation.CapacitorPlugin class * { *; }
+-keepclassmembers class * {
+    @com.getcapacitor.PluginMethod <methods>;
+}
+
+# ── Plugins natifs et services Medjira (réflexion via Capacitor) ──
+# LocationForegroundService, VoipForegroundService, VoipPlugin,
+# BackgroundGeolocationPlugin sont chargés par nom depuis le manifest /
+# le bridge Capacitor — ne pas les obfusquer.
+-keep class com.medjiraservice.medjiraserviceapp.** { *; }
 
 # ── Firebase ───────────────────────────────────────────────────────
 -keep class com.google.firebase.** { *; }

@@ -200,7 +200,9 @@ describe('Tests d\'Intégration - Inscription par Téléphone', () => {
           phoneNumber: mockUser.phoneNumber,
           firstName: 'Jean',
           lastName: 'Dupont',
-          userType: 'client',
+          roles: { client: { enabled: true, joinedAt: expect.any(Date) } },
+          activeRole: 'client',
+          emailVerified: true,
           createdAt: new Date(),
         });
       }
@@ -264,7 +266,9 @@ describe('Tests d\'Intégration - Inscription par Téléphone', () => {
         phoneNumber: userCredential.user.phoneNumber,
         firstName: 'Jean',
         lastName: 'Dupont',
-        userType: 'client',
+        roles: { client: { enabled: true, joinedAt: expect.any(Date) } },
+        activeRole: 'client',
+        emailVerified: true,
         createdAt: new Date(),
       });
 

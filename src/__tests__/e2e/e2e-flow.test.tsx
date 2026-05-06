@@ -153,7 +153,9 @@ describe('E2E - Flux Complet d\'Inscription par Téléphone', () => {
             phoneNumber: userCredential.user.phoneNumber,
             firstName: testContext.user.firstName,
             lastName: testContext.user.lastName,
-            userType: 'client',
+            roles: { client: { enabled: true, joinedAt: expect.any(Date) } },
+            activeRole: 'client',
+            emailVerified: true,
             createdAt: new Date(),
           });
         }

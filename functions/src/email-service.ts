@@ -1,5 +1,29 @@
 import { Resend } from 'resend';
 
+async function maybeRecordDevEmail(payload: {
+  to: string | string[];
+  from: string;
+  subject: string;
+  html?: string;
+  text?: string;
+}): Promise<void> {
+  if (process.env.FUNCTIONS_EMULATOR !== 'true') return;
+  try {
+    const admin = await import('firebase-admin');
+    if (!admin.apps.length) admin.initializeApp();
+    await admin
+      .firestore()
+      .collection('_emails_sent_dev')
+      .add({
+        ...payload,
+        to: Array.isArray(payload.to) ? payload.to[0] : payload.to,
+        capturedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+  } catch {
+    // best-effort
+  }
+}
+
 interface SendVerificationCodeParams {
   to: string;
   code: string;
@@ -86,11 +110,16 @@ export async function sendVerificationCodeEmail(
   const resend = new Resend(resolvedApiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'medjira@medjira.com';
 
-  const result = await resend.emails.send({
+  const emailPayload = {
     from: `Medjira <${fromEmail}>`,
     to,
     subject: 'Votre code de vérification Medjira',
     html: getVerificationCodeTemplate(code),
+  };
+  await maybeRecordDevEmail(emailPayload);
+
+  const result = await resend.emails.send({
+    ...emailPayload,
     tags: [
       { name: 'uid', value: uid },
       { name: 'type', value: 'verification_code' },
@@ -173,12 +202,9 @@ export async function sendDriverStatusEmail(
   const resend = new Resend(resolvedApiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'medjira@medjira.com';
 
-  const result = await resend.emails.send({
-    from: `Medjira <${fromEmail}>`,
-    to,
-    subject,
-    html,
-  });
+  const driverPayload = { from: `Medjira <${fromEmail}>`, to, subject, html };
+  await maybeRecordDevEmail(driverPayload);
+  const result = await resend.emails.send(driverPayload);
 
   if (result.error) {
     throw new Error(`Erreur Resend: ${result.error.message}`);
@@ -238,12 +264,9 @@ export async function sendRestaurantStatusEmail(
   const resend = new Resend(resolvedApiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'medjira@medjira.com';
 
-  const result = await resend.emails.send({
-    from: `Medjira <${fromEmail}>`,
-    to,
-    subject,
-    html,
-  });
+  const restaurantPayload = { from: `Medjira <${fromEmail}>`, to, subject, html };
+  await maybeRecordDevEmail(restaurantPayload);
+  const result = await resend.emails.send(restaurantPayload);
 
   if (result.error) {
     throw new Error(`Erreur Resend: ${result.error.message}`);
@@ -266,10 +289,12 @@ export async function sendAdminRestaurantNotification(input: {
   }
   const resend = new Resend(apiKey);
   const adminLink = `${appBaseUrl}/admin/restaurants?filter=pending_approval&id=${encodeURIComponent(input.restaurantId)}`;
-  await resend.emails.send({
+  const adminPayload = {
     from: 'Medjira <noreply@medjira.com>',
     to: adminEmail,
     subject: `Nouvelle inscription restaurateur : ${input.restaurantName}`,
     html: `<p>Une nouvelle candidature restaurateur vient d'être soumise.</p><ul><li><strong>Restaurant :</strong> ${input.restaurantName}</li><li><strong>Email gérant :</strong> ${input.ownerEmail}</li></ul><p><a href="${adminLink}">Voir dans l'admin</a></p>`,
-  });
+  };
+  await maybeRecordDevEmail(adminPayload);
+  await resend.emails.send(adminPayload);
 }

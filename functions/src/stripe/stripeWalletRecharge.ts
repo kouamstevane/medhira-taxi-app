@@ -5,6 +5,7 @@ import Stripe from 'stripe';
 import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { DEFAULT_CURRENCY, MIN_WALLET_RECHARGE, MAX_WALLET_RECHARGE } from '../config/stripe.js';
+import { createStripeClient } from './stripe-client.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
@@ -22,7 +23,7 @@ function getStripe(): InstanceType<typeof Stripe> {
       throw new HttpsError('internal', 'Configuration error: Stripe key invalid');
     }
     console.log('[stripeWalletRecharge] Initializing Stripe client with key starting with:', trimmedKey.substring(0, 10));
-    _stripe = new Stripe(trimmedKey, { apiVersion: '2026-03-25.dahlia' });
+    _stripe = createStripeClient(trimmedKey);
   }
   return _stripe;
 }

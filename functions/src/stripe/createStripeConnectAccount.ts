@@ -3,8 +3,8 @@ import { defineSecret } from 'firebase-functions/params';
 import { logger } from 'firebase-functions/v2';
 import { z } from 'zod';
 import * as admin from 'firebase-admin';
-import Stripe from 'stripe';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { createStripeClient } from './stripe-client.js';
 
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const APP_BASE_URL = defineSecret('APP_BASE_URL');
@@ -31,7 +31,7 @@ export async function handleCreateStripeConnectAccount(request: CallableRequest<
   if (r.ownerId !== uid) throw new HttpsError('permission-denied', 'Action non autorisée.');
   if (r.status !== 'approved') throw new HttpsError('failed-precondition', 'Le restaurant doit être approuvé.');
 
-  const stripe = new Stripe(STRIPE_SECRET_KEY.value(), { apiVersion: '2026-03-25.dahlia' });
+  const stripe = createStripeClient(STRIPE_SECRET_KEY.value());
   const baseUrl = APP_BASE_URL.value();
 
   let accountId: string | undefined = r.stripeAccountId;

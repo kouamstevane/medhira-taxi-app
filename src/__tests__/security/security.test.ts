@@ -306,10 +306,10 @@ describe('Tests de Sécurité - Inscription par Téléphone', () => {
           // Seul l'utilisateur authentifié peut lire/écrire ses propres données
           allow read, write: if request.auth != null && request.auth.uid == userId;
           
-          // Empêcher la modification du champ userType après création
+          // Empêcher la modification des rôles après création
           allow update: if request.auth != null 
             && request.auth.uid == userId 
-            && request.resource.data.userType == resource.data.userType;
+            && request.resource.data.roles == resource.data.roles;
         }
       `;
 

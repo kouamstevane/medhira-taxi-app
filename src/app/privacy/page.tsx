@@ -17,24 +17,24 @@ const WEBSITE = 'https://medjira.com';
 
 export default function PrivacyPage() {
     return (
-        <main className="min-h-screen bg-white text-gray-900">
+        <main className="min-h-screen bg-background text-foreground">
             <div className="mx-auto max-w-3xl px-4 py-10 sm:py-16">
-                <header className="mb-10 border-b border-gray-200 pb-6">
+                <header className="mb-10 border-b border-border pb-6">
                     <Link
                         href="/"
-                        className="text-sm text-blue-600 hover:underline"
+                        className="text-sm text-primary hover:underline"
                     >
                         ← Retour à l&apos;accueil
                     </Link>
                     <h1 className="mt-4 text-3xl font-bold sm:text-4xl">
                         Politique de confidentialité
                     </h1>
-                    <p className="mt-2 text-sm text-gray-500">
+                    <p className="mt-2 text-sm text-muted-foreground">
                         Dernière mise à jour : {LAST_UPDATED}
                     </p>
                 </header>
 
-                <article className="prose prose-gray max-w-none space-y-8 text-[15px] leading-7">
+                <article className="prose prose-invert max-w-none space-y-8 text-[15px] leading-7">
                     <section>
                         <p>
                             La présente politique décrit comment{' '}
@@ -67,7 +67,7 @@ export default function PrivacyPage() {
                             Site web :{' '}
                             <a
                                 href={WEBSITE}
-                                className="text-blue-600 hover:underline"
+                                className="text-primary hover:underline"
                             >
                                 {WEBSITE}
                             </a>
@@ -75,7 +75,7 @@ export default function PrivacyPage() {
                             Contact protection des données :{' '}
                             <a
                                 href={`mailto:${CONTACT_EMAIL}`}
-                                className="text-blue-600 hover:underline"
+                                className="text-primary hover:underline"
                             >
                                 {CONTACT_EMAIL}
                             </a>
@@ -196,7 +196,7 @@ export default function PrivacyPage() {
                         <div className="overflow-x-auto">
                             <table className="my-4 w-full border-collapse text-sm">
                                 <thead>
-                                    <tr className="border-b border-gray-300 bg-gray-50">
+                                    <tr className="border-b border-border bg-card">
                                         <th className="p-2 text-left">
                                             Finalité
                                         </th>
@@ -206,7 +206,7 @@ export default function PrivacyPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr className="border-b border-gray-200">
+                                    <tr className="border-b border-border">
                                         <td className="p-2">
                                             Création et gestion du compte
                                         </td>
@@ -214,7 +214,7 @@ export default function PrivacyPage() {
                                             Exécution du contrat
                                         </td>
                                     </tr>
-                                    <tr className="border-b border-gray-200">
+                                    <tr className="border-b border-border">
                                         <td className="p-2">
                                             Mise en relation chauffeur/client,
                                             calcul d&apos;itinéraire
@@ -223,7 +223,7 @@ export default function PrivacyPage() {
                                             Exécution du contrat
                                         </td>
                                     </tr>
-                                    <tr className="border-b border-gray-200">
+                                    <tr className="border-b border-border">
                                         <td className="p-2">
                                             Paiement et facturation
                                         </td>
@@ -232,7 +232,7 @@ export default function PrivacyPage() {
                                             légale
                                         </td>
                                     </tr>
-                                    <tr className="border-b border-gray-200">
+                                    <tr className="border-b border-border">
                                         <td className="p-2">
                                             Vérification des chauffeurs
                                             (documents)
@@ -242,7 +242,7 @@ export default function PrivacyPage() {
                                             personnes)
                                         </td>
                                     </tr>
-                                    <tr className="border-b border-gray-200">
+                                    <tr className="border-b border-border">
                                         <td className="p-2">
                                             Notifications de course
                                         </td>
@@ -250,7 +250,7 @@ export default function PrivacyPage() {
                                             Exécution du contrat
                                         </td>
                                     </tr>
-                                    <tr className="border-b border-gray-200">
+                                    <tr className="border-b border-border">
                                         <td className="p-2">
                                             Notifications marketing
                                         </td>
@@ -258,7 +258,7 @@ export default function PrivacyPage() {
                                             Consentement (révocable)
                                         </td>
                                     </tr>
-                                    <tr className="border-b border-gray-200">
+                                    <tr className="border-b border-border">
                                         <td className="p-2">
                                             Sécurité, prévention de la fraude
                                         </td>
@@ -266,7 +266,7 @@ export default function PrivacyPage() {
                                             Intérêt légitime
                                         </td>
                                     </tr>
-                                    <tr className="border-b border-gray-200">
+                                    <tr className="border-b border-border">
                                         <td className="p-2">
                                             Amélioration de l&apos;application
                                             (analytics, crash logs)
@@ -456,7 +456,7 @@ export default function PrivacyPage() {
                             Pour exercer ces droits, écrivez-nous à{' '}
                             <a
                                 href={`mailto:${CONTACT_EMAIL}`}
-                                className="text-blue-600 hover:underline"
+                                className="text-primary hover:underline"
                             >
                                 {CONTACT_EMAIL}
                             </a>{' '}
@@ -470,7 +470,7 @@ export default function PrivacyPage() {
                             ligne sur{' '}
                             <a
                                 href={`${WEBSITE}/account/delete`}
-                                className="text-blue-600 hover:underline"
+                                className="text-primary hover:underline"
                             >
                                 {WEBSITE}/account/delete
                             </a>
@@ -482,7 +482,7 @@ export default function PrivacyPage() {
                             auprès de la <strong>CNIL</strong> :{' '}
                             <a
                                 href="https://www.cnil.fr/fr/plaintes"
-                                className="text-blue-600 hover:underline"
+                                className="text-primary hover:underline"
                                 target="_blank"
                                 rel="noreferrer"
                             >
@@ -612,7 +612,7 @@ export default function PrivacyPage() {
                             📧 Données personnelles :{' '}
                             <a
                                 href={`mailto:${CONTACT_EMAIL}`}
-                                className="text-blue-600 hover:underline"
+                                className="text-primary hover:underline"
                             >
                                 {CONTACT_EMAIL}
                             </a>
@@ -620,7 +620,7 @@ export default function PrivacyPage() {
                             📧 Support général :{' '}
                             <a
                                 href={`mailto:${SUPPORT_EMAIL}`}
-                                className="text-blue-600 hover:underline"
+                                className="text-primary hover:underline"
                             >
                                 {SUPPORT_EMAIL}
                             </a>
@@ -628,7 +628,7 @@ export default function PrivacyPage() {
                             🌐 Site :{' '}
                             <a
                                 href={WEBSITE}
-                                className="text-blue-600 hover:underline"
+                                className="text-primary hover:underline"
                             >
                                 {WEBSITE}
                             </a>
@@ -636,10 +636,10 @@ export default function PrivacyPage() {
                     </section>
                 </article>
 
-                <footer className="mt-12 border-t border-gray-200 pt-6 text-center text-sm text-gray-500">
+                <footer className="mt-12 border-t border-border pt-6 text-center text-sm text-muted-foreground">
                     <Link
                         href="/"
-                        className="text-blue-600 hover:underline"
+                        className="text-primary hover:underline"
                     >
                         ← Retour à l&apos;accueil
                     </Link>

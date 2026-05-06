@@ -94,7 +94,8 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       const db = context.firestore();
       await setDoc(doc(db, 'users', uid), {
         uid,
-        userType: 'client',
+        roles: { client: { enabled: true, joinedAt: new Date().toISOString() } },
+        activeRole: 'client',
         email: email || null,
         phoneNumber: phoneNumber || null,
         createdAt: new Date().toISOString(),
@@ -112,7 +113,6 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       const db = context.firestore();
       await setDoc(doc(db, 'drivers', uid), {
         uid,
-        userType: 'chauffeur',
         email,
         phoneNumber: null,
         status,
@@ -134,7 +134,8 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       // Tentative d'écriture sans authentification
       await assertFails(setDoc(doc(anonDb, 'users', aliceId), { 
-        userType: 'client' 
+        roles: { client: { enabled: true, joinedAt: new Date().toISOString() } },
+        activeRole: 'client',
       }));
     });
 
@@ -158,7 +159,8 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       await assertSucceeds(setDoc(doc(aliceDb, 'users', aliceId), {
         uid: aliceId,
-        userType: 'client',
+        roles: { client: { enabled: true, joinedAt: new Date().toISOString() } },
+        activeRole: 'client',
         email: 'alice@example.com',
         emailVerified: true,
         phoneNumber: null,
@@ -171,7 +173,8 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       await assertSucceeds(setDoc(doc(bobDb, 'users', bobId), {
         uid: bobId,
-        userType: 'client',
+        roles: { client: { enabled: true, joinedAt: new Date().toISOString() } },
+        activeRole: 'client',
         email: null,
         phoneNumber: '+237123456789',
         phoneVerified: true,
@@ -184,7 +187,8 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       await assertSucceeds(setDoc(doc(charlieDb, 'users', charlieId), {
         uid: charlieId,
-        userType: 'client',
+        roles: { client: { enabled: true, joinedAt: new Date().toISOString() } },
+        activeRole: 'client',
         email: 'charlie@example.com',
         phoneNumber: '+237987654321',
         emailVerified: true,
@@ -240,12 +244,16 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       await assertFails(deleteDoc(doc(aliceDb, 'users', aliceId)));
     });
 
-    test('Création de compte avec mauvais userType doit échouer', async () => {
+    test('Création de compte avec roles.driver doit échouer', async () => {
       const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
       
       await assertFails(setDoc(doc(aliceDb, 'users', aliceId), {
         uid: aliceId,
-        userType: 'chauffeur', // Mauvais type pour users
+        roles: {
+          client: { enabled: true, joinedAt: new Date().toISOString() },
+          driver: { joinedAt: new Date().toISOString() },
+        },
+        activeRole: 'client',
         email: 'alice@example.com',
       }));
     });
@@ -261,7 +269,6 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       await assertFails(setDoc(doc(driverDb, 'drivers', driverId), {
         uid: driverId,
-        userType: 'chauffeur',
         email: 'driver@example.com',
         phoneNumber: null,
         status: 'pending',
@@ -273,7 +280,6 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       await assertSucceeds(setDoc(doc(driverDb, 'drivers', driverId), {
         uid: driverId,
-        userType: 'chauffeur',
         email: 'driver@example.com',
         phoneNumber: null,
         status: 'pending',
@@ -285,7 +291,6 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       await assertFails(setDoc(doc(driverDb, 'drivers', driverId), {
         uid: driverId,
-        userType: 'chauffeur',
         email: 'driver@example.com',
         phoneNumber: '+237123456789', // Interdit pour les chauffeurs
         status: 'pending',
@@ -297,7 +302,6 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       await assertFails(setDoc(doc(driverDb, 'drivers', driverId), {
         uid: driverId,
-        userType: 'chauffeur',
         email: null, // Email requis
         phoneNumber: null,
         status: 'pending',
@@ -309,7 +313,6 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       await assertFails(setDoc(doc(driverDb, 'drivers', driverId), {
         uid: driverId,
-        userType: 'chauffeur',
         email: 'driver@example.com',
         phoneNumber: null,
         status: 'approved', // Doit être 'pending' à la création
