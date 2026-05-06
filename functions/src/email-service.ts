@@ -251,3 +251,25 @@ export async function sendRestaurantStatusEmail(
 
   return { messageId: result.data?.id };
 }
+
+export async function sendAdminRestaurantNotification(input: {
+  restaurantName: string;
+  restaurantId: string;
+  ownerEmail: string;
+}): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+  const appBaseUrl = process.env.APP_BASE_URL ?? 'https://app.medjira.com';
+  if (!apiKey || !adminEmail) {
+    console.warn('[email] sendAdminRestaurantNotification skipped: missing env');
+    return;
+  }
+  const resend = new Resend(apiKey);
+  const adminLink = `${appBaseUrl}/admin/restaurants?filter=pending_approval&id=${encodeURIComponent(input.restaurantId)}`;
+  await resend.emails.send({
+    from: 'Medjira <noreply@medjira.com>',
+    to: adminEmail,
+    subject: `Nouvelle inscription restaurateur : ${input.restaurantName}`,
+    html: `<p>Une nouvelle candidature restaurateur vient d'être soumise.</p><ul><li><strong>Restaurant :</strong> ${input.restaurantName}</li><li><strong>Email gérant :</strong> ${input.ownerEmail}</li></ul><p><a href="${adminLink}">Voir dans l'admin</a></p>`,
+  });
+}

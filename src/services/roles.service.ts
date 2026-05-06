@@ -83,9 +83,24 @@ export async function setActiveRole(user: UserData, role: ActiveRole): Promise<v
   });
 }
 
-type StripeConnectStatus = 'not_started' | 'in_progress' | 'active' | 'restricted';
-type RestaurantStatus = 'pending' | 'pending_approval' | 'approved' | 'rejected' | 'suspended';
-type DriverStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended';
+export type StripeConnectStatus = 'not_started' | 'in_progress' | 'active' | 'restricted';
+export type RestaurantStatus = 'pending' | 'pending_approval' | 'approved' | 'rejected' | 'suspended';
+export type DriverStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended';
+
+export type RestaurantEffectiveStatus = {
+  status: RestaurantStatus;
+  stripeConnectStatus: StripeConnectStatus;
+};
+
+export function toRestaurantEffectiveStatus(
+  data: Record<string, unknown> | undefined,
+): RestaurantEffectiveStatus | undefined {
+  if (!data) return undefined;
+  return {
+    status: (data.status ?? 'pending_approval') as RestaurantStatus,
+    stripeConnectStatus: (data.stripeConnectStatus ?? 'not_started') as StripeConnectStatus,
+  };
+}
 
 export interface RouteContext {
   driverStatus?: DriverStatus;
@@ -129,4 +144,55 @@ export function getDashboardRouteFor(role: ActiveRole, ctx: RouteContext = {}): 
   }
 
   return '/dashboard';
+}
+
+export function getRouteForPostLogin(
+  userData: UserData,
+  statuses: { driver?: DriverStatus; restaurant?: RestaurantEffectiveStatus },
+): string {
+  const ownedRoles: ActiveRole[] = [];
+  if (userData.roles?.client) ownedRoles.push('client');
+  if (userData.roles?.driver) ownedRoles.push('driver');
+  if (userData.roles?.restaurant) ownedRoles.push('restaurant');
+
+  if (ownedRoles.length === 0) {
+    return '/dashboard';
+  }
+
+  if (ownedRoles.length === 1) {
+    const role = ownedRoles[0];
+    return getDashboardRouteFor(role, {
+      driverStatus: role === 'driver' ? statuses.driver : undefined,
+      restaurantStatus: statuses.restaurant?.status,
+      stripeConnectStatus: statuses.restaurant?.stripeConnectStatus,
+    });
+  }
+
+  const last = userData.lastActiveRole as ActiveRole | undefined;
+  if (last && ownedRoles.includes(last)) {
+    return getDashboardRouteFor(last, {
+      driverStatus: last === 'driver' ? statuses.driver : undefined,
+      restaurantStatus: last === 'restaurant' ? statuses.restaurant?.status : undefined,
+      stripeConnectStatus: last === 'restaurant' ? statuses.restaurant?.stripeConnectStatus : undefined,
+    });
+  }
+
+  if (last && !ownedRoles.includes(last)) {
+    let fallback: ActiveRole = 'client';
+    if (ownedRoles.includes('driver') && statuses.driver === 'approved') {
+      fallback = 'driver';
+    } else if (
+      ownedRoles.includes('restaurant') &&
+      statuses.restaurant?.status === 'approved'
+    ) {
+      fallback = 'restaurant';
+    }
+    return getDashboardRouteFor(fallback, {
+      driverStatus: fallback === 'driver' ? statuses.driver : undefined,
+      restaurantStatus: fallback === 'restaurant' ? statuses.restaurant?.status : undefined,
+      stripeConnectStatus: fallback === 'restaurant' ? statuses.restaurant?.stripeConnectStatus : undefined,
+    });
+  }
+
+  return '/auth/continue-as';
 }

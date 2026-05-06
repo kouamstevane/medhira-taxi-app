@@ -28,6 +28,8 @@ import { redirectWithFallback } from '@/utils/navigation';
 import { getDashboardRouteFor } from '@/services/roles.service';
 import type { ActiveRole, UserRoles, UserData } from '@/types/user';
 import { RegistrationDraftBanner } from '@/components/restaurant/RegistrationDraftBanner';
+import { RoleSwitcher } from '@/components/role/RoleSwitcher';
+import { BecomeProCard } from '@/components/role/BecomeProCard';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -285,6 +287,8 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-2">
+            <RoleSwitcher />
+
             {/* Notifications */}
             <button
               onClick={handleNotifications}
@@ -322,8 +326,6 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="flex-1 px-4 overflow-y-auto pb-32">
-        {/* TODO P4: <RoleSwitcher /> */}
-        {/* TODO P4: <BecomeProCard /> (si !roles.driver && !roles.restaurant) */}
         {userData?.draftRestaurant && !userData.roles?.restaurant && (
           <RegistrationDraftBanner />
         )}
@@ -379,8 +381,12 @@ export default function Dashboard() {
           </div>
         </section>
 
-        {/* Driver shortcut — V1 : capacité (roles.driver != null), pas activeRole.
-            Le switch vers l'espace driver passera par <RoleSwitcher /> (TODO P4). */}
+        {/* Driver shortcut — V1 : capacité (roles.driver != null), pas activeRole. */}
+        <div className="mb-6">
+          <BecomeProCard />
+        </div>
+
+
         {userData.roles?.driver != null && (
           <section className="mb-6">
             <GlassCard

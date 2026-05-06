@@ -1,15 +1,22 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { auth } from '@/config/firebase';
+import { auth, db } from '@/config/firebase';
 import {
   signInWithEmailAndPassword,
   AuthErrorCodes,
   onAuthStateChanged,
 } from 'firebase/auth';
+import { getDoc, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthService } from '@/services';
+import {
+  getRouteForPostLogin,
+  toRestaurantEffectiveStatus,
+  type DriverStatus,
+} from '@/services/roles.service';
+import type { UserData } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { ERROR_MESSAGES } from '@/utils/constants';
 
@@ -24,7 +31,7 @@ export default function LoginPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        router.push('/dashboard');
+        router.replace('/dashboard');
       }
     });
     return () => unsubscribe();
@@ -41,8 +48,30 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.push('/dashboard');
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const userSnap = await getDoc(doc(db, 'users', cred.user.uid));
+      if (!userSnap.exists()) {
+        router.replace('/dashboard');
+        return;
+      }
+      const userData = userSnap.data() as UserData;
+
+      const driverSnap = userData.roles?.driver
+        ? await getDoc(doc(db, 'drivers', cred.user.uid))
+        : null;
+      const restaurantId = userData.roles?.restaurant?.restaurantId;
+      const restaurantSnap = restaurantId
+        ? await getDoc(doc(db, 'restaurants', restaurantId))
+        : null;
+
+      const driverStatus = driverSnap?.data()?.status as DriverStatus | undefined;
+      const restaurantStatus = toRestaurantEffectiveStatus(restaurantSnap?.data());
+
+      const route = getRouteForPostLogin(userData, {
+        driver: driverStatus,
+        restaurant: restaurantStatus,
+      });
+      router.replace(route);
     } catch (err: unknown) {
       handleAuthError(err);
     } finally {
@@ -54,8 +83,31 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await AuthService.signInWithGoogle();
-      router.push('/dashboard');
+      const user = await AuthService.signInWithGoogle();
+      const uid = user.uid;
+      const userSnap = await getDoc(doc(db, 'users', uid));
+      if (!userSnap.exists()) {
+        router.replace('/dashboard');
+        return;
+      }
+      const userData = userSnap.data() as UserData;
+
+      const driverSnap = userData.roles?.driver
+        ? await getDoc(doc(db, 'drivers', uid))
+        : null;
+      const restaurantId = userData.roles?.restaurant?.restaurantId;
+      const restaurantSnap = restaurantId
+        ? await getDoc(doc(db, 'restaurants', restaurantId))
+        : null;
+
+      const driverStatus = driverSnap?.data()?.status as DriverStatus | undefined;
+      const restaurantStatus = toRestaurantEffectiveStatus(restaurantSnap?.data());
+
+      const route = getRouteForPostLogin(userData, {
+        driver: driverStatus,
+        restaurant: restaurantStatus,
+      });
+      router.replace(route);
     } catch (err: unknown) {
       handleAuthError(err);
     } finally {

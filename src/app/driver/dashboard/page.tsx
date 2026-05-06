@@ -46,6 +46,8 @@ import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
 import { useDriverAvailability } from '@/hooks/useDriverAvailability';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { RoleSwitcher } from '@/components/role/RoleSwitcher';
+import { DriverPendingBanner } from '@/components/driver/DriverPendingBanner';
 
 async function fetchBookingsForRequests(
   requests: Array<{ rideId: string; candidate: RideCandidate }>
@@ -588,6 +590,7 @@ export default function DriverDashboard() {
 
   const driverType = driver?.driverType ?? 'chauffeur'
   const activeMode = driver?.activeMode ?? 'taxi'
+  const viewOnly = driver?.status === 'pending'
 
   return (
     <>
@@ -607,18 +610,22 @@ export default function DriverDashboard() {
           </div>
           <button
             onClick={toggleAvailability}
+            disabled={viewOnly}
             className={`flex items-center gap-2 px-3 py-2.5 min-h-[44px] rounded-full border transition-all ${
               driver.isAvailable
                 ? 'bg-green-500/10 border-green-500/20'
                 : 'bg-slate-700/50 border-white/10'
-            }`}
+            } ${viewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <span className={`size-2 rounded-full ${driver.isAvailable ? 'bg-green-500 animate-pulse-green' : 'bg-slate-500'}`} />
             <span className={`text-sm font-bold ${driver.isAvailable ? 'text-green-500' : 'text-slate-400'}`}>
               {driver.isAvailable ? 'En ligne' : 'Hors ligne'}
             </span>
           </button>
+          <RoleSwitcher />
         </header>
+
+        {viewOnly && <DriverPendingBanner />}
 
         {/* Bandeau Stripe Onboarding — visible tant que le compte n'est pas actif */}
         <div className="px-6">
@@ -674,7 +681,8 @@ export default function DriverDashboard() {
             <div className="flex gap-3">
               <button
                 onClick={toggleAvailability}
-                className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10 flex items-center justify-center gap-2"
+                disabled={viewOnly}
+                className={`flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10 flex items-center justify-center gap-2 ${viewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <MaterialIcon name="power_settings_new" size="sm" />
                 {driver.isAvailable ? 'Aller hors ligne' : 'Aller en ligne'}

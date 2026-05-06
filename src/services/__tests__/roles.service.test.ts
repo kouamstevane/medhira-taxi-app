@@ -5,6 +5,8 @@ import {
   isApprovedRestaurateur,
   getEffectiveRoleStatus,
   getDashboardRouteFor,
+  getRouteForPostLogin,
+  toRestaurantEffectiveStatus,
 } from '@/services/roles.service';
 
 jest.mock('firebase/firestore', () => {
@@ -141,5 +143,148 @@ describe('getDashboardRouteFor (matrice §4.4)', () => {
 
   test('restaurant suspended -> /restaurant/suspended', () => {
     expect(getDashboardRouteFor('restaurant', { restaurantStatus: 'suspended', stripeConnectStatus: 'active' })).toBe('/restaurant/suspended');
+  });
+});
+
+describe('toRestaurantEffectiveStatus', () => {
+  test('returns undefined for undefined input', () => {
+    expect(toRestaurantEffectiveStatus(undefined)).toBeUndefined();
+  });
+
+  test('extracts with defaults when fields missing', () => {
+    const result = toRestaurantEffectiveStatus({});
+    expect(result).toEqual({ status: 'pending_approval', stripeConnectStatus: 'not_started' });
+  });
+
+  test('extracts provided values', () => {
+    const result = toRestaurantEffectiveStatus({ status: 'approved', stripeConnectStatus: 'active' });
+    expect(result).toEqual({ status: 'approved', stripeConnectStatus: 'active' });
+  });
+});
+
+describe('getRouteForPostLogin', () => {
+  const clientUser: UserData = {
+    ...baseUser,
+    roles: { client: { enabled: true, joinedAt: Timestamp.now() } },
+  };
+
+  const multiRoleUser: UserData = {
+    ...baseUser,
+    roles: {
+      client: { enabled: true, joinedAt: Timestamp.now() },
+      driver: { joinedAt: Timestamp.now() },
+    },
+    activeRole: 'client',
+  };
+
+  const tripleRoleUser: UserData = {
+    ...baseUser,
+    roles: {
+      client: { enabled: true, joinedAt: Timestamp.now() },
+      driver: { joinedAt: Timestamp.now() },
+      restaurant: { restaurantId: 'r1', joinedAt: Timestamp.now() },
+    },
+    activeRole: 'client',
+  };
+
+  test('single-role client -> /dashboard', () => {
+    expect(getRouteForPostLogin(clientUser, {})).toBe('/dashboard');
+  });
+
+  test('single-role driver approved -> /driver/dashboard', () => {
+    const user: UserData = {
+      ...baseUser,
+      roles: {
+        client: { enabled: true, joinedAt: Timestamp.now() },
+        driver: { joinedAt: Timestamp.now() },
+      },
+      activeRole: 'driver',
+      lastActiveRole: 'driver',
+    };
+    expect(getRouteForPostLogin(user, { driver: 'approved' })).toBe('/driver/dashboard');
+  });
+
+  test('single-role restaurant pending_approval -> /restaurant/pending', () => {
+    const user: UserData = {
+      ...baseUser,
+      roles: {
+        client: { enabled: true, joinedAt: Timestamp.now() },
+        restaurant: { restaurantId: 'r1', joinedAt: Timestamp.now() },
+      },
+      activeRole: 'restaurant',
+      lastActiveRole: 'restaurant',
+    };
+    expect(getRouteForPostLogin(user, {
+      restaurant: { status: 'pending_approval', stripeConnectStatus: 'not_started' },
+    })).toBe('/restaurant/pending');
+  });
+
+  test('single-role restaurant suspended -> /restaurant/suspended', () => {
+    const user: UserData = {
+      ...baseUser,
+      roles: {
+        client: { enabled: true, joinedAt: Timestamp.now() },
+        restaurant: { restaurantId: 'r1', joinedAt: Timestamp.now() },
+      },
+      activeRole: 'restaurant',
+      lastActiveRole: 'restaurant',
+    };
+    expect(getRouteForPostLogin(user, {
+      restaurant: { status: 'suspended', stripeConnectStatus: 'active' },
+    })).toBe('/restaurant/suspended');
+  });
+
+  test('multi-role with valid lastActiveRole -> routes to that role dashboard', () => {
+    const user: UserData = { ...multiRoleUser, lastActiveRole: 'driver' };
+    expect(getRouteForPostLogin(user, { driver: 'approved' })).toBe('/driver/dashboard');
+  });
+
+  test('multi-role with valid lastActiveRole client -> /dashboard', () => {
+    const user: UserData = { ...multiRoleUser, lastActiveRole: 'client' };
+    expect(getRouteForPostLogin(user, {})).toBe('/dashboard');
+  });
+
+  test('multi-role without lastActiveRole -> /auth/continue-as', () => {
+    expect(getRouteForPostLogin(multiRoleUser, {})).toBe('/auth/continue-as');
+  });
+
+  test('multi-role with lastActiveRole undefined -> /auth/continue-as', () => {
+    const user: UserData = { ...tripleRoleUser };
+    expect(getRouteForPostLogin(user, {})).toBe('/auth/continue-as');
+  });
+
+  test('lastActiveRole invalid (role removed) -> fallback to first approved pro then client', () => {
+    const user: UserData = {
+      ...baseUser,
+      roles: {
+        client: { enabled: true, joinedAt: Timestamp.now() },
+        driver: { joinedAt: Timestamp.now() },
+      },
+      activeRole: 'client',
+      lastActiveRole: 'restaurant' as UserData['lastActiveRole'],
+    };
+    expect(getRouteForPostLogin(user, { driver: 'approved' })).toBe('/driver/dashboard');
+  });
+
+  test('lastActiveRole invalid, no approved pro -> fallback to client', () => {
+    const user: UserData = {
+      ...baseUser,
+      roles: {
+        client: { enabled: true, joinedAt: Timestamp.now() },
+        driver: { joinedAt: Timestamp.now() },
+      },
+      activeRole: 'client',
+      lastActiveRole: 'restaurant' as UserData['lastActiveRole'],
+    };
+    expect(getRouteForPostLogin(user, { driver: 'pending' })).toBe('/dashboard');
+  });
+
+  test('no roles at all -> /dashboard', () => {
+    const user: UserData = {
+      ...baseUser,
+      roles: {} as UserData['roles'],
+      activeRole: 'client',
+    };
+    expect(getRouteForPostLogin(user, {})).toBe('/dashboard');
   });
 });

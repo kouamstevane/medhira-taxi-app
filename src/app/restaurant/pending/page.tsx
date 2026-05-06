@@ -38,7 +38,7 @@ function RestaurantPendingContent() {
           setRejectionReason(data.rejectionReason || 'Documents incomplets ou non conformes.');
         }
         if (data.status === 'approved') {
-          router.replace('/dashboard?restaurant_approved=1');
+          router.replace('/restaurant/dashboard?welcome=1');
         }
         if (data.status === 'suspended') {
           router.replace('/restaurant/suspended');

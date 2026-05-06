@@ -588,6 +588,20 @@ async function syncDriverAccountStatus(driverId: string, accountId: string): Pro
 async function onAccountUpdated(account: Record<string, unknown>): Promise<void> {
   const accountId = account.id as string;
   const metadata  = (account.metadata ?? {}) as Record<string, string>;
+  const accountType = metadata.accountType as string | undefined;
+
+  if (accountType === 'restaurant' && metadata.restaurantId) {
+    const chargesEnabled = !!(account.charges_enabled);
+    const detailsSubmitted = !!(account.details_submitted);
+    const disabledReason = (account.requirements as Record<string, unknown> | undefined)?.disabled_reason as string | null;
+    const newStatus = chargesEnabled && detailsSubmitted ? 'active' : disabledReason ? 'restricted' : 'in_progress';
+    const ref = getDb().collection('restaurants').doc(metadata.restaurantId);
+    const cur = (await ref.get()).data();
+    if (cur?.stripeConnectStatus !== newStatus) {
+      await ref.update({ stripeConnectStatus: newStatus, updatedAt: serverTS() });
+    }
+    return;
+  }
 
   if (metadata.driverId && accountId) {
     await syncDriverAccountStatus(metadata.driverId, accountId);
@@ -1466,7 +1480,7 @@ export const createConnectAccount = onCall(
       business_type: 'individual' as const,
       individual: ind,
       business_profile: businessProfile,
-      metadata: { driverId: uid, platform: 'medjira_taxi' },
+      metadata: { accountType: 'driver', driverId: uid, platform: 'medjira_taxi' },
     });
 
     // Helper : retire récursivement les clés `individual.<rejectedField>` puis retry.
