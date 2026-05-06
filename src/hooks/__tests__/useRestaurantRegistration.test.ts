@@ -156,7 +156,7 @@ describe('useRestaurantRegistration — full wizard flow', () => {
     expect(result.current.step1Data.firstName).toBe('Jean');
     expect(result.current.step2Data.emailVerified).toBe(true);
     expect(result.current.step3Data.name).toBe('Le Bistrot');
-    expect(result.current.step4Data.openingHours.monday.open).toBe('09:00');
+    expect((result.current.step4Data.openingHours as Record<string, { open: string; close: string; closed: boolean }>).monday.open).toBe('09:00');
   });
 
   test('cannot advance past step 4', () => {
