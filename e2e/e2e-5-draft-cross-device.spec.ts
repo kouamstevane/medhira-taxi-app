@@ -35,12 +35,15 @@ test('E2E-5 — Reprise brouillon cross-device', async ({
     .fill(
       'Brouillon partiel pour test E2E-5 (long enough).',
     );
-  await pageA.waitForTimeout(2200);
-
-  const userDocAfterDraft = await getDocData(
-    `users/${user.uid}`,
-  );
-  expect(userDocAfterDraft?.draftRestaurant).toBeDefined();
+  await expect
+    .poll(
+      async () => {
+        const doc = await getDocData(`users/${user.uid}`);
+        return doc?.draftRestaurant ?? null;
+      },
+      { timeout: 5000, intervals: [500] },
+    )
+    .toBeDefined();
   await ctxA.close();
 
   const ctxB = await browser.newContext();

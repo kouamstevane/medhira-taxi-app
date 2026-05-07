@@ -30,10 +30,10 @@ const mockGeocoder = {
   geocode: jest.fn(),
 };
 
-const originalWindowGoogle = (globalThis.window as Record<string, unknown>)?.google as unknown;
+const originalWindowGoogle = (globalThis.window as unknown as Record<string, unknown>)?.google as unknown;
 
 function mockGoogleMapsGeocoder() {
-  (globalThis.window as Record<string, unknown>).google = {
+  (globalThis.window as unknown as Record<string, unknown>).google = {
     maps: {
       Geocoder: jest.fn(() => mockGeocoder),
     },
@@ -41,7 +41,7 @@ function mockGoogleMapsGeocoder() {
 }
 
 function unmockGoogleMaps() {
-  (globalThis.window as Record<string, unknown>).google = originalWindowGoogle;
+  (globalThis.window as unknown as Record<string, unknown>).google = originalWindowGoogle;
 }
 
 beforeEach(() => {

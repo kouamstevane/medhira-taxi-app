@@ -151,8 +151,10 @@ export async function setupNetworkMocks(
           });
         }
         if (url.includes('verifyCode')) {
-          const body = route.request().postDataJSON();
-          const code = body?.data?.code;
+          let body: Record<string, unknown> = {};
+          try { body = route.request().postDataJSON() as Record<string, unknown>; } catch { /* non-JSON body */ }
+          const data = (body?.data ?? {}) as Record<string, unknown>;
+          const code = data?.code as string | undefined;
           if (code === '123456') {
             return route.fulfill({
               status: 200,
@@ -274,8 +276,8 @@ export async function setupNetworkMocks(
   );
 }
 
-export function setupLocalhostMocks(page: Page): void {
-  page.route('**/api/stripe/connect/**', async (route) => {
+export async function setupLocalhostMocks(page: Page): Promise<void> {
+  await page.route('**/api/stripe/connect/**', async (route) => {
     if (route.request().url().includes('/onboard')) {
       return route.fulfill({
         status: 200,

@@ -24,7 +24,7 @@ function db() {
 }
 
 export async function clearEmailCapture(): Promise<void> {
-  const snaps = await db().collection('_emails_sent_dev').get();
+  const snaps = await db().collection('_emails_sent_dev').limit(200).get();
   await Promise.all(snaps.docs.map((d) => d.ref.delete()));
 }
 
@@ -32,6 +32,7 @@ export async function listCapturedEmails(): Promise<CapturedEmail[]> {
   const snaps = await db()
     .collection('_emails_sent_dev')
     .orderBy('capturedAt', 'asc')
+    .limit(200)
     .get();
   return snaps.docs.map((d) => d.data() as CapturedEmail);
 }

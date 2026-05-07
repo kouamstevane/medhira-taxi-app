@@ -16,9 +16,8 @@ export function buildStripeOptions(extra?: StripeOptions): StripeOptions {
     opts.port = process.env.STRIPE_API_PORT
       ? Number(process.env.STRIPE_API_PORT)
       : 12111;
-    opts.protocol = (process.env.STRIPE_API_PROTOCOL as
-      | 'http'
-      | 'https') ?? 'http';
+    const proto = process.env.STRIPE_API_PROTOCOL;
+    opts.protocol = proto === 'https' ? 'https' : 'http';
   }
   return opts;
 }

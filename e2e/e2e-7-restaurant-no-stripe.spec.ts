@@ -29,6 +29,7 @@ test('E2E-7 — Restaurant approved sans Stripe : invisible catalogue, dashboard
   ).toBeVisible();
 
   await page.goto('/food');
+  await page.waitForLoadState('domcontentloaded');
   await expect(
     page.getByText('Le Bistrot Sans Stripe'),
   ).not.toBeVisible();
