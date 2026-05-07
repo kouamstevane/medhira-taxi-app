@@ -108,6 +108,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "113581657187-iaqfmpdsm9qri9spl1kqr150g3ogsfqi.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.medjiraservice.medjiraserviceapp",
+            "certificate_hash": "aed627cbd4fdabd00008f6eaaf42fe161723a6e9"
+          }
+        },
+        {
           "client_id": "113581657187-pgbsvpgfs3o4mglr7m4d796ttte4ht22.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

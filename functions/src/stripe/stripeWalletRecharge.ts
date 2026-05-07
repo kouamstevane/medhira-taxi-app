@@ -1,7 +1,7 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { DEFAULT_CURRENCY, MIN_WALLET_RECHARGE, MAX_WALLET_RECHARGE } from '../config/stripe.js';

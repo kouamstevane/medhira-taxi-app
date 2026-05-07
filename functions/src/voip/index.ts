@@ -6,11 +6,18 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import twilio from 'twilio';
+import type twilio from 'twilio';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 
-const AccessToken = twilio.jwt.AccessToken;
-const VoiceGrant = AccessToken.VoiceGrant;
+let _twilioJwt: typeof twilio.jwt | null = null;
+function getTwilioJwt(): typeof twilio.jwt {
+  if (!_twilioJwt) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('twilio');
+    _twilioJwt = (mod.default ?? mod).jwt;
+  }
+  return _twilioJwt!;
+}
 
 const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
 const twilioApiKey = defineSecret('TWILIO_API_KEY');
@@ -122,12 +129,13 @@ function generateTwilioToken(
 ): string {
   try {
     const expirationTimeInSeconds = 3600;
-    const token = new AccessToken(accountSid, apiKey, apiSecret, {
+    const TwilioJwt = getTwilioJwt();
+    const token = new TwilioJwt.AccessToken(accountSid, apiKey, apiSecret, {
       identity: uid,
       ttl: expirationTimeInSeconds,
     });
 
-    const voiceGrant = new VoiceGrant({
+    const voiceGrant = new TwilioJwt.AccessToken.VoiceGrant({
       outgoingApplicationSid,
       incomingAllow: true,
     });

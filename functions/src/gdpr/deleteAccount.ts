@@ -29,7 +29,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { createStripeClient } from '../stripe/stripe-client.js';
 

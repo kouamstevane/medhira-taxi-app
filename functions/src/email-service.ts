@@ -1,4 +1,14 @@
-import { Resend } from 'resend';
+import type { Resend } from 'resend';
+
+let _ResendCtor: typeof Resend | null = null;
+function loadResendCtor(): typeof Resend {
+  if (!_ResendCtor) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('resend');
+    _ResendCtor = (mod.Resend ?? mod.default ?? mod) as typeof Resend;
+  }
+  return _ResendCtor;
+}
 
 async function maybeRecordDevEmail(payload: {
   to: string | string[];
@@ -107,7 +117,7 @@ export async function sendVerificationCodeEmail(
     throw new Error('RESEND_API_KEY manquant. Configurez-le via Firebase Secret Manager : firebase functions:secrets:set RESEND_API_KEY');
   }
 
-  const resend = new Resend(resolvedApiKey);
+  const resend = new (loadResendCtor())(resolvedApiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'medjira@medjira.com';
 
   const emailPayload = {
@@ -199,7 +209,7 @@ export async function sendDriverStatusEmail(
       break;
   }
 
-  const resend = new Resend(resolvedApiKey);
+  const resend = new (loadResendCtor())(resolvedApiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'medjira@medjira.com';
 
   const driverPayload = { from: `Medjira <${fromEmail}>`, to, subject, html };
@@ -261,7 +271,7 @@ export async function sendRestaurantStatusEmail(
       break;
   }
 
-  const resend = new Resend(resolvedApiKey);
+  const resend = new (loadResendCtor())(resolvedApiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'medjira@medjira.com';
 
   const restaurantPayload = { from: `Medjira <${fromEmail}>`, to, subject, html };
@@ -287,7 +297,7 @@ export async function sendAdminRestaurantNotification(input: {
     console.warn('[email] sendAdminRestaurantNotification skipped: missing env');
     return;
   }
-  const resend = new Resend(apiKey);
+  const resend = new (loadResendCtor())(apiKey);
   const adminLink = `${appBaseUrl}/admin/restaurants?filter=pending_approval&id=${encodeURIComponent(input.restaurantId)}`;
   const adminPayload = {
     from: 'Medjira <noreply@medjira.com>',

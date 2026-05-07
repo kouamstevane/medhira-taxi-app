@@ -3,7 +3,7 @@ import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import { createStripeClient } from './stripe-client.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');

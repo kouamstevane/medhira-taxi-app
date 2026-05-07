@@ -345,7 +345,7 @@ export const createUserDocument = async (
     lastName: data.lastName,
     profileImageUrl: data.profileImageUrl ?? null,
     emailVerified: data.emailVerified ?? false,
-    country: data.country,
+    country: data.country ?? null,
     roles: {
       client: { enabled: true, joinedAt: serverTimestamp() },
     },
