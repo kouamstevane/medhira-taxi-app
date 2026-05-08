@@ -8,25 +8,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:113581657187:android:80d7915859e4187224bc56",
+        "mobilesdk_app_id": "1:113581657187:android:f2f4b81b220782e624bc56",
         "android_client_info": {
-          "package_name": "com.medjiraservice.medjiraserviceapp"
+          "package_name": "com.medjiraservice.medjiraserviceapp2"
         }
       },
       "oauth_client": [
         {
-          "client_id": "113581657187-iaqfmpdsm9qri9spl1kqr150g3ogsfqi.apps.googleusercontent.com",
+          "client_id": "113581657187-euc6kln56gqg4thm6usntuqds61b0e6b.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.medjiraservice.medjiraserviceapp",
+            "package_name": "com.medjiraservice.medjiraserviceapp2",
             "certificate_hash": "aed627cbd4fdabd00008f6eaaf42fe161723a6e9"
           }
         },
         {
-          "client_id": "113581657187-pgbsvpgfs3o4mglr7m4d796ttte4ht22.apps.googleusercontent.com",
+          "client_id": "113581657187-f1ukq55rnobo6hk3n67glo8pgsmqnsjh.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.medjiraservice.medjiraserviceapp",
+            "package_name": "com.medjiraservice.medjiraserviceapp2",
             "certificate_hash": "921331afc89a267e965d5a291904984337bf6268"
           }
         },
@@ -36,6 +36,9 @@
         }
       ],
       "api_key": [
+        {
+          "current_key": "AIzaSyAWXHzi-O_jAFEipK65RrsiBgnsQO6FbkI"
+        },
         {
           "current_key": "AIzaSyBEshD7EK5vtG-_3FGX4ISs6zGdazq_hXQ"
         }

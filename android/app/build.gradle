@@ -12,10 +12,10 @@ if (hasKeystore) {
 }
 
 android {
-    namespace "com.medjiraservice.medjiraserviceapp"
+    namespace "com.medjiraservice.medjiraserviceapp2"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.medjiraservice.medjiraserviceapp"
+        applicationId "com.medjiraservice.medjiraserviceapp2"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

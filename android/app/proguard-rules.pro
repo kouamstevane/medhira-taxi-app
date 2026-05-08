@@ -31,7 +31,7 @@
 # LocationForegroundService, VoipForegroundService, VoipPlugin,
 # BackgroundGeolocationPlugin sont chargés par nom depuis le manifest /
 # le bridge Capacitor — ne pas les obfusquer.
--keep class com.medjiraservice.medjiraserviceapp.** { *; }
+-keep class com.medjiraservice.medjiraserviceapp2.** { *; }
 
 # ── Firebase ───────────────────────────────────────────────────────
 -keep class com.google.firebase.** { *; }
