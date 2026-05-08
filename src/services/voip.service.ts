@@ -153,6 +153,7 @@ class VoipService {
    */
   async startCall(conversationId: string, caller: CallParticipant, callee: CallParticipant): Promise<void> {
     try {
+      await this.ensureEngineInitialized();
       this.updateState({
         status: 'calling',
         direction: 'outgoing',
@@ -445,6 +446,8 @@ class VoipService {
    * Détecte un appel entrant depuis une notification ou un listener externe
    */
   handleIncomingCall(callId: string, conversationId: string, channel: string, caller: CallParticipant, calleeUid: string) {
+    // Init paresseuse du moteur Twilio dès qu'un appel entrant est détecté.
+    void this.ensureEngineInitialized();
     // Double-check to prevent race conditions
     if (this.state.status !== 'idle') {
       logger.warn('Rejected incoming call: already in a call', {
