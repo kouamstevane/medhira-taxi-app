@@ -383,7 +383,17 @@ class PushNotificationService {
      * Navigue vers une route spécifique
      */
     private navigateTo(path: string): void {
-        if (typeof window !== 'undefined' && window.location) {
+        if (typeof window === 'undefined') return;
+        // Émet un événement que le router Next.js (côté layout/provider) peut
+        // intercepter pour faire un client-side navigation. Si personne ne le
+        // gère (ex. listener pas encore monté), on retombe sur window.location
+        // pour garantir la navigation, au prix d'un reload.
+        const event = new CustomEvent<{ path: string }>('app:navigate', {
+            detail: { path },
+            cancelable: true,
+        });
+        const handled = !window.dispatchEvent(event);
+        if (!handled && window.location) {
             window.location.href = path;
         }
     }

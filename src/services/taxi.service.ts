@@ -693,8 +693,11 @@ export const calculateCancellationPenalty = async (bookingId: string): Promise<n
     return 0;
   }
   
-  // Calculer le temps écoulé depuis le début
-  const startTime = booking.startedAt instanceof Timestamp ? booking.startedAt.toDate() : new Date();
+  // Calculer le temps écoulé depuis le début. `startedAt` peut être stocké
+  // comme Timestamp (Firestore), string ISO ou number (ms epoch) selon la source.
+  const startTime = booking.startedAt instanceof Timestamp
+    ? booking.startedAt.toDate()
+    : new Date(booking.startedAt as string | number | Date);
   const now = new Date();
   const elapsedMinutes = Math.ceil((now.getTime() - startTime.getTime()) / 60000);
   

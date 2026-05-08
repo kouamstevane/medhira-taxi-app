@@ -445,10 +445,10 @@ class VoipService {
   /**
    * Détecte un appel entrant depuis une notification ou un listener externe
    */
-  handleIncomingCall(callId: string, conversationId: string, channel: string, caller: CallParticipant, calleeUid: string) {
-    // Init paresseuse du moteur Twilio dès qu'un appel entrant est détecté.
-    void this.ensureEngineInitialized();
-    // Double-check to prevent race conditions
+  async handleIncomingCall(callId: string, conversationId: string, channel: string, caller: CallParticipant, calleeUid: string): Promise<void> {
+    // Verrou d'admission : sans cela, deux appels entrants quasi-simultanés
+    // peuvent tous deux passer le check `status === 'idle'` avant qu'aucun
+    // n'ait basculé l'état en 'ringing'. On bascule l'état AVANT le await.
     if (this.state.status !== 'idle') {
       logger.warn('Rejected incoming call: already in a call', {
         currentStatus: this.state.status,
@@ -480,7 +480,15 @@ class VoipService {
       },
       error: null
     });
-    
+
+    // Init du moteur après bascule d'état (l'état 'ringing' bloque tout
+    // appel concurrent même pendant cette init asynchrone).
+    try {
+      await this.ensureEngineInitialized();
+    } catch (err) {
+      logger.error('handleIncomingCall: engine init failed', { err, callId });
+    }
+
     this.subscribeToCallDoc(callId);
   }
 }

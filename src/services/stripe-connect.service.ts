@@ -478,7 +478,10 @@ export async function triggerManualPayout(
         platform: 'medjira_taxi',
       },
     }, {
-      idempotencyKey: `manual_${driverId}_${lockedBalance}_${processedAt.getTime()}`,
+      // Clé déterministe : driverId + montant + jour. Ainsi un retry de la
+      // Cloud Function (timeout puis re-exécution) ne déclenche pas un second
+      // virement réel — Stripe renvoie le transfert original.
+      idempotencyKey: `manual_${driverId}_${lockedBalance}_${processedAt.toISOString().split('T')[0]}`,
     });
 
     // Étape 3 : libérer le verrou + décrémenter le solde verrouillé + persister

@@ -188,7 +188,6 @@ export const getApprovedRestaurants = async (
 
   const constraints: Parameters<typeof query>[1][] = [
     where('status', '==', 'approved'),
-    limit(limitCount),
   ];
 
   if (filters?.cuisineType) {
@@ -199,9 +198,15 @@ export const getApprovedRestaurants = async (
     constraints.push(where('avgPricePerPerson', '<=', filters.maxAvgPricePerPerson));
   }
 
+  // orderBy obligatoire avant startAfter sinon l'ordre Firestore est indéfini
+  // et la pagination produit des doublons / des manques entre pages.
+  constraints.push(orderBy('createdAt', 'desc'));
+
   if (lastVisible) {
     constraints.push(startAfter(lastVisible));
   }
+
+  constraints.push(limit(limitCount));
 
   const q = query(restaurantsRef, ...constraints);
   const querySnapshot = await getDocs(q);

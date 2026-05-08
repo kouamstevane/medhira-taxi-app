@@ -53,6 +53,20 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   // Initialize keyboard handling to fix white space issues
   useKeyboard();
 
+  // Intercepte les demandes de navigation émises par les services (push, deep
+  // links Capacitor) pour faire un client-side push au lieu d'un full reload.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ev = e as CustomEvent<{ path: string }>;
+      const path = ev.detail?.path;
+      if (!path) return;
+      e.preventDefault();
+      router.push(path);
+    };
+    window.addEventListener('app:navigate', handler);
+    return () => window.removeEventListener('app:navigate', handler);
+  }, [router]);
+
   /**
    * Déterminer si le header doit être affiché
    */
