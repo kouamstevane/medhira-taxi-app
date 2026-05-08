@@ -1,4 +1,4 @@
-package com.medjiraservice.medjiraserviceapp;
+package com.medjiraservice.medjiraserviceapp2;
 
 import android.content.Intent;
 import android.os.Bundle;

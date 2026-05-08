@@ -1,4 +1,4 @@
-package com.medjiraservice.medjiraserviceapp;
+package com.medjiraservice.medjiraserviceapp2;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -19,7 +19,7 @@ import androidx.core.app.NotificationManagerCompat;
 public class VoipForegroundService extends Service {
     private static final String CHANNEL_ID = "voip_call_channel";
     private static final int NOTIFICATION_ID = 1001;
-    private static final String ACTION_END_CALL = "com.medjiraservice.medjiraserviceapp.END_CALL";
+    private static final String ACTION_END_CALL = "com.medjiraservice.medjiraserviceapp2.END_CALL";
 
     private String callerName = "";
     private String callId = "";

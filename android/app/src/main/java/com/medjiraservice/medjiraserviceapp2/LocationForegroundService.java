@@ -1,5 +1,5 @@
 // # Plugin Capacitor
-package com.medjiraservice.medjiraserviceapp;
+package com.medjiraservice.medjiraserviceapp2;
 
 import android.app.Notification;
 import android.app.NotificationChannel;

@@ -44,7 +44,7 @@ Medjira is a Next.js 16 taxi booking and food delivery application built with Ty
 **Mobile:**
 - Capacitor ^8.2.0 — Web-to-native bridge for Android/iOS
   - Config: `capacitor.config.ts`
-  - App ID: `com.medjiraservice.medjiraserviceapp`
+  - App ID: `com.medjiraservice.medjiraserviceapp2`
   - Web dir: `out` (Next.js static export)
   - Android project: `android/`
 
