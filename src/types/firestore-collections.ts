@@ -9,30 +9,45 @@
  * Basé sur : firestore.rules et firestore.indexes.json
  */
 
+import { Timestamp } from 'firebase/firestore';
+import type { UserRoles, ActiveRole, RestaurantDraftData } from './user';
+
 // ============================================================================
 // COLLECTIONS PRINCIPALES
 // ============================================================================
 
 /**
- * Collection USERS (Clients)
- * --------------------------
- * Description : Utilisateurs clients de l'application
+ * Collection USERS (Modèle V1 : roles cumulatifs)
+ * -----------------------------------------------
+ * Description : Utilisateurs de l'application (client + rôles pro optionnels)
  * Authentification : Téléphone (SMS) OU Email
- * 
+ *
+ * Modèle V1 : `roles` cumulatifs ({ client, driver?, restaurant? }).
+ * Le statut effectif d'un rôle pro est lu sur sa collection métier
+ * (drivers/{uid}.status, restaurants/{id}.status), jamais dupliqué ici.
+ *
  * Règles de sécurité :
  * - Read : Tous les utilisateurs authentifiés
- * - Create : Propriétaire uniquement (userType = 'client')
+ * - Create : Propriétaire uniquement
  * - Update : Propriétaire uniquement
  * - Delete : Non autorisé
  */
 export interface UserCollection {
   userId: string;
-  userType: 'client';
   email?: string;
   phoneNumber?: string;
+  emailVerified: boolean;
   firstName?: string;
   lastName?: string;
   profileImage?: string;
+  roles: UserRoles;
+  activeRole: ActiveRole;
+  lastActiveRole?: ActiveRole;
+  draftRestaurant?: {
+    currentStep: 3 | 4;
+    data: Partial<RestaurantDraftData>;
+    updatedAt: Timestamp;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -45,7 +60,7 @@ export interface UserCollection {
  * 
  * Règles de sécurité :
  * - Read : Tous les utilisateurs authentifiés
- * - Create : Propriétaire uniquement (email obligatoire, phoneNumber = null, userType = 'chauffeur')
+ * - Create : Cloud Function uniquement (Admin SDK)
  * - Update : Propriétaire OU admin
  * - Delete : Admin OU propriétaire (si statut = 'rejected' ou 'draft')
  * 
@@ -60,7 +75,6 @@ export interface UserCollection {
 export interface DriverCollection {
   // === Champs existants (inchangés) ===
   driverId: string
-  userType: 'chauffeur'          // JAMAIS modifié — compatibilité Cloud Function
   email: string
   phoneNumber: null              // Toujours null — interdiction d'auth par téléphone
   firstName: string
@@ -347,25 +361,44 @@ export interface ActiveBookingCollection {
 export interface ParcelCollection {
   parcelId: string;
   senderId: string;
+  /** UID du destinataire si trouvé par téléphone, sinon chaîne vide (invité) */
   receiverId: string;
-  driverId?: string;
+  /** Téléphone E.164 du destinataire (toujours rempli, sert au SMS) */
+  recipientPhone: string;
+  recipientName: string;
+  /** true si le destinataire n'a PAS de compte → notifié par SMS uniquement */
+  recipientIsGuest: boolean;
+  driverId: string | null;
   status: 'pending' | 'accepted' | 'in_transit' | 'delivered' | 'cancelled';
-  pickup: {
+  pickupLocation: {
     address: string;
     latitude: number;
     longitude: number;
+    country: string; // ISO 3166-1 alpha-2 (CM, CA)
   };
-  dropoff: {
+  dropoffLocation: {
     address: string;
     latitude: number;
     longitude: number;
+    country: string;
   };
-  description?: string;
-  weight?: number;
-  estimatedPrice?: number;
-  finalPrice?: number;
+  description: string;
+  weight: number;
+  sizeCategory: 'small' | 'medium' | 'large';
+  pickupInstructions?: string;
+  estimatedPrice: number;
+  finalPrice: number | null;
+  price: number;
+  currency: string;
+  distanceKm: number;
+  durationMinutes: number;
   createdAt: Date;
+  updatedAt: Date;
+  acceptedAt?: Date;
+  pickedUpAt?: Date;
   deliveredAt?: Date;
+  cancelledAt?: Date;
+  cancellationReason?: string;
 }
 
 /**
@@ -431,7 +464,7 @@ export interface CarTypeCollection {
 /**
  * Collection CALLS
  * ----------------
- * Description : Appels VoIP entre clients et chauffeurs (Agora RTC)
+ * Description : Appels VoIP entre clients et chauffeurs (Twilio Voice)
  * 
  * Règles de sécurité :
  * - Read : Appelant OU appelé

@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
   output: isMobile ? 'export' : undefined,
   trailingSlash: !isMobile,
   skipTrailingSlashRedirect: isMobile,
+  serverExternalPackages: ['firebase-admin', 'stripe', 'resend', 'sharp', 'nodemailer'],
   productionBrowserSourceMaps: false,
   compress: true,
   poweredByHeader: false,
@@ -27,6 +28,8 @@ const nextConfig: NextConfig = {
       'lucide-react',
       'radix-ui',
       'class-variance-authority',
+      '@stripe/stripe-js',
+      '@stripe/react-stripe-js',
     ],
   },
   modularizeImports: {

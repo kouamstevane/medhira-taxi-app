@@ -15,8 +15,17 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import { Resend } from 'resend';
-import type { WebhookEventPayload } from 'resend';
+import type { Resend, WebhookEventPayload } from 'resend';
+
+let _ResendCtor: typeof Resend | null = null;
+function loadResendCtor(): typeof Resend {
+  if (!_ResendCtor) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('resend');
+    _ResendCtor = (mod.Resend ?? mod.default ?? mod) as typeof Resend;
+  }
+  return _ResendCtor;
+}
 
 // ── Secret ─────────────────────────────────────────────────────────────────
 const resendWebhookSecret = defineSecret('RESEND_WEBHOOK_SECRET');
@@ -68,7 +77,8 @@ export const resendWebhook = onRequest(
 
     // Valider la signature via le SDK Resend (utilise Svix en interne)
     // La clé API n'est pas nécessaire pour verify() — on passe un placeholder
-    const resend = new Resend('unused');
+    const ResendCtor = loadResendCtor();
+    const resend = new ResendCtor('unused');
     let payload: WebhookEventPayload;
     try {
       // req.rawBody est injecté automatiquement par Firebase Functions

@@ -14,11 +14,14 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import {
   createParcelOrder,
   estimateParcelPrice,
+  ParcelValidationError,
   PARCEL_SIZE_LABELS,
   type ParcelLocation,
   type ParcelSizeCategory,
 } from '@/services/parcel.service';
-import { CURRENCY_CODE } from '@/utils/constants';
+import { getMarketByCountryCode, getSupportedCountryNames } from '@/utils/constants';
+import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { useCountryDetection } from '@/hooks/useCountryDetection';
 import type { PlaceSuggestion } from '@/types';
 
 type Step = 'form' | 'submitting' | 'success' | 'error';
@@ -74,10 +77,23 @@ export default function ColisPage() {
   const { currentUser } = useAuth();
   const { isLoaded, loadError, autocompleteService } = useGoogleMaps();
 
+  const { preciseLocation, error: geoError, loading: geoLoading, getCurrentPosition } = useCapacitorGeolocation();
+
+  const gpsLocation = preciseLocation ? { lat: preciseLocation.lat, lng: preciseLocation.lng } : null;
+
+  const { country: detectedCountry } = useCountryDetection({
+    location: gpsLocation,
+    enabled: isLoaded,
+  });
+
+  useEffect(() => {
+    if (isLoaded) getCurrentPosition();
+  }, [isLoaded, getCurrentPosition]);
+
   const [step, setStep] = useState<Step>('form');
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [priceEstimate, setPriceEstimate] = useState<{ price: number; distance: number; duration: number } | null>(null);
+  const [priceEstimate, setPriceEstimate] = useState<{ price: number; distance: number; duration: number; currency: string } | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -94,11 +110,15 @@ export default function ColisPage() {
           }
         });
       });
-      const loc = result[0].geometry.location;
+      const first = result[0];
+      const loc = first.geometry.location;
+      const countryComp = first.address_components.find((c) => c.types.includes('country'));
+      const country = countryComp?.short_name || '';
       return {
         address: suggestion.description,
         latitude: loc.lat(),
         longitude: loc.lng(),
+        country,
       };
     } catch {
       return null;
@@ -110,6 +130,30 @@ export default function ColisPage() {
       setPriceEstimate(null);
       return;
     }
+    const pickupOk = getMarketByCountryCode(formData.pickupLocation.country) !== null;
+    const dropoffOk = getMarketByCountryCode(formData.dropoffLocation.country) !== null;
+    const supportedNames = getSupportedCountryNames(detectedCountry);
+    if (!pickupOk || !dropoffOk) {
+      setPriceEstimate(null);
+      setFieldErrors((prev) => ({
+        ...prev,
+        ...(pickupOk ? {} : { pickup: `Service disponible uniquement dans les pays supportés (${supportedNames})` }),
+        ...(dropoffOk ? {} : { dropoff: `Service disponible uniquement dans les pays supportés (${supportedNames})` }),
+      }));
+      return;
+    }
+    if (formData.pickupLocation.country !== formData.dropoffLocation.country) {
+      setPriceEstimate(null);
+      setFieldErrors((prev) => ({
+        ...prev,
+        dropoff: 'Transport national uniquement — retrait et livraison doivent être dans le même pays',
+      }));
+      return;
+    }
+    setFieldErrors((prev) => {
+      const { pickup: _p, dropoff: _d, ...rest } = prev;
+      return rest;
+    });
     setPriceLoading(true);
     try {
       const estimate = await estimateParcelPrice(
@@ -117,9 +161,12 @@ export default function ColisPage() {
         formData.dropoffLocation,
         formData.sizeCategory
       );
-      setPriceEstimate(estimate);
-    } catch {
+      setPriceEstimate({ ...estimate, currency: estimate.currency });
+    } catch (err) {
       setPriceEstimate(null);
+      if (err instanceof ParcelValidationError && err.field) {
+        setFieldErrors((prev) => ({ ...prev, [err.field!]: err.message }));
+      }
     } finally {
       setPriceLoading(false);
     }
@@ -142,7 +189,7 @@ export default function ColisPage() {
 
   const handleSubmit = async () => {
     if (!currentUser) {
-      setErrorMsg('Vous devez être connecté pour envoyer un colis');
+      setErrorMsg('Vous devez être connecté pour demander le transport d\'un colis');
       return;
     }
     if (!validate()) {
@@ -170,6 +217,14 @@ export default function ColisPage() {
       setStep('success');
     } catch (err) {
       await triggerHaptic('error');
+      if (err instanceof ParcelValidationError) {
+        setErrorMsg(err.message);
+        if (err.field) {
+          setFieldErrors((prev) => ({ ...prev, [err.field!]: err.message }));
+        }
+        setStep('form');
+        return;
+      }
       const message = err instanceof Error ? err.message : 'Une erreur est survenue lors de la création du colis';
       setErrorMsg(message);
       setStep('error');
@@ -202,15 +257,15 @@ export default function ColisPage() {
             <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto border border-green-500/20 mb-5">
               <MaterialIcon name="check_circle" className="text-green-500 text-[32px]" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Colis enregistré !</h2>
+            <h2 className="text-xl font-bold text-white mb-2">Demande enregistrée !</h2>
             <p className="text-sm text-slate-400 mb-6">
-              Votre envoi a été créé. Un chauffeur sera bientôt assigné.
+              Votre demande de transport a été créée. Un chauffeur sera bientôt assigné.
             </p>
             {priceEstimate && (
               <div className="glass-card p-4 rounded-xl border border-white/5 mb-6">
                 <div className="flex justify-between items-center text-lg font-bold text-white">
                   <span>Prix estimé</span>
-                  <span>{priceEstimate.price.toFixed(2)} {CURRENCY_CODE}</span>
+                  <span>{priceEstimate.price.toFixed(2)} {priceEstimate.currency}</span>
                 </div>
               </div>
             )}
@@ -219,7 +274,7 @@ export default function ColisPage() {
               className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
             >
               <MaterialIcon name="receipt_long" size="md" />
-              Voir mes envois
+              Voir mes colis
             </button>
             <button
               onClick={() => {
@@ -231,7 +286,7 @@ export default function ColisPage() {
               }}
               className="w-full mt-3 h-14 glass-card text-slate-300 font-semibold rounded-2xl border border-white/10 active:scale-[0.98] transition-transform flex items-center justify-center"
             >
-              Nouvel envoi
+              Nouveau transport
             </button>
           </div>
         </div>
@@ -251,7 +306,7 @@ export default function ColisPage() {
         >
           <MaterialIcon name="arrow_back" size="md" />
         </button>
-        <h1 className="text-lg font-bold text-white">Envoyer un colis</h1>
+        <h1 className="text-lg font-bold text-white">Transport de colis</h1>
         <div className="w-10" />
       </header>
 
@@ -261,6 +316,14 @@ export default function ColisPage() {
             <p className="text-sm text-yellow-400">{loadError}</p>
           </div>
         )}
+
+        <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2">
+          <MaterialIcon name="info" size="sm" className="text-blue-400 mt-0.5" />
+          <p className="text-xs text-blue-300/90">
+            Service de transport de colis <strong>urbain et national</strong> dans les pays supportés ({getSupportedCountryNames(detectedCountry)}).
+            Le transport à l&apos;international n&apos;est pas pris en charge.
+          </p>
+        </div>
 
         <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -281,6 +344,8 @@ export default function ColisPage() {
             placeholder="Où récupérer le colis ?"
             autocompleteService={autocompleteService}
             error={fieldErrors.pickup}
+            location={gpsLocation}
+            countryRestriction={detectedCountry ? [detectedCountry.toLowerCase()] : undefined}
           />
 
           <AddressInput
@@ -296,6 +361,8 @@ export default function ColisPage() {
             placeholder="Où livrer le colis ?"
             autocompleteService={autocompleteService}
             error={fieldErrors.dropoff}
+            location={gpsLocation}
+            countryRestriction={detectedCountry ? [detectedCountry.toLowerCase()] : undefined}
           />
         </section>
 
@@ -429,7 +496,7 @@ export default function ColisPage() {
               </div>
               <div className="border-t border-white/10 pt-3 flex justify-between items-center text-lg font-bold text-white">
                 <span>Prix estimé</span>
-                <span className="text-primary">{priceEstimate.price.toFixed(2)} {CURRENCY_CODE}</span>
+                <span className="text-primary">{priceEstimate.price.toFixed(2)} {priceEstimate.currency}</span>
               </div>
             </div>
           </section>
@@ -447,26 +514,27 @@ export default function ColisPage() {
             {errorMsg}
           </div>
         )}
-      </main>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/5 z-20 max-w-[430px] mx-auto">
-        <button
-          onClick={handleSubmit}
-          disabled={step === 'submitting' || !formData.pickupLocation || !formData.dropoffLocation}
-          className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-lg py-4 rounded-xl hover:opacity-90 transition-all flex justify-center items-center gap-2 disabled:opacity-70"
-        >
-          {step === 'submitting' ? (
-            <>
-              <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
-              Envoi en cours…
-            </>
-          ) : priceEstimate ? (
-            `Confirmer — ${priceEstimate.price.toFixed(2)} ${CURRENCY_CODE}`
-          ) : (
-            'Confirmer l\'envoi'
-          )}
-        </button>
-      </div>
+        <div className="mt-4">
+          <button
+            onClick={handleSubmit}
+            disabled={step === 'submitting' || !formData.pickupLocation || !formData.dropoffLocation}
+            className="w-full bg-gradient-to-r from-primary to-[#ffae33] active:scale-[0.98] text-white font-bold py-4 px-6 rounded-2xl transition-transform disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-base sm:text-lg primary-glow flex justify-center items-center gap-2"
+            style={{ minHeight: '48px' }}
+          >
+            {step === 'submitting' ? (
+              <>
+                <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
+                Création en cours…
+              </>
+            ) : priceEstimate ? (
+              `Confirmer — ${priceEstimate.price.toFixed(2)} ${priceEstimate.currency}`
+            ) : (
+              'Confirmer le transport'
+            )}
+          </button>
+        </div>
+      </main>
 
       <BottomNav />
     </div>

@@ -4,7 +4,7 @@ _Last updated: 2026-04-03_
 
 ## Summary
 
-The app relies heavily on Firebase as its primary backend (Auth, Firestore, Storage, Cloud Functions, FCM, Remote Config). Stripe handles payments and driver payouts via Stripe Connect. Google Maps powers location features. Agora provides real-time voice calls between passengers and drivers. Resend/Nodemailer handle transactional email.
+The app relies heavily on Firebase as its primary backend (Auth, Firestore, Storage, Cloud Functions, FCM, Remote Config). Stripe handles payments and driver payouts via Stripe Connect. Google Maps powers location features. Twilio provides real-time voice calls and SMS between passengers and drivers. Resend/Nodemailer handle transactional email.
 
 ---
 
@@ -132,23 +132,24 @@ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
 ---
 
-## Agora (VoIP / Real-time Audio Calls)
+## Twilio (VoIP / SMS / Real-time Audio Calls)
 
-**Purpose:** In-app voice calls between passenger and driver during a ride
+**Purpose:** In-app voice calls between passenger and driver during a ride, plus transactional SMS
 
 **SDKs:**
-- `agora-rtc-sdk-ng ^4.24.2` — Web RTC SDK
-- `agora-token ^2.0.5` — Token generation (server-side)
+- `@twilio/voice-sdk ^2.18.2` — Web Voice SDK (client)
+- `twilio` — Server-side SDK (Cloud Functions, token + TwiML generation, SMS)
 
 **Architecture:**
-- Engine interface `IVoipEngine` with `AgoraVoipEngine` implementation: `src/services/voip/engines/agora.engine.ts`
+- Engine interface `IVoipEngine` with `TwilioVoipEngine` implementation: `src/services/voip/engines/twilio.engine.ts`
 - Service orchestrator: `src/services/voip.service.ts`
-- Call lifecycle managed via Firestore `calls` collection + Firebase Cloud Functions (`createCall`, `answerCall`, `endCall`)
+- Call lifecycle managed via Firestore `calls` collection + Firebase Cloud Functions (`createCall`, `answerCall`, `endCall`, TwiML at `functions/src/voip/twiml.ts`)
+- SMS sending via `functions/src/utils/smsService.ts`
 - Android foreground service: native `VoipForeground` Capacitor plugin (`src/plugins/`)
 
 **Hook:** `src/hooks/useVoipCall.ts`
 
-**Required env vars:** Agora App ID and certificate (managed server-side via Cloud Functions)
+**Required env vars (Cloud Functions secrets):** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (and Twilio API Key/Secret + TwiML App SID for Voice tokens)
 
 ---
 

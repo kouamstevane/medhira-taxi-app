@@ -8,9 +8,9 @@ import {
   persistentMultipleTabManager,
   persistentSingleTabManager
 } from "firebase/firestore";
-import { getStorage, FirebaseStorage } from "firebase/storage";
 import { getFunctions, Functions } from "firebase/functions";
-import { getDatabase, Database } from "firebase/database";
+import type { FirebaseStorage } from "firebase/storage";
+import type { Database } from "firebase/database";
 import { Capacitor } from "@capacitor/core";
 
 export const firebaseConfig = {
@@ -20,7 +20,8 @@ export const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
 };
 
 let app: FirebaseApp;
@@ -52,9 +53,25 @@ if (typeof window !== 'undefined') {
 }
 
 export const db: Firestore = firestoreInstance;
-export const storage: FirebaseStorage = getStorage(app);
 export const functions: Functions = getFunctions(app, 'europe-west1');
-export const rtdb: Database = getDatabase(app);
+
+let _storage: FirebaseStorage | undefined;
+export const getFirebaseStorage = (): FirebaseStorage => {
+  if (!_storage) {
+    const { getStorage } = require("firebase/storage") as typeof import("firebase/storage");
+    _storage = getStorage(app);
+  }
+  return _storage;
+};
+
+let _rtdb: Database | undefined;
+export const getFirebaseDatabase = (): Database => {
+  if (!_rtdb) {
+    const { getDatabase } = require("firebase/database") as typeof import("firebase/database");
+    _rtdb = getDatabase(app);
+  }
+  return _rtdb;
+};
 
 export { app };
 export default app;

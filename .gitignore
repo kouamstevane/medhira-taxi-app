@@ -1,7 +1,8 @@
 # Dependencies
 node_modules/
-functions/node_modules/
+functions/node_modules
 node_modulesOld-after/
+functions/node_modules.bak/
 /.pnp
 .pnp.js
 
@@ -53,6 +54,7 @@ lerna-debug.log*
 .env.local
 .env.development.local
 .env.test.local
+.env.production
 .env.production.local
 
 # IDEs and editors
@@ -159,3 +161,10 @@ nul
 .agent/
 plans/
 *.txt
+.opencode/
+functions/lib/
+.playwright-mcp/
+playwright-report/
+test-results/
+e2e/screenshots/
+opencode.json

@@ -1,16 +1,17 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import Stripe from 'stripe';
 import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import type Stripe from 'stripe';
+import { createStripeClient } from './stripe-client.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
 let _stripe: InstanceType<typeof Stripe> | null = null;
 function getStripe(): InstanceType<typeof Stripe> {
   if (!_stripe) {
-    _stripe = new Stripe(stripeSecretKey.value(), { apiVersion: '2026-03-25.dahlia' });
+    _stripe = createStripeClient(stripeSecretKey.value());
   }
   return _stripe;
 }
@@ -50,16 +51,16 @@ interface TransferResult {
   error?: string;
 }
 
-async function getUserRole(uid: string): Promise<'admin' | 'driver' | 'user'> {
+async function getUserRole(uid: string): Promise<'admin' | 'driver' | 'restaurant' | 'user'> {
   const db = getDb();
   const adminSnap = await db.collection('admins').doc(uid).get();
   if (adminSnap.exists) return 'admin';
   const userSnap = await db.collection('users').doc(uid).get();
-  const userType = userSnap.exists ? (userSnap.data()?.userType as string | undefined) : undefined;
-  if (userType === 'admin') return 'admin';
-  if (userType === 'chauffeur') return 'driver';
-  const driverSnap = await db.collection('drivers').doc(uid).get();
-  if (driverSnap.exists) return 'driver';
+  if (userSnap.exists) {
+    const roles = userSnap.data()?.roles;
+    if (roles?.driver != null) return 'driver';
+    if (roles?.restaurant != null) return 'restaurant';
+  }
   return 'user';
 }
 

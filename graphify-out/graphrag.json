@@ -1,0 +1,1067 @@
+{
+  "metadata": {
+    "project": "medjira-taxi-app",
+    "generated_at": "2026-04-30",
+    "total_nodes": 8729,
+    "total_edges": 21482,
+    "total_communities": 41,
+    "meaningful_communities": 12
+  },
+  "communities": [
+    {
+      "id": 3,
+      "label": "Audit Logging, Android Plugins & Stripe Payment",
+      "size": 582,
+      "cohesion": 0.01,
+      "key_nodes": [
+        {
+          "id": "menu_menumanagementclient_deleteitem",
+          "label": "deleteItem()",
+          "source_file": "src/app/food/portal/[id]/menu/MenuManagementClient.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "services_audit_logging_service_auditloggingservice",
+          "label": "AuditLoggingService",
+          "source_file": "src/services/audit-logging.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "setup_payment_setuppaymentcontent_handleretry",
+          "label": "handleRetry()",
+          "source_file": "src/app/auth/setup-payment/SetupPaymentContent.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_components_stripe_nativestripepayment_tsx",
+          "label": "NativeStripePayment.tsx",
+          "source_file": "src/components/stripe/NativeStripePayment.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_components_stripe_nativestripesetup_tsx",
+          "label": "NativeStripeSetup.tsx",
+          "source_file": "src/components/stripe/NativeStripeSetup.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_components_stripe_stripepaymentelement_tsx",
+          "label": "StripePaymentElement.tsx",
+          "source_file": "src/components/stripe/StripePaymentElement.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_lib_stripe_adapters_index_ts",
+          "label": "index.ts",
+          "source_file": "src/lib/stripe-adapters/index.ts",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 10,
+      "top_files": [
+        "android/app/src/main/assets/public/_next/static/chunks/0e4~qsej3ra.y.js",
+        "src/services/audit-logging.service.ts",
+        "android/app/src/main/java/com/medjiraservice/medjiraserviceapp/BackgroundGeolocationPlugin.java",
+        "src/app/auth/setup-payment/SetupPaymentContent.tsx",
+        "src/app/food/portal/[id]/menu/MenuManagementClient.tsx"
+      ]
+    },
+    {
+      "id": 8,
+      "label": "Core Services (Taxi, Food, Driver, Wallet, Auth)",
+      "size": 303,
+      "cohesion": 0.01,
+      "key_nodes": [
+        {
+          "id": "checkout_page_handlecreateorder",
+          "label": "handleCreateOrder()",
+          "source_file": "src/app/food/checkout/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "colis_page_async",
+          "label": "async()",
+          "source_file": "src/app/colis/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "components_driverfoundview_executecancel",
+          "label": "executeCancel()",
+          "source_file": "src/app/taxi/components/DriverFoundView.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "components_invoicemodal_formatprice",
+          "label": "formatPrice()",
+          "source_file": "src/components/InvoiceModal.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "components_newrideform_createbookinginternal",
+          "label": "createBookingInternal()",
+          "source_file": "src/app/taxi/components/NewRideForm.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "dashboard_page_accepttrip",
+          "label": "acceptTrip()",
+          "source_file": "src/app/driver/dashboard/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "dashboard_page_fetchhistory",
+          "label": "fetchHistory()",
+          "source_file": "src/app/dashboard/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "drivers_page_loadmore",
+          "label": "loadMore()",
+          "source_file": "src/app/admin/drivers/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "food_page_fetchrestaurants",
+          "label": "fetchRestaurants()",
+          "source_file": "src/app/food/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "historique_page_fetchhistory",
+          "label": "fetchHistory()",
+          "source_file": "src/app/historique/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "historique_page_fetchtransactions",
+          "label": "fetchTransactions()",
+          "source_file": "src/app/wallet/historique/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "id_restaurantclient_loadrestaurantdata",
+          "label": "loadRestaurantData()",
+          "source_file": "src/app/food/restaurant/[id]/RestaurantClient.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "layout_header_handlelogout",
+          "label": "handleLogout()",
+          "source_file": "src/components/layout/Header.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "lib_firebase_helpers_calculatetripprice",
+          "label": "calculateTripPrice()",
+          "source_file": "src/lib/firebase-helpers.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "lib_validation_getpasswordcriteria",
+          "label": "getPasswordCriteria()",
+          "source_file": "src/lib/validation.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "login_page_handleautherror",
+          "label": "handleAuthError()",
+          "source_file": "src/app/login/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "login_page_handleemaillogin",
+          "label": "handleEmailLogin()",
+          "source_file": "src/app/driver/login/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "matching_assignment_assigndriver",
+          "label": "assignDriver()",
+          "source_file": "src/services/matching/assignment.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "matching_automaticsearch_startautomaticsearch",
+          "label": "startAutomaticSearch()",
+          "source_file": "src/services/matching/automaticSearch.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "matching_broadcast_expireallpendingcandidates",
+          "label": "expireAllPendingCandidates()",
+          "source_file": "src/services/matching/broadcast.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "matching_findavailabledrivers_calculateacceptrate",
+          "label": "calculateAcceptRate()",
+          "source_file": "src/services/matching/findAvailableDrivers.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "orders_page_formatdate",
+          "label": "formatDate()",
+          "source_file": "src/app/client/orders/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "orders_page_loadorders",
+          "label": "loadOrders()",
+          "source_file": "src/app/food/orders/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "profil_page_fetchhistory",
+          "label": "fetchHistory()",
+          "source_file": "src/app/profil/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "rate_pageclient_fetchbooking",
+          "label": "fetchBooking()",
+          "source_file": "src/app/taxi/[bookingId]/rate/PageClient.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "rate_pageclient_fetchdriverid",
+          "label": "fetchDriverId()",
+          "source_file": "src/app/client/[orderId]/rate/PageClient.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "recharger_page_handlestripeerror",
+          "label": "handleStripeError()",
+          "source_file": "src/app/wallet/recharger/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "register_registercontent_handlechange",
+          "label": "handleChange()",
+          "source_file": "src/app/auth/register/RegisterContent.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "register_registerphonecontent_createuserdocument",
+          "label": "createUserDocument()",
+          "source_file": "src/app/auth/register/RegisterPhoneContent.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "reset_password_page_handleresetpassword",
+          "label": "handleResetPassword()",
+          "source_file": "src/app/auth/reset-password/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "restaurants_page_fetchrestaurants",
+          "label": "fetchRestaurants()",
+          "source_file": "src/app/admin/restaurants/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "services_auth_service_checkemailverified",
+          "label": "checkEmailVerified()",
+          "source_file": "src/services/auth.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "services_chat_service_initiatecall",
+          "label": "initiateCall()",
+          "source_file": "src/services/chat.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "services_driver_service_addrating",
+          "label": "addRating()",
+          "source_file": "src/services/driver.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "services_food_delivery_service_assigndrivertoorder",
+          "label": "assignDriverToOrder()",
+          "source_file": "src/services/food-delivery.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "services_invoice_service_downloadinvoicefrombooking",
+          "label": "downloadInvoiceFromBooking()",
+          "source_file": "src/services/invoice.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "services_notification_service_notificationservice",
+          "label": "NotificationService",
+          "source_file": "src/services/notification.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "services_parcel_service_createparcelorder",
+          "label": "createParcelOrder()",
+          "source_file": "src/services/parcel.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "services_taxi_service_calculatecancellationpenalty",
+          "label": "calculateCancellationPenalty()",
+          "source_file": "src/services/taxi.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "services_wallet_service_failtransaction",
+          "label": "failTransaction()",
+          "source_file": "src/services/wallet.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "src_app_admin_users_page_tsx",
+          "label": "page.tsx",
+          "source_file": "src/app/admin/users/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_app_auth_verify_email_page_tsx",
+          "label": "page.tsx",
+          "source_file": "src/app/auth/verify-email/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_app_driver_reset_password_page_tsx",
+          "label": "page.tsx",
+          "source_file": "src/app/driver/reset-password/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_app_taxi_page_tsx",
+          "label": "page.tsx",
+          "source_file": "src/app/taxi/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_app_test_matching_page_tsx",
+          "label": "page.tsx",
+          "source_file": "src/app/test-matching/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_components_ui_walletpreview_tsx",
+          "label": "WalletPreview.tsx",
+          "source_file": "src/components/ui/WalletPreview.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "src_services_matching_tests_matching_helpers_test_ts",
+          "label": "matching-helpers.test.ts",
+          "source_file": "src/services/matching/__tests__/matching-helpers.test.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "src_utils_distance_ts",
+          "label": "distance.ts",
+          "source_file": "src/utils/distance.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "src_utils_error_utils_ts",
+          "label": "error-utils.ts",
+          "source_file": "src/utils/error-utils.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "src_utils_navigation_ts",
+          "label": "navigation.ts",
+          "source_file": "src/utils/navigation.ts",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 7,
+      "top_files": [
+        "src/services/food-delivery.service.ts",
+        "src/services/taxi.service.ts",
+        "src/services/driver.service.ts",
+        "src/lib/validation.ts",
+        "src/app/driver/dashboard/page.tsx"
+      ]
+    },
+    {
+      "id": 13,
+      "label": "Cloud Functions (Admin, GDPR, Email, VoIP)",
+      "size": 157,
+      "cohesion": 0.02,
+      "key_nodes": [
+        {
+          "id": "admin_driverdeletion_anonymizecompletedbyfield",
+          "label": "anonymizeCompletedByField()",
+          "source_file": "functions/lib/admin/driverDeletion.js",
+          "file_type": "code"
+        },
+        {
+          "id": "admin_shared_requireadmin",
+          "label": "requireAdmin()",
+          "source_file": "functions/lib/admin/_shared.js",
+          "file_type": "code"
+        },
+        {
+          "id": "authapi_sendverificationcode_getdb",
+          "label": "getDb()",
+          "source_file": "functions/lib/authApi/sendVerificationCode.js",
+          "file_type": "code"
+        },
+        {
+          "id": "authapi_verifycode_getdb",
+          "label": "getDb()",
+          "source_file": "functions/lib/authApi/verifyCode.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_email_service_js",
+          "label": "email-service.js",
+          "source_file": "functions/lib/email-service.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_gdpr_deleteaccount_js",
+          "label": "deleteAccount.js",
+          "source_file": "functions/lib/gdpr/deleteAccount.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_stripe_stripepaymentintent_js",
+          "label": "stripePaymentIntent.js",
+          "source_file": "functions/lib/stripe/stripePaymentIntent.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_stripe_stripewalletrecharge_js",
+          "label": "stripeWalletRecharge.js",
+          "source_file": "functions/lib/stripe/stripeWalletRecharge.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_utils_matching_js",
+          "label": "matching.js",
+          "source_file": "functions/lib/utils/matching.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_utils_notificationservice_js",
+          "label": "notificationService.js",
+          "source_file": "functions/lib/utils/notificationService.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_utils_ratelimiter_js",
+          "label": "rateLimiter.js",
+          "source_file": "functions/lib/utils/rateLimiter.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_utils_validation_js",
+          "label": "validation.js",
+          "source_file": "functions/lib/utils/validation.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_utilsapi_bookingscomplete_js",
+          "label": "bookingsComplete.js",
+          "source_file": "functions/lib/utilsApi/bookingsComplete.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_utilsapi_distancecalculate_js",
+          "label": "distanceCalculate.js",
+          "source_file": "functions/lib/utilsApi/distanceCalculate.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_validators_bank_validator_js",
+          "label": "bank.validator.js",
+          "source_file": "functions/lib/validators/bank.validator.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_voip_index_js",
+          "label": "index.js",
+          "source_file": "functions/lib/voip/index.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_walletapi_walletensure_js",
+          "label": "walletEnsure.js",
+          "source_file": "functions/lib/walletApi/walletEnsure.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_walletapi_walletfailtransaction_js",
+          "label": "walletFailTransaction.js",
+          "source_file": "functions/lib/walletApi/walletFailTransaction.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_walletapi_walletpaybooking_js",
+          "label": "walletPayBooking.js",
+          "source_file": "functions/lib/walletApi/walletPayBooking.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_lib_walletapi_walletrefundtransaction_js",
+          "label": "walletRefundTransaction.js",
+          "source_file": "functions/lib/walletApi/walletRefundTransaction.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_admin_admindeletedrivercomplete_ts",
+          "label": "adminDeleteDriverComplete.ts",
+          "source_file": "functions/src/admin/adminDeleteDriverComplete.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_admin_adminmanagecity_ts",
+          "label": "adminManageCity.ts",
+          "source_file": "functions/src/admin/adminManageCity.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_admin_adminmanagedriver_ts",
+          "label": "adminManageDriver.ts",
+          "source_file": "functions/src/admin/adminManageDriver.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_admin_adminmanagerestaurant_ts",
+          "label": "adminManageRestaurant.ts",
+          "source_file": "functions/src/admin/adminManageRestaurant.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_admin_adminmanageuser_ts",
+          "label": "adminManageUser.ts",
+          "source_file": "functions/src/admin/adminManageUser.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_admin_adminsendemail_ts",
+          "label": "adminSendEmail.ts",
+          "source_file": "functions/src/admin/adminSendEmail.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_admin_driverdeletion_ts",
+          "label": "driverDeletion.ts",
+          "source_file": "functions/src/admin/driverDeletion.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_admin_shared_ts",
+          "label": "_shared.ts",
+          "source_file": "functions/src/admin/_shared.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_authapi_sendverificationcode_ts",
+          "label": "sendVerificationCode.ts",
+          "source_file": "functions/src/authApi/sendVerificationCode.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_authapi_verifycode_ts",
+          "label": "verifyCode.ts",
+          "source_file": "functions/src/authApi/verifyCode.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_config_stripe_ts",
+          "label": "stripe.ts",
+          "source_file": "functions/src/config/stripe.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_email_service_ts",
+          "label": "email-service.ts",
+          "source_file": "functions/src/email-service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_gdpr_deleteaccount_ts",
+          "label": "deleteAccount.ts",
+          "source_file": "functions/src/gdpr/deleteAccount.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_index_ts",
+          "label": "index.ts",
+          "source_file": "functions/src/index.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_migratecurrency_ts",
+          "label": "migrateCurrency.ts",
+          "source_file": "functions/src/migrateCurrency.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_stripe_stripepaymentintent_ts",
+          "label": "stripePaymentIntent.ts",
+          "source_file": "functions/src/stripe/stripePaymentIntent.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_stripe_stripewalletrecharge_ts",
+          "label": "stripeWalletRecharge.ts",
+          "source_file": "functions/src/stripe/stripeWalletRecharge.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_utils_matching_ts",
+          "label": "matching.ts",
+          "source_file": "functions/src/utils/matching.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_utils_notificationservice_ts",
+          "label": "notificationService.ts",
+          "source_file": "functions/src/utils/notificationService.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_utils_ratelimiter_ts",
+          "label": "rateLimiter.ts",
+          "source_file": "functions/src/utils/rateLimiter.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_utils_validation_ts",
+          "label": "validation.ts",
+          "source_file": "functions/src/utils/validation.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_utilsapi_bookingscomplete_ts",
+          "label": "bookingsComplete.ts",
+          "source_file": "functions/src/utilsApi/bookingsComplete.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_utilsapi_debuglog_ts",
+          "label": "debugLog.ts",
+          "source_file": "functions/src/utilsApi/debugLog.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_utilsapi_distancecalculate_ts",
+          "label": "distanceCalculate.ts",
+          "source_file": "functions/src/utilsApi/distanceCalculate.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_utilsapi_reversegeocode_ts",
+          "label": "reverseGeocode.ts",
+          "source_file": "functions/src/utilsApi/reverseGeocode.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_validators_bank_validator_ts",
+          "label": "bank.validator.ts",
+          "source_file": "functions/src/validators/bank.validator.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_validators_schemas_ts",
+          "label": "schemas.ts",
+          "source_file": "functions/src/validators/schemas.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_voip_index_ts",
+          "label": "index.ts",
+          "source_file": "functions/src/voip/index.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_walletapi_walletensure_ts",
+          "label": "walletEnsure.ts",
+          "source_file": "functions/src/walletApi/walletEnsure.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_walletapi_walletfailtransaction_ts",
+          "label": "walletFailTransaction.ts",
+          "source_file": "functions/src/walletApi/walletFailTransaction.ts",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 2,
+      "top_files": [
+        "functions/src/migrateCurrency.ts",
+        "functions/lib/gdpr/deleteAccount.js",
+        "functions/lib/admin/driverDeletion.js",
+        "functions/lib/voip/index.js",
+        "functions/src/email-service.ts"
+      ]
+    },
+    {
+      "id": 15,
+      "label": "App Config & OAuth (PKCE Flow)",
+      "size": 127,
+      "cohesion": 0.03,
+      "key_nodes": [
+        {
+          "id": "components_step2identity_handledobfieldchange",
+          "label": "handleDobFieldChange()",
+          "source_file": "src/app/driver/register/components/Step2Identity.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "config_api_apiclient",
+          "label": "APIClient",
+          "source_file": "src/config/api.ts",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 11,
+      "top_files": [
+        "android/app/src/main/assets/public/_next/static/chunks/10ch16wai_1y6.js",
+        "android/app/src/main/assets/public/_next/static/chunks/turbopack-0.t.q0n57~.2k.js",
+        "src/config/api.ts",
+        "src/app/driver/register/components/Step2Identity.tsx",
+        "android/app/src/main/assets/public/_next/static/chunks/08hbc6_5p6oq_.js"
+      ]
+    },
+    {
+      "id": 22,
+      "label": "Android Foreground Services (Location + VoIP)",
+      "size": 56,
+      "cohesion": 0.05,
+      "key_nodes": [
+        {
+          "id": "src_utils_test_logger_ts",
+          "label": "test-logger.ts",
+          "source_file": "src/utils/test-logger.ts",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 7,
+      "top_files": [
+        "src/utils/test-logger.ts",
+        "android/app/src/main/java/com/medjiraservice/medjiraserviceapp/LocationForegroundService.java",
+        "android/app/src/main/java/com/medjiraservice/medjiraserviceapp/VoipForegroundService.java",
+        "android/app/src/main/assets/public/_next/static/chunks/08hbc6_5p6oq_.js",
+        "android/app/src/main/assets/public/_next/static/chunks/0sx~m2gaixr3v.js"
+      ]
+    },
+    {
+      "id": 24,
+      "label": "Stripe Connect Webhook Handler",
+      "size": 48,
+      "cohesion": 0.16,
+      "key_nodes": [
+        {
+          "id": "functions_lib_stripe_index_js",
+          "label": "index.js",
+          "source_file": "functions/lib/stripe/index.js",
+          "file_type": "code"
+        },
+        {
+          "id": "functions_src_stripe_index_ts",
+          "label": "index.ts",
+          "source_file": "functions/src/stripe/index.ts",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 1,
+      "top_files": [
+        "functions/lib/stripe/index.js",
+        "functions/src/stripe/index.ts"
+      ]
+    },
+    {
+      "id": 25,
+      "label": "Driver Tracking & GDPR Consent Services",
+      "size": 42,
+      "cohesion": 0.07,
+      "key_nodes": [
+        {
+          "id": "config_firebase_getfirebasedatabase",
+          "label": "getFirebaseDatabase()",
+          "source_file": "src/config/firebase.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "dockey_pageclient_handleupload",
+          "label": "handleUpload()",
+          "source_file": "src/app/driver/documents/[docKey]/PageClient.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "profil_page_handlesubmit",
+          "label": "handleSubmit()",
+          "source_file": "src/app/profil/page.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "services_drivertracking_service_drivertrackingservice",
+          "label": "DriverTrackingService",
+          "source_file": "src/services/driverTracking.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "services_gdpr_consent_service_consentrequirederror",
+          "label": "ConsentRequiredError",
+          "source_file": "src/services/gdpr-consent.service.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "src_utils_firestore_error_handler_ts",
+          "label": "firestore-error-handler.ts",
+          "source_file": "src/utils/firestore-error-handler.ts",
+          "file_type": "code"
+        },
+        {
+          "id": "src_utils_retry_ts",
+          "label": "retry.ts",
+          "source_file": "src/utils/retry.ts",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 2,
+      "top_files": [
+        "src/services/driverTracking.service.ts",
+        "android/app/src/main/assets/public/_next/static/chunks/0sx~m2gaixr3v.js",
+        "src/services/gdpr-consent.service.ts",
+        "src/utils/firestore-error-handler.ts",
+        "src/config/firebase.ts"
+      ]
+    },
+    {
+      "id": 27,
+      "label": "VoIP Service & Chat Modal",
+      "size": 25,
+      "cohesion": 0.14,
+      "key_nodes": [
+        {
+          "id": "components_chatmodal_getotherpartyname",
+          "label": "getOtherPartyName()",
+          "source_file": "src/components/ChatModal.tsx",
+          "file_type": "code"
+        },
+        {
+          "id": "services_voip_service_voipservice",
+          "label": "VoipService",
+          "source_file": "src/services/voip.service.ts",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 1,
+      "top_files": [
+        "src/services/voip.service.ts",
+        "src/components/ChatModal.tsx"
+      ]
+    },
+    {
+      "id": 30,
+      "label": "Structured Logger Utility",
+      "size": 18,
+      "cohesion": 0.21,
+      "key_nodes": [
+        {
+          "id": "src_utils_logger_ts",
+          "label": "logger.ts",
+          "source_file": "src/utils/logger.ts",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 1,
+      "top_files": [
+        "src/utils/logger.ts"
+      ]
+    },
+    {
+      "id": 36,
+      "label": "Driver Registration - Step3Vehicle",
+      "size": 4,
+      "cohesion": 0.5,
+      "key_nodes": [
+        {
+          "id": "components_step3vehicle_handlefilechange",
+          "label": "handleFileChange()",
+          "source_file": "src/app/driver/register/components/Step3Vehicle.tsx",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 1,
+      "top_files": [
+        "src/app/driver/register/components/Step3Vehicle.tsx"
+      ]
+    },
+    {
+      "id": 37,
+      "label": "Driver Registration - Step4Compliance",
+      "size": 4,
+      "cohesion": 0.5,
+      "key_nodes": [
+        {
+          "id": "components_step4compliance_handlefilechange",
+          "label": "handleFileChange()",
+          "source_file": "src/app/driver/register/components/Step4Compliance.tsx",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 1,
+      "top_files": [
+        "src/app/driver/register/components/Step4Compliance.tsx"
+      ]
+    },
+    {
+      "id": 40,
+      "label": "Driver Registration - Step1Intent",
+      "size": 3,
+      "cohesion": 0.67,
+      "key_nodes": [
+        {
+          "id": "components_step1intent_handlecodeverified",
+          "label": "handleCodeVerified()",
+          "source_file": "src/app/driver/register/components/Step1Intent.tsx",
+          "file_type": "code"
+        }
+      ],
+      "external_connections": 1,
+      "top_files": [
+        "src/app/driver/register/components/Step1Intent.tsx"
+      ]
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "voip_architecture_ecosystem",
+      "label": "VoIP Architecture and Migration",
+      "nodes": [
+        "voip_arch_guide_agora",
+        "voip_impl_guide",
+        "voip_correction_twilio",
+        "apk_agora_to_twilio"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "docs/VOIP_ARCHITECTURE_GUIDE.md"
+    },
+    {
+      "id": "security_audit_trail",
+      "label": "Security Audit Findings",
+      "nodes": [
+        "audit_codebase_2026",
+        "codereview_report",
+        "pending_issues_report",
+        "codereview_service_account",
+        "pending_wallet_manipulation"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.9,
+      "source_file": "docs/CODEREVIEW_REPORT.md"
+    },
+    {
+      "id": "food_delivery_feature",
+      "label": "Food Delivery Feature Ecosystem",
+      "nodes": [
+        "food_process_analysis",
+        "food_cityid_bug",
+        "food_delivery_coords_bug",
+        "livreur_feature_spec",
+        "livreur_feature_plan"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "docs/features/analyse-tous-le-processus-dynamic-stallman.md"
+    },
+    {
+      "id": "android_native_icon_system",
+      "label": "Android Native Icon System (mipmap density variants)",
+      "nodes": [
+        "mipmap_ic_launcher_android_icon_set",
+        "mipmap_ic_launcher_round_android_icon_set",
+        "density_bucket_hdpi",
+        "density_bucket_mdpi",
+        "density_bucket_xhdpi",
+        "density_bucket_xxhdpi",
+        "density_bucket_xxxhdpi"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "android/app/src/main/res/mipmap-{density}/"
+    },
+    {
+      "id": "cross_platform_app_icon_suite",
+      "label": "Cross-Platform App Icon Suite (Android Native + PWA + iOS)",
+      "nodes": [
+        "mipmap_ic_launcher_android_icon_set",
+        "public_android_icon_set",
+        "public_apple_icon_set"
+      ],
+      "relation": "implement",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": null
+    },
+    {
+      "id": "medjira_brand_asset_collection",
+      "label": "Medjira Brand Asset Collection",
+      "nodes": [
+        "mipmap_ic_launcher_android_icon_set",
+        "drawable_splash_android_set",
+        "public_android_icon_set",
+        "public_apple_icon_set",
+        "brand_medjira_visual_identity"
+      ],
+      "relation": "form",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": null
+    },
+    {
+      "id": "apple_touch_icon_set",
+      "label": "Apple Touch Icon Multi-Resolution Set",
+      "nodes": [
+        "appleicon76_apple_icon",
+        "appleicon114_apple_icon",
+        "appleicon120_apple_icon",
+        "appleicon144_apple_icon",
+        "appleicon152_apple_icon",
+        "appleicon180_apple_icon"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "public/icons/"
+    },
+    {
+      "id": "android_splash_landscape_set",
+      "label": "Android Landscape Splash Screen DPI Variants",
+      "nodes": [
+        "splash_landhdpi_android_splash",
+        "splash_landmdpi_android_splash",
+        "splash_landxhdpi_android_splash",
+        "splash_landxxhdpi_android_splash",
+        "splash_landxxxhdpi_android_splash"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "android/app/src/main/res/"
+    },
+    {
+      "id": "android_launcher_foreground_set",
+      "label": "Android Launcher Foreground DPI Variants",
+      "nodes": [
+        "launcher_hdpi_android_foreground",
+        "launcher_mdpi_android_foreground",
+        "launcher_xhdpi_android_foreground"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "android/app/src/main/res/"
+    }
+  ]
+}

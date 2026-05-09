@@ -40,6 +40,8 @@ import {
   setDoc,
   Timestamp
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getApps, getApp } from 'firebase/app';
 import { db } from '@/config/firebase';
 import type {
   FoodOrder,
@@ -186,7 +188,6 @@ export const getApprovedRestaurants = async (
 
   const constraints: Parameters<typeof query>[1][] = [
     where('status', '==', 'approved'),
-    limit(limitCount),
   ];
 
   if (filters?.cuisineType) {
@@ -197,9 +198,15 @@ export const getApprovedRestaurants = async (
     constraints.push(where('avgPricePerPerson', '<=', filters.maxAvgPricePerPerson));
   }
 
+  // orderBy obligatoire avant startAfter sinon l'ordre Firestore est indéfini
+  // et la pagination produit des doublons / des manques entre pages.
+  constraints.push(orderBy('createdAt', 'desc'));
+
   if (lastVisible) {
     constraints.push(startAfter(lastVisible));
   }
+
+  constraints.push(limit(limitCount));
 
   const q = query(restaurantsRef, ...constraints);
   const querySnapshot = await getDocs(q);
@@ -313,49 +320,32 @@ export const getRestaurantMenu = async (
   }
 };
 
-/**
- * Créer un nouveau restaurant
- * 
- * Règle 1 : Restaurant visible uniquement après approbation admin
- * 
- * @param restaurantData - Données du restaurant
- * @returns ID du restaurant créé
- */
 export const createRestaurant = async (
-  restaurantData: Omit<Restaurant, 'id' | 'status' | 'rating' | 'totalReviews' | 'createdAt' | 'updatedAt'>
+  restaurantData: Omit<Restaurant, 'id' | 'status' | 'rating' | 'totalReviews' | 'stripeConnectStatus' | 'createdAt' | 'updatedAt'>
 ): Promise<string> => {
   try {
-  const validationResult = CreateRestaurantSchema.safeParse(restaurantData);
-  if (!validationResult.success) {
-    throw new Error(`Données de restaurant invalides: ${validationResult.error.message}`);
-  }
+    const validationResult = CreateRestaurantSchema.safeParse(restaurantData);
+    if (!validationResult.success) {
+      throw new Error(`Données de restaurant invalides: ${validationResult.error.message}`);
+    }
 
-  const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
-  const newRestaurantRef = doc(restaurantsRef);
+    const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+    const app = getApps().length ? getApp() : undefined;
+    if (!app) throw new Error('Firebase app not initialized');
+    const functions = getFunctions(app, functionsRegion);
+    const submit = httpsCallable(functions, 'submitRestaurantApplication');
 
-  const restaurant: Omit<Restaurant, 'createdAt' | 'updatedAt'> & {
-    createdAt: ReturnType<typeof serverTimestamp>;
-    updatedAt: ReturnType<typeof serverTimestamp>;
-  } = {
-    ...restaurantData,
-    id: newRestaurantRef.id,
-    status: 'pending_approval', // Règle 1
-    rating: 2.5, // Note par défaut (ou 0)
-    totalReviews: 0,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
+    const result = await submit({ data: restaurantData });
+    const data = result.data as { restaurantId: string };
 
-  await setDoc(newRestaurantRef, restaurant);
+    logger.info('Demande de création de restaurant envoyée via callable', {
+      restaurantId: data.restaurantId,
+      ownerId: restaurantData.ownerId,
+      name: restaurantData.name,
+    });
 
-  logger.info('Demande de création de restaurant envoyée', {
-    restaurantId: newRestaurantRef.id,
-    ownerId: restaurantData.ownerId,
-    name: restaurantData.name,
-  });
-
-  return newRestaurantRef.id;
-  } catch (error) {
+    return data.restaurantId;
+  } catch (error: unknown) {
     console.error('[food-delivery.service] createRestaurant failed:', error);
     throw error;
   }
@@ -438,7 +428,7 @@ export const createFoodOrder = async (
   if (!restaurant) {
     throw new Error('Restaurant introuvable');
   }
-  if (restaurant.status !== 'approved' || !restaurant.isOpen) {
+  if (restaurant.status !== 'approved' || restaurant.isOpen === false) {
     throw new Error('Ce restaurant n\'est pas disponible actuellement');
   }
 
@@ -447,7 +437,7 @@ export const createFoodOrder = async (
 
   const pickupCode = generatePickupCode();
 
-  const order: Omit<FoodOrder, 'createdAt' | 'updatedAt'> & { createdAt: ReturnType<typeof serverTimestamp>; updatedAt: ReturnType<typeof serverTimestamp> } = {
+  const order: Record<string, unknown> = {
     id: newOrderRef.id,
     userId: orderData.userId,
     restaurantId: orderData.restaurantId,
@@ -455,7 +445,6 @@ export const createFoodOrder = async (
     deliveryDistance: orderData.deliveryDistance,
     isWeekend: orderData.isWeekend,
     deliveryAddress: orderData.deliveryAddress,
-    deliveryLocation: orderData.deliveryLocation,
     basePrice,
     deliveryCost,
     totalOrderPrice,
@@ -463,15 +452,19 @@ export const createFoodOrder = async (
     pickupCode,
     paymentValidated: false,
     restaurantName: restaurant.name,
-    restaurantImage: restaurant.imageUrl,
     deliveryPreference: orderData.deliveryPreference ?? 'leave_at_door',
-    deliveryInstructions: orderData.deliveryInstructions ?? undefined,
     customerPhone: orderData.customerPhone ?? '',
     clientNeighbourhood: orderData.clientNeighbourhood ?? '',
     cityId: orderData.cityId ?? 'edmonton',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
+
+  // Only set optional fields when defined — Firestore rejects `undefined` values
+  // (ignoreUndefinedProperties is not enabled).
+  if (orderData.deliveryLocation) order.deliveryLocation = orderData.deliveryLocation;
+  if (restaurant.imageUrl) order.restaurantImage = restaurant.imageUrl;
+  if (orderData.deliveryInstructions) order.deliveryInstructions = orderData.deliveryInstructions;
 
   const walletRef = doc(db, 'wallets', orderData.userId);
 

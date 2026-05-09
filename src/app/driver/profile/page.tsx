@@ -93,7 +93,7 @@ export default function DriverProfilePage() {
         </div>
       </div>
 
-      <div className="max-w-[430px] mx-auto p-4 space-y-4">
+      <div className="max-w-[430px] mx-auto p-4 pb-28 space-y-4">
         {/* Error */}
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">

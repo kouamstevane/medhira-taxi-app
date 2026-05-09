@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { ref, onValue } from 'firebase/database'
-import { rtdb } from '@/config/firebase'
+import { getFirebaseDatabase } from '@/config/firebase'
 
 interface DriverLocation {
   lat: number
@@ -22,7 +22,7 @@ export function useDeliveryTracking(orderId: string | null): {
 
   useEffect(() => {
     if (!orderId) return
-    const trackingRef = ref(rtdb, `delivery_tracking/${orderId}/location`)
+    const trackingRef = ref(getFirebaseDatabase(), `delivery_tracking/${orderId}/location`)
     const unsub = onValue(trackingRef, (snap) => {
       setLocation(snap.val() as DriverLocation | null)
     }, (err) => {

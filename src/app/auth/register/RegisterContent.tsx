@@ -37,8 +37,9 @@ export default function RegisterContent() {
             if (user && user.emailVerified) {
                 try {
                     const userDoc = await getDoc(doc(db, 'users', user.uid));
-                    const userType = userDoc.exists() ? userDoc.data().userType : 'client';
-                    if (userType === 'chauffeur') {
+                    // Routage post-login : activeRole (V1, spec §7.3)
+                    const activeRole = userDoc.exists() ? userDoc.data().activeRole : 'client';
+                    if (activeRole === 'driver') {
                         router.push('/driver/dashboard');
                     } else {
                         router.push('/auth/setup-payment');
@@ -90,12 +91,15 @@ export default function RegisterContent() {
 
         try {
             // Créer le compte avec email+password et créer le document Firestore
+            // P1 : signUpWithEmail crée TOUJOURS roles: { client } (Task 5).
+            // Les rôles pro (driver/restaurant) passent par leurs flows dédiés.
             const user = await signUpWithEmail(
                 formData.email,
                 formData.password,
-                formData.firstName,
-                formData.lastName,
-                'client'
+                {
+                    firstName: formData.firstName,
+                    lastName: formData.lastName,
+                }
             );
 
             // Mettre à jour le profil Firebase Auth avec le nom complet
@@ -139,8 +143,9 @@ export default function RegisterContent() {
         try {
             const user = await signInWithGoogle();
             const userDoc = await getDoc(doc(db, 'users', user.uid));
-            const userType = userDoc.exists() ? userDoc.data()?.userType : 'client';
-            if (userType === 'chauffeur') {
+            // Routage post-login : activeRole (V1, spec §7.3)
+            const activeRole = userDoc.exists() ? userDoc.data()?.activeRole : 'client';
+            if (activeRole === 'driver') {
                 router.push('/driver/dashboard');
             } else {
                 router.push('/auth/setup-payment');

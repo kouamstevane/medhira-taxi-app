@@ -78,7 +78,7 @@ export default function HomePage() {
         <div className="flex justify-center gap-3 py-6">
           {[
             { emoji: '🚕', label: 'Taxi' },
-            { emoji: '🍔', label: 'Food' },
+            { emoji: '🍔', label: 'Repas' },
             { emoji: '📦', label: 'Colis' },
           ].map((service) => (
             <div
@@ -99,23 +99,14 @@ export default function HomePage() {
             </button>
           </Link>
 
-          <Link href="/auth/register">
+          <Link href="/auth/role">
             <button className="h-[56px] w-full glass-card border-2 border-primary/60 text-primary font-bold text-lg rounded-xl flex items-center justify-center transition-all hover:bg-primary/10 active:scale-[0.98]">
               Créer un compte
             </button>
           </Link>
         </div>
 
-        {/* Driver Link */}
-        <div className="pt-6 text-center">
-          <Link
-            href="/driver/login"
-            className="inline-flex items-center gap-1 text-primary text-sm font-semibold hover:underline"
-          >
-            Vous êtes chauffeur ? Espace Chauffeur
-            <MaterialIcon name="arrow_forward" size="sm" />
-          </Link>
-        </div>
+
       </div>
     </div>
   );

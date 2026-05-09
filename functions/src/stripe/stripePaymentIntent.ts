@@ -1,17 +1,18 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { DRIVER_SHARE_RATE } from '../config/stripe.js';
+import { createStripeClient, isStripeError } from './stripe-client.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
 let _stripe: InstanceType<typeof Stripe> | null = null;
 function getStripe(): InstanceType<typeof Stripe> {
   if (!_stripe) {
-    _stripe = new Stripe(stripeSecretKey.value(), { apiVersion: '2026-03-25.dahlia' });
+    _stripe = createStripeClient(stripeSecretKey.value());
   }
   return _stripe;
 }
@@ -141,9 +142,17 @@ export const stripePaymentIntent = onCall(
               { idempotencyKey: `pi_${bookingId}_${toStripeAmount(amount, CURRENCY)}_taxi_ride` },
             );
           } catch (stripeErr: unknown) {
-            if (stripeErr instanceof Stripe.errors.StripeError) {
+            if (isStripeError(stripeErr)) {
+              console.error('[stripePaymentIntent] Stripe error', {
+                type: stripeErr.type,
+                code: stripeErr.code,
+                statusCode: stripeErr.statusCode,
+                message: stripeErr.message,
+                requestId: stripeErr.requestId,
+              });
               throw new HttpsError('internal', `Stripe error: ${stripeErr.message}`);
             }
+            console.error('[stripePaymentIntent] Non-Stripe error during PI create', stripeErr);
             throw new HttpsError('internal', 'Échec de la création du PaymentIntent');
           }
         } else {
@@ -161,9 +170,17 @@ export const stripePaymentIntent = onCall(
               { idempotencyKey: `pi_${bookingId}_${toStripeAmount(amount, CURRENCY)}_taxi_ride` },
             );
           } catch (stripeErr: unknown) {
-            if (stripeErr instanceof Stripe.errors.StripeError) {
+            if (isStripeError(stripeErr)) {
+              console.error('[stripePaymentIntent] Stripe error', {
+                type: stripeErr.type,
+                code: stripeErr.code,
+                statusCode: stripeErr.statusCode,
+                message: stripeErr.message,
+                requestId: stripeErr.requestId,
+              });
               throw new HttpsError('internal', `Stripe error: ${stripeErr.message}`);
             }
+            console.error('[stripePaymentIntent] Non-Stripe error during PI create', stripeErr);
             throw new HttpsError('internal', 'Échec de la création du PaymentIntent');
           }
         }

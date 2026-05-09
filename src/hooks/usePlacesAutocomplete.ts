@@ -4,6 +4,7 @@ import { PlaceSuggestion } from '@/types';
 interface UsePlacesAutocompleteProps {
   autocompleteService: google.maps.places.AutocompleteService | null;
   location?: { lat: number; lng: number } | null;
+  countryRestriction?: string[];
 }
 
 interface UsePlacesAutocompleteReturn {
@@ -16,6 +17,7 @@ interface UsePlacesAutocompleteReturn {
 export const usePlacesAutocomplete = ({
   autocompleteService,
   location,
+  countryRestriction,
 }: UsePlacesAutocompleteProps): UsePlacesAutocompleteReturn => {
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +51,9 @@ export const usePlacesAutocomplete = ({
 
         const request: google.maps.places.AutocompletionRequest = {
           input,
+          componentRestrictions: countryRestriction?.length
+            ? { country: countryRestriction }
+            : undefined,
         };
 
         if (location) {
@@ -80,7 +85,7 @@ export const usePlacesAutocomplete = ({
         );
       }, 250);
     },
-    [autocompleteService, location]
+    [autocompleteService, location, countryRestriction]
   );
 
   return { suggestions, loading, getSuggestions, clearSuggestions };

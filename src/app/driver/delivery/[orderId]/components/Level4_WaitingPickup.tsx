@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
+import DriverFoodContacts from './DriverFoodContacts'
 
 interface Props {
   order: FoodDeliveryOrder
@@ -21,6 +22,7 @@ export default function Level4_WaitingPickup({ order, updateStatus, confirmPicku
           <h2 className="text-xl font-bold">En attente de la commande</h2>
           <p className="text-slate-400 mt-1">{order.restaurantName}</p>
         </div>
+        <DriverFoodContacts order={order} target="restaurant" />
       </div>
       <div className="space-y-3">
         <button

@@ -6,6 +6,8 @@ import { ChatModal } from '@/components/ChatModal';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 import type { Trip } from '@/types/trip';
+import { useAuth } from '@/hooks/useAuth';
+import type { ConversationContext } from '@/types/conversation';
 
 const MapView = dynamic(() => import('@/components/ui').then(mod => ({ default: mod.MapView })), { ssr: false, loading: () => <div className="w-full h-56 bg-gray-100 animate-pulse rounded-xl" /> })
 
@@ -22,6 +24,7 @@ export function CurrentTripCard({
   onStartTrip,
   onCompleteTrip,
 }: CurrentTripCardProps) {
+  const { currentUser, userData } = useAuth();
   const [showChat, setShowChat] = useState(false);
 
   const passengerPosition = useMemo(() => {
@@ -262,15 +265,34 @@ export function CurrentTripCard({
           </div>
         </div>
       </div>
-      {showChat && (
-        <ChatModal
-          bookingId={trip.id}
-          driverName="Client" // Le nom du client n'est pas toujours dispo ici, on met "Client" par défaut
-          driverId={trip.userId} // C'est l'ID de l'autre partie
-          userType="chauffeur"
-          onClose={() => setShowChat(false)}
-        />
-      )}
+      {showChat && currentUser && (() => {
+        const conversationContext: ConversationContext = {
+          type: 'taxi',
+          entityId: trip.id,
+          participantA: {
+            uid: currentUser.uid,
+            name:
+              [userData?.firstName, userData?.lastName].filter(Boolean).join(' ').trim() ||
+              currentUser.displayName ||
+              'Chauffeur',
+            role: 'chauffeur',
+            avatar: userData?.profileImageUrl || currentUser.photoURL || null,
+          },
+          participantB: {
+            uid: trip.userId,
+            name: trip.passengerName || 'Client',
+            role: 'client',
+            avatar: null,
+          },
+        };
+        return (
+          <ChatModal
+            context={conversationContext}
+            currentUserUid={currentUser.uid}
+            onClose={() => setShowChat(false)}
+          />
+        );
+      })()}
     </div>
   );
 }

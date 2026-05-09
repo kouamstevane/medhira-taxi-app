@@ -13,9 +13,9 @@ export function useVoipCall() {
     return () => unsubscribe();
   }, []);
 
-  const startCall = useCallback(async (bookingId: string, caller: CallParticipant, callee: CallParticipant) => {
+  const startCall = useCallback(async (conversationId: string, caller: CallParticipant, callee: CallParticipant) => {
     try {
-      await voipService.startCall(bookingId, caller, callee);
+      await voipService.startCall(conversationId, caller, callee);
     } catch (error) {
       console.error('[useVoipCall] startCall failed:', error);
       setError(error instanceof Error ? error.message : 'Erreur appel');

@@ -77,8 +77,9 @@ export class NativeStripeAdapter implements StripeAdapter {
 
     await Stripe.createPaymentSheet({
       setupIntentClientSecret: clientSecret,
-      enableGooglePay: false,
-      enableApplePay: false,
+      enableGooglePay: true,
+      enableApplePay: true,
+      GooglePayIsTesting: process.env.NODE_ENV !== 'production',
       countryCode: 'CA',
       merchantDisplayName: 'Medjira',
       returnURL: typeof window !== 'undefined' ? window.location.origin : undefined,

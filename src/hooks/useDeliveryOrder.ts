@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { getDatabase, ref as rtdbRef, set } from 'firebase/database'
-import { db, storage, auth } from '@/config/firebase'
+import { db, getFirebaseStorage, auth } from '@/config/firebase'
 import { retryWithBackoff } from '@/utils/retry'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
 
@@ -131,7 +131,7 @@ export function useDeliveryOrder(orderId: string) {
   }, [orderId])
 
   const uploadProofPhoto = useCallback(async (file: File): Promise<string> => {
-    const fileRef = storageRef(storage, `delivery_proofs/${orderId}/${Date.now()}.jpg`)
+    const fileRef = storageRef(getFirebaseStorage(), `delivery_proofs/${orderId}/${Date.now()}.jpg`)
     return retryWithBackoff(
       async () => {
         await uploadBytes(fileRef, file)

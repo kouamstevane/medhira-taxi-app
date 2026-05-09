@@ -15,7 +15,8 @@ export default function NotificationsPage() {
   const { userData } = useAuth();
   const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications();
   const isAdmin = useAdminAuth();
-  const isDriver = userData?.userType === 'chauffeur';
+  // Capacité conducteur (spec §6.2) : présence de roles.driver
+  const isDriver = userData?.roles?.driver != null;
   const navItems = isDriver ? driverNavItems : isAdmin ? adminNavItems : undefined;
 
   const hasUnread = notifications.some((n) => !n.read);
@@ -117,7 +118,7 @@ export default function NotificationsPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-[430px] mx-auto px-4 py-6">
+      <main className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
         {isLoading ? (
           <div className="flex justify-center items-center py-20">
             <MaterialIcon name="refresh" className="animate-spin text-primary text-[40px]" />

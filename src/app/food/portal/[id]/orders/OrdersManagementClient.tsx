@@ -13,6 +13,8 @@ import { ToastContainer } from '@/components/ui/Toast';
 import type { Restaurant, FoodOrder } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
+import { ConversationLauncher } from '@/components/ConversationLauncher';
+import type { ConversationContext } from '@/types/conversation';
 
 export default function OrdersManagementClient() {
   const params = useParams()
@@ -23,6 +25,7 @@ export default function OrdersManagementClient() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [orders, setOrders] = useState<FoodOrder[]>([]);
   const [filter, setFilter] = useState<FoodOrder['status'] | 'all'>('all');
+  const [currentUserUid, setCurrentUserUid] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -38,6 +41,7 @@ export default function OrdersManagementClient() {
           return;
         }
         setRestaurant(res);
+        setCurrentUserUid(user.uid);
 
         const items = await FoodDeliveryService.getRestaurantOrders(id);
         setOrders(items);
@@ -223,10 +227,58 @@ export default function OrdersManagementClient() {
                       <p className="text-xs text-primary hover:underline cursor-pointer">Voir les coordonnées</p>
                     </div>
                   </div>
-                  <div className="p-3 bg-white/5 rounded-xl border border-white/5">
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/5 mb-3">
                     <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Livraison</p>
                     <p className="text-xs text-slate-300 line-clamp-2">{order.deliveryAddress}</p>
                   </div>
+                  {currentUserUid && restaurant && (
+                    <div className="space-y-2">
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Contacter le client</p>
+                        <ConversationLauncher
+                          context={{
+                            type: 'food',
+                            entityId: order.id,
+                            participantA: {
+                              uid: currentUserUid,
+                              name: restaurant.name,
+                              role: 'restaurant',
+                            },
+                            participantB: {
+                              uid: order.userId,
+                              name: order.customerName || 'Client',
+                              role: 'client',
+                            },
+                          } as ConversationContext}
+                          currentUserUid={currentUserUid}
+                          variant="icon-label"
+                        />
+                      </div>
+                      {order.driverId && (
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Contacter le livreur</p>
+                          <ConversationLauncher
+                            context={{
+                              type: 'food',
+                              entityId: order.id,
+                              participantA: {
+                                uid: currentUserUid,
+                                name: restaurant.name,
+                                role: 'restaurant',
+                              },
+                              participantB: {
+                                uid: order.driverId,
+                                name: order.driverName || 'Livreur',
+                                role: 'livreur',
+                              },
+                            } as ConversationContext}
+                            currentUserUid={currentUserUid}
+                            variant="icon-label"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

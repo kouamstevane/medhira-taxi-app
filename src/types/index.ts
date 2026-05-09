@@ -17,12 +17,17 @@ import { Timestamp } from 'firebase/firestore';
 
 // ==================== Utilisateurs & Authentification ====================
 export type {
-  UserType,
   UserData,
   AuthContextType,
   Country,
   UserProfile,
   FirebaseUser,
+  UserRoles,
+  ActiveRole,
+  RoleClient,
+  RoleDriver,
+  RoleRestaurant,
+  RestaurantDraftData,
 } from './user';
 
 // ==================== Réservations & Localisation ====================

@@ -11,16 +11,16 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import StripeConstructor from 'stripe';
 import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { createStripeClient } from '../stripe/stripe-client.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
 function getStripe() {
   const key = stripeSecretKey.value();
   if (!key) throw new HttpsError('failed-precondition', 'STRIPE_SECRET_KEY non configuré.');
-  return new StripeConstructor(key, { typescript: true });
+  return createStripeClient(key);
 }
 
 const MAX_PAY_AMOUNT = 100_000;

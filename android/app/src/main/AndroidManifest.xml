@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.medjiraservice.medjiraserviceapp">
+    package="com.medjiraservice.medjiraserviceapp2">
 
     <!-- ========== PERMISSIONS (AVANT application) ========== -->
     <!-- Permissions réseau -->
@@ -10,12 +10,8 @@
 
     <!-- Localisation avec granularité RGPD -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission
-        android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
-    <uses-permission
-        android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
-        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Android 12+ permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

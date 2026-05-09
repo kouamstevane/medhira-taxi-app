@@ -77,7 +77,7 @@ export default function WalletPage() {
     date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
   return (
-    <div className="min-h-screen bg-background pb-24 max-w-[430px] mx-auto">
+    <div className="min-h-screen bg-background pb-28 max-w-[430px] mx-auto">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Mon Portefeuille</h1>

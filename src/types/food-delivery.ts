@@ -51,6 +51,17 @@ export interface Restaurant {
     lat: number;
     lng: number;
   };
+  /**
+   * Statut Stripe Connect du restaurateur.
+   * - 'not_started' : aucun account créé
+   * - 'in_progress' : account créé, onboarding en cours (charges_enabled = false)
+   * - 'active' : charges_enabled && payouts_enabled
+   * - 'restricted' : Stripe a flaggé le compte (requires action)
+   */
+  stripeConnectStatus: 'not_started' | 'in_progress' | 'active' | 'restricted';
+
+  /** Stripe Account ID (acct_xxx), rempli après création. */
+  stripeAccountId?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   approvedAt?: Timestamp;

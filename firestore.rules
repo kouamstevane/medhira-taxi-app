@@ -57,7 +57,15 @@ service cloud.firestore {
              field.iv is string &&
              field.iv.length > 0 &&
              field.salt is string &&
-             field.salt.length > 0;
+              field.salt.length > 0;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(roleName) {
+      return isAuthenticated() && userDoc().roles[roleName] != null;
     }
     
     // ============================================================================
@@ -73,24 +81,27 @@ service cloud.firestore {
     match /users/{userId} {
       // Lecture : chaque utilisateur peut lire uniquement son propre document.
       // Les données client nécessaires aux chauffeurs doivent être dénormalisées dans les bookings.
-      allow read: if isOwner(userId);
+      allow read: if isOwner(userId) || isAdmin();
       
-      // Création : Les utilisateurs authentifiés peuvent créer leur propre document
-      // Permet la création de comptes clients par email ou téléphone
-      // SÉCURITÉ : Bloque la création d'un document client si l'utilisateur est déjà chauffeur
-      // (empêche la collision de rôles côté serveur, sans dépendre du check client-side)
-      allow create: if isOwner(userId) &&
-                       request.resource.data.userType == 'client' &&
-                       !exists(/databases/$(database)/documents/drivers/$(userId));
-      
-      // Mise à jour : Seul le propriétaire peut modifier ses propres données
-      // Permet aux clients de mettre à jour leur profil
-      // SÉCURITÉ : userType est immuable — impossible de s'auto-promouvoir restaurateur/admin
-      allow update: if isOwner(userId) &&
-                       request.resource.data.userType == resource.data.userType;
-      
-      // Suppression : Non autorisée pour les clients
-      allow delete: if false;
+      // CRÉATION : roles.client présent + enabled, pas de roles pro à la création initiale
+      // (l'ajout de roles.driver/restaurant passe par Cloud Function admin — cf. P2 §8)
+      allow create: if isOwner(userId)
+                    && request.resource.data.roles.client.enabled == true
+                    && !('driver' in request.resource.data.roles)
+                    && !('restaurant' in request.resource.data.roles);
+
+      allow update: if isOwner(userId)
+                    && (
+                      request.resource.data.roles == resource.data.roles
+                      || (
+                        !('client' in resource.data.roles)
+                        && request.resource.data.roles.client.enabled == true
+                        && request.resource.data.roles.diff(resource.data.roles).affectedKeys().hasOnly(['client'])
+                      )
+                    )
+                    || isAdmin();
+
+      allow delete: if isAdmin();
     }
     
     // ============================================================================
@@ -128,16 +139,7 @@ service cloud.firestore {
       allow list: if isAdmin()
         || (isAuthenticated() && resource.data.status in ['approved', 'available']);
 
-      // Création : Les chauffeurs peuvent créer leur propre document
-      // CONTRAINTE : Aucun champ sensible autorisé à la racine (doit aller en sous-collection private)
-      allow create: if request.auth.uid == driverId &&
-                       request.resource.data.email != null &&
-                       request.resource.data.phoneNumber == null &&
-                       request.resource.data.userType == 'chauffeur' &&
-                       (request.resource.data.status == 'draft' || request.resource.data.status == 'pending') &&
-                       !request.resource.data.keys().hasAny(
-                         ['ssn', 'bank', 'address', 'dob', 'nationality', 'documents', 'idNumber']
-                       );
+      allow create: if isAdmin();
 
       // Mise à jour :
       // - Le propriétaire ne peut JAMAIS modifier : documents, status, kycStatus, approvedBy (FIX #C3 — auto-approbation KYC)
@@ -408,7 +410,9 @@ service cloud.firestore {
       // ============================================================================
       // SOUS-COLLECTION MESSAGES (COMMUNICATIONS CLIENT-CHAUFFEUR)
       // ============================================================================
-      
+      // TODO: deprecated, migrate to top-level /conversations/{convId}/messages.
+      // Conservée pendant la migration pour rétrocompat / rollback safety.
+      //
       // Sous-collection messages - Communications client-chauffeur
       match /messages/{messageId} {
         // Lecture : Les deux parties peuvent lire tous les messages
@@ -435,6 +439,67 @@ service cloud.firestore {
       }
     }
     
+    // ============================================================================
+    // COLLECTION CONVERSATIONS (multi-domaines : taxi, food, parcel)
+    // ============================================================================
+    //
+    // Top-level collection unifiée pour toutes les conversations 1-1 entre
+    // utilisateurs (client↔chauffeur, client↔restaurant, client↔livreur,
+    // restaurant↔livreur, expéditeur↔chauffeur, …).
+    //
+    // Modèle de doc :
+    //   {
+    //     type: 'taxi' | 'food' | 'parcel',
+    //     entityId: string,
+    //     participants: { [uid]: {uid, name, role, avatar?} },
+    //     participantUids: [uidA, uidB],   // pratique pour les queries
+    //     lastMessage, lastMessageAt,
+    //     unreadCount: { [uid]: number },
+    //     createdAt
+    //   }
+    //
+    // Sécurité : seuls les uids présents dans `participants` peuvent lire/écrire.
+    // ============================================================================
+
+    match /conversations/{convId} {
+      // Lecture : participant uniquement
+      allow read: if isAuthenticated() &&
+                     request.auth.uid in resource.data.participants;
+
+      // Création : l'auteur DOIT figurer dans les participants du nouveau doc
+      allow create: if isAuthenticated() &&
+                       request.auth.uid in request.resource.data.participants;
+
+      // Mise à jour : participant uniquement (pour lastMessage, unreadCount, …)
+      allow update: if isAuthenticated() &&
+                       request.auth.uid in resource.data.participants;
+
+      // Suppression : interdite (historique conservé)
+      allow delete: if false;
+
+      // Sous-collection messages
+      match /messages/{messageId} {
+        // Lecture : participant de la conversation parente
+        allow read: if isAuthenticated() &&
+                       request.auth.uid in
+                         get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+
+        // Création : l'auteur doit être participant ET être le sender du message
+        allow create: if isAuthenticated() &&
+                         request.auth.uid in
+                           get(/databases/$(database)/documents/conversations/$(convId)).data.participants &&
+                         request.resource.data.senderId == request.auth.uid;
+
+        // Mise à jour : participant uniquement (pour marquer comme lu)
+        allow update: if isAuthenticated() &&
+                         request.auth.uid in
+                           get(/databases/$(database)/documents/conversations/$(convId)).data.participants;
+
+        // Suppression : interdite
+        allow delete: if false;
+      }
+    }
+
     // ============================================================================
     // COLLECTION ACTIVE_BOOKINGS
     // ============================================================================
@@ -493,12 +558,20 @@ service cloud.firestore {
                                    'deliveredAt', 'notes', 'updatedAt',
                                    'deliveryProofPhoto']);
 
-      // Whitelist sender (expéditeur) : notes et annulation douce
+      // Whitelist sender (expéditeur) : annulation douce (uniquement avant pickup) + notes
       allow update: if isAuthenticated() &&
                        resource.data.senderId == request.auth.uid &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['notes', 'updatedAt', 'cancellationReason',
-                                   'receiverName', 'receiverPhone']);
+                                   'cancelledAt', 'status',
+                                   'recipientName', 'recipientPhone',
+                                   'receiverName', 'receiverPhone']) &&
+                       (
+                         // Soit on touche pas au status, soit on l'annule (et seulement avant pickup)
+                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
+                         (request.resource.data.status == 'cancelled' &&
+                          resource.data.status in ['pending', 'accepted'])
+                       );
 
       // Admin : accès complet
       allow update: if isAdmin();
@@ -567,7 +640,7 @@ service cloud.firestore {
     // COLLECTION CALLS (APPELS VOIP)
     // ============================================================================
     //
-    // Gestion des appels vocaux entre clients et chauffeurs via Agora RTC
+    // Gestion des appels vocaux entre clients et chauffeurs via Twilio Voice
     //
     // ============================================================================
     
@@ -592,7 +665,6 @@ service cloud.firestore {
         request.resource.data.rideId is string &&
         request.resource.data.status == 'ringing' &&
         request.resource.data.channel is string &&
-        request.resource.data.token is string &&
         request.resource.data.callerMetadata is map &&
         request.resource.data.callerMetadata.uid == request.auth.uid;
       
@@ -660,20 +732,15 @@ service cloud.firestore {
                       resource.data.ownerId == request.auth.uid ||
                       isAdmin());
       
-      // Création : Utilisateur authentifié ayant le rôle 'restaurateur' peut créer un compte restaurant
-      // Le statut initial DOIT être 'pending_approval' (validation admin requise)
-      allow create: if isAuthenticated() &&
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'restaurateur' &&
-                       request.resource.data.ownerId == request.auth.uid &&
-                       request.resource.data.status == 'pending_approval' &&
-                       request.resource.data.commissionRate is number &&
-                       request.resource.data.name is string;
+      allow create: if isAdmin();
       
-      // Mise à jour : Propriétaire (champs autorisés uniquement, pas de statut/commissionRate) OU admin (tout)
       allow update: if (isAuthenticated() &&
                         resource.data.ownerId == request.auth.uid &&
                         request.resource.data.status == resource.data.status &&
                         request.resource.data.commissionRate == resource.data.commissionRate &&
+                        request.resource.data.stripeConnectStatus == resource.data.stripeConnectStatus &&
+                        request.resource.data.stripeAccountId == resource.data.stripeAccountId &&
+                        request.resource.data.ownerId == resource.data.ownerId &&
                         request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['name', 'description', 'address', 'phone', 'email',
                                     'cuisineType', 'avgPricePerPerson', 'imageUrl', 'coverImageUrl',

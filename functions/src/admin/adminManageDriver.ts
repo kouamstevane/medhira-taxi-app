@@ -106,6 +106,16 @@ export const adminManageDriver = onCall(
           approvedBy: uid,
           updatedAt: now,
         });
+        try {
+          await admin.firestore().collection('users').doc(driverId).set({
+            roles: { driver: { joinedAt: now } },
+            activeRole: 'driver',
+            lastActiveRole: 'driver',
+            updatedAt: now,
+          }, { merge: true });
+        } catch (e) {
+          console.warn('[adminManageDriver] Failed to write roles.driver on user', { driverId, error: e });
+        }
         await notifyDriver('approval');
         return { success: true, message: 'Chauffeur approuvé avec succès' };
 

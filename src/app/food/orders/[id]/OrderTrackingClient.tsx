@@ -13,6 +13,9 @@ import { CURRENCY_CODE } from '@/utils/constants';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { useAuth } from '@/hooks/useAuth';
+import { ConversationLauncher } from '@/components/ConversationLauncher';
+import type { ConversationContext } from '@/types/conversation';
 
 const STATUS_STEPS = [
   { id: 'pending', icon: 'schedule', label: 'En attente' },
@@ -28,6 +31,7 @@ export default function OrderTrackingClient() {
   const orderId = params.id as string
   const router = useRouter();
   const { showError, toasts, removeToast } = useToast();
+  const { currentUser, userData } = useAuth();
 
   const [order, setOrder] = useState<FoodOrder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,6 +146,44 @@ export default function OrderTrackingClient() {
 
   const isDelivered = order.status === 'delivered';
   const isCancelled = order.status === 'cancelled';
+  const isOrderActive = !isDelivered && !isCancelled;
+  const clientUid = currentUser?.uid ?? order.userId;
+  const clientName = userData?.firstName
+    ? `${userData.firstName} ${userData.lastName ?? ''}`.trim()
+    : order.customerName || 'Client';
+
+  const restaurantContext: ConversationContext = {
+    type: 'food',
+    entityId: order.id!,
+    participantA: {
+      uid: clientUid,
+      name: clientName,
+      role: 'client',
+    },
+    participantB: {
+      uid: order.restaurantId,
+      name: order.restaurantName || 'Restaurant',
+      role: 'restaurant',
+    },
+  };
+
+  const driverContext: ConversationContext | null =
+    order.driverId
+      ? {
+          type: 'food',
+          entityId: order.id!,
+          participantA: {
+            uid: clientUid,
+            name: clientName,
+            role: 'client',
+          },
+          participantB: {
+            uid: order.driverId,
+            name: order.driverName || 'Livreur',
+            role: 'livreur',
+          },
+        }
+      : null;
 
   return (
     <>
@@ -163,6 +205,37 @@ export default function OrderTrackingClient() {
           <p className="text-slate-400 text-sm mb-4">Commande n° {order.id?.slice(-6).toUpperCase()}</p>
           <OrderStatusBadge status={order.status} className="mx-auto" />
         </section>
+
+        {/* Contacts (chat + appel) - visible tant que la commande est active */}
+        {isOrderActive && currentUser && (
+          <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
+            <h3 className="font-bold text-white">Contacter</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-white">Restaurant</p>
+                <p className="text-xs text-slate-400">{order.restaurantName || 'Restaurant'}</p>
+              </div>
+              <ConversationLauncher
+                context={restaurantContext}
+                currentUserUid={clientUid}
+                variant="icon-only"
+              />
+            </div>
+            {driverContext && (
+              <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                <div>
+                  <p className="text-sm font-semibold text-white">Livreur</p>
+                  <p className="text-xs text-slate-400">{order.driverName || 'Livreur assigné'}</p>
+                </div>
+                <ConversationLauncher
+                  context={driverContext}
+                  currentUserUid={clientUid}
+                  variant="icon-only"
+                />
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Timeline de suivi (Optimistic UI pour le tracking) */}
         {!isCancelled && (

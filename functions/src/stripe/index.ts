@@ -19,9 +19,10 @@
 import { onRequest, onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import { DRIVER_SHARE_RATE } from '../config/stripe.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { createStripeClient } from './stripe-client.js';
 
 // Type alias pour les événements Stripe (compatible Stripe v22 / NodeNext)
 type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;
@@ -68,7 +69,7 @@ function getStripe(): InstanceType<typeof Stripe> {
     if (!key) {
       throw new Error('STRIPE_SECRET_KEY is empty');
     }
-    _stripe = new Stripe(key, { apiVersion: '2026-03-25.dahlia' });
+    _stripe = createStripeClient(key);
   }
   return _stripe;
 }
@@ -588,6 +589,20 @@ async function syncDriverAccountStatus(driverId: string, accountId: string): Pro
 async function onAccountUpdated(account: Record<string, unknown>): Promise<void> {
   const accountId = account.id as string;
   const metadata  = (account.metadata ?? {}) as Record<string, string>;
+  const accountType = metadata.accountType as string | undefined;
+
+  if (accountType === 'restaurant' && metadata.restaurantId) {
+    const chargesEnabled = !!(account.charges_enabled);
+    const detailsSubmitted = !!(account.details_submitted);
+    const disabledReason = (account.requirements as Record<string, unknown> | undefined)?.disabled_reason as string | null;
+    const newStatus = chargesEnabled && detailsSubmitted ? 'active' : disabledReason ? 'restricted' : 'in_progress';
+    const ref = getDb().collection('restaurants').doc(metadata.restaurantId);
+    const cur = (await ref.get()).data();
+    if (cur?.stripeConnectStatus !== newStatus) {
+      await ref.update({ stripeConnectStatus: newStatus, updatedAt: serverTS() });
+    }
+    return;
+  }
 
   if (metadata.driverId && accountId) {
     await syncDriverAccountStatus(metadata.driverId, accountId);
@@ -971,17 +986,30 @@ export const stripeWebhookLight = onRequest(
       return;
     }
 
-    let thinEvent: StripeEventLike;
-    try {
-      thinEvent = getStripe().webhooks.constructEvent(
-        rawBody,
-        sig,
-        webhookSecretLight.value(),
-      ) as unknown as StripeEventLike;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[stripeWebhookLight] Signature invalide:', msg);
-      res.status(400).json({ error: `Signature invalide: ${msg}` });
+    const secrets = webhookSecretLight
+      .value()
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    let thinEvent: StripeEventLike | null = null;
+    let lastErr = '';
+    for (const secret of secrets) {
+      try {
+        thinEvent = getStripe().webhooks.constructEvent(
+          rawBody,
+          sig,
+          secret,
+        ) as unknown as StripeEventLike;
+        break;
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    if (!thinEvent) {
+      console.error('[stripeWebhookLight] Signature invalide pour tous les secrets:', lastErr);
+      res.status(400).json({ error: `Signature invalide: ${lastErr}` });
       return;
     }
 
@@ -1466,7 +1494,7 @@ export const createConnectAccount = onCall(
       business_type: 'individual' as const,
       individual: ind,
       business_profile: businessProfile,
-      metadata: { driverId: uid, platform: 'medjira_taxi' },
+      metadata: { accountType: 'driver', driverId: uid, platform: 'medjira_taxi' },
     });
 
     // Helper : retire récursivement les clés `individual.<rejectedField>` puis retry.

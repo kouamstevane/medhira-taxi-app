@@ -57,16 +57,14 @@ export const adminManageRestaurant = onCall(
         });
         if (ownerId) {
           try {
-            await admin
-              .firestore()
-              .collection('users')
-              .doc(ownerId)
-              .update({ userType: 'restaurateur' });
+            await admin.firestore().collection('users').doc(ownerId).set({
+              roles: { restaurant: { restaurantId, joinedAt: now } },
+              activeRole: 'restaurant',
+              lastActiveRole: 'restaurant',
+              updatedAt: now,
+            }, { merge: true });
           } catch (e) {
-            console.error(
-              'Erreur lors de la mise à jour du type utilisateur:',
-              e,
-            );
+            console.warn('[adminManageRestaurant] Failed to write roles.restaurant on user', { ownerId, error: e });
           }
         }
         return { success: true, message: 'Restaurant approuvé avec succès' };

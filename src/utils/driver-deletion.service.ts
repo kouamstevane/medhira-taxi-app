@@ -227,7 +227,7 @@ class DriverDeletionService {
   ): Promise<void> {
     try {
       let hasMore = true;
-      let lastDocId: string | null = null;
+      let lastDoc: admin.firestore.QueryDocumentSnapshot<admin.firestore.DocumentData> | null = null;
 
       while (hasMore) {
         let query = this.db
@@ -235,9 +235,9 @@ class DriverDeletionService {
           .where(fieldName, '==', value)
           .limit(this.MAX_BATCH_SIZE);
 
-        // Pagination pour les grandes collections
-        if (lastDocId) {
-          query = query.startAfter(lastDocId);
+        // Pagination : Firestore Admin SDK exige un DocumentSnapshot, pas l'ID.
+        if (lastDoc) {
+          query = query.startAfter(lastDoc);
         }
 
         const snapshot = await query.get();
@@ -253,9 +253,9 @@ class DriverDeletionService {
 
         snapshot.docs.forEach((doc) => {
           batch.delete(doc.ref);
-          lastDocId = doc.id;
           count++;
         });
+        lastDoc = snapshot.docs[snapshot.docs.length - 1];
 
         await batch.commit();
         this.incrementCollectionStat(collectionName, stats, count);
@@ -535,17 +535,19 @@ class DriverDeletionService {
 
     for (const collection of collectionsToCheck) {
       try {
-        let query: admin.firestore.Query<admin.firestore.DocumentData> | admin.firestore.DocumentReference<admin.firestore.DocumentData> = this.db.collection(collection.name);
-
         if (collection.field) {
-          query = query.where(collection.field, '==', driverId);
+          const snapshot = await this.db
+            .collection(collection.name)
+            .where(collection.field, '==', driverId)
+            .count()
+            .get();
+          collectionsCount[collection.name] = snapshot.data().count;
         } else {
-          query = (query as admin.firestore.CollectionReference<admin.firestore.DocumentData>).doc(driverId);
+          // Lookup direct par doc ID : pas de .count() sur DocumentReference,
+          // il faut tester l'existence du document.
+          const docSnap = await this.db.collection(collection.name).doc(driverId).get();
+          collectionsCount[collection.name] = docSnap.exists ? 1 : 0;
         }
-
-        const snapshot = await (query as admin.firestore.Query<admin.firestore.DocumentData>).count().get();
-        const count = snapshot.data().count;
-        collectionsCount[collection.name] = count;
       } catch (error) {
         console.warn(` Erreur comptage ${collection.name}:`, error);
         collectionsCount[collection.name] = 0;

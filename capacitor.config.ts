@@ -2,7 +2,7 @@ import { CapacitorConfig } from '@capacitor/cli';
 import { KeyboardResize, KeyboardStyle } from '@capacitor/keyboard';
 
 const config: CapacitorConfig = {
-    appId: 'com.medjiraservice.medjiraserviceapp',
+    appId: 'com.medjiraservice.medjiraserviceapp2',
     appName: 'Medjira',
     webDir: 'out',
     server: {

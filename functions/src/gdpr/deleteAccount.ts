@@ -29,15 +29,16 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
-import Stripe from 'stripe';
+import type Stripe from 'stripe';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { createStripeClient } from '../stripe/stripe-client.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
 let _stripe: InstanceType<typeof Stripe> | null = null;
 function getStripeClient(): InstanceType<typeof Stripe> {
   if (!_stripe) {
-    _stripe = new Stripe(stripeSecretKey.value(), { apiVersion: '2026-03-25.dahlia' });
+    _stripe = createStripeClient(stripeSecretKey.value());
   }
   return _stripe;
 }

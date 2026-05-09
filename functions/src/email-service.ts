@@ -1,4 +1,38 @@
-import { Resend } from 'resend';
+import type { Resend } from 'resend';
+
+let _ResendCtor: typeof Resend | null = null;
+function loadResendCtor(): typeof Resend {
+  if (!_ResendCtor) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('resend');
+    _ResendCtor = (mod.Resend ?? mod.default ?? mod) as typeof Resend;
+  }
+  return _ResendCtor;
+}
+
+async function maybeRecordDevEmail(payload: {
+  to: string | string[];
+  from: string;
+  subject: string;
+  html?: string;
+  text?: string;
+}): Promise<void> {
+  if (process.env.FUNCTIONS_EMULATOR !== 'true') return;
+  try {
+    const admin = await import('firebase-admin');
+    if (!admin.apps.length) admin.initializeApp();
+    await admin
+      .firestore()
+      .collection('_emails_sent_dev')
+      .add({
+        ...payload,
+        to: Array.isArray(payload.to) ? payload.to[0] : payload.to,
+        capturedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+  } catch {
+    // best-effort
+  }
+}
 
 interface SendVerificationCodeParams {
   to: string;
@@ -83,14 +117,19 @@ export async function sendVerificationCodeEmail(
     throw new Error('RESEND_API_KEY manquant. Configurez-le via Firebase Secret Manager : firebase functions:secrets:set RESEND_API_KEY');
   }
 
-  const resend = new Resend(resolvedApiKey);
+  const resend = new (loadResendCtor())(resolvedApiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'medjira@medjira.com';
 
-  const result = await resend.emails.send({
+  const emailPayload = {
     from: `Medjira <${fromEmail}>`,
     to,
     subject: 'Votre code de vérification Medjira',
     html: getVerificationCodeTemplate(code),
+  };
+  await maybeRecordDevEmail(emailPayload);
+
+  const result = await resend.emails.send({
+    ...emailPayload,
     tags: [
       { name: 'uid', value: uid },
       { name: 'type', value: 'verification_code' },
@@ -170,19 +209,102 @@ export async function sendDriverStatusEmail(
       break;
   }
 
-  const resend = new Resend(resolvedApiKey);
+  const resend = new (loadResendCtor())(resolvedApiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || 'medjira@medjira.com';
 
-  const result = await resend.emails.send({
-    from: `Medjira <${fromEmail}>`,
-    to,
-    subject,
-    html,
-  });
+  const driverPayload = { from: `Medjira <${fromEmail}>`, to, subject, html };
+  await maybeRecordDevEmail(driverPayload);
+  const result = await resend.emails.send(driverPayload);
 
   if (result.error) {
     throw new Error(`Erreur Resend: ${result.error.message}`);
   }
 
   return { messageId: result.data?.id };
+}
+
+export interface RestaurantStatusEmailParams {
+  to: string;
+  restaurantName: string;
+  type: 'approval' | 'rejection' | 'suspension';
+  reason?: string;
+  apiKey?: string;
+}
+
+function restaurantGetApprovalTemplate(restaurantName: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:'Inter',Arial,sans-serif;line-height:1.6;color:#333;margin:0;padding:0}.container{max-width:600px;margin:0 auto;padding:20px;border:1px solid #eee}.header{background-color:#f29200;color:white;padding:30px 20px;text-align:center;border-radius:8px 8px 0 0}.content{padding:30px;background-color:#fff}.footer{padding:20px;text-align:center;font-size:12px;color:#888}</style></head><body><div class="container"><div class="header"><h1 style="margin:0">Restaurant approuvé !</h1></div><div class="content"><p>Bonjour,</p><p>Votre restaurant <strong>${restaurantName}</strong> a été <strong>approuvé</strong> sur Medjira.</p><p>Vous pouvez maintenant configurer vos paiements et commencer à recevoir des commandes.</p><p>Cordialement,<br>L'équipe Medjira</p></div><div class="footer">&copy; ${new Date().getFullYear()} Medjira. Tous droits réservés.</div></div></body></html>`;
+}
+
+function restaurantGetRejectionTemplate(restaurantName: string, reason?: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:'Inter',Arial,sans-serif;line-height:1.6;color:#333;margin:0;padding:0}.container{max-width:600px;margin:0 auto;padding:20px;border:1px solid #eee}.header{background-color:#dc2626;color:white;padding:30px 20px;text-align:center;border-radius:8px 8px 0 0}.content{padding:30px;background-color:#fff}.reason-box{background-color:#fee2e2;border-left:4px solid #dc2626;padding:20px;margin:25px 0;border-radius:0 4px 4px 0}.footer{padding:20px;text-align:center;font-size:12px;color:#888}</style></head><body><div class="container"><div class="header"><h1 style="margin:0">Décision concernant votre restaurant</h1></div><div class="content"><p>Votre restaurant <strong>${restaurantName}</strong> n'a pas été approuvé.</p><div class="reason-box"><strong>Motif :</strong><p style="margin:10px 0 0 0">${reason || 'Documents incomplets ou non conformes.'}</p></div><p>Vous pouvez modifier votre dossier et soumettre à nouveau.</p><p>Cordialement,<br>L'équipe Medjira</p></div><div class="footer">&copy; ${new Date().getFullYear()} Medjira. Tous droits réservés.</div></div></body></html>`;
+}
+
+function restaurantGetSuspensionTemplate(restaurantName: string, reason?: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:'Inter',Arial,sans-serif;line-height:1.6;color:#333;margin:0;padding:0}.container{max-width:600px;margin:0 auto;padding:20px;border:1px solid #eee}.header{background-color:#f97316;color:white;padding:30px 20px;text-align:center;border-radius:8px 8px 0 0}.content{padding:30px;background-color:#fff}.reason-box{background-color:#fed7aa;border-left:4px solid #f97316;padding:20px;margin:25px 0;border-radius:0 4px 4px 0}.footer{padding:20px;text-align:center;font-size:12px;color:#888}</style></head><body><div class="container"><div class="header"><h1 style="margin:0">Suspension de restaurant</h1></div><div class="content"><p>Votre restaurant <strong>${restaurantName}</strong> a été <strong>suspendu</strong>.</p><div class="reason-box"><strong>Raison :</strong><p style="margin:10px 0 0 0">${reason || 'Violation signalée des conditions d\'utilisation.'}</p></div><p>Contactez support@medjira.com pour toute question.</p><p>Cordialement,<br>L'équipe Medjira</p></div><div class="footer">&copy; ${new Date().getFullYear()} Medjira. Tous droits réservés.</div></div></body></html>`;
+}
+
+export async function sendRestaurantStatusEmail(
+  params: RestaurantStatusEmailParams,
+): Promise<SendEmailResult> {
+  const { to, restaurantName, type, reason, apiKey } = params;
+
+  const resolvedApiKey = apiKey || process.env.RESEND_API_KEY;
+  if (!resolvedApiKey) {
+    throw new Error('RESEND_API_KEY manquant.');
+  }
+
+  let subject = '';
+  let html = '';
+
+  switch (type) {
+    case 'approval':
+      subject = `Votre restaurant "${restaurantName}" a été approuvé !`;
+      html = restaurantGetApprovalTemplate(restaurantName);
+      break;
+    case 'rejection':
+      subject = `Décision concernant votre restaurant "${restaurantName}"`;
+      html = restaurantGetRejectionTemplate(restaurantName, reason);
+      break;
+    case 'suspension':
+      subject = `Votre restaurant "${restaurantName}" a été suspendu`;
+      html = restaurantGetSuspensionTemplate(restaurantName, reason);
+      break;
+  }
+
+  const resend = new (loadResendCtor())(resolvedApiKey);
+  const fromEmail = process.env.RESEND_FROM_EMAIL || 'medjira@medjira.com';
+
+  const restaurantPayload = { from: `Medjira <${fromEmail}>`, to, subject, html };
+  await maybeRecordDevEmail(restaurantPayload);
+  const result = await resend.emails.send(restaurantPayload);
+
+  if (result.error) {
+    throw new Error(`Erreur Resend: ${result.error.message}`);
+  }
+
+  return { messageId: result.data?.id };
+}
+
+export async function sendAdminRestaurantNotification(input: {
+  restaurantName: string;
+  restaurantId: string;
+  ownerEmail: string;
+}): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+  const appBaseUrl = process.env.APP_BASE_URL ?? 'https://app.medjira.com';
+  if (!apiKey || !adminEmail) {
+    console.warn('[email] sendAdminRestaurantNotification skipped: missing env');
+    return;
+  }
+  const resend = new (loadResendCtor())(apiKey);
+  const adminLink = `${appBaseUrl}/admin/restaurants?filter=pending_approval&id=${encodeURIComponent(input.restaurantId)}`;
+  const adminPayload = {
+    from: 'Medjira <noreply@medjira.com>',
+    to: adminEmail,
+    subject: `Nouvelle inscription restaurateur : ${input.restaurantName}`,
+    html: `<p>Une nouvelle candidature restaurateur vient d'être soumise.</p><ul><li><strong>Restaurant :</strong> ${input.restaurantName}</li><li><strong>Email gérant :</strong> ${input.ownerEmail}</li></ul><p><a href="${adminLink}">Voir dans l'admin</a></p>`,
+  };
+  await maybeRecordDevEmail(adminPayload);
+  await resend.emails.send(adminPayload);
 }

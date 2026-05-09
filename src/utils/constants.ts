@@ -32,6 +32,11 @@ import { Country } from '@/types';
 /** Codes de marche supportes par l'application */
 export type MarketCode = 'CM' | 'CA' | 'FR' | 'BE';
 
+export type RoundingStrategy = {
+  mode: 'nearest' | 'decimals';
+  precision: number;
+};
+
 /**
  * MARCHE ACTIF
  *
@@ -111,39 +116,37 @@ interface MarketWalletUI {
   presetAmounts: number[];
 }
 
-interface MarketConfig {
-  /** Nom lisible du marche */
+export interface MarketConfig {
   name: string;
-  /** Code pays ISO 3166-1 alpha-2 */
   countryCode: string;
-  /** Code de devise affiche dans l'UI (ex: 'FCFA', 'CAD', 'EUR') */
   currencyCode: string;
-  /**
-   * Locale BCP-47 pour le formatage des nombres et dates.
-   * Utiliser une locale universellement supportee (ex: 'fr-FR' plutot que 'fr-CM').
-   */
   locale: string;
-  /** Code pays par defaut pour l'enregistrement des chauffeurs */
   driverCountryCode: string;
-  /** Tarification taxi */
   pricing: MarketPricing;
-  /** Limites operationnelles dependantes du marche */
   limits: MarketLimits;
-  /** Frais de rechargement du portefeuille */
   walletFees: MarketWalletFees;
-  /** Valeurs par defaut pour la creation de restaurants */
   restaurantDefaults: MarketRestaurantDefaults;
-  /** Tarification livraison de repas */
   foodDeliveryPricing: MarketFoodDeliveryPricing;
-  /** Options UI specifiques au marche (montants predéfinis, etc.) */
   walletUI: MarketWalletUI;
+  boundingBox: {
+    latMin: number;
+    latMax: number;
+    lngMin: number;
+    lngMax: number;
+  };
+  parcelPricing: {
+    basePrice: number;
+    pricePerKm: number;
+    sizeMultiplier: Record<'small' | 'medium' | 'large', number>;
+    roundingStrategy: RoundingStrategy;
+  };
 }
 
 // ============================================================================
 // CONFIGURATIONS PAR MARCHE
 // ============================================================================
 
-const MARKET_CONFIGS: Record<MarketCode, MarketConfig> = {
+export const MARKET_CONFIGS: Record<MarketCode, MarketConfig> = {
 
   // --------------------------------------------------------------------------
   // CAMEROUN
@@ -187,6 +190,13 @@ const MARKET_CONFIGS: Record<MarketCode, MarketConfig> = {
     },
     walletUI: {
       presetAmounts: [1000, 5000, 10000, 20000, 50000],
+    },
+    boundingBox: { latMin: 2.5, latMax: 12.0, lngMin: 9.5, lngMax: 15.5 },
+    parcelPricing: {
+      basePrice: 1500,
+      pricePerKm: 200,
+      sizeMultiplier: { small: 1.0, medium: 1.4, large: 1.8 },
+      roundingStrategy: { mode: 'nearest', precision: 50 },
     },
   },
 
@@ -232,6 +242,13 @@ const MARKET_CONFIGS: Record<MarketCode, MarketConfig> = {
     walletUI: {
       presetAmounts: [5, 10, 20, 50, 100],
     },
+    boundingBox: { latMin: 44.0, latMax: 72.0, lngMin: -135.0, lngMax: -57.0 },
+    parcelPricing: {
+      basePrice: 5,
+      pricePerKm: 1.25,
+      sizeMultiplier: { small: 1.0, medium: 1.4, large: 1.8 },
+      roundingStrategy: { mode: 'decimals', precision: 2 },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -276,6 +293,13 @@ const MARKET_CONFIGS: Record<MarketCode, MarketConfig> = {
     walletUI: {
       presetAmounts: [5, 10, 20, 50, 100],
     },
+    boundingBox: { latMin: 42.0, latMax: 51.5, lngMin: -5.5, lngMax: 8.5 },
+    parcelPricing: {
+      basePrice: 4.00,
+      pricePerKm: 1.10,
+      sizeMultiplier: { small: 1.0, medium: 1.4, large: 1.8 },
+      roundingStrategy: { mode: 'decimals', precision: 2 },
+    },
   },
 
   // --------------------------------------------------------------------------
@@ -319,6 +343,13 @@ const MARKET_CONFIGS: Record<MarketCode, MarketConfig> = {
     },
     walletUI: {
       presetAmounts: [5, 10, 20, 50, 100],
+    },
+    boundingBox: { latMin: 49.5, latMax: 51.6, lngMin: 2.5, lngMax: 6.5 },
+    parcelPricing: {
+      basePrice: 4.00,
+      pricePerKm: 1.15,
+      sizeMultiplier: { small: 1.0, medium: 1.4, large: 1.8 },
+      roundingStrategy: { mode: 'decimals', precision: 2 },
     },
   },
 };
@@ -431,6 +462,33 @@ export const SUPPORTED_COUNTRIES: Country[] = [
   ..._ALL_COUNTRIES.filter(c => c.code === ACTIVE_MARKET),
   ..._ALL_COUNTRIES.filter(c => c.code !== ACTIVE_MARKET),
 ];
+
+export function getMarketByCountryCode(code: string): { code: MarketCode; config: MarketConfig } | null {
+  const upper = code.toUpperCase() as MarketCode;
+  const config = MARKET_CONFIGS[upper];
+  if (!config) return null;
+  return { code: upper, config };
+}
+
+export function getSupportedCountryNames(detectedCountry?: MarketCode | null): string {
+  const sorted = detectedCountry
+    ? [
+        SUPPORTED_COUNTRIES.find((c) => c.code === detectedCountry),
+        ...SUPPORTED_COUNTRIES.filter((c) => c.code !== detectedCountry),
+      ].filter(Boolean)
+    : SUPPORTED_COUNTRIES;
+  return sorted.map((c) => c!.name).join(', ');
+}
+
+export function applyRounding(rawPrice: number, strategy: RoundingStrategy): number {
+  if (strategy.mode === 'nearest') {
+    return Math.round(rawPrice / strategy.precision) * strategy.precision;
+  }
+  return (
+    Math.round(rawPrice * Math.pow(10, strategy.precision)) /
+    Math.pow(10, strategy.precision)
+  );
+}
 
 // Validation de synchronisation : tous les pays doivent avoir une phoneLength
 const _countriesWithoutPhoneLength = SUPPORTED_COUNTRIES.filter(c => !c.phoneLength);

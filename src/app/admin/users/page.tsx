@@ -24,14 +24,29 @@ import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('AdminUsers');
 
+// V1 (spec §3) : roles cumulatifs sur users/{uid}. La présence d'un sous-objet vaut « capacité présente ».
+interface UserRolesShape {
+  client?: { enabled?: boolean };
+  driver?: { joinedAt?: unknown };
+  restaurant?: { restaurantId?: string };
+}
+
 interface UserData {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
   phoneNumber?: string;
-  userType: 'client' | 'chauffeur' | 'restaurateur';
+  roles?: UserRolesShape;
+  activeRole?: 'client' | 'driver' | 'restaurant';
   createdAt: unknown;
+}
+
+function primaryRoleLabel(user: UserData): 'restaurateur' | 'chauffeur' | 'client' {
+  // « Type principal » affiché : la plus haute capacité présente. roles.restaurant > driver > client.
+  if (user.roles?.restaurant != null) return 'restaurateur';
+  if (user.roles?.driver != null) return 'chauffeur';
+  return 'client';
 }
 
 const UserSkeleton = () => (
@@ -148,6 +163,10 @@ export default function AdminUsersPage() {
     }
   };
 
+  // TODO: index Firestore dédié si la liste devient volumineuse (P2).
+  // En V1 on filtre applicativement après lecture (Firestore where sur nested object
+  // `roles.driver` n'est pas indexé par défaut, et la donnée est nullable).
+
   if (isAdmin === null) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -196,7 +215,10 @@ export default function AdminUsersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {pagedUsers.map((user) => (
+                  {pagedUsers.map((user) => {
+                    const primary = primaryRoleLabel(user);
+                    const hasRestaurantRole = user.roles?.restaurant != null;
+                    return (
                     <tr key={user.id} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
@@ -211,17 +233,17 @@ export default function AdminUsersPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase border ${
-                          user.userType === 'restaurateur' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                          user.userType === 'chauffeur' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                          primary === 'restaurateur' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                          primary === 'chauffeur' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
                           'bg-white/5 text-slate-400 border-white/10'
                         }`}>
-                          {getRoleIcon(user.userType)}
-                          {user.userType}
+                          {getRoleIcon(primary)}
+                          {primary}
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          {user.userType !== 'restaurateur' ? (
+                          {!hasRestaurantRole ? (
                             <button
                               onClick={() => handleUpdateRole(user.id, 'restaurateur')}
                               disabled={!!processing}
@@ -243,7 +265,8 @@ export default function AdminUsersPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
 

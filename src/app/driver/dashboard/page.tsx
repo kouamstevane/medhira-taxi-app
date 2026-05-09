@@ -39,12 +39,15 @@ import { RideRequestCard } from './components/RideRequestCard';
 import { CurrentTripCard } from './components/CurrentTripCard';
 import ModeSwitch from './components/ModeSwitch';
 import DeliveryOrdersList from './components/DeliveryOrdersList';
+import ParcelOrdersList from './components/ParcelOrdersList';
 import { getDriverDashboardInfoMessage } from '@/utils/driver.utils';
 import type { Trip, RideRequest } from '@/types/trip';
 import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
 import { useDriverAvailability } from '@/hooks/useDriverAvailability';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { RoleSwitcher } from '@/components/role/RoleSwitcher';
+import { DriverPendingBanner } from '@/components/driver/DriverPendingBanner';
 
 async function fetchBookingsForRequests(
   requests: Array<{ rideId: string; candidate: RideCandidate }>
@@ -587,12 +590,13 @@ export default function DriverDashboard() {
 
   const driverType = driver?.driverType ?? 'chauffeur'
   const activeMode = driver?.activeMode ?? 'taxi'
+  const viewOnly = driver?.status === 'pending'
 
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
-      <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-24">
+      <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-28">
         {/* Header */}
         <header className="p-6 flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-xl z-50">
           <div className="flex items-center gap-3">
@@ -606,18 +610,22 @@ export default function DriverDashboard() {
           </div>
           <button
             onClick={toggleAvailability}
+            disabled={viewOnly}
             className={`flex items-center gap-2 px-3 py-2.5 min-h-[44px] rounded-full border transition-all ${
               driver.isAvailable
                 ? 'bg-green-500/10 border-green-500/20'
                 : 'bg-slate-700/50 border-white/10'
-            }`}
+            } ${viewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <span className={`size-2 rounded-full ${driver.isAvailable ? 'bg-green-500 animate-pulse-green' : 'bg-slate-500'}`} />
             <span className={`text-sm font-bold ${driver.isAvailable ? 'text-green-500' : 'text-slate-400'}`}>
               {driver.isAvailable ? 'En ligne' : 'Hors ligne'}
             </span>
           </button>
+          <RoleSwitcher />
         </header>
+
+        {viewOnly && <DriverPendingBanner />}
 
         {/* Bandeau Stripe Onboarding — visible tant que le compte n'est pas actif */}
         <div className="px-6">
@@ -673,7 +681,8 @@ export default function DriverDashboard() {
             <div className="flex gap-3">
               <button
                 onClick={toggleAvailability}
-                className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10 flex items-center justify-center gap-2"
+                disabled={viewOnly}
+                className={`flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10 flex items-center justify-center gap-2 ${viewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <MaterialIcon name="power_settings_new" size="sm" />
                 {driver.isAvailable ? 'Aller hors ligne' : 'Aller en ligne'}
@@ -705,6 +714,15 @@ export default function DriverDashboard() {
           <div className="px-6 mb-8">
             <h2 className="text-lg font-bold text-white mb-4">Commandes de livraison</h2>
             <DeliveryOrdersList uid={driver.uid} />
+          </div>
+        )}
+
+        {/* Section colis — toujours affichée si le chauffeur est assigné à un colis,
+            indépendamment du driverType (l'assignation peut concerner tout chauffeur approuvé) */}
+        {driver && (
+          <div className="px-6 mb-8">
+            <h2 className="text-lg font-bold text-white mb-4">Colis à transporter</h2>
+            <ParcelOrdersList uid={driver.uid} />
           </div>
         )}
 

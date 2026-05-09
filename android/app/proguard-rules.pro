@@ -22,9 +22,16 @@
 
 # ── Capacitor ──────────────────────────────────────────────────────
 -keep class com.getcapacitor.** { *; }
+-keep @com.getcapacitor.annotation.CapacitorPlugin class * { *; }
+-keepclassmembers class * {
+    @com.getcapacitor.PluginMethod <methods>;
+}
 
-# ── Agora Voice SDK ────────────────────────────────────────────────
--keep class io.agora.** { *; }
+# ── Plugins natifs et services Medjira (réflexion via Capacitor) ──
+# LocationForegroundService, VoipForegroundService, VoipPlugin,
+# BackgroundGeolocationPlugin sont chargés par nom depuis le manifest /
+# le bridge Capacitor — ne pas les obfusquer.
+-keep class com.medjiraservice.medjiraserviceapp2.** { *; }
 
 # ── Firebase ───────────────────────────────────────────────────────
 -keep class com.google.firebase.** { *; }

@@ -33,7 +33,7 @@ Modern taxi reservation and delivery application built with **Next.js 16**, **Ty
   - `authApi/` — Authentication endpoints
   - `walletApi/` — Wallet/payment operations
   - `stripe/` — Stripe integration
-  - `voip/` — VoIP/Agora token generation
+  - `voip/` — VoIP/Twilio token generation (TwiML)
   - `email-service.ts` — Email sending (Resend)
   - `admin/` — Admin operations
   - `gdpr/` — GDPR compliance
@@ -59,7 +59,7 @@ Modern taxi reservation and delivery application built with **Next.js 16**, **Ty
 - **Backend**: Firebase (Auth, Firestore, Storage, Functions, Messaging)
 - **Payments**: Stripe (Connect + Payments)
 - **Mobile**: Capacitor 8 (Android + iOS)
-- **VoIP**: Agora RTC SDK
+- **VoIP / SMS**: Twilio Voice SDK + Twilio SMS
 - **Maps**: Google Maps API + Capacitor Geolocation
 - **Email**: Resend + Nodemailer + React Email
 - **Testing**: Jest + SWC + React Testing Library + Playwright

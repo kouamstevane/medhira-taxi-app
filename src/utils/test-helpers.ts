@@ -103,20 +103,26 @@ export function mockFirebaseAuthResponse(user: Partial<TestUser>) {
 }
 
 /**
- * Mock d'un document Firestore
+ * Mock d'un document Firestore au format `roles` (spec §5)
  */
 export function mockFirestoreDocument(user: Partial<TestUser>) {
+  const now = new Date();
   return {
     exists: () => true,
     data: () => ({
       uid: user.uid || 'test-uid',
+      email: `${user.uid || 'test-uid'}@example.com`,
+      emailVerified: true,
       phoneNumber: user.fullPhone || '+237655744484',
       firstName: user.firstName || 'Jean',
       lastName: user.lastName || 'Dupont',
-      userType: 'client',
+      roles: {
+        client: { enabled: true, joinedAt: now },
+      },
+      activeRole: 'client',
       country: user.country || 'CM',
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
     }),
   };
 }

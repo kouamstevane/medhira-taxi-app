@@ -2,7 +2,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth, db, storage, app } from '@/config/firebase';
+import { auth, db, getFirebaseStorage, app } from '@/config/firebase';
 import { createUserWithEmailAndPassword, onAuthStateChanged, deleteUser, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp as firestoreServerTimestamp, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
@@ -202,7 +202,7 @@ export function useDriverRegistration() {
         const user = auth.currentUser;
         if (!user || user.uid !== userId) throw new Error('Utilisateur non authentifié');
         const ext = file.name.split('.').pop() || 'tmp';
-        const storageRef = ref(storage, `drivers/${userId}/${fileCategory}/${Date.now()}.${ext}`);
+        const storageRef = ref(getFirebaseStorage(), `drivers/${userId}/${fileCategory}/${Date.now()}.${ext}`);
         const snapshot = await uploadBytes(storageRef, file);
         return getDownloadURL(snapshot.ref);
       },
@@ -464,7 +464,6 @@ export function useDriverRegistration() {
         vehicleType,
         cityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',
         status: 'pending',
-        userType: 'chauffeur',
         isAvailable: false,
         rating: 0,
         tripsCompleted: 0,
@@ -486,9 +485,9 @@ export function useDriverRegistration() {
       // handleStep5FinalSubmit reste valide (TTL 1h) et la CF retry les erreurs auth.
       const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
       const functions = getFunctions(app, functionsRegion);
-      const createDriverProfile = httpsCallable(functions, 'createDriverProfile');
-      // 1) CF crée le doc racine (Admin SDK — seul moyen d'écrire userType='chauffeur')
-      await retryWithBackoff(() => createDriverProfile({ driverId: userId, driverData: publicData }), {
+      const submitApplication = httpsCallable(functions, 'submitDriverApplication');
+      // 1) CF crée drivers/{uid} + update users/{uid}.roles.driver (Admin SDK)
+      await retryWithBackoff(() => submitApplication({ driverId: userId, driverData: publicData }), {
         maxAttempts: 3,
       });
 
@@ -519,7 +518,7 @@ export function useDriverRegistration() {
 
       for (const url of uploadedUrls) {
         try {
-          const fileRef = ref(storage, url);
+          const fileRef = ref(getFirebaseStorage(), url);
           await deleteObject(fileRef);
         } catch {
           // Ignorer les erreurs de cleanup individuel

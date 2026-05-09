@@ -5,7 +5,7 @@
  * 
  * Features:
  * - Protection des routes privées avec vérification d'authentification
- * - Cookies HttpOnly pour les sessions (auth-token, user-type)
+ * - Cookies HttpOnly pour les sessions (auth-token, active-role)
  * - Headers de sécurité (CSP, HSTS, X-Frame-Options, etc.)
  * - Gestion des redirections intelligentes
  * - Logging des requêtes sensibles
@@ -76,11 +76,25 @@ const DRIVER_PUBLIC_ROUTES = [
   '/driver/register',
 ];
 
+const RESTAURANT_ROUTES = [
+  '/restaurant/dashboard',
+  '/restaurant/pending',
+  '/restaurant/suspended',
+  '/restaurant/onboarding',
+  '/restaurant/register',
+];
+
+const RESTAURANT_PUBLIC_ROUTES = [
+  '/restaurant/register',
+];
+
 const ADMIN_ROUTES = [
   '/admin',
 ];
 
-const VALID_USER_TYPES = ['chauffeur', 'driver', 'passager', 'passenger', 'admin'];
+// V1 : activeRole values from spec §3 — 'client' | 'driver' | 'restaurant'.
+// 'admin' reste géré via custom claim JWT (cf. isAdminUser), pas via activeRole.
+const VALID_ACTIVE_ROLES = ['client', 'driver', 'restaurant', 'admin'];
 
 function matchesRoute(pathname: string, routes: string[]): boolean {
   return routes.some(route => {
@@ -133,13 +147,13 @@ async function verifyFirebaseToken(
   }
 }
 
-function isAdminUser(decoded: DecodedFirebaseToken | null, userType: string | undefined): boolean {
+function isAdminUser(decoded: DecodedFirebaseToken | null, activeRole: string | undefined): boolean {
   if (decoded?.role === 'admin') return true;
   if (decoded && typeof decoded['https://medjira.taxi/claims'] === 'object') {
     const claims = decoded['https://medjira.taxi/claims'] as Record<string, unknown>;
     if (claims.admin === true) return true;
   }
-  if (userType === 'admin') return true;
+  if (activeRole === 'admin') return true;
   return false;
 }
 
@@ -154,28 +168,37 @@ export async function middleware(request: NextRequest) {
   // ==================== Vérification de l'authentification ====================
 
   const authToken = request.cookies.get('auth-token')?.value;
-  const userType = request.cookies.get('user-type')?.value;
+  // V1 : cookie renommé `active-role` (lit le rôle ACTIF de l'utilisateur, pas une « capacité »).
+  // Routage middleware = activeRole. Les checks d'autorisation fine (roles[X] != null) se font côté page.
+  const activeRole = request.cookies.get('active-role')?.value;
 
   const { valid: tokenValid, decoded: decodedToken } = await verifyFirebaseToken(authToken || '');
   const isAuthenticated = tokenValid;
 
-  if (userType && !VALID_USER_TYPES.includes(userType)) {
-    logEvent('SECURITY', 'Invalid user-type cookie value', { userType, path: pathname });
+  if (activeRole && !VALID_ACTIVE_ROLES.includes(activeRole)) {
+    logEvent('SECURITY', 'Invalid active-role cookie value', { activeRole, path: pathname });
   }
 
-  logEvent('AUTH_CHECK', `Route: ${pathname}, Auth: ${isAuthenticated}, Type: ${userType || 'none'}`);
+  logEvent('AUTH_CHECK', `Route: ${pathname}, Auth: ${isAuthenticated}, Role: ${activeRole || 'none'}`);
 
   // ==================== Gestion des routes publiques ====================
 
   const isPublicRoute = matchesRoute(pathname, PUBLIC_ROUTES);
   const isDriverPublicRoute = matchesRoute(pathname, DRIVER_PUBLIC_ROUTES);
 
-  if (isAuthenticated && (isPublicRoute || isDriverPublicRoute)) {
+  const isRestaurantPublicRoute = matchesRoute(pathname, RESTAURANT_PUBLIC_ROUTES);
+
+  if (isAuthenticated && (isPublicRoute || isDriverPublicRoute || isRestaurantPublicRoute)) {
     const excludedRoutes = ['/'];
     const shouldRedirect = !excludedRoutes.includes(pathname);
 
     if (shouldRedirect) {
-      const redirectUrl = userType === 'chauffeur' || userType === 'driver' ? '/driver/dashboard' : '/dashboard';
+      // Routage post-login basique : le routage fin selon driverStatus/restaurantStatus
+      // est géré par getDashboardRouteFor côté page. Ici, simple redirect basé sur activeRole.
+      const redirectUrl =
+        activeRole === 'driver' ? '/driver/dashboard'
+        : activeRole === 'restaurant' ? '/restaurant/dashboard'
+        : '/dashboard';
       logEvent('REDIRECT', `Authenticated user → ${redirectUrl}`, { from: pathname });
       return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
@@ -203,9 +226,32 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    if (userType !== 'chauffeur' && userType !== 'driver') {
-      logEvent('REDIRECT', 'Non-driver accessing driver route → /dashboard', {
-        userType,
+    // Middleware = routage : on vérifie activeRole. La page /driver/* refera le check
+    // fin (roles.driver != null + statut effectif via roles.service).
+    if (activeRole !== 'driver') {
+      logEvent('REDIRECT', 'Non-driver active role accessing driver route → /dashboard', {
+        activeRole,
+        from: pathname,
+      });
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
+  // Routes restaurant
+  const isRestaurantRoute = matchesRoute(pathname, RESTAURANT_ROUTES) &&
+    !matchesRoute(pathname, RESTAURANT_PUBLIC_ROUTES);
+
+  if (isRestaurantRoute) {
+    if (!isAuthenticated) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('redirect', pathname);
+      logEvent('REDIRECT', 'Unauthenticated user on restaurant route → /login', { from: pathname });
+      return NextResponse.redirect(loginUrl);
+    }
+
+    if (activeRole !== 'restaurant') {
+      logEvent('REDIRECT', 'Non-restaurant active role accessing restaurant route → /dashboard', {
+        activeRole,
         from: pathname,
       });
       return NextResponse.redirect(new URL('/dashboard', request.url));
@@ -222,9 +268,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    if (!isAdminUser(decodedToken, userType)) {
+    if (!isAdminUser(decodedToken, activeRole)) {
       logEvent('SECURITY', 'Non-admin accessing admin route', {
-        userType,
+        activeRole,
         from: pathname,
         tokenRole: decodedToken?.role,
       });
@@ -295,7 +341,7 @@ export async function middleware(request: NextRequest) {
   if (authToken && !tokenValid) {
     logEvent('SECURITY', 'Clearing invalid auth-token cookie', { path: pathname });
     response.cookies.delete('auth-token');
-    response.cookies.delete('user-type');
+    response.cookies.delete('active-role');
   }
 
   return response;

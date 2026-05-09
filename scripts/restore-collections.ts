@@ -20,9 +20,13 @@ const collections: CollectionConfig[] = [
     sampleDoc: {
       uid: 'sample_user_id',
       email: 'user@example.com',
+      emailVerified: true,
       firstName: 'John',
       lastName: 'Doe',
-      userType: 'client',
+      roles: {
+        client: { enabled: true, joinedAt: FieldValue.serverTimestamp() }
+      },
+      activeRole: 'client',
       profileImageUrl: '',
       phoneNumber: '',
       createdAt: FieldValue.serverTimestamp(),
@@ -30,14 +34,13 @@ const collections: CollectionConfig[] = [
     }
   },
   {
+    // Business doc only — identity fields (firstName/lastName/email) live on users/{uid}
+    // and are no longer duplicated here. See spec §5, §10.4.
     name: 'drivers',
     sampleDoc: {
       userId: 'sample_user_id',
-      email: 'driver@example.com',
-      firstName: 'Driver',
-      lastName: 'Name',
-      phoneNumber: '+237600000000',
-      profileImageUrl: '',
+      status: 'pending',
+      driverType: 'chauffeur',
       vehicleId: 'sample_vehicle_id',
       carTypeId: 'sample_car_type_id',
       isAvailable: true,
@@ -45,6 +48,18 @@ const collections: CollectionConfig[] = [
       rating: 0,
       totalRatings: 0,
       totalRides: 0,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }
+  },
+  {
+    // Business doc only — owner identity is on users/{ownerId}.
+    name: 'restaurants',
+    sampleDoc: {
+      ownerId: 'sample_user_id',
+      status: 'pending',
+      stripeConnectStatus: 'not_started',
+      name: 'Sample Restaurant',
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     }

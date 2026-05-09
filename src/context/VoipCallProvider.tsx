@@ -27,6 +27,10 @@ export function VoipCallProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
   const { callState } = useVoipCall();
 
+  // Le moteur VoIP est initialisé paresseusement (au démarrage d'un appel
+  // sortant ou lors d'un appel entrant) pour éviter d'ouvrir un WebSocket
+  // Twilio inutile sur les pages où aucun appel n'a lieu.
+
   // 1. Écouter les appels entrants via Firestore
   useEffect(() => {
     if (!currentUser) return;
@@ -55,12 +59,13 @@ export function VoipCallProvider({ children }: { children: ReactNode }) {
         };
 
         // Set status immediately to prevent duplicate handling
+        // Note: le token n'est jamais stocké en Firestore — le callee le récupère via getCallToken au moment d'accepter.
         voipService.handleIncomingCall(
           doc.id,
           data.rideId,
           data.channel,
-          data.token,
-          caller
+          caller,
+          currentUser.uid
         );
       }
     });
@@ -88,8 +93,8 @@ export function VoipCallProvider({ children }: { children: ReactNode }) {
           data.callId,
           data.rideId,
           '', // channel (sera récupéré par le snapshot)
-          '', // token (sera récupéré par le snapshot)
-          caller
+          caller,
+          currentUser.uid
         );
       }
     });

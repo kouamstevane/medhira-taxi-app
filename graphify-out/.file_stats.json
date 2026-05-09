@@ -1,0 +1,68 @@
+{
+  "total_files": 375,
+  "total_communities": 202,
+  "total_nodes": 203,
+  "total_edges": 82,
+  "sample": [
+    [
+      "_shared.ts + 4 more",
+      49
+    ],
+    [
+      "index.js + 4 more",
+      2
+    ],
+    [
+      "ActiveCallOverlay.tsx + 4 more",
+      29
+    ],
+    [
+      "index.ts + 4 more",
+      21
+    ],
+    [
+      "requireAdmin() + 4 more",
+      27
+    ],
+    [
+      "matching.js + 4 more",
+      9
+    ],
+    [
+      "index.js + 4 more",
+      20
+    ],
+    [
+      "test-helpers.ts + 4 more",
+      1
+    ],
+    [
+      "manage-driver-schema.test.ts + 4 more",
+      18
+    ],
+    [
+      "audit-logging.service.ts + 4 more",
+      1
+    ],
+    [
+      "chat.ts + 4 more",
+      15
+    ],
+    [
+      "getPasswordCriteria() + 4 more",
+      1
+    ],
+    [
+      "migrateCurrency.ts + 4 more",
+      1
+    ],
+    [
+      "anonymizeCollectionForUser() + 4 more",
+      2
+    ],
+    [
+      "food-delivery.service.ts + 4 more",
+      1
+    ]
+  ]
+}
