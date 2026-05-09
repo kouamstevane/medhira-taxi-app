@@ -8,8 +8,8 @@ interface Props {
 }
 
 const ROLES: { value: DriverType; label: string; desc: string; icon: string }[] = [
-  { value: 'chauffeur', label: 'Chauffeur taxi', desc: 'Transportez des passagers avec votre véhicule', icon: 'directions_car' },
-  { value: 'livreur', label: 'Livreur de repas', desc: 'Livrez des commandes depuis les restaurants', icon: 'delivery_dining' },
+  { value: 'chauffeur', label: 'Chauffeur', desc: 'Transportez des passagers ou effectuez des courses avec votre véhicule', icon: 'directions_car' },
+  { value: 'livreur', label: 'Livreur', desc: 'Livrez repas, colis et toute commande à vos clients', icon: 'delivery_dining' },
   { value: 'les_deux', label: 'Les deux', desc: 'Chauffeur et livreur selon la demande', icon: 'sync_alt' },
 ]
 

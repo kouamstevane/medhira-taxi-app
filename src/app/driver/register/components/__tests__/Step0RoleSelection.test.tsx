@@ -15,8 +15,8 @@ beforeEach(() => { onNext.mockClear() })
 describe('Step0RoleSelection', () => {
   it('affiche les 3 cartes de rôle', () => {
     render(<Step0RoleSelection onNext={onNext} />)
-    expect(screen.getByText(/Chauffeur taxi/i)).toBeInTheDocument()
-    expect(screen.getByText(/Livreur de repas/i)).toBeInTheDocument()
+    expect(screen.getByText('Chauffeur')).toBeInTheDocument()
+    expect(screen.getByText('Livreur')).toBeInTheDocument()
     expect(screen.getByText(/Les deux/i)).toBeInTheDocument()
   })
 
@@ -28,7 +28,7 @@ describe('Step0RoleSelection', () => {
 
   it('appelle onNext avec livreur après sélection', () => {
     render(<Step0RoleSelection onNext={onNext} />)
-    fireEvent.click(screen.getByText(/Livreur de repas/i))
+    fireEvent.click(screen.getByText('Livreur'))
     fireEvent.click(screen.getByRole('button', { name: /continuer/i }))
     expect(onNext).toHaveBeenCalledWith('livreur')
   })
