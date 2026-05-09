@@ -35,7 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      router.push('/login');
+      router.replace('/login');
     } catch (error) {
       console.error('Erreur de déconnexion:', error);
     }

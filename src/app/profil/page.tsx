@@ -106,10 +106,10 @@ export default function ProfilPage() {
         } else {
           // Document does not exist, AuthContext should handle sign out
           // and redirection. For safety, we can also redirect here.
-          router.push("/login");
+          router.replace("/login");
         }
       } else if (!currentUser && !loading) {
-        router.push("/login");
+        router.replace("/login");
       }
       setLoading(false);
     };
@@ -224,7 +224,7 @@ export default function ProfilPage() {
     setLoggingOut(true);
     try {
       await signOut(auth);
-      router.push('/login');
+      router.replace('/login');
     } catch (err) {
       console.error('Erreur de déconnexion:', err);
       showError("Impossible de vous déconnecter. Réessayez.");
@@ -240,7 +240,7 @@ export default function ProfilPage() {
       await requestAccountDeletion({ confirm: 'DELETE_MY_ACCOUNT' });
       try { await signOut(auth); } catch {}
       showSuccess('Votre compte a été supprimé.');
-      router.push('/login');
+      router.replace('/login');
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       console.error('Erreur suppression compte:', error);
