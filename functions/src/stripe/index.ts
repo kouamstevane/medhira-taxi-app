@@ -986,17 +986,30 @@ export const stripeWebhookLight = onRequest(
       return;
     }
 
-    let thinEvent: StripeEventLike;
-    try {
-      thinEvent = getStripe().webhooks.constructEvent(
-        rawBody,
-        sig,
-        webhookSecretLight.value(),
-      ) as unknown as StripeEventLike;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[stripeWebhookLight] Signature invalide:', msg);
-      res.status(400).json({ error: `Signature invalide: ${msg}` });
+    const secrets = webhookSecretLight
+      .value()
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    let thinEvent: StripeEventLike | null = null;
+    let lastErr = '';
+    for (const secret of secrets) {
+      try {
+        thinEvent = getStripe().webhooks.constructEvent(
+          rawBody,
+          sig,
+          secret,
+        ) as unknown as StripeEventLike;
+        break;
+      } catch (err) {
+        lastErr = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    if (!thinEvent) {
+      console.error('[stripeWebhookLight] Signature invalide pour tous les secrets:', lastErr);
+      res.status(400).json({ error: `Signature invalide: ${lastErr}` });
       return;
     }
 
