@@ -9,7 +9,7 @@
     "rules": "database.rules.json"
   },
   "hosting": {
-    "public": "out",
+    "public": "medjira-privacy",
     "ignore": [
       "firebase.json",
       "**/.*",
