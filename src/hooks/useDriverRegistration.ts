@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db, getFirebaseStorage, app } from '@/config/firebase';
-import { createUserWithEmailAndPassword, onAuthStateChanged, deleteUser, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
+import { onAuthStateChanged, deleteUser, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp as firestoreServerTimestamp, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AuthService } from '@/services';
+import { createAuthAccount } from '@/services/auth.service';
 import { serverEncryptionService } from '@/services/server-encryption.service';
 import { auditLoggingService } from '@/services/audit-logging.service';
 import { secureStorage } from '@/services/secureStorage.service';
@@ -255,8 +256,7 @@ export function useDriverRegistration() {
         if (methods.length > 0) {
           throw new Error('EMAIL_ALREADY_IN_USE');
         }
-        const credential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-        newlyCreatedUser = credential.user;
+        newlyCreatedUser = await createAuthAccount(data.email, data.password);
       }
       setStep1Data(data);
       // Envoyer le code OTP — Step1 reste visible en Phase B

@@ -743,6 +743,16 @@ export type DeliveryStatus =
   | 'delivered'
   | 'cancelled'
 
+export const ACTIVE_DELIVERY_STATUSES: readonly DeliveryStatus[] = [
+  'assigned',
+  'heading_to_restaurant',
+  'arrived_restaurant',
+  'waiting',
+  'picked_up',
+  'heading_to_client',
+  'arrived_client',
+]
+
 export interface DocumentEntry {
   url: string | null
   status: 'pending' | 'approved' | 'rejected' | 'not_submitted'
