@@ -26,6 +26,12 @@ export const reverseGeocode = onCall(
   {
     region: 'europe-west1',
     secrets: [googleMapsApiKey],
+    // minInstances: 1 évite les cold starts (~5s) au prix d'une instance
+    // toujours active. Indispensable pour le flow de réservation qui doit
+    // afficher l'adresse en <2s pour une bonne UX.
+    minInstances: 1,
+    memory: '256MiB',
+    cpu: 1,
   },
   async (request: CallableRequest<ReverseGeocodePayload>): Promise<ReverseGeocodeResult> => {
     if (!request.auth) {

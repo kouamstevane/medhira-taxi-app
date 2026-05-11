@@ -219,10 +219,10 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
 
     let cancelled = false;
 
-    // Filet de sécurité au cas où reverseGeocodeAddress ne se résoudrait jamais.
+    // Filet de sécurité — couvre client 4s + serveur 12s + marge.
     const safetyTimer = setTimeout(() => {
       if (!cancelled) setLoadingAddress(false);
-    }, 10000);
+    }, 18000);
 
     reverseGeocodeAddress(preciseLocation.lat, preciseLocation.lng)
       .then((address) => {

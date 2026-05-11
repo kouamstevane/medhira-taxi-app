@@ -68,7 +68,9 @@ export async function reverseGeocodeFull(
     lng: number,
     options: ReverseGeocodeOptions = {}
 ): Promise<google.maps.GeocoderResult | null> {
-    const { clientTimeoutMs = 4000, serverTimeoutMs = 5000 } = options;
+    // serverTimeoutMs généreux (12s) pour absorber un éventuel cold start
+    // résiduel de la Cloud Function malgré minInstances=1.
+    const { clientTimeoutMs = 4000, serverTimeoutMs = 12000 } = options;
 
     try {
         const client = await clientGeocodeFull(lat, lng, clientTimeoutMs);
