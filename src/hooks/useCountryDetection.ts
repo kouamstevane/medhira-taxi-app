@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { haversineKm } from '@/utils/distance';
 import { getMarketByCountryCode, MARKET_CONFIGS, type MarketCode } from '@/utils/constants';
 import { secureStorage } from '@/services/secureStorage.service';
+import { reverseGeocodeFull } from '@/services/reverseGeocode.service';
 
 interface UseCountryDetectionReturn {
   country: MarketCode | null;
@@ -40,33 +41,19 @@ function detectByBoundingBox(location: { lat: number; lng: number }): MarketCode
 async function reverseGeocodeCountry(
   location: { lat: number; lng: number }
 ): Promise<MarketCode | null> {
-  if (!window.google?.maps?.Geocoder) return null;
-
-  const geocoder = new window.google.maps.Geocoder();
-
-  const timeoutPromise = new Promise<null>((resolve) =>
-    setTimeout(() => resolve(null), 3000)
-  );
-
-  const geocodePromise = new Promise<MarketCode | null>((resolve) => {
-    geocoder.geocode({ location }, (results, status) => {
-      if (status !== 'OK' || !results || results.length === 0) {
-        resolve(null);
-        return;
-      }
-      const countryComp = results[0].address_components.find((c) =>
-        c.types.includes('country')
-      );
-      if (!countryComp) {
-        resolve(null);
-        return;
-      }
-      const match = getMarketByCountryCode(countryComp.short_name);
-      resolve(match?.code ?? null);
-    });
+  // Utilise le service partagé (client + fallback serveur) au cas où
+  // la clé browser bloque l'API Geocoding par restriction de référent.
+  const result = await reverseGeocodeFull(location.lat, location.lng, {
+    clientTimeoutMs: 3000,
+    serverTimeoutMs: 4000,
   });
-
-  return Promise.race([geocodePromise, timeoutPromise]);
+  if (!result) return null;
+  const countryComp = result.address_components?.find((c) =>
+    c.types.includes('country')
+  );
+  if (!countryComp) return null;
+  const match = getMarketByCountryCode(countryComp.short_name);
+  return match?.code ?? null;
 }
 
 const CACHE_TTL_MS = 30 * 60 * 1000;

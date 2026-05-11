@@ -19,7 +19,7 @@ interface ReverseGeocodeOptions {
 interface ServerResult {
     address: string;
     place_id: string;
-    results: unknown[];
+    results: google.maps.GeocoderResult[];
 }
 
 let cachedGeocoder: google.maps.Geocoder | null = null;
@@ -30,17 +30,15 @@ function getGeocoder(): google.maps.Geocoder | null {
     return cachedGeocoder;
 }
 
-function clientGeocode(lat: number, lng: number, timeoutMs: number): Promise<string | null> {
+function clientGeocodeFull(lat: number, lng: number, timeoutMs: number): Promise<google.maps.GeocoderResult | null> {
     const geocoder = getGeocoder();
     if (!geocoder) return Promise.resolve(null);
 
-    const geocodePromise = new Promise<string | null>((resolve, reject) => {
+    const geocodePromise = new Promise<google.maps.GeocoderResult | null>((resolve, reject) => {
         try {
-            // API callback : universelle, contrairement au mode Promise qui peut
-            // retourner undefined sur certaines WebView Android.
             geocoder.geocode({ location: { lat, lng } }, (results, status) => {
                 if (status === 'OK' && results && results[0]) {
-                    resolve(results[0].formatted_address);
+                    resolve(results[0]);
                 } else if (status === 'ZERO_RESULTS') {
                     resolve(null);
                 } else {
@@ -55,32 +53,49 @@ function clientGeocode(lat: number, lng: number, timeoutMs: number): Promise<str
     return withTimeout(geocodePromise, timeoutMs, 'Client geocode');
 }
 
-async function serverGeocode(lat: number, lng: number, timeoutMs: number): Promise<string | null> {
+async function serverGeocodeFull(lat: number, lng: number, timeoutMs: number): Promise<google.maps.GeocoderResult | null> {
     const fn = httpsCallable<{ lat: number; lng: number }, ServerResult>(functions, 'reverseGeocode');
     const result = await withTimeout(fn({ lat, lng }), timeoutMs, 'Server geocode');
-    return result.data?.address ?? null;
+    return result.data?.results?.[0] ?? null;
 }
 
-export async function reverseGeocodeAddress(
+/**
+ * Reverse-geocode complet — retourne le premier `GeocoderResult` avec
+ * `address_components`, ou null si les deux niveaux échouent.
+ */
+export async function reverseGeocodeFull(
     lat: number,
     lng: number,
     options: ReverseGeocodeOptions = {}
-): Promise<string | null> {
+): Promise<google.maps.GeocoderResult | null> {
     const { clientTimeoutMs = 4000, serverTimeoutMs = 5000 } = options;
 
     try {
-        const clientAddress = await clientGeocode(lat, lng, clientTimeoutMs);
-        if (clientAddress) return clientAddress;
+        const client = await clientGeocodeFull(lat, lng, clientTimeoutMs);
+        if (client) return client;
     } catch (err) {
         console.warn('[reverseGeocode] Client échoué, fallback serveur:', err instanceof Error ? err.message : err);
     }
 
     try {
-        const serverAddress = await serverGeocode(lat, lng, serverTimeoutMs);
-        if (serverAddress) return serverAddress;
+        const server = await serverGeocodeFull(lat, lng, serverTimeoutMs);
+        if (server) return server;
     } catch (err) {
         console.warn('[reverseGeocode] Serveur échoué:', err instanceof Error ? err.message : err);
     }
 
     return null;
+}
+
+/**
+ * Reverse-geocode des coordonnées en adresse formatée.
+ * Wrapper convenience autour de `reverseGeocodeFull`.
+ */
+export async function reverseGeocodeAddress(
+    lat: number,
+    lng: number,
+    options: ReverseGeocodeOptions = {}
+): Promise<string | null> {
+    const result = await reverseGeocodeFull(lat, lng, options);
+    return result?.formatted_address ?? null;
 }
