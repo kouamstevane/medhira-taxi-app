@@ -80,8 +80,26 @@ export const reverseGeocode = onCall(
         };
       }
 
-      console.warn('[reverseGeocode] No results', { status: data?.status });
-      throw new HttpsError('not-found', 'No results found.');
+      console.warn('[reverseGeocode] Geocoding API non OK', {
+        status: data?.status,
+        error_message: data?.error_message,
+      });
+
+      // Propage le statut Google au client pour faciliter le debug.
+      // REQUEST_DENIED = clé API restreinte (référent / IP) ou Geocoding API non activée.
+      if (data?.status === 'REQUEST_DENIED') {
+        throw new HttpsError(
+          'failed-precondition',
+          `Geocoding API refusée: ${data?.error_message ?? 'clé API restreinte'}`
+        );
+      }
+      if (data?.status === 'OVER_QUERY_LIMIT') {
+        throw new HttpsError('resource-exhausted', 'Quota Geocoding dépassé.');
+      }
+      throw new HttpsError(
+        'not-found',
+        `Aucun résultat (status: ${data?.status ?? 'inconnu'}).`
+      );
     } catch (error) {
       if (error instanceof HttpsError) throw error;
       console.error('[reverseGeocode] Erreur Geocoding:', error);
