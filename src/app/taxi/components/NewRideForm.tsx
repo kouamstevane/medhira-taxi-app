@@ -19,6 +19,7 @@ import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 import { useCountryDetection } from '@/hooks/useCountryDetection';
 import { estimateFare, createBooking, getCarTypes, FareEstimate } from '@/services/taxi.service';
+import { reverseGeocodeAddress } from '@/services/reverseGeocode.service';
 import { CarType, PlaceSuggestion, Location, PreciseLocation as BookingPreciseLocation } from '@/types';
 import { AddressInput } from './AddressInput';
 import { VehicleOption } from './VehicleOption';
@@ -119,12 +120,11 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   }, []);
 
   // Utiliser le hook de géolocalisation avec précision ultra-haute
-  const { 
+  const {
     preciseLocation,
-    error: geoError, 
-    loading: geoLoading, 
+    error: geoError,
+    loading: geoLoading,
     getCurrentPosition,
-    getAccuracyQuality 
   } = useCapacitorGeolocation();
 
   const { country: detectedCountry } = useCountryDetection({
@@ -195,71 +195,50 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     fetchLocation();
   }, [mapsLoaded, getCurrentPosition]); */
 
-  // ÉTAPE 1 : Déclencher la géolocalisation une seule fois
-useEffect(() => {
-  // On s'assure que Google Maps est prêt avant de demander la position
-  if (!mapsLoaded) return;
+  // Mode 'tracking' force enableHighAccuracy: true (GPS satellite). En 'booking',
+  // Android peut se rabattre sur Wi-Fi/réseau et donner une précision ~500m.
+  useEffect(() => {
+    if (!mapsLoaded) return;
+    getCurrentPosition('tracking');
+  }, [mapsLoaded, getCurrentPosition]);
 
-  // On appelle la fonction, c'est tout. Le hook s'occupe du reste.
-  getCurrentPosition();
+  useEffect(() => {
+    if (!preciseLocation) return;
 
-}, [mapsLoaded, getCurrentPosition]); // Le tableau de dépendances est correct
-
-
-// ÉTAPE 2 : Réagir aux changements venant du hook
-useEffect(() => {
-  // Ce code s'exécutera SEULEMENT si le hook réussit à obtenir une position avec précision
-  if (preciseLocation) {
     setLoadingAddress(true);
-
-    // Utiliser la position précise avec toutes les métadonnées
-    const location: BookingPreciseLocation = {
-      lat: preciseLocation.lat,
-      lng: preciseLocation.lng,
-      accuracy: preciseLocation.accuracy,
-      altitude: preciseLocation.altitude,
-      heading: preciseLocation.heading,
-      speed: preciseLocation.speed,
-      timestamp: preciseLocation.timestamp,
-    };
-    
-    // Stocker la précision pour l'afficher et l'envoyer au backend
     setPickupAccuracy(preciseLocation.accuracy);
-    
-    // Mettre à jour les états du composant avec la position ultra-précise
-    setCurrentLocation({ lat: location.lat, lng: location.lng });
-    setPickupLocation(location);
+    setCurrentLocation({ lat: preciseLocation.lat, lng: preciseLocation.lng });
+    setPickupLocation(preciseLocation);
 
-    // Afficher temporairement les coordonnées avec la précision
-    const accuracyText = preciseLocation.accuracy <= 20 ? '📍 Précis' : preciseLocation.accuracy <= 50 ? '📍 OK' : 'Imprécis';
-    const coordsAddress = `${accuracyText} Ma position (±${Math.round(preciseLocation.accuracy)}m)`;
-    setPickupAddress(coordsAddress);
-    
-    console.log(`📍 [GPS] Précision: ${preciseLocation.accuracy.toFixed(1)}m - Qualité: ${getAccuracyQuality()}`);
+    const accuracyText =
+      preciseLocation.accuracy <= 20 ? '📍 Précis' :
+      preciseLocation.accuracy <= 50 ? '📍 OK' :
+      'Imprécis';
+    setPickupAddress(`${accuracyText} Ma position (±${Math.round(preciseLocation.accuracy)}m)`);
+    console.log(`📍 [GPS] Précision: ${preciseLocation.accuracy.toFixed(1)}m`);
 
-    // Votre logique de Geocoding inversé (traduire les coordonnées en adresse)
-    if (window.google && window.google.maps) {
-      const geocoder = new window.google.maps.Geocoder();
-      
-      // Utilisation de .then/.catch/.finally pour une meilleure lisibilité
-      geocoder.geocode({ location: { lat: location.lat, lng: location.lng } })
-        .then(response => {
-          if (response.results && response.results[0]) {
-            setPickupAddress(response.results[0].formatted_address);
-          }
-        })
-        .catch(e => {
-          console.warn('Le Geocoding inversé a échoué, les coordonnées sont conservées.', e);
-        })
-        .finally(() => {
-          setLoadingAddress(false); // Arrêter le chargement dans tous les cas
-        });
-    } else {
-      // Si google.maps n'est pas disponible, arrêter le chargement
-      setLoadingAddress(false);
-    }
-  }
-}, [preciseLocation, getAccuracyQuality]); // Dépend de la position précise du hook
+    let cancelled = false;
+
+    // Filet de sécurité au cas où reverseGeocodeAddress ne se résoudrait jamais.
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) setLoadingAddress(false);
+    }, 10000);
+
+    reverseGeocodeAddress(preciseLocation.lat, preciseLocation.lng)
+      .then((address) => {
+        if (cancelled || !address) return;
+        setPickupAddress(address);
+      })
+      .finally(() => {
+        clearTimeout(safetyTimer);
+        if (!cancelled) setLoadingAddress(false);
+      });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
+    };
+  }, [preciseLocation]);
 
 
   // Charger les types de véhicules

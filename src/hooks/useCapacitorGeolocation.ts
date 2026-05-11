@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { Geolocation, Position } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
 import { secureStorage } from '@/services/secureStorage.service';
+import { withTimeout } from '@/utils/promise';
 //  Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
 
 export interface Location {
@@ -82,16 +83,44 @@ export const useCapacitorGeolocation = () => {
     ) => {
         setState(prev => ({ ...prev, loading: true, error: null }));
 
+        // Master timeout : couvre le pire cas des 3 stratégies (15+15+10 = 40s).
+        // Garantit que loading=false sera émis même si une WebView Android
+        // ne renvoie jamais la callback native de Geolocation.
+        const MASTER_TIMEOUT_MS = 40000;
+        let masterTimeoutFired = false;
+        const masterTimeout = setTimeout(() => {
+            masterTimeoutFired = true;
+            console.error('[Geolocation] Master timeout déclenché — déblocage forcé');
+            setState({
+                location: null,
+                preciseLocation: null,
+                error: "Délai d'attente GPS dépassé. Vérifiez que la localisation est activée.",
+                loading: false,
+                accuracy: null,
+            });
+        }, MASTER_TIMEOUT_MS);
+
+        // setState garde-fou : n'écrase pas l'état si le master timeout a déjà tiré.
+        const safeSetState = (next: GeolocationState) => {
+            if (!masterTimeoutFired) setState(next);
+        };
+
         try {
             console.log(`[Geolocation] Démarrage géolocalisation mode: ${mode}`);
-            
-            // Vérifier les permissions
-            const permissionStatus = await Geolocation.checkPermissions();
+
+            const permissionStatus = await withTimeout(
+                Geolocation.checkPermissions(),
+                5000,
+                'checkPermissions'
+            );
             console.log('[Geolocation] Statut permissions:', permissionStatus);
 
-            if (permissionStatus.location === 'denied') {
-                console.log('[Geolocation] Permission refusée, demande en cours...');
-                const request = await Geolocation.requestPermissions();
+            if (permissionStatus.location === 'denied' || permissionStatus.location === 'prompt') {
+                const request = await withTimeout(
+                    Geolocation.requestPermissions(),
+                    30000,
+                    'requestPermissions'
+                );
                 console.log('[Geolocation] Résultat demande:', request);
                 if (request.location === 'denied') {
                     throw new Error('Permission de géolocalisation refusée');
@@ -169,7 +198,7 @@ export const useCapacitorGeolocation = () => {
                         timestamp: cachedPosition.timestamp,
                     };
 
-                    setState({
+                    safeSetState({
                         location: {
                             lat: preciseLocation.lat,
                             lng: preciseLocation.lng
@@ -180,7 +209,6 @@ export const useCapacitorGeolocation = () => {
                         accuracy: cachedPosition.accuracy,
                     });
 
-                    // Indiquer que c'est une position en cache
                     console.warn(`[Geolocation] Utilisation position cache (précision dégradée: ${cachedPosition.accuracy.toFixed(0)}m)`);
                     
                     return preciseLocation;
@@ -224,7 +252,7 @@ export const useCapacitorGeolocation = () => {
                 console.warn(`[Geolocation] Précision limitée (${bestAccuracy.toFixed(0)}m). Conseil: sortir à l'extérieur.`);
             }
 
-            setState({
+            safeSetState({
                 location: {
                     lat: preciseLocation.lat,
                     lng: preciseLocation.lng
@@ -237,17 +265,13 @@ export const useCapacitorGeolocation = () => {
 
             return preciseLocation;
 
-         
         } catch (err: unknown) {
-            //  Typage correct de l'erreur (medJira.md #116)
             console.error('[Geolocation] Erreur:', err);
-            let errorMessage = 'Impossible d\'obtenir la position';
+            const errorMessage = err instanceof Error && err.message
+                ? err.message
+                : 'Impossible d\'obtenir la position';
 
-            if (err instanceof Error && err.message) {
-                errorMessage = err.message;
-            }
-
-            setState({
+            safeSetState({
                 location: null,
                 preciseLocation: null,
                 error: errorMessage,
@@ -256,6 +280,8 @@ export const useCapacitorGeolocation = () => {
             });
 
             throw err;
+        } finally {
+            clearTimeout(masterTimeout);
         }
     }, []);
 
