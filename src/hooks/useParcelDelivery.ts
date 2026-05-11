@@ -29,7 +29,7 @@ export interface ParcelDoc {
   deliveredAt?: unknown
 }
 
-const ACTIVE_PARCEL_STATUSES: ParcelStatus[] = ['accepted', 'in_transit']
+export const ACTIVE_PARCEL_STATUSES: readonly ParcelStatus[] = ['accepted', 'in_transit']
 
 export function useParcelDelivery(parcelId: string) {
   const [parcel, setParcel] = useState<ParcelDoc | null>(null)

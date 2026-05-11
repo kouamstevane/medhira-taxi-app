@@ -33,6 +33,27 @@ export const signInWithEmail = async (email: string, password: string): Promise<
 };
 
 /**
+ * Création bas-niveau d'un compte Firebase Auth + document Firestore minimal.
+ *
+ * Utilisé par les flows multi-étapes (ex. inscription chauffeur Phase A) où le
+ * profil complet (nom, prénom, etc.) sera renseigné plus tard. Pour une
+ * inscription standard avec profil complet, utiliser `signUpWithEmail`.
+ */
+export const createAuthAccount = async (
+  email: string,
+  password: string,
+): Promise<User> => {
+  const result = await createUserWithEmailAndPassword(auth, email, password);
+  await createUserDocument(result.user.uid, {
+    email,
+    firstName: '',
+    lastName: '',
+    emailVerified: false,
+  });
+  return result.user;
+};
+
+/**
  * Inscription par email et mot de passe
  *  Crée le document Firestore et envoie l'email de vérification
  */
@@ -47,8 +68,6 @@ export const signUpWithEmail = async (
   }
 ): Promise<User> => {
   const result = await createUserWithEmailAndPassword(auth, email, password);
-
-  // Créer le document utilisateur dans Firestore
   await createUserDocument(result.user.uid, {
     email,
     firstName: profileData.firstName,
@@ -57,7 +76,6 @@ export const signUpWithEmail = async (
     country: profileData.country,
     emailVerified: false,
   });
-
   return result.user;
 };
 

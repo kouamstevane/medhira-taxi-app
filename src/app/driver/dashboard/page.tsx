@@ -18,7 +18,6 @@ import {
 } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signOut, User } from 'firebase/auth';
-import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { StripeOnboardingBanner } from '@/components/ui/StripeOnboardingBanner';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -46,8 +45,11 @@ import { useDriverStore, type DriverCoreData } from '@/store/driverStore';
 import { useDriverAvailability } from '@/hooks/useDriverAvailability';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
-import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { DriverPendingBanner } from '@/components/driver/DriverPendingBanner';
+import { useAuth } from '@/hooks/useAuth';
+import { useEffectiveRoleStatus } from '@/hooks/useEffectiveRoleStatus';
+import { useActiveRideGuard } from '@/hooks/useActiveRideGuard';
+import { setActiveRole, getDashboardRouteFor } from '@/services/roles.service';
 
 async function fetchBookingsForRequests(
   requests: Array<{ rideId: string; candidate: RideCandidate }>
@@ -94,6 +96,9 @@ async function fetchBookingsForRequests(
 
 export default function DriverDashboard() {
   const { driver, setDriver, updateDriver } = useDriverStore();
+  const { userData } = useAuth();
+  const roleStatuses = useEffectiveRoleStatus();
+  const { hasActiveRide } = useActiveRideGuard();
   useDriverAvailability();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -597,42 +602,68 @@ export default function DriverDashboard() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
       <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-28">
-        {/* Header */}
-        <header className="p-6 flex items-center justify-between sticky top-0 bg-background/80 backdrop-blur-xl z-50">
-          <div className="flex items-center gap-3">
-            <div className="size-12 rounded-full border-2 border-primary/30 bg-gradient-to-r from-primary to-[#ffae33] flex items-center justify-center">
+        <header className="p-6 flex items-center justify-between gap-3 sticky top-0 bg-background/80 backdrop-blur-xl z-50">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="size-11 shrink-0 rounded-full border-2 border-primary/30 bg-gradient-to-r from-primary to-[#ffae33] flex items-center justify-center">
               <span className="text-white font-bold text-sm">{getInitials(driver.firstName, driver.lastName)}</span>
             </div>
-            <div>
-              <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Bienvenue</p>
-              <h1 className="text-xl font-bold text-white">Bonjour, {formatValue(driver.firstName)}</h1>
+            <div className="min-w-0">
+              <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wider">Bienvenue</p>
+              <h1 className="text-base font-bold text-white truncate">Bonjour, {formatValue(driver.firstName)}</h1>
             </div>
           </div>
-          <button
-            onClick={toggleAvailability}
-            disabled={viewOnly}
-            className={`flex items-center gap-2 px-3 py-2.5 min-h-[44px] rounded-full border transition-all ${
-              driver.isAvailable
-                ? 'bg-green-500/10 border-green-500/20'
-                : 'bg-slate-700/50 border-white/10'
-            } ${viewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <span className={`size-2 rounded-full ${driver.isAvailable ? 'bg-green-500 animate-pulse-green' : 'bg-slate-500'}`} />
-            <span className={`text-sm font-bold ${driver.isAvailable ? 'text-green-500' : 'text-slate-400'}`}>
-              {driver.isAvailable ? 'En ligne' : 'Hors ligne'}
-            </span>
-          </button>
-          <RoleSwitcher />
+          {userData?.roles?.client && userData?.roles?.driver && (
+            <div
+              role="tablist"
+              aria-label="Basculer entre l'espace client et chauffeur"
+              className="relative shrink-0 grid grid-cols-2 p-0.5 rounded-full border border-white/10 bg-white/[0.03]"
+            >
+              <span
+                aria-hidden
+                className="absolute top-0.5 bottom-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-gradient-to-r from-primary to-[#ffae33] shadow-md shadow-primary/20 transition-transform duration-300 ease-out translate-x-full"
+              />
+              <button
+                type="button"
+                role="tab"
+                aria-label="Espace client"
+                aria-selected={false}
+                disabled={hasActiveRide}
+                aria-disabled={hasActiveRide}
+                title={hasActiveRide ? 'Course en cours — impossible de basculer' : undefined}
+                onClick={async () => {
+                  if (!userData || hasActiveRide) return;
+                  await setActiveRole(userData, 'client');
+                  router.replace(
+                    getDashboardRouteFor('client', {
+                      driverStatus: roleStatuses.driver?.status,
+                      restaurantStatus: roleStatuses.restaurant?.status,
+                      stripeConnectStatus: roleStatuses.restaurant?.stripeConnectStatus,
+                    }),
+                  );
+                }}
+                className={`relative z-10 flex items-center justify-center size-8 rounded-full text-slate-400 hover:text-white transition-colors ${hasActiveRide ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                <MaterialIcon name="person" size="sm" />
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-label="Espace chauffeur"
+                aria-selected={true}
+                className="relative z-10 flex items-center justify-center size-8 rounded-full text-background"
+              >
+                <MaterialIcon name="local_taxi" size="sm" />
+              </button>
+            </div>
+          )}
         </header>
 
         {viewOnly && <DriverPendingBanner />}
 
-        {/* Bandeau Stripe Onboarding — visible tant que le compte n'est pas actif */}
         <div className="px-6">
           <StripeOnboardingBanner />
         </div>
 
-        {/* Info Message */}
         {infoMessage && (
           <div className="mx-6 mb-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
             <div className="flex items-start gap-3">
@@ -642,62 +673,53 @@ export default function DriverDashboard() {
           </div>
         )}
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-3 px-6 mb-6">
-          <GlassCard className="p-4 flex flex-col items-center text-center">
-            <span className="text-primary text-sm font-semibold mb-1">Gains</span>
-            <span className="text-white font-bold text-base leading-tight">{formatCurrencyWithCode(driver.earnings || 0)}</span>
-          </GlassCard>
-          <GlassCard className="p-4 flex flex-col items-center text-center">
-            <span className="text-primary text-sm font-semibold mb-1">Note</span>
-            <div className="flex items-center gap-1">
-              <MaterialIcon name="star" size="sm" className="text-primary" filled />
-              <span className="text-white font-bold text-base">{formatValue(driver.rating, 0)}</span>
-            </div>
-            <span className="text-slate-500 text-[10px]">Top Driver</span>
-          </GlassCard>
-          <GlassCard className="p-4 flex flex-col items-center text-center">
-            <span className="text-primary text-sm font-semibold mb-1">Courses</span>
-            <span className="text-white font-bold text-base">{formatValue(driver.tripsCompleted, 0)}</span>
-            <span className="text-slate-500 text-[10px]">Total</span>
-          </GlassCard>
-        </div>
-
-        {/* Status Card */}
-        <div className="px-6 mb-8">
+        <div className="px-6 mb-6">
           <GlassCard variant="elevated" className="p-5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+            <div className={`absolute top-0 right-0 w-40 h-40 rounded-full -mr-20 -mt-20 blur-3xl transition-colors ${driver.isAvailable ? 'bg-green-500/10' : 'bg-primary/10'}`} />
+            <button
+              onClick={handleLogout}
+              aria-label="Se déconnecter"
+              className="absolute top-3 right-3 size-9 rounded-full flex items-center justify-center text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors z-10"
+            >
+              <MaterialIcon name="logout" size="sm" />
+            </button>
             <div className="flex items-center gap-3 mb-4">
               <span className={`size-3 rounded-full ${driver.isAvailable ? 'bg-green-500 animate-pulse-green' : 'bg-slate-500'}`} />
               <p className="text-white font-medium">
                 {driver.isAvailable ? 'Disponible — En attente' : 'Hors ligne'}
               </p>
             </div>
-            <p className="text-slate-400 text-sm mb-5 leading-relaxed">
+            <p className="text-slate-400 text-sm mb-5 leading-relaxed pr-8">
               {driver.isAvailable
                 ? 'Votre position est visible par les clients. Restez à proximité des zones animées.'
                 : 'Activez votre statut pour recevoir des demandes de course.'}
             </p>
-            <div className="flex gap-3">
-              <button
-                onClick={toggleAvailability}
-                disabled={viewOnly}
-                className={`flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold transition-all border border-white/10 flex items-center justify-center gap-2 ${viewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <MaterialIcon name="power_settings_new" size="sm" />
-                {driver.isAvailable ? 'Aller hors ligne' : 'Aller en ligne'}
-              </button>
-              <button
-                onClick={handleLogout}
-                className="py-3 px-4 rounded-xl bg-destructive/10 hover:bg-destructive/20 text-destructive font-semibold transition-all border border-destructive/20 flex items-center justify-center gap-2"
-              >
-                <MaterialIcon name="logout" size="sm" />
-              </button>
-            </div>
+            <button
+              onClick={toggleAvailability}
+              disabled={viewOnly}
+              className={`w-full h-12 rounded-xl font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] ${
+                driver.isAvailable
+                  ? 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
+                  : 'bg-gradient-to-r from-primary to-[#ffae33] text-background shadow-lg shadow-primary/20'
+              } ${viewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <MaterialIcon name="power_settings_new" size="sm" />
+              {driver.isAvailable ? 'Aller hors ligne' : 'Aller en ligne'}
+            </button>
           </GlassCard>
         </div>
 
-        {/* ModeSwitch — uniquement pour les_deux */}
+        {currentTrip && (
+          <div className="px-6 mb-6">
+            <CurrentTripCard
+              trip={currentTrip}
+              onMarkAsArrived={handleMarkAsArrived}
+              onStartTrip={handleStartTrip}
+              onCompleteTrip={handleCompleteTrip}
+            />
+          </div>
+        )}
+
         {driverType === 'les_deux' && driver && (
           <div className="px-6 mb-6">
             <ModeSwitch
@@ -709,37 +731,7 @@ export default function DriverDashboard() {
           </div>
         )}
 
-        {/* Section livraison */}
-        {(activeMode === 'livraison' || driverType === 'livreur') && driver && (
-          <div className="px-6 mb-8">
-            <h2 className="text-lg font-bold text-white mb-4">Commandes de livraison</h2>
-            <DeliveryOrdersList uid={driver.uid} />
-          </div>
-        )}
-
-        {/* Section colis — toujours affichée si le chauffeur est assigné à un colis,
-            indépendamment du driverType (l'assignation peut concerner tout chauffeur approuvé) */}
-        {driver && (
-          <div className="px-6 mb-8">
-            <h2 className="text-lg font-bold text-white mb-4">Colis à transporter</h2>
-            <ParcelOrdersList uid={driver.uid} />
-          </div>
-        )}
-
-        {/* Current Trip */}
-        {currentTrip && (
-          <div className="px-6 mb-8">
-            <CurrentTripCard
-              trip={currentTrip}
-              onMarkAsArrived={handleMarkAsArrived}
-              onStartTrip={handleStartTrip}
-              onCompleteTrip={handleCompleteTrip}
-            />
-          </div>
-        )}
-
-        {/* Demandes en cours */}
-        <div className="px-6 mb-8">
+        <div className="px-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">Demandes en cours</h2>
             {rideRequests.length > 0 && (
@@ -852,18 +844,53 @@ export default function DriverDashboard() {
           )}
         </div>
 
-        {/* Historique du jour */}
-        <div className="px-6 mb-8">
-          <h2 className="text-lg font-bold text-white mb-4">Historique du jour</h2>
-          <GlassCard className="p-5">
-            {dailyHistory.length > 0 ? (
-              <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-3 px-6 mb-6">
+          <GlassCard className="p-3 flex flex-col items-center text-center">
+            <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Gains</span>
+            <span className="text-white font-bold text-sm leading-tight">{formatCurrencyWithCode(driver.earnings || 0)}</span>
+          </GlassCard>
+          <GlassCard className="p-3 flex flex-col items-center text-center">
+            <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Note</span>
+            <div className="flex items-center gap-1">
+              <MaterialIcon name="star" size="sm" className="text-primary" filled />
+              <span className="text-white font-bold text-sm">{formatValue(driver.rating, 0)}</span>
+            </div>
+          </GlassCard>
+          <GlassCard className="p-3 flex flex-col items-center text-center">
+            <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Courses</span>
+            <span className="text-white font-bold text-sm">{formatValue(driver.tripsCompleted, 0)}</span>
+          </GlassCard>
+        </div>
+
+        {(activeMode === 'livraison' || driverType === 'livreur') && driver && (
+          <div className="px-6 mb-6">
+            <DeliveryOrdersList
+              uid={driver.uid}
+              header={<h2 className="text-base font-bold text-white mb-3">Commandes de livraison</h2>}
+            />
+          </div>
+        )}
+
+        {driver && (
+          <div className="px-6 mb-6">
+            <ParcelOrdersList
+              uid={driver.uid}
+              header={<h2 className="text-base font-bold text-white mb-3">Colis à transporter</h2>}
+            />
+          </div>
+        )}
+
+        {dailyHistory.length > 0 && (
+          <div className="px-6 mb-6">
+            <h2 className="text-base font-bold text-white mb-3">Historique du jour</h2>
+            <GlassCard className="p-4">
+              <div className="space-y-3">
                 {dailyHistory.map(trip => (
-                  <div key={trip.id} className="border-b border-white/5 pb-3 last:border-b-0">
+                  <div key={trip.id} className="border-b border-white/5 pb-2 last:border-b-0 last:pb-0">
                     <div className="flex justify-between items-center">
-                      <div>
-                        <p className="font-semibold text-white text-sm">Course #{trip.id.slice(-4)}</p>
-                        <p className="text-xs text-slate-400">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-white text-sm truncate">Course #{trip.id.slice(-4)}</p>
+                        <p className="text-xs text-slate-400 truncate">
                           {trip.createdAt instanceof Timestamp
                             ? new Date(trip.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
                             : trip.createdAt
@@ -872,38 +899,17 @@ export default function DriverDashboard() {
                           } — {trip.destination}
                         </p>
                       </div>
-                      <span className="text-primary font-bold text-sm">{formatCurrencyWithCode(trip.price)}</span>
+                      <span className="text-primary font-bold text-sm shrink-0 ml-3">{formatCurrencyWithCode(trip.price)}</span>
                     </div>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-slate-500 text-center py-4 text-sm">Aucune course complétée aujourd&apos;hui.</p>
-            )}
-          </GlassCard>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="px-6 mb-8">
-          <div className="flex gap-3">
-            <Link href="/dashboard" className="flex-1">
-              <GlassCard className="p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
-                <MaterialIcon name="person" size="md" className="text-primary" />
-                <span className="text-white text-sm font-medium">Espace client</span>
-              </GlassCard>
-            </Link>
-            <Link href="/driver/profile" className="flex-1">
-              <GlassCard className="p-4 flex items-center gap-3 active:scale-[0.98] transition-transform">
-                <MaterialIcon name="settings" size="md" className="text-primary" />
-                <span className="text-white text-sm font-medium">Mon profil</span>
-              </GlassCard>
-            </Link>
+            </GlassCard>
           </div>
-        </div>
+        )}
 
       </div>
       </div>
-      {/* Bottom Nav — en dehors du conteneur contraint pour éviter tout problème de stacking context */}
       <BottomNav items={driverNavItems} />
     </>
   );
