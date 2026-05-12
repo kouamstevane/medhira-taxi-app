@@ -277,7 +277,7 @@ export default function LoginPage() {
         <div className="mt-auto pb-10 text-center">
           <p className="text-slate-400 text-sm">
             Pas de compte ?
-            <Link href="/auth/register" className="text-primary font-bold ml-1 hover:underline">
+            <Link href="/auth/role" className="text-primary font-bold ml-1 hover:underline">
               Créer un compte
             </Link>
           </p>
