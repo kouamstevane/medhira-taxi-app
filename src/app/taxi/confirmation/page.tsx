@@ -11,6 +11,8 @@ const ConfirmationMap = dynamic(() => import('./ConfirmationMap').then(m => ({ d
   loading: () => <div className="w-full h-[200px] bg-[#1A1A1A] animate-pulse rounded-xl" />
 });
 import { MaterialIcon } from "@/components/ui/MaterialIcon";
+import { getDirections } from "@/services/directions.service";
+import { useSmoothMarker } from "@/hooks/useSmoothMarker";
 
 // Composant principal qui utilise useSearchParams
 function ConfirmationContent() {
@@ -24,6 +26,10 @@ function ConfirmationContent() {
   const [showArrival, setShowArrival] = useState(false);
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+
+  // Marker chauffeur lissé pour rendu visuel fluide.
+  // driverLocation brut conservé pour les calculs (distance, ETA).
+  const smoothDriverLocation = useSmoothMarker(driverLocation);
 
   useEffect(() => {
     if (!bookingId) {
@@ -81,22 +87,18 @@ function ConfirmationContent() {
                 // Mettre à jour les directions si le point de départ est disponible
                 if (data.pickupLocation) {
                   if (typeof google === 'undefined' || !google.maps) return;
-                  const directionsService = new google.maps.DirectionsService();
-                  directionsService.route(
-                    {
-                      origin: driverData.lastLocation,
-                      destination: data.pickupLocation,
-                      travelMode: google.maps.TravelMode.DRIVING,
-                    },
-                    (result, status) => {
+                  getDirections({
+                    origin: driverData.lastLocation,
+                    destination: data.pickupLocation,
+                    travelMode: google.maps.TravelMode.DRIVING,
+                  })
+                    .then((result) => {
                       if (!mounted) return;
-                      if (status === google.maps.DirectionsStatus.OK) {
-                        setDirections(result);
-                      } else {
-                        console.error("Erreur de calcul d'itinéraire:", status);
-                      }
-                    }
-                  );
+                      setDirections(result);
+                    })
+                    .catch((err) => {
+                      console.error("Erreur de calcul d'itinéraire:", err);
+                    });
                 }
               }
             }
@@ -216,6 +218,7 @@ function ConfirmationContent() {
           <div className="rounded-xl overflow-hidden border border-white/10">
             <ConfirmationMap
               driverLocation={driverLocation}
+              driverMarkerLocation={smoothDriverLocation}
               pickupLocation={booking?.pickupLocation}
               directions={directions}
             />

@@ -28,7 +28,9 @@ import { auth, db, functions } from '@/config/firebase';
 import { httpsCallable } from 'firebase/functions';
 import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
 import { calculateTripPrice, typedServerTimestamp } from '@/lib/firebase-helpers';
+import { getDirections, DirectionsError } from '@/services/directions.service';
 import { CURRENCY_CODE, DEFAULT_PRICING, LIMITS } from '@/utils/constants';
+import { DEFAULT_CAR_TYPES } from '@/app/taxi/data/vehicleCatalog';
 import { PAYMENT_STATUS } from '@/types/stripe';
 import { haversineKm } from '@/utils/distance';
 
@@ -225,9 +227,23 @@ export const cancelBooking = async (bookingId: string, reason?: string, extraFie
 export const getCarTypes = async (): Promise<CarType[]> => {
   const carTypesRef = collection(db, 'carTypes');
   const q = query(carTypesRef, limit(LIMITS.DEFAULT_QUERY_LIMIT));
-  const querySnapshot = await getDocs(q);
 
-  return querySnapshot.docs
+  let querySnapshot;
+  try {
+    querySnapshot = await getDocs(q);
+  } catch (error) {
+    logger.warn('[getCarTypes] Firestore inaccessible, fallback sur les types par défaut', { error });
+    return DEFAULT_CAR_TYPES;
+  }
+
+  const types = querySnapshot.docs
+    // Ignorer les documents seed `_init: true` ou les docs sans nom exploitable
+    .filter(snapshot => {
+      const raw = snapshot.data() as Record<string, unknown>;
+      if (raw._init === true) return false;
+      const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+      return name.length > 0;
+    })
     .map(snapshot => {
       const raw = snapshot.data() as Record<string, unknown>;
 
@@ -267,6 +283,13 @@ export const getCarTypes = async (): Promise<CarType[]> => {
       return carType;
     })
     .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+  if (types.length === 0) {
+    logger.warn('[getCarTypes] Collection carTypes vide, fallback sur les types par défaut');
+    return DEFAULT_CAR_TYPES;
+  }
+
+  return types;
 };
 
 /**
@@ -332,30 +355,26 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
       throw new Error('Google Maps API non chargée');
     }
 
-    const directionsService = new window.google.maps.DirectionsService();
-
     try {
-      const result = await new Promise<google.maps.DirectionsResult>((resolve, reject) => {
-        directionsService.route(
-          {
-            origin: from,
-            destination: to,
-            travelMode: window.google.maps.TravelMode.DRIVING,
-            provideRouteAlternatives: false,
-          },
-          (result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
-            if (status === 'OK' && result && result.routes && result.routes.length > 0) {
-              resolve(result);
-            } else if (status === 'ZERO_RESULTS') {
-              reject(new Error('Aucun itinéraire trouvé entre ces deux points. Vérifiez les adresses.'));
-            } else if (status === 'NOT_FOUND') {
-              reject(new Error('Une ou plusieurs adresses n\'ont pas pu être trouvées. Vérifiez les adresses saisies.'));
-            } else {
-              reject(new Error(`Erreur calcul itinéraire: ${status}. Vérifiez que l'API Directions est activée.`));
-            }
+      let result: google.maps.DirectionsResult;
+      try {
+        result = await getDirections({
+          origin: from,
+          destination: to,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        });
+      } catch (err) {
+        if (err instanceof DirectionsError) {
+          if (err.code === 'ZERO_RESULTS') {
+            throw new Error('Aucun itinéraire trouvé entre ces deux points. Vérifiez les adresses.');
           }
-        );
-      });
+          if (err.code === 'NOT_FOUND') {
+            throw new Error("Une ou plusieurs adresses n'ont pas pu être trouvées. Vérifiez les adresses saisies.");
+          }
+          throw new Error(`Erreur calcul itinéraire: ${err.code}. Vérifiez que l'API Directions est activée.`);
+        }
+        throw err;
+      }
 
       const route = result.routes[0];
       const leg = route.legs[0];

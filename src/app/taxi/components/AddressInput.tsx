@@ -43,7 +43,7 @@ export const AddressInput = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { suggestions, loading, getSuggestions, clearSuggestions } = usePlacesAutocomplete({
+  const { suggestions, loading, getSuggestions, clearSuggestions, resetSession } = usePlacesAutocomplete({
     autocompleteService,
     location,
     countryRestriction,
@@ -88,6 +88,8 @@ export const AddressInput = ({
     onChange(suggestion.description);
     onSelect(suggestion);
     clearSuggestions();
+    // Clôture la session Places (nouveau token pour la prochaine recherche)
+    resetSession();
     setIsFocused(false);
     inputRef.current?.blur();
   };

@@ -23,6 +23,7 @@ import { reverseGeocodeAddress } from '@/services/reverseGeocode.service';
 import { CarType, PlaceSuggestion, Location, PreciseLocation as BookingPreciseLocation } from '@/types';
 import { AddressInput } from './AddressInput';
 import { VehicleOption } from './VehicleOption';
+import { VehicleDetailsSheet } from './VehicleDetailsSheet';
 import { FareSummary } from './FareSummary';
 import { BonusSelector } from './BonusSelector';
 const PaymentMethodSelector = dynamic(() => import('@/components/stripe/PaymentMethodSelector').then(m => ({ default: m.PaymentMethodSelector })), { ssr: false, loading: () => <div className="w-full h-24 bg-white/10 animate-pulse rounded-xl" /> })
@@ -82,6 +83,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   const [destinationAddress, setDestinationAddress] = useState('');
   const [destinationLocation, setDestinationLocation] = useState<Location | null>(null);
   const [selectedCarType, setSelectedCarType] = useState<CarType | null>(null);
+  const [detailsCarType, setDetailsCarType] = useState<CarType | null>(null);
   const [carTypes, setCarTypes] = useState<CarType[]>([]);
   const [estimate, setEstimate] = useState<FareEstimate | null>(null);
   const [loading, setLoading] = useState(false);
@@ -643,6 +645,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                     await triggerHaptic(ImpactStyle.Light); //  Haptic feedback (medJira.md #93)
                     setSelectedCarType(carType);
                   }}
+                  onShowDetails={(carType) => setDetailsCarType(carType)}
                   disabled={false}
                 />
               ))}
@@ -792,6 +795,16 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
           {loading ? 'Création en cours...' : 'Demander une course'}
         </button>
       </div>
+
+      {/* Bottom sheet description véhicule */}
+      {detailsCarType && (
+        <VehicleDetailsSheet
+          carType={detailsCarType}
+          selected={selectedCarType?.id === detailsCarType.id}
+          onClose={() => setDetailsCarType(null)}
+          onSelect={(carType) => setSelectedCarType(carType)}
+        />
+      )}
 
       {/* Modal de confirmation */}
       {showConfirmModal && estimate && selectedCarType && (

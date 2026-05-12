@@ -19,12 +19,6 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   experimental: {
     optimizePackageImports: [
-      'firebase/auth',
-      'firebase/firestore',
-      'firebase/storage',
-      'firebase/functions',
-      'firebase/database',
-      'firebase/messaging',
       'lucide-react',
       'radix-ui',
       'class-variance-authority',

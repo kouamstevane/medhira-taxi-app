@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { doc, getDoc, onSnapshot, serverTimestamp, Timestamp, type DocumentData } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { logger } from '@/utils/logger';
@@ -9,6 +9,8 @@ import { Booking, CarType, Location, PlaceSuggestion } from '@/types/booking';
 import { updateDestination, updatePassengerLocation, getCarTypes } from '@/services/taxi.service';
 import { AddressInput } from './AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import { getDirections } from '@/services/directions.service';
+import { useSmoothMarker } from '@/hooks/useSmoothMarker';
 import { ChatModal } from '@/components/ChatModal';
 import { InvoiceModal } from '@/components/InvoiceModal';
 import { useAuth } from '@/hooks/useAuth';
@@ -61,6 +63,27 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
 
   const { isLoaded } = useGoogleMaps();
 
+  // Position lissée du marker chauffeur (interpolation 60fps entre les ticks GPS).
+  // On garde la position brute (booking.driverLocation) pour les calculs Directions
+  // afin que le cache directions s'aligne sur des coords arrondies stables.
+  const smoothDriverLocation = useSmoothMarker(booking?.driverLocation ?? null);
+
+  // Center figé : on ne le remet à jour qu'au changement de statut ou tant qu'on
+  // n'a pas encore eu de point. Évite que la map saute à chaque tick GPS.
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
+  useEffect(() => {
+    if (!booking) return;
+    const candidate = booking.driverLocation || booking.pickupLocation || null;
+    if (!candidate) return;
+    setMapCenter((prev) => (prev ? prev : candidate));
+  }, [booking?.driverLocation, booking?.pickupLocation]);
+  useEffect(() => {
+    // Recentre une fois au changement de phase (chauffeur en route → arrivé → en course).
+    if (!booking) return;
+    const candidate = booking.driverLocation || booking.pickupLocation || null;
+    if (candidate) setMapCenter(candidate);
+  }, [booking?.status]);
+
   useEffect(() => {
     import('@react-google-maps/api').then(setMapsApi);
   }, []);
@@ -73,85 +96,132 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
     // Cleanup
   }, []);
 
-  // Calculer l'itinéraire
+  // Effet "polyline" : calcule l'itinéraire affiché sur la carte UNE fois par
+  // changement de statut / d'endpoints stables. Ne réagit pas aux ticks GPS du
+  // chauffeur pour éviter que la polyline saute en permanence.
   useEffect(() => {
     if (!isLoaded || !booking || !window.google) return;
 
-    // Si on a déjà un itinéraire et que le statut n'a pas changé, on ne recalcule pas
-    // sauf si on n'a pas encore de réponse (premier chargement)
-    if (directionsResponse && booking.status === 'accepted' && booking.driverLocation) {
-       // Pour la phase d'approche, on garde l'itinéraire initial pour éviter que la carte ne saute
-       // Le marqueur du chauffeur bougera sur la carte, c'est suffisant
-       return;
-    }
-
-    const directionsService = new window.google.maps.DirectionsService();
-
-    // Déterminer les points de départ et d'arrivée selon le statut
     let origin: google.maps.LatLngLiteral | undefined;
     let destination: google.maps.LatLngLiteral | undefined;
 
     if (booking.status === 'accepted' || booking.status === 'driver_arrived') {
-      // Chauffeur vers Client
       if (booking.driverLocation && booking.pickupLocation) {
         origin = booking.driverLocation;
         destination = booking.pickupLocation;
       }
     } else if (booking.status === 'in_progress') {
-      // Client vers Destination (ou Chauffeur vers Destination)
-      // En cours de route, on peut mettre à jour l'origine pour affiner le temps restant
-      // Mais on va limiter les mises à jour pour la stabilité
-      if (booking.driverLocation && booking.destinationLocation) { 
-         origin = booking.driverLocation;
-         destination = booking.destinationLocation;
+      if (booking.driverLocation && booking.destinationLocation) {
+        origin = booking.driverLocation;
+        destination = booking.destinationLocation;
       } else if (booking.pickupLocation && booking.destinationLocation) {
         origin = booking.pickupLocation;
         destination = booking.destinationLocation;
       }
     }
 
+    // Si on a déjà une polyline pour ce statut, on ne la recalcule pas — le
+    // marqueur chauffeur bouge déjà visuellement et l'effet "chiffres" ci-dessous
+    // se charge de rafraîchir distance/durée.
+    if (directionsResponse && origin && destination) return;
+
     if (origin && destination) {
-      directionsService.route(
-        {
-          origin,
-          destination,
-          travelMode: window.google.maps.TravelMode.DRIVING,
-        },
-        (result, status) => {
-          if (status === 'OK' && result) {
-            // On ne met à jour que si c'est nécessaire pour éviter les clignotements
-            setDirectionsResponse(result);
-            
-            // Extraire la distance et la durée en temps réel
-            const route = result.routes[0];
-            if (route && route.legs[0]) {
-              const leg = route.legs[0];
-              // Distance en km
-              const distanceKm = (leg.distance?.value || 0) / 1000;
-              // Durée en minutes
-              const durationMin = Math.ceil((leg.duration?.value || 0) / 60);
-              
-              setRealTimeDistance(distanceKm);
-              setRealTimeDuration(durationMin);
-            }
-          } else {
-            console.error(`Directions request failed due to ${status}`);
+      let cancelled = false;
+      getDirections({
+        origin,
+        destination,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      })
+        .then((result) => {
+          if (cancelled) return;
+          setDirectionsResponse(result);
+          const route = result.routes[0];
+          if (route && route.legs[0]) {
+            const leg = route.legs[0];
+            setRealTimeDistance((leg.distance?.value || 0) / 1000);
+            setRealTimeDuration(Math.ceil((leg.duration?.value || 0) / 60));
           }
-        }
-      );
+        })
+        .catch((err) => {
+          console.error('Directions request failed:', err);
+        });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [
-    isLoaded, 
-    booking?.status, 
-    // On retire driverLocation des dépendances directes pour éviter le recalcul à chaque tick GPS
-    // On ne le garde que pour l'initialisation ou le changement de statut
-    // booking?.driverLocation?.lat, 
-    // booking?.driverLocation?.lng,
+    isLoaded,
+    booking?.status,
     booking?.pickupLocation?.lat,
     booking?.pickupLocation?.lng,
     booking?.destinationLocation?.lat,
-    booking?.destinationLocation?.lng
+    booking?.destinationLocation?.lng,
+    // directionsResponse intentionnellement omis : on ne veut pas re-fire quand
+    // il devient non-null, le guard interne suffit.
   ]);
+
+  // Effet "chiffres temps réel" : recalcule distance/durée restante au fil des
+  // mouvements du chauffeur, sans remplacer la polyline (donc sans re-centrer
+  // la map via DirectionsRenderer). Throttle 12 s entre deux refreshs : on
+  // ignore les ticks qui arrivent dans la fenêtre, sans les debouncer.
+  const lastRefreshRef = useRef<number>(0);
+  const REFRESH_INTERVAL_MS = 12_000;
+  useEffect(() => {
+    if (!isLoaded || !booking || !window.google) return;
+    if (!booking.driverLocation) return;
+
+    let origin: google.maps.LatLngLiteral | undefined;
+    let destination: google.maps.LatLngLiteral | undefined;
+    if (booking.status === 'accepted' || booking.status === 'driver_arrived') {
+      if (booking.pickupLocation) {
+        origin = booking.driverLocation;
+        destination = booking.pickupLocation;
+      }
+    } else if (booking.status === 'in_progress' && booking.destinationLocation) {
+      origin = booking.driverLocation;
+      destination = booking.destinationLocation;
+    }
+    if (!origin || !destination) return;
+
+    const now = Date.now();
+    if (now - lastRefreshRef.current < REFRESH_INTERVAL_MS) return;
+    lastRefreshRef.current = now;
+
+    let cancelled = false;
+    getDirections({
+      origin,
+      destination,
+      travelMode: window.google.maps.TravelMode.DRIVING,
+    })
+      .then((result) => {
+        if (cancelled) return;
+        const leg = result.routes?.[0]?.legs?.[0];
+        if (!leg) return;
+        setRealTimeDistance((leg.distance?.value || 0) / 1000);
+        setRealTimeDuration(Math.ceil((leg.duration?.value || 0) / 60));
+      })
+      .catch((err) => {
+        console.error('Real-time distance refresh failed:', err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isLoaded,
+    booking?.status,
+    booking?.driverLocation?.lat,
+    booking?.driverLocation?.lng,
+    booking?.pickupLocation?.lat,
+    booking?.pickupLocation?.lng,
+    booking?.destinationLocation?.lat,
+    booking?.destinationLocation?.lng,
+  ]);
+
+  // Reset du throttle quand le statut change (nouvelle phase = refresh immédiat).
+  useEffect(() => {
+    lastRefreshRef.current = 0;
+  }, [booking?.status]);
 
 
   const handleCancelBooking = async () => {
@@ -352,7 +422,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
         {isLoaded && GoogleMap ? (
           <GoogleMap
             mapContainerStyle={{ width: '100%', height: '100%' }}
-            center={booking.driverLocation || booking.pickupLocation || defaultCenter}
+            center={mapCenter || booking.driverLocation || booking.pickupLocation || defaultCenter}
             zoom={15}
             onLoad={onLoad}
             onUnmount={onUnmount}
@@ -377,9 +447,9 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
             )}
 
             {/* Marqueur Chauffeur */}
-            {booking.driverLocation && (
+            {smoothDriverLocation && (
               <Marker
-                position={booking.driverLocation}
+                position={smoothDriverLocation}
                 icon={{
                   path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
                   scale: 6,

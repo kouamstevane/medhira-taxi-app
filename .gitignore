@@ -168,3 +168,6 @@ playwright-report/
 test-results/
 e2e/screenshots/
 opencode.json
+
+# Stripe — fichier de bascule des clés (contient sk_live/whsec)
+STRIPE_KEYS_SWAP.md

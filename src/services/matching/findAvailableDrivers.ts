@@ -19,6 +19,7 @@ import { Location, AvailableDriver, FindDriversConfig } from '@/types';
 import { logger } from '@/utils/logger';
 import { LIMITS } from '@/utils/constants';
 import { haversineKm } from '@/utils/distance';
+import { getDirections } from '@/services/directions.service';
 
 const calculateDistance = (loc1: Location, loc2: Location): number => haversineKm(loc1, loc2);
 
@@ -43,10 +44,9 @@ async function getRealTravelTime(
   }
 
   try {
-    const service = new window.google.maps.DirectionsService();
-    const result = await service.route({
-      origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-      destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+    const result = await getDirections({
+      origin: { lat: origin.lat, lng: origin.lng },
+      destination: { lat: destination.lat, lng: destination.lng },
       travelMode: window.google.maps.TravelMode.DRIVING,
     });
 

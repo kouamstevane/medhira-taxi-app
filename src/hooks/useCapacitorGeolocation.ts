@@ -3,6 +3,8 @@ import { Geolocation, Position } from '@capacitor/geolocation';
 import { Capacitor } from '@capacitor/core';
 import { secureStorage } from '@/services/secureStorage.service';
 import { withTimeout } from '@/utils/promise';
+import { haversineKm } from '@/utils/distance';
+import { GpsKalmanFilter, type SmoothingOptions } from '@/utils/gpsSmoothing';
 //  Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
 
 export interface Location {
@@ -26,9 +28,17 @@ export interface GeolocationState {
     accuracy: number | null; // Précision en mètres
 }
 
-// Précision minimale acceptable (en mètres) pour une localisation "ultra-précise"
-const MIN_ACCEPTABLE_ACCURACY = 50; // 50 mètres max
-const IDEAL_ACCURACY = 20; // Idéalement moins de 20 mètres
+// Seuils de précision en mètres.
+// Resserrés vs Google Maps app : un point taxi à >30m peut faire rater la prise en charge.
+const MIN_ACCEPTABLE_ACCURACY = 30;
+const IDEAL_ACCURACY = 15;
+// Burst : durée max d'affinage progressif via watchPosition (ms).
+const REFINE_BURST_DURATION_MS = 5000;
+// Burst : précision en dessous de laquelle on s'arrête immédiatement (ms).
+const REFINE_EARLY_STOP_ACCURACY = 10;
+// Filtre outlier : on rejette une lecture si elle "saute" de plus que la somme des
+// rayons d'incertitude des deux points (statistiquement improbable que les deux soient correctes).
+const OUTLIER_REJECTION_FACTOR = 1;
 
 //  Modes adaptatifs selon medJiraV2.md §6.1
 export type GeolocationMode = 'tracking' | 'booking' | 'battery_critical';
@@ -46,11 +56,13 @@ const MODE_CONFIGS: Record<GeolocationMode, GeolocationModeConfig> = {
         timeout: 15000,
         maximumAge: 0,
     },
-    // Mode booking (recherche) : Précision standard, timeout 10s, cache 30s
+    // Mode booking (réservation) : Haute précision, timeout 12s, AUCUN cache.
+    // Le pickup taxi exige une position fraîche — un cache de 30s peut placer
+    // l'utilisateur à plusieurs centaines de mètres s'il vient de se déplacer.
     booking: {
-        enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 30000,
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0,
     },
     // Mode batterie critique (<20%) : Basse précision, timeout 10s, distanceFilter 50m
     battery_critical: {
@@ -286,18 +298,187 @@ export const useCapacitorGeolocation = () => {
     }, []);
 
     /**
+     * Affinage progressif via watchPosition pendant ~5s : démarre un watch,
+     * collecte plusieurs lectures et conserve la plus précise. Le GPS converge
+     * en quelques secondes après un cold-start : la 1re lecture est souvent
+     * Wi-Fi (50-100m), les suivantes passent à GPS pur (5-15m).
+     *
+     * À utiliser au moment critique (confirmation pickup taxi) plutôt que
+     * getCurrentPosition qui prend la 1re lecture "acceptable".
+     */
+    const getPrecisePositionBurst = useCallback(async (
+        durationMs: number = REFINE_BURST_DURATION_MS,
+        signal?: AbortSignal
+    ): Promise<PreciseLocation> => {
+        setState(prev => ({ ...prev, loading: true, error: null }));
+
+        const permissionStatus = await withTimeout(
+            Geolocation.checkPermissions(),
+            5000,
+            'checkPermissions'
+        );
+        if (permissionStatus.location === 'denied' || permissionStatus.location === 'prompt') {
+            const request = await withTimeout(
+                Geolocation.requestPermissions(),
+                30000,
+                'requestPermissions'
+            );
+            if (request.location === 'denied') {
+                throw new Error('Permission de géolocalisation refusée');
+            }
+        }
+
+        let best: Position | null = null;
+        let watchId: string | null = null;
+
+        const finish = async (): Promise<PreciseLocation> => {
+            if (watchId) {
+                try { await Geolocation.clearWatch({ id: watchId }); } catch {}
+                watchId = null;
+            }
+            if (!best) {
+                throw new Error("Impossible d'obtenir une localisation précise.");
+            }
+            const precise: PreciseLocation = {
+                lat: best.coords.latitude,
+                lng: best.coords.longitude,
+                accuracy: best.coords.accuracy,
+                altitude: best.coords.altitude,
+                heading: best.coords.heading,
+                speed: best.coords.speed,
+                timestamp: best.timestamp,
+            };
+            await secureStorage.setLastKnownPosition({
+                lat: precise.lat,
+                lng: precise.lng,
+                accuracy: precise.accuracy,
+                timestamp: precise.timestamp,
+            });
+            setState({
+                location: { lat: precise.lat, lng: precise.lng },
+                preciseLocation: precise,
+                error: null,
+                loading: false,
+                accuracy: precise.accuracy,
+            });
+            console.log('[Geolocation] Burst FINAL:', {
+                lat: precise.lat.toFixed(6),
+                lng: precise.lng.toFixed(6),
+                accuracy: `${precise.accuracy.toFixed(1)}m`,
+            });
+            return precise;
+        };
+
+        return new Promise<PreciseLocation>((resolve, reject) => {
+            let stopTimer: ReturnType<typeof setTimeout> | null = null;
+            let resolved = false;
+
+            const settle = async (action: 'resolve' | 'reject', err?: Error) => {
+                if (resolved) return;
+                resolved = true;
+                if (stopTimer) clearTimeout(stopTimer);
+                try {
+                    if (action === 'reject') {
+                        if (watchId) {
+                            try { await Geolocation.clearWatch({ id: watchId }); } catch {}
+                        }
+                        setState(prev => ({ ...prev, loading: false, error: err?.message ?? 'Erreur' }));
+                        reject(err ?? new Error('Annulé'));
+                    } else {
+                        resolve(await finish());
+                    }
+                } catch (e) {
+                    reject(e instanceof Error ? e : new Error(String(e)));
+                }
+            };
+
+            if (signal) {
+                if (signal.aborted) {
+                    settle('reject', new Error('Annulé'));
+                    return;
+                }
+                signal.addEventListener('abort', () => settle('reject', new Error('Annulé')), { once: true });
+            }
+
+            Geolocation.watchPosition(
+                { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+                (position, err) => {
+                    if (resolved) return;
+                    if (err) {
+                        console.warn('[Geolocation] Burst watch err:', err);
+                        return;
+                    }
+                    if (!position) return;
+
+                    const acc = position.coords.accuracy;
+
+                    // Filtre outlier : on rejette une lecture qui saute hors du
+                    // rayon d'incertitude combiné de la meilleure lecture.
+                    if (best) {
+                        const distM = haversineKm(
+                            { lat: best.coords.latitude, lng: best.coords.longitude },
+                            { lat: position.coords.latitude, lng: position.coords.longitude }
+                        ) * 1000;
+                        const jumpThreshold = (best.coords.accuracy + acc) * OUTLIER_REJECTION_FACTOR;
+                        if (distM > jumpThreshold && acc > best.coords.accuracy) {
+                            console.warn(`[Geolocation] Burst outlier rejeté: saut ${distM.toFixed(0)}m, acc ${acc.toFixed(0)}m`);
+                            return;
+                        }
+                    }
+
+                    if (!best || acc < best.coords.accuracy) {
+                        best = position;
+                        console.log(`[Geolocation] Burst nouvelle meilleure: ${acc.toFixed(1)}m`);
+                    }
+
+                    if (acc <= REFINE_EARLY_STOP_ACCURACY) {
+                        settle('resolve');
+                    }
+                }
+            ).then((id) => {
+                if (resolved) {
+                    Geolocation.clearWatch({ id }).catch(() => {});
+                    return;
+                }
+                watchId = id;
+                stopTimer = setTimeout(() => settle('resolve'), durationMs);
+            }).catch((e) => settle('reject', e instanceof Error ? e : new Error(String(e))));
+        });
+    }, []);
+
+    /**
      * Watch position (pour le suivi en temps réel avec precision)
      *  Ajout throttling pour optimiser la batterie (medJira.md #67)
      */
     const watchPosition = useCallback((
         callback: (location: PreciseLocation) => void,
-        options?: { throttleMs?: number; maxFrequencyHz?: number }
+        options?: {
+            throttleMs?: number;
+            maxFrequencyHz?: number;
+            outlierFilter?: boolean;
+            /**
+             * Active le lissage Kalman + rejet d'outliers vitesse.
+             * Désactive automatiquement `outlierFilter` (le Kalman le couvre).
+             * Cf. docs/superpowers/specs/2026-05-12-gps-smoothing.md.
+             */
+            smoothing?: boolean;
+            smoothingOptions?: SmoothingOptions;
+        }
     ) => {
         //  Configuration du throttling (medJira.md #67)
-        const { throttleMs = 1000, maxFrequencyHz = 1 } = options || {};
+        const {
+            throttleMs = 1000,
+            outlierFilter: outlierFilterOpt = true,
+            smoothing = false,
+            smoothingOptions,
+        } = options || {};
+        // Le Kalman remplace le filtre d'outlier simple — on le désactive si smoothing.
+        const outlierFilter = smoothing ? false : outlierFilterOpt;
+        const kalman = smoothing ? new GpsKalmanFilter(smoothingOptions) : null;
         let watchId: string | null = null;
         let lastCallbackTime = 0;
         let cancelled = false;
+        let lastAccepted: PreciseLocation | null = null;
 
         const startWatch = async () => {
             try {
@@ -316,20 +497,70 @@ export const useCapacitorGeolocation = () => {
                         if (position) {
                             const now = Date.now();
                             const speed = position.coords.speed ?? 0;
-                            const effectiveInterval = speed > 1 ? throttleMs : 5000;
+                            // Throttle adaptatif batterie : si on n'a PAS de Kalman,
+                            // on espace en stationnaire (5 s). Avec Kalman activé,
+                            // on doit garder un flux régulier sinon le filtre n'a
+                            // pas assez de samples pour converger au repos.
+                            const effectiveInterval = kalman
+                                ? throttleMs
+                                : (speed > 1 ? throttleMs : 5000);
                             const timeSinceLastCallback = now - lastCallbackTime;
 
                             if (timeSinceLastCallback >= effectiveInterval) {
+                                // Filtre outlier : rejette une lecture qui saute hors du
+                                // rayon d'incertitude combiné de la dernière acceptée,
+                                // sauf si l'utilisateur bouge (speed > 1 m/s).
+                                if (outlierFilter && lastAccepted && speed <= 1) {
+                                    const distM = haversineKm(
+                                        { lat: lastAccepted.lat, lng: lastAccepted.lng },
+                                        { lat: position.coords.latitude, lng: position.coords.longitude }
+                                    ) * 1000;
+                                    const jumpThreshold = (lastAccepted.accuracy + position.coords.accuracy) * OUTLIER_REJECTION_FACTOR;
+                                    if (distM > jumpThreshold && position.coords.accuracy > lastAccepted.accuracy) {
+                                        console.warn(`[Geolocation] Watch outlier rejeté: ${distM.toFixed(0)}m`);
+                                        return;
+                                    }
+                                }
+
+                                let outLat = position.coords.latitude;
+                                let outLng = position.coords.longitude;
+                                let outAcc = position.coords.accuracy;
+
+                                // Lissage Kalman : si activé, remplace lat/lng/accuracy
+                                // par l'estimé filtré. Rejette les outliers vitesse.
+                                if (kalman) {
+                                    const smoothed = kalman.update({
+                                        lat: position.coords.latitude,
+                                        lng: position.coords.longitude,
+                                        accuracy: position.coords.accuracy,
+                                        timestamp: position.timestamp,
+                                        speed: position.coords.speed,
+                                        heading: position.coords.heading,
+                                        altitude: position.coords.altitude,
+                                    });
+                                    if (!smoothed) {
+                                        console.warn('[Geolocation] Smoothing: outlier vitesse rejeté');
+                                        return;
+                                    }
+                                    outLat = smoothed.lat;
+                                    outLng = smoothed.lng;
+                                    outAcc = smoothed.accuracy;
+                                    console.log(
+                                        `[Geolocation] Smoothed: ${outAcc.toFixed(1)}m (raw ${position.coords.accuracy.toFixed(1)}m)`
+                                    );
+                                }
+
                                 lastCallbackTime = now;
                                 const preciseLocation: PreciseLocation = {
-                                    lat: position.coords.latitude,
-                                    lng: position.coords.longitude,
-                                    accuracy: position.coords.accuracy,
+                                    lat: outLat,
+                                    lng: outLng,
+                                    accuracy: outAcc,
                                     altitude: position.coords.altitude,
                                     heading: position.coords.heading,
                                     speed: position.coords.speed,
                                     timestamp: position.timestamp,
                                 };
+                                lastAccepted = preciseLocation;
                                 callback(preciseLocation);
                             }
                         }
@@ -351,6 +582,7 @@ export const useCapacitorGeolocation = () => {
 
         return () => {
             cancelled = true;
+            if (kalman) kalman.reset();
             if (watchId) {
                 Geolocation.clearWatch({ id: watchId });
             }
@@ -380,6 +612,7 @@ export const useCapacitorGeolocation = () => {
     return {
         ...state,
         getCurrentPosition,
+        getPrecisePositionBurst,
         watchPosition,
         isAccuracyGoodEnough,
         getAccuracyQuality,

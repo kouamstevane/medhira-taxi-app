@@ -1,22 +1,36 @@
 /**
  * Composant VehicleOption
  *
- * Option de sélection de type de véhicule (éco/confort/premium)
+ * Option de sélection de type de véhicule (Eco / Confort / Confort+).
+ * Affiche une illustration de la voiture aux couleurs de la catégorie
+ * et un bouton d'info qui ouvre la description détaillée.
  */
 
 'use client';
 
+import { Info } from 'lucide-react';
 import { CarType } from '@/types';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { getVehicleMeta } from '@/app/taxi/data/vehicleCatalog';
+import { TaxiIcon } from './TaxiIcon';
 
 interface VehicleOptionProps {
   carType: CarType;
   selected: boolean;
   onSelect: (carType: CarType) => void;
+  onShowDetails?: (carType: CarType) => void;
   disabled?: boolean;
 }
 
-export const VehicleOption = ({ carType, selected, onSelect, disabled = false }: VehicleOptionProps) => {
+export const VehicleOption = ({
+  carType,
+  selected,
+  onSelect,
+  onShowDetails,
+  disabled = false,
+}: VehicleOptionProps) => {
+  const meta = getVehicleMeta(carType);
+
   return (
     <button
       type="button"
@@ -35,27 +49,61 @@ export const VehicleOption = ({ carType, selected, onSelect, disabled = false }:
         <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
       )}
 
-      <div className="relative flex items-center justify-between gap-2 sm:gap-4">
+      <div className="relative flex items-center gap-3 sm:gap-4">
+        {/* Illustration taxi */}
+        <div className="shrink-0 w-20 sm:w-24 -my-1">
+          <TaxiIcon color={meta.color} className="w-full h-auto" />
+        </div>
+
+        {/* Détails */}
         <div className="flex-1 min-w-0">
-          <h3 className={`font-semibold text-base sm:text-lg ${selected ? 'text-primary' : 'text-white'}`}>
-            {carType.name}
-          </h3>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <div className="flex items-center gap-2">
+            <h3 className={`font-semibold text-base sm:text-lg ${selected ? 'text-primary' : 'text-white'}`}>
+              {carType.name}
+            </h3>
+            {onShowDetails && !disabled && (
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={`Voir la description de ${carType.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShowDetails(carType);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onShowDetails(carType);
+                  }
+                }}
+                className="inline-flex items-center justify-center w-6 h-6 rounded-full text-slate-400 hover:text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
+              >
+                <Info className="w-4 h-4" />
+              </span>
+            )}
+          </div>
+          <p className="text-xs sm:text-sm text-slate-400 mt-0.5 line-clamp-1">
+            {meta.tagline}
+          </p>
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
             {carType.seats} places • {carType.time} d&apos;attente
           </p>
-          <div className="mt-2 flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm">
+          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] sm:text-xs">
             <span className="text-slate-500">
-              Base: <span className="font-medium text-slate-200">{carType.basePrice} {CURRENCY_CODE}</span>
+              Base <span className="font-medium text-slate-200">{carType.basePrice} {CURRENCY_CODE}</span>
             </span>
             <span className="text-slate-500">
-              Par km: <span className="font-medium text-slate-200">{carType.pricePerKm} {CURRENCY_CODE}</span>
+              /km <span className="font-medium text-slate-200">{carType.pricePerKm} {CURRENCY_CODE}</span>
             </span>
             <span className="text-slate-500">
-              Par min: <span className="font-medium text-slate-200">{carType.pricePerMinute} {CURRENCY_CODE}</span>
+              /min <span className="font-medium text-slate-200">{carType.pricePerMinute} {CURRENCY_CODE}</span>
             </span>
           </div>
         </div>
-        <div className={`ml-4 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
+
+        {/* Indicateur sélection */}
+        <div className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
           selected
             ? 'border-primary bg-primary'
             : 'border-white/20'
@@ -70,4 +118,3 @@ export const VehicleOption = ({ carType, selected, onSelect, disabled = false }:
     </button>
   );
 };
-
