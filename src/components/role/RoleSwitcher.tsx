@@ -105,14 +105,15 @@ export function RoleSwitcher() {
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
-        className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors min-h-[44px]"
+        className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-medium text-white hover:bg-primary/15 hover:border-primary/50 transition-colors min-h-[44px] shadow-sm shadow-primary/10"
         aria-expanded={open}
         aria-haspopup="listbox"
         data-testid="role-switcher-btn"
       >
-        <MaterialIcon name={meta.icon} size="sm" />
-        <span>{meta.label}</span>
-        <MaterialIcon name={open ? 'expand_less' : 'expand_more'} size="sm" />
+        <MaterialIcon name={meta.icon} size="sm" className="text-primary" />
+        <span className="text-slate-400 text-xs">Mode&nbsp;:</span>
+        <span className="font-semibold">{meta.label}</span>
+        <MaterialIcon name={open ? 'expand_less' : 'expand_more'} size="sm" className="text-primary" />
       </button>
 
       {open && (

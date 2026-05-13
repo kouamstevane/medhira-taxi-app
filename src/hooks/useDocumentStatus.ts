@@ -15,7 +15,7 @@ export interface DocumentStatusEntry {
   rejectionReason?: string
 }
 
-const DOC_LABELS: Record<string, string> = {
+export const DRIVER_DOC_LABELS: Record<string, string> = {
   photoProfile: 'Photo de profil',
   permitConduire: 'Permis de conduire',
   casierJudiciaire: 'Casier judiciaire',
@@ -40,13 +40,16 @@ export function useDocumentStatus(uid: string | null) {
       const data = snap.data()
       const rawDocs = (data?.documents ?? {}) as Record<string, DocumentEntry>
 
-      const entries: DocumentStatusEntry[] = Object.entries(rawDocs).map(([key, entry]) => ({
-        key,
-        label: DOC_LABELS[key] ?? key,
-        status: entry.status,
-        url: entry.url,
-        rejectionReason: entry.rejectionReason,
-      }))
+      const entries: DocumentStatusEntry[] = Object.keys(DRIVER_DOC_LABELS).map((key) => {
+        const entry = rawDocs[key]
+        return {
+          key,
+          label: DRIVER_DOC_LABELS[key],
+          status: entry?.status ?? 'not_submitted',
+          url: entry?.url ?? null,
+          rejectionReason: entry?.rejectionReason,
+        }
+      })
 
       setDocuments(entries)
 

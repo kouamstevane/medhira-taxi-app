@@ -291,6 +291,9 @@ input, textarea, select {
   animation: slideUp 0.3s ease-out;
 }
 
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* H2: Mobile touch targets minimum 44x44px (WCAG 2.5.5 / medJiraV2 §9.1) */
 button,
 [role="button"],

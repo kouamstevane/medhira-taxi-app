@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { doc, getDoc, query, collection, where, getDocs, limit } from 'firebase/firestore';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { db, auth } from '@/config/firebase';
 import { createLogger } from '@/utils/logger';
 
@@ -21,16 +22,10 @@ export function useAdminAuth(): boolean | null {
   useEffect(() => {
     let isMounted = true;
 
-    const checkAdmin = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        if (isMounted) {
-          setIsAdmin(false);
-          router.push('/login');
-        }
-        return;
-      }
-
+    // On attend l'hydratation de l'état d'auth Firebase (IndexedDB) avant de décider.
+    // Lire `auth.currentUser` de façon synchrone au montage provoque un faux
+    // redirect vers /login lorsque le SDK n'a pas encore restauré la session.
+    const checkAdmin = async (user: User) => {
       try {
         const adminDoc = await getDoc(doc(db, 'admins', user.uid));
         if (adminDoc.exists()) {
@@ -59,9 +54,20 @@ export function useAdminAuth(): boolean | null {
       }
     };
 
-    checkAdmin();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!isMounted) return;
+      if (!user) {
+        setIsAdmin(false);
+        router.push('/login');
+        return;
+      }
+      void checkAdmin(user);
+    });
 
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [router]);
 
   return isAdmin;

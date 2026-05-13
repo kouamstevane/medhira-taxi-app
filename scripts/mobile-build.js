@@ -12,8 +12,8 @@ const middlewareFile = path.join(__dirname, '../middleware.ts');
 const stagingDir = path.join(__dirname, '../.mobile-build-staging');
 let modifiedFiles = [];
 
-const MOBILE_EXCLUDED_PAGES = ['admin', 'test-matching'];
-const MOBILE_EXCLUDED_COMPONENTS = ['admin'];
+const MOBILE_EXCLUDED_PAGES = ['test-matching'];
+const MOBILE_EXCLUDED_COMPONENTS = [];
 
 function getAllRouteFiles(dir, fileList = []) {
     if (!fs.existsSync(dir)) return fileList;

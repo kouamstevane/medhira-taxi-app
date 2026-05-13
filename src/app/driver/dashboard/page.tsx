@@ -47,9 +47,8 @@ import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { DriverPendingBanner } from '@/components/driver/DriverPendingBanner';
 import { useAuth } from '@/hooks/useAuth';
-import { useEffectiveRoleStatus } from '@/hooks/useEffectiveRoleStatus';
-import { useActiveRideGuard } from '@/hooks/useActiveRideGuard';
-import { setActiveRole, getDashboardRouteFor } from '@/services/roles.service';
+import { RoleSwitcher } from '@/components/role/RoleSwitcher';
+import { useDocumentStatus } from '@/hooks/useDocumentStatus';
 
 async function fetchBookingsForRequests(
   requests: Array<{ rideId: string; candidate: RideCandidate }>
@@ -97,9 +96,9 @@ async function fetchBookingsForRequests(
 export default function DriverDashboard() {
   const { driver, setDriver, updateDriver } = useDriverStore();
   const { userData } = useAuth();
-  const roleStatuses = useEffectiveRoleStatus();
-  const { hasActiveRide } = useActiveRideGuard();
   useDriverAvailability();
+  const { documents: driverDocs } = useDocumentStatus(driver?.uid ?? null);
+  const approvedDocsCount = driverDocs.filter(d => d.status === 'approved').length;
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -612,53 +611,19 @@ export default function DriverDashboard() {
               <h1 className="text-base font-bold text-white truncate">Bonjour, {formatValue(driver.firstName)}</h1>
             </div>
           </div>
-          {userData?.roles?.client && userData?.roles?.driver && (
-            <div
-              role="tablist"
-              aria-label="Basculer entre l'espace client et chauffeur"
-              className="relative shrink-0 grid grid-cols-2 p-0.5 rounded-full border border-white/10 bg-white/[0.03]"
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              aria-label="Notifications"
+              className="size-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center relative transition-colors"
             >
-              <span
-                aria-hidden
-                className="absolute top-0.5 bottom-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-gradient-to-r from-primary to-[#ffae33] shadow-md shadow-primary/20 transition-transform duration-300 ease-out translate-x-full"
-              />
-              <button
-                type="button"
-                role="tab"
-                aria-label="Espace client"
-                aria-selected={false}
-                disabled={hasActiveRide}
-                aria-disabled={hasActiveRide}
-                title={hasActiveRide ? 'Course en cours — impossible de basculer' : undefined}
-                onClick={async () => {
-                  if (!userData || hasActiveRide) return;
-                  await setActiveRole(userData, 'client');
-                  router.replace(
-                    getDashboardRouteFor('client', {
-                      driverStatus: roleStatuses.driver?.status,
-                      restaurantStatus: roleStatuses.restaurant?.status,
-                      stripeConnectStatus: roleStatuses.restaurant?.stripeConnectStatus,
-                    }),
-                  );
-                }}
-                className={`relative z-10 flex items-center justify-center size-8 rounded-full text-slate-400 hover:text-white transition-colors ${hasActiveRide ? 'opacity-40 cursor-not-allowed' : ''}`}
-              >
-                <MaterialIcon name="person" size="sm" />
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-label="Espace chauffeur"
-                aria-selected={true}
-                className="relative z-10 flex items-center justify-center size-8 rounded-full text-background"
-              >
-                <MaterialIcon name="local_taxi" size="sm" />
-              </button>
-            </div>
-          )}
+              <MaterialIcon name="notifications" size="sm" className="text-slate-300" />
+              <span className="absolute top-2 right-2 size-2 rounded-full bg-red-500" />
+            </button>
+            <RoleSwitcher />
+          </div>
         </header>
 
-        {viewOnly && <DriverPendingBanner />}
+        {viewOnly && <DriverPendingBanner approvedDocs={approvedDocsCount} totalDocs={driverDocs.length} />}
 
         <div className="px-6">
           <StripeOnboardingBanner />
@@ -907,6 +872,33 @@ export default function DriverDashboard() {
             </GlassCard>
           </div>
         )}
+
+        {/* Actions rapides — 2x2 grid */}
+        <div className="px-6 mb-6">
+          <h2 className="text-base font-bold text-white mb-3">Accès rapide</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { icon: 'payments', label: 'Mes gains', route: '/driver/gains' },
+              { icon: 'history', label: 'Historique', route: '/driver/historique' },
+              { icon: 'description', label: 'Documents', route: '/driver/documents', badge: driverDocs.some(d => d.status === 'rejected' || d.status === 'not_submitted') },
+              { icon: 'person', label: 'Mon profil', route: '/driver/profile' },
+            ].map((item) => (
+              <button
+                key={item.route}
+                onClick={() => router.push(item.route)}
+                className="glass-card rounded-2xl p-4 flex flex-col items-start gap-3 hover:bg-white/[0.04] active:scale-[0.98] transition-all text-left relative"
+              >
+                <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+                  <MaterialIcon name={item.icon} className="text-primary text-[22px]" />
+                </div>
+                <span className="text-white font-bold text-sm">{item.label}</span>
+                {item.badge && (
+                  <span className="absolute top-3 right-3 size-2.5 rounded-full bg-red-500" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
 
       </div>
       </div>

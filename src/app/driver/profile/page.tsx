@@ -1,24 +1,56 @@
 "use client";
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { signOut, deleteUser } from 'firebase/auth';
+import { auth } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import { useDriverProfile } from '@/hooks/useDriverProfile';
+import { useDocumentStatus } from '@/hooks/useDocumentStatus';
+import type { DocStatus } from '@/hooks/useDocumentStatus';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 
-/**
- * Normalise les documents du format nested { url, status } vers un format
- * plat compatible avec l'affichage du profil. Gere les anciennes donnees
- * (string) et les nouvelles donnees (objet avec url/status).
- */
-function normalizeDocUrl(value: unknown): string {
-  if (!value) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "object" && value !== null && "url" in value) {
-    return ((value as Record<string, unknown>).url) as string || "";
-  }
-  return "";
+function initialsOf(firstName?: string, lastName?: string): string {
+  return [firstName?.[0], lastName?.[0]].filter(Boolean).join('').toUpperCase() || '?';
 }
 
+function docStatusPill(status: DocStatus): { text: string; classes: string } {
+  switch (status) {
+    case 'approved': return { text: 'APPROUVÉ', classes: 'bg-green-500/15 text-green-400 border-green-500/30' };
+    case 'pending': return { text: 'EN ATTENTE', classes: 'bg-amber-500/15 text-amber-400 border-amber-500/30' };
+    case 'rejected': return { text: 'REJETÉ', classes: 'bg-red-500/15 text-red-400 border-red-500/30' };
+    default: return { text: 'NON SOUMIS', classes: 'bg-white/5 text-slate-400 border-white/10' };
+  }
+}
+
+interface SectionTitleProps {
+  icon: string;
+  children: React.ReactNode;
+}
+function SectionTitle({ icon, children }: SectionTitleProps) {
+  return (
+    <div className="flex items-center gap-2 mb-3 px-1">
+      <MaterialIcon name={icon} className="text-primary text-[18px]" />
+      <h3 className="text-[11px] font-bold text-slate-400 tracking-[0.15em] uppercase">{children}</h3>
+    </div>
+  );
+}
+
+interface InfoRowProps {
+  label: string;
+  value?: string | null;
+  italic?: boolean;
+}
+function InfoRow({ label, value, italic }: InfoRowProps) {
+  const display = value && value.length > 0 ? value : 'Non spécifié';
+  const isEmpty = !value || value.length === 0;
+  return (
+    <div className="py-2">
+      <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-0.5">{label}</p>
+      <p className={`text-white text-[15px] ${isEmpty || italic ? 'italic text-slate-500' : ''}`}>{display}</p>
+    </div>
+  );
+}
 
 export default function DriverProfilePage() {
   const router = useRouter();
@@ -31,7 +63,6 @@ export default function DriverProfilePage() {
     setEditMode,
     formData,
     setFormData,
-    profileImage,
     setProfileImage,
     isEmailVerified,
     stripeData,
@@ -45,8 +76,48 @@ export default function DriverProfilePage() {
     handleCreateStripeAccount,
     handleToggleWeeklyPayout,
     handleManualPayout,
-    fetchStripeData,
   } = useDriverProfile();
+  const { documents } = useDocumentStatus(auth.currentUser?.uid ?? null);
+
+  const [signOutLoading, setSignOutLoading] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleSignOut() {
+    setSignOutLoading(true);
+    try {
+      await signOut(auth);
+      router.replace('/driver/login');
+    } finally {
+      setSignOutLoading(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteConfirm !== 'SUPPRIMER') return;
+    setDeleteError(null);
+    setDeleteLoading(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        router.replace('/driver/login');
+        return;
+      }
+      await deleteUser(user);
+      router.replace('/driver/login');
+    } catch (e: unknown) {
+      const code = (e as { code?: string })?.code;
+      if (code === 'auth/requires-recent-login') {
+        setDeleteError('Pour des raisons de sécurité, reconnectez-vous puis réessayez.');
+      } else {
+        setDeleteError('Impossible de supprimer le compte. Réessayez ou contactez le support.');
+      }
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -78,23 +149,29 @@ export default function DriverProfilePage() {
 
   if (!driver) return null;
 
-  return (
-    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
-      {/* Header */}
-      <div className="bg-background border-b border-white/5">
-        <div className="max-w-[430px] mx-auto flex items-center p-4">
-          <button
-            onClick={() => router.push('/driver/dashboard')}
-            className="mr-3 p-2 rounded-xl hover:bg-white/5 transition"
-          >
-            <MaterialIcon name="arrow_back" size="lg" className="text-white" />
-          </button>
-          <h1 className="text-xl font-bold text-white">Profil Chauffeur</h1>
-        </div>
-      </div>
+  const profileDocs = documents.filter(d => ['permitConduire', 'plaqueImmatriculation', 'permitCommercial'].includes(d.key));
 
-      <div className="max-w-[430px] mx-auto p-4 pb-28 space-y-4">
-        {/* Error */}
+  return (
+    <div className="min-h-screen bg-background text-slate-100 antialiased font-sans pb-28">
+      {/* Header */}
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md">
+        <div className="max-w-[430px] mx-auto px-4 py-4 flex items-center justify-between">
+          <button onClick={() => router.push('/driver/dashboard')} className="p-2 -ml-2 rounded-xl hover:bg-white/5 transition">
+            <MaterialIcon name="arrow_back" className="text-primary text-[24px]" />
+          </button>
+          <h1 className="text-lg font-bold text-primary">Profil</h1>
+          <button
+            onClick={() => { if (isEmailVerified) setEditMode(!editMode); }}
+            disabled={!isEmailVerified}
+            className="p-2 -mr-2 rounded-xl hover:bg-white/5 transition disabled:opacity-40"
+            aria-label={editMode ? 'Annuler' : 'Modifier'}
+          >
+            <MaterialIcon name={editMode ? 'close' : 'edit'} className="text-primary text-[22px]" />
+          </button>
+        </div>
+      </header>
+
+      <div className="max-w-[430px] mx-auto px-4 space-y-5">
         {error && (
           <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
             <MaterialIcon name="error" size="md" className="text-destructive mt-0.5" />
@@ -102,439 +179,387 @@ export default function DriverProfilePage() {
           </div>
         )}
 
-        {/* Profile Card */}
-        <div className="glass-card rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden">
-                <MaterialIcon name="person" className="text-slate-500 text-[32px]" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white">{driver.firstName} {driver.lastName}</h2>
-                <p className="text-slate-400 text-sm">{driver.email}</p>
-              </div>
+        {/* Profile hero card */}
+        <div className="glass-card rounded-2xl p-6 flex flex-col items-center text-center">
+          <div className="w-24 h-24 rounded-full border-2 border-primary p-1 mb-3">
+            <div className="w-full h-full rounded-full bg-white/5 flex items-center justify-center">
+              <span className="text-white font-bold text-2xl">{initialsOf(driver.firstName, driver.lastName)}</span>
             </div>
-
-            <button
-              onClick={() => {
-                if (!isEmailVerified) {
-                  setEditMode(false);
-                  return;
-                }
-                setEditMode(!editMode);
-              }}
-              disabled={!isEmailVerified}
-              className={`px-4 py-2 rounded-xl font-medium text-sm transition ${
-                !isEmailVerified
-                  ? 'bg-white/5 text-slate-500 cursor-not-allowed'
-                  : editMode
-                    ? 'glass-card border border-white/10 text-slate-300'
-                    : 'bg-gradient-to-r from-primary to-[#ffae33] text-white'
-              }`}
-              title={!isEmailVerified ? "Vérifiez votre email pour modifier votre profil" : undefined}
-            >
-              <span className="flex items-center gap-1">
-                <MaterialIcon name={editMode ? 'close' : 'edit'} size="sm" />
-                {editMode ? 'Annuler' : 'Modifier'}
-              </span>
-            </button>
           </div>
+          <h2 className="text-white font-bold text-xl">{driver.firstName} {driver.lastName}</h2>
+          <p className="text-slate-400 text-sm">{driver.email}</p>
+          <div className="flex items-center gap-2 mt-3">
+            {isEmailVerified && (
+              <span className="inline-flex items-center gap-1 bg-green-500/15 text-green-400 border border-green-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                <MaterialIcon name="verified" className="text-[12px]" />
+                VÉRIFIÉ
+              </span>
+            )}
+          </div>
+          {!editMode && (
+            <button
+              onClick={() => { if (isEmailVerified) setEditMode(true); }}
+              disabled={!isEmailVerified}
+              className="mt-4 px-6 h-10 rounded-full bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition disabled:opacity-40"
+            >
+              Modifier
+            </button>
+          )}
+        </div>
 
-          {/* Informations personnelles */}
-          <div className="mb-6">
-            <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-              <MaterialIcon name="person" size="md" className="text-primary" />
-              Informations personnelles
-            </h3>
+        {/* Availability toggle */}
+        <div className="glass-card rounded-2xl px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${driver.isAvailable ? 'bg-green-500' : 'bg-slate-500'}`} />
+            <span className="text-white text-sm font-medium">Disponible pour des courses</span>
+          </div>
+          <button
+            onClick={toggleAvailability}
+            className={`relative inline-flex items-center h-7 rounded-full w-12 transition-colors ${driver.isAvailable ? 'bg-primary' : 'bg-white/10'}`}
+            aria-pressed={driver.isAvailable}
+          >
+            <span className={`inline-block w-5 h-5 transform transition-transform bg-white rounded-full ${driver.isAvailable ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
 
+        {/* Informations personnelles */}
+        <div>
+          <SectionTitle icon="person">Informations personnelles</SectionTitle>
+          <div className="glass-card rounded-2xl px-5 py-3 divide-y divide-white/[0.04]">
             {editMode ? (
-              <div className="space-y-3">
+              <div className="space-y-3 py-2">
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Prénom</label>
+                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Prénom</label>
                   <input
                     type="text"
                     value={formData.firstName || ''}
-                    onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                    className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none transition-all"
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    className="glass-input w-full h-11 px-3 rounded-xl text-white focus:ring-1 focus:ring-primary outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Nom</label>
+                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Nom</label>
                   <input
                     type="text"
                     value={formData.lastName || ''}
-                    onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                    className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none transition-all"
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    className="glass-input w-full h-11 px-3 rounded-xl text-white focus:ring-1 focus:ring-primary outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Téléphone</label>
+                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Téléphone</label>
                   <input
                     type="tel"
                     value={formData.phone || ''}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none transition-all"
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="glass-input w-full h-11 px-3 rounded-xl text-white focus:ring-1 focus:ring-primary outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Photo de profil</label>
+                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Photo de profil</label>
                   <input
                     type="file"
                     onChange={(e) => setProfileImage(e.target.files?.[0] || null)}
-                    className="glass-input w-full h-12 px-4 rounded-xl text-white file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary/20 file:text-primary hover:file:bg-primary/30 transition-all"
+                    className="glass-input w-full h-11 px-3 rounded-xl text-white file:mr-3 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary/20 file:text-primary"
                     accept="image/*"
                   />
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between py-2 border-b border-white/5">
-                  <span className="text-slate-400 text-sm">Prénom</span>
-                  <span className="text-white text-sm">{driver.firstName}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-white/5">
-                  <span className="text-slate-400 text-sm">Nom</span>
-                  <span className="text-white text-sm">{driver.lastName}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-white/5">
-                  <span className="text-slate-400 text-sm">Téléphone</span>
-                  <span className="text-white text-sm">{driver.phone}</span>
-                </div>
-                <div className="flex items-center justify-between py-2 border-b border-white/5">
-                  <span className="text-slate-400 text-sm">Email</span>
-                  <span className="text-white text-sm">{driver.email}</span>
-                </div>
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-slate-400 text-sm">Numéro de permis</span>
-                  <span className="text-white text-sm">{driver.licenseNumber ?? 'Non spécifié'}</span>
-                </div>
-              </div>
+              <>
+                <InfoRow label="Prénom" value={driver.firstName} />
+                <InfoRow label="Nom" value={driver.lastName} />
+                <InfoRow label="Téléphone" value={driver.phone} />
+                <InfoRow label="Email" value={driver.email} />
+                <InfoRow label="Permis" value={driver.licenseNumber} />
+              </>
             )}
           </div>
+        </div>
 
-          {/* Informations véhicule */}
-          <div className="mb-6">
-            <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-              <MaterialIcon name="directions_car" size="md" className="text-primary" />
-              Informations véhicule
-            </h3>
-
+        {/* Véhicule */}
+        <div>
+          <SectionTitle icon="directions_car">Véhicule</SectionTitle>
+          <div className="glass-card rounded-2xl px-5 py-3 divide-y divide-white/[0.04]">
             {editMode ? (
-              <div className="space-y-3">
+              <div className="space-y-3 py-2">
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Modèle</label>
+                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Modèle</label>
                   <input
                     type="text"
                     value={formData.car?.model || ''}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      car: {
-                        model: e.target.value || undefined,
-                        plate: formData.car?.plate || undefined,
-                        color: formData.car?.color || undefined
-                      }
-                    })}
-                    className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none transition-all"
+                    onChange={(e) => setFormData({ ...formData, car: { ...formData.car, model: e.target.value || undefined } })}
+                    className="glass-input w-full h-11 px-3 rounded-xl text-white outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Plaque</label>
+                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Plaque</label>
                   <input
                     type="text"
                     value={formData.car?.plate || ''}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      car: {
-                        model: formData.car?.model || undefined,
-                        plate: e.target.value || undefined,
-                        color: formData.car?.color || undefined
-                      }
-                    })}
-                    className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none transition-all"
+                    onChange={(e) => setFormData({ ...formData, car: { ...formData.car, plate: e.target.value || undefined } })}
+                    className="glass-input w-full h-11 px-3 rounded-xl text-white outline-none"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-400 mb-1">Couleur</label>
+                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Couleur</label>
                   <input
                     type="text"
                     value={formData.car?.color || ''}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      car: {
-                        model: formData.car?.model || undefined,
-                        plate: formData.car?.plate || undefined,
-                        color: e.target.value || undefined
-                      }
-                    })}
-                    className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none transition-all"
+                    onChange={(e) => setFormData({ ...formData, car: { ...formData.car, color: e.target.value || undefined } })}
+                    className="glass-input w-full h-11 px-3 rounded-xl text-white outline-none"
                   />
                 </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                 <div className="flex items-center justify-between py-2 border-b border-white/5">
-                   <span className="text-slate-400 text-sm">Modèle</span>
-                   <span className="text-white text-sm">{driver.car?.model ?? 'Non spécifié'}</span>
-                 </div>
-                 <div className="flex items-center justify-between py-2 border-b border-white/5">
-                   <span className="text-slate-400 text-sm">Plaque</span>
-                   <span className="text-white text-sm">{driver.car?.plate ?? 'Non spécifié'}</span>
-                 </div>
-                 <div className="flex items-center justify-between py-2">
-                   <span className="text-slate-400 text-sm">Couleur</span>
-                   <span className="text-white text-sm">{driver.car?.color ?? 'Non spécifié'}</span>
-                 </div>
-               </div>
+              <>
+                <InfoRow label="Modèle" value={driver.car?.model} />
+                <InfoRow label="Plaque" value={driver.car?.plate} />
+                <InfoRow label="Couleur" value={driver.car?.color} />
+              </>
             )}
-
-            {/* Disponibilité toggle */}
-            <div className="mt-6 flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-              <div className="flex items-center gap-2">
-                <MaterialIcon
-                  name={driver.isAvailable ? 'toggle_on' : 'toggle_off'}
-                  size="md"
-                  className={driver.isAvailable ? 'text-green-400' : 'text-slate-500'}
-                />
-                <span className="text-slate-300 text-sm">Disponible pour des courses</span>
-              </div>
-              <button
-                onClick={toggleAvailability}
-                className={`relative inline-flex items-center h-7 rounded-full w-12 transition-colors ${
-                  driver.isAvailable ? 'bg-primary' : 'bg-white/10'
-                }`}
-              >
-                <span
-                  className={`inline-block w-5 h-5 transform transition-transform bg-white rounded-full ${
-                    driver.isAvailable ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-            </div>
           </div>
+        </div>
 
-          {/* Edit mode actions */}
-          {editMode && (
-            <div className="flex gap-3 mb-6">
-              <button
-                onClick={() => setEditMode(false)}
-                className="flex-1 h-12 glass-card border border-white/10 text-slate-300 rounded-2xl font-medium active:scale-[0.98] transition-transform"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleUpdateProfile}
-                disabled={loading}
-                className="flex-1 h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-50"
-              >
-                {loading ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Enregistrement...
-                  </span>
-                ) : 'Enregistrer'}
-              </button>
-            </div>
-          )}
+        {editMode && (
+          <div className="flex gap-3">
+            <button
+              onClick={() => setEditMode(false)}
+              className="flex-1 h-12 bg-white/5 text-slate-300 rounded-2xl font-medium active:scale-[0.98] transition-transform"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleUpdateProfile}
+              disabled={loading}
+              className="flex-1 h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-50"
+            >
+              {loading ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+        )}
 
-          {/* ================================================================
-              Section Paiements & Virements (Stripe Connect)
-              ================================================================ */}
-          <div className="mb-6">
-            <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-              <MaterialIcon name="account_balance" size="md" className="text-primary" />
-              Paiements & Virements
-            </h3>
-
+        {/* Paiements & Stripe */}
+        <div>
+          <SectionTitle icon="account_balance">Paiements & Stripe</SectionTitle>
+          <div className="glass-card rounded-2xl p-5 space-y-4">
             {stripeError && (
-              <div className="mb-3 p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
-                <MaterialIcon name="error" size="sm" className="text-destructive mt-0.5" />
+              <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
+                <MaterialIcon name="error" className="text-destructive text-[18px] mt-0.5" />
                 <span className="text-destructive text-sm">{stripeError}</span>
               </div>
             )}
-
             {payoutSuccess && (
-              <div className="mb-3 p-3 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-2">
-                <MaterialIcon name="check_circle" size="sm" className="text-green-400" />
+              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-xl flex items-center gap-2">
+                <MaterialIcon name="check_circle" className="text-green-400 text-[18px]" />
                 <span className="text-green-400 text-sm">{payoutSuccess}</span>
               </div>
             )}
 
             {stripeLoading ? (
-              <div className="flex items-center justify-center py-6">
-                <svg className="animate-spin h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
+              <div className="flex justify-center py-4">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
             ) : !stripeData || stripeData.status === 'not_created' ? (
-              /* Pas encore de compte Connect */
-              <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-3">
-                <p className="text-slate-300 text-sm">
-                  Connectez un compte bancaire pour recevoir vos gains directement sur votre compte.
-                </p>
+              <>
+                <div>
+                  <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Solde en attente</p>
+                  <p className="text-white text-3xl font-bold mt-1">0.00 <span className="text-base font-normal text-slate-400">CAD</span></p>
+                </div>
+                <p className="text-slate-400 text-sm">Connectez un compte bancaire pour recevoir vos gains.</p>
                 <button
                   onClick={handleCreateStripeAccount}
-                  disabled={stripeLoading}
-                  className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow"
                 >
-                  <MaterialIcon name="account_balance_wallet" size="md" />
-                  Configurer mon compte de paiement
+                  Configurer Stripe
                 </button>
-              </div>
-            ) : stripeData.status === 'pending' ? (
-              /* Compte créé, onboarding KYC en attente */
-              <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl space-y-3">
-                <div className="flex items-center gap-2">
-                  <MaterialIcon name="pending" size="md" className="text-yellow-400" />
-                  <p className="text-yellow-400 font-medium text-sm">Vérification en cours</p>
-                </div>
-                <p className="text-slate-400 text-sm">
-                  Votre dossier est en cours de vérification. Complétez votre profil Stripe pour activer les virements.
-                </p>
-                <button
-                  onClick={handleCreateStripeAccount}
-                  className="w-full h-10 glass-card border border-yellow-500/30 text-yellow-400 font-medium rounded-xl text-sm active:scale-[0.98] transition-transform"
-                >
-                  Compléter la vérification
-                </button>
-              </div>
-            ) : stripeData.status === 'restricted' ? (
-              /* Compte restreint */
-              <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <MaterialIcon name="warning" size="md" className="text-destructive" />
-                  <p className="text-destructive font-medium text-sm">Compte restreint</p>
-                </div>
-                <p className="text-slate-400 text-sm">
-                  Des informations supplémentaires sont requises. Contactez le support ou complétez votre profil Stripe.
-                </p>
-              </div>
+              </>
             ) : (
-              /* Compte actif */
-              <div className="space-y-4">
-                {/* Statut compte */}
-                <div className="flex items-center justify-between p-3 bg-green-500/5 rounded-xl border border-green-500/20">
-                  <div className="flex items-center gap-2">
-                    <MaterialIcon name="verified" size="md" className="text-green-400" />
-                    <span className="text-green-400 text-sm font-medium">Compte vérifié</span>
-                  </div>
-                  <span className="text-slate-500 text-xs">Stripe Connect</span>
-                </div>
-
-                {/* Solde en attente */}
-                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-                  <p className="text-slate-400 text-xs uppercase font-bold mb-1">Solde en attente</p>
-                  <p className="text-white text-2xl font-bold">
-                    {((stripeData.pendingBalance ?? 0) / 100).toFixed(2)}{' '}
-                    <span className="text-sm font-normal text-slate-400">
-                      {stripeData.currency?.toUpperCase() ?? 'CAD'}
-                    </span>
-                  </p>
-                  {stripeData.lastPayoutAt && (
-                    <p className="text-slate-500 text-xs mt-1">
-                      Dernier virement : {new Date(stripeData.lastPayoutAt).toLocaleDateString('fr-CA')}
+              <>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Solde en attente</p>
+                    <p className="text-white text-3xl font-bold mt-1">
+                      {((stripeData.pendingBalance ?? 0) / 100).toFixed(2)}{' '}
+                      <span className="text-base font-normal text-slate-400">{stripeData.currency?.toUpperCase() ?? 'CAD'}</span>
                     </p>
-                  )}
-                </div>
-
-                {/* Toggle virements hebdomadaires */}
-                <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="text-white text-sm font-medium">Virements automatiques</p>
-                      <p className="text-slate-500 text-xs mt-0.5">
-                        {stripeData.weeklyPayoutEnabled
-                          ? 'Reçois ta part chaque lundi (70% des courses)'
-                          : 'Accumule tes gains et vire quand tu veux'}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleToggleWeeklyPayout(!stripeData.weeklyPayoutEnabled)}
-                      disabled={payoutToggleLoading}
-                      className={`relative inline-flex items-center h-7 rounded-full w-12 transition-colors disabled:opacity-50 ${
-                        stripeData.weeklyPayoutEnabled ? 'bg-primary' : 'bg-white/10'
-                      }`}
-                    >
-                      <span className={`inline-block w-5 h-5 transform transition-transform bg-white rounded-full ${
-                        stripeData.weeklyPayoutEnabled ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
                   </div>
-                  <p className="text-slate-600 text-xs">
-                    {stripeData.weeklyPayoutEnabled
-                      ? 'Fonctionne comme Uber — virement automatique le lundi'
-                      : 'Mode manuel — utilisez le bouton ci-dessous pour virer'}
-                  </p>
+                  {stripeData.status === 'active' && (
+                    <span className="inline-flex items-center gap-1 bg-green-500/15 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                      <MaterialIcon name="verified" className="text-[11px]" />
+                      VÉRIFIÉ
+                    </span>
+                  )}
                 </div>
 
-                {/* Virement manuel */}
-                <button
-                  onClick={handleManualPayout}
-                  disabled={manualPayoutLoading || (stripeData.pendingBalance ?? 0) <= 0}
-                  className="w-full h-12 glass-card border border-primary/30 text-primary font-medium rounded-xl active:scale-[0.98] transition-transform disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
-                >
-                  {manualPayoutLoading ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Virement en cours…
-                    </>
-                  ) : (
-                    <>
-                      <MaterialIcon name="send" size="sm" />
-                      Virer maintenant ({((stripeData.pendingBalance ?? 0) / 100).toFixed(2)} {stripeData.currency?.toUpperCase()})
-                    </>
-                  )}
-                </button>
-              </div>
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0 pr-3">
+                    <p className="text-white text-sm font-medium">Versement automatique</p>
+                    <p className="text-slate-500 text-xs">
+                      {stripeData.weeklyPayoutEnabled ? 'Chaque lundi (70%)' : 'Manuel — vous décidez'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleWeeklyPayout(!stripeData.weeklyPayoutEnabled)}
+                    disabled={payoutToggleLoading}
+                    className={`relative inline-flex items-center h-7 rounded-full w-12 transition-colors disabled:opacity-50 ${stripeData.weeklyPayoutEnabled ? 'bg-primary' : 'bg-white/10'}`}
+                  >
+                    <span className={`inline-block w-5 h-5 transform transition-transform bg-white rounded-full ${stripeData.weeklyPayoutEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={handleManualPayout}
+                    disabled={manualPayoutLoading || (stripeData.pendingBalance ?? 0) <= 0}
+                    className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
+                  >
+                    {manualPayoutLoading ? 'Virement en cours…' : 'Virer maintenant'}
+                  </button>
+                  <button
+                    onClick={handleCreateStripeAccount}
+                    className="w-full h-12 bg-white/5 hover:bg-white/10 text-white font-medium rounded-2xl border border-white/10"
+                  >
+                    Configurer Stripe
+                  </button>
+                </div>
+              </>
             )}
           </div>
+        </div>
 
-          {/* Documents */}
-          <div>
-            <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-              <MaterialIcon name="description" size="md" className="text-primary" />
-              Documents
-            </h3>
-             <div className="space-y-3">
-               <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
-                 <div className="flex items-center gap-2">
-                   <MaterialIcon name="badge" size="md" className="text-slate-400" />
-                   <span className="text-slate-300 text-sm">Permis de conduire</span>
-                 </div>
-                 <a
-                   href={normalizeDocUrl(privateData?.documents?.licensePhoto)}
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   className={`text-sm font-medium ${normalizeDocUrl(privateData?.documents?.licensePhoto) ? 'text-primary hover:underline' : 'text-slate-500 pointer-events-none'}`}
-                 >
-                   {normalizeDocUrl(privateData?.documents?.licensePhoto) ? 'Voir' : 'Non disponible'}
-                 </a>
-               </div>
-               <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
-                 <div className="flex items-center gap-2">
-                   <MaterialIcon name="receipt_long" size="md" className="text-slate-400" />
-                   <span className="text-slate-300 text-sm">Carte grise</span>
-                 </div>
-                 <a
-                   href={normalizeDocUrl(privateData?.documents?.carRegistration)}
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   className={`text-sm font-medium ${normalizeDocUrl(privateData?.documents?.carRegistration) ? 'text-primary hover:underline' : 'text-slate-500 pointer-events-none'}`}
-                 >
-                   {normalizeDocUrl(privateData?.documents?.carRegistration) ? 'Voir' : 'Non disponible'}
-                 </a>
-               </div>
-             </div>
+        {/* Documents preview */}
+        <div>
+          <SectionTitle icon="description">Documents</SectionTitle>
+          <div className="glass-card rounded-2xl px-5 py-3 divide-y divide-white/[0.04]">
+            {profileDocs.length === 0 ? (
+              <p className="py-3 text-slate-500 text-sm italic">Aucun document — voir l&apos;onglet Documents</p>
+            ) : profileDocs.map(doc => {
+              const pill = docStatusPill(doc.status);
+              const icon = doc.key === 'permitConduire' ? 'badge'
+                : doc.key === 'plaqueImmatriculation' ? 'directions_car'
+                : 'shield';
+              return (
+                <button
+                  key={doc.key}
+                  onClick={() => router.push(`/driver/documents/${doc.key}`)}
+                  className="w-full flex items-center justify-between py-3 text-left hover:bg-white/[0.02] transition rounded-lg -mx-1 px-1"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <MaterialIcon name={icon} className="text-slate-400 text-[20px] flex-shrink-0" />
+                    <span className="text-white text-sm truncate">{doc.label}</span>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${pill.classes} flex-shrink-0`}>
+                    {pill.text}
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              onClick={() => router.push('/driver/documents')}
+              className="w-full py-3 text-primary text-sm font-medium hover:underline"
+            >
+              Voir tous les documents
+            </button>
           </div>
         </div>
+
+        {/* Compte & sécurité */}
+        <div>
+          <SectionTitle icon="shield">Compte & sécurité</SectionTitle>
+          <div className="glass-card rounded-2xl divide-y divide-white/[0.04]">
+            <button
+              onClick={() => router.push('/driver/reset-password')}
+              className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition rounded-t-2xl"
+            >
+              <div className="flex items-center gap-3">
+                <MaterialIcon name="lock" className="text-slate-400 text-[20px]" />
+                <span className="text-white text-sm">Changer mon mot de passe</span>
+              </div>
+              <MaterialIcon name="chevron_right" className="text-slate-500 text-[20px]" />
+            </button>
+            <button
+              onClick={handleSignOut}
+              disabled={signOutLoading}
+              className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition disabled:opacity-50"
+            >
+              <div className="flex items-center gap-3">
+                <MaterialIcon name="logout" className="text-orange-400 text-[20px]" />
+                <span className="text-orange-400 text-sm font-medium">
+                  {signOutLoading ? 'Déconnexion…' : 'Se déconnecter'}
+                </span>
+              </div>
+              <MaterialIcon name="chevron_right" className="text-slate-500 text-[20px]" />
+            </button>
+            <button
+              onClick={() => setDeleteModalOpen(true)}
+              className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition rounded-b-2xl"
+            >
+              <div className="flex items-center gap-3">
+                <MaterialIcon name="delete_forever" className="text-red-400 text-[20px]" />
+                <span className="text-red-400 text-sm font-medium">Supprimer mon compte</span>
+              </div>
+              <MaterialIcon name="chevron_right" className="text-slate-500 text-[20px]" />
+            </button>
+          </div>
+        </div>
+
+        <p className="text-center text-slate-600 text-[11px] tracking-wider pt-2">VERSION 1.0.0 — MEDJIRA</p>
       </div>
+
       <BottomNav items={driverNavItems} />
+
+      {/* Delete confirmation modal */}
+      {deleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="glass-card rounded-3xl p-6 max-w-md w-full animate-slide-up">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+                <MaterialIcon name="warning" className="text-red-400 text-[24px]" />
+              </div>
+              <div>
+                <h3 className="text-white font-bold text-lg">Supprimer votre compte ?</h3>
+                <p className="text-slate-400 text-sm mt-1">
+                  Cette action est <span className="text-red-400 font-medium">irréversible</span>. Toutes vos données chauffeur seront supprimées.
+                </p>
+              </div>
+            </div>
+
+            <label className="block text-xs text-slate-400 mb-2">
+              Pour confirmer, tapez <span className="text-red-400 font-mono font-bold">SUPPRIMER</span>
+            </label>
+            <input
+              type="text"
+              value={deleteConfirm}
+              onChange={(e) => setDeleteConfirm(e.target.value)}
+              placeholder="SUPPRIMER"
+              autoFocus
+              className="glass-input w-full h-12 px-4 rounded-xl text-white placeholder:text-slate-600 font-mono uppercase tracking-wider mb-3 outline-none focus:ring-1 focus:ring-red-400"
+            />
+
+            {deleteError && (
+              <p className="text-red-400 text-xs mb-3">{deleteError}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setDeleteModalOpen(false); setDeleteConfirm(''); setDeleteError(null); }}
+                disabled={deleteLoading}
+                className="flex-1 h-12 bg-white/5 text-slate-300 rounded-2xl font-medium disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirm !== 'SUPPRIMER' || deleteLoading}
+                className="flex-1 h-12 bg-red-500 hover:bg-red-600 disabled:bg-red-500/30 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition"
+              >
+                {deleteLoading ? 'Suppression…' : 'Supprimer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
