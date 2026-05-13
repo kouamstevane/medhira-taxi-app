@@ -63,8 +63,8 @@ function DriverVerifyContent() {
       }
       const createLinkFn = httpsCallable<{ returnUrl: string; refreshUrl: string }, { url: string }>(functions, 'createConnectOnboardLink');
       const result = await createLinkFn({
-        returnUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=success`,
-        refreshUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/driver/verify?onboarding=refresh`,
+        returnUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/stripe-return/?role=driver&status=success`,
+        refreshUrl: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/stripe-return/?role=driver&status=refresh`,
       });
 
       const { url } = result.data;

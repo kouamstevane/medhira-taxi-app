@@ -195,8 +195,8 @@ export function useDriverProfile() {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
       const createLinkFn = httpsCallable<{ returnUrl: string; refreshUrl: string }, { url: string }>(functions, 'createConnectOnboardLink');
       const linkResult = await createLinkFn({
-        returnUrl: `${baseUrl}/driver/payments/setup?onboarding=success`,
-        refreshUrl: `${baseUrl}/driver/payments/setup?onboarding=refresh`,
+        returnUrl: `${baseUrl}/stripe-return/?role=driver&status=success`,
+        refreshUrl: `${baseUrl}/stripe-return/?role=driver&status=refresh`,
       });
       const linkData = linkResult.data;
       if (linkData.url) {

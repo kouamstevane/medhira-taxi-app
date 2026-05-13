@@ -77,28 +77,35 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="medjira.com" android:pathPrefix="/booking" />
+                <data android:scheme="https" android:host="medjira-service.web.app" android:pathPrefix="/booking" />
             </intent-filter>
 
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="medjira.com" android:pathPrefix="/driver/verify" />
+                <data android:scheme="https" android:host="medjira-service.web.app" android:pathPrefix="/driver/verify" />
             </intent-filter>
 
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="medjira.com" android:pathPrefix="/driver/profile" />
+                <data android:scheme="https" android:host="medjira-service.web.app" android:pathPrefix="/driver/profile" />
             </intent-filter>
 
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="medjira.com" android:pathPrefix="/driver/login" />
+                <data android:scheme="https" android:host="medjira-service.web.app" android:pathPrefix="/driver/login" />
+            </intent-filter>
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="medjira-service.web.app" android:pathPrefix="/stripe-return" />
             </intent-filter>
         </activity>
 

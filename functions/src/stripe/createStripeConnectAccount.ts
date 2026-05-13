@@ -58,8 +58,8 @@ export async function handleCreateStripeConnectAccount(request: CallableRequest<
 
   const link = await stripe.accountLinks.create({
     account: accountId!,
-    refresh_url: `${baseUrl}/restaurant/onboarding/payments?refresh=1`,
-    return_url: `${baseUrl}/restaurant/dashboard?stripe=return`,
+    refresh_url: `${baseUrl}/stripe-return/?role=restaurant&status=refresh`,
+    return_url: `${baseUrl}/stripe-return/?role=restaurant&status=success`,
     type: linkType,
   });
 

@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.medjiraservice.medjiraserviceapp2",
+      "sha256_cert_fingerprints": [
+        "PLACEHOLDER_SHA256_FINGERPRINT"
+      ]
+    }
+  }
+]</content>
+<parameter name="filePath">C:\Users\User\Documents\AlloTraining\medjira-taxi-app\medjira-privacy\.well-known\assetlinks.json
