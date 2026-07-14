@@ -14,7 +14,10 @@ export async function seedAuthUser(input: SeedAuthUserInput): Promise<void> {
   const url = `http://${AUTH_HOST}/identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts?key=fake-api-key`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer owner',
+    },
     body: JSON.stringify({
       localId: input.uid,
       email: input.email,
@@ -31,7 +34,12 @@ export async function seedAuthUser(input: SeedAuthUserInput): Promise<void> {
 
 export async function clearAuthEmulator(): Promise<void> {
   const url = `http://${AUTH_HOST}/emulator/v1/projects/${PROJECT_ID}/accounts`;
-  const res = await fetch(url, { method: 'DELETE' });
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': 'Bearer owner',
+    },
+  });
   if (!res.ok)
     throw new Error(`clearAuthEmulator failed: ${res.status}`);
 }

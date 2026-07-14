@@ -33,6 +33,13 @@ export async function seedClientOnly(): Promise<SeededUser> {
     createdAt: new Date('2026-01-01').toISOString(),
     updatedAt: new Date('2026-01-01').toISOString(),
   });
+  await seedDoc(`wallets/${uid}`, {
+    uid,
+    balance: 1000,
+    currency: 'CAD',
+    createdAt: new Date('2026-01-01').toISOString(),
+    updatedAt: new Date('2026-01-01').toISOString(),
+  });
   return { uid, email, password: 'password123' };
 }
 
@@ -175,4 +182,61 @@ function defaultOpeningHours() {
       { open: '09:00', close: '22:00', closed: d === 'sunday' },
     ]),
   );
+}
+
+export async function seedDriverApprovedOnline(): Promise<SeededUser> {
+  const uid = 'seed-driver-approved';
+  const email = 'driver-approved@e2e.test';
+  await seedAuthUser({
+    uid,
+    email,
+    password: 'password123',
+    emailVerified: true,
+  });
+  await seedDoc(`users/${uid}`, {
+    uid,
+    email,
+    emailVerified: true,
+    roles: {
+      client: {
+        enabled: true,
+        joinedAt: new Date('2026-01-01').toISOString(),
+      },
+      driver: {
+        enabled: true,
+        joinedAt: new Date('2026-02-15').toISOString(),
+      },
+    },
+    activeRole: 'driver',
+    lastActiveRole: 'driver',
+    firstName: 'Driver',
+    lastName: 'Approved',
+    createdAt: new Date('2026-01-01').toISOString(),
+    updatedAt: new Date('2026-01-01').toISOString(),
+  });
+  await seedDoc(`drivers/${uid}`, {
+    uid,
+    status: 'approved',
+    isAvailable: true,
+    stripeAccountStatus: 'active',
+    stripePayoutsEnabled: true,
+    firstName: 'Driver',
+    lastName: 'Approved',
+    phone: '+14165551111',
+    currentLocation: {
+      lat: 43.6532,
+      lng: -79.3832,
+    },
+    car: {
+      type: 'Eco',
+      model: 'Toyota Prius',
+      plate: 'E2E-TAXI-001',
+      color: 'white',
+    },
+    rating: 4.9,
+    tripsAccepted: 10,
+    tripsDeclined: 1,
+    updatedAt: new Date().toISOString(),
+  });
+  return { uid, email, password: 'password123' };
 }

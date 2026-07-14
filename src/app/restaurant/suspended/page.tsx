@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -11,6 +11,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 export default function RestaurantSuspendedPage() {
   const router = useRouter();
   const { currentUser, userData, loading } = useAuth();
+  const restaurantId = userData?.roles?.restaurant?.restaurantId;
 
   useEffect(() => {
     if (loading) return;
@@ -18,6 +19,21 @@ export default function RestaurantSuspendedPage() {
       router.replace('/login');
     }
   }, [currentUser, userData, loading, router]);
+
+  useEffect(() => {
+    if (loading || !restaurantId) return;
+    const unsub = onSnapshot(doc(db, 'restaurants', restaurantId), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.status === 'approved') {
+          router.replace('/restaurant/dashboard');
+        } else if (data.status === 'pending_approval' || data.status === 'rejected') {
+          router.replace(`/restaurant/pending?id=${restaurantId}`);
+        }
+      }
+    });
+    return () => unsub();
+  }, [restaurantId, loading, router]);
 
   const handleBackToClient = useCallback(async () => {
     if (currentUser) {

@@ -74,6 +74,7 @@ export const submitRestaurantApplication = onCall(
         const restaurantDoc: Record<string, unknown> = {
           ...restaurantData,
           ownerId: uid,
+          ownerEmail: userData.email || null,
           status: 'pending_approval',
           rating: 2.5,
           totalReviews: 0,

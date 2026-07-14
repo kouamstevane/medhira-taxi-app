@@ -14,8 +14,9 @@ type RestaurantStatus = 'pending_approval' | 'approved' | 'rejected' | 'suspende
 function RestaurantPendingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const restaurantId = searchParams.get('id');
+  const idFromParams = searchParams.get('id');
   const { currentUser, userData, loading: authLoading } = useAuth();
+  const restaurantId = idFromParams || userData?.roles?.restaurant?.restaurantId;
   const [status, setStatus] = useState<RestaurantStatus | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,7 +30,11 @@ function RestaurantPendingContent() {
   }, [currentUser, userData, authLoading, router]);
 
   useEffect(() => {
-    if (!restaurantId) return;
+    if (authLoading) return;
+    if (!restaurantId) {
+      setLoading(false);
+      return;
+    }
     const unsub = onSnapshot(doc(db, 'restaurants', restaurantId), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -43,11 +48,13 @@ function RestaurantPendingContent() {
         if (data.status === 'suspended') {
           router.replace('/restaurant/suspended');
         }
+      } else {
+        setLoading(false);
       }
       setLoading(false);
     });
     return () => unsub();
-  }, [restaurantId, router]);
+  }, [restaurantId, authLoading, router]);
 
   const handleBackToClient = useCallback(async () => {
     if (currentUser) {
