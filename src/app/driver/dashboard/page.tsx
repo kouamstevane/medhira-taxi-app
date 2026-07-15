@@ -49,6 +49,12 @@ import { DriverPendingBanner } from '@/components/driver/DriverPendingBanner';
 import { useAuth } from '@/hooks/useAuth';
 import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { useDocumentStatus } from '@/hooks/useDocumentStatus';
+import { useNotifications } from '@/hooks/useNotifications';
+import {
+  getDriverAvailabilityCardState,
+  getDriverDashboardNotificationState,
+  getDriverDashboardQuickActions,
+} from './dashboard-ui';
 
 async function fetchBookingsForRequests(
   requests: Array<{ rideId: string; candidate: RideCandidate }>
@@ -96,6 +102,7 @@ async function fetchBookingsForRequests(
 export default function DriverDashboard() {
   const { driver, setDriver, updateDriver } = useDriverStore();
   const { userData } = useAuth();
+  const { unreadCount } = useNotifications();
   useDriverAvailability();
   const { documents: driverDocs } = useDocumentStatus(driver?.uid ?? null);
   const approvedDocsCount = driverDocs.filter(d => d.status === 'approved').length;
@@ -107,6 +114,7 @@ export default function DriverDashboard() {
   const [rideRequests, setRideRequests] = useState<RideRequest[]>([]);
   const [dailyHistory, setDailyHistory] = useState<Trip[]>([]);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [availabilityUpdating, setAvailabilityUpdating] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showError, toasts, removeToast } = useToast();
@@ -216,6 +224,7 @@ export default function DriverDashboard() {
           lastName: driverData.lastName || '',
           email: driverData.email || '',
           phone: driverData.phone || '',
+          currentLocation: driverData.currentLocation || null,
           car: driverData.car || {
             model: 'Modèle non spécifié',
             plate: 'Non spécifié',
@@ -225,7 +234,9 @@ export default function DriverDashboard() {
           isAvailable: Boolean(driverData.isAvailable),
           rating: Number(driverData.rating) || 0,
           tripsCompleted: Number(driverData.tripsCompleted) || 0,
-          earnings: Number(driverData.earnings) || 0
+          earnings: Number(driverData.earnings) || 0,
+          stripeAccountStatus: driverData.stripeAccountStatus || 'not_created',
+          stripePayoutsEnabled: Boolean(driverData.stripePayoutsEnabled)
         };
         setDriver(safeDriverData);
 
@@ -293,6 +304,8 @@ export default function DriverDashboard() {
               console.error('[DRIVER] Erreur mise à jour disponibilité:', err);
             }
           }
+        }, (error) => {
+          console.error('[DRIVER] Error listening to current trip:', error);
         });
         listenersRef.current.currentTrip = unsubscribeCurrentTrip;
 
@@ -320,6 +333,8 @@ export default function DriverDashboard() {
             });
           });
           setAvailableTrips(trips);
+        }, (error) => {
+          console.error('[DRIVER] Error listening to pending bookings:', error);
         });
         listenersRef.current.pendingTrips = unsubscribe;
 
@@ -385,7 +400,7 @@ export default function DriverDashboard() {
   };
 
   const toggleAvailability = async () => {
-    if (!auth.currentUser || !driver) return;
+    if (!auth.currentUser || !driver || availabilityUpdating) return;
     // Gating Stripe : interdire la mise en ligne tant que les virements ne sont
     // pas activés — sinon le chauffeur prendrait des courses sans pouvoir être payé.
     const goingOnline = !driver.isAvailable;
@@ -398,13 +413,18 @@ export default function DriverDashboard() {
         return;
       }
     }
+    const nextAvailability = !driver.isAvailable;
     try {
+      setAvailabilityUpdating(true);
+      updateDriver({ isAvailable: nextAvailability });
       await updateDoc(doc(db, 'drivers', auth.currentUser.uid), {
-        isAvailable: !driver.isAvailable
+        isAvailable: nextAvailability
       });
-      updateDriver({ isAvailable: !driver.isAvailable });
     } catch {
-      setError("Erreur de changement de disponibilité");
+      updateDriver({ isAvailable: driver.isAvailable });
+      showError("Impossible de changer votre disponibilité. Réessayez dans un instant.");
+    } finally {
+      setAvailabilityUpdating(false);
     }
   };
 
@@ -595,82 +615,90 @@ export default function DriverDashboard() {
   const driverType = driver?.driverType ?? 'chauffeur'
   const activeMode = driver?.activeMode ?? 'taxi'
   const viewOnly = driver?.status === 'pending'
+  const notificationState = getDriverDashboardNotificationState(unreadCount);
+  const quickActions = getDriverDashboardQuickActions(
+    driverDocs.some(d => d.status === 'rejected' || d.status === 'not_submitted')
+  );
+  const driverLocation = driver.currentLocation;
+  const hasValidCurrentLocation = !!(
+    driverLocation &&
+    (typeof driverLocation.lat === 'number' || typeof driverLocation.latitude === 'number') &&
+    (typeof driverLocation.lng === 'number' || typeof driverLocation.longitude === 'number')
+  );
+  const availabilityState = getDriverAvailabilityCardState({
+    isAvailable: driver.isAvailable,
+    isUpdating: availabilityUpdating,
+    isApproved: driver.status === 'approved',
+    hasLocation: hasValidCurrentLocation,
+  });
 
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
       <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-28">
-        <header className="p-6 flex items-center justify-between gap-3 sticky top-0 bg-background/80 backdrop-blur-xl z-50">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="size-11 shrink-0 rounded-full border-2 border-primary/30 bg-gradient-to-r from-primary to-[#ffae33] flex items-center justify-center">
-              <span className="text-white font-bold text-sm">{getInitials(driver.firstName, driver.lastName)}</span>
-            </div>
-            <div className="min-w-0">
-              <p className="text-slate-400 text-[10px] font-medium uppercase tracking-wider">Bienvenue</p>
-              <h1 className="text-base font-bold text-white truncate">Bonjour, {formatValue(driver.firstName)}</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
+        <header className="px-4 py-3 flex items-center justify-between gap-2.5 sticky top-0 bg-background/80 backdrop-blur-xl z-50 border-b border-white/5">
+          <div className="flex items-center gap-2 min-w-0">
             <button
-              aria-label="Notifications"
-              className="size-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center relative transition-colors"
+              onClick={() => router.push('/driver/profile')}
+              aria-label="Profil"
+              className="size-10 shrink-0 rounded-full border border-primary/30 bg-gradient-to-r from-primary to-[#ffae33] flex items-center justify-center shadow-sm hover:opacity-85 transition-opacity"
+            >
+              <span className="text-white font-bold text-sm">{getInitials(driver.firstName, driver.lastName)}</span>
+            </button>
+          </div>
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              onClick={() => router.push('/notifications')}
+              aria-label={notificationState.ariaLabel}
+              className="size-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center relative transition-colors border border-white/5"
             >
               <MaterialIcon name="notifications" size="sm" className="text-slate-300" />
-              <span className="absolute top-2 right-2 size-2 rounded-full bg-red-500" />
+              {notificationState.showUnreadDot && (
+                <span className="absolute top-2.5 right-2.5 size-2 rounded-full bg-red-500 animate-pulse" />
+              )}
             </button>
             <RoleSwitcher />
           </div>
         </header>
 
-        {viewOnly && <DriverPendingBanner approvedDocs={approvedDocsCount} totalDocs={driverDocs.length} />}
-
-        <div className="px-6">
-          <StripeOnboardingBanner />
+        {/* Greeting Section */}
+        <div className="px-6 pt-5 pb-2">
+          <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Espace Chauffeur</span>
+          <h1 className="text-xl font-bold text-white mt-1 leading-tight">
+            Bonjour, {formatValue(driver.firstName)} !
+          </h1>
         </div>
 
-        {infoMessage && (
-          <div className="mx-6 mb-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-            <div className="flex items-start gap-3">
-              <MaterialIcon name="info" size="md" className="text-blue-400 mt-0.5" />
-              <p className="text-sm text-blue-300 flex-1">{infoMessage}</p>
-            </div>
-          </div>
-        )}
+
 
         <div className="px-6 mb-6">
-          <GlassCard variant="elevated" className="p-5 relative overflow-hidden">
-            <div className={`absolute top-0 right-0 w-40 h-40 rounded-full -mr-20 -mt-20 blur-3xl transition-colors ${driver.isAvailable ? 'bg-green-500/10' : 'bg-primary/10'}`} />
-            <button
-              onClick={handleLogout}
-              aria-label="Se déconnecter"
-              className="absolute top-3 right-3 size-9 rounded-full flex items-center justify-center text-slate-400 hover:text-destructive hover:bg-destructive/10 transition-colors z-10"
-            >
-              <MaterialIcon name="logout" size="sm" />
-            </button>
-            <div className="flex items-center gap-3 mb-4">
-              <span className={`size-3 rounded-full ${driver.isAvailable ? 'bg-green-500 animate-pulse-green' : 'bg-slate-500'}`} />
-              <p className="text-white font-medium">
-                {driver.isAvailable ? 'Disponible — En attente' : 'Hors ligne'}
-              </p>
-            </div>
-            <p className="text-slate-400 text-sm mb-5 leading-relaxed pr-8">
-              {driver.isAvailable
-                ? 'Votre position est visible par les clients. Restez à proximité des zones animées.'
-                : 'Activez votre statut pour recevoir des demandes de course.'}
-            </p>
+          <GlassCard variant="elevated" className="px-4 py-3 relative overflow-hidden">
+            <div className={`absolute top-0 right-0 w-28 h-28 rounded-full -mr-16 -mt-16 blur-3xl transition-colors ${driver.isAvailable ? 'bg-green-500/10' : 'bg-primary/10'}`} />
+            <div className="relative flex items-center gap-3">
+              <span className={`size-2.5 rounded-full shrink-0 ${driver.isAvailable ? 'bg-green-500 animate-pulse-green' : 'bg-slate-500'}`} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-1.5">
+                  <p className="text-white font-semibold text-sm">{availabilityState.statusLabel}</p>
+                  <span className="text-slate-500 text-xs">— {availabilityState.statusDetail}</span>
+                </div>
+                <p className="text-slate-400 text-xs leading-snug truncate">{availabilityState.description}</p>
+              </div>
             <button
               onClick={toggleAvailability}
-              disabled={viewOnly}
-              className={`w-full h-12 rounded-xl font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] ${
+              disabled={viewOnly || availabilityUpdating}
+              aria-label={availabilityState.actionAriaLabel}
+              aria-busy={availabilityUpdating}
+                className={`h-10 px-3 shrink-0 rounded-full text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] ${
                 driver.isAvailable
                   ? 'bg-white/5 hover:bg-white/10 text-white border border-white/10'
                   : 'bg-gradient-to-r from-primary to-[#ffae33] text-background shadow-lg shadow-primary/20'
-              } ${viewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
+              } ${viewOnly || availabilityUpdating ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <MaterialIcon name="power_settings_new" size="sm" />
-              {driver.isAvailable ? 'Aller hors ligne' : 'Aller en ligne'}
+              <MaterialIcon name={availabilityUpdating ? 'progress_activity' : 'power_settings_new'} size="sm" className={availabilityUpdating ? 'animate-spin' : ''} />
+                {availabilityState.actionLabel}
             </button>
+            </div>
           </GlassCard>
         </div>
 
@@ -877,12 +905,7 @@ export default function DriverDashboard() {
         <div className="px-6 mb-6">
           <h2 className="text-base font-bold text-white mb-3">Accès rapide</h2>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { icon: 'payments', label: 'Mes gains', route: '/driver/gains' },
-              { icon: 'history', label: 'Historique', route: '/driver/historique' },
-              { icon: 'description', label: 'Documents', route: '/driver/documents', badge: driverDocs.some(d => d.status === 'rejected' || d.status === 'not_submitted') },
-              { icon: 'person', label: 'Mon profil', route: '/driver/profile' },
-            ].map((item) => (
+            {quickActions.map((item) => (
               <button
                 key={item.route}
                 onClick={() => router.push(item.route)}

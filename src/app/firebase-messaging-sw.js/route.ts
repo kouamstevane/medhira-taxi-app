@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-static';
+
 /**
  * Serves the Firebase Messaging Service Worker with environment variables injected.
  * Browsers fetch /firebase-messaging-sw.js — this route handler responds with the SW script.

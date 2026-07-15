@@ -1,6 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from 'react';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import { useDocumentStatus } from '@/hooks/useDocumentStatus';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
@@ -8,21 +12,169 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useAuth } from "@/hooks/useAuth";
 import { NotificationCollection } from "@/services/notification.service";
 import { driverNavItems, adminNavItems } from "@/components/ui/BottomNav";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
 
 export default function NotificationsPage() {
   const router = useRouter();
-  const { userData } = useAuth();
+  const { userData, currentUser } = useAuth();
   const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications();
-  const isAdmin = useAdminAuth();
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const checkAdmin = async () => {
+      try {
+        const adminDoc = await getDoc(doc(db, 'admins', currentUser.uid));
+        setIsAdmin(adminDoc.exists());
+      } catch {
+        setIsAdmin(false);
+      }
+    };
+    checkAdmin();
+  }, [currentUser]);
+
   // Capacité conducteur (spec §6.2) : présence de roles.driver
   const isDriver = userData?.roles?.driver != null;
   const navItems = isDriver ? driverNavItems : isAdmin ? adminNavItems : undefined;
 
-  const hasUnread = notifications.some((n) => !n.read);
+  const { documents: driverDocs } = useDocumentStatus(isDriver ? (currentUser?.uid ?? null) : null);
+  const approvedDocsCount = driverDocs.filter(d => d.status === 'approved').length;
+  const [driverData, setDriverData] = useState<any>(null);
+
+  useEffect(() => {
+    if (!currentUser || !isDriver) return;
+    const unsub = onSnapshot(doc(db, 'drivers', currentUser.uid), (snap) => {
+      if (snap.exists()) {
+        setDriverData(snap.data());
+      }
+    }, (err) => {
+      console.error('[NOTIFICATIONS] Error listening to driver:', err);
+    });
+    return () => unsub();
+  }, [currentUser, isDriver]);
+
+  // Construire les notifications système dynamiques
+  const systemNotifications: NotificationCollection[] = [];
+
+  if (isDriver && driverData) {
+    // 1. Candidature en cours d'examen
+    if (driverData.status === 'pending') {
+      systemNotifications.push({
+        notificationId: 'sys_pending',
+        userId: currentUser?.uid ?? '',
+        title: "Candidature en cours d'examen",
+        body: "Vos données sont en lecture seule jusqu'à approbation par notre équipe.",
+        type: 'sys_pending',
+        read: false,
+        createdAt: driverData.createdAt || new Date().toISOString(),
+      } as any);
+
+      // 2. Votre adresse email est validée
+      if (currentUser?.emailVerified) {
+        systemNotifications.push({
+          notificationId: 'sys_email_verified',
+          userId: currentUser?.uid ?? '',
+          title: "Adresse email validée",
+          body: "Votre adresse email est validée. Votre candidature est en cours d'étude par notre équipe. Vous recevrez une confirmation dès que votre compte sera approuvé.",
+          type: 'sys_email',
+          read: true,
+          createdAt: driverData.createdAt || new Date().toISOString(),
+        } as any);
+      }
+    }
+
+    // 3. Configuration des paiements requise
+    const stripeStatus = driverData.stripeAccountStatus || 'not_created';
+    const payoutsEnabled = !!driverData.stripePayoutsEnabled;
+    const due = driverData.requirements?.currently_due;
+    const requirementsCount = Array.isArray(due) ? due.length : 0;
+
+    if (stripeStatus !== 'active' || !payoutsEnabled) {
+      let stripeLabel = '';
+      let stripeSublabel = '';
+      let stripeType = 'sys_stripe_amber';
+
+      if (stripeStatus === 'disabled') {
+        stripeLabel = 'Compte de paiement désactivé';
+        stripeSublabel = 'Contactez le support pour réactiver vos virements.';
+        stripeType = 'sys_stripe_red';
+      } else if (stripeStatus === 'restricted') {
+        stripeLabel = 'Compte de paiement restreint';
+        stripeSublabel = requirementsCount
+          ? `${requirementsCount} information(s) à fournir pour débloquer vos virements.`
+          : 'Vos virements sont bloqués. Vérifiez votre compte Stripe.';
+        stripeType = 'sys_stripe_red';
+      } else if (stripeStatus === 'not_created') {
+        stripeLabel = 'Configuration des paiements requise';
+        stripeSublabel = 'Vous ne pourrez pas être payé tant que votre compte Stripe n\'est pas configuré.';
+        stripeType = 'sys_stripe_amber';
+      } else { // pending
+        stripeLabel = 'Configuration des paiements à terminer';
+        stripeSublabel = requirementsCount
+          ? `${requirementsCount} information(s) demandée(s) par Stripe.`
+          : 'Vérification Stripe en cours.';
+        stripeType = 'sys_stripe_amber';
+      }
+
+      systemNotifications.push({
+        notificationId: 'sys_stripe',
+        userId: currentUser?.uid ?? '',
+        title: stripeLabel,
+        body: stripeSublabel,
+        type: stripeType,
+        read: false,
+        createdAt: driverData.updatedAt || new Date().toISOString(),
+      } as any);
+    }
+
+    // 4. Disponible — En attente
+    if (driverData.isAvailable) {
+      systemNotifications.push({
+        notificationId: 'sys_available',
+        userId: currentUser?.uid ?? '',
+        title: "Disponible — En attente",
+        body: "Votre position est visible par les clients. Restez à proximité des zones animées.",
+        type: 'sys_available',
+        read: true,
+        createdAt: new Date().toISOString(),
+      } as any);
+    }
+  }
+
+  const allNotifications = [...systemNotifications, ...notifications];
+  const hasUnread = allNotifications.some((n) => !n.read);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
+      case "sys_pending":
+        return (
+          <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 animate-pulse">
+            <MaterialIcon name="hourglass_top" size="md" />
+          </div>
+        );
+      case "sys_stripe_amber":
+        return (
+          <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400">
+            <MaterialIcon name="warning" size="md" />
+          </div>
+        );
+      case "sys_stripe_red":
+        return (
+          <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center text-red-400">
+            <MaterialIcon name="block" size="md" />
+          </div>
+        );
+      case "sys_email":
+        return (
+          <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">
+            <MaterialIcon name="mark_email_read" size="md" />
+          </div>
+        );
+      case "sys_available":
+        return (
+          <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center text-green-400">
+            <MaterialIcon name="check_circle" size="md" />
+          </div>
+        );
       case "booking_request":
       case "food_order":
         return (
@@ -60,6 +212,15 @@ export default function NotificationsPage() {
   };
 
   const handleNotificationClick = async (notif: NotificationCollection) => {
+    if (notif.notificationId.startsWith('sys_')) {
+      if (notif.notificationId === 'sys_stripe') {
+        router.push('/driver/payments/setup');
+      } else if (notif.notificationId === 'sys_pending') {
+        router.push('/driver/documents');
+      }
+      return;
+    }
+
     if (!notif.read) await markAsRead(notif.notificationId);
 
     // Navigation contextuelle selon le type
@@ -123,14 +284,22 @@ export default function NotificationsPage() {
           <div className="flex justify-center items-center py-20">
             <MaterialIcon name="refresh" className="animate-spin text-primary text-[40px]" />
           </div>
-        ) : notifications.length > 0 ? (
+        ) : allNotifications.length > 0 ? (
           <div className="space-y-3">
-            {notifications.map((notif) => (
+            {allNotifications.map((notif) => (
               <GlassCard
                 key={notif.notificationId}
                 variant={!notif.read ? "bordered" : "default"}
                 className={`p-4 cursor-pointer transition-all ${
-                  !notif.read ? "border-l-primary" : ""
+                  (notif.type as string) === "sys_stripe_red"
+                    ? "border-l-red-500 border-l-2 bg-red-500/5 hover:bg-red-500/10"
+                    : (notif.type as string) === "sys_stripe_amber" || (notif.type as string) === "sys_pending"
+                    ? "border-l-amber-500 border-l-2 bg-amber-500/5 hover:bg-amber-500/10"
+                    : (notif.type as string) === "sys_available"
+                    ? "border-l-green-500 border-l-2 bg-green-500/5 hover:bg-green-500/10"
+                    : !notif.read
+                    ? "border-l-primary"
+                    : ""
                 }`}
                 onClick={() => handleNotificationClick(notif)}
               >

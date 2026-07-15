@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { auth } from '@/config/firebase'
 import { onAuthStateChanged } from 'firebase/auth'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
@@ -9,8 +9,7 @@ import { useDriverStore } from '@/store/driverStore'
 import { useDriverActivity, type ActivityRecord } from '@/hooks/useDriverActivity'
 import { EvaluationsTab } from './components/EvaluationsTab'
 import { formatCurrencyWithCode } from '@/utils/format'
-
-type Tab = 'historique' | 'gains' | 'evaluations'
+import { getInitialActivityTab, type ActivityTab } from './activity-tabs'
 
 function RecordItem({ record }: { record: ActivityRecord }) {
   return (
@@ -32,10 +31,15 @@ function RecordItem({ record }: { record: ActivityRecord }) {
 
 export default function DriverActivitePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [uid, setUid] = useState<string | null>(null)
-  const [tab, setTab] = useState<Tab>('historique')
+  const [tab, setTab] = useState<ActivityTab>(() => getInitialActivityTab(searchParams.get('tab')))
   const { driver } = useDriverStore()
   const { records, totals, loading } = useDriverActivity(uid ?? '')
+
+  useEffect(() => {
+    setTab(getInitialActivityTab(searchParams.get('tab')))
+  }, [searchParams])
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -49,7 +53,7 @@ export default function DriverActivitePage() {
   const todayTotal = records.filter(r => new Date(r.date).toDateString() === today)
     .reduce((s, r) => s + r.amount, 0)
 
-  const TABS: { key: Tab; label: string; icon: string }[] = [
+  const TABS: { key: ActivityTab; label: string; icon: string }[] = [
     { key: 'historique', label: 'Historique', icon: 'history' },
     { key: 'gains',      label: 'Gains',      icon: 'payments' },
     { key: 'evaluations', label: 'Évaluations', icon: 'star' },

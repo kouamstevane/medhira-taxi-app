@@ -17,6 +17,12 @@ interface ActivityTotals {
   livraison: number
 }
 
+export function getTaxiActivityAmount(data: { fare?: unknown; price?: unknown }): number {
+  if (typeof data.fare === 'number') return data.fare
+  if (typeof data.price === 'number') return data.price
+  return 0
+}
+
 export function useDriverActivity(uid: string): {
   records: ActivityRecord[]
   totals: ActivityTotals
@@ -67,7 +73,7 @@ export function useDriverActivity(uid: string): {
           type: 'taxi',
           description: `Course — ${data.pickupAddress ?? 'Départ inconnu'}`,
           date: ts.toLocaleDateString('fr-CA'),
-          amount: typeof data.fare === 'number' ? data.fare : 0,
+          amount: getTaxiActivityAmount(data),
         })
       })
       taxiLoaded = true

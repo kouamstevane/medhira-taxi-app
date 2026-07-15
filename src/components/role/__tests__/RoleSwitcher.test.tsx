@@ -88,16 +88,22 @@ describe('RoleSwitcher', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('shows switcher button with current role when multi-role', () => {
+  it('shows a compact accessible icon for the active role', () => {
     mockUserData = makeUserData({ driver: true }, 'driver');
     mockStatuses = {
       driver: { status: 'approved', loading: false },
       restaurant: null,
     };
     render(<RoleSwitcher />);
-    const btn = screen.getByTestId('role-switcher-btn');
-    expect(btn).toBeInTheDocument();
-    expect(btn.textContent).toContain('Chauffeur');
+
+    const button = screen.getByRole('button', {
+      name: "Changer d'espace, espace actuel : Chauffeur",
+    });
+
+    expect(button).toHaveClass('size-11');
+    expect(screen.getByTestId('icon-local_taxi')).toBeInTheDocument();
+    expect(button).not.toHaveTextContent('Mode');
+    expect(button).not.toHaveTextContent('Chauffeur');
   });
 
   it('opens dropdown with role items on click', () => {

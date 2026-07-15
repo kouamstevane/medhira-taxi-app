@@ -1,5 +1,5 @@
 import { renderHook } from '@testing-library/react'
-import { useDriverActivity } from '../useDriverActivity'
+import { getTaxiActivityAmount, useDriverActivity } from '../useDriverActivity'
 
 // Mock firebase/firestore
 jest.mock('@/config/firebase', () => ({ db: {} }))
@@ -30,5 +30,9 @@ describe('useDriverActivity', () => {
     expect(result.current.totals).toHaveProperty('total')
     expect(result.current.totals).toHaveProperty('taxi')
     expect(result.current.totals).toHaveProperty('livraison')
+  })
+
+  it('uses price when a taxi booking has no fare field', () => {
+    expect(getTaxiActivityAmount({ price: 15 })).toBe(15)
   })
 })

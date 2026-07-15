@@ -7,20 +7,11 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import { useDriverProfile } from '@/hooks/useDriverProfile';
 import { useDocumentStatus } from '@/hooks/useDocumentStatus';
-import type { DocStatus } from '@/hooks/useDocumentStatus';
 import { CardSkeleton } from '@/components/ui/Skeleton';
+import { getDocumentsProfileSummary, getVehicleProfileSummary } from './profile-ui';
 
 function initialsOf(firstName?: string, lastName?: string): string {
   return [firstName?.[0], lastName?.[0]].filter(Boolean).join('').toUpperCase() || '?';
-}
-
-function docStatusPill(status: DocStatus): { text: string; classes: string } {
-  switch (status) {
-    case 'approved': return { text: 'APPROUVÉ', classes: 'bg-green-500/15 text-green-400 border-green-500/30' };
-    case 'pending': return { text: 'EN ATTENTE', classes: 'bg-amber-500/15 text-amber-400 border-amber-500/30' };
-    case 'rejected': return { text: 'REJETÉ', classes: 'bg-red-500/15 text-red-400 border-red-500/30' };
-    default: return { text: 'NON SOUMIS', classes: 'bg-white/5 text-slate-400 border-white/10' };
-  }
 }
 
 interface SectionTitleProps {
@@ -150,6 +141,14 @@ export default function DriverProfilePage() {
   if (!driver) return null;
 
   const profileDocs = documents.filter(d => ['permitConduire', 'plaqueImmatriculation', 'permitCommercial'].includes(d.key));
+  const vehicleSummary = getVehicleProfileSummary(driver.car);
+  const documentsSummary = getDocumentsProfileSummary(profileDocs);
+  const documentsToneClass = {
+    danger: 'border-red-500/25 bg-red-500/10 text-red-300',
+    warning: 'border-amber-500/25 bg-amber-500/10 text-amber-300',
+    success: 'border-green-500/25 bg-green-500/10 text-green-300',
+    neutral: 'border-white/10 bg-white/5 text-slate-300',
+  }[documentsSummary.tone];
 
   return (
     <div className="min-h-screen bg-background text-slate-100 antialiased font-sans pb-28">
@@ -280,7 +279,7 @@ export default function DriverProfilePage() {
         {/* Véhicule */}
         <div>
           <SectionTitle icon="directions_car">Véhicule</SectionTitle>
-          <div className="glass-card rounded-2xl px-5 py-3 divide-y divide-white/[0.04]">
+          <div className={`glass-card rounded-2xl ${editMode ? 'px-5 py-3 divide-y divide-white/[0.04]' : 'p-4'}`}>
             {editMode ? (
               <div className="space-y-3 py-2">
                 <div>
@@ -312,11 +311,22 @@ export default function DriverProfilePage() {
                 </div>
               </div>
             ) : (
-              <>
-                <InfoRow label="Modèle" value={driver.car?.model} />
-                <InfoRow label="Plaque" value={driver.car?.plate} />
-                <InfoRow label="Couleur" value={driver.car?.color} />
-              </>
+              <div className="flex items-center gap-3">
+                <div className="size-11 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0">
+                  <MaterialIcon name="directions_car" className="text-primary text-[22px]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-white text-sm font-bold truncate">{vehicleSummary.title}</p>
+                  <p className="text-slate-400 text-xs truncate">{vehicleSummary.subtitle}</p>
+                </div>
+                <button
+                  onClick={() => { if (isEmailVerified) setEditMode(true); }}
+                  disabled={!isEmailVerified}
+                  className="h-9 px-3 rounded-full bg-white/5 hover:bg-white/10 text-primary text-xs font-bold transition disabled:opacity-40 flex-shrink-0"
+                >
+                  {vehicleSummary.isComplete ? 'Modifier' : 'Compléter'}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -431,35 +441,21 @@ export default function DriverProfilePage() {
         {/* Documents preview */}
         <div>
           <SectionTitle icon="description">Documents</SectionTitle>
-          <div className="glass-card rounded-2xl px-5 py-3 divide-y divide-white/[0.04]">
-            {profileDocs.length === 0 ? (
-              <p className="py-3 text-slate-500 text-sm italic">Aucun document — voir l&apos;onglet Documents</p>
-            ) : profileDocs.map(doc => {
-              const pill = docStatusPill(doc.status);
-              const icon = doc.key === 'permitConduire' ? 'badge'
-                : doc.key === 'plaqueImmatriculation' ? 'directions_car'
-                : 'shield';
-              return (
-                <button
-                  key={doc.key}
-                  onClick={() => router.push(`/driver/documents/${doc.key}`)}
-                  className="w-full flex items-center justify-between py-3 text-left hover:bg-white/[0.02] transition rounded-lg -mx-1 px-1"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <MaterialIcon name={icon} className="text-slate-400 text-[20px] flex-shrink-0" />
-                    <span className="text-white text-sm truncate">{doc.label}</span>
-                  </div>
-                  <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${pill.classes} flex-shrink-0`}>
-                    {pill.text}
-                  </span>
-                </button>
-              );
-            })}
+          <div className={`glass-card rounded-2xl p-4 border ${documentsToneClass}`}>
+            <div className="flex items-center gap-3">
+              <div className="size-11 rounded-2xl bg-black/10 border border-current/20 flex items-center justify-center flex-shrink-0">
+                <MaterialIcon name="description" className="text-[22px]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-white text-sm font-bold truncate">{documentsSummary.title}</p>
+                <p className="text-slate-400 text-xs leading-snug">{documentsSummary.subtitle}</p>
+              </div>
+            </div>
             <button
               onClick={() => router.push('/driver/documents')}
-              className="w-full py-3 text-primary text-sm font-medium hover:underline"
+              className="mt-4 w-full h-10 rounded-full bg-white/10 hover:bg-white/15 text-white text-sm font-bold transition"
             >
-              Voir tous les documents
+              {documentsSummary.cta}
             </button>
           </div>
         </div>

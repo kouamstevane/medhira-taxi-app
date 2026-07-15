@@ -8,6 +8,16 @@ export interface DriverCarData {
   color?: string;
 }
 
+export interface DriverLocationData {
+  lat?: number;
+  lng?: number;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  updatedAt?: unknown;
+  timestamp?: unknown;
+}
+
 export interface DriverCoreData {
   uid: string;
   firstName: string;
@@ -19,6 +29,9 @@ export interface DriverCoreData {
   profileImageUrl?: string;
   licenseNumber?: string;
   car?: DriverCarData;
+  currentLocation?: DriverLocationData | null;
+  stripeAccountStatus?: string;
+  stripePayoutsEnabled?: boolean;
   // NOTE RGPD #C2 : `documents` a été déplacé dans la sous-collection
   // `drivers/{uid}/private/personal` — voir useDriverPrivate / DriverPrivateData.
   rating?: number;

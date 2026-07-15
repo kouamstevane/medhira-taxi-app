@@ -5,8 +5,8 @@ const isMobile = process.env.MOBILE_BUILD === 'true';
 const nextConfig: NextConfig = {
   async redirects() {
     return [
-      { source: '/driver/historique', destination: '/driver/activite', permanent: true },
-      { source: '/driver/gains',      destination: '/driver/activite', permanent: true },
+      { source: '/driver/historique', destination: '/driver/activite?tab=historique', permanent: true },
+      { source: '/driver/gains',      destination: '/driver/activite?tab=gains', permanent: true },
     ]
   },
   output: isMobile ? 'export' : undefined,
@@ -51,7 +51,7 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 60,
   },
   async headers() {
-    if (isMobile) return [];
+    if (isMobile || process.env.NODE_ENV !== 'production') return [];
     return [
       {
         source: '/_next/static/:path*',
