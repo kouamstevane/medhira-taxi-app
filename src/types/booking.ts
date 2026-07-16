@@ -38,7 +38,7 @@ export interface PlaceSuggestion {
 /**
  * Statut d'une réservation
  */
-export type BookingStatus = 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
+export type BookingStatus = 'pending' | 'scheduled' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 
 /**
  * Interface pour une réservation de taxi
@@ -110,6 +110,9 @@ export interface Booking {
     maxAttempts: number; // Nombre max de tentatives (défaut: 10)
     lastAttemptAt?: Date | Timestamp; // Date de la dernière tentative
   };
+
+  rideMode?: 'immediate' | 'scheduled';
+  scheduledAt?: Date | Timestamp;
 
   failureReason?: string; // Raison d'échec (si status = 'failed')
   cancellationReason?: string; // Raison d'annulation (si status = 'cancelled')

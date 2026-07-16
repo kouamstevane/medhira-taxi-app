@@ -30,7 +30,7 @@ import { Booking, BookingStatus, CarType, Driver, Location } from '@/types';
 import { calculateTripPrice, typedServerTimestamp } from '@/lib/firebase-helpers';
 import { getDirections, DirectionsError } from '@/services/directions.service';
 import { CURRENCY_CODE, DEFAULT_PRICING, LIMITS } from '@/utils/constants';
-import { DEFAULT_CAR_TYPES } from '@/app/taxi/data/vehicleCatalog';
+import { DEFAULT_CAR_TYPES, mergeWithDefaultCarType, resolveDefaultCarType } from '@/app/taxi/data/vehicleCatalog';
 import { PAYMENT_STATUS } from '@/types/stripe';
 import { haversineKm } from '@/utils/distance';
 
@@ -50,11 +50,12 @@ export const cancelActiveSearch = (bookingId: string): void => {
 export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   const bookingsRef = collection(db, 'bookings');
   const newBookingRef = doc(bookingsRef);
+  const bookingStatus = bookingData.status ?? 'pending';
 
   const booking: Booking = {
     ...bookingData,
     id: newBookingRef.id,
-    status: 'pending',
+    status: bookingStatus,
     paymentStatus: PAYMENT_STATUS.PENDING,
     paymentMethod: bookingData.paymentMethod,
     stripePaymentIntentId: bookingData.stripePaymentIntentId ?? null,
@@ -64,7 +65,7 @@ export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt
 
   await setDoc(newBookingRef, booking);
 
-  if (bookingData.pickupLocation) {
+  if (bookingData.pickupLocation && bookingStatus === 'pending') {
     const pickupLocation = bookingData.pickupLocation;
     const abortController = new AbortController();
     abortControllers.set(newBookingRef.id, abortController);
@@ -175,7 +176,7 @@ export const updateBookingStatus = async (
  */
 export const cancelBooking = async (bookingId: string, reason?: string, extraFields?: Record<string, unknown>): Promise<void> => {
   const bookingRef = doc(db, 'bookings', bookingId);
-  const CANCELLABLE_STATUSES: BookingStatus[] = ['pending', 'accepted', 'driver_arrived'];
+  const CANCELLABLE_STATUSES: BookingStatus[] = ['pending', 'scheduled', 'accepted', 'driver_arrived'];
 
   try {
     await runTransaction(db, async (tx) => {
@@ -244,44 +245,7 @@ export const getCarTypes = async (): Promise<CarType[]> => {
       const name = typeof raw.name === 'string' ? raw.name.trim() : '';
       return name.length > 0;
     })
-    .map(snapshot => {
-      const raw = snapshot.data() as Record<string, unknown>;
-
-      const basePrice =
-        typeof raw.basePrice === 'number'
-          ? raw.basePrice
-          : typeof raw.baseFare === 'number'
-            ? raw.baseFare
-            : DEFAULT_PRICING.BASE_PRICE;
-
-      const pricePerKm =
-        typeof raw.pricePerKm === 'number'
-          ? raw.pricePerKm
-          : typeof raw.price_per_km === 'number'
-            ? raw.price_per_km
-            : DEFAULT_PRICING.PRICE_PER_KM;
-
-      const pricePerMinute =
-        typeof raw.pricePerMinute === 'number'
-          ? raw.pricePerMinute
-          : typeof raw.price_per_minute === 'number'
-            ? raw.price_per_minute
-            : DEFAULT_PRICING.PRICE_PER_MINUTE;
-
-      const carType: CarType = {
-        id: (raw.id as string) || snapshot.id,
-        name: (raw.name as string) || 'Standard',
-        basePrice,
-        pricePerKm,
-        pricePerMinute,
-        image: (raw.image as string) || (raw.imageUrl as string) || '',
-        seats: (raw.seats as number) || (raw.capacity as number) || 4,
-        time: (raw.time as string) || '2-4 min',
-        order: (raw.order as number) ?? 0,
-      };
-
-      return carType;
-    })
+    .map(snapshot => mergeWithDefaultCarType(snapshot.id, snapshot.data() as Record<string, unknown>))
     .sort((a, b) => (a.order || 0) - (b.order || 0));
 
   if (types.length === 0) {
@@ -339,7 +303,10 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
 
   // Récupérer le type de véhicule
   const carTypes = await getCarTypes();
-  const carType = carTypes.find(ct => ct.id === type || ct.name.toLowerCase() === type.toLowerCase());
+  const normalizedType = type.trim();
+  const carType =
+    carTypes.find(ct => ct.id === normalizedType || ct.name === normalizedType) ||
+    resolveDefaultCarType(normalizedType);
 
   if (!carType) {
     throw new Error(`Type de véhicule "${type}" introuvable`);
@@ -606,7 +573,7 @@ export const calculateFinalFare = async (bookingId: string): Promise<number> => 
 
   // Récupérer les tarifs du type de véhicule
   const carTypes = await getCarTypes();
-  const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
+  const carType = carTypes.find(ct => ct.name === booking.carType || ct.id === booking.carType) || resolveDefaultCarType(booking.carType) || carTypes[0];
 
   if (!carType) return booking.price;
 
@@ -668,7 +635,7 @@ export const completeTrip = async (bookingId: string): Promise<void> => {
   const booking = bookingSnap.data() as Booking;
 
   const carTypes = await getCarTypes();
-  const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
+  const carType = carTypes.find(ct => ct.name === booking.carType || ct.id === booking.carType) || resolveDefaultCarType(booking.carType) || carTypes[0];
 
   let result: { success?: boolean; finalPrice?: number; durationMinutes?: number; paymentFailed?: boolean; error?: string; alreadyCompleted?: boolean } = {};
   try {
@@ -722,7 +689,7 @@ export const calculateCancellationPenalty = async (bookingId: string): Promise<n
   
   // Récupérer les tarifs
   const carTypes = await getCarTypes();
-  const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
+  const carType = carTypes.find(ct => ct.name === booking.carType || ct.id === booking.carType) || resolveDefaultCarType(booking.carType) || carTypes[0];
   
   // Pénalité = CANCELLATION_PENALTY_RATE du tarif de base + temps x tarif minute
   const penalty = (carType.basePrice * DEFAULT_PRICING.CANCELLATION_PENALTY_RATE) + (elapsedMinutes * carType.pricePerMinute);

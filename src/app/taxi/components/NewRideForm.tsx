@@ -26,6 +26,7 @@ import { VehicleOption } from './VehicleOption';
 import { VehicleDetailsSheet } from './VehicleDetailsSheet';
 import { FareSummary } from './FareSummary';
 import { BonusSelector } from './BonusSelector';
+import { RideTimingSelector, type RideTimingMode } from './RideTimingSelector';
 const PaymentMethodSelector = dynamic(() => import('@/components/stripe/PaymentMethodSelector').then(m => ({ default: m.PaymentMethodSelector })), { ssr: false, loading: () => <div className="w-full h-24 bg-white/10 animate-pulse rounded-xl" /> })
 const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement').then(m => ({ default: m.StripePaymentElement })), { ssr: false, loading: () => <div className="w-full h-48 bg-white/10 animate-pulse rounded-xl" /> })
 import { logger } from '@/utils/logger';
@@ -37,6 +38,7 @@ import type { StripePaymentMethod } from '@/types/stripe';
 const BookingSchema = z.object({
   userId: z.string().min(1, 'UID utilisateur requis'),
   userEmail: z.string().email('Email invalide').nullable().optional(),
+  rideMode: z.enum(['immediate', 'scheduled']),
   pickup: z.string().min(5, 'Adresse de départ trop courte (min 5 caractères)'),
   destination: z.string().min(5, 'Adresse de destination trop courte (min 5 caractères)'),
   pickupLocation: z.object({
@@ -52,6 +54,7 @@ const BookingSchema = z.object({
   duration: z.number().positive('Durée doit être positive'),
   price: z.number().positive('Prix doit être positif'),
   carType: z.string().min(1, 'Type de véhicule requis'),
+  scheduledAt: z.date().nullable().optional(),
   bonus: z.number().min(0).optional(),
   bookedForSomeoneElse: z.boolean().optional(),
   passengerName: z.string().optional(),
@@ -60,7 +63,14 @@ const BookingSchema = z.object({
 });
 
 interface NewRideFormProps {
-  onBookingCreated?: (bookingId: string, pickup: string, destination: string, autoSearch?: boolean) => void;
+  onBookingCreated?: (booking: {
+    bookingId: string;
+    pickup: string;
+    destination: string;
+    rideMode: RideTimingMode;
+    autoSearch?: boolean;
+    scheduledAt?: Date | null;
+  }) => void;
   onSearchDriver?: () => void;
 }
 
@@ -90,6 +100,9 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   const [estimating, setEstimating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [rideMode, setRideMode] = useState<RideTimingMode>('immediate');
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
 
   // Nouveaux états pour Bonus et Recherche Auto
   const [bonus, setBonus] = useState(0);
@@ -135,6 +148,19 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   });
 
   const [loadingAddress, setLoadingAddress] = useState(false);
+
+  const buildScheduledAt = () => {
+    if (!scheduledDate || !scheduledTime) return null;
+    const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}:00`);
+    return Number.isNaN(scheduledAt.getTime()) ? null : scheduledAt;
+  };
+
+  const applyScheduledDefaults = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() + 30, 0, 0);
+    setScheduledDate(now.toISOString().slice(0, 10));
+    setScheduledTime(now.toTimeString().slice(0, 5));
+  };
 
   // Récupérer la position GPS //ceci est OK
   /*useEffect(() => {
@@ -368,6 +394,20 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
       return;
     }
 
+    if (rideMode === 'scheduled') {
+      const scheduledAt = buildScheduledAt();
+      if (!scheduledDate || !scheduledTime || !scheduledAt) {
+        setError('Veuillez choisir une date et une heure de départ');
+        return;
+      }
+
+      const earliestAllowed = new Date(Date.now() + 5 * 60 * 1000);
+      if (scheduledAt < earliestAllowed) {
+        setError('La réservation doit être programmée au moins 5 minutes à l\'avance');
+        return;
+      }
+    }
+
     if (bookForSomeoneElse) {
       if (!passengerName.trim()) {
         setError('Veuillez entrer le nom du passager');
@@ -457,9 +497,16 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     setModalStep('summary');
 
     if (pendingBookingId && onBookingCreated) {
-      onBookingCreated(pendingBookingId, pickupAddress, destinationAddress, autoSearchEnabled);
+      onBookingCreated({
+        bookingId: pendingBookingId,
+        pickup: pickupAddress,
+        destination: destinationAddress,
+        rideMode,
+        autoSearch: rideMode === 'immediate' ? autoSearchEnabled : false,
+        scheduledAt: rideMode === 'scheduled' ? buildScheduledAt() : null,
+      });
     }
-    if (onSearchDriver) onSearchDriver();
+    if (rideMode === 'immediate' && onSearchDriver) onSearchDriver();
   };
 
   // Crée la réservation Firestore avec la méthode de paiement choisie
@@ -468,6 +515,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
       const bookingData = {
         userId: currentUser!.uid,
         userEmail: currentUser!.email,
+        rideMode,
         pickup: pickupAddress,
         destination: destinationAddress,
         pickupLocation: pickupLocation || undefined,
@@ -477,10 +525,11 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
         duration: estimate!.duration,
         price: estimate!.price,
         carType: selectedCarType!.name,
-        status: 'pending' as const,
+        status: (rideMode === 'scheduled' ? 'scheduled' : 'pending') as const,
+        scheduledAt: rideMode === 'scheduled' ? buildScheduledAt() || undefined : undefined,
         paymentMethod,
         ...(bonus > 0 && { bonus }),
-        ...(autoSearchEnabled && {
+        ...(rideMode === 'immediate' && autoSearchEnabled && {
           automaticSearch: { enabled: true, intervalSeconds: 60, attemptCount: 0, maxAttempts: 10 },
         }),
         ...(bookForSomeoneElse && {
@@ -528,9 +577,16 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
       setModalStep('summary');
 
       if (onBookingCreated) {
-        onBookingCreated(bookingId, pickupAddress, destinationAddress, autoSearchEnabled);
+        onBookingCreated({
+          bookingId,
+          pickup: pickupAddress,
+          destination: destinationAddress,
+          rideMode,
+          autoSearch: rideMode === 'immediate' ? autoSearchEnabled : false,
+          scheduledAt: rideMode === 'scheduled' ? buildScheduledAt() : null,
+        });
       }
-      if (onSearchDriver) {
+      if (rideMode === 'immediate' && onSearchDriver) {
         onSearchDriver();
       }
     } catch (err: unknown) {
@@ -663,7 +719,22 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
         />
 
         {/* Options Avancées (Bonus & Recherche Auto) */}
-        <div className="space-y-4 pt-2 border-t border-white/[0.05]">
+        <RideTimingSelector
+          mode={rideMode}
+          scheduledDate={scheduledDate}
+          scheduledTime={scheduledTime}
+          onModeChange={(mode) => {
+            setRideMode(mode);
+            setError(null);
+            if (mode === 'scheduled' && (!scheduledDate || !scheduledTime)) {
+              applyScheduledDefaults();
+            }
+          }}
+          onScheduledDateChange={setScheduledDate}
+          onScheduledTimeChange={setScheduledTime}
+        />
+
+        <div className="space-y-3 pt-2 border-t border-white/[0.05]">
           {/* Toggle Bonus */}
           <div>
             <button
@@ -675,7 +746,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
             </button>
 
             {showBonus && (
-              <div className="mt-3 p-4 bg-[#1A1A1A] rounded-xl border border-white/[0.05]">
+              <div className="mt-2.5 p-3.5 bg-[#1A1A1A] rounded-xl border border-white/[0.05]">
                 <BonusSelector
                   selectedBonus={bonus}
                   onSelect={setBonus}
@@ -685,7 +756,8 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
           </div>
 
           {/* Toggle Recherche Auto */}
-          <div className="flex items-center gap-3 p-3 bg-[#3B82F6]/10 rounded-xl border border-[#3B82F6]/20">
+          {rideMode === 'immediate' && (
+            <div className="flex items-center gap-3 p-2.5 bg-[#3B82F6]/10 rounded-xl border border-[#3B82F6]/20">
             <div className="flex items-center h-5">
               <input
                 id="auto-search"
@@ -704,10 +776,11 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
               </p>
             </div>
           </div>
+          )}
 
           {/* Toggle Réservation pour un tiers */}
           <div>
-            <div className="flex items-center gap-3 p-3 bg-[#f29200]/10 rounded-xl border border-[#f29200]/20">
+            <div className="flex items-center gap-3 p-2.5 bg-[#f29200]/10 rounded-xl border border-[#f29200]/20">
               <div className="flex items-center h-5">
                 <input
                   id="book-someone-else"
@@ -728,7 +801,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
             </div>
 
             {bookForSomeoneElse && (
-              <div className="mt-3 p-4 bg-[#1A1A1A] rounded-xl border border-[#f29200]/20 space-y-3">
+              <div className="mt-2.5 p-3.5 bg-[#1A1A1A] rounded-xl border border-[#f29200]/20 space-y-2.5">
                 <div>
                   <label htmlFor="passenger-name" className="block text-sm font-medium text-[#9CA3AF] mb-1">
                     Nom du passager <span className="text-red-500">*</span>

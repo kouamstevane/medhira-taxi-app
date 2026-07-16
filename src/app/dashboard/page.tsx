@@ -345,7 +345,7 @@ export default function Dashboard() {
           <h2 className="text-white text-[20px] font-bold mb-4 px-1 tracking-tight">Que voulez-vous faire ?</h2>
           <div className="grid grid-cols-2 gap-4">
             {[
-              { icon: 'local_taxi', label: 'Réserver un taxi', sub: 'Dispo maintenant', subColor: 'text-emerald-500', route: '/taxi', highlight: true },
+              { icon: 'local_taxi', label: 'Taxi', sub: 'Départ immédiat ou programmé', subColor: 'text-emerald-500', route: '/taxi', highlight: true },
               { icon: 'lunch_dining', label: 'Commander', sub: 'Restaurants', subColor: 'text-slate-400', route: '/food' },
               { icon: 'package_2', label: 'Transporter un colis', sub: 'Transport rapide', subColor: 'text-slate-400', route: '/colis' },
               { icon: 'favorite', label: 'Favoris', sub: '3 adresses', subColor: 'text-slate-400', route: '/profil' },

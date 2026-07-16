@@ -82,6 +82,104 @@ export const useCapacitorGeolocation = () => {
         accuracy: null,
     });
 
+    const readBrowserPosition = useCallback(async (mode: GeolocationMode): Promise<PreciseLocation> => {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) {
+            throw new Error('La géolocalisation du navigateur n’est pas disponible.');
+        }
+
+        if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost') {
+            throw new Error('Le web exige HTTPS ou localhost pour accéder au GPS.');
+        }
+
+        const options: PositionOptions = {
+            enableHighAccuracy: mode !== 'battery_critical',
+            timeout: mode === 'tracking' ? 15000 : 12000,
+            maximumAge: 0,
+        };
+
+        const bestPosition = await new Promise<GeolocationPosition>((resolve, reject) => {
+            let watchId: number | null = null;
+            let resolved = false;
+            let best: GeolocationPosition | null = null;
+            let stopTimer: ReturnType<typeof setTimeout> | null = null;
+
+            const finish = async (fn: () => void, value?: GeolocationPosition | Error) => {
+                if (resolved) return;
+                resolved = true;
+                if (stopTimer) clearTimeout(stopTimer);
+                fn();
+                if (value instanceof Error) {
+                    reject(value);
+                } else if (value) {
+                    resolve(value);
+                } else {
+                    reject(new Error('Impossible d’obtenir une position fiable.'));
+                }
+            };
+
+            const clearWatchSafe = () => {
+                if (watchId !== null) {
+                    navigator.geolocation.clearWatch(watchId);
+                    watchId = null;
+                }
+            };
+
+            watchId = navigator.geolocation.watchPosition(
+                (position) => {
+                    if (!position) return;
+                    if (!best || position.coords.accuracy < best.coords.accuracy) {
+                        best = position;
+                    }
+
+                    if (best && best.coords.accuracy <= 30) {
+                        void finish(clearWatchSafe, best);
+                    }
+                },
+                (error) => {
+                    if (resolved) return;
+                    void finish(clearWatchSafe, new Error(error.message || 'Erreur de géolocalisation navigateur'));
+                },
+                options
+            );
+
+            stopTimer = setTimeout(() => {
+                if (resolved) return;
+                if (best) {
+                    void finish(clearWatchSafe, best);
+                } else {
+                    void finish(clearWatchSafe, new Error('Impossible d’obtenir une position fiable.'));
+                }
+            }, mode === 'tracking' ? 12000 : 10000);
+        });
+
+        const preciseLocation: PreciseLocation = {
+            lat: bestPosition.coords.latitude,
+            lng: bestPosition.coords.longitude,
+            accuracy: bestPosition.coords.accuracy,
+            altitude: bestPosition.coords.altitude,
+            heading: bestPosition.coords.heading,
+            speed: bestPosition.coords.speed,
+            timestamp: bestPosition.timestamp,
+        };
+
+        await secureStorage.setLastKnownPosition({
+            lat: preciseLocation.lat,
+            lng: preciseLocation.lng,
+            accuracy: preciseLocation.accuracy,
+            timestamp: preciseLocation.timestamp,
+        });
+
+        setState({
+            location: { lat: preciseLocation.lat, lng: preciseLocation.lng },
+            preciseLocation,
+            error: null,
+            loading: false,
+            accuracy: preciseLocation.accuracy,
+        });
+
+        return preciseLocation;
+    }, []);
+
     /**
      * Obtenir la position actuelle avec modes adaptatifs
      *  Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
@@ -94,6 +192,23 @@ export const useCapacitorGeolocation = () => {
         fallbackToCache = true
     ) => {
         setState(prev => ({ ...prev, loading: true, error: null }));
+
+        if (typeof window !== 'undefined' && !Capacitor.isNativePlatform()) {
+            try {
+                return await readBrowserPosition(mode);
+            } catch (browserErr) {
+                if (!fallbackToCache) {
+                    setState({
+                        location: null,
+                        preciseLocation: null,
+                        error: browserErr instanceof Error ? browserErr.message : 'Impossible d\'obtenir la position',
+                        loading: false,
+                        accuracy: null,
+                    });
+                    throw browserErr;
+                }
+            }
+        }
 
         // Master timeout : couvre le pire cas des 3 stratégies (15+15+10 = 40s).
         // Garantit que loading=false sera émis même si une WebView Android
@@ -295,7 +410,7 @@ export const useCapacitorGeolocation = () => {
         } finally {
             clearTimeout(masterTimeout);
         }
-    }, []);
+    }, [readBrowserPosition]);
 
     /**
      * Affinage progressif via watchPosition pendant ~5s : démarre un watch,

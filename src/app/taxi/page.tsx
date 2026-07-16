@@ -20,12 +20,13 @@ import { logger } from '@/utils/logger';
 import { doc, onSnapshot, getDoc, updateDoc, serverTimestamp, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { startAutomaticSearch, stopAutomaticSearch } from '@/services/matching/automaticSearch';
+import { cancelBooking } from '@/services/taxi.service';
 import { BonusSelector } from './components/BonusSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 
-type Step = 'form' | 'searching' | 'driver_found' | 'completed' | 'failed';
+type Step = 'form' | 'searching' | 'driver_found' | 'completed' | 'failed' | 'scheduled';
 
 export default function TaxiPage() {
   const router = useRouter();
@@ -46,6 +47,7 @@ export default function TaxiPage() {
   const [timeRemaining, setTimeRemaining] = useState<number>(60);
   const [pickupAddress, setPickupAddress] = useState<string>('');
   const [destinationAddress, setDestinationAddress] = useState<string>('');
+  const [scheduledAtLabel, setScheduledAtLabel] = useState<string>('');
 
   // État pour le bonus en cas d'échec
   const [retryBonus, setRetryBonus] = useState(0);
@@ -67,7 +69,7 @@ export default function TaxiPage() {
         const q = query(
           bookingsRef,
           where('userId', '==', currentUser.uid),
-          where('status', 'in', ['pending', 'accepted', 'driver_arrived', 'in_progress']),
+          where('status', 'in', ['scheduled', 'pending', 'accepted', 'driver_arrived', 'in_progress']),
           limit(5)
         );
 
@@ -88,11 +90,24 @@ export default function TaxiPage() {
           setBookingId(id);
           setPickupAddress(bookingData.pickup);
           setDestinationAddress(bookingData.destination);
+          if (bookingData.status === 'scheduled' && bookingData.scheduledAt?.toDate) {
+            setScheduledAtLabel(bookingData.scheduledAt.toDate().toLocaleString('fr-FR', {
+              weekday: 'short',
+              day: '2-digit',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            }));
+          } else {
+            setScheduledAtLabel('');
+          }
 
           if (bookingData.status === 'pending') {
             setStep('searching');
             // Relancer le timer si besoin, ou juste laisser l'UI de recherche
             // Idéalement on devrait calculer le temps restant
+          } else if (bookingData.status === 'scheduled') {
+            setStep('scheduled');
           } else {
             setStep('driver_found');
           }
@@ -105,18 +120,41 @@ export default function TaxiPage() {
     fetchActiveBooking();
   }, [currentUser]);
 
-  const handleBookingCreated = (id: string, pickup: string, destination: string, autoSearch: boolean = false) => {
-    logger.info('Course créée, recherche de chauffeur', { bookingId: id, autoSearch });
-    setBookingId(id);
-    setPickupAddress(pickup);
-    setDestinationAddress(destination);
+  const handleBookingCreated = (booking: {
+    bookingId: string;
+    pickup: string;
+    destination: string;
+    rideMode: 'immediate' | 'scheduled';
+    autoSearch?: boolean;
+    scheduledAt?: Date | null;
+  }) => {
+    logger.info('Course créée', { bookingId: booking.bookingId, rideMode: booking.rideMode, autoSearch: booking.autoSearch });
+    setBookingId(booking.bookingId);
+    setPickupAddress(booking.pickup);
+    setDestinationAddress(booking.destination);
+    setRetryBonus(0);
+
+    if (booking.rideMode === 'scheduled') {
+      setScheduledAtLabel(
+        booking.scheduledAt?.toLocaleString('fr-FR', {
+          weekday: 'short',
+          day: '2-digit',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        }) ?? '',
+      );
+      setStep('scheduled');
+      return;
+    }
+
+    setScheduledAtLabel('');
     setStep('searching');
     setTimeRemaining(60);
-    setRetryBonus(0); // Reset bonus
 
-    if (autoSearch) {
+    if (booking.autoSearch) {
       setIsAutoSearching(true);
-      const stopFn = startAutomaticSearch(id, { intervalSeconds: 60, maxAttempts: 10 });
+      const stopFn = startAutomaticSearch(booking.bookingId, { intervalSeconds: 60, maxAttempts: 10 });
       stopAutoSearchRef.current = stopFn;
     }
   };
@@ -140,6 +178,7 @@ export default function TaxiPage() {
 
     // Arrêter aussi via Firestore pour être sûr
     await stopAutomaticSearch(bookingId);
+    await cancelBooking(bookingId, 'Annulé par le client');
 
     try {
       // Mettre à jour le statut du booking à "cancelled"
@@ -217,6 +256,12 @@ export default function TaxiPage() {
             driverName: bookingData.driverName,
           });
           setStep('driver_found');
+          return;
+        }
+
+        if (bookingData.status === 'pending' && stepRef.current === 'scheduled') {
+          setStep('searching');
+          setTimeRemaining(60);
           return;
         }
 
@@ -301,7 +346,7 @@ export default function TaxiPage() {
           >
             <MaterialIcon name="arrow_back" size="md" />
           </button>
-          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Réserver un taxi</h1>
+          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Taxi</h1>
         </header>
 
         {/* Content */}
@@ -431,6 +476,57 @@ export default function TaxiPage() {
 
           {step === 'driver_found' && bookingId && (
             <DriverFoundView bookingId={bookingId} onComplete={() => setStep('completed')} />
+          )}
+
+          {step === 'scheduled' && bookingId && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
+              <div className="glass-card w-full sm:max-w-md sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 sm:p-8 text-center border border-white/10">
+                <div className="mb-5">
+                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto border border-primary/20">
+                    <MaterialIcon name="event" className="text-primary text-[32px]" />
+                  </div>
+                </div>
+
+                <h2 className="text-xl font-bold text-white mb-2">Réservation programmée</h2>
+                <p className="text-sm text-slate-400 mb-2">
+                  Votre course a bien été enregistrée.
+                </p>
+                {scheduledAtLabel && (
+                  <p className="text-sm font-semibold text-white mb-6">{scheduledAtLabel}</p>
+                )}
+
+                <button
+                  onClick={async () => {
+                    await triggerHaptic(ImpactStyle.Light);
+                    setStep('form');
+                    setBookingId(null);
+                    setPickupAddress('');
+                    setDestinationAddress('');
+                    setScheduledAtLabel('');
+                  }}
+                  className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+                >
+                  <MaterialIcon name="edit" size="md" />
+                  Modifier
+                </button>
+
+                <button
+                  onClick={async () => {
+                    if (!bookingId) return;
+                    await triggerHaptic(ImpactStyle.Light);
+                    await cancelBooking(bookingId, 'Annulé par le client');
+                    setStep('form');
+                    setBookingId(null);
+                    setPickupAddress('');
+                    setDestinationAddress('');
+                    setScheduledAtLabel('');
+                  }}
+                  className="w-full mt-3 h-14 glass-card text-slate-300 font-semibold rounded-2xl border border-white/10 active:scale-[0.98] transition-transform flex items-center justify-center"
+                >
+                  Annuler la réservation
+                </button>
+              </div>
+            </div>
           )}
 
           {step === 'completed' && (
