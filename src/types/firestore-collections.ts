@@ -82,6 +82,7 @@ export interface DriverCollection {
   city?: string
   zipCode?: string
   phone: string
+  licenseNumber?: string
   status: 'draft' | 'pending' | 'approved' | 'rejected' | 'suspended' | 'action_required'
   isAvailable: boolean
   rating: number
@@ -152,6 +153,13 @@ export interface DriverPrivate {
 
   // Adresse complète
   address?: string
+  province?: string
+  country?: string
+
+  // Classe de permis de conduire
+  licenseClass?: string
+  taxId?: string
+  hasFourDoors?: boolean
 
   // Données fiscales / bancaires (chiffrées AES-GCM)
   ssn?: { data: string; iv: string; salt: string }
@@ -757,6 +765,10 @@ export interface DocumentEntry {
   url: string | null
   status: 'pending' | 'approved' | 'rejected' | 'not_submitted'
   rejectionReason?: string
+  approvedAt?: Date
+  approvedBy?: string
+  rejectedAt?: Date
+  rejectedBy?: string
   submittedAt?: Date
   reviewedAt?: Date
 }

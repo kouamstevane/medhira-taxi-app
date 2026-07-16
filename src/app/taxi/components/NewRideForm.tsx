@@ -641,6 +641,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                   key={carType.id}
                   carType={carType}
                   selected={selectedCarType?.id === carType.id}
+                  estimatedPrice={selectedCarType?.id === carType.id ? estimate?.price ?? null : null}
                   onSelect={async (carType) => {
                     await triggerHaptic(ImpactStyle.Light); //  Haptic feedback (medJira.md #93)
                     setSelectedCarType(carType);
@@ -800,9 +801,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
       {detailsCarType && (
         <VehicleDetailsSheet
           carType={detailsCarType}
-          selected={selectedCarType?.id === detailsCarType.id}
           onClose={() => setDetailsCarType(null)}
-          onSelect={(carType) => setSelectedCarType(carType)}
         />
       )}
 

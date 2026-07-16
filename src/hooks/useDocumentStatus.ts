@@ -1,32 +1,18 @@
-// src/hooks/useDocumentStatus.ts
 'use client'
+
 import { useEffect, useState } from 'react'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type { DocumentEntry } from '@/types/firestore-collections'
+import {
+  computeDriverDocumentsGlobalStatus,
+  normalizeDriverDocuments,
+  type DocStatus,
+  type DriverDocumentStatusEntry,
+} from '@/features/driver-documents/catalog'
 
-export type DocStatus = 'pending' | 'approved' | 'rejected' | 'not_submitted'
-
-export interface DocumentStatusEntry {
-  key: string
-  label: string
-  status: DocStatus
-  url: string | null
-  rejectionReason?: string
-}
-
-export const DRIVER_DOC_LABELS: Record<string, string> = {
-  photoProfile: 'Photo de profil',
-  permitConduire: 'Permis de conduire',
-  casierJudiciaire: 'Casier judiciaire',
-  historiqueConduire: 'Historique chauffeur',
-  preuvePermitTravail: 'Permis de travail',
-  plaqueImmatriculation: "Plaque d'immatriculation",
-  permitCommercial: 'Permis commercial',
-  plaqueImmatriculationCommerciale: 'Plaque commerciale',
-  visiteTechniqueCommerciale: 'Visite technique commerciale',
-  certificatVille: 'Certificat ville',
-}
+export type { DocStatus }
+export type DocumentStatusEntry = DriverDocumentStatusEntry
 
 export function useDocumentStatus(uid: string | null) {
   const [documents, setDocuments] = useState<DocumentStatusEntry[]>([])
@@ -35,34 +21,47 @@ export function useDocumentStatus(uid: string | null) {
   const [globalStatus, setGlobalStatus] = useState<'all_approved' | 'has_rejected' | 'pending'>('pending')
 
   useEffect(() => {
-    if (!uid) return
-    const unsub = onSnapshot(doc(db, 'drivers', uid), (snap) => {
-      const data = snap.data()
-      const rawDocs = (data?.documents ?? {}) as Record<string, DocumentEntry>
+    if (!uid) {
+      setDocuments([])
+      setError(null)
+      setLoading(false)
+      return
+    }
 
-      const entries: DocumentStatusEntry[] = Object.keys(DRIVER_DOC_LABELS).map((key) => {
-        const entry = rawDocs[key]
-        return {
-          key,
-          label: DRIVER_DOC_LABELS[key],
-          status: entry?.status ?? 'not_submitted',
-          url: entry?.url ?? null,
-          rejectionReason: entry?.rejectionReason,
+    const currentUid = uid
+    let mounted = true
+    setLoading(true)
+    setError(null)
+
+    const unsubscribe = onSnapshot(
+      doc(db, 'drivers', currentUid, 'private', 'personal'),
+      (snap) => {
+        if (!mounted) {
+          return
         }
-      })
 
-      setDocuments(entries)
+        const rawDocuments = snap.data()?.documents as Record<string, DocumentEntry | undefined> | undefined
+        const entries = normalizeDriverDocuments(rawDocuments)
 
-      const allApproved = entries.length > 0 && entries.every(e => e.status === 'approved')
-      const hasRejected = entries.some(e => e.status === 'rejected')
-      setGlobalStatus(allApproved ? 'all_approved' : hasRejected ? 'has_rejected' : 'pending')
-      setLoading(false)
-    }, (err) => {
-      console.error('[useDocumentStatus] Erreur de synchronisation:', err)
-      setError('Erreur de connexion aux données')
-      setLoading(false)
-    })
-    return () => unsub()
+        setDocuments(entries)
+        setGlobalStatus(computeDriverDocumentsGlobalStatus(entries))
+        setLoading(false)
+      },
+      (snapshotError) => {
+        if (!mounted) {
+          return
+        }
+
+        console.error('[useDocumentStatus] Sync error:', snapshotError)
+        setError('Erreur de connexion aux données')
+        setLoading(false)
+      },
+    )
+
+    return () => {
+      mounted = false
+      unsubscribe()
+    }
   }, [uid])
 
   return { documents, loading, error, globalStatus }

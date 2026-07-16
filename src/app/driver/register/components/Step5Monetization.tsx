@@ -1,21 +1,13 @@
 "use client";
-import React from 'react';
+import React, { useState } from 'react';
 import { Loader2, ShieldCheck, Lock } from 'lucide-react';
 import { ACTIVE_MARKET } from '@/utils/constants';
+import { InputField } from '@/components/forms/InputField';
+import { useToast } from '@/hooks/useToast';
 
-/**
- * Step5Monetization — Paiement & Monétisation
- *
- * Informe le chauffeur que ses informations bancaires seront collectées
- * de manière sécurisée via le formulaire Stripe Connect après l'inscription.
- *
- * ❌ SUPPRIMÉ : formulaire IBAN/BIC (non-conforme PCI DSS)
- * ✅ REMPLACÉ : message d'information + redirection Stripe onboarding
- */
-
-// Les données bancaires ne sont plus collectées ici — Stripe les collecte via onboarding
 export type Step5FormData = {
   country: string;
+  taxId?: string;
 };
 
 interface Step5MonetizationProps {
@@ -24,17 +16,32 @@ interface Step5MonetizationProps {
   initialData?: Partial<Step5FormData>;
   loading?: boolean;
   disabled?: boolean;
+  driverType?: 'chauffeur' | 'livreur' | 'les_deux';
 }
 
 export default function Step5Monetization({
   onSubmitFinal,
   onBack,
+  initialData,
   loading = false,
   disabled = false,
+  driverType = 'chauffeur',
 }: Step5MonetizationProps) {
+  const { showError } = useToast();
+  const [taxId, setTaxId] = useState(initialData?.taxId || '');
+
+  const isChauffeur = driverType === 'chauffeur' || driverType === 'les_deux';
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmitFinal({ country: ACTIVE_MARKET });
+    if (isChauffeur && taxId.trim().length < 5) {
+      showError("Le numéro d'enregistrement fiscal est obligatoire pour le service VTC.");
+      return;
+    }
+    onSubmitFinal({
+      country: ACTIVE_MARKET,
+      taxId: isChauffeur ? taxId.trim() : undefined,
+    });
   };
 
   return (
@@ -43,6 +50,21 @@ export default function Step5Monetization({
         <h2 className="text-2xl font-bold text-white">Paiement & Monétisation</h2>
         <p className="text-[#9CA3AF] mt-2">Configuration de vos virements</p>
       </div>
+
+      {/* Informations Fiscales (VTC uniquement) */}
+      {isChauffeur && (
+        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Informations Fiscales</h3>
+          <InputField
+            label="Numéro fiscal ou d'entreprise (TPS-TVH, TVA, SIRET)"
+            value={taxId}
+            onChange={(e) => setTaxId(e.target.value)}
+            placeholder="Ex: 123456789 RT0001 (Canada) ou SIRET (France)"
+            helperText="Requis réglementairement pour émettre les factures des trajets VTC."
+            required
+          />
+        </div>
+      )}
 
       {/* Bannière Stripe */}
       <div className="bg-[#635bff]/10 border border-[#635bff]/30 p-5 rounded-xl flex items-start gap-4">

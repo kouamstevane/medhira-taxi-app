@@ -1,41 +1,51 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { Loader2, UploadCloud, FileCheck, X } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
+import { SelectField } from '@/components/forms/SelectField';
+import { InputField } from '@/components/forms/InputField';
 
-const fileSchema = z.custom<File>((v) => v instanceof File, {
-  message: "Document obligatoire"
-});
-
-const step4Schema = z.object({
-  idFront: fileSchema,
-  idBack: fileSchema,
-  licenseFront: fileSchema,
-  licenseBack: fileSchema,
-});
-
-export type Step4Files = z.infer<typeof step4Schema>;
+export type Step4Files = {
+  workEligibility: File;
+  driversAbstract?: File;
+  licenseClass?: string;
+  licenseNumber?: string;
+  licenseFront?: File;
+  licenseBack?: File;
+};
 
 interface Step4ComplianceProps {
   onNext: (files: Step4Files) => void;
   onBack: () => void;
   initialFiles?: Partial<Step4Files>;
   loading?: boolean;
+  driverType?: 'chauffeur' | 'livreur' | 'les_deux';
+  vehicleType?: 'velo' | 'scooter' | 'moto' | 'voiture';
 }
 
-export default function Step4Compliance({ onNext, onBack, initialFiles, loading }: Step4ComplianceProps) {
+export default function Step4Compliance({
+  onNext,
+  onBack,
+  initialFiles,
+  loading = false,
+  driverType = 'chauffeur',
+  vehicleType = 'voiture',
+}: Step4ComplianceProps) {
   const { showError, showWarning } = useToast();
-  
+  const isVelo = driverType === 'livreur' && vehicleType === 'velo';
+
   const [files, setFiles] = useState<{
-    idFront: File | null;
-    idBack: File | null;
+    workEligibility: File | null;
+    driversAbstract: File | null;
+    licenseClass: string;
+    licenseNumber: string;
     licenseFront: File | null;
     licenseBack: File | null;
   }>({
-    idFront: initialFiles?.idFront || null,
-    idBack: initialFiles?.idBack || null,
+    workEligibility: initialFiles?.workEligibility || null,
+    driversAbstract: initialFiles?.driversAbstract || null,
+    licenseClass: initialFiles?.licenseClass || '',
+    licenseNumber: initialFiles?.licenseNumber || '',
     licenseFront: initialFiles?.licenseFront || null,
     licenseBack: initialFiles?.licenseBack || null,
   });
@@ -45,26 +55,25 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
 
   useEffect(() => {
     return () => {
-      blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
 
-  // Gérer les previews pour les fichiers initiaux
-  React.useEffect(() => {
+  useEffect(() => {
     if (initialFiles) {
-        const newPreviews: Record<string, string> = {};
-        Object.entries(initialFiles).forEach(([key, file]) => {
-            if (file instanceof File) {
-                if (file.type.startsWith('image/')) {
-                    const url = URL.createObjectURL(file);
-                    blobUrlsRef.current.push(url);
-                    newPreviews[key] = url;
-                } else if (file.type === 'application/pdf') {
-                    newPreviews[key] = 'pdf';
-                }
-            }
-        });
-        setPreviews(newPreviews);
+      const newPreviews: Record<string, string> = {};
+      Object.entries(initialFiles).forEach(([key, file]) => {
+        if (file instanceof File) {
+          if (file.type.startsWith('image/')) {
+            const url = URL.createObjectURL(file);
+            blobUrlsRef.current.push(url);
+            newPreviews[key] = url;
+          } else if (file.type === 'application/pdf') {
+            newPreviews[key] = 'pdf';
+          }
+        }
+      });
+      setPreviews(newPreviews);
     }
   }, [initialFiles]);
 
@@ -81,37 +90,35 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      showError("Fichier trop lourd (Max 10Mo)");
+      showError('Fichier trop lourd (Max 10Mo)');
       return;
     }
 
-    setFiles(prev => ({ ...prev, [key]: file }));
+    setFiles((prev) => ({ ...prev, [key]: file }));
 
-    // Générer une preview
     if (file.type.startsWith('image/')) {
-        const oldUrl = previews[key];
-        if (oldUrl && oldUrl !== 'pdf') {
-            URL.revokeObjectURL(oldUrl);
-            blobUrlsRef.current = blobUrlsRef.current.filter(u => u !== oldUrl);
-        }
-        const url = URL.createObjectURL(file);
-        blobUrlsRef.current.push(url);
-        setPreviews(prev => ({ ...prev, [key]: url }));
+      const oldUrl = previews[key];
+      if (oldUrl && oldUrl !== 'pdf') {
+        URL.revokeObjectURL(oldUrl);
+        blobUrlsRef.current = blobUrlsRef.current.filter((u) => u !== oldUrl);
+      }
+      const url = URL.createObjectURL(file);
+      blobUrlsRef.current.push(url);
+      setPreviews((prev) => ({ ...prev, [key]: url }));
     } else if (file.type === 'application/pdf') {
-        // Simple preview logic for PDF
-        setPreviews(prev => ({ ...prev, [key]: 'pdf' }));
+      setPreviews((prev) => ({ ...prev, [key]: 'pdf' }));
     }
   };
 
   const removeFile = (key: keyof typeof files) => {
-    setFiles(prev => ({ ...prev, [key]: null }));
-    setPreviews(prev => {
-        const newPreviews = { ...prev };
-        if (newPreviews[key] && newPreviews[key] !== 'pdf') {
-            URL.revokeObjectURL(newPreviews[key]);
-        }
-        delete newPreviews[key];
-        return newPreviews;
+    setFiles((prev) => ({ ...prev, [key]: null }));
+    setPreviews((prev) => {
+      const newPreviews = { ...prev };
+      if (newPreviews[key] && newPreviews[key] !== 'pdf') {
+        URL.revokeObjectURL(newPreviews[key]);
+      }
+      delete newPreviews[key];
+      return newPreviews;
     });
     const fileInput = document.getElementById(`file-${key}`) as HTMLInputElement;
     if (fileInput) fileInput.value = '';
@@ -119,57 +126,82 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const result = step4Schema.safeParse(files);
-    
-    if (!result.success) {
-      showError("Tous les documents de conformité légale sont obligatoires.");
+
+    if (!files.workEligibility) {
+      showError("Le document d'admissibilité au travail est obligatoire.");
       return;
     }
-    
-    onNext(result.data);
+
+    if (!isVelo) {
+      if (!files.licenseNumber || files.licenseNumber.trim().length < 4) {
+        showError("Le numéro de votre permis de conduire est requis.");
+        return;
+      }
+      if (!files.driversAbstract) {
+        showError("Le dossier de conduite (Driver's Abstract) est obligatoire.");
+        return;
+      }
+      if (!files.licenseClass) {
+        showError('La classe de votre permis de conduire est requise.');
+        return;
+      }
+      if (!files.licenseFront || !files.licenseBack) {
+        showError('Les photos recto/verso de votre permis de conduire sont obligatoires.');
+        return;
+      }
+    }
+
+    onNext({
+      workEligibility: files.workEligibility,
+      driversAbstract: isVelo ? undefined : files.driversAbstract || undefined,
+      licenseClass: isVelo ? undefined : files.licenseClass || undefined,
+      licenseNumber: isVelo ? undefined : files.licenseNumber || undefined,
+      licenseFront: isVelo ? undefined : files.licenseFront || undefined,
+      licenseBack: isVelo ? undefined : files.licenseBack || undefined,
+    });
   };
 
-  const renderFileInput = (label: string, key: keyof typeof files, accept = "image/*,application/pdf") => (
+  const renderFileInput = (label: string, key: keyof typeof files, accept = 'image/*,application/pdf') => (
     <div className="border border-white/[0.06] rounded-xl p-4 bg-[#1A1A1A] flex flex-col items-center text-center">
       <label className="block text-sm font-medium text-[#9CA3AF] mb-2 w-full text-left">
         {label} <span className="text-red-500">*</span>
       </label>
-      
+
       {previews[key] ? (
         <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-[#242424] border border-white/[0.06] flex items-center justify-center group">
           {previews[key] === 'pdf' ? (
-              <div className="flex flex-col items-center justify-center p-4">
-                  <FileCheck className="w-12 h-12 text-blue-500 mb-2" />
-                  <span className="text-sm font-medium truncate max-w-[200px]">{files[key]?.name}</span>
-              </div>
+            <div className="flex flex-col items-center justify-center p-4">
+              <FileCheck className="w-12 h-12 text-blue-500 mb-2" />
+              <span className="text-sm font-medium truncate max-w-[200px]">
+                {files[key] instanceof File ? (files[key] as File).name : ''}
+              </span>
+            </div>
           ) : (
             <img src={previews[key]} alt="Preview" className="w-full h-full object-cover" />
           )}
-          
+
           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-             <button type="button" onClick={() => removeFile(key)} className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600">
-               <X size={20} />
-             </button>
+            <button type="button" onClick={() => removeFile(key)} className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600">
+              <X size={20} />
+            </button>
           </div>
         </div>
       ) : (
         <div className="relative w-full aspect-video border-2 border-dashed border-white/[0.15] rounded-lg flex flex-col items-center justify-center hover:bg-white/5 transition-colors cursor-pointer bg-[#1A1A1A]">
-          <input 
-            type="file" 
+          <input
+            type="file"
             id={`file-${key}`}
-            accept={accept} 
-            onChange={(e) => handleFileChange(e, key)} 
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+            accept={accept}
+            onChange={(e) => handleFileChange(e, key)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
           <UploadCloud size={32} className="mb-2 text-[#4B5563]" />
           <span className="text-sm font-medium text-[#9CA3AF]">Cliquez pour ajouter</span>
           <span className="text-xs text-[#4B5563] mt-1">Image ou PDF (Max 10Mo)</span>
         </div>
       )}
-      
-      <p className="text-xs text-[#9CA3AF] mt-2">
-          Assurez-vous que le texte soit lisible et sans reflet.
-      </p>
+
+      <p className="text-xs text-[#9CA3AF] mt-2">Assurez-vous que le texte soit lisible et sans reflet.</p>
     </div>
   );
 
@@ -179,37 +211,89 @@ export default function Step4Compliance({ onNext, onBack, initialFiles, loading 
         <h2 className="text-2xl font-bold text-white">Conformité Légale</h2>
         <p className="text-[#9CA3AF] mt-2">Vos documents d'identité pour validation de votre profil.</p>
         <div className="bg-[#3B82F6]/10 text-[#3B82F6] p-3 rounded-lg text-sm mt-4 font-medium flex items-center justify-center">
-             <FileCheck className="mr-2" size={18} />
-             Vérifiez la lisibilité de vos documents avant d'envoyer.
+          <FileCheck className="mr-2" size={18} />
+          Vérifiez la lisibilité de vos documents avant d'envoyer.
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        
-        {/* Card 1: Identité */}
+        {/* Section 1: Admissibilité au travail */}
         <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Pièce d'Identité ou Passeport</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderFileInput("Recto", "idFront")}
-                {renderFileInput("Verso", "idBack")}
-            </div>
+          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">
+            Preuve d'admissibilité au travail
+          </h3>
+          <p className="text-xs text-[#9CA3AF]">
+            Veuillez téléverser un document prouvant votre droit de travailler (Passeport, Certificat de naissance, Résidence
+            permanente ou Permis de travail).
+          </p>
+          <div className="grid grid-cols-1 gap-4">
+            {renderFileInput('Preuve d\'admissibilité', 'workEligibility')}
+          </div>
         </div>
 
-        {/* Card 2: Permis */}
-         <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Permis de Conduire</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderFileInput("Recto", "licenseFront")}
-                {renderFileInput("Verso", "licenseBack")}
+        {/* Section 2: Conduite & Permis (masqué pour les livreurs vélo) */}
+        {!isVelo && (
+          <>
+            <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+              <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Classe de Permis & Conduite</h3>
+              <div className="grid grid-cols-1 gap-4">
+                 <InputField
+                  label="Numéro de permis de conduire"
+                  value={files.licenseNumber}
+                  onChange={(e) => setFiles((prev) => ({ ...prev, licenseNumber: e.target.value }))}
+                  placeholder="Ex: A-1234-567890-12"
+                  required
+                />
+                <SelectField
+                  label="Classe du permis de conduire"
+                  value={files.licenseClass}
+                  onChange={(e) => setFiles((prev) => ({ ...prev, licenseClass: e.target.value }))}
+                  options={[
+                    { value: '', label: 'Sélectionnez la classe de votre permis' },
+                    { value: 'Classe 4', label: 'Classe 4 (Commercial / Rideshare)' },
+                    { value: 'Classe 1', label: 'Classe 1 (Professionnel / Poids lourd)' },
+                    { value: 'Classe 2', label: 'Classe 2 (Autobus)' },
+                    { value: 'Classe 3', label: 'Classe 3 (Camion lourd)' },
+                    { value: 'Classe 5', label: 'Classe 5 (Standard / Véhicule léger)' },
+                    { value: 'Autre', label: 'Autre / Équivalent' },
+                  ]}
+                  required
+                />
+                <div className="mt-4">
+                  <h4 className="text-sm font-semibold text-white mb-2">Dossier de conduite récent (Driver's Abstract)</h4>
+                  <p className="text-xs text-[#9CA3AF] mb-3">
+                    Téléversez l'extrait officiel de votre dossier de conduite de moins de 30 jours.
+                  </p>
+                  {renderFileInput('Dossier de conduite', 'driversAbstract')}
+                </div>
+              </div>
             </div>
-        </div>
+
+            <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+              <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Permis de Conduire (Photos)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {renderFileInput('Recto', 'licenseFront')}
+                {renderFileInput('Verso', 'licenseBack')}
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="flex gap-4 pt-4">
-           <button type="button" onClick={onBack} disabled={loading} className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={loading}
+            className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors"
+          >
             Retour
           </button>
-           <button type="submit" disabled={loading} className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] hover:bg-[#e68600] transition-colors flex justify-center items-center shadow-[0_0_20px_rgba(242,146,0,0.4)]">
-             {loading ? <Loader2 className="animate-spin mr-2" /> : null} Valider les documents
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] hover:bg-[#e68600] transition-colors flex justify-center items-center shadow-[0_0_20px_rgba(242,146,0,0.4)]"
+          >
+            {loading ? <Loader2 className="animate-spin mr-2" /> : null} Valider les documents
           </button>
         </div>
       </form>

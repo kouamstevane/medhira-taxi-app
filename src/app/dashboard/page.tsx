@@ -301,15 +301,6 @@ export default function Dashboard() {
               )}
             </button>
 
-            {/* Wallet Badge */}
-            <Link
-              href="/wallet/historique"
-              className="flex items-center gap-1.5 bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-full"
-            >
-              <MaterialIcon name="account_balance_wallet" size="sm" className="text-primary text-[18px] font-bold" />
-              <span className="text-primary font-bold text-sm">Wallet</span>
-            </Link>
-
             {/* Admin */}
             {isAdmin && (
               <button
@@ -380,12 +371,6 @@ export default function Dashboard() {
             ))}
           </div>
         </section>
-
-        {/* Driver shortcut — V1 : capacité (roles.driver != null), pas activeRole. */}
-        <div className="mb-6">
-          <BecomeProCard />
-        </div>
-
 
         {userData.roles?.driver != null && (
           <section className="mb-6">
@@ -486,6 +471,11 @@ export default function Dashboard() {
             )}
           </div>
         </section>
+
+        {/* Driver shortcut — V1 : capacité (roles.driver != null), pas activeRole. */}
+        <div className="mb-6">
+          <BecomeProCard />
+        </div>
       </main>
 
       {/* Bottom Navigation */}

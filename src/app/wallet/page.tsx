@@ -12,6 +12,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import Link from 'next/link';
 import { type Transaction, TRANSACTION_ICONS } from './_shared';
 import { timestampToDate } from '@/lib/firebase-helpers';
+import { useNotifications } from '@/hooks/useNotifications';
 
 export default function WalletPage() {
   const [balance, setBalance] = useState(0);
@@ -20,6 +21,7 @@ export default function WalletPage() {
   const [error, setError] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
     if (searchParams.get('success')) {
@@ -81,8 +83,15 @@ export default function WalletPage() {
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Mon Portefeuille</h1>
-        <button onClick={() => router.push('/notifications')} className="p-2 rounded-full hover:bg-white/5 transition">
-          <MaterialIcon name="notifications" size="md" className="text-slate-400" />
+        <button
+          onClick={() => router.push('/notifications')}
+          className="relative p-2.5 rounded-full hover:bg-white/5 transition"
+          aria-label={unreadCount > 0 ? `Notifications (${unreadCount} non lues)` : 'Notifications'}
+        >
+          <MaterialIcon name="notifications" size="lg" className="text-slate-400 text-[22px]" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 size-2.5 rounded-full bg-primary border border-background" />
+          )}
         </button>
       </header>
 
@@ -121,15 +130,20 @@ export default function WalletPage() {
           {[
             { label: 'Recharger',  icon: 'add_card', href: '/wallet/recharger', primary: true },
             { label: 'Historique', icon: 'history',   href: '/wallet/historique' },
-            { label: 'Profil',     icon: 'person',    href: '/profil' },
+            { label: 'Notifications', icon: 'notifications', href: '/notifications', showBadge: true },
           ].map(({ label, icon, href, primary }) => (
             <Link
               key={label}
               href={href}
-              className="glass-card flex flex-col items-center gap-2 p-4 rounded-2xl border border-white/5 hover:bg-white/5 active:scale-[0.97] transition-all"
+              className="glass-card relative flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-2xl border border-white/5 px-3 py-4 hover:bg-white/5 active:scale-[0.97] transition-all"
             >
-              <MaterialIcon name={icon} size="lg" className={primary ? 'text-primary' : 'text-slate-300'} />
+              <MaterialIcon name={icon} size="lg" className={primary ? 'text-primary text-[24px]' : 'text-slate-300 text-[24px]'} />
               <span className="text-xs font-medium text-slate-300">{label}</span>
+              {href === '/notifications' && unreadCount > 0 && (
+                <span className="absolute top-3 right-3 size-5 rounded-full bg-primary text-[10px] font-bold text-background flex items-center justify-center border border-background">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </Link>
           ))}
         </div>

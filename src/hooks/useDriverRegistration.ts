@@ -9,8 +9,6 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AuthService } from '@/services';
 import { createAuthAccount } from '@/services/auth.service';
-import { serverEncryptionService } from '@/services/server-encryption.service';
-import { auditLoggingService } from '@/services/audit-logging.service';
 import { secureStorage } from '@/services/secureStorage.service';
 import { StructuredLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
@@ -53,11 +51,9 @@ export function useDriverRegistration() {
   const [biometricsPhoto, setBiometricsPhoto] = useState<File | null>(null);
   const [vehicleFiles, setVehicleFiles] = useState<{
     registration?: File; insurance?: File; techControl?: File;
-    interiorPhoto?: File; exteriorPhoto?: File;
+    exteriorPhoto?: File;
   }>({});
-  const [complianceFiles, setComplianceFiles] = useState<{
-    idFront?: File; idBack?: File; licenseFront?: File; licenseBack?: File;
-  }>({});
+  const [complianceFiles, setComplianceFiles] = useState<Partial<Step4Files>>({});
 
   const connectivityOnline = useConnectivityMonitor(() => {});
   const isMountedRef = useRef(true);
@@ -82,7 +78,7 @@ export function useDriverRegistration() {
     try {
       const progress: RegistrationProgress = {
         step1Data: { ...step1Data, password: undefined },
-        step2Data: { ...step2Data, ssn: undefined },
+        step2Data,
         step3Data,
         currentStep,
         timestamp: new Date().toISOString(),
@@ -166,8 +162,12 @@ export function useDriverRegistration() {
                 ...prev,
                 firstName: data.firstName || '',
                 lastName: data.lastName || '',
+                city: data.city || '',
+                zipCode: data.zipCode || '',
                 dob: (privateData.dob as string) || '',
-                ssn: '',
+                address: (privateData.address as string) || '',
+                province: (privateData.province as string) || '',
+                country: (privateData.country as string) || '',
               }));
             } else if (['pending', 'approved', 'active'].includes(data.status)) {
               setError('Votre dossier est en cours de traitement ou déjà validé.');
@@ -375,47 +375,21 @@ export function useDriverRegistration() {
         return uploadFileWithRetry(file, category, userId);
       };
 
-      // Validation SSN AVANT de lancer uploads + encryption (early-fail).
-      if (!step2Data.ssn || step2Data.ssn.trim().length < 5) {
-        setError('Le numéro d\'assurance sociale est requis. Veuillez compléter l\'étape Identité.');
-        setCurrentStep(2);
-        setLoading(false);
-        isSubmittingRef.current = false;
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Lance uploads ET encryption SSN EN PARALLÈLE — l'encryption ne dépend
-      // pas des uploads (gain ~1s sur la connexion lente).
+      // Lance uploads
       const uploadsPromise = Promise.allSettled([
         uploadFileWithRetry(biometricsPhoto, 'biometrics', userId),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.registration, 'documents') : Promise.resolve(null),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.insurance, 'documents') : Promise.resolve(null),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.techControl, 'documents') : Promise.resolve(null),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.exteriorPhoto, 'vehicle_photos') : Promise.resolve(null),
-        requiresVehicleDocs ? uploadIfValid(vehicleFiles.interiorPhoto, 'vehicle_photos') : Promise.resolve(null),
-        uploadFileWithRetry(complianceFiles.idFront!, 'compliance', userId),
-        uploadFileWithRetry(complianceFiles.idBack!, 'compliance', userId),
-        uploadFileWithRetry(complianceFiles.licenseFront!, 'compliance', userId),
-        uploadFileWithRetry(complianceFiles.licenseBack!, 'compliance', userId),
+        uploadFileWithRetry(complianceFiles.workEligibility!, 'compliance', userId),
+        (vehicleType !== 'velo') ? uploadFileWithRetry(complianceFiles.driversAbstract!, 'compliance', userId) : Promise.resolve(null),
+        (vehicleType !== 'velo') ? uploadFileWithRetry(complianceFiles.licenseFront!, 'compliance', userId) : Promise.resolve(null),
+        (vehicleType !== 'velo') ? uploadFileWithRetry(complianceFiles.licenseBack!, 'compliance', userId) : Promise.resolve(null),
       ]);
 
-      const ssnPromise = retryWithBackoff(
-        () => serverEncryptionService.encryptSSN(step2Data.ssn!),
-        { maxAttempts: 3 }
-      );
-
-      const [uploadResultsValue, encryptedSsn] = await Promise.all([
-        uploadsPromise,
-        ssnPromise,
-      ]);
+      const uploadResultsValue = await uploadsPromise;
       uploadResults = uploadResultsValue;
-
-      // Audit log fire-and-forget : ne bloque pas le flow utilisateur.
-      // Erreurs catchées pour éviter unhandled rejection — log côté serveur.
-      auditLoggingService.logSSNEncryption(userId, true).catch((err) => {
-        console.warn('[Registration] audit log SSN encryption failed (non-blocking)', err);
-      });
 
       const failedUploads = uploadResults.filter(r => r.status === 'rejected');
       if (failedUploads.length > 0) {
@@ -428,15 +402,9 @@ export function useDriverRegistration() {
 
       const carData = (driverType === 'chauffeur' || driverType === 'les_deux') ? {
         year: step3Data.productionYear,
-        seats: step3Data.passengerSeats,
-        mileage: step3Data.mileage,
       } : undefined;
 
-      // Construit la map documents conditionnellement : n'inclure une entrée
-      // que si l'upload a effectivement produit une URL (évite les faux documents
-      // "pending" avec url=null pour les livreurs non-voiture).
-      // RGPD #C2 : cette map vit dans la sous-collection `drivers/{uid}/private/personal`
-      // et NON à la racine du doc driver.
+      // Construit la map documents conditionnellement
       const documents: Record<string, { url: string; status: string }> = {};
       const addDoc = (key: string, url: string | null) => {
         if (url) documents[key] = { url, status: 'pending' };
@@ -446,11 +414,10 @@ export function useDriverRegistration() {
       addDoc('insurance', getValue(uploadResults[2]));
       addDoc('techControl', getValue(uploadResults[3]));
       addDoc('vehicleExterior', getValue(uploadResults[4]));
-      addDoc('vehicleInterior', getValue(uploadResults[5]));
-      addDoc('idFront', getValue(uploadResults[6]));
-      addDoc('idBack', getValue(uploadResults[7]));
-      addDoc('licenseFront', getValue(uploadResults[8]));
-      addDoc('licenseBack', getValue(uploadResults[9]));
+      addDoc('workEligibility', getValue(uploadResults[5]));
+      addDoc('driversAbstract', getValue(uploadResults[6]));
+      addDoc('licenseFront', getValue(uploadResults[7]));
+      addDoc('licenseBack', getValue(uploadResults[8]));
 
       // === RGPD #C2 : split public vs private ===
       // Champs publics — doc racine `drivers/{uid}` (lisible par utilisateurs auth)
@@ -460,6 +427,9 @@ export function useDriverRegistration() {
         lastName: step2Data.lastName,
         email: step1Data.email || auth.currentUser?.email || '',
         phone: step2Data.phone || '',
+        city: step2Data.city || '',
+        zipCode: step2Data.zipCode || '',
+        licenseNumber: complianceFiles.licenseNumber || '',
         driverType,
         vehicleType,
         cityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',
@@ -476,7 +446,12 @@ export function useDriverRegistration() {
       // Champs sensibles — sous-collection `drivers/{uid}/private/personal`
       const privateData: Record<string, unknown> = {
         dob: step2Data.dob,
-        ssn: encryptedSsn,
+        address: step2Data.address || '',
+        province: step2Data.province || '',
+        country: step2Data.country || '',
+        licenseClass: complianceFiles.licenseClass || '',
+        hasFourDoors: step3Data.hasFourDoors || false,
+        taxId: _data.taxId || '',
         documents,
         updatedAt: firestoreServerTimestamp(),
       };

@@ -2,8 +2,7 @@
  * VehicleDetailsSheet
  *
  * Bottom sheet présentant la description complète d'un type de véhicule
- * (illustration grand format, tagline, description Uber-like, points forts,
- * tarifs). Permet de sélectionner directement la catégorie.
+ * (illustration grand format, tagline, description Uber-like, points forts).
  */
 
 'use client';
@@ -11,18 +10,15 @@
 import { X, Check, Users, Clock } from 'lucide-react';
 import { useEffect } from 'react';
 import { CarType } from '@/types';
-import { CURRENCY_CODE } from '@/utils/constants';
 import { getVehicleMeta } from '@/app/taxi/data/vehicleCatalog';
 import { TaxiIcon } from './TaxiIcon';
 
 interface VehicleDetailsSheetProps {
   carType: CarType;
-  selected: boolean;
   onClose: () => void;
-  onSelect: (carType: CarType) => void;
 }
 
-export function VehicleDetailsSheet({ carType, selected, onClose, onSelect }: VehicleDetailsSheetProps) {
+export function VehicleDetailsSheet({ carType, onClose }: VehicleDetailsSheetProps) {
   const meta = getVehicleMeta(carType);
 
   // Fermeture clavier (Escape) — confort desktop / Capacitor web view
@@ -51,7 +47,7 @@ export function VehicleDetailsSheet({ carType, selected, onClose, onSelect }: Ve
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#0F0F0F] w-full sm:max-w-lg sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl animate-slideUp max-h-[90vh] overflow-y-auto"
+        className="bg-[#0F0F0F] w-full sm:max-w-lg sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl animate-slideUp max-h-[90vh] overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+5rem)]"
       >
         {/* Header */}
         <div className="sticky top-0 z-10 bg-[#0F0F0F] border-b border-white/[0.05] px-4 sm:px-6 py-3 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
@@ -109,42 +105,10 @@ export function VehicleDetailsSheet({ carType, selected, onClose, onSelect }: Ve
           </ul>
         </div>
 
-        {/* Tarification */}
-        <div className="px-4 sm:px-6 py-4">
-          <h3 className="text-sm font-semibold text-white mb-2">Tarification</h3>
-          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl divide-y divide-white/[0.04]">
-            <div className="flex items-center justify-between px-3 py-2 text-sm">
-              <span className="text-slate-400">Prix de base</span>
-              <span className="text-white font-medium">{carType.basePrice} {CURRENCY_CODE}</span>
-            </div>
-            <div className="flex items-center justify-between px-3 py-2 text-sm">
-              <span className="text-slate-400">Par kilomètre</span>
-              <span className="text-white font-medium">{carType.pricePerKm} {CURRENCY_CODE}</span>
-            </div>
-            <div className="flex items-center justify-between px-3 py-2 text-sm">
-              <span className="text-slate-400">Par minute</span>
-              <span className="text-white font-medium">{carType.pricePerMinute} {CURRENCY_CODE}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* CTA */}
         <div className="sticky bottom-0 bg-[#0F0F0F] border-t border-white/[0.05] px-4 sm:px-6 py-3">
-          <button
-            type="button"
-            onClick={() => {
-              onSelect(carType);
-              onClose();
-            }}
-            className={`w-full py-3 rounded-xl font-semibold text-base transition-colors ${
-              selected
-                ? 'bg-white/[0.06] text-slate-300 hover:bg-white/[0.08]'
-                : 'bg-primary text-white hover:bg-primary/90 active:bg-primary/80'
-            }`}
-            style={{ minHeight: '48px' }}
-          >
-            {selected ? 'Déjà sélectionné' : `Choisir ${carType.name}`}
-          </button>
+          <p className="text-xs text-slate-500 text-center">
+            Sélectionnez cette catégorie depuis la liste principale.
+          </p>
         </div>
       </div>
     </div>

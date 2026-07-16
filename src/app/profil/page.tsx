@@ -29,6 +29,37 @@ interface ProfileFormData {
   bio: string;
 }
 
+interface SectionTitleProps {
+  icon: string;
+  children: React.ReactNode;
+}
+
+function SectionTitle({ icon, children }: SectionTitleProps) {
+  return (
+    <div className="mb-3 flex items-center gap-2 px-1">
+      <MaterialIcon name={icon} className="text-primary text-[18px]" />
+      <h3 className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">{children}</h3>
+    </div>
+  );
+}
+
+interface InfoRowProps {
+  label: string;
+  value?: string;
+  emptyLabel?: string;
+}
+
+function InfoRow({ label, value, emptyLabel = 'Non renseignÃ©' }: InfoRowProps) {
+  const displayValue = value && value.length > 0 ? value : emptyLabel;
+
+  return (
+    <div className="py-2">
+      <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">{label}</p>
+      <p className={`text-[15px] ${value ? 'text-white' : 'italic text-slate-500'}`}>{displayValue}</p>
+    </div>
+  );
+}
+
 export default function ProfilPage() {
   const [userData, setUserData] = useState({
     firstName: '',
@@ -40,6 +71,7 @@ export default function ProfilPage() {
     country: 'Canada',
     bio: ''
   });
+  const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState('');
   const [loading, setLoading] = useState(true);
@@ -91,6 +123,7 @@ export default function ProfilPage() {
 
         if (userDocSnap.exists()) {
           const data = userDocSnap.data();
+          setHasPaymentMethod(Boolean(data.defaultPaymentMethodId));
           setUserData({
             firstName: data.firstName || '',
             lastName: data.lastName || '',
@@ -161,13 +194,13 @@ export default function ProfilPage() {
       // Update local state
       setUserData(prev => ({ ...prev, ...data }));
       setEditing(false);
-      showSuccess("Profil mis à jour avec succès");
+      showSuccess("Profil mis Ã  jour avec succÃ¨s");
     } catch (error) {
-      // Logger les détails de l'erreur pour le debugging
-      logFirestoreError(error, "mise à jour du profil client");
+      // Logger les dÃ©tails de l'erreur pour le debugging
+      logFirestoreError(error, "mise Ã  jour du profil client");
 
-      // Afficher un message d'erreur explicite à l'utilisateur
-      const errorMessage = getFirestoreErrorMessage(error, "mise à jour de votre profil");
+      // Afficher un message d'erreur explicite Ã  l'utilisateur
+      const errorMessage = getFirestoreErrorMessage(error, "mise Ã  jour de votre profil");
       showError(errorMessage);
       setError(errorMessage);
     } finally {
@@ -177,7 +210,7 @@ export default function ProfilPage() {
 
   const fetchHistory = async (userId: string) => {
     try {
-      // Obtenir la date du début de la journée (00:00:00)
+      // Obtenir la date du dÃ©but de la journÃ©e (00:00:00)
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
 
@@ -215,7 +248,7 @@ export default function ProfilPage() {
       setHistory(combinedHistory.slice(0, 5));
     } catch (error) {
       console.error("Erreur chargement historique:", error);
-      // Ne pas bloquer l'affichage du profil si l'historique échoue
+      // Ne pas bloquer l'affichage du profil si l'historique Ã©choue
     }
   };
 
@@ -226,8 +259,8 @@ export default function ProfilPage() {
       await signOut(auth);
       router.replace('/login');
     } catch (err) {
-      console.error('Erreur de déconnexion:', err);
-      showError("Impossible de vous déconnecter. Réessayez.");
+      console.error('Erreur de dÃ©connexion:', err);
+      showError("Impossible de vous dÃ©connecter. RÃ©essayez.");
       setLoggingOut(false);
     }
   };
@@ -239,16 +272,16 @@ export default function ProfilPage() {
       const requestAccountDeletion = httpsCallable(functions, 'requestAccountDeletion');
       await requestAccountDeletion({ confirm: 'DELETE_MY_ACCOUNT' });
       try { await signOut(auth); } catch {}
-      showSuccess('Votre compte a été supprimé.');
+      showSuccess('Votre compte a Ã©tÃ© supprimÃ©.');
       router.replace('/login');
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       console.error('Erreur suppression compte:', error);
-      let msg = "Impossible de supprimer le compte. Réessayez plus tard.";
+      let msg = "Impossible de supprimer le compte. RÃ©essayez plus tard.";
       if (error?.message?.includes('courses') || error?.message?.includes('commandes')) {
         msg = "Vous avez des courses ou commandes en cours. Annulez-les ou attendez leur fin avant de supprimer le compte.";
       } else if (error?.code === 'functions/resource-exhausted') {
-        msg = "Trop de tentatives. Réessayez dans une heure.";
+        msg = "Trop de tentatives. RÃ©essayez dans une heure.";
       }
       showError(msg);
       setDeleting(false);
@@ -345,14 +378,14 @@ export default function ProfilPage() {
                   label="Email"
                   value={userData.email}
                   disabled
-                  helperText="L'adresse email ne peut pas être modifiée."
+                  helperText="L'adresse email ne peut pas Ãªtre modifiÃ©e."
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InputField
                   {...form.register('firstName')}
-                  label="Prénom"
-                  placeholder="Prénom"
+                  label="PrÃ©nom"
+                  placeholder="PrÃ©nom"
                   required
                 />
                 <InputField
@@ -367,7 +400,7 @@ export default function ProfilPage() {
                  <InputField
                   type="tel"
                   {...form.register('phone')}
-                  label="Numéro de téléphone"
+                  label="NumÃ©ro de tÃ©lÃ©phone"
                   placeholder="514XXXXXXX"
                   helperText="Format sans le code pays (+1)."
                   required
@@ -427,46 +460,30 @@ export default function ProfilPage() {
               </div>
             </form>
           ) : (
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-slate-500">Email</p>
-                <p className="font-medium text-white">{userData.email || 'Non renseigné'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-500">Prénom</p>
-                <p className="font-medium text-white">{userData.firstName || 'Non renseigné'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-500">Nom</p>
-                <p className="font-medium text-white">{userData.lastName || 'Non renseigné'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-500">Téléphone</p>
-                <p className="font-medium text-white">{userData.phone ? `+1 ${userData.phone}` : 'Non renseigné'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-500">Adresse</p>
-                <p className="font-medium text-white">{userData.address || 'Non renseigné'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-500">Ville</p>
-                <p className="font-medium text-white">{userData.city || 'Non renseigné'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-500">Pays</p>
-                <p className="font-medium text-white">{userData.country || 'Non renseigné'}</p>
-              </div>
-              <div>
-                <p className="text-sm text-slate-500">A propos</p>
-                <p className="font-medium text-white whitespace-pre-line">{userData.bio || 'Aucune description'}</p>
+            <div className="rounded-2xl border border-white/[0.04] bg-white/[0.015] px-5 py-4">
+              <SectionTitle icon="person">Informations personnelles</SectionTitle>
+              <div className="divide-y divide-white/[0.04]">
+                <InfoRow label="Prénom" value={userData.firstName} />
+                <InfoRow label="Nom" value={userData.lastName} />
+                <InfoRow label="Email" value={userData.email} />
+                <InfoRow label="Téléphone" value={userData.phone ? `+1 ${userData.phone}` : ""} />
+                <InfoRow label="Adresse" value={userData.address} />
+                <InfoRow label="Ville" value={userData.city} />
+                <InfoRow label="Pays" value={userData.country} />
+                <div className="py-2">
+                  <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">À propos</p>
+                  <p className="text-[15px] whitespace-pre-line text-white/90">{userData.bio || "Aucune description"}</p>
+                </div>
               </div>
               <div className="pt-4">
                 <button
                   onClick={() => setEditing(true)}
-                  className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                  className="w-full h-12 rounded-full bg-white/10 px-6 text-sm font-medium text-white transition hover:bg-white/15 active:scale-[0.98]"
                 >
-                  <MaterialIcon name="edit" size="md" />
-                  Modifier le profil
+                  <span className="inline-flex items-center gap-2">
+                    <MaterialIcon name="edit" size="md" />
+                    Modifier
+                  </span>
                 </button>
               </div>
             </div>
@@ -474,61 +491,23 @@ export default function ProfilPage() {
           </div>
         </GlassCard>
 
-        {/* Payment Setup Banner — Ajouter carte bancaire */}
-        <div
-          onClick={() => router.push('/auth/setup-payment')}
-          className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/20 cursor-pointer active:scale-[0.98] transition-transform"
-        >
-          <div className="flex items-center gap-3">
-            <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-              <MaterialIcon name="credit_card" className="text-primary text-xl" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
-              <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sécurité</p>
-            </div>
-            <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
-          </div>
-        </div>
-
-        {/* Account Settings */}
-        <div className="mt-8">
-          <h2 className="text-xl font-bold text-white mb-4">Paramètres du compte</h2>
-          <GlassCard className="p-2 divide-y divide-white/[0.06]">
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="w-full flex items-center gap-3 p-4 text-left hover:bg-white/5 transition rounded-xl disabled:opacity-50"
-            >
-              <div className="size-10 rounded-full bg-white/5 flex items-center justify-center flex-shrink-0">
-                <MaterialIcon name="logout" className="text-slate-300" />
+        {!hasPaymentMethod && (
+          <div
+            onClick={() => router.push('/auth/setup-payment')}
+            className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/20 cursor-pointer active:scale-[0.98] transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                <MaterialIcon name="credit_card" className="text-primary text-xl" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white font-medium text-sm">Se déconnecter</p>
-                <p className="text-slate-400 text-xs mt-0.5">Quitter votre session sur cet appareil</p>
-              </div>
-              {loggingOut ? (
-                <MaterialIcon name="refresh" className="animate-spin text-slate-400" size="sm" />
-              ) : (
-                <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
-              )}
-            </button>
-
-            <button
-              onClick={() => { setDeleteConfirmText(''); setShowDeleteModal(true); }}
-              className="w-full flex items-center gap-3 p-4 text-left hover:bg-destructive/5 transition rounded-xl"
-            >
-              <div className="size-10 rounded-full bg-destructive/15 flex items-center justify-center flex-shrink-0">
-                <MaterialIcon name="delete_forever" className="text-destructive" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-destructive font-medium text-sm">Supprimer mon compte</p>
-                <p className="text-slate-400 text-xs mt-0.5">Action irréversible — toutes vos données seront effacées</p>
+                <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
+                <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sÃ©curitÃ©</p>
               </div>
               <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
-            </button>
-          </GlassCard>
-        </div>
+            </div>
+          </div>
+        )}
 
         {/* Delete Account Confirmation Modal */}
         {showDeleteModal && (
@@ -546,14 +525,14 @@ export default function ProfilPage() {
                 </div>
                 <h3 className="text-xl font-bold text-white">Supprimer votre compte ?</h3>
                 <p className="text-slate-400 text-sm mt-2">
-                  Cette action est <strong className="text-destructive">irréversible</strong>. Vos données personnelles seront supprimées et votre historique de courses sera anonymisé conformément au RGPD.
+                  Cette action est <strong className="text-destructive">irrÃ©versible</strong>. Vos donnÃ©es personnelles seront supprimÃ©es et votre historique de courses sera anonymisÃ© conformÃ©ment au RGPD.
                 </p>
               </div>
 
               <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-4 text-xs text-slate-300 space-y-1">
-                <p>• Profil, photos et documents : supprimés</p>
-                <p>• Historique financier : anonymisé (obligation légale)</p>
-                <p>• Vous serez immédiatement déconnecté</p>
+                <p>â€¢ Profil, photos et documents : supprimÃ©s</p>
+                <p>â€¢ Historique financier : anonymisÃ© (obligation lÃ©gale)</p>
+                <p>â€¢ Vous serez immÃ©diatement dÃ©connectÃ©</p>
               </div>
 
               <label className="block text-sm text-slate-300 mb-2">
@@ -597,14 +576,9 @@ export default function ProfilPage() {
           </div>
         )}
 
-        {/* Section Dernières commandes */}
+        {/* Section DerniÃ¨res commandes */}
         <div className="mt-8">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-white">Commandes du jour</h2>
-            <Link href="/historique" className="text-sm font-medium text-primary hover:text-[#ffae33] transition">
-              Voir tout →
-            </Link>
-          </div>
+          <h2 className="text-xl font-bold text-white mb-4">Commandes du jour</h2>
           <div className="space-y-3">
             {history.length > 0 ? (
               history.map(item => {
@@ -622,7 +596,7 @@ export default function ProfilPage() {
                     <div>
                       <p className="font-semibold text-white">{type} - {destination || description}</p>
                       <p className="text-sm text-slate-400">
-                        {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} • {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
+                        {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} Ã  {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} â€¢ {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
                       </p>
                     </div>
                     <span className={`px-3 py-1 text-xs font-medium rounded-full ${
@@ -645,6 +619,40 @@ export default function ProfilPage() {
             )}
           </div>
         </div>
+
+        <div className="mt-8">
+          <SectionTitle icon="shield">Compte et sécurité</SectionTitle>
+          <GlassCard className="divide-y divide-white/[0.04] rounded-2xl">
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="flex w-full items-center justify-between rounded-t-2xl px-5 py-4 transition hover:bg-white/[0.02] disabled:opacity-50"
+            >
+              <div className="flex items-center gap-3">
+                <MaterialIcon name="logout" className="text-[20px] text-orange-400" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-orange-400">Se déconnecter</p>
+                  <p className="text-xs text-slate-400">Quitter votre session sur cet appareil</p>
+                </div>
+              </div>
+              <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
+            </button>
+
+            <button
+              onClick={() => { setDeleteConfirmText(''); setShowDeleteModal(true); }}
+              className="flex w-full items-center justify-between rounded-b-2xl px-5 py-4 transition hover:bg-white/[0.02]"
+            >
+              <div className="flex items-center gap-3">
+                <MaterialIcon name="delete_forever" className="text-[20px] text-red-400" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-red-400">Supprimer mon compte</p>
+                  <p className="text-xs text-slate-400">Action irréversible — toutes vos données seront effacées</p>
+                </div>
+              </div>
+              <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
+            </button>
+          </GlassCard>
+        </div>
       </div>
 
       {/* Bottom Navigation */}
@@ -652,3 +660,4 @@ export default function ProfilPage() {
     </div>
   );
 }
+

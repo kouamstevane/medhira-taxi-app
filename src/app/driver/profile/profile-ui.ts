@@ -23,6 +23,19 @@ export interface DocumentsProfileSummary {
   cta: string;
 }
 
+export interface DriverVerificationBadge {
+  label: string;
+  tone: 'success' | 'warning' | 'danger' | 'neutral';
+}
+
+export interface DriverAvailabilityProfileState {
+  label: string;
+  detail: string;
+  description: string;
+  isInteractive: boolean;
+  displayAvailable: boolean;
+}
+
 function clean(value?: string | null): string | null {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : null;
@@ -59,7 +72,7 @@ export function getDocumentsProfileSummary(documents: DocumentSummaryInput[]): D
     };
   }
 
-  const actionCount = documents.filter(doc => doc.status === 'not_submitted' || doc.status === 'rejected').length;
+  const actionCount = documents.filter((document) => document.status === 'not_submitted' || document.status === 'rejected').length;
   if (actionCount > 0) {
     return {
       title: `${actionCount} document${actionCount > 1 ? 's' : ''} à compléter`,
@@ -69,7 +82,7 @@ export function getDocumentsProfileSummary(documents: DocumentSummaryInput[]): D
     };
   }
 
-  const pendingCount = documents.filter(doc => doc.status === 'pending').length;
+  const pendingCount = documents.filter((document) => document.status === 'pending').length;
   if (pendingCount > 0) {
     return {
       title: 'Documents en vérification',
@@ -79,11 +92,78 @@ export function getDocumentsProfileSummary(documents: DocumentSummaryInput[]): D
     };
   }
 
-  const approvedCount = documents.filter(doc => doc.status === 'approved').length;
+  const approvedCount = documents.filter((document) => document.status === 'approved').length;
   return {
     title: 'Documents validés',
     subtitle: `${approvedCount}/${documents.length} documents approuvés.`,
     tone: 'success',
     cta: 'Consulter',
+  };
+}
+
+export function getDriverVerificationBadges({
+  isEmailVerified,
+  driverStatus,
+}: {
+  isEmailVerified: boolean;
+  driverStatus?: string | null;
+}): DriverVerificationBadge[] {
+  const badges: DriverVerificationBadge[] = [
+    {
+      label: isEmailVerified ? 'Email vérifié' : 'Email à vérifier',
+      tone: isEmailVerified ? 'success' : 'warning',
+    },
+  ];
+
+  switch (driverStatus) {
+    case 'approved':
+      badges.push({ label: 'Compte chauffeur approuvé', tone: 'success' });
+      break;
+    case 'rejected':
+    case 'action_required':
+    case 'suspended':
+      badges.push({ label: 'Dossier à corriger', tone: 'danger' });
+      break;
+    default:
+      badges.push({ label: 'Dossier en attente', tone: 'warning' });
+      break;
+  }
+
+  return badges;
+}
+
+export function getDriverAvailabilityProfileState({
+  isApproved,
+  isAvailable,
+}: {
+  isApproved: boolean;
+  isAvailable: boolean;
+}): DriverAvailabilityProfileState {
+  if (!isApproved) {
+    return {
+      label: 'Disponibilité chauffeur',
+      detail: 'Disponible après validation admin',
+      description: 'Votre compte doit être approuvé avant de recevoir des courses.',
+      isInteractive: false,
+      displayAvailable: false,
+    };
+  }
+
+  if (isAvailable) {
+    return {
+      label: 'Disponible pour des courses',
+      detail: 'Activée',
+      description: 'Vous pouvez recevoir des demandes dès maintenant.',
+      isInteractive: true,
+      displayAvailable: true,
+    };
+  }
+
+  return {
+    label: 'Disponible pour des courses',
+    detail: 'Désactivée',
+    description: 'Activez cette option pour recevoir des demandes.',
+    isInteractive: true,
+    displayAvailable: false,
   };
 }

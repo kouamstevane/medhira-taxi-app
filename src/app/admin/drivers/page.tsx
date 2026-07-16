@@ -40,6 +40,7 @@ export interface Driver {
   driverType?: 'chauffeur' | 'livreur' | 'les_deux';
   licenseNumber: string;
   city: string;
+  zipCode?: string;
   car: {
     model: string;
     plate: string;
@@ -593,7 +594,13 @@ export default function AdminDriversPage() {
                     { label: 'Email', value: selectedDriver.email },
                     { label: 'Téléphone', value: (selectedDriver.phone || selectedDriver.phoneNumber) },
                     { label: 'Numéro de permis', value: (selectedDriver.licenseNumber || 'Non renseigné') },
+                    { label: 'Classe de permis', value: (selectedDriverPrivate?.licenseClass || 'Non renseignée') },
+                    { label: 'Numéro fiscal / SIRET', value: (selectedDriverPrivate?.taxId || 'Non renseigné') },
+                    { label: 'Adresse de résidence', value: (selectedDriverPrivate?.address || 'Non renseignée') },
                     { label: 'Ville', value: (selectedDriver.city || 'Non renseignée') },
+                    { label: 'Code Postal', value: (selectedDriver.zipCode || 'Non renseigné') },
+                    { label: 'Province', value: (selectedDriverPrivate?.province || 'Non renseignée') },
+                    { label: 'Pays', value: (selectedDriverPrivate?.country || 'Non renseigné') },
                   ].map((item, idx) => (
                     <div key={idx}>
                       <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{item.label}</span>
@@ -616,6 +623,7 @@ export default function AdminDriversPage() {
                     { label: 'Marque/Modèle', value: (selectedDriver.car?.brand ? `${selectedDriver.car.brand} ${selectedDriver.car.model}` : (selectedDriver.car?.model || selectedDriver.carModel)) },
                     { label: 'Plaque d\'immatriculation', value: (selectedDriver.car?.plate || selectedDriver.carPlate) },
                     { label: 'Couleur', value: (selectedDriver.car?.color || selectedDriver.carColor) },
+                    { label: 'Déclaration 4 portes VTC', value: (selectedDriverPrivate?.hasFourDoors ? 'Oui, certifié' : 'Non') },
                   ].map((item, idx) => (
                     <div key={idx}>
                       <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{item.label}</span>
@@ -645,15 +653,14 @@ export default function AdminDriversPage() {
                     };
                     return [
                       { label: 'Photo de profil', src: urlOf('biometricPhoto'), id: 'biometricPhoto' },
+                      { label: 'Admissibilité au travail', src: urlOf('workEligibility'), id: 'workEligibility' },
+                      { label: 'Dossier de conduite', src: urlOf('driversAbstract'), id: 'driversAbstract' },
                       { label: 'Permis (Recto)', src: urlOf('licenseFront') || urlOf('licensePhoto'), id: 'licensePhoto' },
                       { label: 'Permis (Verso)', src: urlOf('licenseBack'), id: 'licenseBack' },
-                      { label: 'Identité (Recto)', src: urlOf('idFront'), id: 'idFront' },
-                      { label: 'Identité (Verso)', src: urlOf('idBack'), id: 'idBack' },
                       { label: 'Carte grise', src: urlOf('carRegistration'), id: 'carRegistration' },
                       { label: 'Assurance', src: urlOf('insurance'), id: 'insurance' },
                       { label: 'Contrôle Technique', src: urlOf('techControl'), id: 'techControl' },
                       { label: 'Véhicule (Extérieur)', src: urlOf('vehicleExterior'), id: 'vehicleExterior' },
-                      { label: 'Véhicule (Intérieur)', src: urlOf('vehicleInterior'), id: 'vehicleInterior' },
                     ];
                   })().map((doc, idx) => doc.src ? (
                     <div key={idx} className="group flex flex-col gap-2">

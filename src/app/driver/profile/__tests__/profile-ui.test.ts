@@ -1,4 +1,9 @@
-﻿import { getDocumentsProfileSummary, getVehicleProfileSummary } from '../profile-ui';
+import {
+  getDocumentsProfileSummary,
+  getDriverAvailabilityProfileState,
+  getDriverVerificationBadges,
+  getVehicleProfileSummary,
+} from '../profile-ui';
 
 describe('driver profile UI summaries', () => {
   it('summarizes an empty vehicle as an action to complete', () => {
@@ -45,6 +50,36 @@ describe('driver profile UI summaries', () => {
       subtitle: '2/2 documents approuvés.',
       tone: 'success',
       cta: 'Consulter',
+    });
+  });
+
+  it('separates email verification from driver approval', () => {
+    expect(getDriverVerificationBadges({ isEmailVerified: true, driverStatus: 'pending' })).toEqual([
+      { label: 'Email vérifié', tone: 'success' },
+      { label: 'Dossier en attente', tone: 'warning' },
+    ]);
+
+    expect(getDriverVerificationBadges({ isEmailVerified: true, driverStatus: 'approved' })).toEqual([
+      { label: 'Email vérifié', tone: 'success' },
+      { label: 'Compte chauffeur approuvé', tone: 'success' },
+    ]);
+  });
+
+  it('locks availability until the admin approves the driver account', () => {
+    expect(getDriverAvailabilityProfileState({ isApproved: false, isAvailable: true })).toEqual({
+      label: 'Disponibilité chauffeur',
+      detail: 'Disponible après validation admin',
+      description: 'Votre compte doit être approuvé avant de recevoir des courses.',
+      isInteractive: false,
+      displayAvailable: false,
+    });
+
+    expect(getDriverAvailabilityProfileState({ isApproved: true, isAvailable: true })).toEqual({
+      label: 'Disponible pour des courses',
+      detail: 'Activée',
+      description: 'Vous pouvez recevoir des demandes dès maintenant.',
+      isInteractive: true,
+      displayAvailable: true,
     });
   });
 });

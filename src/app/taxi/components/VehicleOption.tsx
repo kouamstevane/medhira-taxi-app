@@ -10,7 +10,6 @@
 
 import { Info } from 'lucide-react';
 import { CarType } from '@/types';
-import { CURRENCY_CODE } from '@/utils/constants';
 import { getVehicleMeta } from '@/app/taxi/data/vehicleCatalog';
 import { TaxiIcon } from './TaxiIcon';
 
@@ -19,6 +18,7 @@ interface VehicleOptionProps {
   selected: boolean;
   onSelect: (carType: CarType) => void;
   onShowDetails?: (carType: CarType) => void;
+  estimatedPrice?: number | null;
   disabled?: boolean;
 }
 
@@ -27,6 +27,7 @@ export const VehicleOption = ({
   selected,
   onSelect,
   onShowDetails,
+  estimatedPrice = null,
   disabled = false,
 }: VehicleOptionProps) => {
   const meta = getVehicleMeta(carType);
@@ -89,17 +90,15 @@ export const VehicleOption = ({
           <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
             {carType.seats} places • {carType.time} d&apos;attente
           </p>
-          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] sm:text-xs">
-            <span className="text-slate-500">
-              Base <span className="font-medium text-slate-200">{carType.basePrice} {CURRENCY_CODE}</span>
-            </span>
-            <span className="text-slate-500">
-              /km <span className="font-medium text-slate-200">{carType.pricePerKm} {CURRENCY_CODE}</span>
-            </span>
-            <span className="text-slate-500">
-              /min <span className="font-medium text-slate-200">{carType.pricePerMinute} {CURRENCY_CODE}</span>
-            </span>
-          </div>
+          <p className="text-[11px] sm:text-xs text-slate-400 mt-1">
+            {estimatedPrice != null ? (
+              <>
+                Prix estimé <span className="font-medium text-slate-100">{estimatedPrice} CAD</span>
+              </>
+            ) : (
+              'Prix estimé disponible après saisie du trajet'
+            )}
+          </p>
         </div>
 
         {/* Indicateur sélection */}

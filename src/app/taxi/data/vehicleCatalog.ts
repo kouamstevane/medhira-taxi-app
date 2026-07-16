@@ -68,7 +68,7 @@ const META_BY_KEY: Record<string, VehicleMeta> = {
       'Une berline standard pour vos trajets de tous les jours. Idéale pour aller au travail, faire vos courses ou rejoindre vos amis sans vous ruiner.',
     highlights: [
       'Jusqu\'à 4 passagers',
-      'Véhicule économique récent',
+      'Véhicule récent',
       'Tarif le plus accessible',
     ],
   },
@@ -79,20 +79,20 @@ const META_BY_KEY: Record<string, VehicleMeta> = {
       'Une voiture spacieuse et bien entretenue avec un chauffeur mieux noté. Parfait quand vous voulez un trajet calme, climatisé et confortable sans payer le prix d\'une berline premium.',
     highlights: [
       'Jusqu\'à 4 passagers',
-      'Chauffeurs notés 4,7+',
-      'Intérieur spacieux et climatisé',
+      'Chauffeurs mieux notés',
+      'Plus d\'espace et plus de confort',
     ],
   },
   'confort+': {
     color: 'black',
     tagline: 'L\'expérience premium, pour vos déplacements importants',
     description:
-      'Berline haut de gamme noire avec chauffeur d\'élite. Pour vos rendez-vous professionnels, vos sorties spéciales ou quand vous voulez voyager en toute discrétion et avec style.',
+      'Berline haut de gamme avec chauffeur d\'élite. Pour vos rendez-vous professionnels, vos sorties spéciales ou quand vous voulez voyager avec davantage de discrétion et de confort.',
     highlights: [
       'Jusqu\'à 4 passagers',
-      'Chauffeurs notés 4,85+ d\'élite',
-      'Berline noire premium',
-      'Eau, chargeurs et silence respecté',
+      'Chauffeurs d\'élite',
+      'Confort premium',
+      'Attention renforcée aux détails',
     ],
   },
 };

@@ -9,6 +9,9 @@ import { Loader2, Camera } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { InputField } from '@/components/forms/InputField';
 import { ERROR_MESSAGES } from '@/utils/constants';
+import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import { AddressInput } from '@/app/taxi/components/AddressInput';
+import { PlaceSuggestion } from '@/types';
 
 const minDate = new Date();
 minDate.setFullYear(minDate.getFullYear() - 18);
@@ -21,7 +24,11 @@ const step2Schema = z.object({
     return !isNaN(date.getTime()) && date <= minDate;
   }, "Vous devez avoir au moins 18 ans"),
   phone: z.string().regex(/^\+?[0-9\s\-()]{8,20}$/, ERROR_MESSAGES.INVALID_PHONE),
-  ssn: z.string().regex(/^\d{3}[\s\-]?\d{3}[\s\-]?\d{3}$/, "NAS invalide (9 chiffres attendus, ex: 123 456 789)"),
+  address: z.string().min(5, "Adresse de résidence requise"),
+  city: z.string().min(1, "Ville requise"),
+  zipCode: z.string().min(1, "Code postal requis"),
+  province: z.string().min(1, "Province/Région requise"),
+  country: z.string().min(1, "Pays requis"),
 });
 
 export type Step2FormData = z.infer<typeof step2Schema>;
@@ -36,16 +43,62 @@ interface Step2IdentityProps {
 
 export default function Step2Identity({ onNext, onBack, initialData, initialPhoto, loading }: Step2IdentityProps) {
   const { showError } = useToast();
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<Step2FormData>({
+  const { autocompleteService } = useGoogleMaps();
+
+  const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<Step2FormData>({
     resolver: zodResolver(step2Schema),
     defaultValues: {
       firstName: initialData?.firstName || '',
       lastName: initialData?.lastName || '',
       dob: initialData?.dob || '',
       phone: initialData?.phone || '',
-      ssn: initialData?.ssn || '',
+      address: initialData?.address || '',
+      city: initialData?.city || '',
+      zipCode: initialData?.zipCode || '',
+      province: initialData?.province || '',
+      country: initialData?.country || '',
     }
   });
+
+  const addressVal = watch('address') || '';
+
+  const handleAddressSelect = (suggestion: PlaceSuggestion) => {
+    setValue('address', suggestion.description, { shouldValidate: true });
+
+    if (!window.google?.maps?.Geocoder) return;
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ placeId: suggestion.place_id }, (results, status) => {
+      if (status === 'OK' && results && results.length > 0) {
+        const first = results[0];
+        
+        let city = '';
+        let zipCode = '';
+        let province = '';
+        let country = '';
+
+        for (const component of first.address_components) {
+          const types = component.types;
+          if (types.includes('locality') || types.includes('sublocality') || types.includes('postal_town')) {
+            city = component.long_name;
+          }
+          if (types.includes('postal_code')) {
+            zipCode = component.long_name;
+          }
+          if (types.includes('administrative_area_level_1')) {
+            province = component.long_name;
+          }
+          if (types.includes('country')) {
+            country = component.long_name;
+          }
+        }
+
+        setValue('city', city, { shouldValidate: true });
+        setValue('zipCode', zipCode, { shouldValidate: true });
+        setValue('province', province, { shouldValidate: true });
+        setValue('country', country, { shouldValidate: true });
+      }
+    });
+  };
 
   const dayRef = useRef<HTMLInputElement>(null);
   const monthRef = useRef<HTMLInputElement>(null);
@@ -288,14 +341,52 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                 />
             </div>
 
-            <InputField
-                type="password"
-                label="Numéro d'Assurance Sociale (NAS)"
-                placeholder="Masqué par défaut"
-                {...register('ssn')}
-                error={errors.ssn?.message}
+            <div className="w-full">
+              <AddressInput
+                label="Adresse de résidence"
+                value={addressVal}
+                onChange={(val) => {
+                  setValue('address', val, { shouldValidate: true });
+                  if (val === '') {
+                    setValue('city', '');
+                    setValue('zipCode', '');
+                    setValue('province', '');
+                    setValue('country', '');
+                  }
+                }}
+                onSelect={handleAddressSelect}
+                autocompleteService={autocompleteService}
+                placeholder="Saisissez votre adresse de résidence"
                 required
-            />
+                error={errors.address?.message}
+              />
+            </div>
+
+            {watch('city') && (
+              <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-[#242424]/50 border border-white/[0.05] text-sm text-slate-400">
+                <div>
+                  <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Ville</span>
+                  <span className="text-white font-medium">{watch('city')}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Code Postal</span>
+                  <span className="text-white font-medium">{watch('zipCode') || 'Non détecté'}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Province / Région</span>
+                  <span className="text-white font-medium">{watch('province')}</span>
+                </div>
+                <div>
+                  <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Pays</span>
+                  <span className="text-white font-medium">{watch('country')}</span>
+                </div>
+              </div>
+            )}
+
+            <input type="hidden" {...register('city')} />
+            <input type="hidden" {...register('zipCode')} />
+            <input type="hidden" {...register('province')} />
+            <input type="hidden" {...register('country')} />
         </div>
 
         <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">

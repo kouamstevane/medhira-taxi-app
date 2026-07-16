@@ -20,7 +20,7 @@ describe('ManageDriverSchema', () => {
   })
 
   it('accepts approve_document with documentKey', () => {
-    const result = ManageDriverSchema.safeParse({ action: 'approve_document', driverId: 'uid123', documentKey: 'permitConduire' })
+    const result = ManageDriverSchema.safeParse({ action: 'approve_document', driverId: 'uid123', documentKey: 'biometricPhoto' })
     expect(result.success).toBe(true)
   })
 
@@ -28,7 +28,7 @@ describe('ManageDriverSchema', () => {
     const result = ManageDriverSchema.safeParse({
       action: 'reject_document',
       driverId: 'uid123',
-      documentKey: 'casierJudiciaire',
+      documentKey: 'licenseFront',
       documentRejectionReason: 'Document illisible',
     })
     expect(result.success).toBe(true)

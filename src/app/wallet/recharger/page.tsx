@@ -83,7 +83,7 @@ export default function RechargerPage() {
     const numericAmount = parseFloat(amount);
     return (
       <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
-        <div className="max-w-[430px] mx-auto min-h-screen flex flex-col">
+        <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-32">
           <header className="sticky top-0 z-20 flex items-center p-4 bg-background/80 backdrop-blur-xl border-b border-white/5">
             <button
               onClick={() => { setStep('select'); setError(''); }}
@@ -121,7 +121,7 @@ export default function RechargerPage() {
 
   return (
     <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
-      <div className="max-w-[430px] mx-auto min-h-screen flex flex-col">
+      <div className="max-w-[430px] mx-auto min-h-screen flex flex-col pb-32">
         {/* Header */}
         <header className="sticky top-0 z-20 flex items-center p-4 bg-background/80 backdrop-blur-xl border-b border-white/5">
           <Link href="/wallet" className="flex items-center justify-center size-10 rounded-full glass-card text-white active:scale-95 transition-transform">
@@ -130,7 +130,7 @@ export default function RechargerPage() {
           <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Recharger</h1>
         </header>
 
-        <main className="flex-1 p-6 space-y-6">
+        <main className="flex-1 p-6 space-y-6 pb-10">
           {error && (
             <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
               <MaterialIcon name="error" size="md" className="text-destructive mt-0.5" />

@@ -8,26 +8,21 @@ import { suspendDriver } from '@/services/admin.service'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import type { DriverCollection, DriverPrivate } from '@/types/firestore-collections'
+import {
+  areAllDriverDocumentsApproved,
+  normalizeDriverDocuments,
+} from '@/features/driver-documents/catalog'
 
 const DOC_LABELS: Record<string, string> = {
-  photoProfile: 'Photo de profil', permitConduire: 'Permis de conduire',
-  casierJudiciaire: 'Casier judiciaire', historiqueConduire: 'Historique chauffeur',
-  preuvePermitTravail: 'Permis de travail', plaqueImmatriculation: "Plaque d'immatriculation",
-  permitCommercial: 'Permis commercial', plaqueImmatriculationCommerciale: 'Plaque commerciale',
-  visiteTechniqueCommerciale: 'Visite technique', certificatVille: 'Certificat ville',
-}
-
-function normalizeDocuments(documents: Record<string, unknown> | undefined): Record<string, { status: string; url: string; rejectionReason?: string }> {
-  if (!documents) return {};
-  const normalized: Record<string, { status: string; url: string; rejectionReason?: string }> = {};
-  for (const [key, value] of Object.entries(documents)) {
-    if (typeof value === 'string') {
-      normalized[key] = { status: value ? 'approved' : 'not_submitted', url: value };
-    } else if (typeof value === 'object' && value !== null) {
-      normalized[key] = value as { status: string; url: string; rejectionReason?: string };
-    }
-  }
-  return normalized;
+  biometricPhoto: 'Photo biométrique',
+  carRegistration: 'Carte grise',
+  insurance: 'Assurance',
+  techControl: 'Contrôle technique',
+  vehicleExterior: 'Photo extérieure du véhicule',
+  workEligibility: "Preuve d'admissibilité au travail",
+  driversAbstract: "Dossier de conduite (Driver's Abstract)",
+  licenseFront: 'Permis de conduire (recto)',
+  licenseBack: 'Permis de conduire (verso)',
 }
 
 export default function AdminDriverDetailPage() {
@@ -92,8 +87,8 @@ export default function AdminDriverDetailPage() {
   if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
   if (!driver) return <div className="min-h-screen bg-background flex items-center justify-center text-slate-400">Driver introuvable</div>
 
-  const documents = normalizeDocuments(privateData?.documents as Record<string, unknown> | undefined)
-  const allRequiredApproved = Object.values(documents).every(d => d.status === 'approved')
+  const documents = normalizeDriverDocuments(privateData?.documents)
+  const allRequiredApproved = areAllDriverDocumentsApproved(documents)
 
   return (
     <div className="min-h-screen bg-background text-white p-4">
@@ -130,42 +125,83 @@ export default function AdminDriverDetailPage() {
           </button>
         </div>
 
+        {/* Détails personnels */}
+        <div className="glass-card rounded-2xl border border-white/10 p-4 space-y-4">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Détails Chauffeur</h2>
+          <div className="grid grid-cols-2 gap-4 text-sm text-slate-300">
+            <div>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Téléphone</span>
+              <p className="font-medium text-white">{driver.phone || 'N/A'}</p>
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Date de naissance</span>
+              <p className="font-medium text-white">{privateData?.dob || 'N/A'}</p>
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Numéro & Classe de permis</span>
+              <p className="font-medium text-white">
+                {driver.licenseNumber || 'N/A'} (Classe: {privateData?.licenseClass || 'N/A'})
+              </p>
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Numéro fiscal / SIRET</span>
+              <p className="font-medium text-white">{privateData?.taxId || 'N/A'}</p>
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Déclaration 4 portes VTC</span>
+              <p className="font-medium text-white">{privateData?.hasFourDoors ? 'Oui, certifié' : 'N/A'}</p>
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Adresse de résidence</span>
+              <p className="font-medium text-white">{privateData?.address || 'N/A'}</p>
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Ville & Code postal</span>
+              <p className="font-medium text-white">{driver.city || 'N/A'} {driver.zipCode || ''}</p>
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Province & Pays</span>
+              <p className="font-medium text-white">{privateData?.province || 'N/A'}, {privateData?.country || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+
         {/* Documents granulaires */}
         <div className="glass-card rounded-2xl border border-white/10 p-4 space-y-3">
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Documents</h2>
-          {Object.entries(documents).map(([key, entry]) => (
-            <div key={key} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+          {documents.map((document) => (
+            <div key={document.key} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
               <div>
-                <p className="text-sm font-medium text-white">{DOC_LABELS[key] ?? key}</p>
+                <p className="text-sm font-medium text-white">{DOC_LABELS[document.key] ?? document.key}</p>
                 <span className={`text-xs ${
-                  entry.status === 'approved' ? 'text-green-400' :
-                  entry.status === 'rejected' ? 'text-red-400' :
-                  entry.status === 'pending' ? 'text-amber-400' : 'text-slate-500'}`}>
-                  {entry.status}
+                  document.status === 'approved' ? 'text-green-400' :
+                  document.status === 'rejected' ? 'text-red-400' :
+                  document.status === 'pending' ? 'text-amber-400' : 'text-slate-500'}`}>
+                  {document.status}
                 </span>
-                {entry.rejectionReason && <p className="text-xs text-red-400">{entry.rejectionReason}</p>}
+                {document.rejectionReason && <p className="text-xs text-red-400">{document.rejectionReason}</p>}
               </div>
               <div className="flex gap-2">
-                {entry.url && (
-                  <a href={entry.url as string} target="_blank" rel="noopener noreferrer"
+                {document.url && (
+                  <a href={document.url} target="_blank" rel="noopener noreferrer"
                     className="px-2 h-7 bg-white/5 border border-white/10 text-slate-400 text-xs rounded-lg flex items-center gap-1">
                     <MaterialIcon name="open_in_new" className="text-[14px]" /> Voir
                   </a>
                 )}
-                {entry.status !== 'approved' && (
-                  <button onClick={() => manageDriver('approve_document', key)}
-                    disabled={processing === 'approve_document' + key}
+                {document.url && document.status !== 'approved' && (
+                  <button onClick={() => manageDriver('approve_document', document.key)}
+                    disabled={processing === 'approve_document' + document.key}
                     className="px-3 h-7 bg-green-500/10 border border-green-500/20 text-green-400 text-xs rounded-lg">
                     Approuver
                   </button>
                 )}
-                {entry.status !== 'rejected' && (
+                {document.url && document.status !== 'rejected' && (
                   <button
                     onClick={() => {
-                      setRejectModalKey(key)
+                      setRejectModalKey(document.key)
                       setRejectReason('')
                     }}
-                    disabled={processing === 'reject_document' + key}
+                    disabled={processing === 'reject_document' + document.key}
                     className="px-3 h-7 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg">
                     Rejeter
                   </button>
@@ -173,9 +209,6 @@ export default function AdminDriverDetailPage() {
               </div>
             </div>
           ))}
-          {Object.keys(documents).length === 0 && (
-            <p className="text-slate-500 text-sm">Aucun document soumis.</p>
-          )}
         </div>
 
         {/* Notation */}

@@ -23,6 +23,7 @@ import type Stripe from 'stripe';
 import { DRIVER_SHARE_RATE } from '../config/stripe.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { createStripeClient } from './stripe-client.js';
+import { buildDriverIndividualPrefill } from './driver-prefill.js';
 
 // Type alias pour les événements Stripe (compatible Stripe v22 / NodeNext)
 type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;
@@ -1218,68 +1219,6 @@ interface CreateConnectAccountResult {
   status: 'pending' | 'existing';
 }
 
-// Conversion "YYYY-MM-DD" → { day, month, year } pour Stripe.
-// Retourne null si la date est invalide ou hors d'une plage raisonnable.
-function parseStripeDob(iso: string | undefined): { day: number; month: number; year: number } | null {
-  if (!iso || typeof iso !== 'string') return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
-  if (!m) return null;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-  const day = Number(m[3]);
-  if (year < 1900 || year > new Date().getFullYear()) return null;
-  if (month < 1 || month > 12) return null;
-  if (day < 1 || day > 31) return null;
-  return { day, month, year };
-}
-
-// Sanitize une string courte avant envoi à Stripe : trim + cap longueur.
-function safeStr(v: unknown, maxLen = 100): string | undefined {
-  if (typeof v !== 'string') return undefined;
-  const t = v.trim();
-  return t.length > 0 && t.length <= maxLen ? t : undefined;
-}
-
-// Indicatif téléphonique par pays ISO-2 (marchés supportés par l'app).
-const COUNTRY_DIAL_CODE: Record<string, string> = {
-  CA: '1',
-  US: '1',
-  FR: '33',
-  BE: '32',
-  CM: '237',
-};
-
-/**
- * Normalise un numéro de téléphone au format E.164 (`+<dial><digits>`).
- * Retourne `undefined` si normalisation impossible — Stripe rejette les numéros
- * non-E.164 et ferait planter toute la création de compte.
- */
-function toE164(raw: string | undefined, country: string): string | undefined {
-  if (!raw) return undefined;
-  const trimmed = raw.trim();
-  if (!trimmed) return undefined;
-
-  // Déjà au format international
-  if (trimmed.startsWith('+')) {
-    const digits = trimmed.slice(1).replace(/\D/g, '');
-    if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
-    return undefined;
-  }
-
-  // Sinon on retire tout sauf chiffres et on préfixe avec l'indicatif pays.
-  const digits = trimmed.replace(/\D/g, '');
-  if (!digits) return undefined;
-
-  const dial = COUNTRY_DIAL_CODE[country.toUpperCase()];
-  if (!dial) return undefined;
-
-  // Évite le double indicatif si l'utilisateur a tapé le code sans `+`
-  // (ex: "1418..." au Canada — déjà préfixé avec 1).
-  const normalized = digits.startsWith(dial) ? digits : dial + digits;
-  if (normalized.length < 8 || normalized.length > 15) return undefined;
-  return `+${normalized}`;
-}
-
 // =============================================================================
 // Business profile Medjira — pré-rempli côté serveur pour éviter au chauffeur
 // l'écran "Informations sur votre entreprise" dans Stripe-hosted onboarding.
@@ -1381,20 +1320,21 @@ export const createConnectAccount = onCall(
       console.warn('[createConnectAccount] driver doc missing', { uid });
       throw new HttpsError('permission-denied', 'Réservé aux chauffeurs.');
     }
-    // Pré-remplissage à partir de l'inscription chauffeur (réduit la friction
-    // côté formulaire Stripe — l'utilisateur peut quand même corriger sur Stripe).
-    const ind = request.data?.individual;
-    const firstName = safeStr(ind?.firstName);
-    const lastName = safeStr(ind?.lastName);
-    const rawPhone = safeStr(ind?.phone, 30);
-    const phone = toE164(rawPhone, country); // peut être undefined si non normalisable
-    const dob = parseStripeDob(ind?.dob);
-    const individual: Record<string, unknown> = {};
-    if (firstName) individual.first_name = firstName;
-    if (lastName) individual.last_name = lastName;
-    if (phone) individual.phone = phone;
-    if (dob) individual.dob = dob;
-    individual.email = tokenEmail;
+    const privateSnap = await driverRef.collection('private').doc('personal').get();
+    const {
+      firstName,
+      lastName,
+      rawPhone,
+      phone,
+      dob,
+      individual,
+    } = buildDriverIndividualPrefill({
+      tokenEmail,
+      country,
+      requestIndividual: request.data?.individual,
+      driverData: snap.data(),
+      privateData: privateSnap.exists ? privateSnap.data() : undefined,
+    });
 
     // Business profile Medjira — évite l'écran "Informations sur votre entreprise".
     const driverType = (snap.data()?.driverType as string | undefined) ?? 'chauffeur';

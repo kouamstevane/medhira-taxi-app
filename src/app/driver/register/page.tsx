@@ -19,7 +19,7 @@ export default function DriverRegisterWizard() {
   const {
     currentStep, loading, error, warning, isSubmitting, submissionSuccess,
     rejectionCode, rejectionReason,
-    driverType, setVehicleType,
+    driverType, vehicleType, setVehicleType,
     step1Data, step2Data, step3Data, biometricsPhoto, vehicleFiles, complianceFiles,
     handleStep0Next, handleGoogleSignIn, handleStep1Next, handleStep2Next, handleStep3Next,
     handleStep4Next, handleStep5FinalSubmit, handleFixRejection, handleLogout,
@@ -132,10 +132,23 @@ export default function DriverRegisterWizard() {
             />
           )}
           {currentStep === 4 && (
-            <Step4Compliance onNext={handleStep4Next} onBack={() => setCurrentStep(3)} loading={loading} initialFiles={complianceFiles} />
+            <Step4Compliance
+              onNext={handleStep4Next}
+              onBack={() => setCurrentStep(3)}
+              loading={loading}
+              initialFiles={complianceFiles}
+              driverType={driverType}
+              vehicleType={vehicleType}
+            />
           )}
           {currentStep === 5 && (
-            <Step5Monetization onSubmitFinal={handleStep5FinalSubmit} onBack={() => setCurrentStep(4)} loading={loading || isSubmitting} disabled={isSubmitting || submissionSuccess} />
+            <Step5Monetization
+              onSubmitFinal={handleStep5FinalSubmit}
+              onBack={() => setCurrentStep(4)}
+              loading={loading || isSubmitting}
+              disabled={isSubmitting || submissionSuccess}
+              driverType={driverType}
+            />
           )}
         </div>
       </div>

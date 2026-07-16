@@ -8,6 +8,17 @@ import { deleteDriverCompletely } from './driverDeletion.js';
 import { sendDriverStatusEmail } from '../email-service.js';
 
 const resendApiKey = defineSecret('RESEND_API_KEY');
+const CANONICAL_DRIVER_DOCUMENT_KEYS = [
+  'biometricPhoto',
+  'carRegistration',
+  'insurance',
+  'techControl',
+  'vehicleExterior',
+  'workEligibility',
+  'driversAbstract',
+  'licenseFront',
+  'licenseBack',
+] as const;
 
 const ManageDriverSchema = z.object({
   action: z.enum([
@@ -60,6 +71,7 @@ export const adminManageDriver = onCall(
     } = parsed.data;
 
     const driverRef = admin.firestore().collection('drivers').doc(driverId);
+    const driverPrivateRef = driverRef.collection('private').doc('personal');
     const driverDoc = await driverRef.get();
 
     if (!driverDoc.exists) {
@@ -215,12 +227,24 @@ export const adminManageDriver = onCall(
             'invalid-argument',
             'documentKey requis.',
           );
-        await driverRef.update({
-          [`documents.${documentKey}.status`]: 'approved',
-          [`documents.${documentKey}.approvedAt`]: now,
-          [`documents.${documentKey}.approvedBy`]: uid,
+        if (!CANONICAL_DRIVER_DOCUMENT_KEYS.includes(documentKey as typeof CANONICAL_DRIVER_DOCUMENT_KEYS[number])) {
+          throw new HttpsError(
+            'invalid-argument',
+            'documentKey invalide.',
+          );
+        }
+        await driverPrivateRef.set({
+          documents: {
+            [documentKey]: {
+              status: 'approved',
+              approvedAt: now,
+              approvedBy: uid,
+              reviewedAt: now,
+              rejectionReason: null,
+            },
+          },
           updatedAt: now,
-        });
+        }, { merge: true });
         return {
           success: true,
           action: 'approve_document',
@@ -234,14 +258,25 @@ export const adminManageDriver = onCall(
             'invalid-argument',
             'documentKey requis.',
           );
-        await driverRef.update({
-          [`documents.${documentKey}.status`]: 'rejected',
-          [`documents.${documentKey}.rejectionReason`]:
-            documentRejectionReason ?? reason ?? 'Document non conforme',
-          [`documents.${documentKey}.rejectedAt`]: now,
-          [`documents.${documentKey}.rejectedBy`]: uid,
+        if (!CANONICAL_DRIVER_DOCUMENT_KEYS.includes(documentKey as typeof CANONICAL_DRIVER_DOCUMENT_KEYS[number])) {
+          throw new HttpsError(
+            'invalid-argument',
+            'documentKey invalide.',
+          );
+        }
+        await driverPrivateRef.set({
+          documents: {
+            [documentKey]: {
+              status: 'rejected',
+              rejectionReason:
+                documentRejectionReason ?? reason ?? 'Document non conforme',
+              rejectedAt: now,
+              rejectedBy: uid,
+              reviewedAt: now,
+            },
+          },
           updatedAt: now,
-        });
+        }, { merge: true });
         return {
           success: true,
           action: 'reject_document',
