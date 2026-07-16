@@ -104,7 +104,7 @@ export const AddressInput = ({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <label className="block text-sm font-medium text-[#9CA3AF] mb-1">
+      <label className="block text-sm font-medium text-slate-200 mb-1">
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
@@ -120,7 +120,7 @@ export const AddressInput = ({
           disabled={disabled}
           required={required}
           autoComplete="off"
-          className={`w-full p-3 sm:p-3.5 border rounded-lg text-white placeholder-gray-400 bg-[#1A1A1A] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] ${error ? 'border-red-500' : 'border-white/[0.08]'
+          className={`w-full p-3 sm:p-3.5 border rounded-lg text-white placeholder-slate-300 bg-[#1A1A1A] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] ${error ? 'border-red-500' : 'border-white/[0.08]'
             } ${disabled ? 'bg-white/5 cursor-not-allowed' : ''}`}
           style={{ fontSize: '16px' }} // Évite le zoom automatique sur iOS
         />

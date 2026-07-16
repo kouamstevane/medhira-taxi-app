@@ -38,7 +38,7 @@ export const FareSummary = ({
 
   if (distance === null || duration === null || price === null) {
     return (
-      <div className="bg-[#1A1A1A] p-4 rounded-lg border border-white/[0.06] text-center text-[#9CA3AF]">
+      <div className="bg-[#1A1A1A] p-4 rounded-lg border border-white/[0.06] text-center text-slate-300">
         <p>Sélectionnez un départ et une destination pour voir l'estimation</p>
       </div>
     );
@@ -52,12 +52,12 @@ export const FareSummary = ({
 
       <div className="space-y-2 mb-3">
         <div className="flex justify-between items-center">
-          <span className="text-sm text-slate-400">Distance</span>
+          <span className="text-sm text-slate-300">Distance</span>
           <span className="text-sm font-semibold text-white">{distance.toFixed(1)} km</span>
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-sm text-slate-400">Durée estimée</span>
+          <span className="text-sm text-slate-300">Durée estimée</span>
           <span className="text-sm font-semibold text-white">{duration} min</span>
         </div>
       </div>
@@ -69,7 +69,7 @@ export const FareSummary = ({
         </div>
       </div>
 
-      <p className="text-xs text-slate-500 mt-3">
+      <p className="text-xs text-slate-400 mt-3">
         * Le prix final peut varier selon le trafic et les conditions de route
       </p>
     </div>

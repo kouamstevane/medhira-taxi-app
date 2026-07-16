@@ -23,7 +23,7 @@ export const RideTimingSelector = ({
     <section className="space-y-3">
       <div>
         <p className="text-xs font-semibold text-white mb-1">Quand souhaitez-vous partir ?</p>
-        <p className="text-[11px] text-slate-400 mb-2">
+        <p className="text-[11px] text-slate-300 mb-2">
           Choisissez un départ immédiat ou programmez la course pour plus tard.
         </p>
         <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5 border border-white/[0.06]">
@@ -35,11 +35,11 @@ export const RideTimingSelector = ({
             className={`min-h-[64px] rounded-xl px-3 py-2.5 text-left transition-all ${
               mode === 'immediate'
                 ? 'bg-primary text-white shadow-lg shadow-primary/20 ring-1 ring-primary/40'
-                : 'text-slate-300 hover:text-white hover:bg-white/[0.03]'
+                : 'text-slate-200 hover:text-white hover:bg-white/[0.03]'
             }`}
           >
             <span className="block text-[13px] font-semibold leading-tight">Maintenant</span>
-            <span className={`block mt-0.5 text-[11px] leading-snug ${mode === 'immediate' ? 'text-white/80' : 'text-slate-400'}`}>
+            <span className={`block mt-0.5 text-[11px] leading-snug ${mode === 'immediate' ? 'text-white/80' : 'text-slate-300'}`}>
               On cherche un chauffeur dès la confirmation.
             </span>
           </button>
@@ -52,11 +52,11 @@ export const RideTimingSelector = ({
             className={`min-h-[64px] rounded-xl px-3 py-2.5 text-left transition-all ${
               mode === 'scheduled'
                 ? 'bg-primary text-white shadow-lg shadow-primary/20 ring-1 ring-primary/40'
-                : 'text-slate-300 hover:text-white hover:bg-white/[0.03]'
+                : 'text-slate-200 hover:text-white hover:bg-white/[0.03]'
             }`}
           >
             <span className="block text-[13px] font-semibold leading-tight">Programmer</span>
-            <span className={`block mt-0.5 text-[11px] leading-snug ${mode === 'scheduled' ? 'text-white/80' : 'text-slate-400'}`}>
+            <span className={`block mt-0.5 text-[11px] leading-snug ${mode === 'scheduled' ? 'text-white/80' : 'text-slate-300'}`}>
               Vous choisissez la date et l&apos;heure.
             </span>
           </button>
@@ -89,7 +89,7 @@ export const RideTimingSelector = ({
               className="w-full rounded-xl border border-white/[0.08] bg-[#0F0F0F] px-3 py-2.5 text-sm text-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
           </div>
-          <p className="sm:col-span-2 text-[11px] leading-relaxed text-slate-400">
+          <p className="sm:col-span-2 text-[11px] leading-relaxed text-slate-300">
             Le chauffeur sera recherché à l&apos;heure choisie. Vous pourrez modifier ou annuler avant le départ.
           </p>
         </div>

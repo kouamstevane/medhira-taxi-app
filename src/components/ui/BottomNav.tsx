@@ -49,12 +49,12 @@ export function BottomNav({ items = defaultUserItems, className }: BottomNavProp
     <nav
       className={cn(
         'fixed bottom-0 left-0 right-0 z-50',
-        'bg-[#0D0D0D] backdrop-blur-xl border-t border-white/5',
-        'px-6 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3',
+        'bg-[#0D0D0D]/96 backdrop-blur-xl border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.28)]',
+        'px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2',
         className
       )}
     >
-      <div className="flex items-center justify-between max-w-lg mx-auto">
+      <div className="mx-auto flex max-w-md items-center justify-between">
         {items.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           return (
@@ -62,26 +62,23 @@ export function BottomNav({ items = defaultUserItems, className }: BottomNavProp
               key={item.href}
               href={item.href}
               className={cn(
-                'flex flex-col items-center gap-1 min-w-[60px] transition-colors',
+                'flex min-w-[52px] flex-col items-center gap-0.5 transition-colors',
                 isActive ? 'text-primary' : 'text-slate-400'
               )}
             >
               <MaterialIcon
                 name={item.icon}
                 filled={isActive}
-                className="text-[28px]"
+                className="text-[24px]"
               />
               <span
                 className={cn(
-                  'text-[11px] tracking-wide',
+                  'text-[10px] leading-none tracking-wide',
                   isActive ? 'font-bold' : 'font-medium'
                 )}
               >
                 {item.label}
               </span>
-              {isActive && (
-                <div className="w-1 h-1 bg-primary rounded-full" />
-              )}
             </Link>
           );
         })}

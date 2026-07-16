@@ -78,22 +78,22 @@ export const VehicleOption = ({
                     onShowDetails(carType);
                   }
                 }}
-                className="inline-flex items-center justify-center w-6 h-6 rounded-full text-slate-400 hover:text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center w-6 h-6 rounded-full text-slate-300 hover:text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
               >
                 <Info className="w-4 h-4" />
               </span>
             )}
           </div>
-          <p className="text-xs sm:text-sm text-slate-400 mt-0.5 line-clamp-1">
+          <p className="text-xs sm:text-sm text-slate-200 mt-0.5 line-clamp-1">
             {meta.tagline}
           </p>
-          <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
+          <p className="text-[11px] sm:text-xs text-slate-300 mt-1">
             {carType.seats} places • {carType.time} d&apos;attente
           </p>
-          <p className="text-[11px] sm:text-xs text-slate-400 mt-1">
+          <p className="text-[11px] sm:text-xs text-slate-200 mt-1">
             {estimatedPrice != null ? (
               <>
-                Prix estimé <span className="font-medium text-slate-100">{estimatedPrice} CAD</span>
+                Prix estimé <span className="font-semibold text-white">{estimatedPrice} CAD</span>
               </>
             ) : (
               'Prix estimé disponible après saisie du trajet'
