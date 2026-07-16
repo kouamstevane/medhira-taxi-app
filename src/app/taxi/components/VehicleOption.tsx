@@ -37,29 +37,29 @@ export const VehicleOption = ({
       type="button"
       onClick={() => !disabled && onSelect(carType)}
       disabled={disabled}
-      className={`relative w-full overflow-hidden p-4 border rounded-2xl transition-all text-left touch-manipulation ${
+      className={`relative w-full overflow-hidden px-3 py-3 border rounded-2xl transition-all text-left touch-manipulation ${
         disabled
           ? 'border-white/[0.04] bg-[#1A1A1A]/50 cursor-not-allowed opacity-60'
           : selected
           ? 'border-primary/40 bg-primary/[0.08] active:bg-primary/[0.12] shadow-[0_0_24px_-8px_rgba(242,146,0,0.4)]'
           : 'border-white/[0.08] glass-card active:border-primary/30 hover:border-primary/30 hover:bg-white/[0.03]'
       }`}
-      style={{ minHeight: '60px' }}
+      style={{ minHeight: '52px' }}
     >
       {selected && !disabled && (
         <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
       )}
 
-      <div className="relative flex items-center gap-3 sm:gap-4">
+      <div className="relative flex items-center gap-2.5 sm:gap-3">
         {/* Illustration taxi */}
-        <div className="shrink-0 w-20 sm:w-24 -my-1">
+        <div className="shrink-0 w-16 sm:w-20 -my-1">
           <TaxiIcon color={meta.color} className="w-full h-auto" />
         </div>
 
         {/* Détails */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className={`font-semibold text-base sm:text-lg ${selected ? 'text-primary' : 'text-white'}`}>
+            <h3 className={`font-semibold text-sm sm:text-base ${selected ? 'text-primary' : 'text-white'}`}>
               {carType.name}
             </h3>
             {onShowDetails && !disabled && (
@@ -78,19 +78,19 @@ export const VehicleOption = ({
                     onShowDetails(carType);
                   }
                 }}
-                className="inline-flex items-center justify-center w-6 h-6 rounded-full text-slate-300 hover:text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center w-5 h-5 rounded-full text-slate-300 hover:text-primary hover:bg-white/[0.06] transition-colors cursor-pointer"
               >
-                <Info className="w-4 h-4" />
+                <Info className="w-3.5 h-3.5" />
               </span>
             )}
           </div>
-          <p className="text-xs sm:text-sm text-slate-200 mt-0.5 line-clamp-1">
+          <p className="text-[11px] sm:text-xs text-slate-200 mt-0.5 line-clamp-1">
             {meta.tagline}
           </p>
-          <p className="text-[11px] sm:text-xs text-slate-300 mt-1">
+          <p className="text-[10px] sm:text-[11px] text-slate-300 mt-0.5">
             {carType.seats} places • {carType.time} d&apos;attente
           </p>
-          <p className="text-[11px] sm:text-xs text-slate-200 mt-1">
+          <p className="text-[10px] sm:text-[11px] text-slate-200 mt-0.5 line-clamp-1">
             {estimatedPrice != null ? (
               <>
                 Prix estimé <span className="font-semibold text-white">{estimatedPrice} CAD</span>

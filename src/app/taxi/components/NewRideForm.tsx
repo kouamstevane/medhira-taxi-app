@@ -149,6 +149,14 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
 
   const [loadingAddress, setLoadingAddress] = useState(false);
 
+  const handleUseCurrentLocation = useCallback(async () => {
+    try {
+      await getCurrentPosition('booking');
+    } catch (error) {
+      logger.error('Erreur lors de la récupération de la position', { error });
+    }
+  }, [getCurrentPosition]);
+
   const buildScheduledAt = () => {
     if (!scheduledDate || !scheduledTime) return null;
     const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}:00`);
@@ -662,6 +670,30 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
           externalLoading={geoLoading || loadingAddress}
           countryRestriction={detectedCountry ? [detectedCountry.toLowerCase()] : undefined}
         />
+
+        <div className="flex justify-start -mt-1">
+          <button
+            type="button"
+            onClick={handleUseCurrentLocation}
+            disabled={geoLoading || loadingAddress}
+            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-medium text-slate-200 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {geoLoading || loadingAddress ? (
+              <>
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                Détection en cours
+              </>
+            ) : (
+              <>
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 21s6-4.35 6-10a6 6 0 10-12 0c0 5.65 6 10 6 10z" />
+                  <circle cx="12" cy="11" r="2.25" />
+                </svg>
+                Utiliser ma position
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Destination */}
         <AddressInput
