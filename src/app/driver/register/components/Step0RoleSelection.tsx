@@ -1,7 +1,9 @@
 'use client'
 import { useState } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
+import { cn } from '@/lib/utils'
 import type { DriverType } from '@/types/firestore-collections'
+import { driverPrimaryButtonClassName, driverSectionCardClassName } from './driverOnboardingStyles'
 
 interface Props {
   onNext: (driverType: DriverType) => void
@@ -17,7 +19,7 @@ export default function Step0RoleSelection({ onNext }: Props) {
   const [selected, setSelected] = useState<DriverType | null>(null)
 
   return (
-    <div className="w-full max-w-lg mx-auto" data-testid="step0-role-selection">
+    <div className={cn(driverSectionCardClassName, 'w-full max-w-lg mx-auto')} data-testid="step0-role-selection">
       <h2 className="text-2xl font-bold text-white mb-2 text-center">Quel est votre rôle ?</h2>
       <p className="text-slate-400 text-center mb-8">Choisissez comment vous souhaitez utiliser l&apos;application.</p>
 
@@ -52,7 +54,7 @@ export default function Step0RoleSelection({ onNext }: Props) {
         onClick={() => selected && onNext(selected)}
         disabled={!selected}
         data-testid="step0-continue-btn"
-        className="w-full h-14 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-40 disabled:cursor-not-allowed"
+        className={cn(driverPrimaryButtonClassName)}
       >
         Continuer
         <MaterialIcon name="arrow_forward" size="md" className="ml-2" />

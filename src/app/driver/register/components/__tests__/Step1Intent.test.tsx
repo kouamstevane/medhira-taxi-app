@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import Step1Intent from '../Step1Intent';
 
 jest.mock('@/components/forms/InputField', () => ({
@@ -16,6 +16,11 @@ jest.mock('@/components/ui/OTPInput', () => ({
 }));
 
 describe('Step1Intent', () => {
+  it('keeps OTP inside the shared wizard presentation', async () => {
+    render(<Step1Intent onNext={jest.fn()} onGoogleSignIn={jest.fn()} sendVerificationCode={jest.fn().mockResolvedValue({ success: true })} verifyCode={jest.fn()} />)
+    expect(screen.getByRole('button', { name: /continuer avec google/i })).toHaveClass('rounded-xl')
+  });
+
   it('does not auto-advance when autoAdvanceOnMount is disabled', async () => {
     const onVerified = jest.fn();
 
@@ -51,4 +56,3 @@ describe('Step1Intent', () => {
     });
   });
 });
-

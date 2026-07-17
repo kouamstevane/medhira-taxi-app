@@ -39,4 +39,9 @@ describe('Step0RoleSelection', () => {
     fireEvent.click(screen.getByRole('button', { name: /continuer/i }))
     expect(onNext).toHaveBeenCalledWith('les_deux')
   })
+
+  it('uses the shared primary action styling for continue', () => {
+    render(<Step0RoleSelection onNext={jest.fn()} />)
+    expect(screen.getByRole('button', { name: /continuer/i })).toHaveClass('rounded-[28px]')
+  })
 })
