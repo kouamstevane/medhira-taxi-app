@@ -4,6 +4,14 @@ import { Loader2, ShieldCheck, Lock } from 'lucide-react';
 import { ACTIVE_MARKET } from '@/utils/constants';
 import { InputField } from '@/components/forms/InputField';
 import { useToast } from '@/hooks/useToast';
+import { cn } from '@/lib/utils';
+import {
+  driverInfoBannerClassName,
+  driverPrimaryButtonClassName,
+  driverSecondaryButtonClassName,
+  driverSectionCardClassName,
+  driverSectionTitleClassName,
+} from './driverOnboardingStyles';
 
 export type Step5FormData = {
   country: string;
@@ -53,8 +61,8 @@ export default function Step5Monetization({
 
       {/* Informations Fiscales (VTC uniquement) */}
       {isChauffeur && (
-        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Informations Fiscales</h3>
+        <div className={driverSectionCardClassName}>
+          <h3 className={driverSectionTitleClassName}>Informations Fiscales</h3>
           <InputField
             label="Numéro fiscal ou d'entreprise (TPS-TVH, TVA, SIRET)"
             value={taxId}
@@ -67,9 +75,9 @@ export default function Step5Monetization({
       )}
 
       {/* Bannière Stripe */}
-      <div className="bg-[#635bff]/10 border border-[#635bff]/30 p-5 rounded-xl flex items-start gap-4">
-        <div className="w-10 h-10 rounded-full bg-[#635bff]/20 flex items-center justify-center flex-shrink-0">
-          <Lock className="w-5 h-5 text-[#635bff]" />
+      <div className={cn(driverInfoBannerClassName, 'bg-white/[0.03] border-white/[0.08] flex items-start gap-4')}>
+        <div className="w-10 h-10 rounded-full bg-white/[0.06] flex items-center justify-center flex-shrink-0">
+          <Lock className="w-5 h-5 text-[#f29200]" />
         </div>
         <div>
           <p className="font-semibold text-white text-sm">Coordonnées bancaires sécurisées par Stripe</p>
@@ -94,7 +102,7 @@ export default function Step5Monetization({
           type="button"
           onClick={onBack}
           disabled={loading || disabled}
-          className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className={cn(driverSecondaryButtonClassName, 'w-1/3')}
         >
           Retour
         </button>
@@ -102,7 +110,7 @@ export default function Step5Monetization({
         <button
           type="submit"
           disabled={loading || disabled}
-          className="w-2/3 bg-green-600 text-white font-bold py-4 rounded-[28px] hover:bg-green-700 transition-colors flex justify-center items-center shadow-lg hover:shadow-green-600/20 shadow-[0_0_20px_rgba(16,185,129,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
+          className={cn(driverPrimaryButtonClassName, 'w-2/3')}
         >
           {loading ? <Loader2 className="animate-spin mr-2 w-5 h-5" /> : null}
           Soumettre ma candidature
