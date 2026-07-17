@@ -40,8 +40,8 @@ describe('Step0RoleSelection', () => {
     expect(onNext).toHaveBeenCalledWith('les_deux')
   })
 
-  it('uses the shared primary action styling for continue', () => {
+  it('keeps the primary action on the shared orange CTA contract', () => {
     render(<Step0RoleSelection onNext={jest.fn()} />)
-    expect(screen.getByRole('button', { name: /continuer/i })).toHaveClass('rounded-[28px]')
+    expect(screen.getByRole('button', { name: /continuer/i })).toHaveClass('from-[#f29200]')
   })
 })

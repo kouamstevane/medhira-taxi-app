@@ -16,6 +16,13 @@ jest.mock('@/components/ui/OTPInput', () => ({
 }));
 
 describe('Step1Intent', () => {
+  it('keeps primary and alternate actions visually distinct', () => {
+    render(<Step1Intent onNext={jest.fn()} onGoogleSignIn={jest.fn()} />);
+
+    expect(screen.getByTestId('step1-submit-btn')).toHaveClass('from-[#f29200]');
+    expect(screen.getByTestId('google-signin-btn')).toHaveClass('border-white/10');
+  });
+
   it('keeps OTP inside the shared wizard presentation', async () => {
     render(<Step1Intent onNext={jest.fn()} onGoogleSignIn={jest.fn()} sendVerificationCode={jest.fn().mockResolvedValue({ success: true })} verifyCode={jest.fn()} />)
 

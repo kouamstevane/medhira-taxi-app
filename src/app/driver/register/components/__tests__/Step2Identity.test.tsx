@@ -33,7 +33,7 @@ jest.mock('@/app/taxi/components/AddressInput', () => ({
 }));
 
 describe('Step2Identity', () => {
-  it('renders harmonized section and navigation styles', () => {
+  it('keeps navigation actions on the shared CTA contracts', () => {
     render(<Step2Identity onNext={jest.fn()} onBack={jest.fn()} />);
 
     expect(screen.getByText('Identité').parentElement).toHaveClass('rounded-xl');

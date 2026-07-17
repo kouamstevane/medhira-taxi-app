@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import Step5Monetization from '../Step5Monetization';
 
 describe('Step5Monetization', () => {
-  it('keeps the submission CTA in the shared Medjira primary action style', () => {
+  it('keeps navigation actions on the shared CTA contracts', () => {
     render(<Step5Monetization onSubmitFinal={jest.fn()} onBack={jest.fn()} />);
 
     expect(screen.getByRole('button', { name: /soumettre ma candidature/i })).toHaveClass('from-[#f29200]');

@@ -9,6 +9,13 @@ jest.mock('@/hooks/useToast', () => ({
 }));
 
 describe('Step4Compliance', () => {
+  it('keeps navigation actions on the shared CTA contracts', () => {
+    render(<Step4Compliance onNext={jest.fn()} onBack={jest.fn()} />);
+
+    expect(screen.getByRole('button', { name: /retour/i })).toHaveClass('border-white/10');
+    expect(screen.getByRole('button', { name: /valider les documents/i })).toHaveClass('from-[#f29200]');
+  });
+
   it('uses a subdued shared information banner instead of a dominant custom treatment', () => {
     render(<Step4Compliance onNext={jest.fn()} onBack={jest.fn()} />);
 

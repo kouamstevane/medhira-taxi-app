@@ -9,6 +9,13 @@ jest.mock('@/hooks/useToast', () => ({
 }));
 
 describe('Step3Vehicle', () => {
+  it('keeps navigation actions on the shared CTA contracts', () => {
+    render(<Step3Vehicle onNext={jest.fn()} onBack={jest.fn()} />);
+
+    expect(screen.getByRole('button', { name: /retour/i })).toHaveClass('border-white/10');
+    expect(screen.getByRole('button', { name: /continuer/i })).toHaveClass('from-[#f29200]');
+  });
+
   it('uses the shared upload empty-state styling', () => {
     render(<Step3Vehicle onNext={jest.fn()} onBack={jest.fn()} />);
 
