@@ -9,6 +9,13 @@
 'use client';
 
 import React, { InputHTMLAttributes, ReactNode } from 'react';
+import { cn } from '@/lib/utils';
+import {
+  driverFieldClassName,
+  driverFieldErrorClassName,
+  driverFieldHelperClassName,
+  driverFieldLabelClassName,
+} from '@/app/driver/register/components/driverOnboardingStyles';
 
 export interface InputFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -33,17 +40,13 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
       labelClassName = '',
       required,
       disabled,
+      id,
       ...props
     },
     ref
   ) => {
-    const baseInputClasses = `
-      w-full px-4 py-3 border rounded-xl outline-none transition-all duration-200
-      bg-[#1A1A1A] text-white text-base placeholder-[#4B5563]
-      focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]
-      disabled:bg-white/5 disabled:cursor-not-allowed disabled:text-[#4B5563]
-      shadow-sm active:scale-[0.99]
-    `;
+    const generatedId = React.useId();
+    const inputId = id ?? generatedId;
 
     const errorClasses = error
       ? 'border-[#EF4444] focus:ring-[#EF4444] focus:border-[#EF4444]'
@@ -56,7 +59,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
       <div className={`w-full ${containerClassName}`}>
         {/* Label */}
         {label && (
-          <label className={`block text-sm font-medium text-[#9CA3AF] mb-2 ${labelClassName}`}>
+          <label htmlFor={inputId} className={cn(driverFieldLabelClassName, 'block', labelClassName)}>
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -74,7 +77,8 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
           {/* Input */}
           <input
             ref={ref}
-            className={`${baseInputClasses} ${errorClasses} ${iconPaddingClass} ${rightIconPaddingClass} ${className}`}
+            id={inputId}
+            className={cn(driverFieldClassName, errorClasses, iconPaddingClass, rightIconPaddingClass, className)}
             disabled={disabled}
             {...props}
           />
@@ -89,7 +93,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
 
         {/* Error Message */}
         {error && (
-          <p className="mt-1 text-sm text-red-600 flex items-center">
+          <p className={driverFieldErrorClassName}>
             <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
@@ -103,7 +107,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
 
         {/* Helper Text */}
         {!error && helperText && (
-          <p className="mt-1 text-sm text-gray-500">{helperText}</p>
+          <p className={driverFieldHelperClassName}>{helperText}</p>
         )}
       </div>
     );

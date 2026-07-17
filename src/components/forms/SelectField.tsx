@@ -9,6 +9,13 @@
 'use client';
 
 import React, { SelectHTMLAttributes, ReactNode } from 'react';
+import { cn } from '@/lib/utils';
+import {
+  driverFieldClassName,
+  driverFieldErrorClassName,
+  driverFieldHelperClassName,
+  driverFieldLabelClassName,
+} from '@/app/driver/register/components/driverOnboardingStyles';
 
 export interface SelectOption {
   value: string;
@@ -43,14 +50,6 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
     },
     ref
   ) => {
-    const baseSelectClasses = `
-      w-full px-4 py-3 border rounded-xl outline-none transition-all duration-200
-      bg-[#1A1A1A] text-white appearance-none cursor-pointer
-      focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]
-      disabled:bg-white/5 disabled:cursor-not-allowed disabled:text-[#4B5563]
-      shadow-sm active:scale-[0.99]
-    `;
-
     const errorClasses = error
       ? 'border-[#EF4444] focus:ring-[#EF4444] focus:border-[#EF4444]'
       : 'border-white/[0.08]';
@@ -61,7 +60,7 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
       <div className={`w-full ${containerClassName}`}>
         {/* Label */}
         {label && (
-          <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
+          <label className={cn(driverFieldLabelClassName, 'block')}>
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -79,7 +78,7 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
           {/* Select */}
           <select
             ref={ref}
-            className={`${baseSelectClasses} ${errorClasses} ${iconPaddingClass} ${className}`}
+            className={cn(driverFieldClassName, 'appearance-none cursor-pointer', errorClasses, iconPaddingClass, className)}
             disabled={disabled}
             {...props}
           >
@@ -114,7 +113,7 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
 
         {/* Error Message */}
         {error && (
-          <p className="mt-1 text-sm text-red-600 flex items-center">
+          <p className={driverFieldErrorClassName}>
             <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
@@ -128,7 +127,7 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
 
         {/* Helper Text */}
         {!error && helperText && (
-          <p className="mt-1 text-sm text-gray-500">{helperText}</p>
+          <p className={driverFieldHelperClassName}>{helperText}</p>
         )}
       </div>
     );

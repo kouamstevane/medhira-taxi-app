@@ -1,0 +1,12 @@
+export const driverFieldLabelClassName = 'text-sm font-medium text-[#9CA3AF] mb-2'
+export const driverFieldClassName = 'w-full px-4 py-3 border rounded-xl outline-none transition-all duration-200 bg-[#1A1A1A] text-white text-base placeholder-[#4B5563] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] disabled:bg-white/5 disabled:cursor-not-allowed disabled:text-[#4B5563] shadow-sm active:scale-[0.99]'
+export const driverFieldHelperClassName = 'mt-1 text-sm text-slate-400'
+export const driverFieldErrorClassName = 'mt-1 text-sm text-red-500 flex items-center'
+
+export const driverSectionCardClassName = 'bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4'
+export const driverSectionTitleClassName = 'text-lg font-semibold text-white border-b border-white/[0.08] pb-2'
+export const driverPrimaryButtonClassName = 'w-full h-14 flex items-center justify-center bg-gradient-to-r from-[#f29200] to-[#e68600] text-white font-bold rounded-[28px] shadow-[0_0_20px_rgba(242,146,0,0.4)] transition-all hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed'
+export const driverSecondaryButtonClassName = 'w-full h-14 flex items-center justify-center bg-[#1A1A1A] border border-white/10 text-white font-bold rounded-xl transition-colors hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed'
+export const driverInfoBannerClassName = 'rounded-xl border p-4'
+export const driverUploadEmptyClassName = 'relative border-2 border-dashed border-white/[0.1] rounded-xl p-6 flex flex-col items-center justify-center bg-white/[0.01] hover:bg-white/[0.02] transition-colors cursor-pointer'
+export const driverUploadLoadedClassName = 'flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]'
