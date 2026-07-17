@@ -4,6 +4,15 @@ import { Loader2, UploadCloud, FileCheck, X } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { SelectField } from '@/components/forms/SelectField';
 import { InputField } from '@/components/forms/InputField';
+import { cn } from '@/lib/utils';
+import {
+  driverInfoBannerClassName,
+  driverPrimaryButtonClassName,
+  driverSecondaryButtonClassName,
+  driverSectionCardClassName,
+  driverSectionTitleClassName,
+  driverUploadEmptyClassName,
+} from './driverOnboardingStyles';
 
 export type Step4Files = {
   workEligibility: File;
@@ -187,7 +196,7 @@ export default function Step4Compliance({
           </div>
         </div>
       ) : (
-        <div className="relative w-full aspect-video border-2 border-dashed border-white/[0.15] rounded-lg flex flex-col items-center justify-center hover:bg-white/5 transition-colors cursor-pointer bg-[#1A1A1A]">
+        <div className={cn(driverUploadEmptyClassName, 'w-full aspect-video')}>
           <input
             type="file"
             id={`file-${key}`}
@@ -210,7 +219,7 @@ export default function Step4Compliance({
       <div className="text-center mb-8">
         <h2 className="text-2xl font-bold text-white">Conformité Légale</h2>
         <p className="text-[#9CA3AF] mt-2">Vos documents d'identité pour validation de votre profil.</p>
-        <div className="bg-[#3B82F6]/10 text-[#3B82F6] p-3 rounded-lg text-sm mt-4 font-medium flex items-center justify-center">
+        <div className={cn(driverInfoBannerClassName, 'bg-[#f29200]/10 border-[#f29200]/20 text-slate-200 text-sm mt-4 font-medium flex items-center justify-center')}>
           <FileCheck className="mr-2" size={18} />
           Vérifiez la lisibilité de vos documents avant d'envoyer.
         </div>
@@ -218,8 +227,8 @@ export default function Step4Compliance({
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Section 1: Admissibilité au travail */}
-        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">
+        <div className={driverSectionCardClassName}>
+          <h3 className={driverSectionTitleClassName}>
             Preuve d'admissibilité au travail
           </h3>
           <p className="text-xs text-[#9CA3AF]">
@@ -234,8 +243,8 @@ export default function Step4Compliance({
         {/* Section 2: Conduite & Permis (masqué pour les livreurs vélo) */}
         {!isVelo && (
           <>
-            <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-              <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Classe de Permis & Conduite</h3>
+            <div className={driverSectionCardClassName}>
+              <h3 className={driverSectionTitleClassName}>Classe de Permis & Conduite</h3>
               <div className="grid grid-cols-1 gap-4">
                  <InputField
                   label="Numéro de permis de conduire"
@@ -269,8 +278,8 @@ export default function Step4Compliance({
               </div>
             </div>
 
-            <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-              <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Permis de Conduire (Photos)</h3>
+            <div className={driverSectionCardClassName}>
+              <h3 className={driverSectionTitleClassName}>Permis de Conduire (Photos)</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {renderFileInput('Recto', 'licenseFront')}
                 {renderFileInput('Verso', 'licenseBack')}
@@ -284,14 +293,14 @@ export default function Step4Compliance({
             type="button"
             onClick={onBack}
             disabled={loading}
-            className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors"
+            className={cn(driverSecondaryButtonClassName, 'flex-[1]')}
           >
             Retour
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] hover:bg-[#e68600] transition-colors flex justify-center items-center shadow-[0_0_20px_rgba(242,146,0,0.4)]"
+            className={cn(driverPrimaryButtonClassName, 'flex-[2]')}
           >
             {loading ? <Loader2 className="animate-spin mr-2" /> : null} Valider les documents
           </button>

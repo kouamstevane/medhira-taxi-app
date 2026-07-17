@@ -7,6 +7,15 @@ import { Loader2, UploadCloud, X } from 'lucide-react';
 import { imageCompressionService } from '@/services/image-compression.service';
 import { useToast } from '@/hooks/useToast';
 import { InputField } from '@/components/forms/InputField';
+import { cn } from '@/lib/utils';
+import {
+  driverPrimaryButtonClassName,
+  driverSecondaryButtonClassName,
+  driverSectionCardClassName,
+  driverSectionTitleClassName,
+  driverUploadEmptyClassName,
+  driverUploadLoadedClassName,
+} from './driverOnboardingStyles';
 
 const step3Schema = z.object({
   productionYear: z.string()
@@ -154,7 +163,7 @@ export default function Step3Vehicle({
       </label>
 
       {files[key] ? (
-        <div className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+        <div className={driverUploadLoadedClassName}>
           <span className="text-sm font-medium truncate max-w-[180px] text-slate-300">
             {files[key]?.name}
           </span>
@@ -163,7 +172,7 @@ export default function Step3Vehicle({
           </button>
         </div>
       ) : (
-        <div className="relative border-2 border-dashed border-white/[0.1] rounded-xl p-6 flex flex-col items-center justify-center bg-white/[0.01] hover:bg-white/[0.02] transition-colors cursor-pointer">
+        <div className={driverUploadEmptyClassName}>
           <input
             type="file"
             id={`file-${key}`}
@@ -196,11 +205,11 @@ export default function Step3Vehicle({
               key={opt.value}
               type="button"
               onClick={() => setSelectedDeliveryVehicle(opt.value)}
-              className={`p-6 rounded-2xl border text-center transition-all duration-200 ${
+              className={cn(driverSectionCardClassName, 'p-6 text-center transition-all duration-200',
                 selectedDeliveryVehicle === opt.value
                   ? 'bg-[#f29200]/10 border-[#f29200] text-white'
                   : 'bg-[#1A1A1A] border-white/[0.06] text-[#9CA3AF] hover:border-white/10'
-              }`}
+              )}
             >
               <span className="text-3xl block mb-2">{opt.icon}</span>
               <span className="text-sm font-semibold">{opt.label}</span>
@@ -209,7 +218,7 @@ export default function Step3Vehicle({
         </div>
 
         <div className="flex gap-4 pt-4">
-          <button type="button" onClick={onBack} disabled={loading} className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors">
+          <button type="button" onClick={onBack} disabled={loading} className={cn(driverSecondaryButtonClassName, 'flex-[1]')}>
             Retour
           </button>
           <button
@@ -219,7 +228,7 @@ export default function Step3Vehicle({
               onNext(null, {});
             }}
             disabled={loading}
-            className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] shadow-[0_0_20px_rgba(242,146,0,0.4)] hover:bg-[#e68600] transition-colors"
+            className={cn(driverPrimaryButtonClassName, 'flex-[2]')}
           >
             Continuer
           </button>
@@ -236,8 +245,8 @@ export default function Step3Vehicle({
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Détails Véhicule</h3>
+        <div className={driverSectionCardClassName}>
+          <h3 className={driverSectionTitleClassName}>Détails Véhicule</h3>
 
           <div className="grid grid-cols-1 gap-4">
             <InputField
@@ -274,8 +283,8 @@ export default function Step3Vehicle({
           </div>
         </div>
 
-        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Documents Véhicule</h3>
+        <div className={driverSectionCardClassName}>
+          <h3 className={driverSectionTitleClassName}>Documents Véhicule</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {renderFileInput("Carte Grise (Recto/Verso)", "registration")}
             {renderFileInput("Contrôle Technique", "techControl")}
@@ -285,10 +294,10 @@ export default function Step3Vehicle({
         </div>
 
         <div className="flex gap-4 pt-4">
-          <button type="button" onClick={onBack} disabled={loading} className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors">
+          <button type="button" onClick={onBack} disabled={loading} className={cn(driverSecondaryButtonClassName, 'flex-[1]')}>
             Retour
           </button>
-          <button type="submit" disabled={loading} className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] shadow-[0_0_20px_rgba(242,146,0,0.4)] hover:bg-[#e68600] transition-colors flex justify-center items-center">
+          <button type="submit" disabled={loading} className={cn(driverPrimaryButtonClassName, 'flex-[2]')}>
             {loading ? <Loader2 className="animate-spin mr-2" /> : null} Continuer
           </button>
         </div>
