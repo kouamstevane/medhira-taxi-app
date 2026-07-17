@@ -6,9 +6,15 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { PlaceSuggestion } from '@/types';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
+import {
+  driverFieldClassName,
+  driverFieldErrorClassName,
+  driverFieldLabelClassName,
+} from '@/app/driver/register/components/driverOnboardingStyles';
+import { cn } from '@/lib/utils';
 
 interface AddressInputProps {
   label: string;
@@ -40,6 +46,7 @@ export const AddressInput = ({
   countryRestriction,
 }: AddressInputProps) => {
   const [isFocused, setIsFocused] = useState(false);
+  const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -104,13 +111,14 @@ export const AddressInput = ({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <label className="block text-sm font-medium text-slate-200 mb-1">
+      <label htmlFor={inputId} className={driverFieldLabelClassName}>
         {label}
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
 
       <div className="relative">
         <input
+          id={inputId}
           ref={inputRef}
           type="text"
           value={value}
@@ -120,8 +128,10 @@ export const AddressInput = ({
           disabled={disabled}
           required={required}
           autoComplete="off"
-          className={`w-full p-3 sm:p-3.5 border rounded-lg text-white placeholder-slate-300 bg-[#1A1A1A] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] ${error ? 'border-red-500' : 'border-white/[0.08]'
-            } ${disabled ? 'bg-white/5 cursor-not-allowed' : ''}`}
+          className={cn(
+            driverFieldClassName,
+            error ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-white/[0.08]'
+          )}
           style={{ fontSize: '16px' }} // Évite le zoom automatique sur iOS
         />
 
@@ -132,9 +142,7 @@ export const AddressInput = ({
         )}
       </div>
 
-      {error && (
-        <p className="mt-1 text-sm text-[#EF4444]">{error}</p>
-      )}
+      {error && <p className={driverFieldErrorClassName}>{error}</p>}
 
       {/* Liste des suggestions */}
       {isFocused && suggestions.length > 0 && (

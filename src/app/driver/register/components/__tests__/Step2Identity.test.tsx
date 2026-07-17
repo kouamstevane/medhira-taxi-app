@@ -33,6 +33,14 @@ jest.mock('@/app/taxi/components/AddressInput', () => ({
 }));
 
 describe('Step2Identity', () => {
+  it('renders harmonized section and navigation styles', () => {
+    render(<Step2Identity onNext={jest.fn()} onBack={jest.fn()} />);
+
+    expect(screen.getByText('Identité').parentElement).toHaveClass('rounded-xl');
+    expect(screen.getByRole('button', { name: /retour/i })).toHaveClass('border-white/10');
+    expect(screen.getByRole('button', { name: /continuer/i })).toHaveClass('from-[#f29200]');
+  });
+
   it('updates the phone helper text when the user manually changes the dial code', async () => {
     render(
       <Step2Identity

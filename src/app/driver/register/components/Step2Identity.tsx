@@ -15,7 +15,15 @@ import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { PlaceSuggestion } from '@/types';
 import { isValidPhoneNumber } from '@/lib/validation';
+import { cn } from '@/lib/utils';
 import {
+  driverPrimaryButtonClassName,
+  driverSecondaryButtonClassName,
+  driverSectionCardClassName,
+  driverSectionTitleClassName,
+} from './driverOnboardingStyles';
+import {
+  getCountryByDialCode,
   getCountryByCode,
   getCountryByName,
   getDialCodeForCountryCode,
@@ -62,6 +70,9 @@ interface CountryFields {
   country: string;
   countryCode: string | null;
 }
+
+const driverInputClassName = 'bg-[#1A1A1A] text-white placeholder-[#4B5563] border-white/[0.08] focus:ring-[#f29200] focus:border-[#f29200]';
+const dobInputClassName = `${driverInputClassName} min-w-0 w-full px-2.5 py-3 border rounded-xl outline-none transition-all duration-200 text-base text-center shadow-sm active:scale-[0.99]`;
 
 function parseCountryFields(addressComponents: google.maps.GeocoderAddressComponent[]): CountryFields {
   let city = '';
@@ -114,6 +125,8 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
   const addressVal = watch('address') || '';
   const phoneVal = watch('phone') || '';
   const phoneTouchedRef = useRef(Boolean(initialData?.phone));
+  const initialPhoneAppliedRef = useRef(Boolean(initialData?.phone));
+  const initialCountryAppliedRef = useRef(false);
   const [phonePrefix, setPhonePrefix] = useState(() =>
     getDialCodeFromPhone(initialData?.phone)
     ?? getDialCodeForCountryCode(getCountryByName(initialData?.country)?.code ?? null)
@@ -135,6 +148,11 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
 
   useEffect(() => {
     if (initialData?.phone) {
+      if (initialPhoneAppliedRef.current) {
+        return;
+      }
+
+      initialPhoneAppliedRef.current = true;
       phoneTouchedRef.current = true;
       setPhonePrefix(
         getDialCodeFromPhone(initialData.phone)
@@ -146,6 +164,11 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
     }
 
     if (initialData?.country) {
+      if (initialCountryAppliedRef.current) {
+        return;
+      }
+
+      initialCountryAppliedRef.current = true;
       applyPhonePrefix(getCountryByName(initialData.country)?.code ?? null, true);
       return;
     }
@@ -203,15 +226,6 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
       }
     );
   }, [applyPhonePrefix, autocompleteService, initialData?.country, initialData?.phone, phonePrefix]);
-
-  useEffect(() => {
-    const detectedPrefix = getDialCodeFromPhone(phoneVal) ?? '';
-    phonePrefixRef.current = detectedPrefix;
-
-    if (detectedPrefix !== phonePrefix) {
-      setPhonePrefix(detectedPrefix);
-    }
-  }, [phonePrefix, phoneVal]);
 
   const applyCountryFields = useCallback((fields: CountryFields, addressValue?: string) => {
     if (addressValue) {
@@ -290,7 +304,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
     }
   }, [applyCountryFields, showError]);
 
-  const phoneCountry = getCountryByCode(phonePrefix);
+  const phoneCountry = getCountryByDialCode(phonePrefix);
   const phonePlaceholder = phoneCountry
     ? `${phonePrefix} ${phoneCountry.defaultNumber}`
     : '+XXX XXXXXXXX';
@@ -448,6 +462,9 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
   const phoneField = register('phone');
   const handlePhoneInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     phoneTouchedRef.current = true;
+    const detectedPrefix = getDialCodeFromPhone(event.target.value) ?? '';
+    phonePrefixRef.current = detectedPrefix;
+    setPhonePrefix(detectedPrefix);
     phoneField.onChange(event);
   };
 
@@ -458,14 +475,15 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
         <p className="text-[#9CA3AF] mt-2">Ces informations sont requises pour votre vérification légale.</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Identité</h3>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" data-driver-onboarding-form>
+        <div className={driverSectionCardClassName}>
+          <h3 className={driverSectionTitleClassName}>Identité</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InputField
               {...register('firstName')}
               label="Prénom"
               labelClassName="text-slate-100"
+              className={driverInputClassName}
               onInput={handleNameInput}
               error={errors.firstName?.message}
               required
@@ -474,6 +492,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
               {...register('lastName')}
               label="Nom"
               labelClassName="text-slate-100"
+              className={driverInputClassName}
               onInput={handleNameInput}
               error={errors.lastName?.message}
               required
@@ -485,7 +504,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
               <label className="block text-sm font-medium text-slate-100 mb-2">
                 Date de naissance<span className="text-red-500 ml-1">*</span>
               </label>
-              <div className="flex items-center gap-2">
+              <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1.35fr)] items-center gap-1.5 sm:gap-2">
                 <input
                   ref={dayRef}
                   name="dobDay"
@@ -496,7 +515,8 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                   value={dayVal}
                   onChange={(e) => handleDobFieldChange(e, 'day', 2, monthRef)}
                   onKeyDown={(e) => handleDobKeyDown(e, dayRef)}
-                  className="w-[4.5rem] px-3 py-3 border rounded-xl outline-none transition-all duration-200 bg-[#1A1A1A] text-white text-base text-center placeholder-[#4B5563] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] border-white/[0.08] shadow-sm"
+                  aria-label="Jour de naissance"
+                  className={dobInputClassName}
                 />
                 <span className="text-[#4B5563] text-lg font-medium select-none">/</span>
                 <input
@@ -509,7 +529,8 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                   value={monthVal}
                   onChange={(e) => handleDobFieldChange(e, 'month', 2, yearRef)}
                   onKeyDown={(e) => handleDobKeyDown(e, dayRef)}
-                  className="w-[4.5rem] px-3 py-3 border rounded-xl outline-none transition-all duration-200 bg-[#1A1A1A] text-white text-base text-center placeholder-[#4B5563] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] border-white/[0.08] shadow-sm"
+                  aria-label="Mois de naissance"
+                  className={dobInputClassName}
                 />
                 <span className="text-[#4B5563] text-lg font-medium select-none">/</span>
                 <input
@@ -522,7 +543,8 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                   value={yearVal}
                   onChange={(e) => handleDobFieldChange(e, 'year', 4, { current: null })}
                   onKeyDown={(e) => handleDobKeyDown(e, monthRef)}
-                  className="w-[6rem] px-3 py-3 border rounded-xl outline-none transition-all duration-200 bg-[#1A1A1A] text-white text-base text-center placeholder-[#4B5563] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] border-white/[0.08] shadow-sm"
+                  aria-label="Année de naissance"
+                  className={dobInputClassName}
                 />
               </div>
               <p className="mt-1 text-sm text-slate-300">Format : JJ / MM / AAAA</p>
@@ -540,6 +562,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
               type="tel"
               label="Numéro de Téléphone"
               labelClassName="text-slate-100"
+              className={driverInputClassName}
               placeholder={phonePlaceholder}
               {...phoneField}
               onChange={handlePhoneInput}
@@ -613,8 +636,8 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
           <input type="hidden" {...register('country')} />
         </div>
 
-        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
-          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Photo de profil</h3>
+        <div className={driverSectionCardClassName}>
+          <h3 className={driverSectionTitleClassName}>Photo de profil</h3>
           <p className="text-sm text-[#9CA3AF]">Prenez un selfie sur le vif. Assurez-vous d'être bien éclairé et de cadrer votre visage et cou dans l'ovale virtuel.</p>
 
           <input
@@ -656,14 +679,14 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
           <button
             type="button"
             onClick={onBack}
-            className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors"
+            className={cn(driverSecondaryButtonClassName, 'w-1/3')}
           >
             Retour
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] hover:bg-[#e68600] transition-colors shadow-[0_0_20px_rgba(242,146,0,0.4)] flex justify-center items-center"
+            className={cn(driverPrimaryButtonClassName, 'w-2/3')}
           >
             {loading ? <Loader2 className="animate-spin mr-2" /> : null}
             Continuer
