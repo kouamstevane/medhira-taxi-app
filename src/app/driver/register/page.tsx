@@ -1,10 +1,11 @@
-// src/app/driver/register/page.tsx
 "use client";
+// src/app/driver/register/page.tsx
+
+import { useState } from 'react';
 import { auth } from '@/config/firebase';
-import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { useConnectivityMonitor } from '@/hooks/useConnectivityMonitor';
+import { useToast } from '@/hooks/useToast';
 import { useDriverRegistration } from '@/hooks/useDriverRegistration';
 import Step0RoleSelection from './components/Step0RoleSelection';
 import Step1Intent from './components/Step1Intent';
@@ -14,16 +15,37 @@ import Step4Compliance from './components/Step4Compliance';
 import Step5Monetization from './components/Step5Monetization';
 
 export default function DriverRegisterWizard() {
-  const { toasts, removeToast, showWarning } = useToast();
-  const isOnline = useConnectivityMonitor(showWarning);
+  const { toasts, removeToast } = useToast();
+  const [allowStep1AutoAdvance, setAllowStep1AutoAdvance] = useState(true);
   const {
-    currentStep, loading, error, warning, isSubmitting, submissionSuccess,
-    rejectionCode, rejectionReason,
-    driverType, vehicleType, setVehicleType,
-    step1Data, step2Data, step3Data, biometricsPhoto, vehicleFiles, complianceFiles,
-    handleStep0Next, handleGoogleSignIn, handleStep1Next, handleStep2Next, handleStep3Next,
-    handleStep4Next, handleStep5FinalSubmit, handleFixRejection, handleLogout,
-    handleSendVerificationCode, handleVerifyCode,
+    currentStep,
+    loading,
+    error,
+    warning,
+    isSubmitting,
+    submissionSuccess,
+    rejectionCode,
+    rejectionReason,
+    driverType,
+    vehicleType,
+    setVehicleType,
+    step1Data,
+    step2Data,
+    step3Data,
+    biometricsPhoto,
+    vehicleFiles,
+    complianceFiles,
+    handleStep0Next,
+    handleGoogleSignIn,
+    handleStep1Next,
+    handleStep2Next,
+    handleStep3Next,
+    handleStep4Next,
+    handleStep5FinalSubmit,
+    handleFixRejection,
+    handleLogout,
+    handleSendVerificationCode,
+    handleVerifyCode,
     setCurrentStep,
     isExistingUser,
   } = useDriverRegistration();
@@ -42,11 +64,17 @@ export default function DriverRegisterWizard() {
           </div>
           <div className="space-y-3 mt-8">
             {rejectionCode !== 'R005' && (
-              <button onClick={handleFixRejection} className="w-full h-14 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform">
+              <button
+                onClick={handleFixRejection}
+                className="w-full h-14 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform"
+              >
                 <MaterialIcon name="edit" size="md" className="mr-2" /> Mettre à jour mon dossier
               </button>
             )}
-            <button onClick={handleLogout} className="glass-card w-full h-14 flex items-center justify-center rounded-2xl border border-white/10 text-slate-300 font-bold active:scale-[0.98] transition-transform">
+            <button
+              onClick={handleLogout}
+              className="glass-card w-full h-14 flex items-center justify-center rounded-2xl border border-white/10 text-slate-300 font-bold active:scale-[0.98] transition-transform"
+            >
               <MaterialIcon name="logout" size="md" className="mr-2" /> Se déconnecter
             </button>
           </div>
@@ -59,23 +87,7 @@ export default function DriverRegisterWizard() {
     <div className="min-h-screen bg-background font-sans text-slate-100 antialiased flex items-center justify-center p-4">
       <ToastContainer toasts={toasts} onRemove={removeToast} position="top-right" />
 
-      {/* Indicateur connectivité */}
-      <div className="fixed top-4 right-4 z-50">
-        {isOnline ? (
-          <div className="flex items-center bg-green-500/10 border border-green-500/20 text-green-400 px-3 py-2 rounded-xl">
-            <MaterialIcon name="wifi" size="sm" className="mr-2" />
-            <span className="text-sm font-medium">En ligne</span>
-          </div>
-        ) : (
-          <div className="flex items-center bg-destructive/10 border border-destructive/30 text-destructive px-3 py-2 rounded-xl">
-            <MaterialIcon name="wifi_off" size="sm" className="mr-2" />
-            <span className="text-sm font-medium">Hors ligne</span>
-          </div>
-        )}
-      </div>
-
       <div className="glass-card rounded-2xl w-full max-w-2xl overflow-hidden">
-        {/* Progress bar — 6 étapes: 0 à 5 */}
         <div className="h-2 w-full bg-white/5">
           <div
             className="h-full bg-gradient-to-r from-primary to-[#ffae33] transition-all duration-300"
@@ -102,9 +114,7 @@ export default function DriverRegisterWizard() {
             </div>
           )}
 
-          {currentStep === 0 && (
-            <Step0RoleSelection onNext={handleStep0Next} />
-          )}
+          {currentStep === 0 && <Step0RoleSelection onNext={handleStep0Next} />}
           {currentStep === 1 && (
             <Step1Intent
               onNext={handleStep1Next}
@@ -114,11 +124,21 @@ export default function DriverRegisterWizard() {
               sendVerificationCode={handleSendVerificationCode}
               verifyCode={handleVerifyCode}
               onVerified={() => setCurrentStep(2)}
+              autoAdvanceOnMount={allowStep1AutoAdvance}
               emailPreVerified={isExistingUser && auth.currentUser?.emailVerified === true}
             />
           )}
           {currentStep === 2 && (
-            <Step2Identity onNext={handleStep2Next} onBack={() => setCurrentStep(1)} loading={loading} initialData={step2Data} initialPhoto={biometricsPhoto} />
+            <Step2Identity
+              onNext={handleStep2Next}
+              onBack={() => {
+                setAllowStep1AutoAdvance(false);
+                setCurrentStep(1);
+              }}
+              loading={loading}
+              initialData={step2Data}
+              initialPhoto={biometricsPhoto}
+            />
           )}
           {currentStep === 3 && (
             <Step3Vehicle

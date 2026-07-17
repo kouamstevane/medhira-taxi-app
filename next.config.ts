@@ -4,9 +4,6 @@ const isMobile = process.env.MOBILE_BUILD === 'true';
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: __dirname,
-  turbopack: {
-    root: __dirname,
-  },
   async redirects() {
     return [
       { source: '/driver/historique', destination: '/driver/activite?tab=historique', permanent: true },

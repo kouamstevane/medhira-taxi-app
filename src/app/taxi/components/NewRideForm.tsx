@@ -32,6 +32,7 @@ const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePay
 import { logger } from '@/utils/logger';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
+import type { BookingStatus } from '@/types/booking';
 import type { StripePaymentMethod } from '@/types/stripe';
 
 //  Schéma Zod de validation pour la création de course (medJira.md #85)
@@ -520,6 +521,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
   // Crée la réservation Firestore avec la méthode de paiement choisie
   const createBookingInternal = async (paymentMethod: StripePaymentMethod): Promise<string | null> => {
     try {
+      const bookingStatus: BookingStatus = rideMode === 'scheduled' ? 'scheduled' : 'pending';
       const bookingData = {
         userId: currentUser!.uid,
         userEmail: currentUser!.email,
@@ -533,7 +535,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
         duration: estimate!.duration,
         price: estimate!.price,
         carType: selectedCarType!.name,
-        status: (rideMode === 'scheduled' ? 'scheduled' : 'pending') as const,
+        status: bookingStatus,
         scheduledAt: rideMode === 'scheduled' ? buildScheduledAt() || undefined : undefined,
         paymentMethod,
         ...(bonus > 0 && { bonus }),

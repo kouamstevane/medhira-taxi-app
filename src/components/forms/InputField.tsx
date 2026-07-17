@@ -17,6 +17,7 @@ export interface InputFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   icon?: ReactNode;
   rightIcon?: ReactNode;
   containerClassName?: string;
+  labelClassName?: string;
 }
 
 export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
@@ -29,6 +30,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
       rightIcon,
       className = '',
       containerClassName = '',
+      labelClassName = '',
       required,
       disabled,
       ...props
@@ -54,7 +56,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
       <div className={`w-full ${containerClassName}`}>
         {/* Label */}
         {label && (
-          <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
+          <label className={`block text-sm font-medium text-[#9CA3AF] mb-2 ${labelClassName}`}>
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>
