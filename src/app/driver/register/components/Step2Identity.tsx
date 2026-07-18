@@ -17,6 +17,7 @@ import { PlaceSuggestion } from '@/types';
 import { isValidPhoneNumber } from '@/lib/validation';
 import { cn } from '@/lib/utils';
 import {
+  driverFieldClassName,
   driverPrimaryButtonClassName,
   driverSecondaryButtonClassName,
   driverSectionCardClassName,
@@ -71,8 +72,7 @@ interface CountryFields {
   countryCode: string | null;
 }
 
-const driverInputClassName = 'bg-[#1A1A1A] text-white placeholder-[#4B5563] border-white/[0.08] focus:ring-[#f29200] focus:border-[#f29200]';
-const dobInputClassName = `${driverInputClassName} min-w-0 w-full px-2.5 py-3 border rounded-xl outline-none transition-all duration-200 text-base text-center shadow-sm active:scale-[0.99]`;
+const dobInputClassName = cn(driverFieldClassName, 'min-w-0 px-2.5 text-center');
 
 function parseCountryFields(addressComponents: google.maps.GeocoderAddressComponent[]): CountryFields {
   let city = '';
@@ -483,7 +483,6 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
               {...register('firstName')}
               label="Prénom"
               labelClassName="text-slate-100"
-              className={driverInputClassName}
               onInput={handleNameInput}
               error={errors.firstName?.message}
               required
@@ -492,7 +491,6 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
               {...register('lastName')}
               label="Nom"
               labelClassName="text-slate-100"
-              className={driverInputClassName}
               onInput={handleNameInput}
               error={errors.lastName?.message}
               required
@@ -562,7 +560,6 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
               type="tel"
               label="Numéro de Téléphone"
               labelClassName="text-slate-100"
-              className={driverInputClassName}
               placeholder={phonePlaceholder}
               {...phoneField}
               onChange={handlePhoneInput}

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Step3Vehicle from '../Step3Vehicle';
 
 jest.mock('@/hooks/useToast', () => ({
@@ -24,5 +24,26 @@ describe('Step3Vehicle', () => {
     expect(uploadTile).toHaveClass('border-dashed');
     expect(uploadTile).toHaveClass('rounded-xl');
     expect(screen.getAllByText(/Image ou PDF \(Max 10Mo\)/i).length).toBeGreaterThan(0);
+  });
+
+  it('shows inline feedback when the production year is too old for chauffeur registration', async () => {
+    render(
+      <Step3Vehicle
+        onNext={jest.fn()}
+        onBack={jest.fn()}
+        initialData={{ productionYear: '2015', hasFourDoors: true }}
+        initialFiles={{
+          registration: new File(['registration'], 'registration.pdf', { type: 'application/pdf' }),
+          techControl: new File(['tech-control'], 'tech-control.pdf', { type: 'application/pdf' }),
+          exteriorPhoto: new File(['photo'], 'photo.jpg', { type: 'image/jpeg' }),
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /continuer/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Le véhicule doit être de l'année/i)).toBeInTheDocument();
+    });
   });
 });

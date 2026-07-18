@@ -63,12 +63,23 @@ export default function Step3Vehicle({
   const isChauffeur = driverType === 'chauffeur' || driverType === 'les_deux';
   const maxAge = isChauffeur ? 10 : 15;
   const minYear = currentYear - maxAge;
+  const productionYearErrorMessage = `Le véhicule doit être de l'année ${minYear} ou plus récent (${maxAge} ans max pour le rôle choisi).`;
+  const vehicleSchema = React.useMemo(
+    () => step3Schema.refine((data) => {
+      const yearVal = parseInt(data.productionYear, 10);
+      return !isNaN(yearVal) && yearVal >= minYear;
+    }, {
+      path: ['productionYear'],
+      message: productionYearErrorMessage,
+    }),
+    [minYear, productionYearErrorMessage]
+  );
 
   const [selectedDeliveryVehicle, setSelectedDeliveryVehicle] = React.useState<VehicleDeliveryType>('scooter');
   const { showInfo, showError } = useToast();
 
   const { register, handleSubmit, formState: { errors } } = useForm<Step3FormData>({
-    resolver: zodResolver(step3Schema),
+    resolver: zodResolver(vehicleSchema),
     defaultValues: {
       productionYear: initialData?.productionYear || '',
       hasFourDoors: initialData?.hasFourDoors || false,
@@ -133,12 +144,6 @@ export default function Step3Vehicle({
   const onSubmit = (data: Step3FormData) => {
     if (isChauffeur && !data.hasFourDoors) {
       showError("Votre véhicule doit posséder 4 portes indépendantes pour le service VTC.");
-      return;
-    }
-
-    const yearVal = parseInt(data.productionYear, 10);
-    if (isNaN(yearVal) || yearVal < minYear) {
-      showError(`Le véhicule doit être de l'année ${minYear} ou plus récent (${maxAge} ans max pour le rôle choisi).`);
       return;
     }
 

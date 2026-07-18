@@ -1,5 +1,5 @@
 export const driverFieldLabelClassName = 'text-sm font-medium text-[#9CA3AF] mb-2'
-export const driverFieldClassName = 'w-full px-4 py-3 border rounded-xl outline-none transition-all duration-200 bg-[#1A1A1A] text-white text-base placeholder-[#4B5563] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] disabled:bg-white/5 disabled:cursor-not-allowed disabled:text-[#4B5563] shadow-sm active:scale-[0.99]'
+export const driverFieldClassName = 'w-full h-14 px-4 py-3 border border-white/[0.08] rounded-xl outline-none transition-all duration-200 bg-[#1A1A1A] text-white text-base placeholder-[#4B5563] focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200] disabled:bg-white/5 disabled:cursor-not-allowed disabled:text-[#4B5563] shadow-sm active:scale-[0.99]'
 export const driverFieldHelperClassName = 'mt-1 text-sm text-slate-400'
 export const driverFieldErrorClassName = 'mt-1 text-sm text-red-500 flex items-center'
 

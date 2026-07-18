@@ -53,7 +53,7 @@ describe('Step2Identity', () => {
       value: originalGoogle,
     });
     URL.createObjectURL = originalCreateObjectURL;
-    URL.revokeObjectURL = originalRevokeObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL ?? jest.fn();
   });
 
   it('keeps navigation actions on the shared CTA contracts', () => {
@@ -62,6 +62,23 @@ describe('Step2Identity', () => {
     expect(screen.getByText('Identité').parentElement).toHaveClass('rounded-xl');
     expect(screen.getByRole('button', { name: /retour/i })).toHaveClass('border-white/10');
     expect(screen.getByRole('button', { name: /continuer/i })).toHaveClass('from-[#f29200]');
+  });
+
+  it('keeps date inputs on the shared driver input chrome', () => {
+    render(<Step2Identity onNext={jest.fn()} onBack={jest.fn()} />);
+
+    for (const input of [
+      screen.getByLabelText(/Jour de naissance/i),
+      screen.getByLabelText(/Mois de naissance/i),
+      screen.getByLabelText(/Ann.e de naissance/i),
+    ]) {
+      expect(input).toHaveClass('h-14');
+      expect(input).toHaveClass('border-white/[0.08]');
+      expect(input).toHaveClass('focus:ring-2');
+      expect(input).toHaveClass('focus:ring-[#f29200]');
+      expect(input).toHaveClass('focus:border-[#f29200]');
+      expect(input).not.toHaveClass('focus:border-primary');
+    }
   });
 
   it('updates the phone helper text when the user manually changes the dial code', async () => {
