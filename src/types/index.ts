@@ -24,6 +24,7 @@ export type {
   FirebaseUser,
   UserRoles,
   ActiveRole,
+  AuthStatus,
   RoleClient,
   RoleDriver,
   RoleRestaurant,

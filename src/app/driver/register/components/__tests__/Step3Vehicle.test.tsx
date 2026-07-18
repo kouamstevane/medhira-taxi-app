@@ -19,9 +19,10 @@ describe('Step3Vehicle', () => {
   it('uses the shared upload empty-state styling', () => {
     render(<Step3Vehicle onNext={jest.fn()} onBack={jest.fn()} />);
 
-    const uploadTile = screen.getByText(/Cliquez pour ajouter/i).closest('div');
+    const uploadTile = screen.getByTestId('file-registration-empty-state');
 
     expect(uploadTile).toHaveClass('border-dashed');
     expect(uploadTile).toHaveClass('rounded-xl');
+    expect(screen.getAllByText(/Image ou PDF \(Max 10Mo\)/i).length).toBeGreaterThan(0);
   });
 });

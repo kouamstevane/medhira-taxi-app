@@ -14,7 +14,7 @@ import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { AuthContextType, UserData } from '@/types';
-import type { UserRoles } from '@/types/user';
+import type { AuthStatus, UserRoles } from '@/types/user';
 
 /**
  * Contexte d'authentification — valeur null par défaut pour détecter l'usage hors AuthProvider
@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('loading');
   const [error] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
 
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * Lecture exclusive de `users/{uid}` (modèle V1, spec §3.1). Le statut effectif
    * d'un rôle pro (driver, restaurant) est lu à la demande via roles.service.
    */
-  const fetchUserData = async (user: User): Promise<void> => {
+  const fetchUserData = async (user: User): Promise<UserData | null> => {
     try {
       console.log('[AuthContext] Début chargement données utilisateur', {
         uid: user.uid,
@@ -67,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Auto-réparation fire-and-forget via ensureClientRole + fallback local
         // pour ne pas bloquer le rendu.
         let safeRoles: UserRoles;
-        if (!data.roles) {
+        if (!data.roles && data.accountState !== 'driver_onboarding') {
           console.warn('[AuthContext] User without roles, auto-repairing roles.client', {
             uid: user.uid,
           });
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.error('[AuthContext] roles.service import failed', e),
             );
         } else {
-          safeRoles = data.roles;
+          safeRoles = data.roles ?? {};
         }
 
         console.log('[AuthContext] Données utilisateur chargées avec succès', {
@@ -94,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           roles: Object.keys(safeRoles),
         });
 
-        setUserData({
+        const resolvedUserData: UserData = {
           uid: user.uid,
           email: user.email,
           phoneNumber: user.phoneNumber,
@@ -105,11 +106,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           roles: safeRoles,
           activeRole: data.activeRole ?? 'client',
           lastActiveRole: data.lastActiveRole,
+          accountState: data.accountState,
+          onboarding: data.onboarding,
           country: data.country,
           address: data.address,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
-        });
+        };
+
+        setUserData(resolvedUserData);
+        return resolvedUserData;
       } else {
         console.info('[AuthContext] Document utilisateur inexistant (peut être en cours de création)', {
           uid: user.uid,
@@ -117,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         setUserData(null);
+        return null;
       }
     } catch (err: unknown) {
       const errorObj = err instanceof Error ? err : null;
@@ -137,21 +144,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
       setUserData(null);
+      return null;
     }
   };
 
   useEffect(() => {
     // Écouter les changements d'état d'authentification Firebase
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setLoading(true);
+      setAuthStatus('loading');
       setCurrentUser(user);
 
       if (user) {
         //  CORRECTION BUG #2 : Lire emailVerified directement depuis l'objet user
         setIsEmailVerified(user.emailVerified || false);
-        await fetchUserData(user);
+        const resolvedUserData = await fetchUserData(user);
+        setAuthStatus(resolvedUserData ? 'authenticated' : 'unauthenticated');
       } else {
         setIsEmailVerified(false);
         setUserData(null);
+        setAuthStatus('unauthenticated');
       }
 
       setLoading(false);
@@ -173,15 +185,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setCurrentUser(refreshedUser);
         setIsEmailVerified(refreshedUser.emailVerified || false);
         // Recharger aussi les données Firestore
-        await fetchUserData(refreshedUser);
+        const resolvedUserData = await fetchUserData(refreshedUser);
+        setAuthStatus(resolvedUserData ? 'authenticated' : 'unauthenticated');
       } catch (err) {
         console.error('Erreur lors du rechargement de l\'utilisateur:', err);
       }
+    } else {
+      setAuthStatus('unauthenticated');
     }
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, userData, error, isEmailVerified, reloadUser }}>
+    <AuthContext.Provider value={{ currentUser, loading, authStatus, userData, error, isEmailVerified, reloadUser }}>
       {children}
     </AuthContext.Provider>
   );

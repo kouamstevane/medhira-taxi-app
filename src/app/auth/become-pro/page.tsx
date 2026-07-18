@@ -47,6 +47,11 @@ export default function BecomeProPage() {
       return;
     }
 
+    if (userData?.accountState === 'driver_onboarding' || userData?.activeRole === 'driver_onboarding') {
+      router.replace('/driver/register');
+      return;
+    }
+
     if (userData && missingRoles.length === 0) {
       const role = (userData.lastActiveRole || userData.activeRole || 'client') as ActiveRole;
       router.replace(`/dashboard?role=${role}`);

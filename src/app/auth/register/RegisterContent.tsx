@@ -39,7 +39,9 @@ export default function RegisterContent() {
                     const userDoc = await getDoc(doc(db, 'users', user.uid));
                     // Routage post-login : activeRole (V1, spec §7.3)
                     const activeRole = userDoc.exists() ? userDoc.data().activeRole : 'client';
-                    if (activeRole === 'driver') {
+                    if (userDoc.exists() && userDoc.data().accountState === 'driver_onboarding') {
+                        router.push('/driver/register');
+                    } else if (activeRole === 'driver') {
                         router.push('/driver/dashboard');
                     } else {
                         router.push('/auth/setup-payment');
@@ -145,7 +147,9 @@ export default function RegisterContent() {
             const userDoc = await getDoc(doc(db, 'users', user.uid));
             // Routage post-login : activeRole (V1, spec §7.3)
             const activeRole = userDoc.exists() ? userDoc.data()?.activeRole : 'client';
-            if (activeRole === 'driver') {
+            if (userDoc.exists() && userDoc.data()?.accountState === 'driver_onboarding') {
+                router.push('/driver/register');
+            } else if (activeRole === 'driver') {
                 router.push('/driver/dashboard');
             } else {
                 router.push('/auth/setup-payment');

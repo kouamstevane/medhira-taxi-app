@@ -5,14 +5,15 @@ import { auth, db } from '@/config/firebase';
 import {
   signInWithEmailAndPassword,
   AuthErrorCodes,
-  onAuthStateChanged,
+  signOut,
 } from 'firebase/auth';
 import { getDoc, doc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
 import { AuthService } from '@/services';
 import {
-  getRouteForPostLogin,
+  getRouteForAuthenticatedProfile,
   toRestaurantEffectiveStatus,
   type DriverStatus,
 } from '@/services/roles.service';
@@ -26,16 +27,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { authStatus, userData } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.replace('/dashboard');
-      }
-    });
-    return () => unsubscribe();
-  }, [router]);
+    if (authStatus !== 'authenticated' || !userData) return;
+
+    const route = getRouteForAuthenticatedProfile(userData, {});
+    if (!route) {
+      void signOut(auth);
+      return;
+    }
+
+    router.replace(route);
+  }, [authStatus, router, userData]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +56,8 @@ export default function LoginPage() {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const userSnap = await getDoc(doc(db, 'users', cred.user.uid));
       if (!userSnap.exists()) {
-        router.replace('/dashboard');
+        await signOut(auth);
+        setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
         return;
       }
       const userData = userSnap.data() as UserData;
@@ -67,10 +73,15 @@ export default function LoginPage() {
       const driverStatus = driverSnap?.data()?.status as DriverStatus | undefined;
       const restaurantStatus = toRestaurantEffectiveStatus(restaurantSnap?.data());
 
-      const route = getRouteForPostLogin(userData, {
+      const route = getRouteForAuthenticatedProfile(userData, {
         driver: driverStatus,
         restaurant: restaurantStatus,
       });
+      if (!route) {
+        await signOut(auth);
+        setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
+        return;
+      }
       router.replace(route);
     } catch (err: unknown) {
       handleAuthError(err);
@@ -87,7 +98,8 @@ export default function LoginPage() {
       const uid = user.uid;
       const userSnap = await getDoc(doc(db, 'users', uid));
       if (!userSnap.exists()) {
-        router.replace('/dashboard');
+        await signOut(auth);
+        setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
         return;
       }
       const userData = userSnap.data() as UserData;
@@ -103,10 +115,15 @@ export default function LoginPage() {
       const driverStatus = driverSnap?.data()?.status as DriverStatus | undefined;
       const restaurantStatus = toRestaurantEffectiveStatus(restaurantSnap?.data());
 
-      const route = getRouteForPostLogin(userData, {
+      const route = getRouteForAuthenticatedProfile(userData, {
         driver: driverStatus,
         restaurant: restaurantStatus,
       });
+      if (!route) {
+        await signOut(auth);
+        setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
+        return;
+      }
       router.replace(route);
     } catch (err: unknown) {
       handleAuthError(err);

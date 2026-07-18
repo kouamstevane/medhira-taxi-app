@@ -1,17 +1,17 @@
 "use client";
-import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, UploadCloud, FileCheck, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Loader2, FileCheck } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { SelectField } from '@/components/forms/SelectField';
 import { InputField } from '@/components/forms/InputField';
 import { cn } from '@/lib/utils';
+import { DriverDocumentUploadField } from './DriverDocumentUploadField';
 import {
   driverInfoBannerClassName,
   driverPrimaryButtonClassName,
   driverSecondaryButtonClassName,
   driverSectionCardClassName,
   driverSectionTitleClassName,
-  driverUploadEmptyClassName,
 } from './driverOnboardingStyles';
 
 export type Step4Files = {
@@ -59,33 +59,6 @@ export default function Step4Compliance({
     licenseBack: initialFiles?.licenseBack || null,
   });
 
-  const [previews, setPreviews] = useState<Record<string, string>>({});
-  const blobUrlsRef = useRef<string[]>([]);
-
-  useEffect(() => {
-    return () => {
-      blobUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, []);
-
-  useEffect(() => {
-    if (initialFiles) {
-      const newPreviews: Record<string, string> = {};
-      Object.entries(initialFiles).forEach(([key, file]) => {
-        if (file instanceof File) {
-          if (file.type.startsWith('image/')) {
-            const url = URL.createObjectURL(file);
-            blobUrlsRef.current.push(url);
-            newPreviews[key] = url;
-          } else if (file.type === 'application/pdf') {
-            newPreviews[key] = 'pdf';
-          }
-        }
-      });
-      setPreviews(newPreviews);
-    }
-  }, [initialFiles]);
-
   const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, key: keyof typeof files) => {
@@ -104,31 +77,10 @@ export default function Step4Compliance({
     }
 
     setFiles((prev) => ({ ...prev, [key]: file }));
-
-    if (file.type.startsWith('image/')) {
-      const oldUrl = previews[key];
-      if (oldUrl && oldUrl !== 'pdf') {
-        URL.revokeObjectURL(oldUrl);
-        blobUrlsRef.current = blobUrlsRef.current.filter((u) => u !== oldUrl);
-      }
-      const url = URL.createObjectURL(file);
-      blobUrlsRef.current.push(url);
-      setPreviews((prev) => ({ ...prev, [key]: url }));
-    } else if (file.type === 'application/pdf') {
-      setPreviews((prev) => ({ ...prev, [key]: 'pdf' }));
-    }
   };
 
   const removeFile = (key: keyof typeof files) => {
     setFiles((prev) => ({ ...prev, [key]: null }));
-    setPreviews((prev) => {
-      const newPreviews = { ...prev };
-      if (newPreviews[key] && newPreviews[key] !== 'pdf') {
-        URL.revokeObjectURL(newPreviews[key]);
-      }
-      delete newPreviews[key];
-      return newPreviews;
-    });
     const fileInput = document.getElementById(`file-${key}`) as HTMLInputElement;
     if (fileInput) fileInput.value = '';
   };
@@ -171,47 +123,15 @@ export default function Step4Compliance({
   };
 
   const renderFileInput = (label: string, key: keyof typeof files, accept = 'image/*,application/pdf') => (
-    <div className="border border-white/[0.06] rounded-xl p-4 bg-[#1A1A1A] flex flex-col items-center text-center">
-      <label className="block text-sm font-medium text-[#9CA3AF] mb-2 w-full text-left">
-        {label} <span className="text-red-500">*</span>
-      </label>
-
-      {previews[key] ? (
-        <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-[#242424] border border-white/[0.06] flex items-center justify-center group">
-          {previews[key] === 'pdf' ? (
-            <div className="flex flex-col items-center justify-center p-4">
-              <FileCheck className="w-12 h-12 text-blue-500 mb-2" />
-              <span className="text-sm font-medium truncate max-w-[200px]">
-                {files[key] instanceof File ? (files[key] as File).name : ''}
-              </span>
-            </div>
-          ) : (
-            <img src={previews[key]} alt="Preview" className="w-full h-full object-cover" />
-          )}
-
-          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <button type="button" onClick={() => removeFile(key)} className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600">
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className={cn(driverUploadEmptyClassName, 'w-full aspect-video')}>
-          <input
-            type="file"
-            id={`file-${key}`}
-            accept={accept}
-            onChange={(e) => handleFileChange(e, key)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          />
-          <UploadCloud size={32} className="mb-2 text-[#4B5563]" />
-          <span className="text-sm font-medium text-[#9CA3AF]">Cliquez pour ajouter</span>
-          <span className="text-xs text-[#4B5563] mt-1">Image ou PDF (Max 10Mo)</span>
-        </div>
-      )}
-
-      <p className="text-xs text-[#9CA3AF] mt-2">Assurez-vous que le texte soit lisible et sans reflet.</p>
-    </div>
+    <DriverDocumentUploadField
+      label={label}
+      inputId={`file-${key}`}
+      accept={accept}
+      file={files[key] instanceof File ? files[key] : null}
+      onChange={(e) => handleFileChange(e, key)}
+      helperText="Assurez-vous que le texte soit lisible et sans reflet."
+      onRemove={() => removeFile(key)}
+    />
   );
 
   return (

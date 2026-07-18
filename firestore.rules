@@ -48,26 +48,6 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.email_verified == true;
     }
     
-    // Fonction helper pour valider le format des données chiffrées
-    // Vérifie que les données chiffrées ont la structure attendue {data, iv, salt}
-    function isValidEncryptedData(field) {
-      return field != null &&
-             field.data is string &&
-             field.data.length > 0 &&
-             field.iv is string &&
-             field.iv.length > 0 &&
-             field.salt is string &&
-              field.salt.length > 0;
-    }
-
-    function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    function hasRole(roleName) {
-      return isAuthenticated() && userDoc().roles[roleName] != null;
-    }
-    
     // ============================================================================
     // COLLECTION USERS (CLIENTS)
     // ============================================================================
@@ -83,12 +63,23 @@ service cloud.firestore {
       // Les données client nécessaires aux chauffeurs doivent être dénormalisées dans les bookings.
       allow read: if isOwner(userId) || isAdmin();
       
-      // CRÉATION : roles.client présent + enabled, pas de roles pro à la création initiale
-      // (l'ajout de roles.driver/restaurant passe par Cloud Function admin — cf. P2 §8)
+      // CRÉATION : client normal OU brouillon chauffeur verrouillé.
+      // L'ajout de roles.driver/restaurant passe par Cloud Function admin.
       allow create: if isOwner(userId)
-                    && request.resource.data.roles.client.enabled == true
                     && !('driver' in request.resource.data.roles)
-                    && !('restaurant' in request.resource.data.roles);
+                    && !('restaurant' in request.resource.data.roles)
+                    && (
+                      (
+                        'client' in request.resource.data.roles
+                        && request.resource.data.roles.client.enabled == true
+                      )
+                      || (
+                        request.resource.data.accountState == 'driver_onboarding'
+                        && request.resource.data.activeRole == 'driver_onboarding'
+                        && request.resource.data.roles.keys().hasOnly([])
+                        && request.resource.data.onboarding.driver.status == 'draft'
+                      )
+                    );
 
       allow update: if isOwner(userId)
                     && (

@@ -23,6 +23,17 @@ describe('Step1Intent', () => {
     expect(screen.getByTestId('google-signin-btn')).toHaveClass('border-white/10');
   });
 
+  it('renders the Google button as a compact action row instead of a content card', () => {
+    render(<Step1Intent onNext={jest.fn()} onGoogleSignIn={jest.fn()} />);
+
+    const googleButton = screen.getByTestId('google-signin-btn');
+
+    expect(googleButton).toHaveClass('h-14');
+    expect(googleButton).toHaveClass('relative');
+    expect(googleButton).not.toHaveClass('space-y-4');
+    expect(screen.getByTestId('google-signin-icon')).toBeInTheDocument();
+  });
+
   it('keeps OTP inside the shared wizard presentation', async () => {
     render(<Step1Intent onNext={jest.fn()} onGoogleSignIn={jest.fn()} sendVerificationCode={jest.fn().mockResolvedValue({ success: true })} verifyCode={jest.fn()} />)
 

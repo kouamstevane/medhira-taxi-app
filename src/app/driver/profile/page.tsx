@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { deleteUser, signOut } from 'firebase/auth';
-import { auth } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import { useDriverProfile } from '@/hooks/useDriverProfile';
+import { useAuth } from '@/hooks/useAuth';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import {
   getDriverAvailabilityProfileState,
@@ -52,6 +54,7 @@ function InfoRow({ label, value, italic }: InfoRowProps) {
 
 export default function DriverProfilePage() {
   const router = useRouter();
+  const { userData, reloadUser } = useAuth();
   const {
     driver,
     loading,
@@ -80,6 +83,11 @@ export default function DriverProfilePage() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [clientActivationLoading, setClientActivationLoading] = useState(false);
+  const [clientActivationMessage, setClientActivationMessage] = useState<string | null>(null);
+  const [clientActivationError, setClientActivationError] = useState<string | null>(null);
+
+  const canActivateClientRole = userData?.roles?.client == null && userData?.activeRole !== 'driver_onboarding';
 
   async function handleSignOut() {
     setSignOutLoading(true);
@@ -112,6 +120,24 @@ export default function DriverProfilePage() {
       }
     } finally {
       setDeleteLoading(false);
+    }
+  }
+
+  async function handleActivateClientRole() {
+    setClientActivationLoading(true);
+    setClientActivationError(null);
+    setClientActivationMessage(null);
+
+    try {
+      const activateClientRole = httpsCallable<unknown, { success: boolean }>(functions, 'activateClientRole');
+      await activateClientRole();
+      await reloadUser();
+      setClientActivationMessage('Espace client activé. Vous pouvez maintenant changer d’espace depuis le sélecteur.');
+    } catch (e: unknown) {
+      const message = (e as { message?: string })?.message;
+      setClientActivationError(message || 'Impossible d’activer l’espace client pour le moment.');
+    } finally {
+      setClientActivationLoading(false);
     }
   }
 
@@ -480,9 +506,37 @@ export default function DriverProfilePage() {
         <div>
           <SectionTitle icon="shield">Compte & sécurité</SectionTitle>
           <div className="glass-card divide-y divide-white/[0.04] rounded-2xl">
+            {canActivateClientRole && (
+              <div className="px-5 py-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex size-10 flex-shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                    <MaterialIcon name="person_add" className="text-[20px] text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-white">Espace client</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      Activez-le uniquement si vous voulez commander des courses, repas ou colis avec ce même compte.
+                    </p>
+                    {clientActivationMessage && (
+                      <p className="mt-2 text-xs font-medium text-green-400">{clientActivationMessage}</p>
+                    )}
+                    {clientActivationError && (
+                      <p className="mt-2 text-xs font-medium text-red-400">{clientActivationError}</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={handleActivateClientRole}
+                  disabled={clientActivationLoading || Boolean(clientActivationMessage)}
+                  className="mt-3 h-11 w-full rounded-2xl border border-primary/30 bg-primary/10 text-sm font-bold text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {clientActivationLoading ? 'Activation...' : clientActivationMessage ? 'Espace client activé' : 'Activer mon espace client'}
+                </button>
+              </div>
+            )}
             <button
               onClick={() => router.push('/driver/reset-password')}
-              className="flex w-full items-center justify-between rounded-t-2xl px-5 py-4 transition hover:bg-white/[0.02]"
+              className={`flex w-full items-center justify-between px-5 py-4 transition hover:bg-white/[0.02] ${canActivateClientRole ? '' : 'rounded-t-2xl'}`}
             >
               <div className="flex items-center gap-3">
                 <MaterialIcon name="lock" className="text-[20px] text-slate-400" />

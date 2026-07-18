@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { auth, db, getFirebaseStorage, app } from '@/config/firebase';
 import { onAuthStateChanged, deleteUser, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp as firestoreServerTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp as firestoreServerTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { AuthService } from '@/services';
-import { createAuthAccount } from '@/services/auth.service';
+import { createDriverOnboardingAccount } from '@/services/auth.service';
 import { secureStorage } from '@/services/secureStorage.service';
 import { StructuredLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
@@ -116,6 +116,32 @@ export function useDriverRegistration() {
     };
   }, [step1Data, step2Data, step3Data, currentStep, saveProgress]);
 
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user || currentStep <= 0) return;
+
+    const timeout = setTimeout(async () => {
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.data()?.accountState !== 'driver_onboarding') return;
+
+        await updateDoc(userRef, {
+          'onboarding.driver.currentStep': currentStep,
+          'onboarding.driver.updatedAt': firestoreServerTimestamp(),
+          updatedAt: firestoreServerTimestamp(),
+        });
+      } catch (err) {
+        loggerRef.current.logWarning('SAVE_ONBOARDING_STEP', 'Sauvegarde serveur de l’étape échouée', {
+          error: (err as Error).message,
+          step: currentStep,
+        });
+      }
+    }, 1000);
+
+    return () => clearTimeout(timeout);
+  }, [currentStep]);
+
   // Auth state listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -135,6 +161,13 @@ export function useDriverRegistration() {
             // Les étapes 3+ (véhicule, documents) nécessitent de re-uploader les fichiers
             const maxRestorableStep = 2;
             setCurrentStep(Math.min(Math.max(saved.currentStep || 1, 1), maxRestorableStep));
+          } else {
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            const onboardingStep = userDoc.data()?.onboarding?.driver?.currentStep;
+            if (userDoc.data()?.accountState === 'driver_onboarding' && typeof onboardingStep === 'number') {
+              const maxRestorableStep = 2;
+              setCurrentStep(Math.min(Math.max(onboardingStep, 1), maxRestorableStep));
+            }
           }
         }
 
@@ -256,7 +289,7 @@ export function useDriverRegistration() {
         if (methods.length > 0) {
           throw new Error('EMAIL_ALREADY_IN_USE');
         }
-        newlyCreatedUser = await createAuthAccount(data.email, data.password);
+        newlyCreatedUser = await createDriverOnboardingAccount(data.email, data.password);
       }
       setStep1Data(data);
       // Envoyer le code OTP — Step1 reste visible en Phase B
@@ -484,7 +517,7 @@ export function useDriverRegistration() {
       //   - propose le bouton "Reprendre la configuration Stripe" qui ouvre le Browser
       //   - gère seul les cas d'erreur Stripe avec UX retry
       console.log('[Registration] profile created — redirecting to /driver/payments/setup');
-      router.push('/driver/payments/setup?onboarding=fresh');
+      redirectTimeoutRef.current = redirectWithFallback(router, '/driver/payments/setup?onboarding=fresh');
     } catch (err: unknown) {
       // Cleanup des fichiers Storage orphelins uploadés avant l'échec de createDriverProfile
       const uploadedUrls = uploadResults

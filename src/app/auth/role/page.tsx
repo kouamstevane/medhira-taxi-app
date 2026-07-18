@@ -43,6 +43,10 @@ export default function RoleSelectionPage() {
   useEffect(() => {
     if (loading) return;
     if (currentUser && userData) {
+      if (userData.accountState === 'driver_onboarding' || userData.activeRole === 'driver_onboarding') {
+        router.replace('/driver/register');
+        return;
+      }
       const role = (userData.lastActiveRole || userData.activeRole || 'client') as ActiveRole;
       router.replace(getDashboardRouteFor(role));
     }

@@ -73,6 +73,9 @@ export async function ensureClientRole(user: UserData): Promise<void> {
  * Pose lastActiveRole en même temps pour mémoriser le dernier choix.
  */
 export async function setActiveRole(user: UserData, role: ActiveRole): Promise<void> {
+  if (role === 'driver_onboarding') {
+    throw new Error('Cannot set activeRole to driver_onboarding manually');
+  }
   if (role !== 'client' && user.roles[role] == null) {
     throw new Error(`Cannot set activeRole to "${role}" — role not present on user`);
   }
@@ -115,6 +118,7 @@ export interface RouteContext {
  * Visible catalogue ⇒ approuvé ET Stripe actif (calculé ailleurs, hors routage).
  */
 export function getDashboardRouteFor(role: ActiveRole, ctx: RouteContext = {}): string {
+  if (role === 'driver_onboarding') return '/driver/register';
   if (role === 'client') return '/dashboard';
 
   if (role === 'driver') {
@@ -150,6 +154,10 @@ export function getRouteForPostLogin(
   userData: UserData,
   statuses: { driver?: DriverStatus; restaurant?: RestaurantEffectiveStatus },
 ): string {
+  if (userData.accountState === 'driver_onboarding' || userData.activeRole === 'driver_onboarding') {
+    return '/driver/register';
+  }
+
   const ownedRoles: ActiveRole[] = [];
   if (userData.roles?.client) ownedRoles.push('client');
   if (userData.roles?.driver) ownedRoles.push('driver');
@@ -195,4 +203,15 @@ export function getRouteForPostLogin(
   }
 
   return '/auth/continue-as';
+}
+
+export function getRouteForAuthenticatedProfile(
+  userData: UserData | null | undefined,
+  statuses: { driver?: DriverStatus; restaurant?: RestaurantEffectiveStatus },
+): string | null {
+  if (!userData) {
+    return null;
+  }
+
+  return getRouteForPostLogin(userData, statuses);
 }

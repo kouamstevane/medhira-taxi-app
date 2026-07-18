@@ -1,0 +1,130 @@
+# Review package: cc27d29..940d923
+
+## Commits
+940d923 feat: harmonize driver monetization step
+
+## Files changed
+ .../register/components/Step5Monetization.tsx      | 22 +++++++++++++++-------
+ .../__tests__/Step5Monetization.test.tsx           | 11 +++++++++++
+ 2 files changed, 26 insertions(+), 7 deletions(-)
+
+## Diff
+diff --git a/src/app/driver/register/components/Step5Monetization.tsx b/src/app/driver/register/components/Step5Monetization.tsx
+index 61253b7..62ac7dd 100644
+--- a/src/app/driver/register/components/Step5Monetization.tsx
++++ b/src/app/driver/register/components/Step5Monetization.tsx
+@@ -1,16 +1,24 @@
+ "use client";
+ import React, { useState } from 'react';
+ import { Loader2, ShieldCheck, Lock } from 'lucide-react';
+ import { ACTIVE_MARKET } from '@/utils/constants';
+ import { InputField } from '@/components/forms/InputField';
+ import { useToast } from '@/hooks/useToast';
++import { cn } from '@/lib/utils';
++import {
++  driverInfoBannerClassName,
++  driverPrimaryButtonClassName,
++  driverSecondaryButtonClassName,
++  driverSectionCardClassName,
++  driverSectionTitleClassName,
++} from './driverOnboardingStyles';
+ 
+ export type Step5FormData = {
+   country: string;
+   taxId?: string;
+ };
+ 
+ interface Step5MonetizationProps {
+   onSubmitFinal: (data: Step5FormData) => void;
+   onBack: () => void;
+   initialData?: Partial<Step5FormData>;
+@@ -46,37 +54,37 @@ export default function Step5Monetization({
+ 
+   return (
+     <div className="space-y-6">
+       <div className="text-center mb-8">
+         <h2 className="text-2xl font-bold text-white">Paiement & Monétisation</h2>
+         <p className="text-[#9CA3AF] mt-2">Configuration de vos virements</p>
+       </div>
+ 
+       {/* Informations Fiscales (VTC uniquement) */}
+       {isChauffeur && (
+-        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
+-          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Informations Fiscales</h3>
++        <div className={driverSectionCardClassName}>
++          <h3 className={driverSectionTitleClassName}>Informations Fiscales</h3>
+           <InputField
+             label="Numéro fiscal ou d'entreprise (TPS-TVH, TVA, SIRET)"
+             value={taxId}
+             onChange={(e) => setTaxId(e.target.value)}
+             placeholder="Ex: 123456789 RT0001 (Canada) ou SIRET (France)"
+             helperText="Requis réglementairement pour émettre les factures des trajets VTC."
+             required
+           />
+         </div>
+       )}
+ 
+       {/* Bannière Stripe */}
+-      <div className="bg-[#635bff]/10 border border-[#635bff]/30 p-5 rounded-xl flex items-start gap-4">
+-        <div className="w-10 h-10 rounded-full bg-[#635bff]/20 flex items-center justify-center flex-shrink-0">
+-          <Lock className="w-5 h-5 text-[#635bff]" />
++      <div className={cn(driverInfoBannerClassName, 'bg-white/[0.03] border-white/[0.08] flex items-start gap-4')}>
++        <div className="w-10 h-10 rounded-full bg-white/[0.06] flex items-center justify-center flex-shrink-0">
++          <Lock className="w-5 h-5 text-[#f29200]" />
+         </div>
+         <div>
+           <p className="font-semibold text-white text-sm">Coordonnées bancaires sécurisées par Stripe</p>
+           <p className="text-xs text-[#9CA3AF] mt-1 leading-relaxed">
+             Pour votre sécurité et conformité <strong>PCI DSS</strong>, vos informations bancaires
+             sont collectées directement via le formulaire sécurisé de Stripe — jamais stockées
+             sur nos serveurs.
+           </p>
+         </div>
+       </div>
+@@ -87,27 +95,27 @@ export default function Step5Monetization({
+           <p className="text-xs font-medium text-[#9CA3AF]">PCI DSS</p>
+           <p className="text-xs text-[#4B5563]">Certifié</p>
+         </div>
+       </div>
+ 
+       <form onSubmit={handleSubmit} className="flex gap-4 pt-2">
+         <button
+           type="button"
+           onClick={onBack}
+           disabled={loading || disabled}
+-          className="w-1/3 bg-[#1A1A1A] border border-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
++          className={cn(driverSecondaryButtonClassName, 'w-1/3')}
+         >
+           Retour
+         </button>
+ 
+         <button
+           type="submit"
+           disabled={loading || disabled}
+-          className="w-2/3 bg-green-600 text-white font-bold py-4 rounded-[28px] hover:bg-green-700 transition-colors flex justify-center items-center shadow-lg hover:shadow-green-600/20 shadow-[0_0_20px_rgba(16,185,129,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"
++          className={cn(driverPrimaryButtonClassName, 'w-2/3')}
+         >
+           {loading ? <Loader2 className="animate-spin mr-2 w-5 h-5" /> : null}
+           Soumettre ma candidature
+         </button>
+       </form>
+     </div>
+   );
+ }
+diff --git a/src/app/driver/register/components/__tests__/Step5Monetization.test.tsx b/src/app/driver/register/components/__tests__/Step5Monetization.test.tsx
+new file mode 100644
+index 0000000..5ce185f
+--- /dev/null
++++ b/src/app/driver/register/components/__tests__/Step5Monetization.test.tsx
+@@ -0,0 +1,11 @@
++import { render, screen } from '@testing-library/react';
++import Step5Monetization from '../Step5Monetization';
++
++describe('Step5Monetization', () => {
++  it('keeps the submission CTA in the shared Medjira primary action style', () => {
++    render(<Step5Monetization onSubmitFinal={jest.fn()} onBack={jest.fn()} />);
++
++    expect(screen.getByRole('button', { name: /soumettre ma candidature/i })).toHaveClass('from-[#f29200]');
++    expect(screen.getByRole('button', { name: /retour/i })).toHaveClass('border-white/10');
++  });
++});

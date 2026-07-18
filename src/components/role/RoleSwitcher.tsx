@@ -15,7 +15,9 @@ import {
 import type { ActiveRole } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
-const ROLE_META: Record<ActiveRole, { label: string; icon: string }> = {
+type SwitchableRole = Exclude<ActiveRole, 'driver_onboarding'>;
+
+const ROLE_META: Record<SwitchableRole, { label: string; icon: string }> = {
   client: { label: 'Client', icon: 'person' },
   driver: { label: 'Chauffeur', icon: 'local_taxi' },
   restaurant: { label: 'Restaurateur', icon: 'restaurant' },
@@ -52,7 +54,7 @@ export function RoleSwitcher() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const ownedRoles: ActiveRole[] = [];
+  const ownedRoles: SwitchableRole[] = [];
   if (userData?.roles?.client) ownedRoles.push('client');
   if (userData?.roles?.driver) ownedRoles.push('driver');
   if (userData?.roles?.restaurant) ownedRoles.push('restaurant');
@@ -68,24 +70,24 @@ export function RoleSwitcher() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  if (!userData || ownedRoles.length <= 1) return null;
+  if (!userData || userData.activeRole === 'driver_onboarding' || ownedRoles.length <= 1) return null;
 
-  const activeRole = userData.activeRole;
+  const activeRole = userData.activeRole as SwitchableRole;
 
-  function getRoleBadge(role: ActiveRole): BadgeInfo {
+  function getRoleBadge(role: SwitchableRole): BadgeInfo {
     if (role === 'driver') return getDriverBadge(statuses.driver?.status);
     if (role === 'restaurant')
       return getRestaurantBadge(statuses.restaurant?.status, statuses.restaurant?.stripeConnectStatus);
     return null;
   }
 
-  function isRoleDisabled(role: ActiveRole): boolean {
+  function isRoleDisabled(role: SwitchableRole): boolean {
     if (role === 'restaurant' && statuses.restaurant?.status === 'suspended') return true;
     if (hasActiveRide && activeRole === 'driver' && role !== 'driver') return true;
     return false;
   }
 
-  async function handleSelect(role: ActiveRole) {
+  async function handleSelect(role: SwitchableRole) {
     if (isRoleDisabled(role) || role === activeRole) return;
     setOpen(false);
     await setActiveRole(userData!, role);

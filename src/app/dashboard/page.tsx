@@ -14,8 +14,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { auth, db } from "@/config/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { useAuth } from '@/hooks/useAuth';
 import { notificationService } from '@/services/notification.service';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import type { Restaurant } from '@/types';
@@ -24,6 +25,7 @@ import { DEFAULT_URLS } from '@/utils/constants';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { ProtectedPageGuard } from '@/components/auth/ProtectedPageGuard';
 import { redirectWithFallback } from '@/utils/navigation';
 import { getDashboardRouteFor } from '@/services/roles.service';
 import type { ActiveRole, UserRoles, UserData } from '@/types/user';
@@ -33,13 +35,14 @@ import { BecomeProCard } from '@/components/role/BecomeProCard';
 
 export default function Dashboard() {
   const router = useRouter();
+  const { authStatus, currentUser, userData: authUserData } = useAuth();
   const routerRef = useRef(router);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   routerRef.current = router;
   const [notifCount, setNotifCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true); // État de chargement de l'auth
+  const [pageStatus, setPageStatus] = useState<'booting' | 'ready' | 'redirecting'>('booting');
   const [history, setHistory] = useState<Array<{
     id: string;
     type: string;
@@ -142,89 +145,74 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Lire en parallèle : profil utilisateur, doc chauffeur
-        // (la lecture 'admins' est isolée car protégée par les rules et lèverait permission-denied pour les non-admins)
-        const [userDoc, driverDoc] = await Promise.all([
-          getDoc(doc(db, "users", user.uid)),
-          getDoc(doc(db, 'drivers', user.uid)),
-        ]);
-
-        const userDataFromDB = userDoc.exists() ? userDoc.data() : {};
-
-        // Vérifier si l'utilisateur a un moyen de paiement configuré
-        setHasPaymentMethod(!!userDataFromDB.defaultPaymentMethodId);
-
-        // V1 (spec §3) : roles cumulatifs + activeRole. /dashboard = espace CLIENT.
-        // Si activeRole !== 'client', le user a switché vers un autre espace → redirect.
-        const activeRole = (userDataFromDB.activeRole as ActiveRole | undefined) ?? 'client';
-        const roles = (userDataFromDB.roles as Partial<UserRoles> | undefined) ?? {};
-
-        if (activeRole !== 'client') {
-          // Routage défensif : la page restaurateur/chauffeur gère ses propres pré-conditions de statut.
-          redirectTimeoutRef.current = redirectWithFallback(
-            routerRef.current,
-            getDashboardRouteFor(activeRole),
-          );
-          return;
-        }
-
-        setUserData(prev => ({
-          ...prev,
-          phoneNumber: user.phoneNumber || "",
-          firstName: userDataFromDB.firstName || "",
-          lastName: userDataFromDB.lastName || "",
-          profileImageUrl: userDataFromDB.profileImageUrl || user.photoURL || DEFAULT_URLS.DEFAULT_AVATAR,
-          activeRole,
-          roles,
-          draftRestaurant: userDataFromDB.draftRestaurant,
-        }));
-
-        // Charger l'historique des commandes
-        fetchHistory(user.uid);
-
-        // Si l'user a la capacité restaurant, charger les infos pour le shortcut.
-        if (roles?.restaurant != null) {
-          setIsRestaurantLoading(true);
-          FoodDeliveryService.getRestaurantByOwner(user.uid)
-            .then(setRestaurantData)
-            .catch((error) => console.error("Erreur chargement restaurant:", error))
-            .finally(() => setIsRestaurantLoading(false));
-        }
-
-        // Note : on ne touche PAS à activeRole ici (la page = espace CLIENT).
-        // Le switcher d'espace pro est géré via TODO P4 (RoleSwitcher).
-        void driverDoc;
-
-        // Vérifier si l'utilisateur est admin (protégé : permission-denied attendu pour les non-admins)
-        try {
-          const adminDoc = await getDoc(doc(db, 'admins', user.uid));
-          setIsAdmin(adminDoc.exists());
-        } catch {
-          setIsAdmin(false);
-        }
-
-        // Écouter les notifications non lues via le service isolé
-        unsubscribeNotifsRef.current?.();
-        unsubscribeNotifsRef.current = notificationService.listenUnreadCount(user.uid, setNotifCount);
-
-        // Authentification terminée
-        setIsAuthLoading(false);
-      } else {
-        // Pas d'utilisateur connecté - confirmer et rediriger
-        setIsAuthLoading(false);
-        redirectTimeoutRef.current = redirectWithFallback(routerRef.current, '/login');
-      }
-    });
-
     return () => {
-      unsubscribe();
       unsubscribeNotifsRef.current?.();
       if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (authStatus !== 'authenticated' || !currentUser || !authUserData) {
+      setPageStatus('booting');
+      return;
+    }
+
+    const userDataFromDB = authUserData as UserData & { defaultPaymentMethodId?: string };
+    const activeRole = (userDataFromDB.activeRole as ActiveRole | undefined) ?? 'client';
+    const roles = (userDataFromDB.roles as Partial<UserRoles> | undefined) ?? {};
+
+    if (userDataFromDB.accountState === 'driver_onboarding' || activeRole === 'driver_onboarding') {
+      setPageStatus('redirecting');
+      redirectTimeoutRef.current = redirectWithFallback(routerRef.current, '/driver/register');
+      return;
+    }
+
+    if (activeRole !== 'client') {
+      setPageStatus('redirecting');
+      redirectTimeoutRef.current = redirectWithFallback(
+        routerRef.current,
+        getDashboardRouteFor(activeRole),
+      );
+      return;
+    }
+
+    setHasPaymentMethod(!!userDataFromDB.defaultPaymentMethodId);
+    setUserData({
+      phoneNumber: currentUser.phoneNumber || "",
+      firstName: userDataFromDB.firstName || "",
+      lastName: userDataFromDB.lastName || "",
+      profileImageUrl: userDataFromDB.profileImageUrl || currentUser.photoURL || DEFAULT_URLS.DEFAULT_AVATAR,
+      activeRole,
+      roles,
+      draftRestaurant: userDataFromDB.draftRestaurant,
+    });
+    setPageStatus('ready');
+
+    fetchHistory(currentUser.uid);
+
+    if (roles.restaurant != null) {
+      setIsRestaurantLoading(true);
+      FoodDeliveryService.getRestaurantByOwner(currentUser.uid)
+        .then(setRestaurantData)
+        .catch((error) => console.error("Erreur chargement restaurant:", error))
+        .finally(() => setIsRestaurantLoading(false));
+    } else {
+      setRestaurantData(null);
+    }
+
+    getDoc(doc(db, 'admins', currentUser.uid))
+      .then((adminDoc) => setIsAdmin(adminDoc.exists()))
+      .catch(() => setIsAdmin(false));
+
+    unsubscribeNotifsRef.current?.();
+    unsubscribeNotifsRef.current = notificationService.listenUnreadCount(currentUser.uid, setNotifCount);
+
+    return () => {
+      unsubscribeNotifsRef.current?.();
+      unsubscribeNotifsRef.current = null;
+      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
+    };
+  }, [authStatus, authUserData, currentUser]);
 
   const logout = async () => {
     try {
@@ -240,27 +228,24 @@ export default function Dashboard() {
     router.push("/notifications");
   };
 
-  // Loading screen
-  if (isAuthLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative w-24 h-24 mx-auto mb-8">
-            <div className="absolute inset-0 bg-primary rounded-full opacity-20 animate-ping" />
-            <div className="relative w-24 h-24 bg-primary rounded-full flex items-center justify-center shadow-2xl animate-pulse">
-              <MaterialIcon name="local_taxi" className="text-white text-[40px]" />
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Medjira</h2>
-          <p className="text-muted-foreground animate-pulse">Redirection...</p>
-        </div>
-      </div>
-    );
-  }
-
   const initials = `${userData.firstName?.[0] || ''}${userData.lastName?.[0] || ''}`.toUpperCase() || 'U';
 
   return (
+    <ProtectedPageGuard>
+      {pageStatus !== 'ready' ? (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="text-center">
+            <div className="relative w-24 h-24 mx-auto mb-8">
+              <div className="absolute inset-0 bg-primary rounded-full opacity-20 animate-ping" />
+              <div className="relative w-24 h-24 bg-primary rounded-full flex items-center justify-center shadow-2xl animate-pulse">
+                <MaterialIcon name="local_taxi" className="text-white text-[40px]" />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Medjira</h2>
+            <p className="text-muted-foreground animate-pulse">Redirection...</p>
+          </div>
+        </div>
+      ) : (
     <div className="min-h-screen bg-background text-slate-100 font-sans flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 px-4 pt-6 pb-4 bg-background/80 backdrop-blur-md">
@@ -322,7 +307,7 @@ export default function Dashboard() {
         )}
 
         {/* Payment Setup Banner — la page /dashboard est implicitement client (espace client). */}
-        {!isAuthLoading && !hasPaymentMethod && (
+        {!hasPaymentMethod && (
           <div
             onClick={() => router.push('/auth/setup-payment')}
             className="mt-2 mb-6 p-4 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/20 cursor-pointer active:scale-[0.98] transition-transform"
@@ -481,5 +466,7 @@ export default function Dashboard() {
       {/* Bottom Navigation */}
       <BottomNav />
     </div>
+      )}
+    </ProtectedPageGuard>
   );
 }

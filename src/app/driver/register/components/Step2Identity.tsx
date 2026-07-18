@@ -43,7 +43,7 @@ const step2Schema = z.object({
   phone: z.string().refine((value) => isValidPhoneNumber(value), ERROR_MESSAGES.INVALID_PHONE),
   address: z.string().min(5, "Adresse de résidence requise"),
   city: z.string().min(1, "Ville requise"),
-  zipCode: z.string().min(1, "Code postal requis"),
+  zipCode: z.string().optional(),
   province: z.string().min(1, "Province/Région requise"),
   country: z.string().min(1, "Pays requis"),
 });
@@ -601,7 +601,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                 {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MaterialIcon name="my_location" size="sm" />}
                 Utiliser ma position
               </button>
-              {locationFeedback && (
+              {locationFeedback?.type === 'error' && (
                 <p className={`mt-2 text-sm ${locationFeedback.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
                   {locationFeedback.message}
                 </p>

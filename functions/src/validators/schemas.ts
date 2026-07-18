@@ -134,7 +134,7 @@ export type WalletRefundTransactionInput = z.infer<typeof WalletRefundTransactio
 // `z.any()` car la validation stricte (Timestamp instance vs serverTimestamp
 // sentinel vs ISO string en provenance d'un client) est trop bruyante ici.
 export const UserRolesSchema = z.object({
-  client: z.object({ enabled: z.literal(true), joinedAt: z.any() }),
+  client: z.object({ enabled: z.literal(true), joinedAt: z.any() }).optional(),
   driver: z.object({ joinedAt: z.any() }).optional(),
   restaurant: z.object({ restaurantId: z.string(), joinedAt: z.any() }).optional(),
 });

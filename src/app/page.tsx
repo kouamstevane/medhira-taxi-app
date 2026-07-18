@@ -5,18 +5,21 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { getRouteForAuthenticatedProfile } from '@/services/roles.service';
 import { redirectWithFallback } from '@/utils/navigation';
 
 export default function HomePage() {
   const router = useRouter();
-  const { currentUser, loading } = useAuth();
+  const { currentUser, loading, userData } = useAuth();
   const redirectedRef = useRef(false);
   const fallbackRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!loading && currentUser && !redirectedRef.current) {
+    const route = getRouteForAuthenticatedProfile(userData, {});
+
+    if (!loading && currentUser && route && !redirectedRef.current) {
       redirectedRef.current = true;
-      fallbackRef.current = redirectWithFallback(router, '/dashboard');
+      fallbackRef.current = redirectWithFallback(router, route);
     }
 
     return () => {
@@ -24,9 +27,9 @@ export default function HomePage() {
         clearTimeout(fallbackRef.current);
       }
     };
-  }, [currentUser, loading, router]);
+  }, [currentUser, loading, router, userData]);
 
-  if (loading || currentUser) {
+  if (loading || (currentUser && userData)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">

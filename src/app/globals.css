@@ -199,6 +199,17 @@ input, textarea, select {
   font-size: 16px;
 }
 
+[data-driver-onboarding-form] input:-webkit-autofill,
+[data-driver-onboarding-form] input:-webkit-autofill:hover,
+[data-driver-onboarding-form] input:-webkit-autofill:focus,
+[data-driver-onboarding-form] input:-webkit-autofill:active {
+  -webkit-text-fill-color: #FFFFFF;
+  caret-color: #FFFFFF;
+  box-shadow: 0 0 0 1000px #1A1A1A inset;
+  border-color: rgba(255, 255, 255, 0.08);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 /*
  * Bouton primaire raffiné — applique un highlight intérieur (effet rétroéclairé),
  * un léger gradient vertical par-dessus le gradient Tailwind existant et un glow

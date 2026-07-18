@@ -50,7 +50,10 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
 
     const errorClasses = error
       ? 'border-[#EF4444] focus:ring-[#EF4444] focus:border-[#EF4444]'
-      : 'border-white/[0.08]';
+      : 'border-white/5 focus:border-primary focus:ring-1 focus:ring-primary';
+
+    const sharedInputChromeClassName =
+      'glass-input h-14 rounded-xl outline-none text-white placeholder:text-slate-500 transition-all';
 
     const iconPaddingClass = icon ? 'pl-11' : '';
     const rightIconPaddingClass = rightIcon ? 'pr-11' : '';
@@ -78,7 +81,14 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
           <input
             ref={ref}
             id={inputId}
-            className={cn(driverFieldClassName, errorClasses, iconPaddingClass, rightIconPaddingClass, className)}
+            className={cn(
+              driverFieldClassName,
+              sharedInputChromeClassName,
+              errorClasses,
+              iconPaddingClass,
+              rightIconPaddingClass,
+              className,
+            )}
             disabled={disabled}
             {...props}
           />

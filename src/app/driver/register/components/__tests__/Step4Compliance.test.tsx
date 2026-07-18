@@ -19,9 +19,15 @@ describe('Step4Compliance', () => {
   it('uses a subdued shared information banner instead of a dominant custom treatment', () => {
     render(<Step4Compliance onNext={jest.fn()} onBack={jest.fn()} />);
 
-    const banner = screen.getByText(/Vérifiez la lisibilité/i).parentElement;
+    const banner = screen.getByText(/lisibilit/i).closest('div.rounded-xl');
 
     expect(banner).toHaveClass('rounded-xl');
     expect(banner).toHaveClass('border');
+  });
+
+  it('uses the shared upload guidance for legal document fields', () => {
+    render(<Step4Compliance onNext={jest.fn()} onBack={jest.fn()} />);
+
+    expect(screen.getAllByText(/Image ou PDF \(Max 10Mo\)/i).length).toBeGreaterThan(0);
   });
 });

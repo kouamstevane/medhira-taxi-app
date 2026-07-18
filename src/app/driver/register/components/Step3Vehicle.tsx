@@ -3,18 +3,17 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2, UploadCloud, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { imageCompressionService } from '@/services/image-compression.service';
 import { useToast } from '@/hooks/useToast';
 import { InputField } from '@/components/forms/InputField';
 import { cn } from '@/lib/utils';
+import { DriverDocumentUploadField } from './DriverDocumentUploadField';
 import {
   driverPrimaryButtonClassName,
   driverSecondaryButtonClassName,
   driverSectionCardClassName,
   driverSectionTitleClassName,
-  driverUploadEmptyClassName,
-  driverUploadLoadedClassName,
 } from './driverOnboardingStyles';
 
 const step3Schema = z.object({
@@ -157,38 +156,16 @@ export default function Step3Vehicle({
   };
 
   const renderFileInput = (label: string, key: keyof typeof files, required = true, accept = "image/*,application/pdf") => (
-    <div className="border border-white/[0.06] rounded-xl p-4 bg-[#1A1A1A] relative">
-      <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
-        {label} {required ? <span className="text-red-500">*</span> : <span className="text-[#4B5563] text-xs">(facultatif)</span>}
-      </label>
-
-      {files[key] ? (
-        <div className={driverUploadLoadedClassName}>
-          <span className="text-sm font-medium truncate max-w-[180px] text-slate-300">
-            {files[key]?.name}
-          </span>
-          <button type="button" onClick={() => removeFile(key)} className="text-red-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors">
-            Supprimer
-          </button>
-        </div>
-      ) : (
-        <div className={driverUploadEmptyClassName}>
-          <input
-            type="file"
-            id={`file-${key}`}
-            accept={accept}
-            onChange={(e) => handleFileChange(e, key)}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          />
-          {compressionLoading === key ? (
-            <Loader2 className="animate-spin text-[#f29200] w-8 h-8" />
-          ) : (
-            <UploadCloud className="text-slate-500 w-8 h-8 mb-2" />
-          )}
-          <span className="text-xs text-slate-400">Cliquez pour ajouter</span>
-        </div>
-      )}
-    </div>
+    <DriverDocumentUploadField
+      label={label}
+      inputId={`file-${key}`}
+      accept={accept}
+      required={required}
+      file={files[key]}
+      loading={compressionLoading === key}
+      onChange={(e) => handleFileChange(e, key)}
+      onRemove={() => removeFile(key)}
+    />
   );
 
   if (driverType === 'livreur') {

@@ -5,6 +5,7 @@ import {
   isApprovedRestaurateur,
   getEffectiveRoleStatus,
   getDashboardRouteFor,
+  getRouteForAuthenticatedProfile,
   getRouteForPostLogin,
   toRestaurantEffectiveStatus,
 } from '@/services/roles.service';
@@ -144,6 +145,10 @@ describe('getDashboardRouteFor (matrice §4.4)', () => {
   test('restaurant suspended -> /restaurant/suspended', () => {
     expect(getDashboardRouteFor('restaurant', { restaurantStatus: 'suspended', stripeConnectStatus: 'active' })).toBe('/restaurant/suspended');
   });
+
+  test('driver_onboarding role -> /driver/register', () => {
+    expect(getDashboardRouteFor('driver_onboarding' as any)).toBe('/driver/register');
+  });
 });
 
 describe('toRestaurantEffectiveStatus', () => {
@@ -279,12 +284,40 @@ describe('getRouteForPostLogin', () => {
     expect(getRouteForPostLogin(user, { driver: 'pending' })).toBe('/dashboard');
   });
 
-  test('no roles at all -> /dashboard', () => {
+  test('driver onboarding account without roles -> /driver/register', () => {
+    const user: UserData = {
+      ...baseUser,
+      roles: {} as UserData['roles'],
+      activeRole: 'driver_onboarding' as any,
+      accountState: 'driver_onboarding',
+      onboarding: {
+        driver: {
+          status: 'draft',
+          currentStep: 1,
+          startedAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        },
+      },
+    } as UserData;
+    expect(getRouteForPostLogin(user, {})).toBe('/driver/register');
+  });
+
+  test('active account without roles -> /dashboard', () => {
     const user: UserData = {
       ...baseUser,
       roles: {} as UserData['roles'],
       activeRole: 'client',
     };
     expect(getRouteForPostLogin(user, {})).toBe('/dashboard');
+  });
+});
+
+describe('getRouteForAuthenticatedProfile', () => {
+  test('returns null when authenticated firebase user has no app profile yet', () => {
+    expect(getRouteForAuthenticatedProfile(null, {})).toBeNull();
+  });
+
+  test('delegates to post-login routing when app profile exists', () => {
+    expect(getRouteForAuthenticatedProfile(baseUser, {})).toBe('/dashboard');
   });
 });

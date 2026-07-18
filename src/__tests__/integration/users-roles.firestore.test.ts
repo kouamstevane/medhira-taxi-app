@@ -2,8 +2,7 @@
  * Integration Tests - Users/Roles Firestore Rules
  *
  * Validates the anti-self-promotion rules on users/{uid}:
- *   CREATE: isOwner(userId) && roles.client.enabled == true
- *           && !('driver' in roles) && !('restaurant' in roles)
+ *   CREATE: client profile OR locked driver onboarding draft
  *   UPDATE: isOwner(userId) && request.resource.data.roles == resource.data.roles
  *
  * Run via: firebase emulators:exec "npx jest src/__tests__/integration/users-roles.firestore.test.ts"
@@ -69,6 +68,31 @@ describe('Users/Roles Firestore Rules', () => {
         },
         activeRole: 'client',
         emailVerified: true,
+        email: 'alice@example.com',
+        createdAt: new Date().toISOString(),
+      }),
+    );
+  });
+
+  test('AUTHORIZED: Create users/{uid} as locked driver onboarding draft', async () => {
+    const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
+    const now = Timestamp.fromDate(new Date());
+
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'users', aliceId), {
+        uid: aliceId,
+        roles: {},
+        activeRole: 'driver_onboarding',
+        accountState: 'driver_onboarding',
+        onboarding: {
+          driver: {
+            status: 'draft',
+            currentStep: 1,
+            startedAt: now,
+            updatedAt: now,
+          },
+        },
+        emailVerified: false,
         email: 'alice@example.com',
         createdAt: new Date().toISOString(),
       }),

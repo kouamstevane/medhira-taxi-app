@@ -10,7 +10,7 @@
  */
 
 import { Timestamp } from 'firebase/firestore';
-import type { UserRoles, ActiveRole, RestaurantDraftData } from './user';
+import type { UserRoles, ActiveRole, AppAccountState, RestaurantDraftData } from './user';
 
 // ============================================================================
 // COLLECTIONS PRINCIPALES
@@ -43,6 +43,15 @@ export interface UserCollection {
   roles: UserRoles;
   activeRole: ActiveRole;
   lastActiveRole?: ActiveRole;
+  accountState?: AppAccountState;
+  onboarding?: {
+    driver?: {
+      status: 'draft' | 'submitted';
+      currentStep: number;
+      startedAt: Timestamp;
+      updatedAt: Timestamp;
+    };
+  };
   draftRestaurant?: {
     currentStep: 3 | 4;
     data: Partial<RestaurantDraftData>;

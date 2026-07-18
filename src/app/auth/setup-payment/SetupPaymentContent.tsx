@@ -11,8 +11,9 @@ import {
 import { getStripe } from '@/lib/stripe-client';
 import { isNativeStripe } from '@/lib/stripe-adapters';
 import { NativeStripeSetup } from '@/components/stripe/NativeStripeSetup';
-import { auth, functions } from '@/config/firebase';
+import { auth, db, functions } from '@/config/firebase';
 import { httpsCallable } from 'firebase/functions';
+import { doc, getDoc } from 'firebase/firestore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 interface CreateSetupIntentResult {
@@ -132,6 +133,13 @@ export default function SetupPaymentContent() {
 
     try {
       setLoading(true);
+
+      const userSnap = await getDoc(doc(db, 'users', user.uid));
+      const userData = userSnap.data();
+      if (userData?.accountState === 'driver_onboarding' || userData?.activeRole === 'driver_onboarding') {
+        router.push('/driver/register');
+        return;
+      }
 
       const callable = httpsCallable<unknown, CreateSetupIntentResult>(
         functions,

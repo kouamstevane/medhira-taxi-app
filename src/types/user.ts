@@ -24,12 +24,14 @@ export interface RoleRestaurant {
 }
 
 export interface UserRoles {
-  client: RoleClient;
+  client?: RoleClient;
   driver?: RoleDriver;
   restaurant?: RoleRestaurant;
 }
 
-export type ActiveRole = 'client' | 'driver' | 'restaurant';
+export type ActiveRole = 'client' | 'driver' | 'restaurant' | 'driver_onboarding';
+export type AppAccountState = 'active' | 'driver_onboarding';
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
 export interface RestaurantDraftData {
   name?: string;
@@ -54,6 +56,16 @@ export interface UserData {
   roles: UserRoles;
   activeRole: ActiveRole;
   lastActiveRole?: ActiveRole;
+  accountState?: AppAccountState;
+
+  onboarding?: {
+    driver?: {
+      status: 'draft' | 'submitted';
+      currentStep: number;
+      startedAt: Timestamp;
+      updatedAt: Timestamp;
+    };
+  };
 
   draftRestaurant?: {
     currentStep: 3 | 4;
@@ -70,6 +82,7 @@ export interface UserData {
 export interface AuthContextType {
   currentUser: FirebaseUser | null;
   loading: boolean;
+  authStatus: AuthStatus;
   userData: UserData | null;
   error: string | null;
   isEmailVerified: boolean;
@@ -95,14 +108,13 @@ export interface UserProfile extends UserData {
 export type { FirebaseUser };
 
 export function isClientOnly(user: UserData): boolean {
-  return user.roles.driver == null && user.roles.restaurant == null;
+  return user.roles.client != null && user.roles.driver == null && user.roles.restaurant == null;
 }
 
-export function hasRole<R extends ActiveRole>(
+export function hasRole<R extends Exclude<ActiveRole, 'driver_onboarding'>>(
   user: UserData,
   role: R,
 ): user is UserData & { roles: UserRoles & Required<Pick<UserRoles, R>> } {
-  if (role === 'client') return true;
   return user.roles[role] != null;
 }
 

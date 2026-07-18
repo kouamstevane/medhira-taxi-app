@@ -33,6 +33,29 @@ jest.mock('@/app/taxi/components/AddressInput', () => ({
 }));
 
 describe('Step2Identity', () => {
+  const originalGeolocation = global.navigator.geolocation;
+  const originalGoogle = global.window.google;
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+
+  beforeEach(() => {
+    URL.createObjectURL = jest.fn(() => 'blob:test-photo');
+    URL.revokeObjectURL = jest.fn();
+  });
+
+  afterEach(() => {
+    Object.defineProperty(global.navigator, 'geolocation', {
+      configurable: true,
+      value: originalGeolocation,
+    });
+    Object.defineProperty(global.window, 'google', {
+      configurable: true,
+      value: originalGoogle,
+    });
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+  });
+
   it('keeps navigation actions on the shared CTA contracts', () => {
     render(<Step2Identity onNext={jest.fn()} onBack={jest.fn()} />);
 
@@ -68,6 +91,97 @@ describe('Step2Identity', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Format international requis, ex\. \+33/i)).toBeInTheDocument();
+    });
+  });
+
+  it('does not show a success text after using current location', async () => {
+    Object.defineProperty(global.navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: (success: (position: GeolocationPosition) => void) =>
+          success({
+            coords: {
+              latitude: 4.0511,
+              longitude: 9.7679,
+              accuracy: 1,
+              altitude: null,
+              altitudeAccuracy: null,
+              heading: null,
+              speed: null,
+            },
+            timestamp: Date.now(),
+          } as GeolocationPosition),
+      },
+    });
+
+    Object.defineProperty(global.window, 'google', {
+      configurable: true,
+      value: {
+        maps: {
+          Geocoder: function MockGeocoder() {
+            return {
+              geocode: (
+                _request: unknown,
+                callback: (results: Array<{ address_components: Array<{ long_name: string; short_name: string; types: string[] }>; formatted_address: string }>, status: string) => void
+              ) => callback([
+                {
+                  formatted_address: '3P3C+J6G, Douala, Cameroun',
+                  address_components: [
+                    { long_name: 'Douala', short_name: 'Douala', types: ['locality'] },
+                    { long_name: 'Région du Littoral', short_name: 'LT', types: ['administrative_area_level_1'] },
+                    { long_name: 'Cameroun', short_name: 'CM', types: ['country'] },
+                  ],
+                },
+              ], 'OK'),
+            };
+          },
+        },
+      },
+    });
+
+    render(<Step2Identity onNext={jest.fn()} onBack={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /utiliser ma position/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Position détectée et adresse remplie automatiquement/i)).not.toBeInTheDocument();
+    });
+  });
+  it('submits the form even when the detected address has no zip code', async () => {
+    const onNext = jest.fn();
+    const photo = new File(['photo'], 'biometric.jpg', { type: 'image/jpeg' });
+
+    render(
+      <Step2Identity
+        onNext={onNext}
+        onBack={jest.fn()}
+        initialPhoto={photo}
+        initialData={{
+          firstName: 'Olive',
+          lastName: 'Steve',
+          dob: '1992-05-30',
+          phone: '+237682821031',
+          address: '3P3C+J6G, Douala, Cameroun',
+          city: 'Douala',
+          zipCode: '',
+          province: 'Région du Littoral',
+          country: 'Cameroun',
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /continuer/i }));
+
+    await waitFor(() => {
+      expect(onNext).toHaveBeenCalledWith(
+        expect.objectContaining({
+          city: 'Douala',
+          zipCode: '',
+          province: 'Région du Littoral',
+          country: 'Cameroun',
+        }),
+        photo
+      );
     });
   });
 });

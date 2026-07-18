@@ -134,6 +134,8 @@ export const submitDriverApplication = onCall(
           'roles.driver': { joinedAt: now },
           activeRole: 'driver',
           lastActiveRole: 'driver',
+          accountState: 'active',
+          onboarding: admin.firestore.FieldValue.delete(),
           updatedAt: now,
         });
 

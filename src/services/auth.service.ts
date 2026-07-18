@@ -53,6 +53,61 @@ export const createAuthAccount = async (
   return result.user;
 };
 
+const createDriverOnboardingUserDocument = async (
+  userId: string,
+  data: {
+    email?: string | null;
+    firstName?: string;
+    lastName?: string;
+    profileImageUrl?: string | null;
+    emailVerified?: boolean;
+  },
+): Promise<void> => {
+  const now = serverTimestamp();
+
+  await setDoc(doc(db, 'users', userId), {
+    uid: userId,
+    email: data.email ?? null,
+    phoneNumber: null,
+    firstName: data.firstName ?? '',
+    lastName: data.lastName ?? '',
+    profileImageUrl: data.profileImageUrl ?? null,
+    emailVerified: data.emailVerified ?? false,
+    roles: {},
+    activeRole: 'driver_onboarding',
+    accountState: 'driver_onboarding',
+    onboarding: {
+      driver: {
+        status: 'draft',
+        currentStep: 1,
+        startedAt: now,
+        updatedAt: now,
+      },
+    },
+    createdAt: now,
+    updatedAt: now,
+  });
+};
+
+/**
+ * Création d'un compte réservé à l'inscription chauffeur.
+ *
+ * Tant que le dossier n'est pas soumis jusqu'au bout, ce compte n'a pas le
+ * rôle client et doit toujours être routé vers /driver/register.
+ */
+export const createDriverOnboardingAccount = async (
+  email: string,
+  password: string,
+): Promise<User> => {
+  const result = await createUserWithEmailAndPassword(auth, email, password);
+  await createDriverOnboardingUserDocument(result.user.uid, {
+    email,
+    emailVerified: false,
+  });
+
+  return result.user;
+};
+
 /**
  * Inscription par email et mot de passe
  *  Crée le document Firestore et envoie l'email de vérification
@@ -160,9 +215,8 @@ export const resendVerificationEmail = async (
  *  AJOUT PARAMÈTRE : intendedUserType pour spécifier le type d'utilisateur
  *  AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
  */
-// TODO P1: param ignoré, à retirer après refactor des appelants (Tasks 11/13)
 export const signInWithGoogle = async (
-  _intendedUserType?: string
+  _intendedUserType?: 'driver'
 ): Promise<User> => {
   console.log('[AuthService] signInWithGoogle appelé', {
     platform: Capacitor.isNativePlatform() ? 'native' : 'web',
@@ -250,13 +304,23 @@ export const signInWithGoogle = async (
 
   if (!userDoc.exists()) {
     try {
-      await createUserDocument(user.uid, {
-        email: user.email,
-        firstName: user.displayName?.split(' ')[0] || '',
-        lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
-        profileImageUrl: user.photoURL || undefined,
-        emailVerified: user.emailVerified,
-      });
+      if (_intendedUserType === 'driver') {
+        await createDriverOnboardingUserDocument(user.uid, {
+          email: user.email,
+          firstName: user.displayName?.split(' ')[0] || '',
+          lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+          profileImageUrl: user.photoURL || undefined,
+          emailVerified: user.emailVerified,
+        });
+      } else {
+        await createUserDocument(user.uid, {
+          email: user.email,
+          firstName: user.displayName?.split(' ')[0] || '',
+          lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
+          profileImageUrl: user.photoURL || undefined,
+          emailVerified: user.emailVerified,
+        });
+      }
     } catch (docError) {
       // Empêcher un compte Auth orphelin sans document Firestore
       console.error('[AuthService] Échec création document Firestore, déconnexion préventive', {
@@ -316,7 +380,7 @@ export const signInWithGoogleForDriver = async (): Promise<User> => {
 
   // Connexion Google standard ; le doc users/{uid} est créé/maj par signInWithGoogle.
   // Le doc driverProfiles/{uid} sera créé à l'étape 5 du formulaire (Cloud Function).
-  const user = await signInWithGoogle();
+  const user = await signInWithGoogle('driver');
 
   console.log('[AuthService] Connexion Google réussie pour chauffeur', {
     uid: user.uid,

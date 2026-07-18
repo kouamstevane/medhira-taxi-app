@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import DriverProfilePage from '../page';
 
 jest.mock('next/navigation', () => ({
@@ -19,6 +19,13 @@ jest.mock('@/config/firebase', () => ({
       uid: 'driver-1',
     },
   },
+  functions: {},
+}));
+
+const mockActivateClientRole = jest.fn().mockResolvedValue({ data: { success: true } });
+
+jest.mock('firebase/functions', () => ({
+  httpsCallable: jest.fn(() => mockActivateClientRole),
 }));
 
 jest.mock('@/components/ui/MaterialIcon', () => ({
@@ -73,6 +80,21 @@ jest.mock('@/hooks/useDriverProfile', () => ({
   }),
 }));
 
+const mockReloadUser = jest.fn().mockResolvedValue(undefined);
+
+jest.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({
+    userData: {
+      uid: 'driver-1',
+      roles: {
+        driver: { joinedAt: {} },
+      },
+      activeRole: 'driver',
+    },
+    reloadUser: mockReloadUser,
+  }),
+}));
+
 jest.mock('@/hooks/useDocumentStatus', () => ({
   useDocumentStatus: () => ({
     documents: [
@@ -84,9 +106,23 @@ jest.mock('@/hooks/useDocumentStatus', () => ({
 }));
 
 describe('DriverProfilePage', () => {
+  beforeEach(() => {
+    mockActivateClientRole.mockClear();
+    mockReloadUser.mockClear();
+  });
+
   it('does not render the documents summary card on the profile page', () => {
     render(<DriverProfilePage />);
 
     expect(screen.queryByText('Documents en vérification')).not.toBeInTheDocument();
+  });
+
+  it('shows a client activation action for driver-only accounts', async () => {
+    render(<DriverProfilePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /activer mon espace client/i }));
+
+    await waitFor(() => expect(mockActivateClientRole).toHaveBeenCalledTimes(1));
+    expect(mockReloadUser).toHaveBeenCalledTimes(1);
   });
 });

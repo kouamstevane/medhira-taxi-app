@@ -14,7 +14,9 @@ import {
 import type { ActiveRole } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
-const ROLE_META: Record<ActiveRole, { label: string; icon: string; color: string }> = {
+type SelectableRole = Exclude<ActiveRole, 'driver_onboarding'>;
+
+const ROLE_META: Record<SelectableRole, { label: string; icon: string; color: string }> = {
   client: { label: 'Espace Client', icon: 'person', color: 'bg-blue-500' },
   driver: { label: 'Espace Chauffeur', icon: 'local_taxi', color: 'bg-orange-500' },
   restaurant: { label: 'Espace Restaurateur', icon: 'restaurant', color: 'bg-green-500' },
@@ -41,7 +43,7 @@ const BADGE_STYLES: Record<string, string> = {
 };
 
 function getBadge(
-  role: ActiveRole,
+  role: SelectableRole,
   effectiveStatuses: ReturnType<typeof useEffectiveRoleStatus>,
 ): { variant: BadgeVariant; label: string } {
   if (role === 'client') {
@@ -69,10 +71,10 @@ export default function ContinueAsPage() {
   const router = useRouter();
   const { currentUser, userData, loading } = useAuth();
   const effectiveStatuses = useEffectiveRoleStatus();
-  const [selecting, setSelecting] = useState<ActiveRole | null>(null);
+  const [selecting, setSelecting] = useState<SelectableRole | null>(null);
 
-  const ownedRoles: ActiveRole[] = userData
-    ? (Object.keys(userData.roles) as ActiveRole[]).filter((r) => {
+  const ownedRoles: SelectableRole[] = userData
+    ? (Object.keys(userData.roles) as SelectableRole[]).filter((r) => {
         if (r === 'client') return true;
         return userData.roles[r] != null;
       })
@@ -82,6 +84,10 @@ export default function ContinueAsPage() {
     if (loading) return;
     if (!currentUser || !userData) {
       router.replace('/login');
+      return;
+    }
+    if (userData.accountState === 'driver_onboarding' || userData.activeRole === 'driver_onboarding') {
+      router.replace('/driver/register');
       return;
     }
     if (ownedRoles.length <= 1) {
@@ -100,7 +106,7 @@ export default function ContinueAsPage() {
     );
   }
 
-  async function handleSelect(role: ActiveRole) {
+  async function handleSelect(role: SelectableRole) {
     if (!userData || selecting) return;
     setSelecting(role);
     try {

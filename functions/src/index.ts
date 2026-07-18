@@ -295,6 +295,7 @@ export const encryptSensitiveData = onCall(
 
 export { submitDriverApplication, createDriverProfile } from './driver/submitDriverApplication.js';
 export { submitRestaurantApplication } from './restaurant/submitRestaurantApplication.js';
+export { activateClientRole } from './roles/activateClientRole.js';
 export { notifyAdminNewRestaurant } from './admin/notifyAdminNewRestaurant.js';
 export { createStripeConnectAccount } from './stripe/createStripeConnectAccount.js';
 

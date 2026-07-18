@@ -21,6 +21,8 @@ const customJestConfig = {
   // Chemins de modules
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^lucide-react$': '<rootDir>/src/__mocks__/lucide-react.js',
+    '^lucide-react/dist/esm/icons/(.*)$': '<rootDir>/src/__mocks__/lucide-react.js',
   },
 
   // Polyfill fetch avant le chargement de tout module (firebase/auth en a besoin)
