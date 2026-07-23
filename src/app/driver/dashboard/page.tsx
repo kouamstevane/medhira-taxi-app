@@ -51,9 +51,11 @@ import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { useDocumentStatus } from '@/hooks/useDocumentStatus';
 import { useNotifications } from '@/hooks/useNotifications';
 import {
+  canDriverAccessRideWork,
   getDriverAvailabilityCardState,
   getDriverDashboardNotificationState,
   getDriverDashboardQuickActions,
+  isDriverApprovedOrActive,
 } from './dashboard-ui';
 
 async function fetchBookingsForRequests(
@@ -239,6 +241,14 @@ export default function DriverDashboard() {
           stripePayoutsEnabled: Boolean(driverData.stripePayoutsEnabled)
         };
         setDriver(safeDriverData);
+
+        if (!canDriverAccessRideWork(safeDriverData)) {
+          setCurrentTrip(null);
+          setAvailableTrips([]);
+          setRideRequests([]);
+          setLoading(false);
+          return;
+        }
 
         // Écouter les courses du chauffeur (en cours)
         const currentTripQuery = query(
@@ -628,9 +638,19 @@ export default function DriverDashboard() {
   const availabilityState = getDriverAvailabilityCardState({
     isAvailable: driver.isAvailable,
     isUpdating: availabilityUpdating,
-    isApproved: driver.status === 'approved',
+    isApproved: isDriverApprovedOrActive(driver.status),
     hasLocation: hasValidCurrentLocation,
   });
+  const availabilityGlowClass = availabilityState.indicatorTone === 'online'
+    ? 'bg-green-500/10'
+    : availabilityState.indicatorTone === 'warning'
+      ? 'bg-amber-500/10'
+      : 'bg-primary/10';
+  const availabilityDotClass = availabilityState.indicatorTone === 'online'
+    ? 'bg-green-500 animate-pulse-green'
+    : availabilityState.indicatorTone === 'warning'
+      ? 'bg-amber-500'
+      : 'bg-slate-500';
 
   return (
     <>
@@ -674,9 +694,9 @@ export default function DriverDashboard() {
 
         <div className="px-6 mb-6">
           <GlassCard variant="elevated" className="px-4 py-3 relative overflow-hidden">
-            <div className={`absolute top-0 right-0 w-28 h-28 rounded-full -mr-16 -mt-16 blur-3xl transition-colors ${driver.isAvailable ? 'bg-green-500/10' : 'bg-primary/10'}`} />
+            <div className={`absolute top-0 right-0 w-28 h-28 rounded-full -mr-16 -mt-16 blur-3xl transition-colors ${availabilityGlowClass}`} />
             <div className="relative flex items-center gap-3">
-              <span className={`size-2.5 rounded-full shrink-0 ${driver.isAvailable ? 'bg-green-500 animate-pulse-green' : 'bg-slate-500'}`} />
+              <span className={`size-2.5 rounded-full shrink-0 ${availabilityDotClass}`} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-1.5">
                   <p className="text-white font-semibold text-sm">{availabilityState.statusLabel}</p>

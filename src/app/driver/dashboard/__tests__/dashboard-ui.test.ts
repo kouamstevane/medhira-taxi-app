@@ -1,7 +1,9 @@
 import {
+  canDriverAccessRideWork,
   getDriverAvailabilityCardState,
   getDriverDashboardNotificationState,
   getDriverDashboardQuickActions,
+  isDriverApprovedOrActive,
 } from '../dashboard-ui';
 
 describe('driver dashboard UI helpers', () => {
@@ -35,6 +37,7 @@ describe('driver dashboard UI helpers', () => {
       description: 'Visible par les clients',
       actionLabel: 'Passer hors ligne',
       actionAriaLabel: 'Passer hors ligne',
+      indicatorTone: 'online',
     });
 
     expect(getDriverAvailabilityCardState({ isAvailable: false, isUpdating: false, isApproved: true, hasLocation: true })).toEqual({
@@ -43,6 +46,7 @@ describe('driver dashboard UI helpers', () => {
       description: 'Activez pour recevoir des demandes',
       actionLabel: 'Passer en ligne',
       actionAriaLabel: 'Passer en ligne',
+      indicatorTone: 'offline',
     });
   });
 
@@ -53,24 +57,55 @@ describe('driver dashboard UI helpers', () => {
       description: 'Changement en cours...',
       actionLabel: '...',
       actionAriaLabel: 'Disponibilité en cours de mise à jour',
+      indicatorTone: 'online',
     });
   });
 
-  it('does not claim client visibility when the driver is not approved or has no location', () => {
+  it('does not claim availability or show an online indicator when the driver is not approved', () => {
     expect(getDriverAvailabilityCardState({ isAvailable: true, isUpdating: false, isApproved: false, hasLocation: false })).toEqual({
-      statusLabel: 'Disponible',
-      statusDetail: 'Non visible',
+      statusLabel: 'En attente',
+      statusDetail: 'Dossier en revue',
       description: 'Compte en attente d’approbation',
-      actionLabel: 'Passer hors ligne',
-      actionAriaLabel: 'Passer hors ligne',
+      actionLabel: 'Indisponible',
+      actionAriaLabel: 'Compte en attente d’approbation',
+      indicatorTone: 'offline',
     });
+  });
 
+  it('does not claim client visibility when the approved driver has no location', () => {
     expect(getDriverAvailabilityCardState({ isAvailable: true, isUpdating: false, isApproved: true, hasLocation: false })).toEqual({
       statusLabel: 'Disponible',
       statusDetail: 'Non visible',
       description: 'Position introuvable',
       actionLabel: 'Passer hors ligne',
       actionAriaLabel: 'Passer hors ligne',
+      indicatorTone: 'warning',
     });
+  });
+
+  it('allows ride listeners only for approved active-payout drivers', () => {
+    expect(canDriverAccessRideWork({
+      status: 'pending',
+      stripeAccountStatus: 'active',
+      stripePayoutsEnabled: true,
+    })).toBe(false);
+
+    expect(canDriverAccessRideWork({
+      status: 'approved',
+      stripeAccountStatus: 'pending',
+      stripePayoutsEnabled: false,
+    })).toBe(false);
+
+    expect(canDriverAccessRideWork({
+      status: 'approved',
+      stripeAccountStatus: 'active',
+      stripePayoutsEnabled: true,
+    })).toBe(true);
+  });
+
+  it('treats approved and active driver statuses as operationally approved', () => {
+    expect(isDriverApprovedOrActive('pending')).toBe(false);
+    expect(isDriverApprovedOrActive('approved')).toBe(true);
+    expect(isDriverApprovedOrActive('active')).toBe(true);
   });
 });

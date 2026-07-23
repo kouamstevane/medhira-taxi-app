@@ -37,7 +37,7 @@ index 6e30998..7c1efa8 100644
  
  const step3Schema = z.object({
    productionYear: z.string()
-     .regex(/^(19|20)\d{2}$/, "Année invalide (ex: 2021)"),
+     .regex(/^(19|20)\d{2}$/, "Annï¿½e invalide (ex: 2021)"),
    hasFourDoors: z.boolean().optional(),
  });
  
@@ -79,7 +79,7 @@ index 6e30998..7c1efa8 100644
            ) : (
 @@ -189,62 +198,62 @@ export default function Step3Vehicle({
            <h2 className="text-2xl font-bold text-white">Moyen de transport</h2>
-           <p className="text-[#9CA3AF] mt-2">Sélectionnez votre véhicule pour la livraison.</p>
+           <p className="text-[#9CA3AF] mt-2">Sï¿½lectionnez votre vï¿½hicule pour la livraison.</p>
          </div>
  
          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -127,23 +127,23 @@ index 6e30998..7c1efa8 100644
    return (
      <div className="space-y-6">
        <div className="text-center mb-8">
-         <h2 className="text-2xl font-bold text-white">Éligibilité Véhicule</h2>
-         <p className="text-[#9CA3AF] mt-2">Veuillez renseigner les détails de votre véhicule.</p>
+         <h2 className="text-2xl font-bold text-white">ï¿½ligibilitï¿½ Vï¿½hicule</h2>
+         <p className="text-[#9CA3AF] mt-2">Veuillez renseigner les dï¿½tails de votre vï¿½hicule.</p>
        </div>
  
        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 -        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
--          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Détails Véhicule</h3>
+-          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Dï¿½tails Vï¿½hicule</h3>
 +        <div className={driverSectionCardClassName}>
-+          <h3 className={driverSectionTitleClassName}>Détails Véhicule</h3>
++          <h3 className={driverSectionTitleClassName}>Dï¿½tails Vï¿½hicule</h3>
  
            <div className="grid grid-cols-1 gap-4">
              <InputField
                type="number"
                {...register('productionYear')}
-               label="Année de production"
+               label="Annï¿½e de production"
                placeholder={`Ex: ${currentYear - 2}`}
-               helperText={`Véhicule de ${minYear} ou plus récent (${maxAge} ans max pour le rôle choisi)`}
+               helperText={`Vï¿½hicule de ${minYear} ou plus rï¿½cent (${maxAge} ans max pour le rï¿½le choisi)`}
                error={errors.productionYear?.message}
                required
 @@ -267,32 +276,32 @@ export default function Step3Vehicle({
@@ -158,13 +158,13 @@ index 6e30998..7c1efa8 100644
          </div>
  
 -        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
--          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Documents Véhicule</h3>
+-          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Documents Vï¿½hicule</h3>
 +        <div className={driverSectionCardClassName}>
-+          <h3 className={driverSectionTitleClassName}>Documents Véhicule</h3>
++          <h3 className={driverSectionTitleClassName}>Documents Vï¿½hicule</h3>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {renderFileInput("Carte Grise (Recto/Verso)", "registration")}
-             {renderFileInput("Contrôle Technique", "techControl")}
-             {renderFileInput("Photo Extérieur (Plaque visible)", "exteriorPhoto", true, "image/*")}
+             {renderFileInput("Contrï¿½le Technique", "techControl")}
+             {renderFileInput("Photo Extï¿½rieur (Plaque visible)", "exteriorPhoto", true, "image/*")}
            </div>
            {renderFileInput("Assurance Pro", "insurance", false)}
          </div>
@@ -245,33 +245,33 @@ index 85a3d73..32cad89 100644
    return (
      <div className="space-y-6">
        <div className="text-center mb-8">
-         <h2 className="text-2xl font-bold text-white">Conformité Légale</h2>
-         <p className="text-[#9CA3AF] mt-2">Vos documents d'identité pour validation de votre profil.</p>
+         <h2 className="text-2xl font-bold text-white">Conformitï¿½ Lï¿½gale</h2>
+         <p className="text-[#9CA3AF] mt-2">Vos documents d'identitï¿½ pour validation de votre profil.</p>
 -        <div className="bg-[#3B82F6]/10 text-[#3B82F6] p-3 rounded-lg text-sm mt-4 font-medium flex items-center justify-center">
 +        <div className={cn(driverInfoBannerClassName, 'bg-[#f29200]/10 border-[#f29200]/20 text-slate-200 text-sm mt-4 font-medium flex items-center justify-center')}>
            <FileCheck className="mr-2" size={18} />
-           Vérifiez la lisibilité de vos documents avant d'envoyer.
+           Vï¿½rifiez la lisibilitï¿½ de vos documents avant d'envoyer.
          </div>
        </div>
  
        <form onSubmit={handleSubmit} className="space-y-6">
-         {/* Section 1: Admissibilité au travail */}
+         {/* Section 1: Admissibilitï¿½ au travail */}
 -        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
 -          <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">
 +        <div className={driverSectionCardClassName}>
 +          <h3 className={driverSectionTitleClassName}>
-             Preuve d'admissibilité au travail
+             Preuve d'admissibilitï¿½ au travail
            </h3>
            <p className="text-xs text-[#9CA3AF]">
-             Veuillez téléverser un document prouvant votre droit de travailler (Passeport, Certificat de naissance, Résidence
+             Veuillez tï¿½lï¿½verser un document prouvant votre droit de travailler (Passeport, Certificat de naissance, Rï¿½sidence
              permanente ou Permis de travail).
            </p>
            <div className="grid grid-cols-1 gap-4">
-             {renderFileInput('Preuve d\'admissibilité', 'workEligibility')}
+             {renderFileInput('Preuve d\'admissibilitï¿½', 'workEligibility')}
            </div>
          </div>
  
-         {/* Section 2: Conduite & Permis (masqué pour les livreurs vélo) */}
+         {/* Section 2: Conduite & Permis (masquï¿½ pour les livreurs vï¿½lo) */}
          {!isVelo && (
            <>
 -            <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
@@ -280,7 +280,7 @@ index 85a3d73..32cad89 100644
 +              <h3 className={driverSectionTitleClassName}>Classe de Permis & Conduite</h3>
                <div className="grid grid-cols-1 gap-4">
                   <InputField
-                   label="Numéro de permis de conduire"
+                   label="Numï¿½ro de permis de conduire"
                    value={files.licenseNumber}
                    onChange={(e) => setFiles((prev) => ({ ...prev, licenseNumber: e.target.value }))}
                    placeholder="Ex: A-1234-567890-12"
@@ -290,9 +290,9 @@ index 85a3d73..32cad89 100644
                    label="Classe du permis de conduire"
 @@ -262,41 +271,41 @@ export default function Step4Compliance({
                  <div className="mt-4">
-                   <h4 className="text-sm font-semibold text-white mb-2">Dossier de conduite récent (Driver's Abstract)</h4>
+                   <h4 className="text-sm font-semibold text-white mb-2">Dossier de conduite rï¿½cent (Driver's Abstract)</h4>
                    <p className="text-xs text-[#9CA3AF] mb-3">
-                     Téléversez l'extrait officiel de votre dossier de conduite de moins de 30 jours.
+                     Tï¿½lï¿½versez l'extrait officiel de votre dossier de conduite de moins de 30 jours.
                    </p>
                    {renderFileInput('Dossier de conduite', 'driversAbstract')}
                  </div>
@@ -327,7 +327,7 @@ index 85a3d73..32cad89 100644
 -            className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] hover:bg-[#e68600] transition-colors flex justify-center items-center shadow-[0_0_20px_rgba(242,146,0,0.4)]"
 +            className={cn(driverPrimaryButtonClassName, 'flex-[2]')}
            >
-             {loading ? <Loader2 className="animate-spin mr-2" /> : null} Valider les documents
+             {loading ? <Loader2 className="animate-spin mr-2" /> : null} Continuer
            </button>
          </div>
        </form>
@@ -380,7 +380,7 @@ index 0000000..9670fb8
 +  it('uses a subdued shared information banner instead of a dominant custom treatment', () => {
 +    render(<Step4Compliance onNext={jest.fn()} onBack={jest.fn()} />);
 +
-+    const banner = screen.getByText(/Vérifiez la lisibilité/i).parentElement;
++    const banner = screen.getByText(/Vï¿½rifiez la lisibilitï¿½/i).parentElement;
 +
 +    expect(banner).toHaveClass('rounded-xl');
 +    expect(banner).toHaveClass('border');

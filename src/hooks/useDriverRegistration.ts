@@ -14,6 +14,8 @@ import { StructuredLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
 import { redirectWithFallback } from '@/utils/navigation';
 import { useConnectivityMonitor, checkConnectivity } from '@/hooks/useConnectivityMonitor';
+import { buildDriverApplicationPublicData } from '@/hooks/driverRegistrationPayload';
+import { getDriverSubmissionErrorMessage } from '@/hooks/driverRegistrationErrors';
 import type { Step1FormData } from '@/app/driver/register/components/Step1Intent';
 import type { Step2FormData } from '@/app/driver/register/components/Step2Identity';
 import type { Step3FormData } from '@/app/driver/register/components/Step3Vehicle';
@@ -433,10 +435,6 @@ export function useDriverRegistration() {
       const getValue = (r: PromiseSettledResult<string | null>) =>
         r.status === 'fulfilled' ? r.value : null;
 
-      const carData = (driverType === 'chauffeur' || driverType === 'les_deux') ? {
-        year: step3Data.productionYear,
-      } : undefined;
-
       // Construit la map documents conditionnellement
       const documents: Record<string, { url: string; status: string }> = {};
       const addDoc = (key: string, url: string | null) => {
@@ -454,27 +452,15 @@ export function useDriverRegistration() {
 
       // === RGPD #C2 : split public vs private ===
       // Champs publics — doc racine `drivers/{uid}` (lisible par utilisateurs auth)
-      const publicData: Record<string, unknown> = {
-        uid: userId,
-        firstName: step2Data.firstName,
-        lastName: step2Data.lastName,
+      const publicData = buildDriverApplicationPublicData({
+        userId,
         email: step1Data.email || auth.currentUser?.email || '',
-        phone: step2Data.phone || '',
-        city: step2Data.city || '',
-        zipCode: step2Data.zipCode || '',
-        licenseNumber: complianceFiles.licenseNumber || '',
         driverType,
         vehicleType,
-        cityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',
-        status: 'pending',
-        isAvailable: false,
-        rating: 0,
-        tripsCompleted: 0,
-      };
-
-      if (carData && carData.year != null) {
-        publicData.car = carData;
-      }
+        defaultCityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',
+        step2Data,
+        step3Data,
+      });
 
       // Champs sensibles — sous-collection `drivers/{uid}/private/personal`
       const privateData: Record<string, unknown> = {
@@ -482,6 +468,7 @@ export function useDriverRegistration() {
         address: step2Data.address || '',
         province: step2Data.province || '',
         country: step2Data.country || '',
+        licenseNumber: complianceFiles.licenseNumber || '',
         licenseClass: complianceFiles.licenseClass || '',
         hasFourDoors: step3Data.hasFourDoors || false,
         taxId: _data.taxId || '',
@@ -534,15 +521,7 @@ export function useDriverRegistration() {
       }
 
       const error = err as { code?: string; message?: string };
-      let errorMessage = "Erreur lors de la soumission. Vos fichiers ont été supprimés. Veuillez réessayer — si l'erreur persiste, reconnectez-vous pour reprendre votre dossier.";
-      if (error?.code === 'permission-denied') {
-        errorMessage = 'Session expirée. Veuillez vous reconnecter puis reprendre votre inscription.';
-      } else if (error?.code === 'storage/unauthorized') {
-        errorMessage = "Erreur lors de l'upload des fichiers. Veuillez réessayer.";
-      } else if (error?.message) {
-        errorMessage = `Erreur : ${error.message}`;
-      }
-      setError(errorMessage);
+      setError(getDriverSubmissionErrorMessage(error));
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);

@@ -8,6 +8,13 @@ function hasRequiredFields(data: Record<string, unknown>, fields: string[]): boo
   return fields.every((f) => data[f] != null && data[f] !== '');
 }
 
+export const DRIVER_SUBMIT_RATE_LIMIT = {
+  bucket: 'driver:submit',
+  limit: 3,
+  windowSec: 600,
+  message: 'Trop de tentatives de soumission. Réessayez dans 10 minutes.',
+} as const;
+
 export const submitDriverApplication = onCall(
   { region: 'europe-west1', cors: true },
   async (request: CallableRequest) => {
@@ -20,9 +27,7 @@ export const submitDriverApplication = onCall(
 
     await enforceRateLimit({
       identifier: request.auth.uid,
-      bucket: 'driver:submit',
-      limit: 3,
-      windowSec: 3600,
+      ...DRIVER_SUBMIT_RATE_LIMIT,
     });
 
     let payload;

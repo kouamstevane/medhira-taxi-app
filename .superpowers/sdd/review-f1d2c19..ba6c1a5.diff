@@ -10,7 +10,7 @@ cc27d29 feat: unify onboarding document upload patterns
 0063c87 feat: add shared driver onboarding style primitives
 d75feb2 feat(driver-registration): enhance Step1Intent with auto-advance feature and add tests
 0d0e8b3 feat(NewRideForm): ajouter un bouton pour utiliser la position actuelle de l'utilisateur
-e153757 style: améliorer la palette de couleurs des composants pour une meilleure lisibilité
+e153757 style: amï¿½liorer la palette de couleurs des composants pour une meilleure lisibilitï¿½
 7a7fd0d feat(taxi): add support for scheduled bookings and improve vehicle catalog handling
 571b50e feat(driver-registration): update driver registration process to include additional fields and improve file upload handling
 
@@ -538,7 +538,7 @@ index 284482e..1779f78 100644
      const driverEmail = driverData?.email as string | undefined;
      const driverName =
 @@ -208,47 +220,70 @@ export const adminManageDriver = onCall(
-           message: 'Chauffeur et toutes ses données supprimés avec succès',
+           message: 'Chauffeur et toutes ses donnï¿½es supprimï¿½s avec succï¿½s',
          };
        }
  
@@ -806,10 +806,10 @@ index 3845390..34d8e9e 100644
  import { createStripeClient } from './stripe-client.js';
 +import { buildDriverIndividualPrefill } from './driver-prefill.js';
  
- // Type alias pour les événements Stripe (compatible Stripe v22 / NodeNext)
+ // Type alias pour les ï¿½vï¿½nements Stripe (compatible Stripe v22 / NodeNext)
  type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;
  
- // Type étendu pour les thin events v2 (non inclus dans l'union StripeEvent)
+ // Type ï¿½tendu pour les thin events v2 (non inclus dans l'union StripeEvent)
  type StripeEventLike = {
    id: string;
    type: string;
@@ -841,14 +841,14 @@ index 3845390..34d8e9e 100644
 -  return { day, month, year };
 -}
 -
--// Sanitize une string courte avant envoi à Stripe : trim + cap longueur.
+-// Sanitize une string courte avant envoi ï¿½ Stripe : trim + cap longueur.
 -function safeStr(v: unknown, maxLen = 100): string | undefined {
 -  if (typeof v !== 'string') return undefined;
 -  const t = v.trim();
 -  return t.length > 0 && t.length <= maxLen ? t : undefined;
 -}
 -
--// Indicatif téléphonique par pays ISO-2 (marchés supportés par l'app).
+-// Indicatif tï¿½lï¿½phonique par pays ISO-2 (marchï¿½s supportï¿½s par l'app).
 -const COUNTRY_DIAL_CODE: Record<string, string> = {
 -  CA: '1',
 -  US: '1',
@@ -858,43 +858,43 @@ index 3845390..34d8e9e 100644
 -};
 -
 -/**
-- * Normalise un numéro de téléphone au format E.164 (`+<dial><digits>`).
-- * Retourne `undefined` si normalisation impossible — Stripe rejette les numéros
-- * non-E.164 et ferait planter toute la création de compte.
+- * Normalise un numï¿½ro de tï¿½lï¿½phone au format E.164 (`+<dial><digits>`).
+- * Retourne `undefined` si normalisation impossible ï¿½ Stripe rejette les numï¿½ros
+- * non-E.164 et ferait planter toute la crï¿½ation de compte.
 - */
 -function toE164(raw: string | undefined, country: string): string | undefined {
 -  if (!raw) return undefined;
 -  const trimmed = raw.trim();
 -  if (!trimmed) return undefined;
 -
--  // Déjà au format international
+-  // Dï¿½jï¿½ au format international
 -  if (trimmed.startsWith('+')) {
 -    const digits = trimmed.slice(1).replace(/\D/g, '');
 -    if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
 -    return undefined;
 -  }
 -
--  // Sinon on retire tout sauf chiffres et on préfixe avec l'indicatif pays.
+-  // Sinon on retire tout sauf chiffres et on prï¿½fixe avec l'indicatif pays.
 -  const digits = trimmed.replace(/\D/g, '');
 -  if (!digits) return undefined;
 -
 -  const dial = COUNTRY_DIAL_CODE[country.toUpperCase()];
 -  if (!dial) return undefined;
 -
--  // Évite le double indicatif si l'utilisateur a tapé le code sans `+`
--  // (ex: "1418..." au Canada — déjà préfixé avec 1).
+-  // ï¿½vite le double indicatif si l'utilisateur a tapï¿½ le code sans `+`
+-  // (ex: "1418..." au Canada ï¿½ dï¿½jï¿½ prï¿½fixï¿½ avec 1).
 -  const normalized = digits.startsWith(dial) ? digits : dial + digits;
 -  if (normalized.length < 8 || normalized.length > 15) return undefined;
 -  return `+${normalized}`;
 -}
 -
  // =============================================================================
- // Business profile Medjira — pré-rempli côté serveur pour éviter au chauffeur
- // l'écran "Informations sur votre entreprise" dans Stripe-hosted onboarding.
+ // Business profile Medjira ï¿½ prï¿½-rempli cï¿½tï¿½ serveur pour ï¿½viter au chauffeur
+ // l'ï¿½cran "Informations sur votre entreprise" dans Stripe-hosted onboarding.
  //
  // Pour changer ces valeurs (ex: nouveau site web officiel) :
  //   1. Modifier ci-dessous
- //   2. Redéployer : firebase deploy --only functions:createConnectAccount
+ //   2. Redï¿½ployer : firebase deploy --only functions:createConnectAccount
  //
  // MCC (Merchant Category Code) :
  //   - 4121 = Limousines and Taxicabs (chauffeurs taxi)
@@ -907,15 +907,15 @@ index 3845390..34d8e9e 100644
      const snap = await driverRef.get();
      if (!snap.exists) {
        console.warn('[createConnectAccount] driver doc missing', { uid });
-       throw new HttpsError('permission-denied', 'Réservé aux chauffeurs.');
+       throw new HttpsError('permission-denied', 'Rï¿½servï¿½ aux chauffeurs.');
      }
--    // Pré-remplissage à partir de l'inscription chauffeur (réduit la friction
--    // côté formulaire Stripe — l'utilisateur peut quand même corriger sur Stripe).
+-    // Prï¿½-remplissage ï¿½ partir de l'inscription chauffeur (rï¿½duit la friction
+-    // cï¿½tï¿½ formulaire Stripe ï¿½ l'utilisateur peut quand mï¿½me corriger sur Stripe).
 -    const ind = request.data?.individual;
 -    const firstName = safeStr(ind?.firstName);
 -    const lastName = safeStr(ind?.lastName);
 -    const rawPhone = safeStr(ind?.phone, 30);
--    const phone = toE164(rawPhone, country); // peut être undefined si non normalisable
+-    const phone = toE164(rawPhone, country); // peut ï¿½tre undefined si non normalisable
 -    const dob = parseStripeDob(ind?.dob);
 -    const individual: Record<string, unknown> = {};
 -    if (firstName) individual.first_name = firstName;
@@ -939,7 +939,7 @@ index 3845390..34d8e9e 100644
 +      privateData: privateSnap.exists ? privateSnap.data() : undefined,
 +    });
  
-     // Business profile Medjira — évite l'écran "Informations sur votre entreprise".
+     // Business profile Medjira ï¿½ ï¿½vite l'ï¿½cran "Informations sur votre entreprise".
      const driverType = (snap.data()?.driverType as string | undefined) ?? 'chauffeur';
      const businessProfile = buildBusinessProfile(driverType);
  
@@ -1056,12 +1056,12 @@ index 09d1e54..12117d6 100644
 -    }
 -  }
 -  return normalized;
-+  biometricPhoto: 'Photo biométrique',
++  biometricPhoto: 'Photo biomï¿½trique',
 +  carRegistration: 'Carte grise',
 +  insurance: 'Assurance',
-+  techControl: 'Contrôle technique',
-+  vehicleExterior: 'Photo extérieure du véhicule',
-+  workEligibility: "Preuve d'admissibilité au travail",
++  techControl: 'Contrï¿½le technique',
++  vehicleExterior: 'Photo extï¿½rieure du vï¿½hicule',
++  workEligibility: "Preuve d'admissibilitï¿½ au travail",
 +  driversAbstract: "Dossier de conduite (Driver's Abstract)",
 +  licenseFront: 'Permis de conduire (recto)',
 +  licenseBack: 'Permis de conduire (verso)',
@@ -1111,12 +1111,12 @@ index 09d1e54..12117d6 100644
            </button>
          </div>
  
-+        {/* Détails personnels */}
++        {/* Dï¿½tails personnels */}
 +        <div className="glass-card rounded-2xl border border-white/10 p-4 space-y-4">
-+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Détails Chauffeur</h2>
++          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Dï¿½tails Chauffeur</h2>
 +          <div className="grid grid-cols-2 gap-4 text-sm text-slate-300">
 +            <div>
-+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Téléphone</span>
++              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tï¿½lï¿½phone</span>
 +              <p className="font-medium text-white">{driver.phone || 'N/A'}</p>
 +            </div>
 +            <div>
@@ -1124,21 +1124,21 @@ index 09d1e54..12117d6 100644
 +              <p className="font-medium text-white">{privateData?.dob || 'N/A'}</p>
 +            </div>
 +            <div>
-+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Numéro & Classe de permis</span>
++              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Numï¿½ro & Classe de permis</span>
 +              <p className="font-medium text-white">
 +                {driver.licenseNumber || 'N/A'} (Classe: {privateData?.licenseClass || 'N/A'})
 +              </p>
 +            </div>
 +            <div>
-+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Numéro fiscal / SIRET</span>
++              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Numï¿½ro fiscal / SIRET</span>
 +              <p className="font-medium text-white">{privateData?.taxId || 'N/A'}</p>
 +            </div>
 +            <div>
-+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Déclaration 4 portes VTC</span>
-+              <p className="font-medium text-white">{privateData?.hasFourDoors ? 'Oui, certifié' : 'N/A'}</p>
++              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Dï¿½claration 4 portes VTC</span>
++              <p className="font-medium text-white">{privateData?.hasFourDoors ? 'Oui, certifiï¿½' : 'N/A'}</p>
 +            </div>
 +            <div>
-+              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Adresse de résidence</span>
++              <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">Adresse de rï¿½sidence</span>
 +              <p className="font-medium text-white">{privateData?.address || 'N/A'}</p>
 +            </div>
 +            <div>
@@ -1220,8 +1220,8 @@ index 09d1e54..12117d6 100644
          <div className="glass-card rounded-2xl border border-white/10 p-4">
            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-2">Notation</h2>
            <p className="text-white">
-             Note : <span className="text-amber-400 font-bold">{driver.rating?.toFixed(1) ?? '—'}</span>
-             {' '}({driver.ratingsCount ?? 0} évaluation{(driver.ratingsCount ?? 0) > 1 ? 's' : ''})
+             Note : <span className="text-amber-400 font-bold">{driver.rating?.toFixed(1) ?? 'ï¿½'}</span>
+             {' '}({driver.ratingsCount ?? 0} ï¿½valuation{(driver.ratingsCount ?? 0) > 1 ? 's' : ''})
            </p>
          </div>
 diff --git a/src/app/admin/drivers/page.tsx b/src/app/admin/drivers/page.tsx
@@ -1249,25 +1249,25 @@ index 9c1d32e..86b0985 100644
    carModel?: string;
    carPlate?: string;
    carColor?: string;
-   // RGPD #C2 : `documents` n'est plus à la racine — hydraté via
+   // RGPD #C2 : `documents` n'est plus ï¿½ la racine ï¿½ hydratï¿½ via
 @@ -586,21 +587,27 @@ export default function AdminDriversPage() {
                    </div>
                    <h3 className="text-lg font-bold text-white">Informations Personnelles</h3>
                  </div>
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 p-6 bg-white/[0.02] border border-white/5 rounded-2xl">
                    {[
-                     { label: 'Prénom', value: selectedDriver.firstName },
+                     { label: 'Prï¿½nom', value: selectedDriver.firstName },
                      { label: 'Nom', value: selectedDriver.lastName },
                      { label: 'Email', value: selectedDriver.email },
-                     { label: 'Téléphone', value: (selectedDriver.phone || selectedDriver.phoneNumber) },
-                     { label: 'Numéro de permis', value: (selectedDriver.licenseNumber || 'Non renseigné') },
-+                    { label: 'Classe de permis', value: (selectedDriverPrivate?.licenseClass || 'Non renseignée') },
-+                    { label: 'Numéro fiscal / SIRET', value: (selectedDriverPrivate?.taxId || 'Non renseigné') },
-+                    { label: 'Adresse de résidence', value: (selectedDriverPrivate?.address || 'Non renseignée') },
-                     { label: 'Ville', value: (selectedDriver.city || 'Non renseignée') },
-+                    { label: 'Code Postal', value: (selectedDriver.zipCode || 'Non renseigné') },
-+                    { label: 'Province', value: (selectedDriverPrivate?.province || 'Non renseignée') },
-+                    { label: 'Pays', value: (selectedDriverPrivate?.country || 'Non renseigné') },
+                     { label: 'Tï¿½lï¿½phone', value: (selectedDriver.phone || selectedDriver.phoneNumber) },
+                     { label: 'Numï¿½ro de permis', value: (selectedDriver.licenseNumber || 'Non renseignï¿½') },
++                    { label: 'Classe de permis', value: (selectedDriverPrivate?.licenseClass || 'Non renseignï¿½e') },
++                    { label: 'Numï¿½ro fiscal / SIRET', value: (selectedDriverPrivate?.taxId || 'Non renseignï¿½') },
++                    { label: 'Adresse de rï¿½sidence', value: (selectedDriverPrivate?.address || 'Non renseignï¿½e') },
+                     { label: 'Ville', value: (selectedDriver.city || 'Non renseignï¿½e') },
++                    { label: 'Code Postal', value: (selectedDriver.zipCode || 'Non renseignï¿½') },
++                    { label: 'Province', value: (selectedDriverPrivate?.province || 'Non renseignï¿½e') },
++                    { label: 'Pays', value: (selectedDriverPrivate?.country || 'Non renseignï¿½') },
                    ].map((item, idx) => (
                      <div key={idx}>
                        <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{item.label}</span>
@@ -1277,19 +1277,19 @@ index 9c1d32e..86b0985 100644
                  </div>
                </section>
  
-               {/* Informations Véhicule */}
+               {/* Informations Vï¿½hicule */}
 @@ -609,20 +616,21 @@ export default function AdminDriversPage() {
                    <div className="p-2 bg-primary/10 rounded-lg text-primary">
                      <MaterialIcon name="directions_car" size="md" />
                    </div>
-                   <h3 className="text-lg font-bold text-white">Véhicule</h3>
+                   <h3 className="text-lg font-bold text-white">Vï¿½hicule</h3>
                  </div>
                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 p-6 bg-white/[0.02] border border-white/5 rounded-2xl">
                    {[
-                     { label: 'Marque/Modèle', value: (selectedDriver.car?.brand ? `${selectedDriver.car.brand} ${selectedDriver.car.model}` : (selectedDriver.car?.model || selectedDriver.carModel)) },
+                     { label: 'Marque/Modï¿½le', value: (selectedDriver.car?.brand ? `${selectedDriver.car.brand} ${selectedDriver.car.model}` : (selectedDriver.car?.model || selectedDriver.carModel)) },
                      { label: 'Plaque d\'immatriculation', value: (selectedDriver.car?.plate || selectedDriver.carPlate) },
                      { label: 'Couleur', value: (selectedDriver.car?.color || selectedDriver.carColor) },
-+                    { label: 'Déclaration 4 portes VTC', value: (selectedDriverPrivate?.hasFourDoors ? 'Oui, certifié' : 'Non') },
++                    { label: 'Dï¿½claration 4 portes VTC', value: (selectedDriverPrivate?.hasFourDoors ? 'Oui, certifiï¿½' : 'Non') },
                    ].map((item, idx) => (
                      <div key={idx}>
                        <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{item.label}</span>
@@ -1311,17 +1311,17 @@ index 9c1d32e..86b0985 100644
                      };
                      return [
                        { label: 'Photo de profil', src: urlOf('biometricPhoto'), id: 'biometricPhoto' },
-+                      { label: 'Admissibilité au travail', src: urlOf('workEligibility'), id: 'workEligibility' },
++                      { label: 'Admissibilitï¿½ au travail', src: urlOf('workEligibility'), id: 'workEligibility' },
 +                      { label: 'Dossier de conduite', src: urlOf('driversAbstract'), id: 'driversAbstract' },
                        { label: 'Permis (Recto)', src: urlOf('licenseFront') || urlOf('licensePhoto'), id: 'licensePhoto' },
                        { label: 'Permis (Verso)', src: urlOf('licenseBack'), id: 'licenseBack' },
--                      { label: 'Identité (Recto)', src: urlOf('idFront'), id: 'idFront' },
--                      { label: 'Identité (Verso)', src: urlOf('idBack'), id: 'idBack' },
+-                      { label: 'Identitï¿½ (Recto)', src: urlOf('idFront'), id: 'idFront' },
+-                      { label: 'Identitï¿½ (Verso)', src: urlOf('idBack'), id: 'idBack' },
                        { label: 'Carte grise', src: urlOf('carRegistration'), id: 'carRegistration' },
                        { label: 'Assurance', src: urlOf('insurance'), id: 'insurance' },
-                       { label: 'Contrôle Technique', src: urlOf('techControl'), id: 'techControl' },
-                       { label: 'Véhicule (Extérieur)', src: urlOf('vehicleExterior'), id: 'vehicleExterior' },
--                      { label: 'Véhicule (Intérieur)', src: urlOf('vehicleInterior'), id: 'vehicleInterior' },
+                       { label: 'Contrï¿½le Technique', src: urlOf('techControl'), id: 'techControl' },
+                       { label: 'Vï¿½hicule (Extï¿½rieur)', src: urlOf('vehicleExterior'), id: 'vehicleExterior' },
+-                      { label: 'Vï¿½hicule (Intï¿½rieur)', src: urlOf('vehicleInterior'), id: 'vehicleInterior' },
                      ];
                    })().map((doc, idx) => doc.src ? (
                      <div key={idx} className="group flex flex-col gap-2">
@@ -1377,8 +1377,8 @@ index d881eef..691be96 100644
            <h2 className="text-white text-[20px] font-bold mb-4 px-1 tracking-tight">Que voulez-vous faire ?</h2>
            <div className="grid grid-cols-2 gap-4">
              {[
--              { icon: 'local_taxi', label: 'Réserver un taxi', sub: 'Dispo maintenant', subColor: 'text-emerald-500', route: '/taxi', highlight: true },
-+              { icon: 'local_taxi', label: 'Taxi', sub: 'Départ immédiat ou programmé', subColor: 'text-emerald-500', route: '/taxi', highlight: true },
+-              { icon: 'local_taxi', label: 'Rï¿½server un taxi', sub: 'Dispo maintenant', subColor: 'text-emerald-500', route: '/taxi', highlight: true },
++              { icon: 'local_taxi', label: 'Taxi', sub: 'Dï¿½part immï¿½diat ou programmï¿½', subColor: 'text-emerald-500', route: '/taxi', highlight: true },
                { icon: 'lunch_dining', label: 'Commander', sub: 'Restaurants', subColor: 'text-slate-400', route: '/food' },
                { icon: 'package_2', label: 'Transporter un colis', sub: 'Transport rapide', subColor: 'text-slate-400', route: '/colis' },
                { icon: 'favorite', label: 'Favoris', sub: '3 adresses', subColor: 'text-slate-400', route: '/profil' },
@@ -1400,7 +1400,7 @@ index d881eef..691be96 100644
            </div>
          </section>
  
--        {/* Driver shortcut — V1 : capacité (roles.driver != null), pas activeRole. */}
+-        {/* Driver shortcut ï¿½ V1 : capacitï¿½ (roles.driver != null), pas activeRole. */}
 -        <div className="mb-6">
 -          <BecomeProCard />
 -        </div>
@@ -1422,13 +1422,13 @@ index d881eef..691be96 100644
                <GlassCard className="p-8 text-center">
                  <MaterialIcon name="receipt_long" className="text-slate-600 text-[40px] mx-auto mb-3" />
                  <p className="text-slate-400 font-medium">Aucune course aujourd&apos;hui</p>
-                 <p className="text-sm text-slate-500 mt-1">Réservez un taxi pour commencer</p>
+                 <p className="text-sm text-slate-500 mt-1">Rï¿½servez un taxi pour commencer</p>
                </GlassCard>
              )}
            </div>
          </section>
 +
-+        {/* Driver shortcut — V1 : capacité (roles.driver != null), pas activeRole. */}
++        {/* Driver shortcut ï¿½ V1 : capacitï¿½ (roles.driver != null), pas activeRole. */}
 +        <div className="mb-6">
 +          <BecomeProCard />
 +        </div>
@@ -1510,12 +1510,12 @@ index 7b67f38..8dfe08f 100644
 -  visiteTechniqueCommerciale: 'Visite technique commerciale',
 -  certificatVille: 'Certificat ville',
 +const DOC_LABELS: Record<AllowedDocKey, string> = {
-+  biometricPhoto: 'Photo biométrique',
++  biometricPhoto: 'Photo biomï¿½trique',
 +  carRegistration: 'Carte grise',
 +  insurance: 'Assurance',
-+  techControl: 'Contrôle technique',
-+  vehicleExterior: 'Photo extérieure du véhicule',
-+  workEligibility: "Preuve d'admissibilité au travail",
++  techControl: 'Contrï¿½le technique',
++  vehicleExterior: 'Photo extï¿½rieure du vï¿½hicule',
++  workEligibility: "Preuve d'admissibilitï¿½ au travail",
 +  driversAbstract: "Dossier de conduite (Driver's Abstract)",
 +  licenseFront: 'Permis de conduire (recto)',
 +  licenseBack: 'Permis de conduire (verso)',
@@ -1585,7 +1585,7 @@ index 7b67f38..8dfe08f 100644
        setTimeout(() => router.push('/driver/documents'), 2000)
 -    } catch (err) {
 +    } catch (uploadError) {
-       setError('Erreur lors du téléversement. Réessayez.')
+       setError('Erreur lors du tï¿½lï¿½versement. Rï¿½essayez.')
 -      console.error(err)
 +      console.error(uploadError)
      } finally {
@@ -1599,7 +1599,7 @@ index 7b67f38..8dfe08f 100644
 -        <div className="text-center space-y-3">
 -          <MaterialIcon name="check_circle" className="text-green-400 text-[64px]" />
 -          <p className="text-white font-bold">Document soumis !</p>
--          <p className="text-slate-400 text-sm">Redirection en cours…</p>
+-          <p className="text-slate-400 text-sm">Redirection en coursï¿½</p>
 +      <div className="flex min-h-screen items-center justify-center bg-background">
 +        <div className="space-y-3 text-center">
 +          <MaterialIcon name="check_circle" className="text-[64px] text-green-400" />
@@ -1621,9 +1621,9 @@ index 7b67f38..8dfe08f 100644
          </button>
  
 -        <h1 className="text-xl font-bold mb-2">{DOC_LABELS[docKey] ?? docKey}</h1>
--        <p className="text-slate-400 text-sm mb-6">Téléversez une nouvelle version de ce document.</p>
+-        <p className="text-slate-400 text-sm mb-6">Tï¿½lï¿½versez une nouvelle version de ce document.</p>
 +        <h1 className="mb-2 text-xl font-bold">{DOC_LABELS[docKey as AllowedDocKey] ?? docKey}</h1>
-+        <p className="mb-6 text-sm text-slate-400">Téléversez une nouvelle version de ce document.</p>
++        <p className="mb-6 text-sm text-slate-400">Tï¿½lï¿½versez une nouvelle version de ce document.</p>
  
 -        <label className="glass-card block p-6 rounded-2xl border border-dashed border-white/20 text-center cursor-pointer hover:border-primary/40 transition-all">
 +        <label className="glass-card block cursor-pointer rounded-2xl border border-dashed border-white/20 p-6 text-center transition-all hover:border-primary/40">
@@ -1640,7 +1640,7 @@ index 7b67f38..8dfe08f 100644
 -            <p className="text-white font-medium">{file.name}</p>
 +            <p className="font-medium text-white">{file.name}</p>
            ) : (
-             <p className="text-slate-400">Cliquez pour sélectionner un fichier</p>
+             <p className="text-slate-400">Cliquez pour sï¿½lectionner un fichier</p>
            )}
 -          <p className="text-xs text-slate-500 mt-1">Image ou PDF</p>
 +          <p className="mt-1 text-xs text-slate-500">Image ou PDF</p>
@@ -1685,7 +1685,7 @@ index 0000000..bacef8d
 +      globalStatus: 'pending',
 +    })
 +
-+    expect(summary.title).toBe('Documents à téléverser')
++    expect(summary.title).toBe('Documents ï¿½ tï¿½lï¿½verser')
 +  })
 +
 +  it('returns action required when at least one document is rejected', () => {
@@ -1719,40 +1719,40 @@ index 0000000..8b16985
 +export function getDriverDocumentsSummary(input: DriverDocumentsSummaryInput) {
 +  if (input.globalStatus === 'all_approved') {
 +    return {
-+      title: 'Documents approuvés',
-+      subtitle: `${input.approved} document${input.approved > 1 ? 's' : ''} approuvé${input.approved > 1 ? 's' : ''} sur ${input.total}`,
-+      helper: 'Tous vos documents requis ont été validés.',
++      title: 'Documents approuvï¿½s',
++      subtitle: `${input.approved} document${input.approved > 1 ? 's' : ''} approuvï¿½${input.approved > 1 ? 's' : ''} sur ${input.total}`,
++      helper: 'Tous vos documents requis ont ï¿½tï¿½ validï¿½s.',
 +    }
 +  }
 +
 +  if (input.globalStatus === 'has_rejected') {
 +    return {
 +      title: 'Action requise',
-+      subtitle: `${input.rejected} document${input.rejected > 1 ? 's' : ''} à corriger`,
-+      helper: 'Corrigez les documents refusés pour relancer la vérification.',
++      subtitle: `${input.rejected} document${input.rejected > 1 ? 's' : ''} ï¿½ corriger`,
++      helper: 'Corrigez les documents refusï¿½s pour relancer la vï¿½rification.',
 +    }
 +  }
 +
 +  if (input.notSubmitted === input.total) {
 +    return {
-+      title: 'Documents à téléverser',
-+      subtitle: `0 document approuvé sur ${input.total}`,
-+      helper: 'Téléversez tous les documents requis pour activer votre compte chauffeur.',
++      title: 'Documents ï¿½ tï¿½lï¿½verser',
++      subtitle: `0 document approuvï¿½ sur ${input.total}`,
++      helper: 'Tï¿½lï¿½versez tous les documents requis pour activer votre compte chauffeur.',
 +    }
 +  }
 +
 +  if (input.pending > 0 && input.approved === 0 && input.notSubmitted === 0) {
 +    return {
-+      title: 'Vérification en cours',
-+      subtitle: `${input.pending} document${input.pending > 1 ? 's' : ''} en cours de vérification`,
-+      helper: 'Vos documents envoyés sont en cours de vérification.',
++      title: 'Vï¿½rification en cours',
++      subtitle: `${input.pending} document${input.pending > 1 ? 's' : ''} en cours de vï¿½rification`,
++      helper: 'Vos documents envoyï¿½s sont en cours de vï¿½rification.',
 +    }
 +  }
 +
 +  return {
-+    title: 'Vérification en cours',
-+    subtitle: `${input.approved} document${input.approved > 1 ? 's' : ''} approuvé${input.approved > 1 ? 's' : ''} sur ${input.total}`,
-+    helper: 'Complétez les pièces manquantes et suivez la validation de vos documents.',
++    title: 'Vï¿½rification en cours',
++    subtitle: `${input.approved} document${input.approved > 1 ? 's' : ''} approuvï¿½${input.approved > 1 ? 's' : ''} sur ${input.total}`,
++    helper: 'Complï¿½tez les piï¿½ces manquantes et suivez la validation de vos documents.',
 +  }
 +}
 diff --git a/src/app/driver/documents/page.tsx b/src/app/driver/documents/page.tsx
@@ -1778,11 +1778,11 @@ index 5ff1cac..540ab4b 100644
  function statusVisuals(status: DocStatus) {
    switch (status) {
      case 'approved':
-       return { icon: 'check_circle', text: 'APPROUVÉ', color: 'text-green-400', bg: 'bg-green-500/10' }
+       return { icon: 'check_circle', text: 'APPROUVï¿½', color: 'text-green-400', bg: 'bg-green-500/10' }
      case 'pending':
-       return { icon: 'hourglass_empty', text: 'EN COURS DE VÉRIFICATION', color: 'text-amber-400', bg: 'bg-amber-500/10' }
+       return { icon: 'hourglass_empty', text: 'EN COURS DE Vï¿½RIFICATION', color: 'text-amber-400', bg: 'bg-amber-500/10' }
      case 'rejected':
-       return { icon: 'cancel', text: 'REJETÉ', color: 'text-red-400', bg: 'bg-red-500/10' }
+       return { icon: 'cancel', text: 'REJETï¿½', color: 'text-red-400', bg: 'bg-red-500/10' }
      default:
        return { icon: 'upload_file', text: 'NON SOUMIS', color: 'text-slate-400', bg: 'bg-white/5' }
    }
@@ -1849,10 +1849,10 @@ index 5ff1cac..540ab4b 100644
  
    const filters: Array<{ key: Filter; label: string }> = [
      { key: 'all', label: 'Tous' },
-     { key: 'not_submitted', label: 'À téléverser' },
+     { key: 'not_submitted', label: 'ï¿½ tï¿½lï¿½verser' },
      { key: 'pending', label: 'En attente' },
-     { key: 'approved', label: 'Approuvés' },
-     { key: 'rejected', label: 'Rejetés' },
+     { key: 'approved', label: 'Approuvï¿½s' },
+     { key: 'rejected', label: 'Rejetï¿½s' },
    ]
  
    return (
@@ -1944,12 +1944,12 @@ index 5ff1cac..540ab4b 100644
              </div>
            </div>
 -          <div className="flex-1 min-w-0">
--            <h2 className="text-white font-bold text-xl leading-tight">Vérification en cours</h2>
+-            <h2 className="text-white font-bold text-xl leading-tight">Vï¿½rification en cours</h2>
 -            <p className="text-primary text-sm font-medium mt-1">
--              {counts.approved} document{counts.approved > 1 ? 's' : ''} approuvé{counts.approved > 1 ? 's' : ''} sur {counts.all || 10}
+-              {counts.approved} document{counts.approved > 1 ? 's' : ''} approuvï¿½{counts.approved > 1 ? 's' : ''} sur {counts.all || 10}
 -            </p>
 -            <p className="text-slate-400 text-xs mt-2 leading-relaxed">
--              Téléversez tous les documents requis pour activer votre compte chauffeur
+-              Tï¿½lï¿½versez tous les documents requis pour activer votre compte chauffeur
 -            </p>
 +        )}
 +
@@ -2016,7 +2016,7 @@ index 5ff1cac..540ab4b 100644
 -          <div className="text-center py-12 text-slate-500 text-sm">
 +        ) : filteredDocuments.length === 0 ? (
 +          <div className="py-12 text-center text-sm text-slate-500">
-             Aucun document dans cette catégorie
+             Aucun document dans cette catï¿½gorie
            </div>
          ) : (
            <div className="space-y-3">
@@ -2059,7 +2059,7 @@ index 5ff1cac..540ab4b 100644
 +
 +                  {showUploadButton ? (
 +                    <span className="flex h-8 flex-shrink-0 items-center rounded-full bg-gradient-to-r from-primary to-[#ffae33] px-4 text-xs font-bold text-black">
-                       TÉLÉVERSER
+                       Tï¿½Lï¿½VERSER
                      </span>
                    ) : (
 -                    <MaterialIcon name="chevron_right" className="text-slate-500 text-[20px] flex-shrink-0" />
@@ -2169,7 +2169,7 @@ index 0000000..ad867ca
 +  it('does not render the documents summary card on the profile page', () => {
 +    render(<DriverProfilePage />);
 +
-+    expect(screen.queryByText('Documents en vérification')).not.toBeInTheDocument();
++    expect(screen.queryByText('Documents en vï¿½rification')).not.toBeInTheDocument();
 +  });
 +});
 diff --git a/src/app/driver/profile/__tests__/profile-ui.test.ts b/src/app/driver/profile/__tests__/profile-ui.test.ts
@@ -2188,8 +2188,8 @@ index a784591..16a4e1f 100644
  describe('driver profile UI summaries', () => {
    it('summarizes an empty vehicle as an action to complete', () => {
      expect(getVehicleProfileSummary({})).toEqual({
-       title: 'Véhicule à compléter',
-       subtitle: 'Ajoutez modèle, plaque et couleur',
+       title: 'Vï¿½hicule ï¿½ complï¿½ter',
+       subtitle: 'Ajoutez modï¿½le, plaque et couleur',
        isComplete: false,
      });
    });
@@ -2199,8 +2199,8 @@ index a784591..16a4e1f 100644
  
    it('shows approved documents as complete', () => {
      expect(getDocumentsProfileSummary([{ status: 'approved' }, { status: 'approved' }])).toMatchObject({
-       title: 'Documents validés',
-       subtitle: '2/2 documents approuvés.',
+       title: 'Documents validï¿½s',
+       subtitle: '2/2 documents approuvï¿½s.',
        tone: 'success',
        cta: 'Consulter',
      });
@@ -2208,29 +2208,29 @@ index a784591..16a4e1f 100644
 +
 +  it('separates email verification from driver approval', () => {
 +    expect(getDriverVerificationBadges({ isEmailVerified: true, driverStatus: 'pending' })).toEqual([
-+      { label: 'Email vérifié', tone: 'success' },
++      { label: 'Email vï¿½rifiï¿½', tone: 'success' },
 +      { label: 'Dossier en attente', tone: 'warning' },
 +    ]);
 +
 +    expect(getDriverVerificationBadges({ isEmailVerified: true, driverStatus: 'approved' })).toEqual([
-+      { label: 'Email vérifié', tone: 'success' },
-+      { label: 'Compte chauffeur approuvé', tone: 'success' },
++      { label: 'Email vï¿½rifiï¿½', tone: 'success' },
++      { label: 'Compte chauffeur approuvï¿½', tone: 'success' },
 +    ]);
 +  });
 +
 +  it('locks availability until the admin approves the driver account', () => {
 +    expect(getDriverAvailabilityProfileState({ isApproved: false, isAvailable: true })).toEqual({
-+      label: 'Disponibilité chauffeur',
-+      detail: 'Disponible après validation admin',
-+      description: 'Votre compte doit être approuvé avant de recevoir des courses.',
++      label: 'Disponibilitï¿½ chauffeur',
++      detail: 'Disponible aprï¿½s validation admin',
++      description: 'Votre compte doit ï¿½tre approuvï¿½ avant de recevoir des courses.',
 +      isInteractive: false,
 +      displayAvailable: false,
 +    });
 +
 +    expect(getDriverAvailabilityProfileState({ isApproved: true, isAvailable: true })).toEqual({
 +      label: 'Disponible pour des courses',
-+      detail: 'Activée',
-+      description: 'Vous pouvez recevoir des demandes dès maintenant.',
++      detail: 'Activï¿½e',
++      description: 'Vous pouvez recevoir des demandes dï¿½s maintenant.',
 +      isInteractive: true,
 +      displayAvailable: true,
 +    });
@@ -2287,7 +2287,7 @@ index 09ef7a5..547c5c2 100644
  }
 +
  function InfoRow({ label, value, italic }: InfoRowProps) {
-   const display = value && value.length > 0 ? value : 'Non spécifié';
+   const display = value && value.length > 0 ? value : 'Non spï¿½cifiï¿½';
    const isEmpty = !value || value.length === 0;
 +
    return (
@@ -2338,7 +2338,7 @@ index 09ef7a5..547c5c2 100644
      try {
 @@ -105,457 +110,469 @@ export default function DriverProfilePage() {
        } else {
-         setDeleteError('Impossible de supprimer le compte. Réessayez ou contactez le support.');
+         setDeleteError('Impossible de supprimer le compte. Rï¿½essayez ou contactez le support.');
        }
      } finally {
        setDeleteLoading(false);
@@ -2457,7 +2457,7 @@ index 09ef7a5..547c5c2 100644
 -            {isEmailVerified && (
 -              <span className="inline-flex items-center gap-1 bg-green-500/15 text-green-400 border border-green-500/30 px-2.5 py-0.5 rounded-full text-[11px] font-bold">
 -                <MaterialIcon name="verified" className="text-[12px]" />
--                VÉRIFIÉ
+-                Vï¿½RIFIï¿½
 +          <h2 className="text-xl font-bold text-white">{driver.firstName} {driver.lastName}</h2>
 +          <p className="text-sm text-slate-400">{driver.email}</p>
 +          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -2510,7 +2510,7 @@ index 09ef7a5..547c5c2 100644
 +              <span className="text-sm font-medium text-white">{availabilityState.label}</span>
 +            </div>
 +            <p className="mt-1 text-[11px] text-slate-400">
-+              {availabilityState.detail} · {availabilityState.description}
++              {availabilityState.detail} ï¿½ {availabilityState.description}
 +            </p>
            </div>
            <button
@@ -2541,8 +2541,8 @@ index 09ef7a5..547c5c2 100644
              {editMode ? (
                <div className="space-y-3 py-2">
                  <div>
--                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Prénom</label>
-+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Prénom</label>
+-                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Prï¿½nom</label>
++                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Prï¿½nom</label>
                    <input
                      type="text"
                      value={formData.firstName || ''}
@@ -2563,8 +2563,8 @@ index 09ef7a5..547c5c2 100644
                    />
                  </div>
                  <div>
--                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Téléphone</label>
-+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Téléphone</label>
+-                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Tï¿½lï¿½phone</label>
++                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Tï¿½lï¿½phone</label>
                    <input
                      type="tel"
                      value={formData.phone || ''}
@@ -2587,9 +2587,9 @@ index 09ef7a5..547c5c2 100644
                </div>
              ) : (
                <>
-                 <InfoRow label="Prénom" value={driver.firstName} />
+                 <InfoRow label="Prï¿½nom" value={driver.firstName} />
                  <InfoRow label="Nom" value={driver.lastName} />
-                 <InfoRow label="Téléphone" value={driver.phone} />
+                 <InfoRow label="Tï¿½lï¿½phone" value={driver.phone} />
                  <InfoRow label="Email" value={driver.email} />
                  <InfoRow label="Permis" value={driver.licenseNumber} />
                </>
@@ -2597,16 +2597,16 @@ index 09ef7a5..547c5c2 100644
            </div>
          </div>
  
--        {/* Véhicule */}
+-        {/* Vï¿½hicule */}
          <div>
-           <SectionTitle icon="directions_car">Véhicule</SectionTitle>
+           <SectionTitle icon="directions_car">Vï¿½hicule</SectionTitle>
 -          <div className={`glass-card rounded-2xl ${editMode ? 'px-5 py-3 divide-y divide-white/[0.04]' : 'p-4'}`}>
 +          <div className={`glass-card rounded-2xl ${editMode ? 'divide-y divide-white/[0.04] px-5 py-3' : 'p-4'}`}>
              {editMode ? (
                <div className="space-y-3 py-2">
                  <div>
--                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Modèle</label>
-+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Modèle</label>
+-                  <label className="block text-[10px] font-medium text-slate-500 uppercase tracking-wider mb-1">Modï¿½le</label>
++                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Modï¿½le</label>
                    <input
                      type="text"
                      value={formData.car?.model || ''}
@@ -2660,7 +2660,7 @@ index 09ef7a5..547c5c2 100644
 -                  className="h-9 px-3 rounded-full bg-white/5 hover:bg-white/10 text-primary text-xs font-bold transition disabled:opacity-40 flex-shrink-0"
 +                  className="h-9 flex-shrink-0 rounded-full bg-white/5 px-3 text-xs font-bold text-primary transition hover:bg-white/10 disabled:opacity-40"
                  >
-                   {vehicleSummary.isComplete ? 'Modifier' : 'Compléter'}
+                   {vehicleSummary.isComplete ? 'Modifier' : 'Complï¿½ter'}
                  </button>
                </div>
              )}
@@ -2682,7 +2682,7 @@ index 09ef7a5..547c5c2 100644
 -              className="flex-1 h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-50"
 +              className="primary-glow h-12 flex-1 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] font-bold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
              >
--              {loading ? 'Enregistrement…' : 'Enregistrer'}
+-              {loading ? 'Enregistrementï¿½' : 'Enregistrer'}
 +              {loading ? 'Enregistrement...' : 'Enregistrer'}
              </button>
            </div>
@@ -2753,7 +2753,7 @@ index 09ef7a5..547c5c2 100644
 -                    <span className="inline-flex items-center gap-1 bg-green-500/15 text-green-400 border border-green-500/30 px-2 py-0.5 rounded-full text-[10px] font-bold">
 +                    <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/15 px-2 py-0.5 text-[10px] font-bold text-green-400">
                        <MaterialIcon name="verified" className="text-[11px]" />
-                       VÉRIFIÉ
+                       Vï¿½RIFIï¿½
                      </span>
                    )}
                  </div>
@@ -2764,7 +2764,7 @@ index 09ef7a5..547c5c2 100644
 -                    <p className="text-slate-500 text-xs">
 +                    <p className="text-sm font-medium text-white">Versement automatique</p>
 +                    <p className="text-xs text-slate-500">
-                       {stripeData.weeklyPayoutEnabled ? 'Chaque lundi (70%)' : 'Manuel — vous décidez'}
+                       {stripeData.weeklyPayoutEnabled ? 'Chaque lundi (70%)' : 'Manuel ï¿½ vous dï¿½cidez'}
                      </p>
                    </div>
                    <button
@@ -2791,7 +2791,7 @@ index 09ef7a5..547c5c2 100644
 -                    className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
 +                    className="primary-glow h-12 w-full rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] font-bold text-white disabled:opacity-40"
                    >
--                    {manualPayoutLoading ? 'Virement en cours…' : 'Virer maintenant'}
+-                    {manualPayoutLoading ? 'Virement en coursï¿½' : 'Virer maintenant'}
 +                    {manualPayoutLoading ? 'Virement en cours...' : 'Virer maintenant'}
                    </button>
                    <button
@@ -2829,9 +2829,9 @@ index 09ef7a5..547c5c2 100644
 -          </div>
 -        </div>
 -
--        {/* Compte & sécurité */}
+-        {/* Compte & sï¿½curitï¿½ */}
          <div>
-           <SectionTitle icon="shield">Compte & sécurité</SectionTitle>
+           <SectionTitle icon="shield">Compte & sï¿½curitï¿½</SectionTitle>
 -          <div className="glass-card rounded-2xl divide-y divide-white/[0.04]">
 +          <div className="glass-card divide-y divide-white/[0.04] rounded-2xl">
              <button
@@ -2857,10 +2857,10 @@ index 09ef7a5..547c5c2 100644
                <div className="flex items-center gap-3">
 -                <MaterialIcon name="logout" className="text-orange-400 text-[20px]" />
 -                <span className="text-orange-400 text-sm font-medium">
--                  {signOutLoading ? 'Déconnexion…' : 'Se déconnecter'}
+-                  {signOutLoading ? 'Dï¿½connexionï¿½' : 'Se dï¿½connecter'}
 +                <MaterialIcon name="logout" className="text-[20px] text-orange-400" />
 +                <span className="text-sm font-medium text-orange-400">
-+                  {signOutLoading ? 'Déconnexion...' : 'Se déconnecter'}
++                  {signOutLoading ? 'Dï¿½connexion...' : 'Se dï¿½connecter'}
                  </span>
                </div>
 -              <MaterialIcon name="chevron_right" className="text-slate-500 text-[20px]" />
@@ -2883,8 +2883,8 @@ index 09ef7a5..547c5c2 100644
            </div>
          </div>
  
--        <p className="text-center text-slate-600 text-[11px] tracking-wider pt-2">VERSION 1.0.0 — MEDJIRA</p>
-+        <p className="pt-2 text-center text-[11px] tracking-wider text-slate-600">VERSION 1.0.0 — MEDJIRA</p>
+-        <p className="text-center text-slate-600 text-[11px] tracking-wider pt-2">VERSION 1.0.0 ï¿½ MEDJIRA</p>
++        <p className="pt-2 text-center text-[11px] tracking-wider text-slate-600">VERSION 1.0.0 ï¿½ MEDJIRA</p>
        </div>
  
        <BottomNav items={driverNavItems} />
@@ -2905,10 +2905,10 @@ index 09ef7a5..547c5c2 100644
                <div>
 -                <h3 className="text-white font-bold text-lg">Supprimer votre compte ?</h3>
 -                <p className="text-slate-400 text-sm mt-1">
--                  Cette action est <span className="text-red-400 font-medium">irréversible</span>. Toutes vos données chauffeur seront supprimées.
+-                  Cette action est <span className="text-red-400 font-medium">irrï¿½versible</span>. Toutes vos donnï¿½es chauffeur seront supprimï¿½es.
 +                <h3 className="text-lg font-bold text-white">Supprimer votre compte ?</h3>
 +                <p className="mt-1 text-sm text-slate-400">
-+                  Cette action est <span className="font-medium text-red-400">irréversible</span>. Toutes vos données chauffeur seront supprimées.
++                  Cette action est <span className="font-medium text-red-400">irrï¿½versible</span>. Toutes vos donnï¿½es chauffeur seront supprimï¿½es.
                  </p>
                </div>
              </div>
@@ -2953,7 +2953,7 @@ index 09ef7a5..547c5c2 100644
 -                className="flex-1 h-12 bg-red-500 hover:bg-red-600 disabled:bg-red-500/30 disabled:cursor-not-allowed text-white font-bold rounded-2xl transition"
 +                className="h-12 flex-1 rounded-2xl bg-red-500 font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-500/30"
                >
--                {deleteLoading ? 'Suppression…' : 'Supprimer'}
+-                {deleteLoading ? 'Suppressionï¿½' : 'Supprimer'}
 +                {deleteLoading ? 'Suppression...' : 'Supprimer'}
                </button>
              </div>
@@ -3005,7 +3005,7 @@ index 3f593a1..d4b8669 100644
  export function getDocumentsProfileSummary(documents: DocumentSummaryInput[]): DocumentsProfileSummary {
    if (documents.length === 0) {
      return {
-       title: 'Documents à téléverser',
+       title: 'Documents ï¿½ tï¿½lï¿½verser',
        subtitle: 'Ouvrez Documents pour commencer.',
        tone: 'neutral',
        cta: 'Ouvrir',
@@ -3016,10 +3016,10 @@ index 3f593a1..d4b8669 100644
 +  const actionCount = documents.filter((document) => document.status === 'not_submitted' || document.status === 'rejected').length;
    if (actionCount > 0) {
      return {
-       title: `${actionCount} document${actionCount > 1 ? 's' : ''} à compléter`,
-       subtitle: 'Ouvrez Documents pour corriger ou téléverser les pièces.',
+       title: `${actionCount} document${actionCount > 1 ? 's' : ''} ï¿½ complï¿½ter`,
+       subtitle: 'Ouvrez Documents pour corriger ou tï¿½lï¿½verser les piï¿½ces.',
        tone: 'danger',
-       cta: 'Compléter',
+       cta: 'Complï¿½ter',
      };
    }
  
@@ -3027,7 +3027,7 @@ index 3f593a1..d4b8669 100644
 +  const pendingCount = documents.filter((document) => document.status === 'pending').length;
    if (pendingCount > 0) {
      return {
-       title: 'Documents en vérification',
+       title: 'Documents en vï¿½rification',
        subtitle: `${pendingCount} document${pendingCount > 1 ? 's' : ''} en attente de validation.`,
        tone: 'warning',
        cta: 'Voir',
@@ -3037,8 +3037,8 @@ index 3f593a1..d4b8669 100644
 -  const approvedCount = documents.filter(doc => doc.status === 'approved').length;
 +  const approvedCount = documents.filter((document) => document.status === 'approved').length;
    return {
-     title: 'Documents validés',
-     subtitle: `${approvedCount}/${documents.length} documents approuvés.`,
+     title: 'Documents validï¿½s',
+     subtitle: `${approvedCount}/${documents.length} documents approuvï¿½s.`,
      tone: 'success',
      cta: 'Consulter',
    };
@@ -3053,19 +3053,19 @@ index 3f593a1..d4b8669 100644
 +}): DriverVerificationBadge[] {
 +  const badges: DriverVerificationBadge[] = [
 +    {
-+      label: isEmailVerified ? 'Email vérifié' : 'Email à vérifier',
++      label: isEmailVerified ? 'Email vï¿½rifiï¿½' : 'Email ï¿½ vï¿½rifier',
 +      tone: isEmailVerified ? 'success' : 'warning',
 +    },
 +  ];
 +
 +  switch (driverStatus) {
 +    case 'approved':
-+      badges.push({ label: 'Compte chauffeur approuvé', tone: 'success' });
++      badges.push({ label: 'Compte chauffeur approuvï¿½', tone: 'success' });
 +      break;
 +    case 'rejected':
 +    case 'action_required':
 +    case 'suspended':
-+      badges.push({ label: 'Dossier à corriger', tone: 'danger' });
++      badges.push({ label: 'Dossier ï¿½ corriger', tone: 'danger' });
 +      break;
 +    default:
 +      badges.push({ label: 'Dossier en attente', tone: 'warning' });
@@ -3084,9 +3084,9 @@ index 3f593a1..d4b8669 100644
 +}): DriverAvailabilityProfileState {
 +  if (!isApproved) {
 +    return {
-+      label: 'Disponibilité chauffeur',
-+      detail: 'Disponible après validation admin',
-+      description: 'Votre compte doit être approuvé avant de recevoir des courses.',
++      label: 'Disponibilitï¿½ chauffeur',
++      detail: 'Disponible aprï¿½s validation admin',
++      description: 'Votre compte doit ï¿½tre approuvï¿½ avant de recevoir des courses.',
 +      isInteractive: false,
 +      displayAvailable: false,
 +    };
@@ -3095,8 +3095,8 @@ index 3f593a1..d4b8669 100644
 +  if (isAvailable) {
 +    return {
 +      label: 'Disponible pour des courses',
-+      detail: 'Activée',
-+      description: 'Vous pouvez recevoir des demandes dès maintenant.',
++      detail: 'Activï¿½e',
++      description: 'Vous pouvez recevoir des demandes dï¿½s maintenant.',
 +      isInteractive: true,
 +      displayAvailable: true,
 +    };
@@ -3104,7 +3104,7 @@ index 3f593a1..d4b8669 100644
 +
 +  return {
 +    label: 'Disponible pour des courses',
-+    detail: 'Désactivée',
++    detail: 'Dï¿½sactivï¿½e',
 +    description: 'Activez cette option pour recevoir des demandes.',
 +    isInteractive: true,
 +    displayAvailable: false,
@@ -3127,8 +3127,8 @@ index 91f4d5e..d15014e 100644
  }
  
  const ROLES: { value: DriverType; label: string; desc: string; icon: string }[] = [
-   { value: 'chauffeur', label: 'Chauffeur', desc: 'Transportez des passagers ou effectuez des courses avec votre véhicule', icon: 'directions_car' },
-   { value: 'livreur', label: 'Livreur', desc: 'Livrez repas, colis et toute commande à vos clients', icon: 'delivery_dining' },
+   { value: 'chauffeur', label: 'Chauffeur', desc: 'Transportez des passagers ou effectuez des courses avec votre vï¿½hicule', icon: 'directions_car' },
+   { value: 'livreur', label: 'Livreur', desc: 'Livrez repas, colis et toute commande ï¿½ vos clients', icon: 'delivery_dining' },
    { value: 'les_deux', label: 'Les deux', desc: 'Chauffeur et livreur selon la demande', icon: 'sync_alt' },
  ]
  
@@ -3138,7 +3138,7 @@ index 91f4d5e..d15014e 100644
    return (
 -    <div className="w-full max-w-lg mx-auto" data-testid="step0-role-selection">
 +    <div className={cn(driverSectionCardClassName, 'w-full max-w-lg mx-auto')} data-testid="step0-role-selection">
-       <h2 className="text-2xl font-bold text-white mb-2 text-center">Quel est votre rôle ?</h2>
+       <h2 className="text-2xl font-bold text-white mb-2 text-center">Quel est votre rï¿½le ?</h2>
        <p className="text-slate-400 text-center mb-8">Choisissez comment vous souhaitez utiliser l&apos;application.</p>
  
        <div className="space-y-4 mb-8">
@@ -3187,7 +3187,7 @@ index 8f54e93..37365e0 100644
  
  const step1Schema = z.object({
    email: z.string().email(ERROR_MESSAGES.INVALID_EMAIL),
-   password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+   password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractï¿½res"),
  });
  
  export type Step1FormData = z.infer<typeof step1Schema>;
@@ -3219,8 +3219,8 @@ index 8f54e93..37365e0 100644
    const [formData, setFormData] = useState<Step1FormData | null>(null);
    const autoAdvancedRef = useRef(false);
  
-   // Si l'email est déjà vérifié (utilisateur authentifié redirigé depuis login),
-   // sauter entièrement Step1 et avancer à Step2 au montage.
+   // Si l'email est dï¿½jï¿½ vï¿½rifiï¿½ (utilisateur authentifiï¿½ redirigï¿½ depuis login),
+   // sauter entiï¿½rement Step1 et avancer ï¿½ Step2 au montage.
    useEffect(() => {
 -    if (emailPreVerified && !autoAdvancedRef.current && onVerified) {
 +    if (autoAdvanceOnMount && emailPreVerified && !autoAdvancedRef.current && onVerified) {
@@ -3246,7 +3246,7 @@ index 8f54e93..37365e0 100644
      onVerified?.();
    };
  
-   // Phase B : vérification OTP
+   // Phase B : vï¿½rification OTP
    if (verificationPhase && !codeVerified && sendVerificationCode && verifyCode) {
      const email = formData?.email ?? getValues('email');
      return (
@@ -3256,14 +3256,14 @@ index 8f54e93..37365e0 100644
            <div className="mx-auto w-16 h-16 bg-[#f29200]/20 rounded-full flex items-center justify-center mb-4">
              <span className="text-3xl">??</span>
            </div>
-           <h2 className="text-2xl font-bold text-white">Vérifiez votre email</h2>
-           <p className="text-[#9CA3AF] mt-2">Entrez le code à 6 chiffres envoyé à votre adresse email.</p>
+           <h2 className="text-2xl font-bold text-white">Vï¿½rifiez votre email</h2>
+           <p className="text-[#9CA3AF] mt-2">Entrez le code ï¿½ 6 chiffres envoyï¿½ ï¿½ votre adresse email.</p>
          </div>
          <OTPInput
            email={email}
            onVerify={verifyCode}
 @@ -102,32 +105,32 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
-         <p className="text-[#9CA3AF] mt-2">Rejoignez notre réseau de chauffeurs et commencez à rouler aujourd'hui.</p>
+         <p className="text-[#9CA3AF] mt-2">Rejoignez notre rï¿½seau de chauffeurs et commencez ï¿½ rouler aujourd'hui.</p>
        </div>
  
        <div className="space-y-4">
@@ -3299,7 +3299,7 @@ index 8f54e93..37365e0 100644
              placeholder="votre@email.com"
 @@ -141,21 +144,21 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
              label="Mot de passe"
-             placeholder="••••••••"
+             placeholder="ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
              error={errors.password?.message}
              required
            />
@@ -3363,7 +3363,7 @@ index 9ade265..20b3686 100644
  minDate.setFullYear(minDate.getFullYear() - 18);
  
  const step2Schema = z.object({
-   firstName: z.string().min(2, "Prénom requis"),
+   firstName: z.string().min(2, "Prï¿½nom requis"),
    lastName: z.string().min(2, "Nom requis"),
    dob: z.string().min(1, "Date de naissance requise").refine((val) => {
      const date = new Date(val);
@@ -3372,10 +3372,10 @@ index 9ade265..20b3686 100644
 -  phone: z.string().regex(/^\+?[0-9\s\-()]{8,20}$/, ERROR_MESSAGES.INVALID_PHONE),
 -  ssn: z.string().regex(/^\d{3}[\s\-]?\d{3}[\s\-]?\d{3}$/, "NAS invalide (9 chiffres attendus, ex: 123 456 789)"),
 +  phone: z.string().refine((value) => isValidPhoneNumber(value), ERROR_MESSAGES.INVALID_PHONE),
-+  address: z.string().min(5, "Adresse de résidence requise"),
++  address: z.string().min(5, "Adresse de rï¿½sidence requise"),
 +  city: z.string().min(1, "Ville requise"),
 +  zipCode: z.string().min(1, "Code postal requis"),
-+  province: z.string().min(1, "Province/Région requise"),
++  province: z.string().min(1, "Province/Rï¿½gion requise"),
 +  country: z.string().min(1, "Pays requis"),
  });
  
@@ -3594,7 +3594,7 @@ index 9ade265..20b3686 100644
 +
 +    try {
 +      if (typeof navigator === 'undefined' || !navigator.geolocation) {
-+        throw new Error("La géolocalisation n'est pas disponible sur cet appareil.");
++        throw new Error("La gï¿½olocalisation n'est pas disponible sur cet appareil.");
 +      }
 +
 +      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -3627,7 +3627,7 @@ index 9ade265..20b3686 100644
 +        parseCountryFields(result.address_components),
 +        result.formatted_address || result.address_components.map((component) => component.long_name).join(', ')
 +      );
-+      setLocationFeedback({ type: 'success', message: 'Position détectée et adresse remplie automatiquement.' });
++      setLocationFeedback({ type: 'success', message: 'Position dï¿½tectï¿½e et adresse remplie automatiquement.' });
 +    } catch (error: unknown) {
 +      const message = error instanceof Error ? error.message : "Impossible d'obtenir votre position.";
 +      setLocationFeedback({ type: 'error', message });
@@ -3700,10 +3700,10 @@ index 9ade265..20b3686 100644
          if (msg.includes('User cancelled') || msg.includes('cancelled')) {
            return;
          } else if (msg.includes('permission')) {
-           setPhotoError("Permission caméra refusée. Veuillez l'autoriser dans les paramètres.");
+           setPhotoError("Permission camï¿½ra refusï¿½e. Veuillez l'autoriser dans les paramï¿½tres.");
          } else {
--          setPhotoError("Impossible de prendre la photo. Veuillez réessayer.");
-+          setPhotoError('Impossible de prendre la photo. Veuillez réessayer.');
+-          setPhotoError("Impossible de prendre la photo. Veuillez rï¿½essayer.");
++          setPhotoError('Impossible de prendre la photo. Veuillez rï¿½essayer.');
          }
        }
      } else {
@@ -3717,8 +3717,8 @@ index 9ade265..20b3686 100644
      if (!file) return;
  
      if (!file.type.startsWith('image/')) {
--      setPhotoError("Seules les images sont acceptées.");
-+      setPhotoError('Seules les images sont acceptées.');
+-      setPhotoError("Seules les images sont acceptï¿½es.");
++      setPhotoError('Seules les images sont acceptï¿½es.');
        return;
      }
      if (file.size > 10 * 1024 * 1024) {
@@ -3741,8 +3741,8 @@ index 9ade265..20b3686 100644
  
    const onSubmit = (data: Step2FormData) => {
      if (!photoFile) {
--      showError("La photo biométrique est obligatoire pour finaliser votre inscription.");
-+      showError('La photo biométrique est obligatoire pour finaliser votre inscription.');
+-      showError("La photo biomï¿½trique est obligatoire pour finaliser votre inscription.");
++      showError('La photo biomï¿½trique est obligatoire pour finaliser votre inscription.');
        return;
      }
      onNext(data, photoFile);
@@ -3768,27 +3768,27 @@ index 9ade265..20b3686 100644
      <div className="space-y-6">
        <div className="text-center mb-8">
          <h2 className="text-2xl font-bold text-white">Votre Profil Chauffeur</h2>
-         <p className="text-[#9CA3AF] mt-2">Ces informations sont requises pour votre vérification légale.</p>
+         <p className="text-[#9CA3AF] mt-2">Ces informations sont requises pour votre vï¿½rification lï¿½gale.</p>
        </div>
  
 -      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 -
 -        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
--            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Identité</h3>
+-            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Identitï¿½</h3>
 -            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 -                <InputField
 -                    {...register('firstName')}
--                    label="Prénom"
+-                    label="Prï¿½nom"
 -                    onInput={handleNameInput}
 -                    error={errors.firstName?.message}
 -                    required
 +      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" data-driver-onboarding-form>
 +        <div className={driverSectionCardClassName}>
-+          <h3 className={driverSectionTitleClassName}>Identité</h3>
++          <h3 className={driverSectionTitleClassName}>Identitï¿½</h3>
 +          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 +            <InputField
 +              {...register('firstName')}
-+              label="Prénom"
++              label="Prï¿½nom"
 +              labelClassName="text-slate-100"
 +              className={driverInputClassName}
 +              onInput={handleNameInput}
@@ -3905,7 +3905,7 @@ index 9ade265..20b3686 100644
 -                </div>
 -                <InputField
 -                    type="tel"
--                    label="Numéro de Téléphone"
+-                    label="Numï¿½ro de Tï¿½lï¿½phone"
 -                    placeholder="+1 514 000 0000"
 -                    {...register('phone')}
 -                    helperText="Format international (+1 pour le Canada)"
@@ -3921,7 +3921,7 @@ index 9ade265..20b3686 100644
 +                  value={yearVal}
 +                  onChange={(e) => handleDobFieldChange(e, 'year', 4, { current: null })}
 +                  onKeyDown={(e) => handleDobKeyDown(e, monthRef)}
-+                  aria-label="Année de naissance"
++                  aria-label="Annï¿½e de naissance"
 +                  className={dobInputClassName}
                  />
 +              </div>
@@ -3939,13 +3939,13 @@ index 9ade265..20b3686 100644
 -
              <InputField
 -                type="password"
--                label="Numéro d'Assurance Sociale (NAS)"
--                placeholder="Masqué par défaut"
+-                label="Numï¿½ro d'Assurance Sociale (NAS)"
+-                placeholder="Masquï¿½ par dï¿½faut"
 -                {...register('ssn')}
 -                error={errors.ssn?.message}
 -                required
 +              type="tel"
-+              label="Numéro de Téléphone"
++              label="Numï¿½ro de Tï¿½lï¿½phone"
 +              labelClassName="text-slate-100"
 +              className={driverInputClassName}
 +              placeholder={phonePlaceholder}
@@ -3958,7 +3958,7 @@ index 9ade265..20b3686 100644
 +
 +          <div className="w-full">
 +            <AddressInput
-+              label="Adresse de résidence"
++              label="Adresse de rï¿½sidence"
 +              value={addressVal}
 +              onChange={(val) => {
 +                setValue('address', val, { shouldValidate: true });
@@ -3972,7 +3972,7 @@ index 9ade265..20b3686 100644
 +              }}
 +              onSelect={handleAddressSelect}
 +              autocompleteService={autocompleteService}
-+              placeholder="Saisissez votre adresse de résidence"
++              placeholder="Saisissez votre adresse de rï¿½sidence"
 +              required
 +              error={errors.address?.message}
 +            />
@@ -4002,10 +4002,10 @@ index 9ade265..20b3686 100644
 +              </div>
 +              <div>
 +                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Code Postal</span>
-+                <span className="text-white font-medium">{watch('zipCode') || 'Non détecté'}</span>
++                <span className="text-white font-medium">{watch('zipCode') || 'Non dï¿½tectï¿½'}</span>
 +              </div>
 +              <div>
-+                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Province / Région</span>
++                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Province / Rï¿½gion</span>
 +                <span className="text-white font-medium">{watch('province')}</span>
 +              </div>
 +              <div>
@@ -4023,7 +4023,7 @@ index 9ade265..20b3686 100644
  
 -        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
 -             <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Photo de profil</h3>
--             <p className="text-sm text-[#9CA3AF]">Prenez un selfie sur le vif. Assurez-vous d'être bien éclairé et de cadrer votre visage et cou dans l'ovale virtuel.</p>
+-             <p className="text-sm text-[#9CA3AF]">Prenez un selfie sur le vif. Assurez-vous d'ï¿½tre bien ï¿½clairï¿½ et de cadrer votre visage et cou dans l'ovale virtuel.</p>
 -
 -             <input
 -               id="web-camera-fallback"
@@ -4049,7 +4049,7 @@ index 9ade265..20b3686 100644
 -                    onClick={takePhoto}
 -                     className="mt-4 px-6 py-2 bg-[#242424] text-white font-medium rounded-full hover:bg-white/10 transition-colors"
 -                >
--                    {photoDataUrl ? 'Reprendre la photo' : 'Ouvrir la caméra'}
+-                    {photoDataUrl ? 'Reprendre la photo' : 'Ouvrir la camï¿½ra'}
 -                </button>
 -
 -                {photoError && (
@@ -4060,7 +4060,7 @@ index 9ade265..20b3686 100644
 -             </div>
 +        <div className={driverSectionCardClassName}>
 +          <h3 className={driverSectionTitleClassName}>Photo de profil</h3>
-+          <p className="text-sm text-[#9CA3AF]">Prenez un selfie sur le vif. Assurez-vous d'être bien éclairé et de cadrer votre visage et cou dans l'ovale virtuel.</p>
++          <p className="text-sm text-[#9CA3AF]">Prenez un selfie sur le vif. Assurez-vous d'ï¿½tre bien ï¿½clairï¿½ et de cadrer votre visage et cou dans l'ovale virtuel.</p>
 +
 +          <input
 +            id="web-camera-fallback"
@@ -4086,7 +4086,7 @@ index 9ade265..20b3686 100644
 +              onClick={takePhoto}
 +              className="mt-4 px-6 py-2 bg-[#242424] text-white font-medium rounded-full hover:bg-white/10 transition-colors"
 +            >
-+              {photoDataUrl ? 'Reprendre la photo' : 'Ouvrir la caméra'}
++              {photoDataUrl ? 'Reprendre la photo' : 'Ouvrir la camï¿½ra'}
 +            </button>
 +
 +            {photoError && (
@@ -4147,11 +4147,11 @@ index e140530..7c1efa8 100644
  
  const step3Schema = z.object({
    productionYear: z.string()
--    .regex(/^(19|20)\d{2}$/, "Année invalide (ex: 2021)")
--    .refine((val) => parseInt(val, 10) >= 2010, "Le véhicule doit être de 2010 ou plus récent"),
+-    .regex(/^(19|20)\d{2}$/, "Annï¿½e invalide (ex: 2021)")
+-    .refine((val) => parseInt(val, 10) >= 2010, "Le vï¿½hicule doit ï¿½tre de 2010 ou plus rï¿½cent"),
 -  passengerSeats: z.number().min(1).max(9),
--  mileage: z.number().min(0, "Kilométrage invalide"),
-+    .regex(/^(19|20)\d{2}$/, "Année invalide (ex: 2021)"),
+-  mileage: z.number().min(0, "Kilomï¿½trage invalide"),
++    .regex(/^(19|20)\d{2}$/, "Annï¿½e invalide (ex: 2021)"),
 +  hasFourDoors: z.boolean().optional(),
  });
  
@@ -4178,7 +4178,7 @@ index e140530..7c1efa8 100644
  }
  
  const DELIVERY_VEHICLE_OPTIONS: { value: VehicleDeliveryType; label: string; icon: string }[] = [
-   { value: 'velo', label: 'Vélo', icon: '??' },
+   { value: 'velo', label: 'Vï¿½lo', icon: '??' },
    { value: 'scooter', label: 'Scooter', icon: '??' },
    { value: 'moto', label: 'Moto', icon: '???' },
    { value: 'voiture', label: 'Voiture', icon: '??' },
@@ -4247,11 +4247,11 @@ index e140530..7c1efa8 100644
 -    if (!allowedMimeTypes.includes(file.type)) {
 -      setFileErrors(prev => ({
 -        ...prev,
--        [key]: `Type de fichier non autorisé. Seuls les fichiers JPG, PNG et PDF sont acceptés.`
+-        [key]: `Type de fichier non autorisï¿½. Seuls les fichiers JPG, PNG et PDF sont acceptï¿½s.`
 -      }));
 +    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 +    if (!allowedTypes.includes(file.type)) {
-+      showError("Format de fichier non supporté (JPEG, PNG, WebP, PDF uniquement).");
++      showError("Format de fichier non supportï¿½ (JPEG, PNG, WebP, PDF uniquement).");
        return;
      }
  
@@ -4259,7 +4259,7 @@ index e140530..7c1efa8 100644
 -      setFileErrors(prev => ({ ...prev, [key]: "Fichier trop lourd (Max 10Mo)" }));
 +    if (file.type === 'application/pdf') {
 +      if (file.size > 10 * 1024 * 1024) {
-+        showError("Le PDF ne doit pas dépasser 10Mo.");
++        showError("Le PDF ne doit pas dï¿½passer 10Mo.");
 +        return;
 +      }
 +      setFiles(prev => ({ ...prev, [key]: file }));
@@ -4282,7 +4282,7 @@ index e140530..7c1efa8 100644
 -        finalFile = result.file;
 -
 -        if (result.compressionRatio > 20) {
--          showInfo(`${file.name} compressé de ${result.compressionRatio.toFixed(0)}%`);
+-          showInfo(`${file.name} compressï¿½ de ${result.compressionRatio.toFixed(0)}%`);
 -        }
 -
 -        console.log(`Compressed ${file.name}: ${(result.originalSize / 1024 / 1024).toFixed(2)}MB ? ${(result.compressedSize / 1024 / 1024).toFixed(2)}MB`);
@@ -4301,9 +4301,9 @@ index e140530..7c1efa8 100644
        setFiles(prev => ({ ...prev, [key]: file }));
 -      setFileErrors(prev => ({
 -        ...prev,
--        [key]: "La compression a échoué. Le fichier original sera utilisé (plus lourd)."
+-        [key]: "La compression a ï¿½chouï¿½. Le fichier original sera utilisï¿½ (plus lourd)."
 -      }));
-       showError("La compression a échoué pour " + file.name);
+       showError("La compression a ï¿½chouï¿½ pour " + file.name);
      } finally {
        setCompressionLoading(null);
      }
@@ -4317,20 +4317,20 @@ index e140530..7c1efa8 100644
  
    const onSubmit = (data: Step3FormData) => {
 -    if (!files.registration || !files.techControl || !files.interiorPhoto || !files.exteriorPhoto) {
--      showError("Veuillez fournir tous les documents obligatoires (Carte grise, Contrôle technique, Photos intérieur et extérieur).");
+-      showError("Veuillez fournir tous les documents obligatoires (Carte grise, Contrï¿½le technique, Photos intï¿½rieur et extï¿½rieur).");
 +    if (isChauffeur && !data.hasFourDoors) {
-+      showError("Votre véhicule doit posséder 4 portes indépendantes pour le service VTC.");
++      showError("Votre vï¿½hicule doit possï¿½der 4 portes indï¿½pendantes pour le service VTC.");
        return;
      }
 +
 +    const yearVal = parseInt(data.productionYear, 10);
 +    if (isNaN(yearVal) || yearVal < minYear) {
-+      showError(`Le véhicule doit être de l'année ${minYear} ou plus récent (${maxAge} ans max pour le rôle choisi).`);
++      showError(`Le vï¿½hicule doit ï¿½tre de l'annï¿½e ${minYear} ou plus rï¿½cent (${maxAge} ans max pour le rï¿½le choisi).`);
 +      return;
 +    }
 +
 +    if (!files.registration || !files.techControl || !files.exteriorPhoto) {
-+      showError("Veuillez fournir tous les documents obligatoires (Carte grise, Contrôle technique, Photo extérieur).");
++      showError("Veuillez fournir tous les documents obligatoires (Carte grise, Contrï¿½le technique, Photo extï¿½rieur).");
 +      return;
 +    }
 +
@@ -4405,10 +4405,10 @@ index e140530..7c1efa8 100644
      return (
        <div className="space-y-6">
          <div className="text-center mb-8">
--          <h2 className="text-2xl font-bold text-white">Type de véhicule</h2>
--          <p className="text-[#9CA3AF] mt-2">Sélectionnez votre véhicule de livraison.</p>
+-          <h2 className="text-2xl font-bold text-white">Type de vï¿½hicule</h2>
+-          <p className="text-[#9CA3AF] mt-2">Sï¿½lectionnez votre vï¿½hicule de livraison.</p>
 +          <h2 className="text-2xl font-bold text-white">Moyen de transport</h2>
-+          <p className="text-[#9CA3AF] mt-2">Sélectionnez votre véhicule pour la livraison.</p>
++          <p className="text-[#9CA3AF] mt-2">Sï¿½lectionnez votre vï¿½hicule pour la livraison.</p>
          </div>
 -        <div className="grid grid-cols-2 gap-4">
 +
@@ -4468,23 +4468,23 @@ index e140530..7c1efa8 100644
    return (
      <div className="space-y-6">
        <div className="text-center mb-8">
-         <h2 className="text-2xl font-bold text-white">Éligibilité Véhicule</h2>
-         <p className="text-[#9CA3AF] mt-2">Veuillez renseigner les détails de votre véhicule.</p>
+         <h2 className="text-2xl font-bold text-white">ï¿½ligibilitï¿½ Vï¿½hicule</h2>
+         <p className="text-[#9CA3AF] mt-2">Veuillez renseigner les dï¿½tails de votre vï¿½hicule.</p>
        </div>
  
        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 +        <div className={driverSectionCardClassName}>
-+          <h3 className={driverSectionTitleClassName}>Détails Véhicule</h3>
++          <h3 className={driverSectionTitleClassName}>Dï¿½tails Vï¿½hicule</h3>
  
 -        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
--            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Détails Véhicule</h3>
+-            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Dï¿½tails Vï¿½hicule</h3>
 +          <div className="grid grid-cols-1 gap-4">
 +            <InputField
 +              type="number"
 +              {...register('productionYear')}
-+              label="Année de production"
++              label="Annï¿½e de production"
 +              placeholder={`Ex: ${currentYear - 2}`}
-+              helperText={`Véhicule de ${minYear} ou plus récent (${maxAge} ans max pour le rôle choisi)`}
++              helperText={`Vï¿½hicule de ${minYear} ou plus rï¿½cent (${maxAge} ans max pour le rï¿½le choisi)`}
 +              error={errors.productionYear?.message}
 +              required
 +            />
@@ -4493,7 +4493,7 @@ index e140530..7c1efa8 100644
 -                <InputField
 -                    type="number"
 -                    {...register('productionYear')}
--                    label="Année"
+-                    label="Annï¿½e"
 -                    placeholder="YYYY"
 -                    error={errors.productionYear?.message}
 -                    required
@@ -4506,7 +4506,7 @@ index e140530..7c1efa8 100644
 -                <InputField
 -                    type="number"
 -                    {...register('mileage', { valueAsNumber: true })}
--                    label="Kilométrage"
+-                    label="Kilomï¿½trage"
 -                    placeholder="ex: 50000"
 -                    error={errors.mileage?.message}
 -                    required
@@ -4521,10 +4521,10 @@ index e140530..7c1efa8 100644
 -            </div>
 +                <div className="flex flex-col">
 +                  <label htmlFor="hasFourDoors" className="text-sm font-semibold text-white cursor-pointer select-none">
-+                    Mon véhicule dispose de 4 portes indépendantes
++                    Mon vï¿½hicule dispose de 4 portes indï¿½pendantes
 +                  </label>
 +                  <span className="text-xs text-[#9CA3AF] mt-1">
-+                    Exigence réglementaire obligatoire pour tous les services VTC (les voitures à 2 ou 3 portes sont interdites).
++                    Exigence rï¿½glementaire obligatoire pour tous les services VTC (les voitures ï¿½ 2 ou 3 portes sont interdites).
 +                  </span>
 +                  {errors.hasFourDoors && (
 +                    <span className="text-red-500 text-xs mt-1">{errors.hasFourDoors.message}</span>
@@ -4536,20 +4536,20 @@ index e140530..7c1efa8 100644
          </div>
  
 -        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
--            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Documents Véhicule</h3>
+-            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Documents Vï¿½hicule</h3>
 -            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 -                {renderFileInput("Carte Grise (Recto/Verso)", "registration")}
--                {renderFileInput("Contrôle Technique", "techControl")}
--                {renderFileInput("Photo Extérieur (Plaque visible)", "exteriorPhoto", true, "image/*")}
--                {renderFileInput("Photo Intérieur (Sièges arrière)", "interiorPhoto", true, "image/*")}
+-                {renderFileInput("Contrï¿½le Technique", "techControl")}
+-                {renderFileInput("Photo Extï¿½rieur (Plaque visible)", "exteriorPhoto", true, "image/*")}
+-                {renderFileInput("Photo Intï¿½rieur (Siï¿½ges arriï¿½re)", "interiorPhoto", true, "image/*")}
 -            </div>
 -            {renderFileInput("Assurance Pro", "insurance", false)}
 +        <div className={driverSectionCardClassName}>
-+          <h3 className={driverSectionTitleClassName}>Documents Véhicule</h3>
++          <h3 className={driverSectionTitleClassName}>Documents Vï¿½hicule</h3>
 +          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 +            {renderFileInput("Carte Grise (Recto/Verso)", "registration")}
-+            {renderFileInput("Contrôle Technique", "techControl")}
-+            {renderFileInput("Photo Extérieur (Plaque visible)", "exteriorPhoto", true, "image/*")}
++            {renderFileInput("Contrï¿½le Technique", "techControl")}
++            {renderFileInput("Photo Extï¿½rieur (Plaque visible)", "exteriorPhoto", true, "image/*")}
 +          </div>
 +          {renderFileInput("Assurance Pro", "insurance", false)}
          </div>
@@ -4666,7 +4666,7 @@ index 83b90d6..32cad89 100644
      };
    }, []);
  
--  // Gérer les previews pour les fichiers initiaux
+-  // Gï¿½rer les previews pour les fichiers initiaux
 -  React.useEffect(() => {
 +  useEffect(() => {
      if (initialFiles) {
@@ -4706,7 +4706,7 @@ index 83b90d6..32cad89 100644
      if (!file) return;
  
      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-       showWarning('Format non supporté. Utilisez JPEG, PNG, WebP ou PDF.');
+       showWarning('Format non supportï¿½. Utilisez JPEG, PNG, WebP ou PDF.');
        e.target.value = '';
        return;
      }
@@ -4720,7 +4720,7 @@ index 83b90d6..32cad89 100644
 -    setFiles(prev => ({ ...prev, [key]: file }));
 +    setFiles((prev) => ({ ...prev, [key]: file }));
  
--    // Générer une preview
+-    // Gï¿½nï¿½rer une preview
      if (file.type.startsWith('image/')) {
 -        const oldUrl = previews[key];
 -        if (oldUrl && oldUrl !== 'pdf') {
@@ -4772,10 +4772,10 @@ index 83b90d6..32cad89 100644
 -    const result = step4Schema.safeParse(files);
 -    
 -    if (!result.success) {
--      showError("Tous les documents de conformité légale sont obligatoires.");
+-      showError("Tous les documents de conformitï¿½ lï¿½gale sont obligatoires.");
 +
 +    if (!files.workEligibility) {
-+      showError("Le document d'admissibilité au travail est obligatoire.");
++      showError("Le document d'admissibilitï¿½ au travail est obligatoire.");
        return;
      }
 -    
@@ -4783,7 +4783,7 @@ index 83b90d6..32cad89 100644
 +
 +    if (!isVelo) {
 +      if (!files.licenseNumber || files.licenseNumber.trim().length < 4) {
-+        showError("Le numéro de votre permis de conduire est requis.");
++        showError("Le numï¿½ro de votre permis de conduire est requis.");
 +        return;
 +      }
 +      if (!files.driversAbstract) {
@@ -4877,37 +4877,37 @@ index 83b90d6..32cad89 100644
    return (
      <div className="space-y-6">
        <div className="text-center mb-8">
-         <h2 className="text-2xl font-bold text-white">Conformité Légale</h2>
-         <p className="text-[#9CA3AF] mt-2">Vos documents d'identité pour validation de votre profil.</p>
+         <h2 className="text-2xl font-bold text-white">Conformitï¿½ Lï¿½gale</h2>
+         <p className="text-[#9CA3AF] mt-2">Vos documents d'identitï¿½ pour validation de votre profil.</p>
 -        <div className="bg-[#3B82F6]/10 text-[#3B82F6] p-3 rounded-lg text-sm mt-4 font-medium flex items-center justify-center">
 -             <FileCheck className="mr-2" size={18} />
--             Vérifiez la lisibilité de vos documents avant d'envoyer.
+-             Vï¿½rifiez la lisibilitï¿½ de vos documents avant d'envoyer.
 +        <div className={cn(driverInfoBannerClassName, 'bg-[#f29200]/10 border-[#f29200]/20 text-slate-200 text-sm mt-4 font-medium flex items-center justify-center')}>
 +          <FileCheck className="mr-2" size={18} />
-+          Vérifiez la lisibilité de vos documents avant d'envoyer.
++          Vï¿½rifiez la lisibilitï¿½ de vos documents avant d'envoyer.
          </div>
        </div>
  
        <form onSubmit={handleSubmit} className="space-y-6">
 -        
--        {/* Card 1: Identité */}
+-        {/* Card 1: Identitï¿½ */}
 -        <div className="bg-[#1A1A1A] p-6 rounded-xl border border-white/[0.05] shadow-[0_4px_20px_rgba(0,0,0,0.4)] space-y-4">
--            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Pièce d'Identité ou Passeport</h3>
+-            <h3 className="text-lg font-semibold text-white border-b border-white/[0.08] pb-2">Piï¿½ce d'Identitï¿½ ou Passeport</h3>
 -            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 -                {renderFileInput("Recto", "idFront")}
 -                {renderFileInput("Verso", "idBack")}
 -            </div>
-+        {/* Section 1: Admissibilité au travail */}
++        {/* Section 1: Admissibilitï¿½ au travail */}
 +        <div className={driverSectionCardClassName}>
 +          <h3 className={driverSectionTitleClassName}>
-+            Preuve d'admissibilité au travail
++            Preuve d'admissibilitï¿½ au travail
 +          </h3>
 +          <p className="text-xs text-[#9CA3AF]">
-+            Veuillez téléverser un document prouvant votre droit de travailler (Passeport, Certificat de naissance, Résidence
++            Veuillez tï¿½lï¿½verser un document prouvant votre droit de travailler (Passeport, Certificat de naissance, Rï¿½sidence
 +            permanente ou Permis de travail).
 +          </p>
 +          <div className="grid grid-cols-1 gap-4">
-+            {renderFileInput('Preuve d\'admissibilité', 'workEligibility')}
++            {renderFileInput('Preuve d\'admissibilitï¿½', 'workEligibility')}
 +          </div>
          </div>
  
@@ -4917,14 +4917,14 @@ index 83b90d6..32cad89 100644
 -            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 -                {renderFileInput("Recto", "licenseFront")}
 -                {renderFileInput("Verso", "licenseBack")}
-+        {/* Section 2: Conduite & Permis (masqué pour les livreurs vélo) */}
++        {/* Section 2: Conduite & Permis (masquï¿½ pour les livreurs vï¿½lo) */}
 +        {!isVelo && (
 +          <>
 +            <div className={driverSectionCardClassName}>
 +              <h3 className={driverSectionTitleClassName}>Classe de Permis & Conduite</h3>
 +              <div className="grid grid-cols-1 gap-4">
 +                 <InputField
-+                  label="Numéro de permis de conduire"
++                  label="Numï¿½ro de permis de conduire"
 +                  value={files.licenseNumber}
 +                  onChange={(e) => setFiles((prev) => ({ ...prev, licenseNumber: e.target.value }))}
 +                  placeholder="Ex: A-1234-567890-12"
@@ -4935,20 +4935,20 @@ index 83b90d6..32cad89 100644
 +                  value={files.licenseClass}
 +                  onChange={(e) => setFiles((prev) => ({ ...prev, licenseClass: e.target.value }))}
 +                  options={[
-+                    { value: '', label: 'Sélectionnez la classe de votre permis' },
++                    { value: '', label: 'Sï¿½lectionnez la classe de votre permis' },
 +                    { value: 'Classe 4', label: 'Classe 4 (Commercial / Rideshare)' },
 +                    { value: 'Classe 1', label: 'Classe 1 (Professionnel / Poids lourd)' },
 +                    { value: 'Classe 2', label: 'Classe 2 (Autobus)' },
 +                    { value: 'Classe 3', label: 'Classe 3 (Camion lourd)' },
-+                    { value: 'Classe 5', label: 'Classe 5 (Standard / Véhicule léger)' },
-+                    { value: 'Autre', label: 'Autre / Équivalent' },
++                    { value: 'Classe 5', label: 'Classe 5 (Standard / Vï¿½hicule lï¿½ger)' },
++                    { value: 'Autre', label: 'Autre / ï¿½quivalent' },
 +                  ]}
 +                  required
 +                />
 +                <div className="mt-4">
-+                  <h4 className="text-sm font-semibold text-white mb-2">Dossier de conduite récent (Driver's Abstract)</h4>
++                  <h4 className="text-sm font-semibold text-white mb-2">Dossier de conduite rï¿½cent (Driver's Abstract)</h4>
 +                  <p className="text-xs text-[#9CA3AF] mb-3">
-+                    Téléversez l'extrait officiel de votre dossier de conduite de moins de 30 jours.
++                    Tï¿½lï¿½versez l'extrait officiel de votre dossier de conduite de moins de 30 jours.
 +                  </p>
 +                  {renderFileInput('Dossier de conduite', 'driversAbstract')}
 +                </div>
@@ -4977,13 +4977,13 @@ index 83b90d6..32cad89 100644
              Retour
            </button>
 -           <button type="submit" disabled={loading} className="w-2/3 bg-[#f29200] text-white font-bold py-4 rounded-[28px] hover:bg-[#e68600] transition-colors flex justify-center items-center shadow-[0_0_20px_rgba(242,146,0,0.4)]">
--             {loading ? <Loader2 className="animate-spin mr-2" /> : null} Valider les documents
+-             {loading ? <Loader2 className="animate-spin mr-2" /> : null} Continuer
 +          <button
 +            type="submit"
 +            disabled={loading}
 +            className={cn(driverPrimaryButtonClassName, 'flex-[2]')}
 +          >
-+            {loading ? <Loader2 className="animate-spin mr-2" /> : null} Valider les documents
++            {loading ? <Loader2 className="animate-spin mr-2" /> : null} Continuer
            </button>
          </div>
        </form>
@@ -5012,16 +5012,16 @@ index 4bc5bc9..62ac7dd 100644
 +} from './driverOnboardingStyles';
  
 -/**
-- * Step5Monetization — Paiement & Monétisation
+- * Step5Monetization ï¿½ Paiement & Monï¿½tisation
 - *
-- * Informe le chauffeur que ses informations bancaires seront collectées
-- * de manière sécurisée via le formulaire Stripe Connect après l'inscription.
+- * Informe le chauffeur que ses informations bancaires seront collectï¿½es
+- * de maniï¿½re sï¿½curisï¿½e via le formulaire Stripe Connect aprï¿½s l'inscription.
 - *
-- * ? SUPPRIMÉ : formulaire IBAN/BIC (non-conforme PCI DSS)
-- * ? REMPLACÉ : message d'information + redirection Stripe onboarding
+- * ? SUPPRIMï¿½ : formulaire IBAN/BIC (non-conforme PCI DSS)
+- * ? REMPLACï¿½ : message d'information + redirection Stripe onboarding
 - */
 -
--// Les données bancaires ne sont plus collectées ici — Stripe les collecte via onboarding
+-// Les donnï¿½es bancaires ne sont plus collectï¿½es ici ï¿½ Stripe les collecte via onboarding
  export type Step5FormData = {
    country: string;
 +  taxId?: string;
@@ -5053,7 +5053,7 @@ index 4bc5bc9..62ac7dd 100644
      e.preventDefault();
 -    onSubmitFinal({ country: ACTIVE_MARKET });
 +    if (isChauffeur && taxId.trim().length < 5) {
-+      showError("Le numéro d'enregistrement fiscal est obligatoire pour le service VTC.");
++      showError("Le numï¿½ro d'enregistrement fiscal est obligatoire pour le service VTC.");
 +      return;
 +    }
 +    onSubmitFinal({
@@ -5065,7 +5065,7 @@ index 4bc5bc9..62ac7dd 100644
    return (
      <div className="space-y-6">
        <div className="text-center mb-8">
-         <h2 className="text-2xl font-bold text-white">Paiement & Monétisation</h2>
+         <h2 className="text-2xl font-bold text-white">Paiement & Monï¿½tisation</h2>
          <p className="text-[#9CA3AF] mt-2">Configuration de vos virements</p>
        </div>
  
@@ -5074,17 +5074,17 @@ index 4bc5bc9..62ac7dd 100644
 +        <div className={driverSectionCardClassName}>
 +          <h3 className={driverSectionTitleClassName}>Informations Fiscales</h3>
 +          <InputField
-+            label="Numéro fiscal ou d'entreprise (TPS-TVH, TVA, SIRET)"
++            label="Numï¿½ro fiscal ou d'entreprise (TPS-TVH, TVA, SIRET)"
 +            value={taxId}
 +            onChange={(e) => setTaxId(e.target.value)}
 +            placeholder="Ex: 123456789 RT0001 (Canada) ou SIRET (France)"
-+            helperText="Requis réglementairement pour émettre les factures des trajets VTC."
++            helperText="Requis rï¿½glementairement pour ï¿½mettre les factures des trajets VTC."
 +            required
 +          />
 +        </div>
 +      )}
 +
-       {/* Bannière Stripe */}
+       {/* Banniï¿½re Stripe */}
 -      <div className="bg-[#635bff]/10 border border-[#635bff]/30 p-5 rounded-xl flex items-start gap-4">
 -        <div className="w-10 h-10 rounded-full bg-[#635bff]/20 flex items-center justify-center flex-shrink-0">
 -          <Lock className="w-5 h-5 text-[#635bff]" />
@@ -5093,17 +5093,17 @@ index 4bc5bc9..62ac7dd 100644
 +          <Lock className="w-5 h-5 text-[#f29200]" />
          </div>
          <div>
-           <p className="font-semibold text-white text-sm">Coordonnées bancaires sécurisées par Stripe</p>
+           <p className="font-semibold text-white text-sm">Coordonnï¿½es bancaires sï¿½curisï¿½es par Stripe</p>
            <p className="text-xs text-[#9CA3AF] mt-1 leading-relaxed">
-             Pour votre sécurité et conformité <strong>PCI DSS</strong>, vos informations bancaires
-             sont collectées directement via le formulaire sécurisé de Stripe — jamais stockées
+             Pour votre sï¿½curitï¿½ et conformitï¿½ <strong>PCI DSS</strong>, vos informations bancaires
+             sont collectï¿½es directement via le formulaire sï¿½curisï¿½ de Stripe ï¿½ jamais stockï¿½es
              sur nos serveurs.
            </p>
          </div>
        </div>
 @@ -65,27 +95,27 @@ export default function Step5Monetization({
            <p className="text-xs font-medium text-[#9CA3AF]">PCI DSS</p>
-           <p className="text-xs text-[#4B5563]">Certifié</p>
+           <p className="text-xs text-[#4B5563]">Certifiï¿½</p>
          </div>
        </div>
  
@@ -5274,7 +5274,7 @@ index 0000000..28ca492
 +  it('keeps navigation actions on the shared CTA contracts', () => {
 +    render(<Step2Identity onNext={jest.fn()} onBack={jest.fn()} />);
 +
-+    expect(screen.getByText('Identité').parentElement).toHaveClass('rounded-xl');
++    expect(screen.getByText('Identitï¿½').parentElement).toHaveClass('rounded-xl');
 +    expect(screen.getByRole('button', { name: /retour/i })).toHaveClass('border-white/10');
 +    expect(screen.getByRole('button', { name: /continuer/i })).toHaveClass('from-[#f29200]');
 +  });
@@ -5300,7 +5300,7 @@ index 0000000..28ca492
 +
 +    expect(screen.getByText(/Format international requis, ex\. \+237/i)).toBeInTheDocument();
 +
-+    fireEvent.change(screen.getByLabelText(/Numéro de Téléphone/i), {
++    fireEvent.change(screen.getByLabelText(/Numï¿½ro de Tï¿½lï¿½phone/i), {
 +      target: { value: '+33 6 12 34 56 78' },
 +    });
 +
@@ -5363,13 +5363,13 @@ index 0000000..b45014a
 +    render(<Step4Compliance onNext={jest.fn()} onBack={jest.fn()} />);
 +
 +    expect(screen.getByRole('button', { name: /retour/i })).toHaveClass('border-white/10');
-+    expect(screen.getByRole('button', { name: /valider les documents/i })).toHaveClass('from-[#f29200]');
++    expect(screen.getByRole('button', { name: /Continuer/i })).toHaveClass('from-[#f29200]');
 +  });
 +
 +  it('uses a subdued shared information banner instead of a dominant custom treatment', () => {
 +    render(<Step4Compliance onNext={jest.fn()} onBack={jest.fn()} />);
 +
-+    const banner = screen.getByText(/Vérifiez la lisibilité/i).parentElement;
++    const banner = screen.getByText(/Vï¿½rifiez la lisibilitï¿½/i).parentElement;
 +
 +    expect(banner).toHaveClass('rounded-xl');
 +    expect(banner).toHaveClass('border');
@@ -5600,7 +5600,7 @@ index 13009dc..51e9cbf 100644
 +                onClick={handleFixRejection}
 +                className="w-full h-14 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform"
 +              >
-                 <MaterialIcon name="edit" size="md" className="mr-2" /> Mettre à jour mon dossier
+                 <MaterialIcon name="edit" size="md" className="mr-2" /> Mettre ï¿½ jour mon dossier
                </button>
              )}
 -            <button onClick={handleLogout} className="glass-card w-full h-14 flex items-center justify-center rounded-2xl border border-white/10 text-slate-300 font-bold active:scale-[0.98] transition-transform">
@@ -5608,7 +5608,7 @@ index 13009dc..51e9cbf 100644
 +              onClick={handleLogout}
 +              className="glass-card w-full h-14 flex items-center justify-center rounded-2xl border border-white/10 text-slate-300 font-bold active:scale-[0.98] transition-transform"
 +            >
-               <MaterialIcon name="logout" size="md" className="mr-2" /> Se déconnecter
+               <MaterialIcon name="logout" size="md" className="mr-2" /> Se dï¿½connecter
              </button>
            </div>
          </div>
@@ -5620,7 +5620,7 @@ index 13009dc..51e9cbf 100644
      <div className="min-h-screen bg-background font-sans text-slate-100 antialiased flex items-center justify-center p-4">
        <ToastContainer toasts={toasts} onRemove={removeToast} position="top-right" />
  
--      {/* Indicateur connectivité */}
+-      {/* Indicateur connectivitï¿½ */}
 -      <div className="fixed top-4 right-4 z-50">
 -        {isOnline ? (
 -          <div className="flex items-center bg-green-500/10 border border-green-500/20 text-green-400 px-3 py-2 rounded-xl">
@@ -5636,7 +5636,7 @@ index 13009dc..51e9cbf 100644
 -      </div>
 -
        <div className="glass-card rounded-2xl w-full max-w-2xl overflow-hidden">
--        {/* Progress bar — 6 étapes: 0 à 5 */}
+-        {/* Progress bar ï¿½ 6 ï¿½tapes: 0 ï¿½ 5 */}
          <div className="h-2 w-full bg-white/5">
            <div
              className="h-full bg-gradient-to-r from-primary to-[#ffae33] transition-all duration-300"
@@ -5826,16 +5826,16 @@ index e5119e5..f0e3e0e 100644
        // Update local state
        setUserData(prev => ({ ...prev, ...data }));
        setEditing(false);
--      showSuccess("Profil mis à jour avec succès");
+-      showSuccess("Profil mis ï¿½ jour avec succï¿½s");
 +      showSuccess("Profil mis Ã  jour avec succÃ¨s");
      } catch (error) {
--      // Logger les détails de l'erreur pour le debugging
--      logFirestoreError(error, "mise à jour du profil client");
+-      // Logger les dï¿½tails de l'erreur pour le debugging
+-      logFirestoreError(error, "mise ï¿½ jour du profil client");
 +      // Logger les dÃ©tails de l'erreur pour le debugging
 +      logFirestoreError(error, "mise Ã  jour du profil client");
  
--      // Afficher un message d'erreur explicite à l'utilisateur
--      const errorMessage = getFirestoreErrorMessage(error, "mise à jour de votre profil");
+-      // Afficher un message d'erreur explicite ï¿½ l'utilisateur
+-      const errorMessage = getFirestoreErrorMessage(error, "mise ï¿½ jour de votre profil");
 +      // Afficher un message d'erreur explicite Ã  l'utilisateur
 +      const errorMessage = getFirestoreErrorMessage(error, "mise Ã  jour de votre profil");
        showError(errorMessage);
@@ -5847,7 +5847,7 @@ index e5119e5..f0e3e0e 100644
  
    const fetchHistory = async (userId: string) => {
      try {
--      // Obtenir la date du début de la journée (00:00:00)
+-      // Obtenir la date du dï¿½but de la journï¿½e (00:00:00)
 +      // Obtenir la date du dÃ©but de la journÃ©e (00:00:00)
        const now = new Date();
        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
@@ -5870,7 +5870,7 @@ index e5119e5..f0e3e0e 100644
        setHistory(combinedHistory.slice(0, 5));
      } catch (error) {
        console.error("Erreur chargement historique:", error);
--      // Ne pas bloquer l'affichage du profil si l'historique échoue
+-      // Ne pas bloquer l'affichage du profil si l'historique ï¿½choue
 +      // Ne pas bloquer l'affichage du profil si l'historique Ã©choue
      }
    };
@@ -5882,8 +5882,8 @@ index e5119e5..f0e3e0e 100644
        await signOut(auth);
        router.replace('/login');
      } catch (err) {
--      console.error('Erreur de déconnexion:', err);
--      showError("Impossible de vous déconnecter. Réessayez.");
+-      console.error('Erreur de dï¿½connexion:', err);
+-      showError("Impossible de vous dï¿½connecter. Rï¿½essayez.");
 +      console.error('Erreur de dÃ©connexion:', err);
 +      showError("Impossible de vous dÃ©connecter. RÃ©essayez.");
        setLoggingOut(false);
@@ -5897,18 +5897,18 @@ index e5119e5..f0e3e0e 100644
        const requestAccountDeletion = httpsCallable(functions, 'requestAccountDeletion');
        await requestAccountDeletion({ confirm: 'DELETE_MY_ACCOUNT' });
        try { await signOut(auth); } catch {}
--      showSuccess('Votre compte a été supprimé.');
+-      showSuccess('Votre compte a ï¿½tï¿½ supprimï¿½.');
 +      showSuccess('Votre compte a Ã©tÃ© supprimÃ©.');
        router.replace('/login');
      } catch (err: unknown) {
        const error = err as { code?: string; message?: string };
        console.error('Erreur suppression compte:', error);
--      let msg = "Impossible de supprimer le compte. Réessayez plus tard.";
+-      let msg = "Impossible de supprimer le compte. Rï¿½essayez plus tard.";
 +      let msg = "Impossible de supprimer le compte. RÃ©essayez plus tard.";
        if (error?.message?.includes('courses') || error?.message?.includes('commandes')) {
          msg = "Vous avez des courses ou commandes en cours. Annulez-les ou attendez leur fin avant de supprimer le compte.";
        } else if (error?.code === 'functions/resource-exhausted') {
--        msg = "Trop de tentatives. Réessayez dans une heure.";
+-        msg = "Trop de tentatives. Rï¿½essayez dans une heure.";
 +        msg = "Trop de tentatives. RÃ©essayez dans une heure.";
        }
        showError(msg);
@@ -5931,15 +5931,15 @@ index e5119e5..f0e3e0e 100644
                    label="Email"
                    value={userData.email}
                    disabled
--                  helperText="L'adresse email ne peut pas être modifiée."
+-                  helperText="L'adresse email ne peut pas ï¿½tre modifiï¿½e."
 +                  helperText="L'adresse email ne peut pas Ãªtre modifiÃ©e."
                />
  
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                  <InputField
                    {...form.register('firstName')}
--                  label="Prénom"
--                  placeholder="Prénom"
+-                  label="Prï¿½nom"
+-                  placeholder="Prï¿½nom"
 +                  label="PrÃ©nom"
 +                  placeholder="PrÃ©nom"
                    required
@@ -5956,7 +5956,7 @@ index e5119e5..f0e3e0e 100644
                   <InputField
                    type="tel"
                    {...form.register('phone')}
--                  label="Numéro de téléphone"
+-                  label="Numï¿½ro de tï¿½lï¿½phone"
 +                  label="NumÃ©ro de tÃ©lÃ©phone"
                    placeholder="514XXXXXXX"
                    helperText="Format sans le code pays (+1)."
@@ -5982,31 +5982,31 @@ index e5119e5..f0e3e0e 100644
 -            <div className="space-y-4">
 -              <div>
 -                <p className="text-sm text-slate-500">Email</p>
--                <p className="font-medium text-white">{userData.email || 'Non renseigné'}</p>
+-                <p className="font-medium text-white">{userData.email || 'Non renseignï¿½'}</p>
 -              </div>
 -              <div>
--                <p className="text-sm text-slate-500">Prénom</p>
--                <p className="font-medium text-white">{userData.firstName || 'Non renseigné'}</p>
+-                <p className="text-sm text-slate-500">Prï¿½nom</p>
+-                <p className="font-medium text-white">{userData.firstName || 'Non renseignï¿½'}</p>
 -              </div>
 -              <div>
 -                <p className="text-sm text-slate-500">Nom</p>
--                <p className="font-medium text-white">{userData.lastName || 'Non renseigné'}</p>
+-                <p className="font-medium text-white">{userData.lastName || 'Non renseignï¿½'}</p>
 -              </div>
 -              <div>
--                <p className="text-sm text-slate-500">Téléphone</p>
--                <p className="font-medium text-white">{userData.phone ? `+1 ${userData.phone}` : 'Non renseigné'}</p>
+-                <p className="text-sm text-slate-500">Tï¿½lï¿½phone</p>
+-                <p className="font-medium text-white">{userData.phone ? `+1 ${userData.phone}` : 'Non renseignï¿½'}</p>
 -              </div>
 -              <div>
 -                <p className="text-sm text-slate-500">Adresse</p>
--                <p className="font-medium text-white">{userData.address || 'Non renseigné'}</p>
+-                <p className="font-medium text-white">{userData.address || 'Non renseignï¿½'}</p>
 -              </div>
 -              <div>
 -                <p className="text-sm text-slate-500">Ville</p>
--                <p className="font-medium text-white">{userData.city || 'Non renseigné'}</p>
+-                <p className="font-medium text-white">{userData.city || 'Non renseignï¿½'}</p>
 -              </div>
 -              <div>
 -                <p className="text-sm text-slate-500">Pays</p>
--                <p className="font-medium text-white">{userData.country || 'Non renseigné'}</p>
+-                <p className="font-medium text-white">{userData.country || 'Non renseignï¿½'}</p>
 -              </div>
 -              <div>
 -                <p className="text-sm text-slate-500">A propos</p>
@@ -6014,15 +6014,15 @@ index e5119e5..f0e3e0e 100644
 +            <div className="rounded-2xl border border-white/[0.04] bg-white/[0.015] px-5 py-4">
 +              <SectionTitle icon="person">Informations personnelles</SectionTitle>
 +              <div className="divide-y divide-white/[0.04]">
-+                <InfoRow label="Prénom" value={userData.firstName} />
++                <InfoRow label="Prï¿½nom" value={userData.firstName} />
 +                <InfoRow label="Nom" value={userData.lastName} />
 +                <InfoRow label="Email" value={userData.email} />
-+                <InfoRow label="Téléphone" value={userData.phone ? `+1 ${userData.phone}` : ""} />
++                <InfoRow label="Tï¿½lï¿½phone" value={userData.phone ? `+1 ${userData.phone}` : ""} />
 +                <InfoRow label="Adresse" value={userData.address} />
 +                <InfoRow label="Ville" value={userData.city} />
 +                <InfoRow label="Pays" value={userData.country} />
 +                <div className="py-2">
-+                  <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">À propos</p>
++                  <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">ï¿½ propos</p>
 +                  <p className="text-[15px] whitespace-pre-line text-white/90">{userData.bio || "Aucune description"}</p>
 +                </div>
                </div>
@@ -6045,7 +6045,7 @@ index e5119e5..f0e3e0e 100644
            </div>
          </GlassCard>
  
--        {/* Payment Setup Banner — Ajouter carte bancaire */}
+-        {/* Payment Setup Banner ï¿½ Ajouter carte bancaire */}
 -        <div
 -          onClick={() => router.push('/auth/setup-payment')}
 -          className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/20 cursor-pointer active:scale-[0.98] transition-transform"
@@ -6056,7 +6056,7 @@ index e5119e5..f0e3e0e 100644
 -            </div>
 -            <div className="flex-1 min-w-0">
 -              <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
--              <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sécurité</p>
+-              <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sï¿½curitï¿½</p>
 -            </div>
 -            <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
 -          </div>
@@ -6064,7 +6064,7 @@ index e5119e5..f0e3e0e 100644
 -
 -        {/* Account Settings */}
 -        <div className="mt-8">
--          <h2 className="text-xl font-bold text-white mb-4">Paramètres du compte</h2>
+-          <h2 className="text-xl font-bold text-white mb-4">Paramï¿½tres du compte</h2>
 -          <GlassCard className="p-2 divide-y divide-white/[0.06]">
 -            <button
 -              onClick={handleLogout}
@@ -6075,7 +6075,7 @@ index e5119e5..f0e3e0e 100644
 -                <MaterialIcon name="logout" className="text-slate-300" />
 -              </div>
 -              <div className="flex-1 min-w-0">
--                <p className="text-white font-medium text-sm">Se déconnecter</p>
+-                <p className="text-white font-medium text-sm">Se dï¿½connecter</p>
 -                <p className="text-slate-400 text-xs mt-0.5">Quitter votre session sur cet appareil</p>
 -              </div>
 -              {loggingOut ? (
@@ -6102,7 +6102,7 @@ index e5119e5..f0e3e0e 100644
                </div>
                <div className="flex-1 min-w-0">
 -                <p className="text-destructive font-medium text-sm">Supprimer mon compte</p>
--                <p className="text-slate-400 text-xs mt-0.5">Action irréversible — toutes vos données seront effacées</p>
+-                <p className="text-slate-400 text-xs mt-0.5">Action irrï¿½versible ï¿½ toutes vos donnï¿½es seront effacï¿½es</p>
 +                <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
 +                <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sÃ©curitÃ©</p>
                </div>
@@ -6130,15 +6130,15 @@ index e5119e5..f0e3e0e 100644
                  </div>
                  <h3 className="text-xl font-bold text-white">Supprimer votre compte ?</h3>
                  <p className="text-slate-400 text-sm mt-2">
--                  Cette action est <strong className="text-destructive">irréversible</strong>. Vos données personnelles seront supprimées et votre historique de courses sera anonymisé conformément au RGPD.
+-                  Cette action est <strong className="text-destructive">irrï¿½versible</strong>. Vos donnï¿½es personnelles seront supprimï¿½es et votre historique de courses sera anonymisï¿½ conformï¿½ment au RGPD.
 +                  Cette action est <strong className="text-destructive">irrÃ©versible</strong>. Vos donnÃ©es personnelles seront supprimÃ©es et votre historique de courses sera anonymisÃ© conformÃ©ment au RGPD.
                  </p>
                </div>
  
                <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-4 text-xs text-slate-300 space-y-1">
--                <p>• Profil, photos et documents : supprimés</p>
--                <p>• Historique financier : anonymisé (obligation légale)</p>
--                <p>• Vous serez immédiatement déconnecté</p>
+-                <p>ï¿½ Profil, photos et documents : supprimï¿½s</p>
+-                <p>ï¿½ Historique financier : anonymisï¿½ (obligation lï¿½gale)</p>
+-                <p>ï¿½ Vous serez immï¿½diatement dï¿½connectï¿½</p>
 +                <p>â€¢ Profil, photos et documents : supprimÃ©s</p>
 +                <p>â€¢ Historique financier : anonymisÃ© (obligation lÃ©gale)</p>
 +                <p>â€¢ Vous serez immÃ©diatement dÃ©connectÃ©</p>
@@ -6163,7 +6163,7 @@ index e5119e5..f0e3e0e 100644
            </div>
          )}
  
--        {/* Section Dernières commandes */}
+-        {/* Section Derniï¿½res commandes */}
 +        {/* Section DerniÃ¨res commandes */}
          <div className="mt-8">
 -          <div className="flex justify-between items-center mb-4">
@@ -6190,7 +6190,7 @@ index e5119e5..f0e3e0e 100644
                      <div>
                        <p className="font-semibold text-white">{type} - {destination || description}</p>
                        <p className="text-sm text-slate-400">
--                        {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} • {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
+-                        {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} ï¿½ {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} ï¿½ {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
 +                        {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} Ã  {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} â€¢ {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
                        </p>
                      </div>
@@ -6215,7 +6215,7 @@ index e5119e5..f0e3e0e 100644
          </div>
 +
 +        <div className="mt-8">
-+          <SectionTitle icon="shield">Compte et sécurité</SectionTitle>
++          <SectionTitle icon="shield">Compte et sï¿½curitï¿½</SectionTitle>
 +          <GlassCard className="divide-y divide-white/[0.04] rounded-2xl">
 +            <button
 +              onClick={handleLogout}
@@ -6225,7 +6225,7 @@ index e5119e5..f0e3e0e 100644
 +              <div className="flex items-center gap-3">
 +                <MaterialIcon name="logout" className="text-[20px] text-orange-400" />
 +                <div className="text-left">
-+                  <p className="text-sm font-medium text-orange-400">Se déconnecter</p>
++                  <p className="text-sm font-medium text-orange-400">Se dï¿½connecter</p>
 +                  <p className="text-xs text-slate-400">Quitter votre session sur cet appareil</p>
 +                </div>
 +              </div>
@@ -6240,7 +6240,7 @@ index e5119e5..f0e3e0e 100644
 +                <MaterialIcon name="delete_forever" className="text-[20px] text-red-400" />
 +                <div className="text-left">
 +                  <p className="text-sm font-medium text-red-400">Supprimer mon compte</p>
-+                  <p className="text-xs text-slate-400">Action irréversible — toutes vos données seront effacées</p>
++                  <p className="text-xs text-slate-400">Action irrï¿½versible ï¿½ toutes vos donnï¿½es seront effacï¿½es</p>
 +                </div>
 +              </div>
 +              <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
@@ -6291,16 +6291,16 @@ index 0000000..610c209
 +  it('shows helper text for GPS-based pickup precision', () => {
 +    render(
 +      <AddressInput
-+        label="Point de départ"
++        label="Point de dï¿½part"
 +        value="Douala"
 +        onChange={jest.fn()}
 +        onSelect={jest.fn()}
 +        autocompleteService={null}
-+        helperText="Position GPS · ±8m · Très précis"
++        helperText="Position GPS ï¿½ ï¿½8m ï¿½ Trï¿½s prï¿½cis"
 +      />
 +    );
 +
-+    expect(screen.getByText('Position GPS · ±8m · Très précis')).toBeInTheDocument();
++    expect(screen.getByText('Position GPS ï¿½ ï¿½8m ï¿½ Trï¿½s prï¿½cis')).toBeInTheDocument();
 +  });
 +
 +  it('lets the user correct the pickup manually and select a suggestion', async () => {
@@ -6310,12 +6310,12 @@ index 0000000..610c209
 +
 +    render(
 +      <AddressInput
-+        label="Point de départ"
++        label="Point de dï¿½part"
 +        value="Dou"
 +        onChange={onChange}
 +        onSelect={onSelect}
 +        autocompleteService={{} as never}
-+        helperText="Adresse corrigée manuellement."
++        helperText="Adresse corrigï¿½e manuellement."
 +      />
 +    );
 +
@@ -6342,7 +6342,7 @@ index be9cc29..0999460 100644
  /**
   * Composant AddressInput
   * 
-  * Champ de saisie avec autocomplétion d'adresses Google Places
+  * Champ de saisie avec autocomplï¿½tion d'adresses Google Places
   */
  
  'use client';
@@ -6388,11 +6388,11 @@ index be9cc29..0999460 100644
      countryRestriction,
    });
  
-   // Réessayer l'autocomplétion si le service devient disponible et qu'il y a déjà du texte
+   // Rï¿½essayer l'autocomplï¿½tion si le service devient disponible et qu'il y a dï¿½jï¿½ du texte
 @@ -97,51 +104,52 @@ export const AddressInput = ({
    const handleFocus = () => {
      setIsFocused(true);
-     // Réessayer l'autocomplétion si on a déjà du texte
+     // Rï¿½essayer l'autocomplï¿½tion si on a dï¿½jï¿½ du texte
      if (value.length >= 3) {
        getSuggestions(value);
      }
@@ -6424,7 +6424,7 @@ index be9cc29..0999460 100644
 +            driverFieldClassName,
 +            error ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-white/[0.08]'
 +          )}
-           style={{ fontSize: '16px' }} // Évite le zoom automatique sur iOS
+           style={{ fontSize: '16px' }} // ï¿½vite le zoom automatique sur iOS
          />
  
          {(loading || externalLoading) && (
@@ -6465,7 +6465,7 @@ index 16db007..71a91a1 100644
      return (
 -      <div className="bg-[#1A1A1A] p-4 rounded-lg border border-white/[0.06] text-center text-[#9CA3AF]">
 +      <div className="bg-[#1A1A1A] p-4 rounded-lg border border-white/[0.06] text-center text-slate-300">
-         <p>Sélectionnez un départ et une destination pour voir l'estimation</p>
+         <p>Sï¿½lectionnez un dï¿½part et une destination pour voir l'estimation</p>
        </div>
      );
    }
@@ -6484,15 +6484,15 @@ index 16db007..71a91a1 100644
          </div>
  
          <div className="flex justify-between items-center">
--          <span className="text-sm text-slate-400">Durée estimée</span>
-+          <span className="text-sm text-slate-300">Durée estimée</span>
+-          <span className="text-sm text-slate-400">Durï¿½e estimï¿½e</span>
++          <span className="text-sm text-slate-300">Durï¿½e estimï¿½e</span>
            <span className="text-sm font-semibold text-white">{duration} min</span>
          </div>
        </div>
  
        <div className="border-t border-white/[0.06] pt-3 mt-3">
          <div className="flex justify-between items-center">
-           <span className="text-base font-semibold text-white">Prix estimé</span>
+           <span className="text-base font-semibold text-white">Prix estimï¿½</span>
            <span className="text-2xl font-bold text-[#f29200]">{formatCurrencyWithCode(price)}</span>
          </div>
        </div>
@@ -6529,13 +6529,13 @@ index 0dd8259..f9724f3 100644
 +import type { BookingStatus } from '@/types/booking';
  import type { StripePaymentMethod } from '@/types/stripe';
  
- //  Schéma Zod de validation pour la création de course (medJira.md #85)
+ //  Schï¿½ma Zod de validation pour la crï¿½ation de course (medJira.md #85)
  const BookingSchema = z.object({
    userId: z.string().min(1, 'UID utilisateur requis'),
    userEmail: z.string().email('Email invalide').nullable().optional(),
 +  rideMode: z.enum(['immediate', 'scheduled']),
-   pickup: z.string().min(5, 'Adresse de départ trop courte (min 5 caractères)'),
-   destination: z.string().min(5, 'Adresse de destination trop courte (min 5 caractères)'),
+   pickup: z.string().min(5, 'Adresse de dï¿½part trop courte (min 5 caractï¿½res)'),
+   destination: z.string().min(5, 'Adresse de destination trop courte (min 5 caractï¿½res)'),
    pickupLocation: z.object({
      lat: z.number().min(-90).max(90),
      lng: z.number().min(-180).max(180),
@@ -6545,10 +6545,10 @@ index 0dd8259..f9724f3 100644
      lat: z.number().min(-90).max(90),
      lng: z.number().min(-180).max(180),
    }).optional(),
-   distance: z.number().positive('Distance doit être positive'),
-   duration: z.number().positive('Durée doit être positive'),
-   price: z.number().positive('Prix doit être positif'),
-   carType: z.string().min(1, 'Type de véhicule requis'),
+   distance: z.number().positive('Distance doit ï¿½tre positive'),
+   duration: z.number().positive('Durï¿½e doit ï¿½tre positive'),
+   price: z.number().positive('Prix doit ï¿½tre positif'),
+   carType: z.string().min(1, 'Type de vï¿½hicule requis'),
 +  scheduledAt: z.date().nullable().optional(),
    bonus: z.number().min(0).optional(),
    bookedForSomeoneElse: z.boolean().optional(),
@@ -6571,7 +6571,7 @@ index 0dd8259..f9724f3 100644
  }
  
  export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormProps) => {
-   //  Fonction pour déclencher le haptic feedback (medJira.md #93)
+   //  Fonction pour dï¿½clencher le haptic feedback (medJira.md #93)
    const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Light) => {
      if (Capacitor.isNativePlatform()) {
        try {
@@ -6592,12 +6592,12 @@ index 0dd8259..f9724f3 100644
 +  const [scheduledDate, setScheduledDate] = useState('');
 +  const [scheduledTime, setScheduledTime] = useState('');
  
-   // Nouveaux états pour Bonus et Recherche Auto
+   // Nouveaux ï¿½tats pour Bonus et Recherche Auto
    const [bonus, setBonus] = useState(0);
    const [showBonus, setShowBonus] = useState(false);
    const [autoSearchEnabled, setAutoSearchEnabled] = useState(false);
  
-   // États pour la réservation pour un tiers
+   // ï¿½tats pour la rï¿½servation pour un tiers
    const [bookForSomeoneElse, setBookForSomeoneElse] = useState(false);
    const [passengerName, setPassengerName] = useState('');
    const [passengerPhone, setPassengerPhone] = useState('');
@@ -6616,7 +6616,7 @@ index 0dd8259..f9724f3 100644
 +    try {
 +      await getCurrentPosition('booking');
 +    } catch (error) {
-+      logger.error('Erreur lors de la récupération de la position', { error });
++      logger.error('Erreur lors de la rï¿½cupï¿½ration de la position', { error });
 +    }
 +  }, [getCurrentPosition]);
 +
@@ -6633,9 +6633,9 @@ index 0dd8259..f9724f3 100644
 +    setScheduledTime(now.toTimeString().slice(0, 5));
 +  };
 +
-   // Récupérer la position GPS //ceci est OK
+   // Rï¿½cupï¿½rer la position GPS //ceci est OK
    /*useEffect(() => {
-     // Attendre que Google Maps soit chargé
+     // Attendre que Google Maps soit chargï¿½
      if (!mapsLoaded) return;
  
      const fetchLocation = async () => {
@@ -6657,13 +6657,13 @@ index 0dd8259..f9724f3 100644
 +    if (rideMode === 'scheduled') {
 +      const scheduledAt = buildScheduledAt();
 +      if (!scheduledDate || !scheduledTime || !scheduledAt) {
-+        setError('Veuillez choisir une date et une heure de départ');
++        setError('Veuillez choisir une date et une heure de dï¿½part');
 +        return;
 +      }
 +
 +      const earliestAllowed = new Date(Date.now() + 5 * 60 * 1000);
 +      if (scheduledAt < earliestAllowed) {
-+        setError('La réservation doit être programmée au moins 5 minutes à l\'avance');
++        setError('La rï¿½servation doit ï¿½tre programmï¿½e au moins 5 minutes ï¿½ l\'avance');
 +        return;
 +      }
 +    }
@@ -6674,7 +6674,7 @@ index 0dd8259..f9724f3 100644
          return;
        }
        if (!passengerPhone.trim() || passengerPhone.trim().length < 8) {
-         setError('Veuillez entrer un numéro de téléphone valide pour le passager');
+         setError('Veuillez entrer un numï¿½ro de tï¿½lï¿½phone valide pour le passager');
          return;
        }
      }
@@ -6682,9 +6682,9 @@ index 0dd8259..f9724f3 100644
      }
    };
  
-   // Appelé par StripePaymentElement après autorisation de la carte
+   // Appelï¿½ par StripePaymentElement aprï¿½s autorisation de la carte
    const handleCardAuthorized = async (paymentIntentId: string) => {
-     logger.info('Carte autorisée', { paymentIntentId, bookingId: pendingBookingId });
+     logger.info('Carte autorisï¿½e', { paymentIntentId, bookingId: pendingBookingId });
      setShowConfirmModal(false);
      setModalStep('summary');
  
@@ -6703,7 +6703,7 @@ index 0dd8259..f9724f3 100644
 +    if (rideMode === 'immediate' && onSearchDriver) onSearchDriver();
    };
  
-   // Crée la réservation Firestore avec la méthode de paiement choisie
+   // Crï¿½e la rï¿½servation Firestore avec la mï¿½thode de paiement choisie
    const createBookingInternal = async (paymentMethod: StripePaymentMethod): Promise<string | null> => {
      try {
 +      const bookingStatus: BookingStatus = rideMode === 'scheduled' ? 'scheduled' : 'pending';
@@ -6763,8 +6763,8 @@ index 0dd8259..f9724f3 100644
          onSearchDriver();
        }
      } catch (err: unknown) {
-       logger.error('Erreur création course', { error: err });
-       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la création de la course';
+       logger.error('Erreur crï¿½ation course', { error: err });
+       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la crï¿½ation de la course';
        setError(errorMessage);
  
        if (Capacitor.isNativePlatform()) {
@@ -6772,7 +6772,7 @@ index 0dd8259..f9724f3 100644
            await Haptics.notification({ type: NotificationType.Error });
 @@ -600,20 +666,44 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
            onSelect={handlePickupSelect}
-           placeholder="Où êtes-vous ?"
+           placeholder="Oï¿½ ï¿½tes-vous ?"
            autocompleteService={autocompleteService}
            location={currentLocation}
            required
@@ -6791,7 +6791,7 @@ index 0dd8259..f9724f3 100644
 +            {geoLoading || loadingAddress ? (
 +              <>
 +                <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" />
-+                Détection en cours
++                Dï¿½tection en cours
 +              </>
 +            ) : (
 +              <>
@@ -6811,12 +6811,12 @@ index 0dd8259..f9724f3 100644
            value={destinationAddress}
            onChange={setDestinationAddress}
            onSelect={handleDestinationSelect}
-           placeholder="Où allez-vous ?"
+           placeholder="Oï¿½ allez-vous ?"
            autocompleteService={autocompleteService}
            location={currentLocation}
            required
 @@ -634,20 +724,21 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
-                   : 'Chargement des types de véhicules...'}
+                   : 'Chargement des types de vï¿½hicules...'}
                </p>
              </div>
            ) : (
@@ -6847,7 +6847,7 @@ index 0dd8259..f9724f3 100644
            loading={estimating}
          />
  
-         {/* Options Avancées (Bonus & Recherche Auto) */}
+         {/* Options Avancï¿½es (Bonus & Recherche Auto) */}
 -        <div className="space-y-4 pt-2 border-t border-white/[0.05]">
 +        <RideTimingSelector
 +          mode={rideMode}
@@ -6904,13 +6904,13 @@ index 0dd8259..f9724f3 100644
                  Recherche automatique
                </label>
                <p className="text-xs text-[#9CA3AF]">
-                 Réessayer automatiquement si aucun chauffeur n&apos;est trouvé immédiatement.
+                 Rï¿½essayer automatiquement si aucun chauffeur n&apos;est trouvï¿½ immï¿½diatement.
                </p>
              </div>
            </div>
 +          )}
  
-           {/* Toggle Réservation pour un tiers */}
+           {/* Toggle Rï¿½servation pour un tiers */}
            <div>
 -            <div className="flex items-center gap-3 p-3 bg-[#f29200]/10 rounded-xl border border-[#f29200]/20">
 +            <div className="flex items-center gap-3 p-2.5 bg-[#f29200]/10 rounded-xl border border-[#f29200]/20">
@@ -6949,11 +6949,11 @@ index 0dd8259..f9724f3 100644
 @@ -793,23 +901,21 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
            style={{ minHeight: '48px' }}
          >
-           {loading ? 'Création en cours...' : 'Demander une course'}
+           {loading ? 'Crï¿½ation en cours...' : 'Demander une course'}
          </button>
        </div>
  
-       {/* Bottom sheet description véhicule */}
+       {/* Bottom sheet description vï¿½hicule */}
        {detailsCarType && (
          <VehicleDetailsSheet
            carType={detailsCarType}
@@ -7002,7 +7002,7 @@ index 0000000..9ffcdf2
 +      <div>
 +        <p className="text-xs font-semibold text-white mb-1">Quand souhaitez-vous partir ?</p>
 +        <p className="text-[11px] text-slate-300 mb-2">
-+          Choisissez un départ immédiat ou programmez la course pour plus tard.
++          Choisissez un dï¿½part immï¿½diat ou programmez la course pour plus tard.
 +        </p>
 +        <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5 border border-white/[0.06]">
 +          <button
@@ -7018,7 +7018,7 @@ index 0000000..9ffcdf2
 +          >
 +            <span className="block text-[13px] font-semibold leading-tight">Maintenant</span>
 +            <span className={`block mt-0.5 text-[11px] leading-snug ${mode === 'immediate' ? 'text-white/80' : 'text-slate-300'}`}>
-+              On cherche un chauffeur dès la confirmation.
++              On cherche un chauffeur dï¿½s la confirmation.
 +            </span>
 +          </button>
 +
@@ -7045,7 +7045,7 @@ index 0000000..9ffcdf2
 +        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-2xl border border-primary/20 bg-primary/5 p-3.5">
 +          <div>
 +            <label htmlFor="scheduled-date" className="block text-xs font-medium text-white mb-1.5">
-+              Date de départ
++              Date de dï¿½part
 +            </label>
 +            <input
 +              id="scheduled-date"
@@ -7057,7 +7057,7 @@ index 0000000..9ffcdf2
 +          </div>
 +          <div>
 +            <label htmlFor="scheduled-time" className="block text-xs font-medium text-white mb-1.5">
-+              Heure de départ
++              Heure de dï¿½part
 +            </label>
 +            <input
 +              id="scheduled-time"
@@ -7068,7 +7068,7 @@ index 0000000..9ffcdf2
 +            />
 +          </div>
 +          <p className="sm:col-span-2 text-[11px] leading-relaxed text-slate-300">
-+            Le chauffeur sera recherché à l&apos;heure choisie. Vous pourrez modifier ou annuler avant le départ.
++            Le chauffeur sera recherchï¿½ ï¿½ l&apos;heure choisie. Vous pourrez modifier ou annuler avant le dï¿½part.
 +          </p>
 +        </div>
 +      )}
@@ -7085,9 +7085,9 @@ index b5204b7..f470bdf 100644
  /**
   * VehicleDetailsSheet
   *
-  * Bottom sheet présentant la description complète d'un type de véhicule
+  * Bottom sheet prï¿½sentant la description complï¿½te d'un type de vï¿½hicule
 - * (illustration grand format, tagline, description Uber-like, points forts,
-- * tarifs). Permet de sélectionner directement la catégorie.
+- * tarifs). Permet de sï¿½lectionner directement la catï¿½gorie.
 + * (illustration grand format, tagline, description Uber-like, points forts).
   */
  
@@ -7111,7 +7111,7 @@ index b5204b7..f470bdf 100644
 +export function VehicleDetailsSheet({ carType, onClose }: VehicleDetailsSheetProps) {
    const meta = getVehicleMeta(carType);
  
-   // Fermeture clavier (Escape) — confort desktop / Capacitor web view
+   // Fermeture clavier (Escape) ï¿½ confort desktop / Capacitor web view
    useEffect(() => {
      const handler = (e: KeyboardEvent) => {
        if (e.key === 'Escape') onClose();
@@ -7126,7 +7126,7 @@ index b5204b7..f470bdf 100644
        onClick={onClose}
        role="dialog"
        aria-modal="true"
-       aria-label={`Détails du véhicule ${carType.name}`}
+       aria-label={`Dï¿½tails du vï¿½hicule ${carType.name}`}
      >
        <div
          onClick={(e) => e.stopPropagation()}
@@ -7162,7 +7162,7 @@ index b5204b7..f470bdf 100644
 -              <span className="text-white font-medium">{carType.basePrice} {CURRENCY_CODE}</span>
 -            </div>
 -            <div className="flex items-center justify-between px-3 py-2 text-sm">
--              <span className="text-slate-400">Par kilomètre</span>
+-              <span className="text-slate-400">Par kilomï¿½tre</span>
 -              <span className="text-white font-medium">{carType.pricePerKm} {CURRENCY_CODE}</span>
 -            </div>
 -            <div className="flex items-center justify-between px-3 py-2 text-sm">
@@ -7187,10 +7187,10 @@ index b5204b7..f470bdf 100644
 -            }`}
 -            style={{ minHeight: '48px' }}
 -          >
--            {selected ? 'Déjà sélectionné' : `Choisir ${carType.name}`}
+-            {selected ? 'Dï¿½jï¿½ sï¿½lectionnï¿½' : `Choisir ${carType.name}`}
 -          </button>
 +          <p className="text-xs text-slate-500 text-center">
-+            Sélectionnez cette catégorie depuis la liste principale.
++            Sï¿½lectionnez cette catï¿½gorie depuis la liste principale.
 +          </p>
          </div>
        </div>
@@ -7236,7 +7236,7 @@ index 0000000..93fd234
 +    );
 +
 +    expect(screen.getByText('Eco')).toBeInTheDocument();
-+    expect(screen.getByText('4 places • 2-4 min d\'attente')).toBeInTheDocument();
++    expect(screen.getByText('4 places ï¿½ 2-4 min d\'attente')).toBeInTheDocument();
 +    expect(screen.queryByText('Base', { exact: false })).not.toBeInTheDocument();
 +    expect(screen.queryByText('/km', { exact: false })).not.toBeInTheDocument();
 +    expect(screen.queryByText('/min', { exact: false })).not.toBeInTheDocument();
@@ -7248,9 +7248,9 @@ index c1ddd1a..281c47c 100644
 +++ b/src/app/taxi/components/VehicleOption.tsx
 @@ -3,110 +3,109 @@
   *
-  * Option de sélection de type de véhicule (Eco / Confort / Confort+).
-  * Affiche une illustration de la voiture aux couleurs de la catégorie
-  * et un bouton d'info qui ouvre la description détaillée.
+  * Option de sï¿½lection de type de vï¿½hicule (Eco / Confort / Confort+).
+  * Affiche une illustration de la voiture aux couleurs de la catï¿½gorie
+  * et un bouton d'info qui ouvre la description dï¿½taillï¿½e.
   */
  
  'use client';
@@ -7308,7 +7308,7 @@ index c1ddd1a..281c47c 100644
            <TaxiIcon color={meta.color} className="w-full h-auto" />
          </div>
  
-         {/* Détails */}
+         {/* Dï¿½tails */}
          <div className="flex-1 min-w-0">
            <div className="flex items-center gap-2">
 -            <h3 className={`font-semibold text-base sm:text-lg ${selected ? 'text-primary' : 'text-white'}`}>
@@ -7345,7 +7345,7 @@ index c1ddd1a..281c47c 100644
            </p>
 -          <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
 +          <p className="text-[10px] sm:text-[11px] text-slate-300 mt-0.5">
-             {carType.seats} places • {carType.time} d&apos;attente
+             {carType.seats} places ï¿½ {carType.time} d&apos;attente
            </p>
 -          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] sm:text-xs">
 -            <span className="text-slate-500">
@@ -7361,15 +7361,15 @@ index c1ddd1a..281c47c 100644
 +          <p className="text-[10px] sm:text-[11px] text-slate-200 mt-0.5 line-clamp-1">
 +            {estimatedPrice != null ? (
 +              <>
-+                Prix estimé <span className="font-semibold text-white">{estimatedPrice} CAD</span>
++                Prix estimï¿½ <span className="font-semibold text-white">{estimatedPrice} CAD</span>
 +              </>
 +            ) : (
-+              'Prix estimé disponible après saisie du trajet'
++              'Prix estimï¿½ disponible aprï¿½s saisie du trajet'
 +            )}
 +          </p>
          </div>
  
-         {/* Indicateur sélection */}
+         {/* Indicateur sï¿½lection */}
          <div className={`shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
            selected
              ? 'border-primary bg-primary'
@@ -7439,17 +7439,17 @@ index 41be870..4a7252d 100644
 +++ b/src/app/taxi/data/vehicleCatalog.ts
 @@ -1,128 +1,145 @@
  /**
-  * Catalogue des types de véhicules.
+  * Catalogue des types de vï¿½hicules.
   *
-- * - DEFAULT_CAR_TYPES : fallback utilisé quand la collection Firestore `carTypes`
+- * - DEFAULT_CAR_TYPES : fallback utilisï¿½ quand la collection Firestore `carTypes`
 - *   est vide ou ne contient que le doc `_init` du seed.
-- * - VEHICLE_META : métadonnées d'affichage (couleur de carrosserie, description
-- *   courte/longue, cas d'usage) associées à chaque catégorie par nom.
+- * - VEHICLE_META : mï¿½tadonnï¿½es d'affichage (couleur de carrosserie, description
+- *   courte/longue, cas d'usage) associï¿½es ï¿½ chaque catï¿½gorie par nom.
 - *
-- * Les tarifs des fallbacks dérivent de DEFAULT_PRICING (marché actif) : Eco
+- * Les tarifs des fallbacks dï¿½rivent de DEFAULT_PRICING (marchï¿½ actif) : Eco
 - * conserve la base, Confort applique +30 %, Confort+ applique +75 %.
-+ * Le catalogue local sert de source de vérité pour les tarifs et les métadonnées.
-+ * Firestore peut surcharger les champs, mais jamais au prix de retomber à 0.
++ * Le catalogue local sert de source de vï¿½ritï¿½ pour les tarifs et les mï¿½tadonnï¿½es.
++ * Firestore peut surcharger les champs, mais jamais au prix de retomber ï¿½ 0.
   */
  
  import { CarType } from '@/types';
@@ -7543,49 +7543,49 @@ index 41be870..4a7252d 100644
      color: 'white',
      tagline: 'La course du quotidien, au meilleur prix',
      description:
-       'Une berline standard pour vos trajets de tous les jours. Idéale pour aller au travail, faire vos courses ou rejoindre vos amis sans vous ruiner.',
+       'Une berline standard pour vos trajets de tous les jours. Idï¿½ale pour aller au travail, faire vos courses ou rejoindre vos amis sans vous ruiner.',
 -    highlights: [
--      'Jusqu\'à 4 passagers',
--      'Véhicule économique récent',
+-      'Jusqu\'ï¿½ 4 passagers',
+-      'Vï¿½hicule ï¿½conomique rï¿½cent',
 -      'Tarif le plus accessible',
 -    ],
-+    highlights: ["Jusqu'à 4 passagers", 'Véhicule récent', 'Tarif le plus accessible'],
++    highlights: ["Jusqu'ï¿½ 4 passagers", 'Vï¿½hicule rï¿½cent', 'Tarif le plus accessible'],
    },
    confort: {
      color: 'yellow',
--    tagline: 'Plus d\'espace, plus de tranquillité',
-+    tagline: "Plus d'espace, plus de tranquillité",
+-    tagline: 'Plus d\'espace, plus de tranquillitï¿½',
++    tagline: "Plus d'espace, plus de tranquillitï¿½",
      description:
--      'Une voiture spacieuse et bien entretenue avec un chauffeur mieux noté. Parfait quand vous voulez un trajet calme, climatisé et confortable sans payer le prix d\'une berline premium.',
+-      'Une voiture spacieuse et bien entretenue avec un chauffeur mieux notï¿½. Parfait quand vous voulez un trajet calme, climatisï¿½ et confortable sans payer le prix d\'une berline premium.',
 -    highlights: [
--      'Jusqu\'à 4 passagers',
--      'Chauffeurs notés 4,7+',
--      'Intérieur spacieux et climatisé',
+-      'Jusqu\'ï¿½ 4 passagers',
+-      'Chauffeurs notï¿½s 4,7+',
+-      'Intï¿½rieur spacieux et climatisï¿½',
 -    ],
-+      'Une voiture spacieuse et bien entretenue avec un chauffeur mieux noté. Parfait quand vous voulez un trajet calme, climatisé et confortable sans payer le prix d’une berline premium.',
-+    highlights: ["Jusqu'à 4 passagers", 'Chauffeurs mieux notés', "Plus d'espace et plus de confort"],
++      'Une voiture spacieuse et bien entretenue avec un chauffeur mieux notï¿½. Parfait quand vous voulez un trajet calme, climatisï¿½ et confortable sans payer le prix dï¿½une berline premium.',
++    highlights: ["Jusqu'ï¿½ 4 passagers", 'Chauffeurs mieux notï¿½s', "Plus d'espace et plus de confort"],
    },
    'confort+': {
      color: 'black',
--    tagline: 'L\'expérience premium, pour vos déplacements importants',
-+    tagline: "L'expérience premium, pour vos déplacements importants",
+-    tagline: 'L\'expï¿½rience premium, pour vos dï¿½placements importants',
++    tagline: "L'expï¿½rience premium, pour vos dï¿½placements importants",
      description:
--      'Berline haut de gamme noire avec chauffeur d\'élite. Pour vos rendez-vous professionnels, vos sorties spéciales ou quand vous voulez voyager en toute discrétion et avec style.',
+-      'Berline haut de gamme noire avec chauffeur d\'ï¿½lite. Pour vos rendez-vous professionnels, vos sorties spï¿½ciales ou quand vous voulez voyager en toute discrï¿½tion et avec style.',
 -    highlights: [
--      'Jusqu\'à 4 passagers',
--      'Chauffeurs notés 4,85+ d\'élite',
+-      'Jusqu\'ï¿½ 4 passagers',
+-      'Chauffeurs notï¿½s 4,85+ d\'ï¿½lite',
 -      'Berline noire premium',
--      'Eau, chargeurs et silence respecté',
+-      'Eau, chargeurs et silence respectï¿½',
 -    ],
-+      'Berline haut de gamme avec chauffeur d’élite. Pour vos rendez-vous professionnels, vos sorties spéciales ou quand vous voulez voyager avec davantage de discrétion et de confort.',
-+    highlights: ["Jusqu'à 4 passagers", "Chauffeurs d'élite", 'Confort premium', 'Attention renforcée aux détails'],
++      'Berline haut de gamme avec chauffeur dï¿½ï¿½lite. Pour vos rendez-vous professionnels, vos sorties spï¿½ciales ou quand vous voulez voyager avec davantage de discrï¿½tion et de confort.',
++    highlights: ["Jusqu'ï¿½ 4 passagers", "Chauffeurs d'ï¿½lite", 'Confort premium', 'Attention renforcï¿½e aux dï¿½tails'],
    },
  };
  
  const FALLBACK_META: VehicleMeta = {
    color: 'white',
    tagline: 'Votre course',
-   description: 'Un véhicule pour votre trajet.',
+   description: 'Un vï¿½hicule pour votre trajet.',
    highlights: ['Course standard'],
  };
  
@@ -7593,7 +7593,7 @@ index 41be870..4a7252d 100644
 -  name
 -    .toLowerCase()
 -    .normalize('NFD')
--    .replace(/[`-?]/g, '') // retire les diacritiques (accents, cédilles…)
+-    .replace(/[`-?]/g, '') // retire les diacritiques (accents, cï¿½dillesï¿½)
 -    .trim();
 +export const resolveDefaultCarType = (value: string): CarType | undefined => {
 +  const key = normalize(value);
@@ -7678,7 +7678,7 @@ index 614de53..4c2cc3c 100644
    const router = useRouter();
    const { currentUser } = useAuth();
    
-   //  Fonction pour déclencher le haptic feedback (medJira.md #93)
+   //  Fonction pour dï¿½clencher le haptic feedback (medJira.md #93)
    const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Medium) => {
      if (Capacitor.isNativePlatform()) {
        try {
@@ -7695,23 +7695,23 @@ index 614de53..4c2cc3c 100644
    const [destinationAddress, setDestinationAddress] = useState<string>('');
 +  const [scheduledAtLabel, setScheduledAtLabel] = useState<string>('');
  
-   // État pour le bonus en cas d'échec
+   // ï¿½tat pour le bonus en cas d'ï¿½chec
    const [retryBonus, setRetryBonus] = useState(0);
    const [isAutoSearching, setIsAutoSearching] = useState(false);
-   // Stocké dans un ref pour ne pas déclencher de re-render ni invalider les useEffect
+   // Stockï¿½ dans un ref pour ne pas dï¿½clencher de re-render ni invalider les useEffect
    const stopAutoSearchRef = useRef<(() => void) | null>(null);
    const stepRef = useRef<Step>(step);
    useEffect(() => { stepRef.current = step; }, [step]);
  
-   // Récupérer la course active au chargement
+   // Rï¿½cupï¿½rer la course active au chargement
 @@ -60,70 +62,106 @@ export default function TaxiPage() {
      const fetchActiveBooking = async () => {
        if (!currentUser) return;
  
        try {
          const bookingsRef = collection(db, 'bookings');
-         // On cherche les courses qui ne sont ni terminées, ni annulées, ni échouées
-         // Note: On retire orderBy pour éviter d'avoir à créer un index composite complexe
+         // On cherche les courses qui ne sont ni terminï¿½es, ni annulï¿½es, ni ï¿½chouï¿½es
+         // Note: On retire orderBy pour ï¿½viter d'avoir ï¿½ crï¿½er un index composite complexe
          const q = query(
            bookingsRef,
            where('userId', '==', currentUser.uid),
@@ -7722,7 +7722,7 @@ index 614de53..4c2cc3c 100644
  
          const snapshot = await getDocs(q);
          if (!snapshot.empty) {
-           // On trie côté client pour prendre la plus récente
+           // On trie cï¿½tï¿½ client pour prendre la plus rï¿½cente
            const docs = snapshot.docs.sort((a, b) => {
              const dateA = a.data().createdAt?.toMillis() || 0;
              const dateB = b.data().createdAt?.toMillis() || 0;
@@ -7732,7 +7732,7 @@ index 614de53..4c2cc3c 100644
            const bookingData = docs[0].data();
            const id = docs[0].id;
            
-           logger.info('Course active trouvée', { id, status: bookingData.status });
+           logger.info('Course active trouvï¿½e', { id, status: bookingData.status });
            
            setBookingId(id);
            setPickupAddress(bookingData.pickup);
@@ -7752,7 +7752,7 @@ index 614de53..4c2cc3c 100644
            if (bookingData.status === 'pending') {
              setStep('searching');
              // Relancer le timer si besoin, ou juste laisser l'UI de recherche
-             // Idéalement on devrait calculer le temps restant
+             // Idï¿½alement on devrait calculer le temps restant
 +          } else if (bookingData.status === 'scheduled') {
 +            setStep('scheduled');
            } else {
@@ -7760,7 +7760,7 @@ index 614de53..4c2cc3c 100644
            }
          }
        } catch (error) {
-         logger.error('Erreur récupération course active', error);
+         logger.error('Erreur rï¿½cupï¿½ration course active', error);
        }
      };
  
@@ -7768,7 +7768,7 @@ index 614de53..4c2cc3c 100644
    }, [currentUser]);
  
 -  const handleBookingCreated = (id: string, pickup: string, destination: string, autoSearch: boolean = false) => {
--    logger.info('Course créée, recherche de chauffeur', { bookingId: id, autoSearch });
+-    logger.info('Course crï¿½ï¿½e, recherche de chauffeur', { bookingId: id, autoSearch });
 -    setBookingId(id);
 -    setPickupAddress(pickup);
 -    setDestinationAddress(destination);
@@ -7780,7 +7780,7 @@ index 614de53..4c2cc3c 100644
 +    autoSearch?: boolean;
 +    scheduledAt?: Date | null;
 +  }) => {
-+    logger.info('Course créée', { bookingId: booking.bookingId, rideMode: booking.rideMode, autoSearch: booking.autoSearch });
++    logger.info('Course crï¿½ï¿½e', { bookingId: booking.bookingId, rideMode: booking.rideMode, autoSearch: booking.autoSearch });
 +    setBookingId(booking.bookingId);
 +    setPickupAddress(booking.pickup);
 +    setDestinationAddress(booking.destination);
@@ -7816,35 +7816,35 @@ index 614de53..4c2cc3c 100644
  
    const handleSearchDriver = async () => {
      await triggerHaptic(ImpactStyle.Light); //  Haptic feedback (medJira.md #93)
-     logger.info('Recherche de chauffeur démarrée', { bookingId });
+     logger.info('Recherche de chauffeur dï¿½marrï¿½e', { bookingId });
    };
  
    const handleCancelSearch = async () => {
 @@ -133,20 +171,21 @@ export default function TaxiPage() {
  
-     // Arrêter la recherche auto si active
+     // Arrï¿½ter la recherche auto si active
      if (stopAutoSearchRef.current) {
        stopAutoSearchRef.current();
        stopAutoSearchRef.current = null;
      }
      setIsAutoSearching(false);
  
-     // Arrêter aussi via Firestore pour être sûr
+     // Arrï¿½ter aussi via Firestore pour ï¿½tre sï¿½r
      await stopAutomaticSearch(bookingId);
-+    await cancelBooking(bookingId, 'Annulé par le client');
++    await cancelBooking(bookingId, 'Annulï¿½ par le client');
  
      try {
-       // Mettre à jour le statut du booking à "cancelled"
+       // Mettre ï¿½ jour le statut du booking ï¿½ "cancelled"
        const bookingRef = doc(db, 'bookings', bookingId);
        await updateDoc(bookingRef, {
          status: 'cancelled',
-         cancellationReason: 'Annulé par le client',
+         cancellationReason: 'Annulï¿½ par le client',
          updatedAt: serverTimestamp(),
        });
  
 @@ -213,20 +252,26 @@ export default function TaxiPage() {
          if (bookingData.status === 'accepted' && bookingData.driverId) {
-           logger.info('Chauffeur trouvé !', {
+           logger.info('Chauffeur trouvï¿½ !', {
              bookingId,
              driverId: bookingData.driverId,
              driverName: bookingData.driverName,
@@ -7866,7 +7866,7 @@ index 614de53..4c2cc3c 100644
          }
        },
        (error) => {
-         logger.error('Erreur lors de l\'écoute du booking', { error, bookingId });
+         logger.error('Erreur lors de l\'ï¿½coute du booking', { error, bookingId });
        }
      );
 @@ -294,25 +339,25 @@ export default function TaxiPage() {
@@ -7880,7 +7880,7 @@ index 614de53..4c2cc3c 100644
            >
              <MaterialIcon name="arrow_back" size="md" />
            </button>
--          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Réserver un taxi</h1>
+-          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Rï¿½server un taxi</h1>
 +          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Taxi</h1>
          </header>
  
@@ -7898,7 +7898,7 @@ index 614de53..4c2cc3c 100644
  
            {step === 'searching' && bookingId && (
 @@ -426,20 +471,71 @@ export default function TaxiPage() {
-                   Conseil : Essayez à une heure différente pour plus de disponibilité
+                   Conseil : Essayez ï¿½ une heure diffï¿½rente pour plus de disponibilitï¿½
                  </p>
                </div>
              </div>
@@ -7917,9 +7917,9 @@ index 614de53..4c2cc3c 100644
 +                  </div>
 +                </div>
 +
-+                <h2 className="text-xl font-bold text-white mb-2">Réservation programmée</h2>
++                <h2 className="text-xl font-bold text-white mb-2">Rï¿½servation programmï¿½e</h2>
 +                <p className="text-sm text-slate-400 mb-2">
-+                  Votre course a bien été enregistrée.
++                  Votre course a bien ï¿½tï¿½ enregistrï¿½e.
 +                </p>
 +                {scheduledAtLabel && (
 +                  <p className="text-sm font-semibold text-white mb-6">{scheduledAtLabel}</p>
@@ -7944,7 +7944,7 @@ index 614de53..4c2cc3c 100644
 +                  onClick={async () => {
 +                    if (!bookingId) return;
 +                    await triggerHaptic(ImpactStyle.Light);
-+                    await cancelBooking(bookingId, 'Annulé par le client');
++                    await cancelBooking(bookingId, 'Annulï¿½ par le client');
 +                    setStep('form');
 +                    setBookingId(null);
 +                    setPickupAddress('');
@@ -7953,7 +7953,7 @@ index 614de53..4c2cc3c 100644
 +                  }}
 +                  className="w-full mt-3 h-14 glass-card text-slate-300 font-semibold rounded-2xl border border-white/10 active:scale-[0.98] transition-transform flex items-center justify-center"
 +                >
-+                  Annuler la réservation
++                  Annuler la rï¿½servation
 +                </button>
 +              </div>
 +            </div>
@@ -7968,7 +7968,7 @@ index 614de53..4c2cc3c 100644
                    </div>
                  </div>
  
-                 <h2 className="text-xl font-bold text-white mb-2">Course terminée !</h2>
+                 <h2 className="text-xl font-bold text-white mb-2">Course terminï¿½e !</h2>
 diff --git a/src/app/wallet/page.tsx b/src/app/wallet/page.tsx
 index a6bb277..1893141 100644
 --- a/src/app/wallet/page.tsx
@@ -7997,7 +7997,7 @@ index a6bb277..1893141 100644
  
    useEffect(() => {
      if (searchParams.get('success')) {
-       toast.success('Recharge effectuée avec succès !');
+       toast.success('Recharge effectuï¿½e avec succï¿½s !');
        router.replace('/wallet');
      }
    }, [searchParams, router]);
@@ -8039,7 +8039,7 @@ index a6bb277..1893141 100644
 @@ -114,29 +123,34 @@ export default function WalletPage() {
              </p>
            )}
-           <p className="relative text-slate-500 text-xs">Mis à jour maintenant</p>
+           <p className="relative text-slate-500 text-xs">Mis ï¿½ jour maintenant</p>
          </div>
  
          {/* Quick Actions */}
@@ -8071,7 +8071,7 @@ index a6bb277..1893141 100644
          {/* Recent Transactions */}
          <div>
            <div className="flex items-center justify-between mb-4">
-             <h2 className="text-base font-bold text-white">Dernières transactions</h2>
+             <h2 className="text-base font-bold text-white">Derniï¿½res transactions</h2>
              <Link href="/wallet/historique" className="text-primary text-sm font-semibold">Voir tout</Link>
            </div>
 diff --git a/src/app/wallet/recharger/page.tsx b/src/app/wallet/recharger/page.tsx
@@ -8082,7 +8082,7 @@ index 6253412..b34b53a 100644
    const presetAmounts = WALLET_PRESET_AMOUNTS;
  
    // ============================================================
-   // Écran formulaire Stripe
+   // ï¿½cran formulaire Stripe
    // ============================================================
  
    if (step === 'stripe_form') {
@@ -8107,7 +8107,7 @@ index 6253412..b34b53a 100644
    }
  
    // ============================================================
-   // Écran principal (sélection montant)
+   // ï¿½cran principal (sï¿½lection montant)
    // ============================================================
  
    return (
@@ -8141,7 +8141,7 @@ index 8840f41..aa73cde 100644
 @@ -2,110 +2,116 @@
   * Composant InputField
   * 
-  * Champ de saisie réutilisable avec label, erreur et icône optionnelle.
+  * Champ de saisie rï¿½utilisable avec label, erreur et icï¿½ne optionnelle.
   * 
   * @component
   */
@@ -8273,7 +8273,7 @@ index dabcb33..93340d1 100644
 @@ -2,20 +2,27 @@
   * Composant SelectField
   * 
-  * Champ de sélection réutilisable avec label et gestion d'erreurs.
+  * Champ de sï¿½lection rï¿½utilisable avec label et gestion d'erreurs.
   * 
   * @component
   */
@@ -8299,7 +8299,7 @@ index dabcb33..93340d1 100644
    label?: string;
    error?: string;
 @@ -36,57 +43,49 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
-       placeholder = 'Sélectionner...',
+       placeholder = 'Sï¿½lectionner...',
        icon,
        className = '',
        containerClassName = '',
@@ -8589,12 +8589,12 @@ index 0000000..48bbee5
 +}
 +
 +export const DRIVER_DOCUMENT_CATALOG: DriverDocumentCatalogEntry[] = [
-+  { key: 'biometricPhoto', label: 'Photo biométrique' },
++  { key: 'biometricPhoto', label: 'Photo biomï¿½trique' },
 +  { key: 'carRegistration', label: 'Carte grise' },
 +  { key: 'insurance', label: 'Assurance' },
-+  { key: 'techControl', label: 'Contrôle technique' },
-+  { key: 'vehicleExterior', label: 'Photo extérieure du véhicule' },
-+  { key: 'workEligibility', label: "Preuve d'admissibilité au travail" },
++  { key: 'techControl', label: 'Contrï¿½le technique' },
++  { key: 'vehicleExterior', label: 'Photo extï¿½rieure du vï¿½hicule' },
++  { key: 'workEligibility', label: "Preuve d'admissibilitï¿½ au travail" },
 +  { key: 'driversAbstract', label: "Dossier de conduite (Driver's Abstract)" },
 +  { key: 'licenseFront', label: 'Permis de conduire (recto)' },
 +  { key: 'licenseBack', label: 'Permis de conduire (verso)' },
@@ -8719,7 +8719,7 @@ index 5680ed4..1823a11 100644
 +  normalizeDriverDocuments,
 +} from '@/features/driver-documents/catalog'
  
--describe('useDocumentStatus — logique globale', () => {
+-describe('useDocumentStatus ï¿½ logique globale', () => {
 -  function computeGlobalStatus(entries: Pick<DocumentStatusEntry, 'status'>[]): string {
 -    const allApproved = entries.length > 0 && entries.every(e => e.status === 'approved')
 -    const hasRejected = entries.some(e => e.status === 'rejected')
@@ -8750,7 +8750,7 @@ index 5680ed4..1823a11 100644
 -    expect(computeGlobalStatus(entries)).toBe('has_rejected')
 -  })
 -
--  it('pending si mélange pending/not_submitted', () => {
+-  it('pending si mï¿½lange pending/not_submitted', () => {
 -    const entries = [{ status: 'pending' as const }, { status: 'not_submitted' as const }]
 -    expect(computeGlobalStatus(entries)).toBe('pending')
 -  })
@@ -8783,11 +8783,11 @@ index 0c46b50..ef8d729 100644
  
 +    const readBrowserPosition = useCallback(async (mode: GeolocationMode): Promise<PreciseLocation> => {
 +        if (typeof navigator === 'undefined' || !navigator.geolocation) {
-+            throw new Error('La géolocalisation du navigateur n’est pas disponible.');
++            throw new Error('La gï¿½olocalisation du navigateur nï¿½est pas disponible.');
 +        }
 +
 +        if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost') {
-+            throw new Error('Le web exige HTTPS ou localhost pour accéder au GPS.');
++            throw new Error('Le web exige HTTPS ou localhost pour accï¿½der au GPS.');
 +        }
 +
 +        const options: PositionOptions = {
@@ -8812,7 +8812,7 @@ index 0c46b50..ef8d729 100644
 +                } else if (value) {
 +                    resolve(value);
 +                } else {
-+                    reject(new Error('Impossible d’obtenir une position fiable.'));
++                    reject(new Error('Impossible dï¿½obtenir une position fiable.'));
 +                }
 +            };
 +
@@ -8836,7 +8836,7 @@ index 0c46b50..ef8d729 100644
 +                },
 +                (error) => {
 +                    if (resolved) return;
-+                    void finish(clearWatchSafe, new Error(error.message || 'Erreur de géolocalisation navigateur'));
++                    void finish(clearWatchSafe, new Error(error.message || 'Erreur de gï¿½olocalisation navigateur'));
 +                },
 +                options
 +            );
@@ -8846,7 +8846,7 @@ index 0c46b50..ef8d729 100644
 +                if (best) {
 +                    void finish(clearWatchSafe, best);
 +                } else {
-+                    void finish(clearWatchSafe, new Error('Impossible d’obtenir une position fiable.'));
++                    void finish(clearWatchSafe, new Error('Impossible dï¿½obtenir une position fiable.'));
 +                }
 +            }, mode === 'tracking' ? 12000 : 10000);
 +        });
@@ -8881,10 +8881,10 @@ index 0c46b50..ef8d729 100644
 +
      /**
       * Obtenir la position actuelle avec modes adaptatifs
-      *  Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
+      *  Conforme ï¿½ medJiraV2.md ï¿½6.1 (modes adaptatifs + fallback lastKnownPosition)
       * 
-      * @param mode Mode de géolocalisation (tracking, booking, battery_critical)
-      * @param fallbackToCache Si true, utilise le cache lastKnownPosition en cas d'échec
+      * @param mode Mode de gï¿½olocalisation (tracking, booking, battery_critical)
+      * @param fallbackToCache Si true, utilise le cache lastKnownPosition en cas d'ï¿½chec
       */
      const getCurrentPosition = useCallback(async (
          mode: GeolocationMode = 'booking',
@@ -8909,14 +8909,14 @@ index 0c46b50..ef8d729 100644
 +            }
 +        }
 +
-         // Master timeout : couvre le pire cas des 3 stratégies (15+15+10 = 40s).
-         // Garantit que loading=false sera émis même si une WebView Android
+         // Master timeout : couvre le pire cas des 3 stratï¿½gies (15+15+10 = 40s).
+         // Garantit que loading=false sera ï¿½mis mï¿½me si une WebView Android
          // ne renvoie jamais la callback native de Geolocation.
          const MASTER_TIMEOUT_MS = 40000;
          let masterTimeoutFired = false;
          const masterTimeout = setTimeout(() => {
              masterTimeoutFired = true;
-             console.error('[Geolocation] Master timeout déclenché — déblocage forcé');
+             console.error('[Geolocation] Master timeout dï¿½clenchï¿½ ï¿½ dï¿½blocage forcï¿½');
              setState({
                  location: null,
 @@ -288,21 +403,21 @@ export const useCapacitorGeolocation = () => {
@@ -8934,12 +8934,12 @@ index 0c46b50..ef8d729 100644
 +    }, [readBrowserPosition]);
  
      /**
-      * Affinage progressif via watchPosition pendant ~5s : démarre un watch,
-      * collecte plusieurs lectures et conserve la plus précise. Le GPS converge
-      * en quelques secondes après un cold-start : la 1re lecture est souvent
-      * Wi-Fi (50-100m), les suivantes passent à GPS pur (5-15m).
+      * Affinage progressif via watchPosition pendant ~5s : dï¿½marre un watch,
+      * collecte plusieurs lectures et conserve la plus prï¿½cise. Le GPS converge
+      * en quelques secondes aprï¿½s un cold-start : la 1re lecture est souvent
+      * Wi-Fi (50-100m), les suivantes passent ï¿½ GPS pur (5-15m).
       *
-      * À utiliser au moment critique (confirmation pickup taxi) plutôt que
+      * ï¿½ utiliser au moment critique (confirmation pickup taxi) plutï¿½t que
       * getCurrentPosition qui prend la 1re lecture "acceptable".
       */
 diff --git a/src/hooks/useDocumentStatus.ts b/src/hooks/useDocumentStatus.ts
@@ -9035,7 +9035,7 @@ index e7df017..b5c1869 100644
 -      setLoading(false)
 -    }, (err) => {
 -      console.error('[useDocumentStatus] Erreur de synchronisation:', err)
--      setError('Erreur de connexion aux données')
+-      setError('Erreur de connexion aux donnï¿½es')
 -      setLoading(false)
 -    })
 -    return () => unsub()
@@ -9049,7 +9049,7 @@ index e7df017..b5c1869 100644
 +        }
 +
 +        console.error('[useDocumentStatus] Sync error:', snapshotError)
-+        setError('Erreur de connexion aux données')
++        setError('Erreur de connexion aux donnï¿½es')
 +        setLoading(false)
 +      },
 +    )
@@ -9145,7 +9145,7 @@ index e9f9b1f..ab6875e 100644
                  const privateDoc = await getDoc(doc(db, 'drivers', user.uid, 'private', 'personal'));
                  if (privateDoc.exists()) privateData = privateDoc.data() || {};
                } catch (e) {
-                 loggerRef.current.logWarning('PRIVATE_FETCH', 'Lecture private/personal échouée', { error: (e as Error).message });
+                 loggerRef.current.logWarning('PRIVATE_FETCH', 'Lecture private/personal ï¿½chouï¿½e', { error: (e as Error).message });
                }
                setStep2Data(prev => ({
                  ...prev,
@@ -9160,7 +9160,7 @@ index e9f9b1f..ab6875e 100644
 +                country: (privateData.country as string) || '',
                }));
              } else if (['pending', 'approved', 'active'].includes(data.status)) {
-               setError('Votre dossier est en cours de traitement ou déjà validé.');
+               setError('Votre dossier est en cours de traitement ou dï¿½jï¿½ validï¿½.');
                setTimeout(() =>
                  (redirectTimeoutRef.current = redirectWithFallback(router, '/driver/dashboard')),
                  2000
@@ -9169,7 +9169,7 @@ index e9f9b1f..ab6875e 100644
            }
          } catch (err: unknown) {
 @@ -368,122 +368,97 @@ export function useDriverRegistration() {
-       // Helper : skip l'upload si le fichier est absent ou vide (sécurité
+       // Helper : skip l'upload si le fichier est absent ou vide (sï¿½curitï¿½
        // anti-File([]) vide). Retourne toujours un PromiseSettledResult pour
        // conserver l'indexation stable du tableau uploadResults.
        const uploadIfValid = (file: File | undefined | null, category: string) => {
@@ -9181,7 +9181,7 @@ index e9f9b1f..ab6875e 100644
  
 -      // Validation SSN AVANT de lancer uploads + encryption (early-fail).
 -      if (!step2Data.ssn || step2Data.ssn.trim().length < 5) {
--        setError('Le numéro d\'assurance sociale est requis. Veuillez compléter l\'étape Identité.');
+-        setError('Le numï¿½ro d\'assurance sociale est requis. Veuillez complï¿½ter l\'ï¿½tape Identitï¿½.');
 -        setCurrentStep(2);
 -        setLoading(false);
 -        isSubmittingRef.current = false;
@@ -9189,7 +9189,7 @@ index e9f9b1f..ab6875e 100644
 -        return;
 -      }
 -
--      // Lance uploads ET encryption SSN EN PARALLÈLE — l'encryption ne dépend
+-      // Lance uploads ET encryption SSN EN PARALLï¿½LE ï¿½ l'encryption ne dï¿½pend
 -      // pas des uploads (gain ~1s sur la connexion lente).
 +      // Lance uploads
        const uploadsPromise = Promise.allSettled([
@@ -9222,14 +9222,14 @@ index e9f9b1f..ab6875e 100644
        uploadResults = uploadResultsValue;
  
 -      // Audit log fire-and-forget : ne bloque pas le flow utilisateur.
--      // Erreurs catchées pour éviter unhandled rejection — log côté serveur.
+-      // Erreurs catchï¿½es pour ï¿½viter unhandled rejection ï¿½ log cï¿½tï¿½ serveur.
 -      auditLoggingService.logSSNEncryption(userId, true).catch((err) => {
 -        console.warn('[Registration] audit log SSN encryption failed (non-blocking)', err);
 -      });
 -
        const failedUploads = uploadResults.filter(r => r.status === 'rejected');
        if (failedUploads.length > 0) {
-         setError("Erreur lors de l'upload de certains fichiers. Veuillez réessayer.");
+         setError("Erreur lors de l'upload de certains fichiers. Veuillez rï¿½essayer.");
          return;
        }
  
@@ -9242,11 +9242,11 @@ index e9f9b1f..ab6875e 100644
 -        mileage: step3Data.mileage,
        } : undefined;
  
--      // Construit la map documents conditionnellement : n'inclure une entrée
--      // que si l'upload a effectivement produit une URL (évite les faux documents
+-      // Construit la map documents conditionnellement : n'inclure une entrï¿½e
+-      // que si l'upload a effectivement produit une URL (ï¿½vite les faux documents
 -      // "pending" avec url=null pour les livreurs non-voiture).
 -      // RGPD #C2 : cette map vit dans la sous-collection `drivers/{uid}/private/personal`
--      // et NON à la racine du doc driver.
+-      // et NON ï¿½ la racine du doc driver.
 +      // Construit la map documents conditionnellement
        const documents: Record<string, { url: string; status: string }> = {};
        const addDoc = (key: string, url: string | null) => {
@@ -9268,7 +9268,7 @@ index e9f9b1f..ab6875e 100644
 +      addDoc('licenseBack', getValue(uploadResults[8]));
  
        // === RGPD #C2 : split public vs private ===
-       // Champs publics — doc racine `drivers/{uid}` (lisible par utilisateurs auth)
+       // Champs publics ï¿½ doc racine `drivers/{uid}` (lisible par utilisateurs auth)
        const publicData: Record<string, unknown> = {
          uid: userId,
          firstName: step2Data.firstName,
@@ -9291,7 +9291,7 @@ index e9f9b1f..ab6875e 100644
          publicData.car = carData;
        }
  
-       // Champs sensibles — sous-collection `drivers/{uid}/private/personal`
+       // Champs sensibles ï¿½ sous-collection `drivers/{uid}/private/personal`
        const privateData: Record<string, unknown> = {
          dob: step2Data.dob,
 -        ssn: encryptedSsn,
@@ -9305,12 +9305,12 @@ index e9f9b1f..ab6875e 100644
          updatedAt: firestoreServerTimestamp(),
        };
  
-       // Optim : pas de 2ème getIdToken(true) — le refresh fait en début de
+       // Optim : pas de 2ï¿½me getIdToken(true) ï¿½ le refresh fait en dï¿½but de
        // handleStep5FinalSubmit reste valide (TTL 1h) et la CF retry les erreurs auth.
        const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
        const functions = getFunctions(app, functionsRegion);
        const submitApplication = httpsCallable(functions, 'submitDriverApplication');
-       // 1) CF crée drivers/{uid} + update users/{uid}.roles.driver (Admin SDK)
+       // 1) CF crï¿½e drivers/{uid} + update users/{uid}.roles.driver (Admin SDK)
 diff --git a/src/services/taxi.service.ts b/src/services/taxi.service.ts
 index 09675da..67877b7 100644
 --- a/src/services/taxi.service.ts
@@ -9342,7 +9342,7 @@ index 09675da..67877b7 100644
  };
  
  /**
-  * Créer une nouvelle réservation
+  * Crï¿½er une nouvelle rï¿½servation
   */
  export const createBooking = async (bookingData: Omit<Booking, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
    const bookingsRef = collection(db, 'bookings');
@@ -9382,7 +9382,7 @@ index 09675da..67877b7 100644
  };
  
  /**
-  * Annuler une réservation et libérer le chauffeur assigné
+  * Annuler une rï¿½servation et libï¿½rer le chauffeur assignï¿½
   */
  export const cancelBooking = async (bookingId: string, reason?: string, extraFields?: Record<string, unknown>): Promise<void> => {
    const bookingRef = doc(db, 'bookings', bookingId);
@@ -9394,7 +9394,7 @@ index 09675da..67877b7 100644
        const bookingSnap = await tx.get(bookingRef);
  
        if (!bookingSnap.exists()) {
-         throw new Error('Réservation introuvable');
+         throw new Error('Rï¿½servation introuvable');
        }
  
        const booking = bookingSnap.data() as Booking;
@@ -9451,7 +9451,7 @@ index 09675da..67877b7 100644
      .sort((a, b) => (a.order || 0) - (b.order || 0));
  
    if (types.length === 0) {
-     logger.warn('[getCarTypes] Collection carTypes vide, fallback sur les types par défaut');
+     logger.warn('[getCarTypes] Collection carTypes vide, fallback sur les types par dï¿½faut');
      return DEFAULT_CAR_TYPES;
    }
  
@@ -9461,13 +9461,13 @@ index 09675da..67877b7 100644
 @@ -332,21 +296,24 @@ export interface EstimateFareParams {
   * Estimer le tarif d'une course
   * 
-  * @param params - Paramètres de la course (départ, destination, type de véhicule)
-  * @returns Estimation du tarif avec distance et durée
+  * @param params - Paramï¿½tres de la course (dï¿½part, destination, type de vï¿½hicule)
+  * @returns Estimation du tarif avec distance et durï¿½e
   */
  export const estimateFare = async (params: EstimateFareParams): Promise<FareEstimate> => {
    const { from, to, type } = params;
  
-   // Récupérer le type de véhicule
+   // Rï¿½cupï¿½rer le type de vï¿½hicule
    const carTypes = await getCarTypes();
 -  const carType = carTypes.find(ct => ct.id === type || ct.name.toLowerCase() === type.toLowerCase());
 +  const normalizedType = type.trim();
@@ -9476,24 +9476,24 @@ index 09675da..67877b7 100644
 +    resolveDefaultCarType(normalizedType);
  
    if (!carType) {
-     throw new Error(`Type de véhicule "${type}" introuvable`);
+     throw new Error(`Type de vï¿½hicule "${type}" introuvable`);
    }
  
-   // Calculer la distance et la durée
+   // Calculer la distance et la durï¿½e
    let distance: number;
    let duration: number;
  
    if (typeof from === 'string' && typeof to === 'string') {
 @@ -599,21 +566,21 @@ export const calculateFinalFare = async (bookingId: string): Promise<number> =>
    if (!startTime) {
-     // Course pas encore démarrée, retourner le prix estimé
+     // Course pas encore dï¿½marrï¿½e, retourner le prix estimï¿½
      return booking.price;
    }
  
    const endTime = new Date();
    const durationMinutes = Math.max(1, Math.ceil((endTime.getTime() - startTime.getTime()) / 60000));
  
-   // Récupérer les tarifs du type de véhicule
+   // Rï¿½cupï¿½rer les tarifs du type de vï¿½hicule
    const carTypes = await getCarTypes();
 -  const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
 +  const carType = carTypes.find(ct => ct.name === booking.carType || ct.id === booking.carType) || resolveDefaultCarType(booking.carType) || carTypes[0];
@@ -9508,7 +9508,7 @@ index 09675da..67877b7 100644
      carType.pricePerMinute
    );
 @@ -661,21 +628,21 @@ export const startTrip = async (bookingId: string): Promise<void> => {
-  * Firestore rules qui bloquent les écritures client-side sur les champs
+  * Firestore rules qui bloquent les ï¿½critures client-side sur les champs
   * financiers (paymentStatus, price, finalPrice, etc.).
   */
  export const completeTrip = async (bookingId: string): Promise<void> => {
@@ -9531,7 +9531,7 @@ index 09675da..67877b7 100644
        result = (err as any).data as typeof result;
      } else {
 @@ -715,21 +682,21 @@ export const calculateCancellationPenalty = async (bookingId: string): Promise<n
-   // Calculer le temps écoulé depuis le début. `startedAt` peut être stocké
+   // Calculer le temps ï¿½coulï¿½ depuis le dï¿½but. `startedAt` peut ï¿½tre stockï¿½
    // comme Timestamp (Firestore), string ISO ou number (ms epoch) selon la source.
    const startTime = booking.startedAt instanceof Timestamp
      ? booking.startedAt.toDate()
@@ -9539,26 +9539,26 @@ index 09675da..67877b7 100644
    const now = new Date();
    const elapsedMinutes = Math.ceil((now.getTime() - startTime.getTime()) / 60000);
    
-   // Récupérer les tarifs
+   // Rï¿½cupï¿½rer les tarifs
    const carTypes = await getCarTypes();
 -  const carType = carTypes.find(ct => ct.name === booking.carType) || carTypes[0];
 +  const carType = carTypes.find(ct => ct.name === booking.carType || ct.id === booking.carType) || resolveDefaultCarType(booking.carType) || carTypes[0];
    
-   // Pénalité = CANCELLATION_PENALTY_RATE du tarif de base + temps x tarif minute
+   // Pï¿½nalitï¿½ = CANCELLATION_PENALTY_RATE du tarif de base + temps x tarif minute
    const penalty = (carType.basePrice * DEFAULT_PRICING.CANCELLATION_PENALTY_RATE) + (elapsedMinutes * carType.pricePerMinute);
  
    return Math.round(Math.max(penalty, LIMITS.MIN_CANCELLATION_PENALTY) * 100) / 100;
  };
  
  /**
-  * Débiter la pénalité d'annulation du portefeuille de l'utilisateur
-  * et libérer le chauffeur
+  * Dï¿½biter la pï¿½nalitï¿½ d'annulation du portefeuille de l'utilisateur
+  * et libï¿½rer le chauffeur
 diff --git a/src/types/booking.ts b/src/types/booking.ts
 index b16f38c..0a4607f 100644
 --- a/src/types/booking.ts
 +++ b/src/types/booking.ts
 @@ -31,21 +31,21 @@ export interface PreciseLocation extends Location {
-  * Suggestion d'adresse pour l'autocomplétion Google Maps
+  * Suggestion d'adresse pour l'autocomplï¿½tion Google Maps
   */
  export interface PlaceSuggestion {
    description: string;
@@ -9566,13 +9566,13 @@ index b16f38c..0a4607f 100644
  }
  
  /**
-  * Statut d'une réservation
+  * Statut d'une rï¿½servation
   */
 -export type BookingStatus = 'pending' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
 +export type BookingStatus = 'pending' | 'scheduled' | 'accepted' | 'driver_arrived' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
  
  /**
-  * Interface pour une réservation de taxi
+  * Interface pour une rï¿½servation de taxi
   */
  export interface Booking {
    id: string;
@@ -9586,21 +9586,21 @@ index b16f38c..0a4607f 100644
    automaticSearch?: {
      enabled: boolean;
      intervalSeconds: number; // Intervalle entre tentatives (60-180s)
-     attemptCount: number; // Nombre de tentatives effectuées
-     maxAttempts: number; // Nombre max de tentatives (défaut: 10)
-     lastAttemptAt?: Date | Timestamp; // Date de la dernière tentative
+     attemptCount: number; // Nombre de tentatives effectuï¿½es
+     maxAttempts: number; // Nombre max de tentatives (dï¿½faut: 10)
+     lastAttemptAt?: Date | Timestamp; // Date de la derniï¿½re tentative
    };
  
 +  rideMode?: 'immediate' | 'scheduled';
 +  scheduledAt?: Date | Timestamp;
 +
-   failureReason?: string; // Raison d'échec (si status = 'failed')
+   failureReason?: string; // Raison d'ï¿½chec (si status = 'failed')
    cancellationReason?: string; // Raison d'annulation (si status = 'cancelled')
  
-   // Réservation pour tiers (Book for someone else)
-   bookedForSomeoneElse?: boolean; // Indique si c'est une réservation pour un tiers
+   // Rï¿½servation pour tiers (Book for someone else)
+   bookedForSomeoneElse?: boolean; // Indique si c'est une rï¿½servation pour un tiers
    passengerName?: string; // Nom du passager
-   passengerPhone?: string; // Téléphone du passager
+   passengerPhone?: string; // Tï¿½lï¿½phone du passager
    passengerNotes?: string; // Notes optionnelles pour le chauffeur
  }
  
@@ -9610,10 +9610,10 @@ index 699d683..896b8ae 100644
 +++ b/src/types/firestore-collections.ts
 @@ -75,20 +75,21 @@ export interface UserCollection {
  export interface DriverCollection {
-   // === Champs existants (inchangés) ===
+   // === Champs existants (inchangï¿½s) ===
    driverId: string
    email: string
-   phoneNumber: null              // Toujours null — interdiction d'auth par téléphone
+   phoneNumber: null              // Toujours null ï¿½ interdiction d'auth par tï¿½lï¿½phone
    firstName: string
    lastName: string
    city?: string
@@ -9631,15 +9631,15 @@ index 699d683..896b8ae 100644
    driverType: 'chauffeur' | 'livreur' | 'les_deux'
    cityId: string                 // ex: 'edmonton'
 @@ -145,20 +146,27 @@ export interface DriverCollection {
-  * Aucun autre chauffeur ni client authentifié ne peut lire ces champs.
+  * Aucun autre chauffeur ni client authentifiï¿½ ne peut lire ces champs.
   */
  export interface DriverPrivate {
-   // Identité personnelle
+   // Identitï¿½ personnelle
    dob?: string
    nationality?: string
    idNumber?: string
  
-   // Adresse complète
+   // Adresse complï¿½te
    address?: string
 +  province?: string
 +  country?: string
@@ -9649,11 +9649,11 @@ index 699d683..896b8ae 100644
 +  taxId?: string
 +  hasFourDoors?: boolean
  
-   // Données fiscales / bancaires (chiffrées AES-GCM)
+   // Donnï¿½es fiscales / bancaires (chiffrï¿½es AES-GCM)
    ssn?: { data: string; iv: string; salt: string }
    bank?: { data: string; iv: string; salt: string }
  
-   // Documents KYC (URLs Firebase Storage + statut de vérification)
+   // Documents KYC (URLs Firebase Storage + statut de vï¿½rification)
    documents?: {
      [documentKey: string]: {
        url: string | null

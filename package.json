@@ -27,6 +27,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ci": "playwright test --reporter=list",
     "test:regression": "playwright test e2e/registration-full-flow.spec.ts e2e/registration-otp.spec.ts",
+    "reset:driver-submit-rate-limit": "node scripts/reset-driver-submit-rate-limit.mjs",
+    "reset:driver-stripe": "node scripts/reset-driver-stripe.mjs",
     "optimize:images": "node optimize-images.js",
     "convert:svg": "node convert-svg-to-webp.js"
   },

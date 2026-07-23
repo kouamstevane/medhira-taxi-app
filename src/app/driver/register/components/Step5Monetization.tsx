@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { Loader2, ShieldCheck, Lock } from 'lucide-react';
+import { Loader2, Lock } from 'lucide-react';
 import { ACTIVE_MARKET } from '@/utils/constants';
 import { InputField } from '@/components/forms/InputField';
 import { useToast } from '@/hooks/useToast';
@@ -82,18 +82,10 @@ export default function Step5Monetization({
         <div>
           <p className="font-semibold text-white text-sm">Coordonnées bancaires sécurisées par Stripe</p>
           <p className="text-xs text-[#9CA3AF] mt-1 leading-relaxed">
-            Pour votre sécurité et conformité <strong>PCI DSS</strong>, vos informations bancaires
-            sont collectées directement via le formulaire sécurisé de Stripe — jamais stockées
-            sur nos serveurs.
+            Pour votre sécurité et la conformité <strong>PCI DSS</strong>, vous serez redirigé vers
+            le formulaire sécurisé de Stripe pour renseigner vos informations bancaires après la
+            soumission de votre candidature. Elles ne sont jamais stockées sur nos serveurs.
           </p>
-        </div>
-      </div>
-
-      <div className="flex justify-center">
-        <div className="bg-[#1A1A1A] rounded-xl p-3 text-center border border-white/[0.06] w-32">
-          <ShieldCheck className="w-6 h-6 text-green-600 mx-auto mb-1" />
-          <p className="text-xs font-medium text-[#9CA3AF]">PCI DSS</p>
-          <p className="text-xs text-[#4B5563]">Certifié</p>
         </div>
       </div>
 

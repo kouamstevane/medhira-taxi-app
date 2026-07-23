@@ -98,7 +98,7 @@ test.describe('Inscription Chauffeur — Parcours complet', () => {
         name: `${f}.jpg`, mimeType: 'image/jpeg', buffer: Buffer.from('x'),
       });
     }
-    await page.getByRole('button', { name: /valider les documents/i }).click();
+    await page.getByRole('button', { name: /Continuer/i }).click();
 
     // Step 5 — Soumission
     await expect(page.getByRole('heading', { name: /paiement|monétisation/i })).toBeVisible({ timeout: 10_000 });
@@ -158,7 +158,7 @@ test.describe('Inscription Chauffeur — Parcours complet', () => {
         name: `${f}.jpg`, mimeType: 'image/jpeg', buffer: Buffer.from('x'),
       });
     }
-    await page.getByRole('button', { name: /valider les documents/i }).click();
+    await page.getByRole('button', { name: /Continuer/i }).click();
 
     // Step 5
     await expect(page.getByRole('heading', { name: /paiement|monétisation/i })).toBeVisible({ timeout: 10_000 });

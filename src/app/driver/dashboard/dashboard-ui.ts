@@ -21,12 +21,36 @@ export function getDriverDashboardQuickActions(hasDocumentIssue: boolean): Drive
   ];
 }
 
+interface DriverRideWorkAccessInput {
+  status?: string | null;
+  stripeAccountStatus?: string | null;
+  stripePayoutsEnabled?: boolean | null;
+}
+
+export function isDriverApprovedOrActive(status?: string | null): boolean {
+  return status === 'approved' || status === 'active';
+}
+
+export function canDriverAccessRideWork({
+  status,
+  stripeAccountStatus,
+  stripePayoutsEnabled,
+}: DriverRideWorkAccessInput): boolean {
+  return (
+    isDriverApprovedOrActive(status) &&
+    stripeAccountStatus === 'active' &&
+    stripePayoutsEnabled === true
+  );
+}
+
 interface DriverAvailabilityCardOptions {
   isAvailable: boolean;
   isUpdating?: boolean;
   isApproved: boolean;
   hasLocation: boolean;
 }
+
+type DriverAvailabilityIndicatorTone = 'online' | 'warning' | 'offline';
 
 export function getDriverAvailabilityCardState({
   isAvailable,
@@ -41,16 +65,18 @@ export function getDriverAvailabilityCardState({
       description: 'Changement en cours...',
       actionLabel: '...',
       actionAriaLabel: 'Disponibilité en cours de mise à jour',
+      indicatorTone: (isAvailable ? 'online' : 'offline') satisfies DriverAvailabilityIndicatorTone,
     };
   }
 
-  if (isAvailable && !isApproved) {
+  if (!isApproved) {
     return {
-      statusLabel: 'Disponible',
-      statusDetail: 'Non visible',
+      statusLabel: 'En attente',
+      statusDetail: 'Dossier en revue',
       description: 'Compte en attente d’approbation',
-      actionLabel: 'Passer hors ligne',
-      actionAriaLabel: 'Passer hors ligne',
+      actionLabel: 'Indisponible',
+      actionAriaLabel: 'Compte en attente d’approbation',
+      indicatorTone: 'offline' satisfies DriverAvailabilityIndicatorTone,
     };
   }
 
@@ -61,6 +87,7 @@ export function getDriverAvailabilityCardState({
       description: 'Position introuvable',
       actionLabel: 'Passer hors ligne',
       actionAriaLabel: 'Passer hors ligne',
+      indicatorTone: 'warning' satisfies DriverAvailabilityIndicatorTone,
     };
   }
 
@@ -71,6 +98,7 @@ export function getDriverAvailabilityCardState({
         description: 'Visible par les clients',
         actionLabel: 'Passer hors ligne',
         actionAriaLabel: 'Passer hors ligne',
+        indicatorTone: 'online' satisfies DriverAvailabilityIndicatorTone,
       }
     : {
         statusLabel: 'Hors ligne',
@@ -78,5 +106,6 @@ export function getDriverAvailabilityCardState({
         description: 'Activez pour recevoir des demandes',
         actionLabel: 'Passer en ligne',
         actionAriaLabel: 'Passer en ligne',
+        indicatorTone: 'offline' satisfies DriverAvailabilityIndicatorTone,
       };
 }
