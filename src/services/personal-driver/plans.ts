@@ -1,0 +1,41 @@
+import type { PersonalDriverPlan, PersonalDriverPlanId } from '@/types/personal-driver';
+
+export const PERSONAL_DRIVER_PLANS: Record<PersonalDriverPlanId, PersonalDriverPlan> = {
+  basic: {
+    id: 'basic',
+    name: 'Basic',
+    promise: 'La simplicité au quotidien',
+    pricePerKm: 1.5,
+    minimumBillableKm: 200,
+    minimumAmount: 300,
+    allowedWeekdays: [1, 2, 3, 4, 5],
+    includedRegularWaitMinutes: 15,
+    includedSpecialTrips: 0,
+    benefits: ['Service du lundi au vendredi', 'Chauffeur attitré', 'Suivi des trajets'],
+  },
+  classic: {
+    id: 'classic',
+    name: 'Classic',
+    badge: 'Le plus choisi',
+    promise: 'Le meilleur équilibre pour vos déplacements',
+    pricePerKm: 1.25,
+    minimumBillableKm: 360,
+    minimumAmount: 450,
+    allowedWeekdays: [1, 2, 3, 4, 5, 6],
+    includedRegularWaitMinutes: 30,
+    includedSpecialTrips: 2,
+    benefits: ['Service du lundi au samedi', 'Chauffeur attitré', 'Priorité de réservation'],
+  },
+  premium: {
+    id: 'premium',
+    name: 'Premium',
+    promise: 'Un service privilégié, chaque jour',
+    pricePerKm: 1.1,
+    minimumBillableKm: 591,
+    minimumAmount: 650,
+    allowedWeekdays: [0, 1, 2, 3, 4, 5, 6],
+    includedRegularWaitMinutes: 60,
+    includedSpecialTrips: 4,
+    benefits: ['Service 7 jours sur 7', 'Chauffeur prioritaire', 'Flexibilité maximale'],
+  },
+};

@@ -98,5 +98,17 @@ export type {
   DeliveryPriceResult,
 } from './food-delivery';
 
+export type {
+  PersonalDriverPlanId,
+  PersonalDriverPlan,
+  PersonalDriverTripType,
+  PersonalDriverWeekday,
+  PersonalDriverSubscriptionStatus,
+  PersonalDriverTripStatus,
+  PersonalDriverPriceInput,
+  PersonalDriverPlanPrice,
+  PersonalDriverPriceComparison,
+} from './personal-driver';
+
 export type { Timestamp };
 
