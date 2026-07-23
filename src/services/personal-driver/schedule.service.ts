@@ -64,7 +64,10 @@ function createTripDraft(
 export function buildPersonalDriverTripDrafts(
   input: PersonalDriverTripDraftInput,
 ): PersonalDriverTripDraft[] {
-  if (input.tripType === 'round_trip' && !input.returnTime?.trim()) {
+  const returnTime =
+    input.tripType === 'round_trip' ? input.returnTime?.trim() ?? null : null;
+
+  if (input.tripType === 'round_trip' && !returnTime) {
     throw new Error('returnTime is required for round_trip subscriptions');
   }
 
@@ -82,8 +85,8 @@ export function buildPersonalDriverTripDrafts(
     const dateString = formatDate(date);
     trips.push(createTripDraft(input, dateString, 'outbound', input.departureTime));
 
-    if (input.tripType === 'round_trip') {
-      trips.push(createTripDraft(input, dateString, 'return', input.returnTime));
+    if (returnTime !== null) {
+      trips.push(createTripDraft(input, dateString, 'return', returnTime));
     }
   }
 

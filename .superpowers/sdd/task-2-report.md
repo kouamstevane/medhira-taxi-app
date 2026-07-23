@@ -40,3 +40,11 @@ The brief's round-trip example expected 8 drafts for Mondays from `2026-08-03` a
 - Added focused assertions for round-trip `scheduledAtIso` values and null assignment fields.
 - Red phase: the new test failed because the function did not throw.
 - Green phase: `npx jest src/services/personal-driver/schedule.service.test.ts --runInBand --watch=false` passed with 3 tests and 0 failures.
+
+## TypeScript Review Fix Evidence
+
+- Baseline: `npx tsc --noEmit` failed at `schedule.service.ts:86` because `input.returnTime` was still `string | undefined` at the return-trip call.
+- Fixed by deriving a trimmed local `returnTime` as `string | null`, validating it before calendar generation, and narrowing the return-trip branch on `returnTime !== null`.
+- Focused verification: `npx jest src/services/personal-driver/schedule.service.test.ts --runInBand --watch=false` passed with 3 tests and 0 failures.
+- TypeScript verification: `npx tsc --noEmit` exited with code 0.
+- Diff verification: `git diff --check` exited with code 0.
