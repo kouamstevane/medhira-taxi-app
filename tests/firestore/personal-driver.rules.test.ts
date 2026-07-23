@@ -5,7 +5,7 @@ import {
   RulesTestContext,
   RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -19,12 +19,14 @@ describe('Personal driver Firestore rules', () => {
   const otherClientId = 'personal-driver-other-client';
   const adminId = 'personal-driver-admin';
   const driverId = 'personal-driver-driver';
+  const unassignedDriverId = 'personal-driver-unassigned-driver';
   const subscriptionId = 'personal-driver-subscription';
   const tripId = 'personal-driver-trip';
 
   const subscription = {
     userId: clientId,
     status: 'pending_validation',
+    paymentStatus: 'pending',
     createdAt: '2026-07-24T10:00:00.000Z',
   };
 
@@ -77,17 +79,32 @@ describe('Personal driver Firestore rules', () => {
     await assertFails(getDoc(doc(db, 'personal_driver_subscriptions', subscriptionId)));
   });
 
-  test('admin can read and update subscriptions and trips', async () => {
+  test('admin can read subscriptions but cannot write them through the client SDK', async () => {
     const db = testEnv.authenticatedContext(adminId).firestore();
 
     await assertSucceeds(getDoc(doc(db, 'personal_driver_subscriptions', subscriptionId)));
-    await assertSucceeds(updateDoc(doc(db, 'personal_driver_subscriptions', subscriptionId), {
+    await assertFails(setDoc(doc(db, 'personal_driver_subscriptions', 'admin-created-subscription'), subscription));
+    await assertFails(updateDoc(doc(db, 'personal_driver_subscriptions', subscriptionId), {
       status: 'active',
     }));
+    await assertFails(deleteDoc(doc(db, 'personal_driver_subscriptions', subscriptionId)));
     await assertSucceeds(getDoc(doc(db, 'personal_driver_trips', tripId)));
     await assertSucceeds(updateDoc(doc(db, 'personal_driver_trips', tripId), {
       assignedDriverId: 'replacement-driver',
     }));
+  });
+
+  test('subscription owner cannot change status or payment fields', async () => {
+    const db = testEnv.authenticatedContext(clientId).firestore();
+
+    await assertFails(setDoc(doc(db, 'personal_driver_subscriptions', 'client-created-subscription'), subscription));
+    await assertFails(updateDoc(doc(db, 'personal_driver_subscriptions', subscriptionId), {
+      status: 'active',
+    }));
+    await assertFails(updateDoc(doc(db, 'personal_driver_subscriptions', subscriptionId), {
+      paymentStatus: 'paid',
+    }));
+    await assertFails(deleteDoc(doc(db, 'personal_driver_subscriptions', subscriptionId)));
   });
 
   test('assigned driver can read their assigned trip', async () => {
@@ -107,6 +124,24 @@ describe('Personal driver Firestore rules', () => {
     }));
     await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
       assignedDriverId: 'replacement-driver',
+    }));
+    await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
+      userId: 'replacement-client',
+    }));
+    await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
+      subscriptionId: 'replacement-subscription',
+    }));
+    await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
+      scheduledAt: '2026-07-26T10:00:00.000Z',
+    }));
+  });
+
+  test('unassigned driver cannot read or update the trip', async () => {
+    const db = testEnv.authenticatedContext(unassignedDriverId).firestore();
+
+    await assertFails(getDoc(doc(db, 'personal_driver_trips', tripId)));
+    await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
+      status: 'en_route',
     }));
   });
 
