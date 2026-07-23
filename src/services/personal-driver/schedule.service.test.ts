@@ -40,7 +40,27 @@ describe('Personal Driver schedule generation', () => {
     expect(trips).toHaveLength(10);
     expect(trips[0].direction).toBe('outbound');
     expect(trips[1].direction).toBe('return');
+    expect(trips[0].scheduledAtIso).toBe('2026-08-03T07:30:00');
+    expect(trips[1].scheduledAtIso).toBe('2026-08-03T17:00:00');
     expect(trips[1].pickupAddress).toBe('Travail');
     expect(trips[1].destinationAddress).toBe('Maison');
+    expect(trips[1].assignedDriverId).toBeNull();
+    expect(trips[1].assignedVehicleId).toBeNull();
+  });
+
+  it('rejects round trips without a return time', () => {
+    expect(() =>
+      buildPersonalDriverTripDrafts({
+        subscriptionId: 'sub_3',
+        userId: 'user_1',
+        startDate: '2026-08-03',
+        selectedWeekdays: [1],
+        tripType: 'round_trip',
+        departureTime: '07:30',
+        pickupAddress: 'Maison',
+        destinationAddress: 'Travail',
+        planId: 'basic',
+      }),
+    ).toThrow('returnTime is required for round_trip subscriptions');
   });
 });

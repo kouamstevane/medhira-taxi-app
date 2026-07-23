@@ -64,6 +64,10 @@ function createTripDraft(
 export function buildPersonalDriverTripDrafts(
   input: PersonalDriverTripDraftInput,
 ): PersonalDriverTripDraft[] {
+  if (input.tripType === 'round_trip' && !input.returnTime?.trim()) {
+    throw new Error('returnTime is required for round_trip subscriptions');
+  }
+
   const [year, month, day] = input.startDate.split('-').map(Number);
   const startDate = new Date(year, month - 1, day);
   const selectedWeekdays = new Set(input.selectedWeekdays);
@@ -79,7 +83,7 @@ export function buildPersonalDriverTripDrafts(
     trips.push(createTripDraft(input, dateString, 'outbound', input.departureTime));
 
     if (input.tripType === 'round_trip') {
-      trips.push(createTripDraft(input, dateString, 'return', input.returnTime ?? ''));
+      trips.push(createTripDraft(input, dateString, 'return', input.returnTime));
     }
   }
 
