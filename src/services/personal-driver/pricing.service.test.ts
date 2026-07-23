@@ -32,6 +32,18 @@ describe('Personal Driver pricing', () => {
     expect(result.plans.basic.minimumApplied).toBe(true);
   });
 
+  it('applies explicit minimums below thresholds and distance pricing at thresholds', () => {
+    const premiumBelowThreshold = calculatePersonalDriverPrices({ monthlyDistanceKm: 590, requestedWeekdays: [1, 2, 3, 4, 5] });
+    const premiumAtThreshold = calculatePersonalDriverPrices({ monthlyDistanceKm: 591, requestedWeekdays: [1, 2, 3, 4, 5] });
+    const classicAtThreshold = calculatePersonalDriverPrices({ monthlyDistanceKm: 360, requestedWeekdays: [1, 2, 3, 4, 5] });
+    const basicAtThreshold = calculatePersonalDriverPrices({ monthlyDistanceKm: 200, requestedWeekdays: [1, 2, 3, 4, 5] });
+
+    expect(premiumBelowThreshold.plans.premium.totalBeforeTax).toBe(650);
+    expect(premiumAtThreshold.plans.premium.totalBeforeTax).toBe(650.1);
+    expect(classicAtThreshold.plans.classic.totalBeforeTax).toBe(450);
+    expect(basicAtThreshold.plans.basic.totalBeforeTax).toBe(300);
+  });
+
   it('recommends Classic when Classic is cheaper than Basic for high weekday mileage', () => {
     const result = calculatePersonalDriverPrices({ monthlyDistanceKm: 440, requestedWeekdays: [1, 2, 3, 4, 5] });
 
