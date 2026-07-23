@@ -276,6 +276,29 @@ service cloud.firestore {
       // Les transactions ne doivent pas être supprimées pour garantir l'intégrité
       allow delete: if false;
     }
+
+    match /personal_driver_subscriptions/{subscriptionId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /personal_driver_trips/{tripId} {
+      allow read: if isAuthenticated() &&
+                     (resource.data.userId == request.auth.uid ||
+                      resource.data.assignedDriverId == request.auth.uid ||
+                      isAdmin());
+
+      allow create, delete: if isAdmin();
+
+      allow update: if isAdmin() ||
+                       (isAuthenticated() &&
+                        resource.data.assignedDriverId == request.auth.uid &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['status', 'statusHistory', 'updatedAt',
+                                    'driverLocation', 'driverStatus', 'pickupTime',
+                                    'completionTime', 'startedAt', 'completedAt',
+                                    'arrivedAt', 'cancelledAt']));
+    }
     
     // ============================================================================
     // COLLECTION BOOKINGS
