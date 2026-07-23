@@ -54,3 +54,13 @@ DONE
 - Ran:
   `node node_modules\\jest\\bin\\jest.js src/services/personal-driver/pricing.service.test.ts --runInBand`
 - Result: **1 suite passed, 5 tests passed, 0 failed**.
+
+## Re-review Fix: Minimum Billable Distance Thresholds
+
+- Updated `pricing.service.ts` to apply `plan.minimumAmount` whenever monthly distance is below `plan.minimumBillableKm`.
+- At or above the threshold, pricing now explicitly uses `Math.max(distanceAmount, plan.minimumAmount)`.
+- `minimumApplied` now reflects the threshold minimum or explicit minimum floor, including equality at the floor.
+- Preserved the required Premium boundary expectations: 590 km returns 650 CAD and 591 km returns 650.1 CAD.
+- Focused verification:
+  `node node_modules\\jest\\bin\\jest.js src/services/personal-driver/pricing.service.test.ts --runInBand`
+  Result: **1 suite passed, 5 tests passed, 0 failed**.

@@ -22,7 +22,11 @@ function calculatePlanPrice(
 ): PersonalDriverPlanPrice {
   const plan = PERSONAL_DRIVER_PLANS[planId];
   const distanceAmount = input.monthlyDistanceKm * plan.pricePerKm;
-  const totalBeforeTax = Math.max(distanceAmount, plan.minimumAmount);
+  const isBelowMinimumBillableDistance = input.monthlyDistanceKm < plan.minimumBillableKm;
+  const totalBeforeTax = isBelowMinimumBillableDistance
+    ? plan.minimumAmount
+    : Math.max(distanceAmount, plan.minimumAmount);
+  const minimumApplied = isBelowMinimumBillableDistance || distanceAmount <= plan.minimumAmount;
 
   return {
     planId,
@@ -32,7 +36,7 @@ function calculatePlanPrice(
     minimumBillableKm: plan.minimumBillableKm,
     distanceAmount,
     totalBeforeTax,
-    minimumApplied: totalBeforeTax === plan.minimumAmount,
+    minimumApplied,
     savingsComparedToBasic: 0,
   };
 }
