@@ -30,7 +30,10 @@ export const STRIPE_CURRENCY_BY_MARKET: Record<string, string | null> = {
 // ============================================================================
 
 /** But d'un PaymentIntent */
-export type PaymentIntentPurpose = 'taxi_ride' | 'wallet_recharge';
+export type PaymentIntentPurpose =
+  | 'taxi_ride'
+  | 'wallet_recharge'
+  | 'personal_driver_subscription';
 
 /** Metadata attachée à chaque PaymentIntent */
 export interface PaymentIntentMetadata {
@@ -38,6 +41,7 @@ export interface PaymentIntentMetadata {
   userId: string;
   /** ID de la course (pour taxi_ride uniquement) */
   bookingId?: string;
+  subscriptionId?: string;
   /** Montant en devise locale affiché à l'utilisateur */
   displayAmount?: string;
   /** Marché actif au moment du paiement */

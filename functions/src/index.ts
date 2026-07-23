@@ -298,6 +298,7 @@ export { submitRestaurantApplication } from './restaurant/submitRestaurantApplic
 export { activateClientRole } from './roles/activateClientRole.js';
 export { notifyAdminNewRestaurant } from './admin/notifyAdminNewRestaurant.js';
 export { createStripeConnectAccount } from './stripe/createStripeConnectAccount.js';
+export { createPersonalDriverSubscriptionPayment } from './personalDriver/index.js';
 
 /**
  * Cloud Function: cleanupFailedUploads
