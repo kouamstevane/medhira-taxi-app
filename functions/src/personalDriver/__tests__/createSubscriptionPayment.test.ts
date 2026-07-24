@@ -6,6 +6,7 @@ const mockTripRef = { id: 'trip_123' };
 const mockTransaction = {
   get: jest.fn(),
   create: jest.fn(),
+  update: jest.fn(),
 };
 const mockBatch = {
   set: jest.fn(),
@@ -82,6 +83,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     mockSubscriptionRef.get.mockReset();
     mockTransaction.get.mockReset();
     mockTransaction.create.mockReset();
+    mockTransaction.update.mockReset();
     mockDb.runTransaction.mockClear();
     mockBatch.commit.mockReset();
     mockStripe.paymentIntents.create.mockReset();
@@ -200,7 +202,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
           userId: 'user_123',
         },
       }),
-      expect.objectContaining({ idempotencyKey: `personal_driver_subscription_${subscriptionId}` }),
+      expect.objectContaining({ idempotencyKey: `personal_driver_subscription_${subscriptionId}_1` }),
     );
     expect(mockBatch.set).toHaveBeenCalledWith(
       mockSubscriptionRef,
@@ -296,11 +298,67 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 45000 }),
-      expect.objectContaining({ idempotencyKey: `personal_driver_subscription_${subscriptionId}` }),
+      expect.objectContaining({ idempotencyKey: `personal_driver_subscription_${subscriptionId}_1` }),
     );
 
     releasePaymentIntent?.({ id: 'pi_123', client_secret: 'pi_123_secret' });
     await expect(firstRequest).resolves.toEqual(expect.objectContaining({ paymentIntentId: 'pi_123' }));
+  });
+
+  it('marks a Stripe creation failure recoverable and lets a retry reclaim it', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    let claimedData: Record<string, unknown> | undefined;
+    mockTransaction.get.mockImplementation(async () => (
+      claimedData
+        ? { exists: true, data: () => claimedData }
+        : { exists: false }
+    ));
+    mockTransaction.create.mockImplementation((_ref, data) => {
+      claimedData = data;
+    });
+    mockTransaction.update.mockImplementation((_ref, data) => {
+      claimedData = { ...claimedData, ...data };
+    });
+    mockStripe.paymentIntents.create.mockRejectedValueOnce(new Error('Stripe unavailable'));
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).rejects.toMatchObject({
+      code: 'internal',
+    });
+
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
+      paymentStatus: 'payment_creation_failed',
+      paymentCreationFailedAt: expect.any(Date),
+      paymentCreationError: 'Stripe unavailable',
+    }));
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).resolves.toEqual(
+      expect.objectContaining({ paymentIntentId: 'pi_123' }),
+    );
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('reclaims a stale payment creation claim', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    mockTransaction.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        userId: 'user_123',
+        status: 'pending_payment',
+        paymentStatus: 'creating_payment',
+        paymentCreationClaimedAt: new Date(Date.now() - (60 * 60 * 1000)),
+        paymentCreationAttempt: 1,
+      }),
+    });
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).resolves.toEqual(
+      expect.objectContaining({ paymentIntentId: 'pi_123' }),
+    );
+
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
+      paymentStatus: 'creating_payment',
+      paymentCreationClaimedAt: expect.any(Date),
+    }));
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
   });
 
   it('cancels the PaymentIntent when Firestore persistence fails', async () => {
@@ -316,6 +374,37 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       undefined,
       { idempotencyKey: 'cancel_personal_driver_subscription_pi_123' },
     );
+  });
+
+  it('marks an orphaned commit failure recoverable after cancellation', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    let claimedData: Record<string, unknown> | undefined;
+    mockTransaction.get.mockImplementation(async () => (
+      claimedData
+        ? { exists: true, data: () => claimedData }
+        : { exists: false }
+    ));
+    mockTransaction.create.mockImplementation((_ref, data) => {
+      claimedData = data;
+    });
+    mockTransaction.update.mockImplementation((_ref, data) => {
+      claimedData = { ...claimedData, ...data };
+    });
+    mockBatch.commit.mockRejectedValue(new Error('Firestore unavailable'));
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).rejects.toMatchObject({
+      code: 'internal',
+    });
+
+    expect(mockStripe.paymentIntents.cancel).toHaveBeenCalledWith(
+      'pi_123',
+      undefined,
+      { idempotencyKey: 'cancel_personal_driver_subscription_pi_123' },
+    );
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
+      paymentStatus: 'payment_creation_failed',
+      paymentCreationAttempt: 2,
+    }));
   });
 
   it('does not cancel a PaymentIntent when the failed commit persisted its subscription', async () => {

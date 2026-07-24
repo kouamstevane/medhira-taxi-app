@@ -176,3 +176,39 @@ npm run build
 ```
 
 Result: passed (`tsc`, exit code 0).
+
+## Final Recovery Finding Fix Evidence
+
+- Subscription payment claims now persist a unique claim ID, claim timestamp, and payment-creation attempt number. A live `creating_payment` claim remains abort-only, but failed claims and claims older than 15 minutes are reclaimed atomically in a Firestore transaction.
+- Stripe creation failures conditionally transition the owning claim to `payment_creation_failed`, with a bounded error message and failure timestamp. A later retry reclaims that state instead of being permanently aborted.
+- Commit failures that confirm an orphaned PaymentIntent now conditionally mark the claim recoverable after compensation. When cancellation succeeds, the persisted attempt is advanced so the next retry gets a new Stripe idempotency scope rather than replaying the canceled PaymentIntent. Failed or uncertain Stripe creation keeps the same attempt key.
+- The successful final batch still persists `status: pending_payment` and `paymentStatus: authorized`.
+
+### Verification
+
+TDD red run:
+
+```powershell
+cd functions
+npx jest --config jest.config.js src/personalDriver/__tests__/createSubscriptionPayment.test.ts --runInBand
+```
+
+Result: failed as expected before the recovery implementation. A Stripe creation error escaped without an `internal` callable error or failure-state update, a one-hour-old `creating_payment` claim aborted instead of creating, and an orphaned commit failure did not advance the recoverable claim state.
+
+Final focused suite:
+
+```powershell
+cd functions
+npx jest --config jest.config.js src/personalDriver/__tests__/createSubscriptionPayment.test.ts --runInBand
+```
+
+Result: 15 passed, 0 failed.
+
+Build:
+
+```powershell
+cd functions
+npm run build
+```
+
+Result: passed (`tsc`, exit code 0).
