@@ -74,6 +74,11 @@ function makeRequest(data: unknown, uid?: string) {
 describe('createPersonalDriverSubscriptionPayment', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSubscriptionRef.get.mockReset();
+    mockBatch.commit.mockReset();
+    mockStripe.paymentIntents.create.mockReset();
+    mockStripe.paymentIntents.retrieve.mockReset();
+    mockStripe.paymentIntents.cancel.mockReset();
     mockSubscriptionRef.get.mockResolvedValue({ exists: false });
     mockBatch.commit.mockResolvedValue(undefined);
     mockStripe.paymentIntents.create.mockResolvedValue({
@@ -146,6 +151,21 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     }, 'user_123'))).rejects.toMatchObject({ code: 'invalid-argument' });
 
     expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+
+  it('derives the same subscription ID for the same user and request ID only', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+
+    await createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'));
+    await createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'));
+    await createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_456'));
+
+    const subscriptionDocCalls = mockSubscriptionDoc.mock.calls as unknown as Array<[string]>;
+    const [firstSubscriptionId] = subscriptionDocCalls[0];
+    const [replayedSubscriptionId] = subscriptionDocCalls[1];
+    const [otherUserSubscriptionId] = subscriptionDocCalls[2];
+    expect(replayedSubscriptionId).toBe(firstSubscriptionId);
+    expect(otherUserSubscriptionId).not.toBe(firstSubscriptionId);
   });
 
   it('recalculates the price and creates the subscription, trips, and PaymentIntent', async () => {
@@ -242,6 +262,27 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       undefined,
       { idempotencyKey: 'cancel_personal_driver_subscription_pi_123' },
     );
+  });
+
+  it('does not cancel a PaymentIntent when the failed commit persisted its subscription', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    mockSubscriptionRef.get
+      .mockResolvedValueOnce({ exists: false })
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({
+          userId: 'user_123',
+          stripePaymentIntentId: 'pi_123',
+        }),
+      });
+    mockBatch.commit.mockRejectedValue(new Error('Firestore unavailable'));
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).rejects.toMatchObject({
+      code: 'internal',
+    });
+
+    expect(mockSubscriptionRef.get).toHaveBeenCalledTimes(2);
+    expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
   });
 
   it('still returns an internal error when compensation cancellation fails', async () => {

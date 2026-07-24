@@ -213,15 +213,28 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     try {
       await batch.commit();
     } catch (error) {
+      let paymentIntentIsOrphaned = false;
       try {
-        await getStripe().paymentIntents.cancel(paymentIntent.id, undefined, {
-          idempotencyKey: `cancel_personal_driver_subscription_${paymentIntent.id}`,
-        });
-      } catch (cancelError) {
-        console.error('[createPersonalDriverSubscriptionPayment] Failed to cancel orphaned PaymentIntent', {
+        const persistedSubscription = await subscriptionRef.get();
+        paymentIntentIsOrphaned = !persistedSubscription.exists;
+      } catch (verificationError) {
+        console.error('[createPersonalDriverSubscriptionPayment] Failed to verify subscription after batch commit failure', {
           paymentIntentId: paymentIntent.id,
-          error: cancelError instanceof Error ? cancelError.message : cancelError,
+          error: verificationError instanceof Error ? verificationError.message : verificationError,
         });
+      }
+
+      if (paymentIntentIsOrphaned) {
+        try {
+          await getStripe().paymentIntents.cancel(paymentIntent.id, undefined, {
+            idempotencyKey: `cancel_personal_driver_subscription_${paymentIntent.id}`,
+          });
+        } catch (cancelError) {
+          console.error('[createPersonalDriverSubscriptionPayment] Failed to cancel orphaned PaymentIntent', {
+            paymentIntentId: paymentIntent.id,
+            error: cancelError instanceof Error ? cancelError.message : cancelError,
+          });
+        }
       }
       throw new HttpsError('internal', 'Impossible d’enregistrer l’abonnement.');
     }

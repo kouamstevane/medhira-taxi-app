@@ -104,3 +104,38 @@ npm run build
 ```
 
 Result: passed (`tsc`, exit code 0).
+
+## Remaining Finding Fix Evidence
+
+- After a Firestore batch commit rejection, the callable re-reads the deterministic subscription document before compensating. It cancels the PaymentIntent only when that read confirms the subscription document is absent. A visible persisted subscription therefore preserves its linked PaymentIntent, including an idempotency replay.
+- Added request-ID determinism coverage: the same `(uid, requestId)` resolves to the same subscription document ID, while the same request ID under another UID resolves to a different document ID.
+- Added commit-failure coverage proving that a subscription visible after the failed commit prevents PaymentIntent cancellation. The existing no-document failure test continues to cover cancellation of a confirmed orphan.
+
+### Verification
+
+TDD red run:
+
+```powershell
+cd functions
+npx jest --config jest.config.js src/personalDriver/__tests__/createSubscriptionPayment.test.ts --runInBand
+```
+
+Result: failed as expected before the compensation change because the failed-commit path performed only one subscription read and cancelled the PaymentIntent.
+
+Final focused suite:
+
+```powershell
+cd functions
+npx jest --config jest.config.js src/personalDriver/__tests__/createSubscriptionPayment.test.ts --runInBand
+```
+
+Result: 11 passed, 0 failed.
+
+Build:
+
+```powershell
+cd functions
+npm run build
+```
+
+Result: passed (`tsc`, exit code 0).
