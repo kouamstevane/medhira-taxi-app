@@ -86,12 +86,18 @@ interface CreateSubscriptionPaymentResult {
   currency: string;
 }
 
+interface SubscriptionPaymentClaim {
+  isCreator: boolean;
+  data?: FirebaseFirestore.DocumentData;
+}
+
 export const createPersonalDriverSubscriptionPayment = onCall(
   { region: 'europe-west1', secrets: [stripeSecretKey] },
   async (request: CallableRequest<unknown>): Promise<CreateSubscriptionPaymentResult> => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
     }
+    const userId = request.auth.uid;
 
     const parsed = inputSchema.safeParse(request.data);
     if (!parsed.success) {
@@ -124,10 +130,33 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     const subscriptionRef = db.collection('personal_driver_subscriptions')
       .doc(createSubscriptionId(request.auth.uid, input.requestId));
     const subscriptionId = subscriptionRef.id;
-    const existingSubscription = await subscriptionRef.get();
-    if (existingSubscription.exists) {
-      const existingData = existingSubscription.data();
-      if (!existingData || existingData.userId !== request.auth.uid || !existingData.stripePaymentIntentId) {
+    const subscriptionClaim = await db.runTransaction<SubscriptionPaymentClaim>(async (transaction) => {
+      const existingSubscription = await transaction.get(subscriptionRef);
+      if (existingSubscription.exists) {
+        return { isCreator: false, data: existingSubscription.data() };
+      }
+
+      transaction.create(subscriptionRef, {
+        id: subscriptionId,
+        userId,
+        status: 'pending_payment',
+        paymentStatus: 'creating_payment',
+        createdAt: new Date(),
+      });
+      return { isCreator: true };
+    });
+
+    if (!subscriptionClaim.isCreator) {
+      const existingData = subscriptionClaim.data;
+      if (!existingData || existingData.userId !== request.auth.uid) {
+        throw new HttpsError('internal', 'Impossible de récupérer le paiement existant.');
+      }
+
+      if (existingData.paymentStatus === 'creating_payment') {
+        throw new HttpsError('aborted', 'Création du paiement en cours. Veuillez réessayer.');
+      }
+
+      if (!existingData.stripePaymentIntentId) {
         throw new HttpsError('internal', 'Impossible de récupérer le paiement existant.');
       }
 
@@ -159,7 +188,7 @@ export const createPersonalDriverSubscriptionPayment = onCall(
         description: `Abonnement chauffeur personnel #${subscriptionId}`,
         automatic_payment_methods: { enabled: true },
       },
-      { idempotencyKey: `personal_driver_subscription_${subscriptionId}_${amountInSmallestUnit}` },
+      { idempotencyKey: `personal_driver_subscription_${subscriptionId}` },
     );
     if (!paymentIntent.client_secret) {
       throw new HttpsError('internal', 'Impossible de créer le PaymentIntent : client_secret manquant.');
@@ -216,7 +245,8 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       let paymentIntentIsOrphaned = false;
       try {
         const persistedSubscription = await subscriptionRef.get();
-        paymentIntentIsOrphaned = !persistedSubscription.exists;
+        paymentIntentIsOrphaned = !persistedSubscription.exists
+          || persistedSubscription.data()?.stripePaymentIntentId !== paymentIntent.id;
       } catch (verificationError) {
         console.error('[createPersonalDriverSubscriptionPayment] Failed to verify subscription after batch commit failure', {
           paymentIntentId: paymentIntent.id,

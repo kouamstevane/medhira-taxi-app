@@ -56,6 +56,43 @@ npm run build
 
 Result: passed (`tsc`, exit code 0).
 
+## Concurrency Idempotency Fix Evidence
+
+- Replaced the non-atomic subscription existence read with a Firestore transaction. The transaction creates a minimal `pending_payment` subscription claim with `paymentStatus: creating_payment`; only the transaction winner can create a Stripe PaymentIntent.
+- A request that finds a completed pending subscription replays its stored PaymentIntent. A request that finds the in-progress claim receives a retryable `aborted` response and does not call Stripe.
+- Stripe creation now uses `personal_driver_subscription_${subscriptionId}` as its idempotency key. The key has no amount component, so all retries for the same `(uid, requestId)` share one Stripe request scope.
+- The final batch still writes the complete subscription with `status: pending_payment` and `paymentStatus: authorized`. The commit-failure verification treats a placeholder without the newly created PaymentIntent ID as unpersisted for compensation.
+- Added a focused concurrency regression: while the first valid request waits in `paymentIntents.create`, a same-request retry with a different valid monthly distance is rejected as `aborted`; the transaction claim is present and Stripe `create` has exactly one call using the subscription-scoped key.
+
+### Verification
+
+TDD red run:
+
+```powershell
+cd functions
+npx jest --config jest.config.js src/personalDriver/__tests__/createSubscriptionPayment.test.ts --runInBand
+```
+
+Result: failed as expected before the implementation. The existing assertion received an amount-bearing key (`..._${subscriptionId}_45000`), and the held concurrent retry resolved by creating another PaymentIntent instead of returning `aborted`.
+
+Final focused suite:
+
+```powershell
+cd functions
+npx jest --config jest.config.js src/personalDriver/__tests__/createSubscriptionPayment.test.ts --runInBand
+```
+
+Result: 12 passed, 0 failed.
+
+Build:
+
+```powershell
+cd functions
+npm run build
+```
+
+Result: passed (`tsc`, exit code 0).
+
 ## Concern
 
 The command specified in the brief, `npm test -- personalDriver/createSubscriptionPayment.test.ts --runInBand`, cannot run because `functions/package.json` has no `test` script. Also, `functions/jest.config.js` only discovers tests beneath `src/**/__tests__/`, while the required test path is `src/personalDriver/createSubscriptionPayment.test.ts`. The explicit `npx jest` command above uses a command-line `--testMatch` override and leaves shared Jest configuration unchanged.
