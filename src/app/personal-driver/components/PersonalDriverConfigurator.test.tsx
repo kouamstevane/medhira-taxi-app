@@ -87,6 +87,24 @@ describe('PersonalDriverConfigurator', () => {
       'aria-describedby',
       'departure-time-error',
     );
+
+    expect(screen.getByLabelText('Adresse de depart')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Adresse de depart')).toHaveAttribute(
+      'aria-describedby',
+      'pickup-address-error',
+    );
+    expect(screen.getByLabelText('Destination')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Destination')).toHaveAttribute(
+      'aria-describedby',
+      'destination-address-error',
+    );
+    expect(screen.getByText("L'adresse de depart est requise.")).toHaveAttribute('role', 'alert');
+    expect(screen.getByText('La destination est requise.')).toHaveAttribute('role', 'alert');
+
+    const weekdaysFieldset = screen.getByRole('group', { name: 'Jours' });
+    expect(weekdaysFieldset).toHaveAttribute('aria-invalid', 'true');
+    expect(weekdaysFieldset).toHaveAttribute('aria-describedby', 'weekdays-error');
+    expect(screen.getByText('Choisissez au moins un jour.')).toHaveAttribute('role', 'alert');
   });
 
   it('clears the stale distance error after a successful calculation', async () => {

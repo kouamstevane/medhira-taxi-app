@@ -6,6 +6,8 @@ interface WeekdaySelectorProps {
   allowedWeekdays: PersonalDriverWeekday[];
   selectedWeekdays: PersonalDriverWeekday[];
   onChange: (weekdays: PersonalDriverWeekday[]) => void;
+  errorId?: string;
+  hasError?: boolean;
 }
 
 const weekdays: Array<{ value: PersonalDriverWeekday; label: string }> = [
@@ -18,7 +20,7 @@ const weekdays: Array<{ value: PersonalDriverWeekday; label: string }> = [
   { value: 0, label: 'Dimanche' },
 ];
 
-export function WeekdaySelector({ allowedWeekdays, selectedWeekdays, onChange }: WeekdaySelectorProps) {
+export function WeekdaySelector({ allowedWeekdays, selectedWeekdays, onChange, errorId, hasError = false }: WeekdaySelectorProps) {
   const toggleWeekday = (weekday: PersonalDriverWeekday) => {
     if (!allowedWeekdays.includes(weekday)) {
       return;
@@ -32,7 +34,10 @@ export function WeekdaySelector({ allowedWeekdays, selectedWeekdays, onChange }:
   };
 
   return (
-    <fieldset>
+    <fieldset
+      aria-describedby={hasError ? errorId : undefined}
+      aria-invalid={hasError}
+    >
       <legend className="mb-3 text-sm font-semibold text-white">Jours</legend>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {weekdays.map(({ value, label }) => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
@@ -48,6 +48,51 @@ interface FormErrors {
   returnTime?: string;
   startDate?: string;
   distance?: string;
+}
+
+interface AccessibleAddressInputProps {
+  error?: string;
+  errorId: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onSelect: (suggestion: Parameters<NonNullable<React.ComponentProps<typeof AddressInput>['onSelect']>>[0]) => void;
+  autocompleteService: google.maps.places.AutocompleteService | null;
+  required?: boolean;
+}
+
+function AccessibleAddressInput({ error, errorId, ...props }: AccessibleAddressInputProps) {
+  const fieldRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const input = fieldRef.current?.querySelector('input');
+    const errorNode = fieldRef.current?.querySelector('p');
+
+    if (input) {
+      input.setAttribute('aria-invalid', String(Boolean(error)));
+      if (error) {
+        input.setAttribute('aria-describedby', errorId);
+      } else {
+        input.removeAttribute('aria-describedby');
+      }
+    }
+
+    if (errorNode) {
+      if (error) {
+        errorNode.id = errorId;
+        errorNode.setAttribute('role', 'alert');
+      } else {
+        errorNode.removeAttribute('id');
+        errorNode.removeAttribute('role');
+      }
+    }
+  }, [error, errorId]);
+
+  return (
+    <div ref={fieldRef}>
+      <AddressInput {...props} error={error} />
+    </div>
+  );
 }
 
 function createRequestId(): string {
@@ -188,7 +233,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       }}
     >
       <section className="space-y-4" aria-label="Itineraire">
-        <AddressInput
+        <AccessibleAddressInput
           label="Adresse de depart"
           value={pickupAddress}
           onChange={(value) => {
@@ -198,9 +243,10 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           onSelect={(suggestion) => setPickupAddress(suggestion.description)}
           autocompleteService={autocompleteService}
           error={errors.pickupAddress}
+          errorId="pickup-address-error"
           required
         />
-        <AddressInput
+        <AccessibleAddressInput
           label="Destination"
           value={destinationAddress}
           onChange={(value) => {
@@ -210,6 +256,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           onSelect={(suggestion) => setDestinationAddress(suggestion.description)}
           autocompleteService={autocompleteService}
           error={errors.destinationAddress}
+          errorId="destination-address-error"
           required
         />
         <button
@@ -256,8 +303,10 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           allowedWeekdays={plan.allowedWeekdays}
           selectedWeekdays={weekdays}
           onChange={setWeekdays}
+          errorId="weekdays-error"
+          hasError={Boolean(errors.weekdays)}
         />
-        {errors.weekdays && <p className={fieldErrorClassName}>{errors.weekdays}</p>}
+        {errors.weekdays && <p id="weekdays-error" role="alert" className={fieldErrorClassName}>{errors.weekdays}</p>}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

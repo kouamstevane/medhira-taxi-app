@@ -26,6 +26,14 @@ DONE
 - Focused configurator verification: `npx jest src/app/personal-driver/components/PersonalDriverConfigurator.test.tsx --runInBand` passed: 1 suite, 6 tests.
 - Type check: `npx tsc --noEmit` passed.
 
+## Accessibility Finding Follow-up
+
+- Added field-to-error `aria-describedby` and `aria-invalid` associations for departure and destination address inputs, with address validation messages exposed as `role="alert"`.
+- Added `aria-describedby`, `aria-invalid`, and `role="alert"` coverage for weekday validation.
+- Focused configurator verification after the fix: `npx jest src/app/personal-driver/components/PersonalDriverConfigurator.test.tsx --runInBand` passed: 1 suite, 6 tests.
+- Type check after the fix: `npx tsc --noEmit` passed.
+- The missing `/personal-driver/estimation` route is intentionally deferred to the next planned task, which owns that target.
+
 ## Changed Files
 
 - `src/app/personal-driver/configurer/page.tsx`
