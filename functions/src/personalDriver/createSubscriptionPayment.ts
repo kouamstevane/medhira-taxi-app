@@ -2,6 +2,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import type Stripe from 'stripe';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { DEFAULT_CURRENCY } from '../config/stripe.js';
 import { createStripeClient } from '../stripe/stripe-client.js';
@@ -41,8 +42,17 @@ function toMoney(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function createSubscriptionId(userId: string, requestId: string): string {
+  return createHash('sha256')
+    .update(userId)
+    .update('\0')
+    .update(requestId)
+    .digest('hex');
+}
+
 const inputSchema = z.object({
   selectedPlanId: z.enum(['basic', 'classic', 'premium']),
+  requestId: z.string().trim().min(1, 'Identifiant de demande requis').max(128, 'Identifiant de demande trop long'),
   pickupAddress: z.string().trim().min(3).max(500),
   destinationAddress: z.string().trim().min(3).max(500),
   tripType: z.enum(['one_way', 'round_trip']),
@@ -111,8 +121,30 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     }
 
     const db = getDb();
-    const subscriptionRef = db.collection('personal_driver_subscriptions').doc();
+    const subscriptionRef = db.collection('personal_driver_subscriptions')
+      .doc(createSubscriptionId(request.auth.uid, input.requestId));
     const subscriptionId = subscriptionRef.id;
+    const existingSubscription = await subscriptionRef.get();
+    if (existingSubscription.exists) {
+      const existingData = existingSubscription.data();
+      if (!existingData || existingData.userId !== request.auth.uid || !existingData.stripePaymentIntentId) {
+        throw new HttpsError('internal', 'Impossible de récupérer le paiement existant.');
+      }
+
+      const existingPaymentIntent = await getStripe().paymentIntents.retrieve(existingData.stripePaymentIntentId);
+      if (!existingPaymentIntent.client_secret) {
+        throw new HttpsError('internal', 'Impossible de récupérer le PaymentIntent existant.');
+      }
+
+      return {
+        subscriptionId,
+        paymentIntentId: existingPaymentIntent.id,
+        clientSecret: existingPaymentIntent.client_secret,
+        amount: existingData.totalAmount,
+        currency: existingData.currency,
+      };
+    }
+
     const amountInSmallestUnit = Math.round(amount * 100);
     const paymentIntent = await getStripe().paymentIntents.create(
       {
@@ -172,13 +204,27 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       paymentStatus: 'authorized',
       createdAt: new Date(),
     });
-    trips.forEach((trip) => {
-      batch.set(db.collection('personal_driver_trips').doc(), {
+    trips.forEach((trip, index) => {
+      batch.set(db.collection('personal_driver_trips').doc(`${subscriptionId}_${index}`), {
         ...trip,
         createdAt: new Date(),
       });
     });
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (error) {
+      try {
+        await getStripe().paymentIntents.cancel(paymentIntent.id, undefined, {
+          idempotencyKey: `cancel_personal_driver_subscription_${paymentIntent.id}`,
+        });
+      } catch (cancelError) {
+        console.error('[createPersonalDriverSubscriptionPayment] Failed to cancel orphaned PaymentIntent', {
+          paymentIntentId: paymentIntent.id,
+          error: cancelError instanceof Error ? cancelError.message : cancelError,
+        });
+      }
+      throw new HttpsError('internal', 'Impossible d’enregistrer l’abonnement.');
+    }
 
     return {
       subscriptionId,

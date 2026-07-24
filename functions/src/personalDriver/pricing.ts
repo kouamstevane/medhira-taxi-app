@@ -24,7 +24,6 @@ export interface PersonalDriverPriceComparison {
   monthlyDistanceKm: number;
   plans: Record<PersonalDriverPlanId, PersonalDriverPlanPrice>;
   recommendedPlanId: PersonalDriverPlanId;
-  recommendationReasons: string[];
 }
 
 const PLAN_ORDER: PersonalDriverPlanId[] = ['basic', 'classic', 'premium'];
@@ -95,6 +94,5 @@ export function calculatePersonalDriverPrices(input: {
     monthlyDistanceKm: input.monthlyDistanceKm,
     plans,
     recommendedPlanId,
-    recommendationReasons: [`${recommendedPlanId} offers the best price for the requested schedule.`],
   };
 }

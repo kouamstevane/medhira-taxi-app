@@ -59,3 +59,48 @@ Result: passed (`tsc`, exit code 0).
 ## Concern
 
 The command specified in the brief, `npm test -- personalDriver/createSubscriptionPayment.test.ts --runInBand`, cannot run because `functions/package.json` has no `test` script. Also, `functions/jest.config.js` only discovers tests beneath `src/**/__tests__/`, while the required test path is `src/personalDriver/createSubscriptionPayment.test.ts`. The explicit `npx jest` command above uses a command-line `--testMatch` override and leaves shared Jest configuration unchanged.
+
+## Review Findings Fix Evidence
+
+- Added required `requestId` validation (trimmed, non-empty, maximum 128 characters). The subscription document ID is a SHA-256 hash of `userId` and `requestId`, so repeat requests resolve the same document. Existing subscriptions return their stored PaymentIntent after retrieving its client secret, and Stripe creation uses the deterministic subscription ID in its idempotency key. Generated trip documents now also use deterministic subscription/index IDs.
+- Wrapped the Firestore batch commit in a compensation block. A failed commit cancels the just-created PaymentIntent using a deterministic cancellation idempotency key; a cancellation failure is logged without masking the callable `internal` error.
+- Moved the suite to `functions/src/personalDriver/__tests__/createSubscriptionPayment.test.ts`. `npx jest --config jest.config.js --listTests` now lists it through normal configured discovery.
+- Removed `recommendationReasons` from the server pricing result, so the persisted comparison contains only pricing and eligibility data rather than divergent presentation copy.
+
+### Test Evidence
+
+TDD red run:
+
+```powershell
+cd functions
+npx jest --config jest.config.js src/personalDriver/__tests__/createSubscriptionPayment.test.ts --runInBand
+```
+
+Result: failed as expected before the fix: empty `requestId` was accepted, the subscription document ID was random, retries created a new PaymentIntent, and a Firestore commit error escaped without Stripe cancellation.
+
+Final focused suite:
+
+```powershell
+cd functions
+npx jest --config jest.config.js src/personalDriver/__tests__/createSubscriptionPayment.test.ts --runInBand
+```
+
+Result: 9 passed, 0 failed.
+
+Configured discovery:
+
+```powershell
+cd functions
+npx jest --config jest.config.js --listTests
+```
+
+Result: listed `src/personalDriver/__tests__/createSubscriptionPayment.test.ts`.
+
+Build:
+
+```powershell
+cd functions
+npm run build
+```
+
+Result: passed (`tsc`, exit code 0).
