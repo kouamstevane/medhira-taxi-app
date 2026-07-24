@@ -1,24 +1,25 @@
 import { render, screen } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import PersonalDriverPage from '../page';
+import { DashboardServiceGrid } from '@/app/dashboard/page';
 
 describe('Personal Driver client entry', () => {
   it('adds the Personal Driver dashboard entry with the monthly transport CTA', () => {
-    const dashboardSource = readFileSync(
-      join(process.cwd(), 'src/app/dashboard/page.tsx'),
-      'utf8',
-    );
+    render(<DashboardServiceGrid />);
 
-    expect(dashboardSource).toContain("label: 'Personal Driver'");
-    expect(dashboardSource).toContain("route: '/personal-driver'");
-    expect(dashboardSource).toContain(
-      "Planifiez vos deplacements reguliers et connaissez votre cout mensuel a l'avance.",
+    expect(screen.getByRole('link', { name: /Personal Driver/i })).toHaveAttribute(
+      'href',
+      '/personal-driver',
     );
-    expect(dashboardSource).toContain('Configurer mon transport mensuel');
-    expect(dashboardSource).not.toMatch(
+    expect(screen.getByText('Personal Driver')).toBeVisible();
+    expect(
+      screen.getByText(
+        "Planifiez vos deplacements reguliers et connaissez votre cout mensuel a l'avance.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByText('Configurer mon transport mensuel')).toBeVisible();
+    expect(screen.queryByText(
       /Commander un taxi|Reserver une course maintenant|Trouver un chauffeur/,
-    );
+    )).not.toBeInTheDocument();
   });
 
   it('renders the available plans and their required labels', () => {
