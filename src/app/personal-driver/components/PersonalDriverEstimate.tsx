@@ -20,7 +20,7 @@ function formatKm(distanceKm: number): string {
 }
 
 function formatCad(amount: number): string {
-  return `${amount.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} CAD`;
+  return `${amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD`;
 }
 
 export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDriverEstimateProps) {
@@ -64,7 +64,7 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
       <section aria-labelledby="estimate-heading">
         <div className="mb-4">
           <p className="text-sm font-semibold text-primary">VOTRE ESTIMATION</p>
-          <h1 id="estimate-heading" className="text-2xl font-bold text-white">Choisissez votre forfait</h1>
+          <h2 id="estimate-heading" className="text-2xl font-bold text-white">Choisissez votre forfait</h2>
         </div>
         <p className="mb-4 text-sm text-slate-400">{comparison.recommendationReasons.join(' ')}</p>
 
@@ -117,7 +117,7 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
       >
         Continuer avec ce forfait
       </button>
-      <a href="/personal-driver/configurer?plan=classic" className="block text-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
+      <a href={`/personal-driver/configurer?plan=${configuration.planId}`} className="block text-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
         Modifier mon trajet
       </a>
     </div>
