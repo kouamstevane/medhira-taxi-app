@@ -22,6 +22,7 @@ import * as admin from 'firebase-admin';
 import type Stripe from 'stripe';
 import { DRIVER_SHARE_RATE } from '../config/stripe.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { createNotification } from '../utils/notificationService.js';
 import { createStripeClient } from './stripe-client.js';
 import { buildDriverIndividualPrefill } from './driver-prefill.js';
 
@@ -444,6 +445,55 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
       }
       tx.update(bookingRef, { paymentStatus: PAYMENT_STATUS.CAPTURED });
     });
+  }
+
+  if (metadata.purpose === 'personal_driver_subscription' && metadata.subscriptionId && metadata.userId) {
+    const db = getDb();
+    const subscriptionRef = db.collection('personal_driver_subscriptions').doc(metadata.subscriptionId);
+    let shouldNotify = false;
+
+    await db.runTransaction(async (tx) => {
+      shouldNotify = false;
+      const subscriptionSnap = await tx.get(subscriptionRef);
+      if (!subscriptionSnap.exists) {
+        console.warn(`[Webhook] personal_driver_subscription introuvable: ${metadata.subscriptionId}`);
+        return;
+      }
+
+      const subscription = subscriptionSnap.data();
+      if (subscription?.userId !== metadata.userId) {
+        console.warn(`[Webhook] personal_driver_subscription userId invalide: ${metadata.subscriptionId}`);
+        return;
+      }
+
+      if (
+        subscription.paymentStatus === PAYMENT_STATUS.CAPTURED &&
+        subscription.status === 'pending_validation'
+      ) {
+        console.warn(`[Webhook] personal_driver_subscription déjà traité: ${metadata.subscriptionId}`);
+        return;
+      }
+
+      tx.update(subscriptionRef, {
+        paymentStatus: PAYMENT_STATUS.CAPTURED,
+        status: 'pending_validation',
+        paidAt: serverTS(),
+      });
+      shouldNotify = true;
+    });
+
+    if (shouldNotify) {
+      await createNotification({
+        userId: metadata.userId,
+        title: 'Paiement Personal Driver confirme',
+        body: 'Votre abonnement Personal Driver est en attente de validation.',
+        type: 'payment_received',
+        metadata: {
+          subscriptionId: metadata.subscriptionId,
+          stripePaymentIntentId: piId,
+        },
+      });
+    }
   }
 }
 
