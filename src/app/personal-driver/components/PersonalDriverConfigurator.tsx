@@ -31,6 +31,9 @@ export interface PersonalDriverConfiguration {
   passengerCount: number;
   notes?: string;
   distanceKm: number;
+  distanceOneWayKm: number;
+  distanceReturnKm?: number;
+  monthlyDistanceKm: number;
 }
 
 interface PersonalDriverConfiguratorProps {
@@ -112,6 +115,11 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
         throw new Error('Distance must be positive');
       }
       setDistanceKm(estimatedDistance);
+      setErrors((currentErrors) => {
+        if (!currentErrors.distance) return currentErrors;
+        const { distance: _distance, ...remainingErrors } = currentErrors;
+        return remainingErrors;
+      });
     } catch {
       setDistanceError(DISTANCE_ESTIMATE_ERROR_MESSAGE);
     } finally {
@@ -159,6 +167,9 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       passengerCount,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       distanceKm,
+      distanceOneWayKm: distanceKm,
+      ...(tripType === 'round_trip' ? { distanceReturnKm: distanceKm } : {}),
+      monthlyDistanceKm: distanceKm * (tripType === 'round_trip' ? 2 : 1) * weekdays.length * 4,
     };
 
     sessionStorage.setItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY, JSON.stringify(configuration));
@@ -212,8 +223,8 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
         {distanceKm !== null && !distanceError && (
           <p className="text-sm font-semibold text-emerald-400">{distanceKm.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km</p>
         )}
-        {distanceError && <p className={fieldErrorClassName}>{distanceError}</p>}
-        {errors.distance && <p className={fieldErrorClassName}>{errors.distance}</p>}
+        {distanceError && <p role="alert" className={fieldErrorClassName}>{distanceError}</p>}
+        {errors.distance && <p id="distance-error" role="alert" className={fieldErrorClassName}>{errors.distance}</p>}
       </section>
 
       <fieldset className="grid grid-cols-2 gap-3">
@@ -256,9 +267,11 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
             type="time"
             value={departureTime}
             onChange={(event) => setDepartureTime(event.target.value)}
+            aria-invalid={Boolean(errors.departureTime)}
+            aria-describedby={errors.departureTime ? 'departure-time-error' : undefined}
             className={`mt-2 ${fieldClassName}`}
           />
-          {errors.departureTime && <span className={fieldErrorClassName}>{errors.departureTime}</span>}
+          {errors.departureTime && <span id="departure-time-error" role="alert" className={fieldErrorClassName}>{errors.departureTime}</span>}
         </label>
         {tripType === 'round_trip' && (
           <label className="text-sm font-semibold text-white">
@@ -267,9 +280,11 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
               type="time"
               value={returnTime}
               onChange={(event) => setReturnTime(event.target.value)}
+              aria-invalid={Boolean(errors.returnTime)}
+              aria-describedby={errors.returnTime ? 'return-time-error' : undefined}
               className={`mt-2 ${fieldClassName}`}
             />
-            {errors.returnTime && <span className={fieldErrorClassName}>{errors.returnTime}</span>}
+            {errors.returnTime && <span id="return-time-error" role="alert" className={fieldErrorClassName}>{errors.returnTime}</span>}
           </label>
         )}
         <label className="text-sm font-semibold text-white">
@@ -278,9 +293,11 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
             type="date"
             value={startDate}
             onChange={(event) => setStartDate(event.target.value)}
+            aria-invalid={Boolean(errors.startDate)}
+            aria-describedby={errors.startDate ? 'start-date-error' : undefined}
             className={`mt-2 ${fieldClassName}`}
           />
-          {errors.startDate && <span className={fieldErrorClassName}>{errors.startDate}</span>}
+          {errors.startDate && <span id="start-date-error" role="alert" className={fieldErrorClassName}>{errors.startDate}</span>}
         </label>
         <label className="text-sm font-semibold text-white">
           Nombre de passagers

@@ -81,6 +81,31 @@ describe('PersonalDriverConfigurator', () => {
     expect(screen.getByText("L'heure de depart est requise.")).toBeVisible();
     expect(screen.getByText('La date de debut est requise.')).toBeVisible();
     expect(screen.getByText('Calculez une distance positive avant de continuer.')).toBeVisible();
+    const departureTimeInput = document.querySelector('input[type="time"]');
+    expect(departureTimeInput).toHaveAttribute('aria-invalid', 'true');
+    expect(departureTimeInput).toHaveAttribute(
+      'aria-describedby',
+      'departure-time-error',
+    );
+  });
+
+  it('clears the stale distance error after a successful calculation', async () => {
+    const user = userEvent.setup();
+    estimateRoadDistanceKmMock.mockResolvedValue(12.4);
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await user.type(screen.getByLabelText('Adresse de depart'), 'Aeroport de Yaounde');
+    await user.type(screen.getByLabelText('Destination'), 'Bastos, Yaounde');
+    await user.click(screen.getByLabelText('Lundi'));
+    fireEvent.change(screen.getByLabelText('Heure de depart'), { target: { value: '08:00' } });
+    fireEvent.change(screen.getByLabelText('Date de debut'), { target: { value: '2026-08-03' } });
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+    expect(screen.getByText('Calculez une distance positive avant de continuer.')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Calculer la distance' }));
+
+    await waitFor(() => expect(screen.getByText('12,4 km')).toBeVisible());
+    expect(screen.queryByText('Calculez une distance positive avant de continuer.')).not.toBeInTheDocument();
   });
 
   it('stores a valid configuration and proceeds to the estimate', async () => {
@@ -106,8 +131,31 @@ describe('PersonalDriverConfigurator', () => {
       startDate: '2026-08-03',
       passengerCount: 2,
       distanceKm: 12.4,
+      distanceOneWayKm: 12.4,
+      monthlyDistanceKm: 49.6,
     });
     expect(stored.requestId).toEqual(expect.any(String));
+  });
+
+  it('persists a round-trip monthly distance using the V1 estimate formula', async () => {
+    const user = userEvent.setup();
+    estimateRoadDistanceKmMock.mockResolvedValue(12.4);
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await fillRequiredFields(user);
+    await user.click(screen.getByLabelText('Aller-retour'));
+    await user.type(screen.getByLabelText('Heure de retour'), '18:00');
+    await user.click(screen.getByRole('button', { name: 'Calculer la distance' }));
+    await waitFor(() => expect(screen.getByText('12,4 km')).toBeVisible());
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+
+    const stored = JSON.parse(sessionStorage.getItem('medjira.personalDriver.config.v1') ?? '{}');
+    expect(stored).toMatchObject({
+      tripType: 'round_trip',
+      distanceOneWayKm: 12.4,
+      distanceReturnKm: 12.4,
+      monthlyDistanceKm: 99.2,
+    });
   });
 });
 

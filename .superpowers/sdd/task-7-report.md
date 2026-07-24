@@ -18,6 +18,14 @@ DONE
 - Green: `npm test -- --watch=false src/app/personal-driver/components/PersonalDriverConfigurator.test.tsx --runInBand` passed: 1 suite, 4 tests.
 - Type check: `npx tsc --noEmit` passed.
 
+## Review Fix Evidence
+
+- Persisted `monthlyDistanceKm` using the V1 estimate formula: one-way distance multiplied by the round-trip factor, selected weekday count, and four weeks. Also persisted `distanceOneWayKm` and round-trip `distanceReturnKm` when applicable.
+- Cleared stale `errors.distance` after a successful distance calculation.
+- Added ARIA invalid/described-by state for representative time/date validation controls and live alert semantics for validation messages.
+- Focused configurator verification: `npx jest src/app/personal-driver/components/PersonalDriverConfigurator.test.tsx --runInBand` passed: 1 suite, 6 tests.
+- Type check: `npx tsc --noEmit` passed.
+
 ## Changed Files
 
 - `src/app/personal-driver/configurer/page.tsx`
