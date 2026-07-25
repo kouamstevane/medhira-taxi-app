@@ -18,7 +18,7 @@
     "android:bundle": "node scripts/mobile-build.js && cd android && gradlew bundleRelease",
     "android:apk:release": "node scripts/mobile-build.js && cd android && gradlew assembleRelease",
     "start": "next start -p $PORT",
-    "lint": "next lint .",
+    "lint": "next lint",
     "test": "jest --watch",
     "test:ci": "jest --ci --coverage",
     "test:coverage": "jest --coverage",
@@ -29,8 +29,7 @@
     "test:regression": "playwright test e2e/registration-full-flow.spec.ts e2e/registration-otp.spec.ts",
     "reset:driver-submit-rate-limit": "node scripts/reset-driver-submit-rate-limit.mjs",
     "reset:driver-stripe": "node scripts/reset-driver-stripe.mjs",
-    "optimize:images": "node optimize-images.js",
-    "convert:svg": "node convert-svg-to-webp.js"
+    "optimize:images": "node optimize-images.js"
   },
   "dependencies": {
     "@capacitor-community/stripe": "^8.1.1",
