@@ -445,6 +445,52 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
       tx.update(bookingRef, { paymentStatus: PAYMENT_STATUS.CAPTURED });
     });
   }
+
+  if (metadata.purpose === 'personal_driver_subscription' && metadata.subscriptionId && metadata.userId) {
+    const db = getDb();
+    const subscriptionRef = db.collection('personal_driver_subscriptions').doc(metadata.subscriptionId);
+    const notificationRef = db.collection('notifications').doc(`personal_driver_payment_${piId}`);
+
+    await db.runTransaction(async (tx) => {
+      const subscriptionSnap = await tx.get(subscriptionRef);
+      if (!subscriptionSnap.exists) {
+        console.warn(`[Webhook] personal_driver_subscription introuvable: ${metadata.subscriptionId}`);
+        return;
+      }
+
+      const subscription = subscriptionSnap.data();
+      if (subscription?.userId !== metadata.userId) {
+        console.warn(`[Webhook] personal_driver_subscription userId invalide: ${metadata.subscriptionId}`);
+        return;
+      }
+
+      const canCapturePayment = subscription?.status === 'pending_payment' &&
+        (subscription.paymentStatus === PAYMENT_STATUS.AUTHORIZED || subscription.paymentStatus === 'pending');
+      if (!canCapturePayment) {
+        console.warn(`[Webhook] personal_driver_subscription déjà traité: ${metadata.subscriptionId}`);
+        return;
+      }
+
+      tx.update(subscriptionRef, {
+        paymentStatus: PAYMENT_STATUS.CAPTURED,
+        status: 'pending_validation',
+        paidAt: serverTS(),
+      });
+      tx.set(notificationRef, {
+        notificationId: notificationRef.id,
+        userId: metadata.userId,
+        title: 'Paiement Personal Driver confirme',
+        body: 'Votre abonnement Personal Driver est en attente de validation.',
+        type: 'payment_received',
+        metadata: {
+          subscriptionId: metadata.subscriptionId,
+          stripePaymentIntentId: piId,
+        },
+        read: false,
+        createdAt: serverTS(),
+      });
+    });
+  }
 }
 
 async function onPaymentIntentFailed(pi: Record<string, unknown>): Promise<void> {

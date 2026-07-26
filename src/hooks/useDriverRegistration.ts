@@ -205,11 +205,30 @@ export function useDriverRegistration() {
                 country: (privateData.country as string) || '',
               }));
             } else if (['pending', 'approved', 'active'].includes(data.status)) {
-              setError('Votre dossier est en cours de traitement ou déjà validé.');
-              setTimeout(() =>
-                (redirectTimeoutRef.current = redirectWithFallback(router, '/driver/dashboard')),
-                2000
-              );
+              // Synchroniser le document user s'il est resté en driver_onboarding
+              try {
+                const userDocRef = doc(db, 'users', user.uid);
+                const userSnap = await getDoc(userDocRef);
+                if (userSnap.exists()) {
+                  const uData = userSnap.data();
+                  if (uData?.accountState === 'driver_onboarding' || uData?.activeRole === 'driver_onboarding') {
+                    await updateDoc(userDocRef, {
+                      accountState: 'active',
+                      activeRole: 'driver',
+                      lastActiveRole: 'driver',
+                      'roles.driver': uData.roles?.driver || { joinedAt: firestoreServerTimestamp() },
+                      updatedAt: firestoreServerTimestamp(),
+                    });
+                  }
+                }
+              } catch (syncErr) {
+                loggerRef.current.logWarning('USER_SYNC', 'Synchronisation du profil utilisateur échouée', {
+                  error: (syncErr as Error).message,
+                });
+              }
+
+              // Redirection immédiate sans délai d'erreur
+              redirectTimeoutRef.current = redirectWithFallback(router, '/driver/dashboard');
             }
           }
         } catch (err: unknown) {

@@ -13,3 +13,9 @@ if (typeof global.fetch === 'undefined') {
       text: () => Promise.resolve(''),
     });
 }
+
+if (typeof global.TextEncoder === 'undefined') {
+  const { TextEncoder, TextDecoder } = require('util');
+  global.TextEncoder = TextEncoder;
+  global.TextDecoder = TextDecoder;
+}

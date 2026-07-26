@@ -1,0 +1,44 @@
+# Task 7 Report: Client Configuration and Distance Estimate
+
+## Status
+
+DONE
+
+## Implementation
+
+- Added the Personal Driver configuration page at `/personal-driver/configurer`, reading the selected `basic`, `classic`, or `premium` plan from the query string.
+- Added a French configuration form for regular one-way and round-trip trips, with plan-constrained weekday selection, required-field validation, return-time validation, and distance calculation.
+- Added a client distance service backed by the existing Google Maps Directions service. Every calculation failure uses the required French message: `Impossible de calculer la distance. Verifiez les adresses puis reessayez.`
+- Persisted successful configurations to `sessionStorage` under `medjira.personalDriver.config.v1`, including a stable `requestId` reused from an existing configuration session when available.
+- Added focused configurator coverage for Basic weekend disabling, round-trip return-time validation, required configuration details, persistence, and navigation.
+
+## TDD Evidence
+
+- Red: `npx jest src/app/personal-driver/components/PersonalDriverConfigurator.test.tsx --runInBand` failed before implementation because `@/services/personal-driver/distance.service` did not exist.
+- Green: `npm test -- --watch=false src/app/personal-driver/components/PersonalDriverConfigurator.test.tsx --runInBand` passed: 1 suite, 4 tests.
+- Type check: `npx tsc --noEmit` passed.
+
+## Review Fix Evidence
+
+- Persisted `monthlyDistanceKm` using the V1 estimate formula: one-way distance multiplied by the round-trip factor, selected weekday count, and four weeks. Also persisted `distanceOneWayKm` and round-trip `distanceReturnKm` when applicable.
+- Cleared stale `errors.distance` after a successful distance calculation.
+- Added ARIA invalid/described-by state for representative time/date validation controls and live alert semantics for validation messages.
+- Focused configurator verification: `npx jest src/app/personal-driver/components/PersonalDriverConfigurator.test.tsx --runInBand` passed: 1 suite, 6 tests.
+- Type check: `npx tsc --noEmit` passed.
+
+## Accessibility Finding Follow-up
+
+- Added field-to-error `aria-describedby` and `aria-invalid` associations for departure and destination address inputs, with address validation messages exposed as `role="alert"`.
+- Added `aria-describedby`, `aria-invalid`, and `role="alert"` coverage for weekday validation.
+- Focused configurator verification after the fix: `npx jest src/app/personal-driver/components/PersonalDriverConfigurator.test.tsx --runInBand` passed: 1 suite, 6 tests.
+- Type check after the fix: `npx tsc --noEmit` passed.
+- The missing `/personal-driver/estimation` route is intentionally deferred to the next planned task, which owns that target.
+
+## Changed Files
+
+- `src/app/personal-driver/configurer/page.tsx`
+- `src/app/personal-driver/components/PersonalDriverConfigurator.tsx`
+- `src/app/personal-driver/components/WeekdaySelector.tsx`
+- `src/services/personal-driver/distance.service.ts`
+- `src/app/personal-driver/components/PersonalDriverConfigurator.test.tsx`
+- `.superpowers/sdd/task-7-report.md`

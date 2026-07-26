@@ -21,6 +21,7 @@ const customJestConfig = {
   // Chemins de modules
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^(\\.\\.?/.*)\\.js$': '$1',
     '^lucide-react$': '<rootDir>/src/__mocks__/lucide-react.js',
     '^lucide-react/dist/esm/icons/(.*)$': '<rootDir>/src/__mocks__/lucide-react.js',
   },

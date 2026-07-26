@@ -163,6 +163,7 @@ nul
 plans/
 *.txt
 .opencode/
+.superpowers/
 functions/lib/
 .playwright-mcp/
 playwright-report/
