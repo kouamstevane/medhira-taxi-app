@@ -48,13 +48,13 @@ jest.mock('firebase-functions/params', () => ({
   defineSecret: () => ({ value: () => 'test_secret' }),
 }));
 
-jest.mock('../../stripe/stripe-client.js', () => ({
+jest.mock('../../stripe/stripe-client', () => ({
   createStripeClient: mockCreateStripeClient,
-}), { virtual: true });
+}));
 
-jest.mock('../../utils/notificationService.js', () => ({
+jest.mock('../../utils/notificationService', () => ({
   createNotification: mockCreateNotification,
-}), { virtual: true });
+}));
 
 function paymentSucceededEvent(eventUserId = userId) {
   return {
@@ -106,7 +106,7 @@ describe('Personal Driver Stripe webhook', () => {
   });
 
   it('captures a pending paid subscription and writes its deterministic notification atomically', async () => {
-    const { stripeWebhookInstant } = require('../../stripe/index.js');
+    const { stripeWebhookInstant } = require('../../stripe/index');
     const request = {
       method: 'POST',
       headers: { 'stripe-signature': 'signature' },
@@ -142,7 +142,7 @@ describe('Personal Driver Stripe webhook', () => {
   });
 
   it('does not regress or notify an active subscription on duplicate delivery', async () => {
-    const { stripeWebhookInstant } = require('../../stripe/index.js');
+    const { stripeWebhookInstant } = require('../../stripe/index');
     Object.assign(subscriptionData, {
       status: 'active',
       paymentStatus: 'captured',
@@ -165,7 +165,7 @@ describe('Personal Driver Stripe webhook', () => {
   });
 
   it('does not transition a subscription when metadata belongs to another user', async () => {
-    const { stripeWebhookInstant } = require('../../stripe/index.js');
+    const { stripeWebhookInstant } = require('../../stripe/index');
     mockConstructEvent.mockReturnValue(paymentSucceededEvent('other_user'));
     const request = {
       method: 'POST',

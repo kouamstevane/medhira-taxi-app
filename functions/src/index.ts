@@ -298,7 +298,6 @@ export { submitRestaurantApplication } from './restaurant/submitRestaurantApplic
 export { activateClientRole } from './roles/activateClientRole.js';
 export { notifyAdminNewRestaurant } from './admin/notifyAdminNewRestaurant.js';
 export { createStripeConnectAccount } from './stripe/createStripeConnectAccount.js';
-export { createPersonalDriverSubscriptionPayment } from './personalDriver/index.js';
 
 /**
  * Cloud Function: cleanupFailedUploads
@@ -1433,12 +1432,12 @@ async function manageTopicSubscription(
 }
 
 export const subscribeToTopic = onCall(
-  { cors: true },
+  { region: 'europe-west1', cors: true },
   (request: CallableRequest) => manageTopicSubscription(request, 'subscribe')
 );
 
 export const unsubscribeFromTopic = onCall(
-  { cors: true },
+  { region: 'europe-west1', cors: true },
   (request: CallableRequest) => manageTopicSubscription(request, 'unsubscribe')
 );
 

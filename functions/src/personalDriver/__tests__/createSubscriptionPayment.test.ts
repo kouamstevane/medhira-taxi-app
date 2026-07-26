@@ -50,9 +50,9 @@ jest.mock('firebase-functions/params', () => ({
   defineSecret: () => ({ value: () => 'sk_test_123' }),
 }));
 
-jest.mock('../../stripe/stripe-client.js', () => ({
+jest.mock('../../stripe/stripe-client', () => ({
   createStripeClient: mockCreateStripeClient,
-}), { virtual: true });
+}));
 
 const validPayload = {
   selectedPlanId: 'basic',
@@ -104,7 +104,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('requires authentication', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
 
     await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload))).rejects.toMatchObject({
       code: 'unauthenticated',
@@ -112,7 +112,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('rejects Basic subscriptions that include weekend days', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
 
     await expect(createPersonalDriverSubscriptionPayment(makeRequest({
       ...validPayload,
@@ -123,7 +123,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('rejects round trips without a return time', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
 
     await expect(createPersonalDriverSubscriptionPayment(makeRequest({
       ...validPayload,
@@ -135,7 +135,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('rejects subscriptions above the existing Stripe amount limit', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
 
     await expect(createPersonalDriverSubscriptionPayment(makeRequest({
       ...validPayload,
@@ -147,7 +147,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('requires a bounded non-empty request ID', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
 
     await expect(createPersonalDriverSubscriptionPayment(makeRequest({
       ...validPayload,
@@ -165,7 +165,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('derives the same subscription ID for the same user and request ID only', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
 
     await createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'));
     await createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'));
@@ -180,7 +180,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('recalculates the price and creates the subscription, trips, and PaymentIntent', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
 
     const result = await createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'));
 
@@ -231,7 +231,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('returns the persisted pending subscription payment for a retried request', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     mockTransaction.get.mockResolvedValue({
       exists: true,
       data: () => ({
@@ -261,7 +261,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('does not create another PaymentIntent while the same request is claimed', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     let claimedData: Record<string, unknown> | undefined;
     let releasePaymentIntent: ((paymentIntent: { id: string; client_secret: string }) => void) | undefined;
     const paymentIntentCreated = new Promise<void>((resolve) => {
@@ -306,7 +306,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('marks a Stripe creation failure recoverable and lets a retry reclaim it', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     let claimedData: Record<string, unknown> | undefined;
     mockTransaction.get.mockImplementation(async () => (
       claimedData
@@ -338,7 +338,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('reclaims a stale payment creation claim', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     mockTransaction.get.mockResolvedValue({
       exists: true,
       data: () => ({
@@ -362,7 +362,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('cancels the PaymentIntent when Firestore persistence fails', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     mockBatch.commit.mockRejectedValue(new Error('Firestore unavailable'));
 
     await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).rejects.toMatchObject({
@@ -377,7 +377,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('marks an orphaned commit failure recoverable after cancellation', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     let claimedData: Record<string, unknown> | undefined;
     mockTransaction.get.mockImplementation(async () => (
       claimedData
@@ -408,7 +408,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('does not cancel a PaymentIntent when the failed commit persisted its subscription', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     mockSubscriptionRef.get.mockResolvedValue({
       exists: true,
       data: () => ({
@@ -427,7 +427,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('still returns an internal error when compensation cancellation fails', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment.js');
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     mockBatch.commit.mockRejectedValue(new Error('Firestore unavailable'));
     mockStripe.paymentIntents.cancel.mockRejectedValue(new Error('Stripe unavailable'));
     const consoleError = jest.spyOn(console, 'error').mockImplementation();
