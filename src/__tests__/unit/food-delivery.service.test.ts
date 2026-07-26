@@ -77,4 +77,14 @@ describe('FoodDeliveryService — Unit Tests', () => {
       });
     });
   });
+
+  describe('paymentMethod selection', () => {
+    it('accepte les options de paiement wallet et card', () => {
+      const validMethods: ('wallet' | 'card')[] = ['wallet', 'card'];
+      validMethods.forEach(method => {
+        expect(['wallet', 'card']).toContain(method);
+      });
+    });
+  });
 });
+

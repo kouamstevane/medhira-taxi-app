@@ -12,5 +12,7 @@ export { walletEnsure } from './walletEnsure.js';
 export { walletFailTransaction } from './walletFailTransaction.js';
 export { walletPayBooking } from './walletPayBooking.js';
 export { walletPayFoodOrder } from './walletPayFoodOrder.js';
+export { payFoodOrderWithCard } from './payFoodOrderWithCard.js';
 export { walletRefundTransaction } from './walletRefundTransaction.js';
+
 

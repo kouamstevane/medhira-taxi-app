@@ -129,7 +129,9 @@ export default function CheckoutPage() {
         deliveryAddress,
         deliveryPreference,
         deliveryInstructions,
+        paymentMethod,
       });
+
 
       setSubmitted(true);
       router.push(`/food/orders/${orderId}`);
@@ -319,7 +321,7 @@ export default function CheckoutPage() {
       <div className="fixed bottom-0 inset-x-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/5 z-20 max-w-[430px] mx-auto">
         <button
           onClick={handleCreateOrder}
-          disabled={loading || isWalletInsufficient || !hasValidAddress}
+          disabled={loading || (paymentMethod === 'wallet' && isWalletInsufficient) || !hasValidAddress}
           className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-lg py-4 rounded-xl hover:opacity-90 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
@@ -327,7 +329,7 @@ export default function CheckoutPage() {
               <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
               Traitement du paiement...
             </>
-          ) : isWalletInsufficient ? (
+          ) : (paymentMethod === 'wallet' && isWalletInsufficient) ? (
             'Solde portefeuille insuffisant'
           ) : !hasValidAddress ? (
             'Adresse de livraison manquante'
@@ -335,6 +337,7 @@ export default function CheckoutPage() {
             `Payer ${total.toFixed(2)} ${CURRENCY_CODE}`
           )}
         </button>
+
       </div>
       <BottomNav />
     </div>

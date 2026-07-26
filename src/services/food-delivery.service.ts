@@ -410,6 +410,7 @@ export const createFoodOrder = async (
     customerPhone?: string;
     clientNeighbourhood?: string;
     cityId?: string;
+    paymentMethod?: 'wallet' | 'card';
   }
 ): Promise<string> => {
   try {
@@ -436,6 +437,7 @@ export const createFoodOrder = async (
   const newOrderRef = doc(ordersRef);
 
   const pickupCode = generatePickupCode();
+  const selectedPaymentMethod = orderData.paymentMethod ?? 'wallet';
 
   const order: Record<string, unknown> = {
     id: newOrderRef.id,
@@ -451,6 +453,7 @@ export const createFoodOrder = async (
     status: 'pending_payment',
     pickupCode,
     paymentValidated: false,
+    paymentMethod: selectedPaymentMethod,
     restaurantName: restaurant.name,
     restaurantPhone: restaurant.phone || '',
     restaurantAddress: {
@@ -475,8 +478,12 @@ export const createFoodOrder = async (
     // 1. Créer le document de commande conforme aux règles Firestore (paymentValidated = false)
     await setDoc(newOrderRef, order);
 
-    // 2. Valider et débiter le paiement via la Cloud Function sécurisée
-    await payFoodOrderWithWallet(newOrderRef.id);
+    // 2. Valider le paiement via la Cloud Function adaptée au mode choisi
+    if (selectedPaymentMethod === 'card') {
+      await payFoodOrderWithCard(newOrderRef.id);
+    } else {
+      await payFoodOrderWithWallet(newOrderRef.id);
+    }
   } catch (payError) {
     const msg = (payError as Error).message;
     logger.error('Création commande livraison échouée', {
@@ -490,6 +497,7 @@ export const createFoodOrder = async (
     orderId: newOrderRef.id,
     restaurantId: orderData.restaurantId,
     totalOrderPrice,
+    paymentMethod: selectedPaymentMethod,
     pickupCode: order.pickupCode,
   });
 
@@ -517,6 +525,25 @@ export const payFoodOrderWithWallet = async (orderId: string): Promise<{ transac
     throw error;
   }
 };
+
+/**
+ * Payer une commande de livraison via carte bancaire / Stripe (Cloud Function)
+ */
+export const payFoodOrderWithCard = async (orderId: string): Promise<{ transactionId: string }> => {
+  try {
+    const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+    const app = getApps().length ? getApp() : undefined;
+    if (!app) throw new Error('Firebase app not initialized');
+    const functions = getFunctions(app, functionsRegion);
+    const payCallable = httpsCallable<{ orderId: string }, { transactionId: string }>(functions, 'payFoodOrderWithCard');
+    const result = await payCallable({ orderId });
+    return result.data;
+  } catch (error) {
+    console.error('[food-delivery.service] payFoodOrderWithCard failed:', error);
+    throw error;
+  }
+};
+
 
 
 /**
@@ -817,7 +844,9 @@ export const FoodDeliveryService = {
   getRestaurantMenu,
   createFoodOrder,
   payFoodOrderWithWallet,
+  payFoodOrderWithCard,
   updateFoodOrderStatus,
+
 
   getUserFoodOrders,
   submitDeliveryReview,

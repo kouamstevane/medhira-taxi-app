@@ -1660,7 +1660,9 @@ export {
   walletFailTransaction,
   walletPayBooking,
   walletPayFoodOrder,
+  payFoodOrderWithCard,
   walletRefundTransaction,
+
 } from './walletApi/index.js';
 
 
