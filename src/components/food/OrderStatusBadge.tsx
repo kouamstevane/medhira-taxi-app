@@ -28,6 +28,12 @@ export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ status, clas
           color: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
           icon: 'check_circle'
         };
+      case 'accepted':
+        return {
+          label: 'Acceptée par le resto',
+          color: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+          icon: 'check_circle'
+        };
       case 'preparing':
         return {
           label: 'En préparation',
@@ -40,17 +46,36 @@ export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ status, clas
           color: 'bg-green-500/10 text-green-400 border-green-500/20',
           icon: 'shopping_bag'
         };
+      case 'driver_heading_to_restaurant':
+        return {
+          label: 'Livreur en route vers resto',
+          color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+          icon: 'directions_car'
+        };
+      case 'driver_arrived_restaurant':
+        return {
+          label: 'Livreur au resto',
+          color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+          icon: 'storefront'
+        };
       case 'picked_up':
         return {
-          label: 'Récupérée',
-          color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+          label: 'Récupérée par livreur',
+          color: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
           icon: 'directions_bike'
         };
+      case 'out_for_delivery':
       case 'delivering':
         return {
-          label: 'En livraison',
+          label: 'En cours de livraison',
           color: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
           icon: 'delivery_dining'
+        };
+      case 'arriving':
+        return {
+          label: 'Livreur tout proche',
+          color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+          icon: 'location_on'
         };
       case 'delivered':
         return {
@@ -58,9 +83,21 @@ export const OrderStatusBadge: React.FC<OrderStatusBadgeProps> = ({ status, clas
           color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
           icon: 'check_circle'
         };
+      case 'no_driver_available':
+        return {
+          label: 'Aucun livreur disponible',
+          color: 'bg-destructive/10 text-destructive border-destructive/20',
+          icon: 'warning'
+        };
       case 'cancelled':
         return {
           label: 'Annulée',
+          color: 'bg-destructive/10 text-destructive border-destructive/20',
+          icon: 'cancel'
+        };
+      case 'cancelled_by_restaurant':
+        return {
+          label: 'Refusée par le restaurant',
           color: 'bg-destructive/10 text-destructive border-destructive/20',
           icon: 'cancel'
         };

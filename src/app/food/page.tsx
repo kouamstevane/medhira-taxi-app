@@ -20,6 +20,19 @@ export default function FoodHomePage() {
 
   const CUISINES = ['Tous', 'Africain', 'Européen', 'Fast Food', 'Healthy', 'Asiatique', 'Pâtisserie'];
 
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setFilters(prev => {
+      const next = { ...prev };
+      if (value.trim()) {
+        next.searchQuery = value.trim();
+      } else {
+        delete next.searchQuery;
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -35,7 +48,7 @@ export default function FoodHomePage() {
         if (isMounted) {
           setRestaurants(newRestaurants);
           setLastVisible(lastDoc);
-          setHasMore(newRestaurants.length === 20); // medJira spec limits to 20
+          setHasMore(newRestaurants.length === 20);
         }
       } catch (error) {
         if (isMounted) console.error('Erreur chargement restaurants:', error);
@@ -49,7 +62,7 @@ export default function FoodHomePage() {
     return () => {
       isMounted = false;
     };
-  }, [filters.cuisineType]);
+  }, [filters.cuisineType, filters.searchQuery]);
 
   const loadMoreRestaurants = async () => {
     setLoadingMore(true);
@@ -76,11 +89,15 @@ export default function FoodHomePage() {
     if (cuisine === 'Tous') {
       const newFilters = { ...filters };
       delete newFilters.cuisineType;
+      delete newFilters.searchQuery;
       setFilters(newFilters);
     } else {
-      setFilters({ ...filters, cuisineType: cuisine });
+      const newFilters = { ...filters, cuisineType: cuisine };
+      delete newFilters.searchQuery;
+      setFilters(newFilters);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-background pb-28 max-w-[430px] mx-auto">
@@ -106,9 +123,10 @@ export default function FoodHomePage() {
             type="text"
             placeholder="Rechercher un plat, un restaurant..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full glass-input rounded-2xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-primary border-0"
           />
+
         </div>
       </div>
 

@@ -1659,8 +1659,10 @@ export {
   walletEnsure,
   walletFailTransaction,
   walletPayBooking,
+  walletPayFoodOrder,
   walletRefundTransaction,
 } from './walletApi/index.js';
+
 
 export {
   bookingsComplete,

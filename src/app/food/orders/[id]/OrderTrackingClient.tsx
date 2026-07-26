@@ -5,7 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
-import { FoodOrder } from '@/types/food-delivery';
+import { FoodOrder, FoodOrderStatus } from '@/types/food-delivery';
+
 import { OrderStatusBadge } from '@/components/food/OrderStatusBadge';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
@@ -18,13 +19,42 @@ import { ConversationLauncher } from '@/components/ConversationLauncher';
 import type { ConversationContext } from '@/types/conversation';
 
 const STATUS_STEPS = [
-  { id: 'pending', icon: 'schedule', label: 'En attente' },
-  { id: 'confirmed', icon: 'check_circle', label: 'Acceptée' },
-  { id: 'preparing', icon: 'restaurant', label: 'En préparation' },
-  { id: 'ready', icon: 'delivery_dining', label: 'Prête' },
-  { id: 'delivering', icon: 'delivery_dining', label: 'En livraison' },
-  { id: 'delivered', icon: 'location_on', label: 'Livrée' },
+  { step: 0, icon: 'schedule', label: 'Commande reçue' },
+  { step: 1, icon: 'restaurant', label: 'En préparation' },
+  { step: 2, icon: 'shopping_bag', label: 'Prête' },
+  { step: 3, icon: 'delivery_dining', label: 'En livraison' },
+  { step: 4, icon: 'location_on', label: 'Livrée' },
 ];
+
+export const getFoodOrderStepIndex = (status?: FoodOrderStatus): number => {
+  if (!status) return 0;
+  switch (status) {
+    case 'pending_payment':
+    case 'pending':
+    case 'confirmed':
+      return 0;
+    case 'accepted':
+    case 'preparing':
+      return 1;
+    case 'ready':
+    case 'driver_heading_to_restaurant':
+    case 'driver_arrived_restaurant':
+      return 2;
+    case 'picked_up':
+    case 'out_for_delivery':
+    case 'arriving':
+    case 'delivering':
+      return 3;
+    case 'delivered':
+      return 4;
+    case 'no_driver_available':
+    case 'cancelled':
+    case 'cancelled_by_restaurant':
+      return -1;
+    default:
+      return 0;
+  }
+};
 
 export default function OrderTrackingClient() {
   const params = useParams()
@@ -82,7 +112,8 @@ export default function OrderTrackingClient() {
     return () => unsubscribe();
   }, [orderId]);
 
-  const currentStepIndex = STATUS_STEPS.findIndex(step => step.id === order?.status);
+  const currentStepIndex = getFoodOrderStepIndex(order?.status);
+
 
   const handleSubmitReview = async () => {
     if (!order || restaurantRating === 0) {
@@ -242,17 +273,17 @@ export default function OrderTrackingClient() {
           <section className="glass-card p-5 rounded-2xl border border-white/5">
             <h3 className="font-bold text-white mb-6">État d'avancement</h3>
             <div className="space-y-6 relative before:absolute before:inset-0 before:ml-[1.4rem] before:w-0.5 before:bg-white/5 before:-z-10">
-              {STATUS_STEPS.map((step, index) => {
-                const isCompleted = index <= currentStepIndex;
-                const isCurrent = index === currentStepIndex;
+              {STATUS_STEPS.map((step) => {
+                const isCompleted = currentStepIndex >= 0 && step.step <= currentStepIndex;
+                const isCurrent = step.step === currentStepIndex;
 
                 return (
-                  <div key={step.id} className="flex gap-4 items-start relative z-10">
+                  <div key={step.step} className="flex gap-4 items-start relative z-10">
                     <div className={`p-2 rounded-full shrink-0 ${isCompleted ? 'bg-primary text-white' : 'bg-white/5 text-slate-500'}`}>
                       <MaterialIcon name={step.icon} size="md" />
                     </div>
                     <div className="pt-1.5">
-                      <p className={`font-semibold ${isCurrent ? 'text-primary' : isCompleted ? 'text-white' : 'text-slate-500'}`}>
+                      <p className={`font-semibold ${isCurrent ? 'text-primary font-bold' : isCompleted ? 'text-white' : 'text-slate-500'}`}>
                         {step.label}
                       </p>
                     </div>
@@ -260,6 +291,7 @@ export default function OrderTrackingClient() {
                 );
               })}
             </div>
+
           </section>
         )}
 

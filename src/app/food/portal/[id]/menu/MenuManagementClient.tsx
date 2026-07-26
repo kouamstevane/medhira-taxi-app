@@ -189,14 +189,14 @@ export default function MenuManagementClient() {
               className="w-full pl-12 pr-4 py-3 glass-input rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-white"
             />
           </div>
-          <div className="flex gap-2 overflow-x-auto">
-            {categories.slice(0, 3).map(cat => (
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {categories.map(cat => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(prev => prev === cat ? null : cat)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
                   selectedCategory === cat
-                    ? 'bg-primary text-white'
+                    ? 'bg-primary text-white font-bold'
                     : 'glass-card border border-white/5 text-slate-300 hover:bg-white/10'
                 }`}
               >
@@ -204,6 +204,7 @@ export default function MenuManagementClient() {
               </button>
             ))}
           </div>
+
         </div>
 
         {/* Categories & Items Grid */}

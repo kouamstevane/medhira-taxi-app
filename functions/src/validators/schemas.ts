@@ -126,6 +126,13 @@ export type WalletFailTransactionInput = z.infer<typeof WalletFailTransactionSch
 export type WalletPayBookingInput = z.infer<typeof WalletPayBookingSchema>;
 export type WalletRefundTransactionInput = z.infer<typeof WalletRefundTransactionSchema>;
 
+/** `walletPayFoodOrder` — body { orderId } */
+export const WalletPayFoodOrderSchema = z.object({
+  orderId: z.string().min(1),
+});
+export type WalletPayFoodOrderInput = z.infer<typeof WalletPayFoodOrderSchema>;
+
+
 // ============================================================================
 // User Roles — spec §7.3
 // ============================================================================

@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cartStore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/config/firebase';
 
 import { CURRENCY_CODE } from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
@@ -25,14 +27,18 @@ export default function CheckoutPage() {
   const [distanceIsEstimate, setDistanceIsEstimate] = useState(true);
   const [distanceLoading, setDistanceLoading] = useState(false);
 
-  const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
-  const deliveryAddress = userData?.address || "Veuillez définir votre adresse dans le profil";
+  // Payment State
+  const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'card'>('wallet');
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
-  // Guards auth / panier — déplacés hors du render sync pour éviter le warning
-  // React "Cannot update a component while rendering" et les hydration mismatches.
-  // router.replace() plutôt que push() : pas d'entrée history à un état invalide.
+  const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
+  const userAddress = userData?.address?.trim();
+  const hasValidAddress = Boolean(userAddress && userAddress !== 'Veuillez définir votre adresse dans le profil');
+  const deliveryAddress = hasValidAddress ? userAddress! : '';
+
+  // Auth / Cart Guard
   React.useEffect(() => {
-    if (submitted) return; // order succeeded — let handleCreateOrder navigate to the tracking page
+    if (submitted) return;
     if (!user) {
       router.replace('/login?next=/food/checkout');
       return;
@@ -43,11 +49,28 @@ export default function CheckoutPage() {
     }
   }, [user, restaurant, items.length, router, submitted]);
 
-  // Calculate real delivery distance when restaurant and user address are available
-  React.useEffect(() => {
-    if (!restaurant || !userData?.address) return;
+  // Read Wallet Balance
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsub = onSnapshot(doc(db, 'wallets', user.uid), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setWalletBalance(typeof data.balance === 'number' ? data.balance : 0);
+      } else {
+        setWalletBalance(0);
+      }
+    }, (err) => {
+      console.error('Erreur lecture wallet:', err);
+      setWalletBalance(0);
+    });
+    return () => unsub();
+  }, [user?.uid]);
 
-    const origin      = userData.address;
+  // Calculate delivery distance
+  React.useEffect(() => {
+    if (!restaurant || !hasValidAddress) return;
+
+    const origin = deliveryAddress;
     const destination = restaurant.location
       ? restaurant.location
       : restaurant.address || restaurant.name;
@@ -60,9 +83,8 @@ export default function CheckoutPage() {
         setDistanceIsEstimate(isEstimate);
       })
       .finally(() => setDistanceLoading(false));
-  }, [restaurant, userData?.address]);
+  }, [restaurant, hasValidAddress, deliveryAddress]);
 
-  // Pendant la vérification / redirection, on ne rend rien (pas de push inline).
   if (!submitted && (!user || !restaurant || items.length === 0)) {
     return null;
   }
@@ -73,13 +95,24 @@ export default function CheckoutPage() {
   const subtotal = getSubtotal();
   const deliveryCost = FoodDeliveryService.calculateDeliveryCost(deliveryDistance, isWeekend);
   const total = subtotal + deliveryCost;
+  const isWalletInsufficient = paymentMethod === 'wallet' && walletBalance !== null && walletBalance < total;
 
   const handleCreateOrder = async () => {
-    if (loading) return; // Prevent double submit
-    setLoading(true);
+    if (loading) return;
     setErrorMsg(null);
+
+    if (!hasValidAddress) {
+      setErrorMsg('Veuillez renseigner votre adresse de livraison dans votre profil avant de commander.');
+      return;
+    }
+
+    if (isWalletInsufficient) {
+      setErrorMsg(`Solde insuffisant (${(walletBalance ?? 0).toFixed(2)} ${CURRENCY_CODE} disponibles pour un total de ${total.toFixed(2)} ${CURRENCY_CODE}). Veuillez recharger votre portefeuille.`);
+      return;
+    }
+
+    setLoading(true);
     try {
-      // 1. Transformer les items pour le service
       const orderItems = items.map(item => ({
         menuItemId: item.id!,
         itemName: item.name,
@@ -87,7 +120,6 @@ export default function CheckoutPage() {
         itemPrice: item.price
       }));
 
-      // 2. Créer la commande
       const orderId = await FoodDeliveryService.createFoodOrder({
         userId: user!.uid,
         restaurantId: restaurant.id,
@@ -99,13 +131,13 @@ export default function CheckoutPage() {
         deliveryInstructions,
       });
 
-      // 3. Marquer comme soumis pour neutraliser le useEffect, rediriger, puis vider le panier
       setSubmitted(true);
       router.push(`/food/orders/${orderId}`);
       clearCart();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Erreur lors de la validation:', error);
-      setErrorMsg('Une erreur est survenue lors de la validation de votre commande.');
+      const msg = error instanceof Error ? error.message : 'Une erreur est survenue lors de la validation de votre commande.';
+      setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
@@ -119,7 +151,7 @@ export default function CheckoutPage() {
           <MaterialIcon name="arrow_back" size="lg" />
         </button>
         <h1 className="text-xl font-bold text-white">Paiement</h1>
-        <div className="w-10"></div> {/* Spacer */}
+        <div className="w-10"></div>
       </div>
 
       <div className="p-4 space-y-6">
@@ -132,14 +164,22 @@ export default function CheckoutPage() {
             </div>
             <div className="flex-1">
               <p className="font-semibold text-white">Domicile</p>
-              <p className="text-slate-400 text-sm mt-1">{deliveryAddress}</p>
-              <p className="text-slate-500 text-xs mt-1">
-                {distanceLoading
-                  ? 'Calcul de la distance...'
-                  : `${distanceIsEstimate ? '~' : ''} ${deliveryDistance.toFixed(1)} km · ~${durationMinutes} min`}
-              </p>
+              {hasValidAddress ? (
+                <>
+                  <p className="text-slate-400 text-sm mt-1">{deliveryAddress}</p>
+                  <p className="text-slate-500 text-xs mt-1">
+                    {distanceLoading
+                      ? 'Calcul de la distance...'
+                      : `${distanceIsEstimate ? '~' : ''} ${deliveryDistance.toFixed(1)} km · ~${durationMinutes} min`}
+                  </p>
+                </>
+              ) : (
+                <p className="text-destructive text-sm mt-1 font-medium">Adresse non renseignée dans votre profil</p>
+              )}
             </div>
-            <button onClick={() => router.push('/profil')} className="text-primary text-sm font-semibold">Modifier</button>
+            <button onClick={() => router.push('/profil')} className="text-primary text-sm font-semibold">
+              {hasValidAddress ? 'Modifier' : 'Ajouter'}
+            </button>
           </div>
         </section>
 
@@ -181,18 +221,53 @@ export default function CheckoutPage() {
           </div>
         </section>
 
-        {/* Payment Method */}
+        {/* Payment Method Selection */}
         <section className="glass-card p-5 rounded-2xl border border-white/5">
           <h2 className="text-lg font-bold text-white mb-4">Moyen de paiement</h2>
-          <div className="flex items-center justify-between p-4 border border-primary/20 bg-primary/5 rounded-xl">
-            <div className="flex items-center gap-3">
-              <MaterialIcon name="credit_card" size="lg" className="text-primary" />
-              <div>
-                <p className="font-semibold text-white">Apple Pay</p>
-                <p className="text-xs text-slate-400">Moyen par défaut</p>
+          <div className="space-y-3">
+            {/* Wallet Option */}
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('wallet')}
+              className={[
+                'w-full p-4 rounded-xl border text-left transition-all flex items-center justify-between',
+                paymentMethod === 'wallet' ? 'border-primary bg-primary/10' : 'border-white/10 bg-white/5',
+              ].join(' ')}
+            >
+              <div className="flex items-center gap-3">
+                <MaterialIcon name="account_balance_wallet" size="lg" className="text-primary" />
+                <div>
+                  <p className="font-semibold text-white">Portefeuille Medjira</p>
+                  <p className="text-xs text-slate-400">
+                    Solde: {walletBalance !== null ? `${walletBalance.toFixed(2)} ${CURRENCY_CODE}` : 'Chargement...'}
+                  </p>
+                </div>
               </div>
-            </div>
-            <MaterialIcon name="chevron_right" size="md" className="text-slate-500" />
+              {paymentMethod === 'wallet' && (
+                <MaterialIcon name="check_circle" size="md" className="text-primary" />
+              )}
+            </button>
+
+            {/* Card Option */}
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('card')}
+              className={[
+                'w-full p-4 rounded-xl border text-left transition-all flex items-center justify-between',
+                paymentMethod === 'card' ? 'border-primary bg-primary/10' : 'border-white/10 bg-white/5',
+              ].join(' ')}
+            >
+              <div className="flex items-center gap-3">
+                <MaterialIcon name="credit_card" size="lg" className="text-slate-400" />
+                <div>
+                  <p className="font-semibold text-white">Carte bancaire / Apple Pay</p>
+                  <p className="text-xs text-slate-400">Paiement sécurisé Stripe</p>
+                </div>
+              </div>
+              {paymentMethod === 'card' && (
+                <MaterialIcon name="check_circle" size="md" className="text-primary" />
+              )}
+            </button>
           </div>
         </section>
 
@@ -244,14 +319,18 @@ export default function CheckoutPage() {
       <div className="fixed bottom-0 inset-x-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/5 z-20 max-w-[430px] mx-auto">
         <button
           onClick={handleCreateOrder}
-          disabled={loading}
-          className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-lg py-4 rounded-xl hover:opacity-90 transition-all flex justify-center items-center gap-2 disabled:opacity-70"
+          disabled={loading || isWalletInsufficient || !hasValidAddress}
+          className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-lg py-4 rounded-xl hover:opacity-90 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
             <>
               <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
               Traitement du paiement...
             </>
+          ) : isWalletInsufficient ? (
+            'Solde portefeuille insuffisant'
+          ) : !hasValidAddress ? (
+            'Adresse de livraison manquante'
           ) : (
             `Payer ${total.toFixed(2)} ${CURRENCY_CODE}`
           )}

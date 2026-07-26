@@ -103,7 +103,10 @@ export default function RestaurantClient() {
             )}
           </div>
 
-          <p className="text-slate-400 font-medium mb-4">{restaurant.cuisineType} • {restaurant.avgPricePerPerson} {CURRENCY_CODE} / pers.</p>
+          <p className="text-slate-400 font-medium mb-4">
+            {Array.isArray(restaurant.cuisineType) ? restaurant.cuisineType.join(' • ') : restaurant.cuisineType} • {restaurant.avgPricePerPerson} {CURRENCY_CODE} / pers.
+          </p>
+
 
           <div className="flex items-center gap-6 text-sm text-slate-300 font-medium">
             <div className="flex items-center gap-2">

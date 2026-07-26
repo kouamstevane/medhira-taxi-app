@@ -452,6 +452,12 @@ export const createFoodOrder = async (
     pickupCode,
     paymentValidated: false,
     restaurantName: restaurant.name,
+    restaurantPhone: restaurant.phone || '',
+    restaurantAddress: {
+      address: restaurant.address || '',
+      lat: restaurant.location?.lat ?? 0,
+      lng: restaurant.location?.lng ?? 0,
+    },
     deliveryPreference: orderData.deliveryPreference ?? 'leave_at_door',
     customerPhone: orderData.customerPhone ?? '',
     clientNeighbourhood: orderData.clientNeighbourhood ?? '',
@@ -461,39 +467,16 @@ export const createFoodOrder = async (
   };
 
   // Only set optional fields when defined — Firestore rejects `undefined` values
-  // (ignoreUndefinedProperties is not enabled).
   if (orderData.deliveryLocation) order.deliveryLocation = orderData.deliveryLocation;
   if (restaurant.imageUrl) order.restaurantImage = restaurant.imageUrl;
   if (orderData.deliveryInstructions) order.deliveryInstructions = orderData.deliveryInstructions;
 
-  const walletRef = doc(db, 'wallets', orderData.userId);
-
   try {
-    await runTransaction(db, async (tx) => {
-      const walletSnap = await tx.get(walletRef);
-      if (!walletSnap.exists()) {
-        throw new Error('Portefeuille introuvable');
-      }
-      const walletData = walletSnap.data() as { balance?: number };
-      const currentBalance = walletData.balance ?? 0;
-      if (currentBalance < totalOrderPrice) {
-        throw new Error(
-          `Solde insuffisant: ${currentBalance} < ${totalOrderPrice}`
-        );
-      }
+    // 1. Créer le document de commande conforme aux règles Firestore (paymentValidated = false)
+    await setDoc(newOrderRef, order);
 
-      tx.update(walletRef, {
-        balance: currentBalance - totalOrderPrice,
-        updatedAt: serverTimestamp(),
-      });
-
-      tx.set(newOrderRef, {
-        ...order,
-        status: 'confirmed',
-        paymentValidated: true,
-        confirmedAt: serverTimestamp(),
-      });
-    });
+    // 2. Valider et débiter le paiement via la Cloud Function sécurisée
+    await payFoodOrderWithWallet(newOrderRef.id);
   } catch (payError) {
     const msg = (payError as Error).message;
     logger.error('Création commande livraison échouée', {
@@ -503,7 +486,7 @@ export const createFoodOrder = async (
     throw new Error(`Paiement échoué: ${msg}`);
   }
 
-  logger.info('Commande de livraison créée', {
+  logger.info('Commande de livraison créée et payée', {
     orderId: newOrderRef.id,
     restaurantId: orderData.restaurantId,
     totalOrderPrice,
@@ -516,6 +499,25 @@ export const createFoodOrder = async (
     throw error;
   }
 };
+
+/**
+ * Payer une commande de livraison via le portefeuille (Cloud Function)
+ */
+export const payFoodOrderWithWallet = async (orderId: string): Promise<{ transactionId: string }> => {
+  try {
+    const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+    const app = getApps().length ? getApp() : undefined;
+    if (!app) throw new Error('Firebase app not initialized');
+    const functions = getFunctions(app, functionsRegion);
+    const payCallable = httpsCallable<{ orderId: string }, { transactionId: string }>(functions, 'walletPayFoodOrder');
+    const result = await payCallable({ orderId });
+    return result.data;
+  } catch (error) {
+    console.error('[food-delivery.service] payFoodOrderWithWallet failed:', error);
+    throw error;
+  }
+};
+
 
 /**
  * Récupérer une commande par ID
@@ -814,7 +816,9 @@ export const FoodDeliveryService = {
   getApprovedRestaurants,
   getRestaurantMenu,
   createFoodOrder,
+  payFoodOrderWithWallet,
   updateFoodOrderStatus,
+
   getUserFoodOrders,
   submitDeliveryReview,
   submitRestaurantReview,

@@ -38,10 +38,14 @@ const customJestConfig = {
     '**/?(*.)+(spec|test).[jt]s?(x)',
   ],
 
+  modulePathIgnorePatterns: ['<rootDir>/.worktrees/'],
+
   // Fichiers à ignorer
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/.next/',
+    '<rootDir>/.worktrees/',
+
     // Tests Playwright — doivent être lancés via `npx playwright test`
     '<rootDir>/e2e/',
     // Tests Firestore rules — nécessitent les émulateurs Firebase (`npm run test:firestore:emulators`)
