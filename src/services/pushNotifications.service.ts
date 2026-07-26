@@ -231,8 +231,6 @@ class PushNotificationService {
      */
     async subscribeToTopic(topic: string): Promise<void> {
         try {
-            // Utiliser Firebase Cloud Functions pour gérer les abonnements
-            // car Capacitor ne supporte pas directement les topics
             const auth = getAuth();
             const user = auth.currentUser;
             
@@ -241,14 +239,25 @@ class PushNotificationService {
                 return;
             }
 
+            if (!Capacitor.isNativePlatform() && !this.token) {
+                console.warn(`[PushNotifications] Abonnement ignoré pour topic ${topic} (plateforme non-native sans token FCM)`);
+                return;
+            }
+
             // Appeler une Cloud Function pour s'abonner au topic
             const { getFunctions, httpsCallable } = await import('firebase/functions');
-            const functions = getFunctions();
+            const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+            const functions = getFunctions(app, functionsRegion);
             const subscribeToTopicFn = httpsCallable(functions, 'subscribeToTopic');
             
             await subscribeToTopicFn({ topic });
             console.log(`[PushNotifications] Abonné au topic: ${topic}`);
         } catch (error) {
+            const err = error as { message?: string; code?: string };
+            if (err?.message?.includes('Token FCM introuvable') || err?.code === 'functions/failed-precondition') {
+                console.warn(`[PushNotifications] Pas de token FCM actif pour l'abonnement au topic: ${topic}`);
+                return;
+            }
             console.error('[PushNotifications] Erreur abonnement topic:', error);
         }
     }
@@ -266,14 +275,25 @@ class PushNotificationService {
                 return;
             }
 
+            if (!Capacitor.isNativePlatform() && !this.token) {
+                console.warn(`[PushNotifications] Désabonnement ignoré pour topic ${topic} (plateforme non-native sans token FCM)`);
+                return;
+            }
+
             // Appeler une Cloud Function pour se désabonner du topic
             const { getFunctions, httpsCallable } = await import('firebase/functions');
-            const functions = getFunctions();
+            const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+            const functions = getFunctions(app, functionsRegion);
             const unsubscribeFromTopicFn = httpsCallable(functions, 'unsubscribeFromTopic');
             
             await unsubscribeFromTopicFn({ topic });
             console.log(`[PushNotifications] Désabonné du topic: ${topic}`);
         } catch (error) {
+            const err = error as { message?: string; code?: string };
+            if (err?.message?.includes('Token FCM introuvable') || err?.code === 'functions/failed-precondition') {
+                console.warn(`[PushNotifications] Pas de token FCM actif pour le désabonnement du topic: ${topic}`);
+                return;
+            }
             console.error('[PushNotifications] Erreur désabonnement topic:', error);
         }
     }

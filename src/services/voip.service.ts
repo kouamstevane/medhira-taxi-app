@@ -4,7 +4,8 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { db } from '@/config/firebase';
+import { db, app } from '@/config/firebase';
+const FUNCTIONS_REGION = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
 import { VoipCallState, CallStatus, CallParticipant, IVoipEngine, DEFAULT_CALL_TIMEOUTS } from '@/types/voip';
 import { logger } from '@/utils/logger';
 import { TwilioVoipEngine } from './voip/engines/twilio.engine';
@@ -164,7 +165,7 @@ class VoipService {
         error: null,
       });
 
-      const functions = getFunctions();
+      const functions = getFunctions(app, FUNCTIONS_REGION);
 
       const response = await this.retryWithBackoff(async () => {
         const createCallFn = httpsCallable(functions, 'createCall');
@@ -232,7 +233,7 @@ class VoipService {
     if (!this.state.callId) return;
 
     try {
-      const functions = getFunctions();
+      const functions = getFunctions(app, FUNCTIONS_REGION);
       const answerCallFn = httpsCallable(functions, 'answerCall');
 
       await answerCallFn({ callId: this.state.callId });
@@ -304,7 +305,7 @@ class VoipService {
 
     try {
       if (callId) {
-        const functions = getFunctions();
+        const functions = getFunctions(app, FUNCTIONS_REGION);
         const endCallFn = httpsCallable(functions, 'endCall');
         await endCallFn({ callId, reason });
       }

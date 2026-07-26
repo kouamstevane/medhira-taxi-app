@@ -1432,12 +1432,12 @@ async function manageTopicSubscription(
 }
 
 export const subscribeToTopic = onCall(
-  { cors: true },
+  { region: 'europe-west1', cors: true },
   (request: CallableRequest) => manageTopicSubscription(request, 'subscribe')
 );
 
 export const unsubscribeFromTopic = onCall(
-  { cors: true },
+  { region: 'europe-west1', cors: true },
   (request: CallableRequest) => manageTopicSubscription(request, 'unsubscribe')
 );
 

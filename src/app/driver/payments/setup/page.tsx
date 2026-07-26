@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { app, auth } from '@/config/firebase';
+import { app, auth, db } from '@/config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { useAuth } from '@/hooks/useAuth';
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 import { Loader2, CheckCircle2, AlertTriangle, XCircle, RefreshCw, ArrowRight, Shield } from 'lucide-react';
@@ -54,10 +56,11 @@ function humanizeRequirement(key: string): string {
   return REQUIREMENT_LABELS[key] || key.replace(/[._]/g, ' ');
 }
 
-export default function PaymentSetupPage() {
+function PaymentSetupContent() {
   const router = useRouter();
   const params = useSearchParams();
   const onboardingState = params.get('onboarding'); // 'success' | 'refresh' | null
+  const { currentUser, loading: authLoading } = useAuth();
 
   const [statusData, setStatusData] = useState<StatusResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,30 +77,78 @@ export default function PaymentSetupPage() {
   }, []);
 
   const fetchStatus = useCallback(async () => {
+    const user = auth.currentUser || currentUser;
+    if (!user) {
+      if (!authLoading) {
+        router.push('/driver/login');
+      }
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        router.push('/driver/login');
-        return;
+      // 1) Lecture Firestore directe pour affichage immédiat / fallback
+      let initialStatus: StatusResult | null = null;
+      try {
+        const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
+        if (driverDoc.exists()) {
+          const d = driverDoc.data();
+          const req = (d.requirements ?? {}) as Record<string, unknown>;
+          initialStatus = {
+            accountId: d.stripeAccountId ?? null,
+            status: (d.stripeAccountStatus as AccountStatus) ?? (d.stripeAccountId ? 'pending' : 'not_created'),
+            chargesEnabled: !!d.stripeChargesEnabled,
+            payoutsEnabled: !!d.stripePayoutsEnabled,
+            detailsSubmitted: !!d.stripeDetailsSubmitted,
+            disabledReason: (d.stripeDisabledReason as string | null) ?? null,
+            requirements: {
+              currently_due: Array.isArray(req.currently_due) ? (req.currently_due as string[]) : [],
+              past_due: Array.isArray(req.past_due) ? (req.past_due as string[]) : [],
+              eventually_due: Array.isArray(req.eventually_due) ? (req.eventually_due as string[]) : [],
+              pending_verification: Array.isArray(req.pending_verification) ? (req.pending_verification as string[]) : [],
+              current_deadline: (req.current_deadline as number | null) ?? null,
+            },
+          };
+          if (mountedRef.current) {
+            setStatusData(initialStatus);
+          }
+        }
+      } catch (fsErr) {
+        console.warn('[PaymentSetup] Lecture Firestore locale échouée, fallback sur Cloud Function', fsErr);
       }
-      await user.getIdToken(true);
-      const fn = getFunctions(app, FUNCTIONS_REGION);
-      const call = httpsCallable<unknown, StatusResult>(fn, 'getStripeAccountStatus');
-      const res = await call({});
-      if (!mountedRef.current) return;
-      setStatusData(res.data);
+
+      // 2) Rafraîchissement via Cloud Function avec race/timeout gracieux
+      try {
+        await user.getIdToken(true);
+        const fn = getFunctions(app, FUNCTIONS_REGION);
+        const call = httpsCallable<unknown, StatusResult>(fn, 'getStripeAccountStatus');
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Délai d\'attente dépassé (timeout).')), 8000)
+        );
+
+        const res = (await Promise.race([call({}), timeoutPromise])) as { data: StatusResult };
+        if (mountedRef.current && res?.data) {
+          setStatusData(res.data);
+        }
+      } catch (cfErr: unknown) {
+        const err = cfErr as { message?: string };
+        console.warn('[PaymentSetup] Cloud Function fetch failed or timed out:', err);
+        if (mountedRef.current && !initialStatus) {
+          setError(err.message || 'Impossible de récupérer le statut Stripe.');
+        }
+      }
     } catch (e: unknown) {
-      const err = e as { code?: string; message?: string };
+      const err = e as { message?: string };
       console.error('[PaymentSetup] fetch failed', err);
-      if (mountedRef.current) {
+      if (mountedRef.current && !statusData) {
         setError(err.message || 'Impossible de récupérer le statut Stripe.');
       }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [router]);
+  }, [router, currentUser, authLoading, statusData]);
 
   useEffect(() => {
     fetchStatus();
@@ -319,5 +370,20 @@ export default function PaymentSetupPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function PaymentSetupPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#0A0A0A] text-white flex flex-col items-center justify-center px-6">
+          <Loader2 className="w-10 h-10 animate-spin text-[#635bff]" />
+          <p className="mt-4 text-[#9CA3AF]">Vérification de votre compte Stripe…</p>
+        </div>
+      }
+    >
+      <PaymentSetupContent />
+    </Suspense>
   );
 }

@@ -23,7 +23,7 @@ import {
   limit,
   writeBatch,
 } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { db, app } from '@/config/firebase';
 import { Message, MessageType } from '@/types/chat';
 import {
   ConversationContext,
@@ -236,7 +236,8 @@ export const sendSystemMessage = async (
 ): Promise<void> => {
   try {
     const { getFunctions, httpsCallable } = await import('firebase/functions');
-    const functions = getFunctions();
+    const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+    const functions = getFunctions(app, functionsRegion);
     const sendSystemMsg = httpsCallable(functions, 'sendSystemMessage');
 
     const recipientForBackend = recipient === 'chauffeur' ? 'driver' : recipient;

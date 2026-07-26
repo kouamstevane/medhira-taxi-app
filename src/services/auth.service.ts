@@ -288,6 +288,7 @@ export const signInWithGoogle = async (
     console.log('[AuthService] Connexion Google web (popup)');
 
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     const result = await signInWithPopup(auth, provider);
     user = result.user;
 
@@ -347,6 +348,13 @@ export const signInWithGoogle = async (
  * Déconnexion
  */
 export const signOut = async (): Promise<void> => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await SocialLogin.logout({ provider: 'google' });
+    } catch {
+      // Ignorer l'erreur si l'utilisateur n'était pas connecté via SocialLogin
+    }
+  }
   await firebaseSignOut(auth);
 };
 
