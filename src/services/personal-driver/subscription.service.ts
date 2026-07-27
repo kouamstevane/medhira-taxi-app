@@ -94,3 +94,47 @@ export async function getPersonalDriverTripsForSubscription(
     ...doc.data(),
   })) as PersonalDriverTrip[];
 }
+
+export async function cancelPersonalDriverTripByClient(tripId: string): Promise<void> {
+  const { doc, updateDoc } = await import('firebase/firestore');
+  const tripRef = doc(db, 'personal_driver_trips', tripId);
+  await updateDoc(tripRef, {
+    status: 'cancelled',
+    cancelledBy: 'client',
+    clientCancelledLostKm: true,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function requestSpecialTrip(
+  subscriptionId: string,
+  userId: string,
+  planId: PersonalDriverPlanId,
+  pickupAddress: string,
+  destinationAddress: string,
+  scheduledAtIso: string,
+  distanceKm: number,
+): Promise<void> {
+  const { doc, collection, addDoc, updateDoc, increment } = await import('firebase/firestore');
+  const tripsRef = collection(db, 'personal_driver_trips');
+  await addDoc(tripsRef, {
+    subscriptionId,
+    userId,
+    planId,
+    direction: 'special',
+    isSpecialTrip: true,
+    pickupAddress,
+    destinationAddress,
+    scheduledAtIso,
+    status: 'scheduled',
+    distanceKm,
+    assignedDriverId: null,
+    assignedVehicleId: null,
+    createdAt: new Date().toISOString(),
+  });
+
+  const subRef = doc(db, 'personal_driver_subscriptions', subscriptionId);
+  await updateDoc(subRef, {
+    specialTripsUsed: increment(1),
+  });
+}

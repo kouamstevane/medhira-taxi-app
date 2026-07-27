@@ -54,3 +54,53 @@ export interface PersonalDriverPriceComparison {
   recommendedPlanId: PersonalDriverPlanId;
   recommendationReasons: string[];
 }
+
+export interface PersonalDriverSubscription {
+  id: string;
+  userId: string;
+  planId: PersonalDriverPlanId;
+  status: PersonalDriverSubscriptionStatus;
+  startDate: string;
+  endDate: string;
+  monthlyDistanceKm: number;
+  totalPriceBeforeTax: number;
+  totalPriceWithTax: number;
+  includedSpecialTrips: number;
+  specialTripsUsed: number;
+  specialTripsRemaining: number;
+  pickupAddress: string;
+  destinationAddress: string;
+  tripType: PersonalDriverTripType;
+  selectedWeekdays: PersonalDriverWeekday[];
+  departureTime: string;
+  returnTime?: string;
+  passengerCount: number;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface PersonalDriverTrip {
+  id: string;
+  subscriptionId: string;
+  userId: string;
+  planId: PersonalDriverPlanId;
+  direction: 'outbound' | 'return' | 'special';
+  isSpecialTrip?: boolean;
+  distanceKm?: number;
+  status: PersonalDriverTripStatus;
+  scheduledAtIso: string;
+  pickupAddress: string;
+  destinationAddress: string;
+  assignedDriverId: string | null;
+  assignedDriverName?: string;
+  assignedVehicleId: string | null;
+  driverArrivedAtIso?: string;
+  waitTimeMinutes?: number;
+  overageWaitMinutes?: number;
+  overageWaitFeeAmount?: number;
+  overageWaitBilled?: boolean;
+  cancelledBy?: 'client' | 'driver' | 'admin';
+  clientCancelledLostKm?: boolean;
+  driverAlertFlagged?: boolean;
+  driverAlertReason?: string;
+}

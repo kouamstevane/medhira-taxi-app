@@ -1,5 +1,6 @@
 'use client';
 
+import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -11,7 +12,7 @@ function isPlanId(planId: string | null): planId is PersonalDriverPlanId {
   return planId === 'basic' || planId === 'classic' || planId === 'premium';
 }
 
-export default function PersonalDriverConfigurationPage() {
+function ConfigurerContent() {
   const searchParams = useSearchParams();
   const selectedPlanId = searchParams.get('plan');
   const plan = PERSONAL_DRIVER_PLANS[isPlanId(selectedPlanId) ? selectedPlanId : 'basic'];
@@ -39,5 +40,13 @@ export default function PersonalDriverConfigurationPage() {
         <PersonalDriverConfigurator plan={plan} />
       </main>
     </div>
+  );
+}
+
+export default function PersonalDriverConfigurationPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-400">Chargement...</div>}>
+      <ConfigurerContent />
+    </Suspense>
   );
 }

@@ -198,6 +198,18 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       return;
     }
 
+    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+    const startObj = new Date(startYear, startMonth - 1, startDay);
+    const selectedWeekdaysSet = new Set(weekdays);
+    let totalMatchingDays = 0;
+    for (let offset = 0; offset < 30; offset += 1) {
+      const currentDate = new Date(startObj);
+      currentDate.setDate(startObj.getDate() + offset);
+      if (selectedWeekdaysSet.has(currentDate.getDay() as PersonalDriverWeekday)) {
+        totalMatchingDays += 1;
+      }
+    }
+
     const configuration: PersonalDriverConfiguration = {
       version: 1,
       requestId: requestIdRef.current ?? createRequestId(),
@@ -214,7 +226,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       distanceKm,
       distanceOneWayKm: distanceKm,
       ...(tripType === 'round_trip' ? { distanceReturnKm: distanceKm } : {}),
-      monthlyDistanceKm: distanceKm * (tripType === 'round_trip' ? 2 : 1) * weekdays.length * 4,
+      monthlyDistanceKm: distanceKm * (tripType === 'round_trip' ? 2 : 1) * totalMatchingDays,
     };
 
     sessionStorage.setItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY, JSON.stringify(configuration));

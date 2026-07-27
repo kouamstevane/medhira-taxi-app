@@ -31,6 +31,12 @@ const adminActionSchema = z.discriminatedUnion('action', [
     driverId: z.string().min(1),
     vehicleId: z.string().min(1),
   }),
+  z.object({
+    action: z.literal('reassignDriverEmergency'),
+    tripId: z.string().min(1),
+    newDriverId: z.string().min(1),
+    newVehicleId: z.string().min(1),
+  }),
 ]);
 
 export const adminManagePersonalDriver = onCall(
@@ -87,6 +93,23 @@ export const adminManagePersonalDriver = onCall(
         status: 'driver_assigned',
         assignedAt: admin.firestore.FieldValue.serverTimestamp(),
         assignedBy: request.auth.uid,
+      });
+      return { success: true };
+    }
+
+    if (payload.action === 'reassignDriverEmergency') {
+      const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
+      const tripSnap = await tripRef.get();
+      if (!tripSnap.exists) {
+        throw new HttpsError('not-found', 'Trajet introuvable.');
+      }
+      await tripRef.update({
+        assignedDriverId: payload.newDriverId,
+        assignedVehicleId: payload.newVehicleId,
+        status: 'driver_assigned',
+        driverAlertFlagged: false,
+        emergencyReassignedAt: admin.firestore.FieldValue.serverTimestamp(),
+        emergencyReassignedBy: request.auth.uid,
       });
       return { success: true };
     }
