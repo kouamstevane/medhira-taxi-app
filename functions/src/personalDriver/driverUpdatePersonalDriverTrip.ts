@@ -1,7 +1,15 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
-import type { PersonalDriverTripStatus } from './pricing.js';
+export type PersonalDriverTripStatus =
+  | 'scheduled'
+  | 'driver_assigned'
+  | 'driver_en_route'
+  | 'driver_arrived'
+  | 'passenger_picked_up'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
 
 function getDb(): FirebaseFirestore.Firestore {
   if (!admin.apps.length) admin.initializeApp();
