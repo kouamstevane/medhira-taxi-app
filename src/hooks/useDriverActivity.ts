@@ -29,13 +29,10 @@ export function useDriverActivity(uid: string): {
   loading: boolean
 } {
   const [records, setRecords] = useState<ActivityRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const [snapshotLoading, setSnapshotLoading] = useState(true)
 
   useEffect(() => {
-    if (!uid) {
-      setLoading(false)
-      return
-    }
+    if (!uid) return
 
     const taxiRecordsRef: ActivityRecord[] = []
     const deliveryRecordsRef: ActivityRecord[] = []
@@ -50,7 +47,7 @@ export function useDriverActivity(uid: string): {
     const checkDone = () => {
       if (taxiLoaded && deliveryLoaded) {
         mergeAndSort()
-        setLoading(false)
+        setSnapshotLoading(false)
       }
     }
 
@@ -81,7 +78,7 @@ export function useDriverActivity(uid: string): {
       checkDone()
     }, (error) => {
       console.error('Driver activity snapshot error:', error)
-      setLoading(false)
+      setSnapshotLoading(false)
     })
 
     const deliveryQuery = query(
@@ -111,7 +108,7 @@ export function useDriverActivity(uid: string): {
       checkDone()
     }, (error) => {
       console.error('Driver activity snapshot error:', error)
-      setLoading(false)
+      setSnapshotLoading(false)
     })
 
     return () => {
@@ -132,5 +129,5 @@ export function useDriverActivity(uid: string): {
     return { total, taxi, livraison }
   }, [records])
 
-  return { records, totals, loading }
+  return { records, totals, loading: uid ? snapshotLoading : false }
 }

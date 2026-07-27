@@ -20,6 +20,8 @@ import { CURRENCY_CODE, DEFAULT_PRICING, DEFAULT_LOCALE } from '@/utils/constant
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 
+type GoogleMapsApi = typeof import('@react-google-maps/api');
+
 interface DriverFoundViewProps {
   bookingId: string;
   onComplete: () => void;
@@ -55,7 +57,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   const [cancellationFee, setCancellationFee] = useState(0);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
-  const [mapsApi, setMapsApi] = useState<any>(null);
+  const [mapsApi, setMapsApi] = useState<GoogleMapsApi | null>(null);
 
   const { autocompleteService } = useGoogleMaps();
   const { watchPosition } = useCapacitorGeolocation();
@@ -394,6 +396,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
   const GoogleMap = mapsApi?.GoogleMap;
   const Marker = mapsApi?.Marker;
   const DirectionsRenderer = mapsApi?.DirectionsRenderer;
+  const canRenderMap = isLoaded && GoogleMap && Marker && DirectionsRenderer;
 
   const getStatusMessage = () => {
     switch (booking.status) {
@@ -419,7 +422,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       <div className="bg-[#0F0F0F] rounded-xl shadow-lg overflow-hidden">
       {/* Carte */}
       <div className="relative h-[300px] sm:h-[400px] bg-[#1A1A1A]">
-        {isLoaded && GoogleMap ? (
+        {canRenderMap ? (
           <GoogleMap
             mapContainerStyle={{ width: '100%', height: '100%' }}
             center={mapCenter || booking.driverLocation || booking.pickupLocation || defaultCenter}

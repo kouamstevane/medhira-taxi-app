@@ -124,7 +124,7 @@ async function processQueryInChunks(
   let total = 0;
   // Pagination via startAfter pour éviter de recharger toujours le même set
   let last: admin.firestore.QueryDocumentSnapshot | null = null;
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     let q = query.limit(BATCH_CHUNK_SIZE);
     if (last) q = q.startAfter(last);
@@ -327,7 +327,7 @@ async function anonymizeCollectionForUser(
   let total = 0;
   let last: admin.firestore.QueryDocumentSnapshot | null = null;
 
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     let q: admin.firestore.Query = db.collection(collectionName).where(field, '==', uid);
     if (onlyCompleted) {

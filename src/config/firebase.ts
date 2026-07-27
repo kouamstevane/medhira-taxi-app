@@ -9,8 +9,8 @@ import {
   persistentSingleTabManager
 } from "firebase/firestore";
 import { getFunctions, Functions } from "firebase/functions";
-import type { FirebaseStorage } from "firebase/storage";
-import type { Database } from "firebase/database";
+import { getStorage, type FirebaseStorage } from "firebase/storage";
+import { getDatabase, type Database } from "firebase/database";
 import { Capacitor } from "@capacitor/core";
 
 export const firebaseConfig = {
@@ -58,7 +58,6 @@ export const functions: Functions = getFunctions(app, 'europe-west1');
 let _storage: FirebaseStorage | undefined;
 export const getFirebaseStorage = (): FirebaseStorage => {
   if (!_storage) {
-    const { getStorage } = require("firebase/storage") as typeof import("firebase/storage");
     _storage = getStorage(app);
   }
   return _storage;
@@ -67,7 +66,6 @@ export const getFirebaseStorage = (): FirebaseStorage => {
 let _rtdb: Database | undefined;
 export const getFirebaseDatabase = (): Database => {
   if (!_rtdb) {
-    const { getDatabase } = require("firebase/database") as typeof import("firebase/database");
     _rtdb = getDatabase(app);
   }
   return _rtdb;

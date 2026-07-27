@@ -31,10 +31,7 @@ function RestaurantPendingContent() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!restaurantId) {
-      setLoading(false);
-      return;
-    }
+    if (!restaurantId) return;
     const unsub = onSnapshot(doc(db, 'restaurants', restaurantId), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -70,7 +67,7 @@ function RestaurantPendingContent() {
     router.replace('/dashboard');
   }, [currentUser, router]);
 
-  if (authLoading || loading) {
+  if (authLoading || (restaurantId ? loading : false)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner />

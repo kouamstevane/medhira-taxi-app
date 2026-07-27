@@ -40,7 +40,10 @@ import { selectNearestDriver } from './utils/matching.js';
 import { enforceRateLimit } from './utils/rateLimiter.js';
 
 // Lazy imports pour éviter le timeout de déploiement (10s)
-let _cloudTasksClient: any = null;
+type CloudTasksClient = import('@google-cloud/tasks').CloudTasksClient;
+type OAuth2Client = import('google-auth-library').OAuth2Client;
+
+let _cloudTasksClient: CloudTasksClient | null = null;
 async function getCloudTasksClient() {
   if (!_cloudTasksClient) {
     const { CloudTasksClient } = await import('@google-cloud/tasks');
@@ -49,7 +52,7 @@ async function getCloudTasksClient() {
   return _cloudTasksClient;
 }
 
-let _oauthClient: any = null;
+let _oauthClient: OAuth2Client | null = null;
 async function getOAuthClient() {
   if (!_oauthClient) {
     const { OAuth2Client } = await import('google-auth-library');

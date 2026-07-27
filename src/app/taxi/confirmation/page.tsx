@@ -20,8 +20,8 @@ function ConfirmationContent() {
   const bookingId = searchParams.get("bookingId");
 
   const [booking, setBooking] = useState<DocumentData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(() => Boolean(bookingId));
+  const [error, setError] = useState<string | null>(() => bookingId ? null : "ID de course manquant");
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [showArrival, setShowArrival] = useState(false);
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
@@ -32,11 +32,7 @@ function ConfirmationContent() {
   const smoothDriverLocation = useSmoothMarker(driverLocation);
 
   useEffect(() => {
-    if (!bookingId) {
-      setError("ID de course manquant");
-      setLoading(false);
-      return;
-    }
+    if (!bookingId) return;
 
     const bookingRef = doc(db, "bookings", bookingId);
     let mounted = true;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CURRENCY_CODE } from '@/utils/constants';
 import type { RideRequest } from '@/types/trip';
@@ -13,18 +13,18 @@ interface RideRequestCardProps {
 
 export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCardProps) {
   const [showMap, setShowMap] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const expiresAtMs = useMemo(
+    () => request.candidate.expiresAt?.toDate().getTime() ?? null,
+    [request.candidate.expiresAt]
+  );
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(() =>
+    expiresAtMs == null ? null : Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000))
+  );
 
   useEffect(() => {
-    if (!request.candidate.expiresAt) {
-      setTimeRemaining(null);
-      return;
-    }
-
-    const expiresAt = request.candidate.expiresAt.toDate();
+    if (expiresAtMs == null) return;
     const updateTimer = () => {
-      const now = new Date();
-      const remaining = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000));
+      const remaining = Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000));
       setTimeRemaining(remaining);
 
       if (remaining <= 0) {
@@ -36,14 +36,15 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
     const interval = setInterval(updateTimer, 1000);
 
     return () => clearInterval(interval);
-  }, [request.candidate.expiresAt]);
+  }, [expiresAtMs]);
 
   const formatTime = (seconds: number): string => {
     return `${seconds}s`;
   };
 
-  const isExpired = timeRemaining !== null && timeRemaining <= 0;
-  const isUrgent = timeRemaining !== null && timeRemaining <= 10;
+  const visibleTimeRemaining = expiresAtMs == null ? null : timeRemaining;
+  const isExpired = visibleTimeRemaining !== null && visibleTimeRemaining <= 0;
+  const isUrgent = visibleTimeRemaining !== null && visibleTimeRemaining <= 10;
 
   if (isExpired) {
     return null;
@@ -60,7 +61,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
               <MaterialIcon name="schedule" size="sm" className={`${isUrgent ? 'text-red-400 animate-pulse' : 'text-primary'}`} />
             </div>
             <span className={`text-xs sm:text-sm font-bold ${isUrgent ? 'text-red-400 animate-pulse' : 'text-primary'}`}>
-              {timeRemaining !== null ? formatTime(timeRemaining) : 'Nouvelle demande'}
+              {visibleTimeRemaining !== null ? formatTime(visibleTimeRemaining) : 'Nouvelle demande'}
             </span>
             {isUrgent && (
               <span className="text-xs font-semibold text-red-400 animate-bounce">

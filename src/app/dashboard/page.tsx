@@ -98,7 +98,6 @@ export default function Dashboard() {
   const { authStatus, currentUser, userData: authUserData } = useAuth();
   const routerRef = useRef(router);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  routerRef.current = router;
   const [notifCount, setNotifCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
@@ -133,6 +132,10 @@ export default function Dashboard() {
   const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
   const [isRestaurantLoading, setIsRestaurantLoading] = useState(false);
   const unsubscribeNotifsRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   const fetchHistory = async (userId: string) => {
     try {
@@ -213,7 +216,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (authStatus !== 'authenticated' || !currentUser || !authUserData) {
-      setPageStatus('booting');
+      queueMicrotask(() => setPageStatus('booting'));
       return;
     }
 
@@ -222,13 +225,13 @@ export default function Dashboard() {
     const roles = (userDataFromDB.roles as Partial<UserRoles> | undefined) ?? {};
 
     if (userDataFromDB.accountState === 'driver_onboarding' || activeRole === 'driver_onboarding') {
-      setPageStatus('redirecting');
+      queueMicrotask(() => setPageStatus('redirecting'));
       redirectTimeoutRef.current = redirectWithFallback(routerRef.current, '/driver/register');
       return;
     }
 
     if (activeRole !== 'client') {
-      setPageStatus('redirecting');
+      queueMicrotask(() => setPageStatus('redirecting'));
       redirectTimeoutRef.current = redirectWithFallback(
         routerRef.current,
         getDashboardRouteFor(activeRole),
@@ -236,29 +239,33 @@ export default function Dashboard() {
       return;
     }
 
-    setHasPaymentMethod(!!userDataFromDB.defaultPaymentMethodId);
-    setUserData({
-      phoneNumber: currentUser.phoneNumber || "",
-      firstName: userDataFromDB.firstName || "",
-      lastName: userDataFromDB.lastName || "",
-      profileImageUrl: userDataFromDB.profileImageUrl || currentUser.photoURL || DEFAULT_URLS.DEFAULT_AVATAR,
-      activeRole,
-      roles,
-      draftRestaurant: userDataFromDB.draftRestaurant,
+    queueMicrotask(() => {
+      setHasPaymentMethod(!!userDataFromDB.defaultPaymentMethodId);
+      setUserData({
+        phoneNumber: currentUser.phoneNumber || "",
+        firstName: userDataFromDB.firstName || "",
+        lastName: userDataFromDB.lastName || "",
+        profileImageUrl: userDataFromDB.profileImageUrl || currentUser.photoURL || DEFAULT_URLS.DEFAULT_AVATAR,
+        activeRole,
+        roles,
+        draftRestaurant: userDataFromDB.draftRestaurant,
+      });
+      setPageStatus('ready');
     });
-    setPageStatus('ready');
 
-    fetchHistory(currentUser.uid);
+    queueMicrotask(() => {
+      void fetchHistory(currentUser.uid);
 
-    if (roles.restaurant != null) {
-      setIsRestaurantLoading(true);
-      FoodDeliveryService.getRestaurantByOwner(currentUser.uid)
-        .then(setRestaurantData)
-        .catch((error) => console.error("Erreur chargement restaurant:", error))
-        .finally(() => setIsRestaurantLoading(false));
-    } else {
-      setRestaurantData(null);
-    }
+      if (roles.restaurant != null) {
+        setIsRestaurantLoading(true);
+        FoodDeliveryService.getRestaurantByOwner(currentUser.uid)
+          .then(setRestaurantData)
+          .catch((error) => console.error("Erreur chargement restaurant:", error))
+          .finally(() => setIsRestaurantLoading(false));
+      } else {
+        setRestaurantData(null);
+      }
+    });
 
     getDoc(doc(db, 'admins', currentUser.uid))
       .then((adminDoc) => setIsAdmin(adminDoc.exists()))

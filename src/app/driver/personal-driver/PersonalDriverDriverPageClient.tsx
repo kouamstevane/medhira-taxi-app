@@ -10,6 +10,10 @@ import type { PersonalDriverTrip } from '@/types/personal-driver';
 
 type TripRow = Partial<PersonalDriverTrip> & { id: string };
 
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : 'Erreur inconnue';
+}
+
 export function PersonalDriverDriverPageClient() {
   const { currentUser } = useAuth();
   const [tripId, setTripId] = useState('');
@@ -46,8 +50,8 @@ export function PersonalDriverDriverPageClient() {
           .filter((trip) => !['completed', 'cancelled'].includes(trip.status || ''))
           .sort((left, right) => String(left.scheduledAtIso || '').localeCompare(String(right.scheduledAtIso || ''))),
       );
-    } catch (err: any) {
-      setMessage(`Impossible de charger vos missions: ${err.message}`);
+    } catch (err: unknown) {
+      setMessage(`Impossible de charger vos missions: ${getErrorMessage(err)}`);
     } finally {
       setLoadingTrips(false);
     }
@@ -92,8 +96,8 @@ export function PersonalDriverDriverPageClient() {
         setMessage(`Statut du trajet ${tripId} mis à jour : ${status}`);
       }
       void loadAssignedTrips();
-    } catch (err: any) {
-      setMessage(`Erreur: ${err.message}`);
+    } catch (err: unknown) {
+      setMessage(`Erreur: ${getErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }

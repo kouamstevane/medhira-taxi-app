@@ -642,9 +642,10 @@ export const completeTrip = async (bookingId: string): Promise<void> => {
     const callableFn = httpsCallable(functions, 'bookingsComplete');
     const callableResult = await callableFn({ bookingId });
     result = callableResult.data as typeof result;
-  } catch (err: any) {
-    if (err instanceof Error && 'code' in err && (err as any).data?.paymentFailed) {
-      result = (err as any).data as typeof result;
+  } catch (err: unknown) {
+    const callableError = err as { data?: typeof result } | null;
+    if (err instanceof Error && 'code' in err && callableError?.data?.paymentFailed) {
+      result = callableError.data;
     } else {
       throw new Error(err instanceof Error ? err.message : 'Échec de la complétion de la course');
     }

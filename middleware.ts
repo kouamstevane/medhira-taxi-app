@@ -18,7 +18,7 @@
  */
 
 
-/* eslint-disable */
+ 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 // FIX #C12 : vérification cryptographique de la signature JWT (Edge runtime compatible).

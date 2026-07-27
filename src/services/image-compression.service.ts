@@ -121,7 +121,6 @@ class ImageCompressionService {
 
         // Utiliser requestIdleCallback si disponible, sinon setTimeout
         // Ajouter un timeout de sécurité au cas où le callback n'est jamais appelé
-        let timeoutId: NodeJS.Timeout;
         let callbackCalled = false;
 
         const safeCompress = () => {
@@ -132,7 +131,7 @@ class ImageCompressionService {
         };
 
         // Timeout de sécurité de 5 secondes
-        timeoutId = setTimeout(() => {
+        const timeoutId = setTimeout(() => {
           if (!callbackCalled) {
             callbackCalled = true;
             reject(new Error('Timeout lors de la compression de l\'image'));

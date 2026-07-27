@@ -9,7 +9,7 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useKeyboard } from '@/hooks/useKeyboard';
@@ -48,7 +48,6 @@ export default function LayoutClient({ children }: LayoutClientProps) {
   const router = useRouter();
   const { currentUser, userData, loading } = useAuth();
   const { unreadCount } = useNotifications();
-  const [showHeader, setShowHeader] = useState(false);
   
   // Initialize keyboard handling to fix white space issues
   useKeyboard();
@@ -67,31 +66,12 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     return () => window.removeEventListener('app:navigate', handler);
   }, [router]);
 
-  /**
-   * Déterminer si le header doit être affiché
-   */
-  useEffect(() => {
-    // Ne pas afficher pendant le chargement
-    if (loading) {
-      setShowHeader(false);
-      return;
-    }
-
-    // Ne pas afficher si utilisateur non connecté
-    if (!currentUser) {
-      setShowHeader(false);
-      return;
-    }
-
-    // Ne pas afficher sur les routes publiques
-    const shouldHideHeader = NO_HEADER_ROUTES.some((route) => {
-      if (route === pathname) return true;
-      if (route.endsWith('/') && pathname.startsWith(route)) return true;
-      return false;
-    });
-
-    setShowHeader(!shouldHideHeader);
-  }, [pathname, currentUser, loading]);
+  const shouldHideHeader = NO_HEADER_ROUTES.some((route) => {
+    if (route === pathname) return true;
+    if (route.endsWith('/') && pathname.startsWith(route)) return true;
+    return false;
+  });
+  const showHeader = !loading && Boolean(currentUser) && !shouldHideHeader;
 
   const body = (
     <>

@@ -1419,7 +1419,7 @@ export const createConnectAccount = onCall(
           });
           // Retry-without-prefill : si Stripe rejette un champ (ex: phone invalide),
           // on l'enlève et on retente — sans bloquer le retour.
-          let currentInd = { ...individual };
+          const currentInd = { ...individual };
           for (let attempt = 1; attempt <= 4; attempt++) {
             try {
               const updatePayload: Record<string, unknown> = { business_profile: businessProfile };
@@ -1502,7 +1502,7 @@ export const createConnectAccount = onCall(
       let attempt = 0;
       const MAX_FALLBACK_ATTEMPTS = 4;
 
-      /* eslint-disable no-constant-condition */
+       
       while (true) {
         attempt++;
         try {
@@ -1542,7 +1542,7 @@ export const createConnectAccount = onCall(
           throw innerErr;
         }
       }
-      /* eslint-enable no-constant-condition */
+       
     } catch (err) {
       const stripeErr = err as {
         type?: string;

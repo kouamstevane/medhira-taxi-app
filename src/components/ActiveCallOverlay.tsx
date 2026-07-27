@@ -7,7 +7,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 export function ActiveCallOverlay() {
   const { callState, endCall, toggleMute, toggleSpeaker } = useVoipCall();
-  const [displayTimer, setDisplayTimer] = useState('00:00');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Timer de durée d'appel
   useEffect(() => {
@@ -15,13 +15,8 @@ export function ActiveCallOverlay() {
 
     if (callState.status === 'accepted' && callState.startTime) {
       interval = setInterval(() => {
-        const seconds = Math.floor((Date.now() - (callState.startTime || 0)) / 1000);
-        const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const secs = (seconds % 60).toString().padStart(2, '0');
-        setDisplayTimer(`${mins}:${secs}`);
+        setElapsedSeconds(Math.floor((Date.now() - (callState.startTime || 0)) / 1000));
       }, 1000);
-    } else {
-      setDisplayTimer('00:00');
     }
 
     return () => {
@@ -36,6 +31,10 @@ export function ActiveCallOverlay() {
   if (!isVisible) return null;
 
   const otherParticipant = callState.direction === 'outgoing' ? callState.callee : callState.caller;
+  const displayTimer =
+    callState.status === 'accepted'
+      ? `${Math.floor(elapsedSeconds / 60).toString().padStart(2, '0')}:${(elapsedSeconds % 60).toString().padStart(2, '0')}`
+      : '00:00';
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-between py-16 animate-slide-up">

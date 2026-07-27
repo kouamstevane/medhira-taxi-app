@@ -48,7 +48,7 @@ export default function WalletHistoriquePage() {
     setHasMore(true);
     setLoading(true);
     fetchTransactions(userId, null, filter);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [userId, filter]);
 
   const fetchTransactions = async (uid: string, cursor: TransactionPageCursor | null, currentFilter: FilterType) => {

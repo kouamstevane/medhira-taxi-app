@@ -17,9 +17,7 @@ import { pushNotifications } from '@/services/pushNotifications.service';
 import { IncomingCallOverlay } from '@/components/IncomingCallOverlay';
 import { ActiveCallOverlay } from '@/components/ActiveCallOverlay';
 
-interface VoipContextType {
-  // On peut ajouter des getters ou setters si nécessaire
-}
+type VoipContextType = Record<string, never>;
 
 const VoipContext = createContext<VoipContextType | null>(null);
 

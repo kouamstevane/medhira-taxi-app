@@ -33,14 +33,14 @@ export function useDriverAssignedDocs<T>({
   const [loading, setLoading] = useState(true)
   const mapDocRef = useRef(mapDoc)
   const logTagRef = useRef(logTag)
-  mapDocRef.current = mapDoc
-  logTagRef.current = logTag
 
   useEffect(() => {
-    if (!uid) {
-      setLoading(false)
-      return
-    }
+    mapDocRef.current = mapDoc
+    logTagRef.current = logTag
+  }, [mapDoc, logTag])
+
+  useEffect(() => {
+    if (!uid) return
     const q = query(
       collection(db, collectionPath),
       where('driverId', '==', uid),
@@ -62,5 +62,5 @@ export function useDriverAssignedDocs<T>({
     return () => unsub()
   }, [uid, collectionPath, activeStatuses, pageSize])
 
-  return { items, loading }
+  return { items: uid ? items : [], loading: uid ? loading : false }
 }

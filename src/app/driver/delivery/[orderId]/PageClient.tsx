@@ -1,6 +1,6 @@
 'use client'
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useDeliveryOrder } from '@/hooks/useDeliveryOrder'
 import Level1_Acceptance from './components/Level1_Acceptance'
 import Level2_HeadingToRestaurant from './components/Level2_HeadingToRestaurant'
@@ -15,14 +15,10 @@ export default function DeliveryOrderPage() {
   const router = useRouter()
   const orderId = params.orderId as string
   const { order, loading, updateStatus, confirmPickup, confirmDelivery, uploadProofPhoto, validatePin, reportNotReady } = useDeliveryOrder(orderId)
-  const [showCancelledModal, setShowCancelledModal] = useState(false)
 
   useEffect(() => {
     if (!loading && order?.status === 'delivered') {
       router.replace('/driver/dashboard')
-    }
-    if (!loading && order?.status === 'cancelled') {
-      setShowCancelledModal(true)
     }
   }, [loading, order?.status, router])
 
@@ -34,7 +30,7 @@ export default function DeliveryOrderPage() {
     )
   }
 
-  if (showCancelledModal) {
+  if (!loading && order.status === 'cancelled') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="glass-card rounded-2xl border border-white/10 p-6 max-w-sm w-full text-center space-y-4">

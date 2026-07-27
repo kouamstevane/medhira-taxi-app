@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useGoogleMaps } from "@/hooks/useGoogleMaps";
 
+type GoogleMapsApi = typeof import("@react-google-maps/api");
+
 const mapContainerStyle = { width: "100%", height: "200px" };
 const defaultCenter = { lat: 43.6532, lng: -79.3832 };
 
@@ -18,7 +20,7 @@ interface ConfirmationMapProps {
 export function ConfirmationMap({ driverLocation, driverMarkerLocation, pickupLocation, directions }: ConfirmationMapProps) {
   const markerPosition = driverMarkerLocation ?? driverLocation;
   const { isLoaded } = useGoogleMaps();
-  const [mapsApi, setMapsApi] = useState<any>(null);
+  const [mapsApi, setMapsApi] = useState<GoogleMapsApi | null>(null);
 
   // Center figé : on prend la 1re position disponible et on n'en change plus.
   // Évite que la map saute à chaque tick GPS Firestore.

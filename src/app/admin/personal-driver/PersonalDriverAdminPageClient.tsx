@@ -10,6 +10,10 @@ import type { PersonalDriverSubscription, PersonalDriverTrip } from '@/types/per
 type SubscriptionRow = Partial<PersonalDriverSubscription> & { id: string };
 type TripRow = Partial<PersonalDriverTrip> & { id: string };
 
+function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : 'Erreur inconnue';
+}
+
 export function PersonalDriverAdminPageClient() {
   const [subscriptionId, setSubscriptionId] = useState('');
   const [tripId, setTripId] = useState('');
@@ -47,8 +51,8 @@ export function PersonalDriverAdminPageClient() {
           .filter((trip) => ['scheduled', 'driver_assigned', 'driver_en_route', 'driver_arrived'].includes(trip.status || ''))
           .slice(0, 12),
       );
-    } catch (err: any) {
-      setMessage(`Impossible de charger les opérations: ${err.message}`);
+    } catch (err: unknown) {
+      setMessage(`Impossible de charger les opérations: ${getErrorMessage(err)}`);
     } finally {
       setRefreshing(false);
     }
@@ -69,8 +73,8 @@ export function PersonalDriverAdminPageClient() {
       setMessage(`Abonnement ${subscriptionId} validé avec succès.`);
       setSubscriptionId('');
       void loadOperations();
-    } catch (err: any) {
-      setMessage(`Erreur: ${err.message}`);
+    } catch (err: unknown) {
+      setMessage(`Erreur: ${getErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }
@@ -94,8 +98,8 @@ export function PersonalDriverAdminPageClient() {
       setDriverId('');
       setVehicleId('');
       void loadOperations();
-    } catch (err: any) {
-      setMessage(`Erreur: ${err.message}`);
+    } catch (err: unknown) {
+      setMessage(`Erreur: ${getErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }
@@ -120,8 +124,8 @@ export function PersonalDriverAdminPageClient() {
       setNewDriverId('');
       setNewVehicleId('');
       void loadOperations();
-    } catch (err: any) {
-      setMessage(`Erreur réaffectation: ${err.message}`);
+    } catch (err: unknown) {
+      setMessage(`Erreur réaffectation: ${getErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }

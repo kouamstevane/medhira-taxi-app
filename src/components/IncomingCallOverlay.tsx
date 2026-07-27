@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import Image from 'next/image';
 import { useVoipCall } from '@/hooks/useVoipCall';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -8,7 +8,6 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 export function IncomingCallOverlay() {
   const { callState, acceptCall, declineCall } = useVoipCall();
-  const [vibrating, setVibrating] = useState(false);
 
   // Gérer la vibration et la sonnerie
   useEffect(() => {
@@ -16,14 +15,12 @@ export function IncomingCallOverlay() {
       const interval = setInterval(async () => {
         try {
           await Haptics.impact({ style: ImpactStyle.Heavy });
-        } catch (e) {
+        } catch {
           // Fallback simple si Capacitor n'est pas dispo
         }
       }, 1000);
-      setVibrating(true);
       return () => {
         clearInterval(interval);
-        setVibrating(false);
       };
     }
   }, [callState.status, callState.direction]);

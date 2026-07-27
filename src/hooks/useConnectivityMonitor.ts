@@ -8,11 +8,9 @@ function checkConnectivity(): boolean {
 export function useConnectivityMonitor(
   showWarning: (message: string) => void
 ): boolean {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(checkConnectivity);
 
   useEffect(() => {
-    setIsOnline(checkConnectivity());
-
     const handleOnline = () => setIsOnline(true);
 
     const handleOffline = () => {

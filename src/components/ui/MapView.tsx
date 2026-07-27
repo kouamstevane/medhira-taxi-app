@@ -17,6 +17,8 @@ import { LoadingSpinner } from './LoadingSpinner';
 import { MapFallback } from './MapFallback';
 import dynamic from 'next/dynamic';
 
+type GoogleMapsApi = typeof import('@react-google-maps/api');
+
 const NativeMapView = dynamic(() => import('./NativeMapView').then(mod => mod.NativeMapView), {
   ssr: false,
   loading: () => <LoadingSpinner size="lg" />
@@ -77,7 +79,7 @@ export const MapView: React.FC<MapViewProps> = ({
 }) => {
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapsApi, setMapsApi] = useState<any>(null);
+  const [mapsApi, setMapsApi] = useState<GoogleMapsApi | null>(null);
 
   // Charger l'API Google Maps
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';

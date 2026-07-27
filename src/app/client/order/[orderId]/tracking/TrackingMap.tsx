@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useGoogleMaps } from '@/hooks/useGoogleMaps'
 
+type GoogleMapsApi = typeof import('@react-google-maps/api')
+
 const mapContainerStyle = { width: '100%', height: '300px' }
 const defaultCenter = { lat: 43.6532, lng: -79.3832 }
 
@@ -15,7 +17,7 @@ interface TrackingMapProps {
 export default function TrackingMap({ driverLocation, restaurantAddress, clientAddress }: TrackingMapProps) {
   const center = driverLocation || clientAddress || defaultCenter
   const { isLoaded } = useGoogleMaps()
-  const [mapsApi, setMapsApi] = useState<any>(null)
+  const [mapsApi, setMapsApi] = useState<GoogleMapsApi | null>(null)
 
   useEffect(() => {
     import('@react-google-maps/api').then(setMapsApi)

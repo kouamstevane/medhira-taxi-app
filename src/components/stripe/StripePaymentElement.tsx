@@ -179,19 +179,6 @@ export function StripePaymentElement({
   onError,
   submitLabel,
 }: StripePaymentElementProps) {
-  if (isNativeStripe()) {
-    return (
-      <NativeStripePayment
-        clientSecret={clientSecret}
-        amount={amount}
-        currency={currency}
-        onSuccess={onSuccess}
-        onError={onError}
-        submitLabel={submitLabel}
-      />
-    );
-  }
-
   const stripePromise = useMemo(() => getStripe(), []);
 
   const options = useMemo(
@@ -227,6 +214,19 @@ export function StripePaymentElement({
     }),
     [clientSecret]
   );
+
+  if (isNativeStripe()) {
+    return (
+      <NativeStripePayment
+        clientSecret={clientSecret}
+        amount={amount}
+        currency={currency}
+        onSuccess={onSuccess}
+        onError={onError}
+        submitLabel={submitLabel}
+      />
+    );
+  }
 
   return (
     <Elements

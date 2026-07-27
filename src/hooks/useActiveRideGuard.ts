@@ -9,13 +9,11 @@ const ACTIVE_RIDE_STATUSES = ['accepted', 'in_progress', 'en_route'] as const;
 export function useActiveRideGuard(): { hasActiveRide: boolean; loading: boolean } {
   const { currentUser, userData } = useAuth();
   const [hasActiveRide, setHasActiveRide] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
+  const isDriver = Boolean(currentUser && userData?.roles?.driver);
 
   useEffect(() => {
-    if (!currentUser || !userData?.roles?.driver) {
-      setLoading(false);
-      return;
-    }
+    if (!isDriver || !currentUser) return;
     const q = query(
       collection(db, 'rides'),
       where('driverId', '==', currentUser.uid),
@@ -23,10 +21,10 @@ export function useActiveRideGuard(): { hasActiveRide: boolean; loading: boolean
     );
     const u: Unsubscribe = onSnapshot(q, (snap) => {
       setHasActiveRide(!snap.empty);
-      setLoading(false);
+      setSnapshotLoading(false);
     });
     return () => u();
-  }, [currentUser, userData]);
+  }, [currentUser, isDriver]);
 
-  return { hasActiveRide, loading };
+  return { hasActiveRide: isDriver ? hasActiveRide : false, loading: isDriver ? snapshotLoading : false };
 }

@@ -16,7 +16,9 @@ export const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
 export const twilioAuthToken = defineSecret('TWILIO_AUTH_TOKEN');
 export const twilioFromNumber = defineSecret('TWILIO_FROM_NUMBER');
 
-let _client: any = null;
+type TwilioClient = ReturnType<typeof import('twilio').default>;
+
+let _client: TwilioClient | null = null;
 
 async function getClient() {
   if (_client) return _client;

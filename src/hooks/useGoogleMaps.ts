@@ -142,13 +142,11 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
 
     // Charger le script Google Maps
     // Utiliser la clé spécifique à la plateforme
-    let apiKey: string | undefined;
-
     // Pour le SDK JavaScript Google Maps, on doit TOUJOURS utiliser une clé avec restrictions HTTP (Referrer)
     // ou sans restriction. Les clés restreintes par application Android (SHA-1) NE FONCTIONNENT PAS
     // avec le SDK JavaScript, même dans une WebView Android.
     // On utilise donc toujours la clé "Browser" / "Web".
-    apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
     // Debug: Afficher quelle clé est utilisée
     if (process.env.NODE_ENV === 'development') {

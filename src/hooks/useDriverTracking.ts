@@ -17,6 +17,7 @@ interface UseDriverTrackingOptions {
 export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
     const { tripId, enabled = true } = options;
     const { currentUser } = useAuth();
+    const driverId = currentUser?.uid;
     const [isTracking, setIsTracking] = useState(false);
     const [isOnline, setIsOnline] = useState(true); // État réseau (§11.2)
     const [lastLocation, setLastLocation] = useState<DriverLocation | null>(null);
@@ -30,14 +31,14 @@ export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
     const lastHapticRef = useRef(0);
 
     const startTracking = useCallback(async () => {
-        if (!currentUser?.uid) {
+        if (!driverId) {
             console.warn('Cannot start tracking: no authenticated user');
             return;
         }
 
         try {
             const config: TrackingConfig = {
-                driverId: currentUser.uid,
+                driverId,
                 tripId,
                 onLocationUpdate: (location: DriverLocation) => {
                     setLastLocation(location);
@@ -84,7 +85,7 @@ export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
                 setNeedsGeolocationConsent(true);
             }
         }
-    }, [currentUser?.uid, tripId]);
+    }, [driverId, tripId]);
 
     const stopTracking = useCallback(async () => {
         if (!isTrackingRef.current) return;
@@ -105,8 +106,8 @@ export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
     useEffect(() => {
         let mounted = true;
 
-        if (enabled && currentUser?.uid && !isTrackingRef.current) {
-            startTracking().then(() => {
+        if (enabled && driverId && !isTrackingRef.current) {
+            Promise.resolve().then(startTracking).then(() => {
                 if (!mounted) {
                     // Cleanup si composant démonté pendant le démarrage
                     stopTracking();
@@ -121,7 +122,7 @@ export function useDriverTracking(options: UseDriverTrackingOptions = {}) {
                 stopTracking();
             }
         };
-    }, [enabled, currentUser?.uid, tripId, startTracking, stopTracking]);
+    }, [enabled, driverId, tripId, startTracking, stopTracking]);
 
     // Écoute changements état réseau (§11.2)
     useEffect(() => {

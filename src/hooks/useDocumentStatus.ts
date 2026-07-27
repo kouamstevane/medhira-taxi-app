@@ -21,17 +21,14 @@ export function useDocumentStatus(uid: string | null) {
   const [globalStatus, setGlobalStatus] = useState<'all_approved' | 'has_rejected' | 'pending'>('pending')
 
   useEffect(() => {
-    if (!uid) {
-      setDocuments([])
-      setError(null)
-      setLoading(false)
-      return
-    }
+    if (!uid) return
 
     const currentUid = uid
     let mounted = true
-    setLoading(true)
-    setError(null)
+    queueMicrotask(() => {
+      setLoading(true)
+      setError(null)
+    })
 
     const unsubscribe = onSnapshot(
       doc(db, 'drivers', currentUid, 'private', 'personal'),
@@ -64,5 +61,7 @@ export function useDocumentStatus(uid: string | null) {
     }
   }, [uid])
 
-  return { documents, loading, error, globalStatus }
+  return uid
+    ? { documents, loading, error, globalStatus }
+    : { documents: [], loading: false, error: null, globalStatus: 'pending' as const }
 }

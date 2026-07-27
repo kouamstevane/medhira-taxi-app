@@ -13,6 +13,21 @@ import { useAuth } from "@/hooks/useAuth";
 import { NotificationCollection } from "@/services/notification.service";
 import { driverNavItems, adminNavItems } from "@/components/ui/BottomNav";
 
+type SystemNotification = Omit<NotificationCollection, 'type' | 'createdAt'> & {
+  type: NotificationCollection['type'] | `sys_${string}`;
+  createdAt: NotificationCollection['createdAt'] | string | { seconds: number };
+};
+
+interface DriverNotificationData {
+  status?: string;
+  createdAt?: NotificationCollection['createdAt'] | string | { seconds: number };
+  updatedAt?: NotificationCollection['createdAt'] | string | { seconds: number };
+  stripeAccountStatus?: string;
+  stripePayoutsEnabled?: boolean;
+  requirements?: { currently_due?: unknown[] };
+  isAvailable?: boolean;
+}
+
 export default function NotificationsPage() {
   const router = useRouter();
   const { userData, currentUser } = useAuth();
@@ -38,7 +53,7 @@ export default function NotificationsPage() {
 
   const { documents: driverDocs } = useDocumentStatus(isDriver ? (currentUser?.uid ?? null) : null);
   const approvedDocsCount = driverDocs.filter(d => d.status === 'approved').length;
-  const [driverData, setDriverData] = useState<any>(null);
+  const [driverData, setDriverData] = useState<DriverNotificationData | null>(null);
 
   useEffect(() => {
     if (!currentUser || !isDriver) return;
@@ -53,7 +68,7 @@ export default function NotificationsPage() {
   }, [currentUser, isDriver]);
 
   // Construire les notifications système dynamiques
-  const systemNotifications: NotificationCollection[] = [];
+  const systemNotifications: SystemNotification[] = [];
 
   if (isDriver && driverData) {
     // 1. Candidature en cours d'examen
@@ -66,7 +81,7 @@ export default function NotificationsPage() {
         type: 'sys_pending',
         read: false,
         createdAt: driverData.createdAt || new Date().toISOString(),
-      } as any);
+      });
 
       // 2. Votre adresse email est validée
       if (currentUser?.emailVerified) {
@@ -78,7 +93,7 @@ export default function NotificationsPage() {
           type: 'sys_email',
           read: true,
           createdAt: driverData.createdAt || new Date().toISOString(),
-        } as any);
+        });
       }
     }
 
@@ -91,7 +106,7 @@ export default function NotificationsPage() {
     if (stripeStatus !== 'active' || !payoutsEnabled) {
       let stripeLabel = '';
       let stripeSublabel = '';
-      let stripeType = 'sys_stripe_amber';
+      let stripeType: SystemNotification['type'] = 'sys_stripe_amber';
 
       if (stripeStatus === 'disabled') {
         stripeLabel = 'Compte de paiement désactivé';
@@ -123,7 +138,7 @@ export default function NotificationsPage() {
         type: stripeType,
         read: false,
         createdAt: driverData.updatedAt || new Date().toISOString(),
-      } as any);
+      });
     }
 
     // 4. Disponible — En attente
@@ -136,11 +151,11 @@ export default function NotificationsPage() {
         type: 'sys_available',
         read: true,
         createdAt: new Date().toISOString(),
-      } as any);
+      });
     }
   }
 
-  const allNotifications = [...systemNotifications, ...notifications];
+  const allNotifications: Array<SystemNotification | NotificationCollection> = [...systemNotifications, ...notifications];
   const hasUnread = allNotifications.some((n) => !n.read);
 
   const getNotificationIcon = (type: string) => {
@@ -211,7 +226,7 @@ export default function NotificationsPage() {
     }
   };
 
-  const handleNotificationClick = async (notif: NotificationCollection) => {
+  const handleNotificationClick = async (notif: SystemNotification | NotificationCollection) => {
     if (notif.notificationId.startsWith('sys_')) {
       if (notif.notificationId === 'sys_stripe') {
         router.push('/driver/payments/setup');

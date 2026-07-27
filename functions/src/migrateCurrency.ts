@@ -74,7 +74,7 @@ async function backupCollection(collectionName: string): Promise<void> {
   let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
   let totalDocs = 0;
   const batchSize = 500;
-  let allBackupData: Record<string, unknown>[] = [];
+  const allBackupData: Record<string, unknown>[] = [];
   
   while (true) {
     let query = db.collection(collectionName).orderBy('__name__').limit(batchSize);
