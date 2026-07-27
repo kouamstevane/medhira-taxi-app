@@ -1,6 +1,7 @@
 export {};
 
 const mockTripRef = {};
+const mockDriverRef = {};
 const mockTripData: Record<string, unknown> = {};
 
 const mockTransaction = {
@@ -9,7 +10,9 @@ const mockTransaction = {
 };
 
 const mockDb = {
-  collection: jest.fn(() => ({ doc: jest.fn(() => mockTripRef) })),
+  collection: jest.fn((collectionName: string) => ({
+    doc: jest.fn(() => (collectionName === 'drivers' ? mockDriverRef : mockTripRef)),
+  })),
   runTransaction: jest.fn((callback: (tx: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction)),
 };
 
@@ -77,6 +80,37 @@ describe('driverUpdatePersonalDriverTrip', () => {
     expect(mockTransaction.update).toHaveBeenCalledWith(
       mockTripRef,
       expect.objectContaining({ status: 'driver_en_route' }),
+    );
+    expect(mockTransaction.update).toHaveBeenCalledWith(
+      mockDriverRef,
+      expect.objectContaining({
+        isAvailable: false,
+        availabilityStatus: 'busy_personal_driver',
+        activePersonalDriverTripId: 'trip_1',
+      }),
+    );
+  });
+
+  it('marks the driver available after completing the trip', async () => {
+    Object.assign(mockTripData, {
+      assignedDriverId: 'driver_1',
+      status: 'in_progress',
+      statusHistory: [],
+    });
+    const { driverUpdatePersonalDriverTrip } = require('../driverUpdatePersonalDriverTrip');
+
+    const result = await driverUpdatePersonalDriverTrip(
+      makeRequest({ tripId: 'trip_1', status: 'completed' }, 'driver_1'),
+    );
+
+    expect(result).toEqual({ success: true, status: 'completed' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(
+      mockDriverRef,
+      expect.objectContaining({
+        isAvailable: true,
+        availabilityStatus: 'available',
+        activePersonalDriverTripId: null,
+      }),
     );
   });
 

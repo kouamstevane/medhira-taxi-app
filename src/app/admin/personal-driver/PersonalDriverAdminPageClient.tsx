@@ -1,8 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import React, { useEffect, useState } from 'react';
+import { collection, getDocs, limit, query } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import type { PersonalDriverSubscription, PersonalDriverTrip } from '@/types/personal-driver';
+
+type SubscriptionRow = Partial<PersonalDriverSubscription> & { id: string };
+type TripRow = Partial<PersonalDriverTrip> & { id: string };
 
 export function PersonalDriverAdminPageClient() {
   const [subscriptionId, setSubscriptionId] = useState('');
@@ -10,7 +16,10 @@ export function PersonalDriverAdminPageClient() {
   const [driverId, setDriverId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionRow[]>([]);
+  const [trips, setTrips] = useState<TripRow[]>([]);
 
   // Urgent Replacement Modal State (Rule #5)
   const [urgentTripId, setUrgentTripId] = useState('');
@@ -18,17 +27,48 @@ export function PersonalDriverAdminPageClient() {
   const [newVehicleId, setNewVehicleId] = useState('');
   const [showUrgentModal, setShowUrgentModal] = useState(false);
 
+  const loadOperations = async () => {
+    setRefreshing(true);
+    try {
+      const [subscriptionSnap, tripSnap] = await Promise.all([
+        getDocs(query(collection(db, 'personal_driver_subscriptions'), limit(30))),
+        getDocs(query(collection(db, 'personal_driver_trips'), limit(60))),
+      ]);
+
+      setSubscriptions(
+        subscriptionSnap.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() }) as SubscriptionRow)
+          .filter((subscription) => ['pending_validation', 'pending_payment', 'active'].includes(subscription.status || ''))
+          .slice(0, 8),
+      );
+      setTrips(
+        tripSnap.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() }) as TripRow)
+          .filter((trip) => ['scheduled', 'driver_assigned', 'driver_en_route', 'driver_arrived'].includes(trip.status || ''))
+          .slice(0, 12),
+      );
+    } catch (err: any) {
+      setMessage(`Impossible de charger les opérations: ${err.message}`);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadOperations();
+  }, []);
+
   const handleValidateSubscription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subscriptionId.trim()) return;
     setLoading(true);
     setMessage(null);
     try {
-      const functions = getFunctions(undefined, 'europe-west1');
       const callable = httpsCallable(functions, 'adminManagePersonalDriver');
       await callable({ action: 'validateSubscription', subscriptionId: subscriptionId.trim() });
       setMessage(`Abonnement ${subscriptionId} validé avec succès.`);
       setSubscriptionId('');
+      void loadOperations();
     } catch (err: any) {
       setMessage(`Erreur: ${err.message}`);
     } finally {
@@ -42,7 +82,6 @@ export function PersonalDriverAdminPageClient() {
     setLoading(true);
     setMessage(null);
     try {
-      const functions = getFunctions(undefined, 'europe-west1');
       const callable = httpsCallable(functions, 'adminManagePersonalDriver');
       await callable({
         action: 'assignTrip',
@@ -54,6 +93,7 @@ export function PersonalDriverAdminPageClient() {
       setTripId('');
       setDriverId('');
       setVehicleId('');
+      void loadOperations();
     } catch (err: any) {
       setMessage(`Erreur: ${err.message}`);
     } finally {
@@ -67,7 +107,6 @@ export function PersonalDriverAdminPageClient() {
     setLoading(true);
     setMessage(null);
     try {
-      const functions = getFunctions(undefined, 'europe-west1');
       const callable = httpsCallable(functions, 'adminManagePersonalDriver');
       await callable({
         action: 'reassignDriverEmergency',
@@ -75,11 +114,12 @@ export function PersonalDriverAdminPageClient() {
         newDriverId: newDriverId.trim(),
         newVehicleId: newVehicleId.trim() || 'VEH-SUR-DISPO',
       });
-      setMessage(`🚨 Chauffeur de remplacement ${newDriverId} affecté d'urgence au trajet ${urgentTripId}. Notification client envoyée.`);
+      setMessage(`Chauffeur de remplacement ${newDriverId} affecté d'urgence au trajet ${urgentTripId}. Réaffectation enregistrée.`);
       setShowUrgentModal(false);
       setUrgentTripId('');
       setNewDriverId('');
       setNewVehicleId('');
+      void loadOperations();
     } catch (err: any) {
       setMessage(`Erreur réaffectation: ${err.message}`);
     } finally {
@@ -107,7 +147,6 @@ export function PersonalDriverAdminPageClient() {
         </div>
       )}
 
-      {/* PANNEAU D'ALERTE EN TEMPS RÉEL (RULE #5 - CHAUFFEUR EN RETARD) */}
       <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-red-400">
@@ -133,7 +172,83 @@ export function PersonalDriverAdminPageClient() {
         </button>
       </div>
 
-      {/* VALIDATION ABONNEMENT */}
+      <section className="grid gap-4 lg:grid-cols-2" aria-label="Opérations Personal Driver">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+              <MaterialIcon name="fact_check" size="sm" className="text-emerald-400" />
+              Abonnements à traiter
+            </h2>
+            <button
+              type="button"
+              onClick={loadOperations}
+              disabled={refreshing}
+              className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
+            >
+              <MaterialIcon name="refresh" size="sm" />
+              Actualiser
+            </button>
+          </div>
+          <div className="space-y-2">
+            {subscriptions.length === 0 ? (
+              <p className="rounded-lg border border-white/5 bg-black/10 p-3 text-xs text-slate-400">
+                Aucun abonnement récent à afficher.
+              </p>
+            ) : (
+              subscriptions.map((subscription) => (
+                <button
+                  key={subscription.id}
+                  type="button"
+                  onClick={() => setSubscriptionId(subscription.id)}
+                  className="w-full rounded-lg border border-white/10 bg-black/10 p-3 text-left transition hover:bg-white/5"
+                >
+                  <span className="block text-xs font-bold text-white">{subscription.id}</span>
+                  <span className="mt-1 block text-xs text-slate-400">
+                    {subscription.status || 'statut inconnu'} · {subscription.planId || 'forfait inconnu'} · {subscription.pickupAddress || 'départ non renseigné'}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-bold text-white">
+            <MaterialIcon name="route" size="sm" className="text-primary" />
+            Trajets à affecter ou surveiller
+          </h2>
+          <div className="space-y-2">
+            {trips.length === 0 ? (
+              <p className="rounded-lg border border-white/5 bg-black/10 p-3 text-xs text-slate-400">
+                Aucun trajet récent à afficher.
+              </p>
+            ) : (
+              trips.map((trip) => (
+                <button
+                  key={trip.id}
+                  type="button"
+                  onClick={() => {
+                    setTripId(trip.id);
+                    setUrgentTripId(trip.id);
+                    if (trip.assignedDriverId) setDriverId(trip.assignedDriverId);
+                    if (trip.assignedVehicleId) setVehicleId(trip.assignedVehicleId);
+                  }}
+                  className="w-full rounded-lg border border-white/10 bg-black/10 p-3 text-left transition hover:bg-white/5"
+                >
+                  <span className="block text-xs font-bold text-white">{trip.id}</span>
+                  <span className="mt-1 block text-xs text-slate-400">
+                    {trip.status || 'statut inconnu'} · {trip.scheduledAtIso || 'horaire non renseigné'}
+                  </span>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    {trip.pickupAddress || 'départ'} → {trip.destinationAddress || 'destination'}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
       <form onSubmit={handleValidateSubscription} className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-4">
         <h2 className="text-sm font-bold text-white flex items-center gap-2">
           <MaterialIcon name="check_circle" size="sm" className="text-emerald-400" />
@@ -157,7 +272,6 @@ export function PersonalDriverAdminPageClient() {
         </div>
       </form>
 
-      {/* AFFECTATION CHAUFFEUR / VÉHICULE */}
       <form onSubmit={handleAssignTrip} className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-4">
         <h2 className="text-sm font-bold text-white flex items-center gap-2">
           <MaterialIcon name="person_add" size="sm" className="text-primary" />
@@ -195,7 +309,6 @@ export function PersonalDriverAdminPageClient() {
         </button>
       </form>
 
-      {/* MODAL RÉAFFECTATION D'URGENCE (RULE #5) */}
       {showUrgentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <form

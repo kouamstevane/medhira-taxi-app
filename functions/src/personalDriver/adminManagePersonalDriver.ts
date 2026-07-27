@@ -62,11 +62,24 @@ export const adminManagePersonalDriver = onCall(
       if (!subSnap.exists) {
         throw new HttpsError('not-found', 'Abonnement introuvable.');
       }
-      await subRef.update({
+      const subscription = subSnap.data();
+      const batch = db.batch();
+      batch.update(subRef, {
         status: 'active',
         validatedAt: admin.firestore.FieldValue.serverTimestamp(),
         validatedBy: request.auth.uid,
       });
+      if (subscription?.userId) {
+        batch.set(db.collection('notifications').doc(), {
+          userId: subscription.userId,
+          type: 'personal_driver_subscription_validated',
+          title: 'Abonnement Personal Driver validé',
+          message: 'Votre abonnement Personal Driver est actif. Vos trajets planifiés peuvent maintenant être suivis dans votre tableau de bord.',
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
       return { success: true };
     }
 
@@ -87,13 +100,36 @@ export const adminManagePersonalDriver = onCall(
       if (!tripSnap.exists) {
         throw new HttpsError('not-found', 'Trajet introuvable.');
       }
-      await tripRef.update({
+      const trip = tripSnap.data();
+      const batch = db.batch();
+      batch.update(tripRef, {
         assignedDriverId: payload.driverId,
         assignedVehicleId: payload.vehicleId,
         status: 'driver_assigned',
         assignedAt: admin.firestore.FieldValue.serverTimestamp(),
         assignedBy: request.auth.uid,
       });
+      if (trip?.userId) {
+        batch.set(db.collection('notifications').doc(), {
+          userId: trip.userId,
+          type: 'personal_driver_trip_assigned',
+          title: 'Chauffeur affecté',
+          message: 'Un chauffeur et un véhicule ont été affectés à votre trajet Personal Driver.',
+          tripId: payload.tripId,
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      batch.set(db.collection('notifications').doc(), {
+        userId: payload.driverId,
+        type: 'personal_driver_trip_assigned_driver',
+        title: 'Nouvelle mission Personal Driver',
+        message: 'Une mission Personal Driver vous a été affectée.',
+        tripId: payload.tripId,
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
       return { success: true };
     }
 
@@ -103,7 +139,9 @@ export const adminManagePersonalDriver = onCall(
       if (!tripSnap.exists) {
         throw new HttpsError('not-found', 'Trajet introuvable.');
       }
-      await tripRef.update({
+      const trip = tripSnap.data();
+      const batch = db.batch();
+      batch.update(tripRef, {
         assignedDriverId: payload.newDriverId,
         assignedVehicleId: payload.newVehicleId,
         status: 'driver_assigned',
@@ -111,6 +149,27 @@ export const adminManagePersonalDriver = onCall(
         emergencyReassignedAt: admin.firestore.FieldValue.serverTimestamp(),
         emergencyReassignedBy: request.auth.uid,
       });
+      if (trip?.userId) {
+        batch.set(db.collection('notifications').doc(), {
+          userId: trip.userId,
+          type: 'personal_driver_emergency_reassignment',
+          title: 'Chauffeur remplacé',
+          message: 'Un chauffeur de remplacement a été affecté à votre trajet Personal Driver.',
+          tripId: payload.tripId,
+          read: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      batch.set(db.collection('notifications').doc(), {
+        userId: payload.newDriverId,
+        type: 'personal_driver_emergency_reassignment_driver',
+        title: 'Mission de remplacement',
+        message: 'Une mission Personal Driver de remplacement vous a été affectée.',
+        tripId: payload.tripId,
+        read: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
       return { success: true };
     }
 

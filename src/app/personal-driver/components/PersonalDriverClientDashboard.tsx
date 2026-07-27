@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -52,7 +52,7 @@ export function PersonalDriverClientDashboard() {
   const [specialTime, setSpecialTime] = useState('');
   const [specialDistance, setSpecialDistance] = useState('15');
 
-  const reloadData = async () => {
+  const reloadData = useCallback(async () => {
     if (!currentUser?.uid) return;
     try {
       const sub = await getCurrentPersonalDriverSubscription(currentUser.uid);
@@ -60,11 +60,13 @@ export function PersonalDriverClientDashboard() {
       if (sub?.id) {
         const tripList = await getPersonalDriverTripsForSubscription(sub.id);
         setTrips(tripList);
+      } else {
+        setTrips([]);
       }
     } catch (err) {
       console.error('Erreur chargement abonnement:', err);
     }
-  };
+  }, [currentUser?.uid]);
 
   useEffect(() => {
     async function loadData() {
@@ -73,7 +75,7 @@ export function PersonalDriverClientDashboard() {
       setLoading(false);
     }
     loadData();
-  }, [currentUser?.uid]);
+  }, [currentUser?.uid, reloadData]);
 
   const handleCancelTrip = async () => {
     if (!selectedTripToCancel) return;
@@ -138,7 +140,7 @@ export function PersonalDriverClientDashboard() {
           Aucun abonnement Personal Driver actif
         </h2>
         <p className="mb-6 text-sm leading-relaxed text-slate-400">
-          Planifiez vos déplacements récurrents du mois et profitez d'un chauffeur dédié au meilleur tarif.
+          Planifiez vos déplacements récurrents du mois et profitez d&apos;un chauffeur dédié au meilleur tarif.
         </p>
         <Link
           href="/personal-driver"
@@ -349,7 +351,7 @@ export function PersonalDriverClientDashboard() {
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-card p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3 text-red-400">
               <MaterialIcon name="warning" size="lg" />
-              <h3 className="text-lg font-bold text-white">Confirmer l'annulation</h3>
+              <h3 className="text-lg font-bold text-white">Confirmer l&apos;annulation</h3>
             </div>
             <p className="text-sm leading-relaxed text-slate-300">
               Êtes-vous sûr de vouloir annuler le trajet du{' '}
@@ -365,7 +367,7 @@ export function PersonalDriverClientDashboard() {
               ?
             </p>
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-300">
-              ⚠️ <strong>Règle d'abonnement :</strong> Les kilomètres de cette journée annulée ne sont ni remboursables ni reportables sur le mois suivant.
+              ⚠️ <strong>Règle d&apos;abonnement :</strong> Les kilomètres de cette journée annulée ne sont ni remboursables ni reportables sur le mois suivant.
             </div>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button

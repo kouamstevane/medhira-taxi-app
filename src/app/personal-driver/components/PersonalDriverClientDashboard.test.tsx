@@ -11,8 +11,8 @@ jest.mock('@/services/personal-driver/subscription.service', () => ({
   getPersonalDriverTripsForSubscription: jest.fn(),
 }));
 
-jest.mock('@/context/AuthContext', () => ({
-  useAuth: () => ({ user: { uid: 'user_123' } }),
+jest.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({ currentUser: { uid: 'user_123' } }),
 }));
 
 describe('PersonalDriverClientDashboard Component', () => {
@@ -56,10 +56,10 @@ describe('PersonalDriverClientDashboard Component', () => {
     render(<PersonalDriverClientDashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Mon Personal Driver/i)).toBeInTheDocument();
+      expect(screen.getByText(/MON ACCÈS PERSONAL DRIVER/i)).toBeInTheDocument();
       expect(screen.getByText(/En attente de validation/i)).toBeInTheDocument();
       expect(screen.getByText(/440 km/i)).toBeInTheDocument();
-      expect(screen.getByText(/100 rue Principale/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/100 rue Principale/i).length).toBeGreaterThan(0);
     });
   });
 });

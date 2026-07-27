@@ -1635,6 +1635,13 @@ export { stripeWebhookInstant, stripeWebhookLight, createSetupIntent, createConn
 export { stripeConnectPayout } from './stripe/stripeConnectPayout.js';
 export { stripePaymentIntent } from './stripe/stripePaymentIntent.js';
 export { stripeWalletRecharge } from './stripe/stripeWalletRecharge.js';
+export {
+  createPersonalDriverSubscriptionPayment,
+  adminManagePersonalDriver,
+  driverUpdatePersonalDriverTrip,
+  chargePersonalDriverWaitTimeOverage,
+  clientManagePersonalDriver,
+} from './personalDriver/index.js';
 
 // ============================================================================
 // Migration Next.js → Cloud Functions onCall (groupes)

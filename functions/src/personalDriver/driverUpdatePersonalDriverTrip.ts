@@ -52,6 +52,7 @@ export const driverUpdatePersonalDriverTrip = onCall(
     const { tripId, status: newStatus, lat, lng } = parsed.data;
     const db = getDb();
     const tripRef = db.collection('personal_driver_trips').doc(tripId);
+    const driverRef = db.collection('drivers').doc(request.auth.uid);
 
     await db.runTransaction(async (transaction) => {
       const snap = await transaction.get(tripRef);
@@ -85,6 +86,26 @@ export const driverUpdatePersonalDriverTrip = onCall(
         status: newStatus,
         statusHistory,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      const driverAvailabilityUpdate =
+        newStatus === 'completed'
+          ? {
+              isAvailable: true,
+              availabilityStatus: 'available',
+              activePersonalDriverTripId: null,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }
+          : {
+              isAvailable: false,
+              availabilityStatus: 'busy_personal_driver',
+              activePersonalDriverTripId: tripId,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            };
+
+      transaction.update(driverRef, {
+        ...driverAvailabilityUpdate,
+        ...(lat !== undefined && lng !== undefined ? { currentLocation: { lat, lng } } : {}),
       });
     });
 

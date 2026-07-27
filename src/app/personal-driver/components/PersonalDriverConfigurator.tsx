@@ -162,7 +162,8 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       setDistanceKm(estimatedDistance);
       setErrors((currentErrors) => {
         if (!currentErrors.distance) return currentErrors;
-        const { distance: _distance, ...remainingErrors } = currentErrors;
+        const remainingErrors = { ...currentErrors };
+        delete remainingErrors.distance;
         return remainingErrors;
       });
     } catch {

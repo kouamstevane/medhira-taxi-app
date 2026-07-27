@@ -45,6 +45,7 @@ export default {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
+    '/.worktrees/',
     '/out/',
     '/android/',
     '/ios/',
@@ -55,6 +56,8 @@ export default {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
+
+  modulePathIgnorePatterns: ['<rootDir>/.worktrees/'],
 
   // Configuration de la collecte de couverture
   collectCoverageFrom: [

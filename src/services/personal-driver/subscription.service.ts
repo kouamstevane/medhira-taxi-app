@@ -1,4 +1,4 @@
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 import {
   collection,
   query,
@@ -7,7 +7,7 @@ import {
   limit,
   orderBy,
 } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { db, functions } from '@/config/firebase';
 import type {
   PersonalDriverPlanId,
   PersonalDriverSubscription,
@@ -33,6 +33,12 @@ export interface CreatePersonalDriverSubscriptionPaymentInput {
   notes?: string;
 }
 
+interface ClientManagePersonalDriverResult {
+  success: boolean;
+  tripId?: string;
+  specialTripsRemaining?: number;
+}
+
 export interface CreatePersonalDriverSubscriptionPaymentResult {
   subscriptionId: string;
   paymentIntentId: string;
@@ -44,7 +50,6 @@ export interface CreatePersonalDriverSubscriptionPaymentResult {
 export async function createPersonalDriverSubscriptionPayment(
   input: CreatePersonalDriverSubscriptionPaymentInput,
 ): Promise<CreatePersonalDriverSubscriptionPaymentResult> {
-  const functions = getFunctions(undefined, 'europe-west1');
   const callable = httpsCallable<
     CreatePersonalDriverSubscriptionPaymentInput,
     CreatePersonalDriverSubscriptionPaymentResult
@@ -96,14 +101,11 @@ export async function getPersonalDriverTripsForSubscription(
 }
 
 export async function cancelPersonalDriverTripByClient(tripId: string): Promise<void> {
-  const { doc, updateDoc } = await import('firebase/firestore');
-  const tripRef = doc(db, 'personal_driver_trips', tripId);
-  await updateDoc(tripRef, {
-    status: 'cancelled',
-    cancelledBy: 'client',
-    clientCancelledLostKm: true,
-    updatedAt: new Date().toISOString(),
-  });
+  const callable = httpsCallable<
+    { action: 'cancelTrip'; tripId: string },
+    ClientManagePersonalDriverResult
+  >(functions, 'clientManagePersonalDriver');
+  await callable({ action: 'cancelTrip', tripId });
 }
 
 export async function requestSpecialTrip(
@@ -115,26 +117,25 @@ export async function requestSpecialTrip(
   scheduledAtIso: string,
   distanceKm: number,
 ): Promise<void> {
-  const { doc, collection, addDoc, updateDoc, increment } = await import('firebase/firestore');
-  const tripsRef = collection(db, 'personal_driver_trips');
-  await addDoc(tripsRef, {
+  void userId;
+  void planId;
+  const callable = httpsCallable<
+    {
+      action: 'requestSpecialTrip';
+      subscriptionId: string;
+      pickupAddress: string;
+      destinationAddress: string;
+      scheduledAtIso: string;
+      distanceKm: number;
+    },
+    ClientManagePersonalDriverResult
+  >(functions, 'clientManagePersonalDriver');
+  await callable({
+    action: 'requestSpecialTrip',
     subscriptionId,
-    userId,
-    planId,
-    direction: 'special',
-    isSpecialTrip: true,
     pickupAddress,
     destinationAddress,
     scheduledAtIso,
-    status: 'scheduled',
     distanceKm,
-    assignedDriverId: null,
-    assignedVehicleId: null,
-    createdAt: new Date().toISOString(),
-  });
-
-  const subRef = doc(db, 'personal_driver_subscriptions', subscriptionId);
-  await updateDoc(subRef, {
-    specialTripsUsed: increment(1),
   });
 }

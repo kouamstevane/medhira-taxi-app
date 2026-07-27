@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -64,24 +64,26 @@ export function parsePersonalDriverConfiguration(value: unknown): PersonalDriver
   return configuration as PersonalDriverConfiguration;
 }
 
-export default function PersonalDriverEstimationPage() {
-  const router = useRouter();
-  const [configuration, setConfiguration] = useState<PersonalDriverConfiguration | null>(null);
+function readStoredPersonalDriverConfiguration(): PersonalDriverConfiguration | null {
+  if (typeof window === 'undefined') return null;
 
-  useEffect(() => {
-    try {
-      const storedConfiguration = sessionStorage.getItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
-      const parsedConfiguration: unknown = storedConfiguration ? JSON.parse(storedConfiguration) : null;
-      const validConfiguration = parsePersonalDriverConfiguration(parsedConfiguration);
-      if (validConfiguration) {
-        setConfiguration(validConfiguration);
-      } else if (storedConfiguration) {
-        sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
-      }
-    } catch {
+  try {
+    const storedConfiguration = sessionStorage.getItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+    const parsedConfiguration: unknown = storedConfiguration ? JSON.parse(storedConfiguration) : null;
+    const validConfiguration = parsePersonalDriverConfiguration(parsedConfiguration);
+    if (validConfiguration) return validConfiguration;
+    if (storedConfiguration) {
       sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
     }
-  }, []);
+  } catch {
+    sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+  }
+  return null;
+}
+
+export default function PersonalDriverEstimationPage() {
+  const router = useRouter();
+  const [configuration] = useState<PersonalDriverConfiguration | null>(readStoredPersonalDriverConfiguration);
 
   if (!configuration) {
     return (

@@ -1,7 +1,6 @@
 import {
   calculateTripWaitTimeFee,
   cancelTripByClient,
-  WAIT_TIME_RULES,
 } from './wait-time.service';
 import type { PersonalDriverTrip } from '@/types/personal-driver';
 

@@ -39,7 +39,7 @@ const PLANS: Record<PersonalDriverPlanId, PersonalDriverPlan> = {
     pricePerKm: 1.25,
     minimumBillableKm: 360,
     minimumAmount: 450,
-    allowedWeekdays: [1, 2, 3, 4, 5, 6],
+    allowedWeekdays: [0, 1, 2, 3, 4, 5, 6],
   },
   premium: {
     pricePerKm: 1.1,

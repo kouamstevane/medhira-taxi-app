@@ -21,6 +21,8 @@ const weekdays: Array<{ value: PersonalDriverWeekday; label: string }> = [
 ];
 
 export function WeekdaySelector({ allowedWeekdays, selectedWeekdays, onChange, errorId, hasError = false }: WeekdaySelectorProps) {
+  const excludesWeekend = !allowedWeekdays.includes(6) || !allowedWeekdays.includes(0);
+
   const toggleWeekday = (weekday: PersonalDriverWeekday) => {
     if (!allowedWeekdays.includes(weekday)) {
       return;
@@ -65,6 +67,11 @@ export function WeekdaySelector({ allowedWeekdays, selectedWeekdays, onChange, e
           );
         })}
       </div>
+      {excludesWeekend && (
+        <p className="mt-3 rounded-lg border border-primary/20 bg-primary/10 p-3 text-xs leading-5 text-slate-300">
+          Le service Basic est offert du lundi au vendredi. Pour ajouter le samedi ou le dimanche, choisissez Classic ou Premium.
+        </p>
+      )}
     </fieldset>
   );
 }

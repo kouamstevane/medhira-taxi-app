@@ -1,0 +1,44 @@
+name: Personal Driver Quality Gate
+
+on:
+  pull_request:
+    paths:
+      - 'src/app/personal-driver/**'
+      - 'src/services/personal-driver/**'
+      - 'src/quality/**'
+      - 'functions/src/personalDriver/**'
+      - 'e2e/personal-driver-quality.spec.ts'
+      - 'e2e/helpers/personal-driver-fixtures.ts'
+      - 'playwright.personal-driver.config.ts'
+      - 'package.json'
+      - 'functions/package.json'
+      - 'eslint.config.mjs'
+  workflow_dispatch:
+
+jobs:
+  personal-driver-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Install functions dependencies
+        run: npm ci
+        working-directory: functions
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run Personal Driver quality gate
+        run: npm run quality:personal-driver

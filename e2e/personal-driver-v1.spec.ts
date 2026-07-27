@@ -1,53 +1,35 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import {
+  personalDriverClassicConfiguration,
+  personalDriverConfigSessionKey,
+  personalDriverEstimateSession,
+  personalDriverEstimateSessionKey,
+} from './helpers/personal-driver-fixtures';
 
-test.describe('Personal Driver V1 Funnel & Flow', () => {
-  test('navigates through Personal Driver presentation, configurator, estimation, confirmation, and dashboard', async ({ page }) => {
-    test.setTimeout(60_000);
+test.describe('Personal Driver V1 smoke', () => {
+  test('keeps the presentation, configurator, and confirmation route connected', async ({ page }) => {
+    await page.goto('/personal-driver', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: /MEDJIRA PERSONAL DRIVER/i })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Choisir Classic' })).toHaveAttribute('href', /plan=classic/);
 
-    // 1. Ouvrir la page de présentation Personal Driver
-    await page.goto('/personal-driver');
-    await expect(page.locator('h1')).toContainText(/MEDJIRA PERSONAL DRIVER/i);
-    await expect(page.getByRole('link', { name: /Commencer/i })).toBeVisible();
+    await page.goto('/personal-driver/configurer?plan=classic', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/FORMULE CLASSIC/i)).toBeVisible();
+    await expect(page.locator('label', { hasText: 'Samedi' }).locator('input')).toBeEnabled();
 
-    // Capture d'écran Étape 1 (Présentation & Cartes)
-    await page.screenshot({ path: 'test-results/screenshots/01-personal-driver-presentation.png', fullPage: true });
-
-    // 2. Cliquer sur Commencer
-    await page.getByRole('link', { name: /Commencer/i }).click();
-    await page.waitForURL('/personal-driver/configurer');
-
-    // 3. Remplir le formulaire de configuration
-    await page.fill('input[placeholder*="venir vous chercher"], input[name="pickupAddress"]', '100 rue Principale, Montreal');
-    await page.fill('input[placeholder*="aller"], input[name="destinationAddress"]', '500 rue Universite, Montreal');
-
-    // S'assurer qu'au moins 1 jour est sélectionné
-    const mondayBtn = page.getByRole('button', { name: /^L$/i }).first();
-    if (await mondayBtn.isVisible()) {
-      await mondayBtn.click();
-    }
-
-    // Capture d'écran Étape 2 (Configurateur)
-    await page.screenshot({ path: 'test-results/screenshots/02-personal-driver-configurator.png', fullPage: true });
-
-    // Soumettre le formulaire
-    const submitBtn = page.getByRole('button', { name: /Voir mes tarifs et recommandations/i });
-    if (await submitBtn.isVisible()) {
-      await submitBtn.click();
-      await page.waitForURL('/personal-driver/estimation');
-    }
-
-    // 4. Vérifier l'écran d'estimation
-    await expect(page.locator('body')).toContainText(/Personal Driver/i);
-    await page.screenshot({ path: 'test-results/screenshots/03-personal-driver-estimation.png', fullPage: true });
-
-    // 5. Continuer vers la confirmation
-    const continueBtn = page.getByRole('button', { name: /Continuer avec ce forfait/i });
-    if (await continueBtn.isVisible()) {
-      await continueBtn.click();
-      await page.waitForURL('/personal-driver/confirmation');
-    }
-
-    // 6. Vérifier l'écran de confirmation
-    await page.screenshot({ path: 'test-results/screenshots/04-personal-driver-confirmation.png', fullPage: true });
+    await page.addInitScript(
+      ({ configKey, estimateKey, config, estimate }) => {
+        window.sessionStorage.setItem(configKey, JSON.stringify(config));
+        window.sessionStorage.setItem(estimateKey, JSON.stringify(estimate));
+      },
+      {
+        configKey: personalDriverConfigSessionKey,
+        estimateKey: personalDriverEstimateSessionKey,
+        config: personalDriverClassicConfiguration,
+        estimate: personalDriverEstimateSession,
+      },
+    );
+    await page.goto('/personal-driver/confirmation', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'CLASSIC' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Préparer le paiement sécurisé/i })).toBeVisible();
   });
 });

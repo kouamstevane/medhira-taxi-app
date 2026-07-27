@@ -144,6 +144,10 @@ apk-directeur/
 
 # Documentation
 docs/
+!docs/
+docs/*
+!docs/quality/
+!docs/quality/personal-driver-quality-gate.md
 # Kilo AI framework
 .kilo/
 

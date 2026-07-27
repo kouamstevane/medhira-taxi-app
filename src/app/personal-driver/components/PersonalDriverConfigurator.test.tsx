@@ -150,7 +150,7 @@ describe('PersonalDriverConfigurator', () => {
       passengerCount: 2,
       distanceKm: 12.4,
       distanceOneWayKm: 12.4,
-      monthlyDistanceKm: 49.6,
+      monthlyDistanceKm: 62,
     });
     expect(stored.requestId).toEqual(expect.any(String));
   });
@@ -172,7 +172,7 @@ describe('PersonalDriverConfigurator', () => {
       tripType: 'round_trip',
       distanceOneWayKm: 12.4,
       distanceReturnKm: 12.4,
-      monthlyDistanceKm: 99.2,
+      monthlyDistanceKm: 124,
     });
   });
 });

@@ -25,11 +25,15 @@ describe('Personal Driver client entry', () => {
   it('renders the available plans and their required labels', () => {
     render(<PersonalDriverPage />);
 
+    expect(screen.getByRole('heading', { name: /MEDJIRA PERSONAL DRIVER/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Commencer/i })).toHaveAttribute('href', '#forfaits');
     expect(screen.getByRole('heading', { name: 'Basic' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Classic' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Premium' })).toBeInTheDocument();
     expect(screen.getByText('LE PLUS POPULAIRE')).toBeInTheDocument();
     expect(screen.getByText('SERVICE PRIORITAIRE')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Comparer les forfaits/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Aidez-moi à choisir/i })).toBeInTheDocument();
   });
 
   it('links each plan selection to its configuration route', () => {

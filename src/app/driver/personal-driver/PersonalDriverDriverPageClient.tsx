@@ -1,13 +1,22 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useAuth } from '@/hooks/useAuth';
+import type { PersonalDriverTrip } from '@/types/personal-driver';
+
+type TripRow = Partial<PersonalDriverTrip> & { id: string };
 
 export function PersonalDriverDriverPageClient() {
+  const { currentUser } = useAuth();
   const [tripId, setTripId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingTrips, setLoadingTrips] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [assignedTrips, setAssignedTrips] = useState<TripRow[]>([]);
 
   // Timer state for wait time
   const [isWaiting, setIsWaiting] = useState(false);
@@ -24,12 +33,35 @@ export function PersonalDriverDriverPageClient() {
     return () => clearInterval(interval);
   }, [isWaiting, waitStartTime]);
 
+  const loadAssignedTrips = async () => {
+    if (!currentUser?.uid) return;
+    setLoadingTrips(true);
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'personal_driver_trips'), where('assignedDriverId', '==', currentUser.uid)),
+      );
+      setAssignedTrips(
+        snap.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() }) as TripRow)
+          .filter((trip) => !['completed', 'cancelled'].includes(trip.status || ''))
+          .sort((left, right) => String(left.scheduledAtIso || '').localeCompare(String(right.scheduledAtIso || ''))),
+      );
+    } catch (err: any) {
+      setMessage(`Impossible de charger vos missions: ${err.message}`);
+    } finally {
+      setLoadingTrips(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadAssignedTrips();
+  }, [currentUser?.uid]);
+
   const handleUpdateStatus = async (status: string) => {
     if (!tripId.trim()) return;
     setLoading(true);
     setMessage(null);
     try {
-      const functions = getFunctions(undefined, 'europe-west1');
       const callable = httpsCallable(functions, 'driverUpdatePersonalDriverTrip');
       await callable({ tripId: tripId.trim(), status });
 
@@ -59,6 +91,7 @@ export function PersonalDriverDriverPageClient() {
       } else {
         setMessage(`Statut du trajet ${tripId} mis à jour : ${status}`);
       }
+      void loadAssignedTrips();
     } catch (err: any) {
       setMessage(`Erreur: ${err.message}`);
     } finally {
@@ -92,7 +125,50 @@ export function PersonalDriverDriverPageClient() {
         </div>
       )}
 
-      {/* CHRONOMÈTRE D'ATTENTE ACTIF */}
+      <section className="rounded-xl border border-white/10 bg-white/5 p-4" aria-label="Missions attribuées">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-white">
+            <MaterialIcon name="assignment" size="sm" className="text-primary" />
+            Mes missions
+          </h2>
+          <button
+            type="button"
+            onClick={loadAssignedTrips}
+            disabled={loadingTrips || !currentUser?.uid}
+            className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
+          >
+            <MaterialIcon name="refresh" size="sm" />
+            Actualiser
+          </button>
+        </div>
+        <div className="space-y-2">
+          {assignedTrips.length === 0 ? (
+            <p className="rounded-lg border border-white/5 bg-black/10 p-3 text-xs text-slate-400">
+              Aucune mission active attribuée pour le moment.
+            </p>
+          ) : (
+            assignedTrips.map((trip) => (
+              <button
+                key={trip.id}
+                type="button"
+                onClick={() => setTripId(trip.id)}
+                className={`w-full rounded-lg border p-3 text-left transition ${
+                  tripId === trip.id ? 'border-primary bg-primary/10' : 'border-white/10 bg-black/10 hover:bg-white/5'
+                }`}
+              >
+                <span className="block text-xs font-bold text-white">{trip.id}</span>
+                <span className="mt-1 block text-xs text-slate-400">
+                  {trip.status || 'statut inconnu'} · {trip.scheduledAtIso || 'horaire non renseigné'}
+                </span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  {trip.pickupAddress || 'départ'} → {trip.destinationAddress || 'destination'}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </section>
+
       {isWaiting && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5 text-center space-y-2">
           <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center justify-center gap-1">
