@@ -310,8 +310,8 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
         return () => {
             isMountedRef.current = false;
             
-            cameraUpdateTimeoutRef.current && clearTimeout(cameraUpdateTimeoutRef.current);
-            markersUpdateTimeoutRef.current && clearTimeout(markersUpdateTimeoutRef.current);
+            if (cameraUpdateTimeoutRef.current) clearTimeout(cameraUpdateTimeoutRef.current);
+            if (markersUpdateTimeoutRef.current) clearTimeout(markersUpdateTimeoutRef.current);
             
             if (mapInstanceRef.current) {
                 if (currentMarkersRef.current.length > 0) {

@@ -16,7 +16,7 @@ export const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
 export const twilioAuthToken = defineSecret('TWILIO_AUTH_TOKEN');
 export const twilioFromNumber = defineSecret('TWILIO_FROM_NUMBER');
 
-type TwilioClient = ReturnType<typeof import('twilio').default>;
+type TwilioClient = ReturnType<typeof import('twilio')>;
 
 let _client: TwilioClient | null = null;
 
@@ -27,7 +27,8 @@ async function getClient() {
   if (!sid || !token) {
     throw new Error('Twilio credentials manquants (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN)');
   }
-  const twilio = (await import('twilio')).default;
+  const twilioModule = await import('twilio');
+  const twilio = (twilioModule.default ?? twilioModule) as typeof import('twilio');
   _client = twilio(sid, token);
   return _client;
 }

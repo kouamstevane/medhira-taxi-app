@@ -14,7 +14,7 @@ export default function DeliveryOrderPage() {
   const params = useParams()
   const router = useRouter()
   const orderId = params.orderId as string
-  const { order, loading, updateStatus, confirmPickup, confirmDelivery, uploadProofPhoto, validatePin, reportNotReady } = useDeliveryOrder(orderId)
+  const { order, loading, updateStatus, confirmPickup, confirmDelivery, uploadProofPhoto, reportNotReady } = useDeliveryOrder(orderId)
 
   useEffect(() => {
     if (!loading && order?.status === 'delivered') {
@@ -67,7 +67,7 @@ export default function DeliveryOrderPage() {
     case 'heading_to_client':
       return <Level5_HeadingToClient {...commonProps} />
     case 'arrived_client':
-      return <Level6_ArrivedClient order={order} confirmDelivery={confirmDelivery} uploadProofPhoto={uploadProofPhoto} validatePin={validatePin} />
+      return <Level6_ArrivedClient order={order} confirmDelivery={confirmDelivery} uploadProofPhoto={uploadProofPhoto} />
     default:
       return (
         <div className="min-h-screen bg-background flex items-center justify-center text-slate-400">

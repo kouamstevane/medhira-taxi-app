@@ -5,7 +5,7 @@
  * de sécurité Firestore avec @firebase/rules-unit-testing.
  */
 
-export default {
+const jestFirestoreConfig = {
   // Environnement de test Node.js (requis pour @firebase/rules-unit-testing)
   testEnvironment: 'node',
 
@@ -75,3 +75,5 @@ export default {
   // Affichage détaillé des résultats
   verbose: true,
 };
+
+export default jestFirestoreConfig;

@@ -294,7 +294,7 @@ export async function checkSystemHealth(): Promise<{
   };
 }
 
-export default {
+const testHelpers = {
   generateRandomPhoneNumber,
   generateInvalidPhoneNumbers,
   createTestUser,
@@ -315,3 +315,5 @@ export default {
   cleanupTestData,
   checkSystemHealth,
 };
+
+export default testHelpers;

@@ -181,6 +181,14 @@ export default function OrdersManagementClient() {
                         Accepter la commande (assigner un livreur)
                       </button>
                     )}
+                    {order.status === 'accepted' && (
+                      <button
+                        onClick={() => updateOrderStatus(order.id, 'preparing')}
+                        className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-500/20 transition"
+                      >
+                        Préparer
+                      </button>
+                    )}
                     {order.status === 'preparing' && (
                       <button
                         onClick={() => updateOrderStatus(order.id, 'ready')}
@@ -189,9 +197,9 @@ export default function OrdersManagementClient() {
                         Prêt
                       </button>
                     )}
-                    {order.status === 'pending' && (
+                    {['pending', 'confirmed'].includes(order.status) && (
                       <button
-                        onClick={() => updateOrderStatus(order.id, 'cancelled')}
+                        onClick={() => updateOrderStatus(order.id, 'cancelled_by_restaurant')}
                         className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-2 rounded-xl text-xs font-bold hover:bg-destructive/20 transition"
                       >
                         Refuser
@@ -218,6 +226,12 @@ export default function OrdersManagementClient() {
                 </div>
                 <div className="sm:w-64 border-l sm:pl-6 border-white/5">
                   <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-3">Client</h4>
+                  {order.pickupCode && (
+                    <div className="mb-4 bg-primary/10 border border-primary/20 rounded-xl p-3">
+                      <p className="text-[10px] uppercase font-bold text-primary mb-1">Code retrait</p>
+                      <p className="text-2xl font-mono font-bold text-white tracking-widest">{order.pickupCode}</p>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-slate-400">
                       <MaterialIcon name="person" size="md" />

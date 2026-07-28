@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { useCartStore } from '@/store/cartStore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -12,6 +13,11 @@ import { db } from '@/config/firebase';
 
 import { CURRENCY_CODE } from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
+
+const StripePaymentElement = dynamic(
+  () => import('@/components/stripe/StripePaymentElement').then((module) => ({ default: module.StripePaymentElement })),
+  { ssr: false, loading: () => <div className="w-full h-48 bg-white/5 animate-pulse rounded-xl" /> }
+);
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -26,6 +32,12 @@ export default function CheckoutPage() {
   const [durationMinutes, setDurationMinutes] = useState(15);
   const [distanceIsEstimate, setDistanceIsEstimate] = useState(true);
   const [distanceLoading, setDistanceLoading] = useState(false);
+  const [cardPayment, setCardPayment] = useState<{
+    orderId: string;
+    clientSecret: string;
+    amount: number;
+    currency: string;
+  } | null>(null);
 
   // Payment State
   const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'card'>('wallet');
@@ -132,6 +144,19 @@ export default function CheckoutPage() {
         paymentMethod,
       });
 
+      if (paymentMethod === 'card') {
+        const payment = await FoodDeliveryService.payFoodOrderWithCard(orderId);
+        if (!payment.clientSecret || !payment.amount || !payment.currency) {
+          throw new Error('Impossible de préparer le paiement carte.');
+        }
+        setCardPayment({
+          orderId,
+          clientSecret: payment.clientSecret,
+          amount: payment.amount,
+          currency: payment.currency,
+        });
+        return;
+      }
 
       setSubmitted(true);
       router.push(`/food/orders/${orderId}`);
@@ -139,6 +164,23 @@ export default function CheckoutPage() {
     } catch (error: unknown) {
       console.error('Erreur lors de la validation:', error);
       const msg = error instanceof Error ? error.message : 'Une erreur est survenue lors de la validation de votre commande.';
+      setErrorMsg(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCardPaymentSuccess = async (paymentIntentId: string) => {
+    if (!cardPayment) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      await FoodDeliveryService.payFoodOrderWithCard(cardPayment.orderId, paymentIntentId);
+      setSubmitted(true);
+      clearCart();
+      router.push(`/food/orders/${cardPayment.orderId}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Paiement carte non confirmé.';
       setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -157,6 +199,20 @@ export default function CheckoutPage() {
       </div>
 
       <div className="p-4 space-y-6">
+        {cardPayment ? (
+          <section className="glass-card p-5 rounded-2xl border border-white/5">
+            <h2 className="text-lg font-bold text-white mb-4">Paiement carte</h2>
+            <StripePaymentElement
+              clientSecret={cardPayment.clientSecret}
+              amount={cardPayment.amount}
+              currency={cardPayment.currency}
+              submitLabel="Payer la commande"
+              onSuccess={handleCardPaymentSuccess}
+              onError={setErrorMsg}
+            />
+          </section>
+        ) : (
+          <>
         {/* Delivery Address */}
         <section className="glass-card p-5 rounded-2xl border border-white/5">
           <h2 className="text-lg font-bold text-white mb-4">Adresse de livraison</h2>
@@ -309,6 +365,8 @@ export default function CheckoutPage() {
             />
           </div>
         </section>
+          </>
+        )}
 
         {errorMsg && (
           <div className="bg-destructive/10 text-destructive p-4 rounded-xl text-sm border border-destructive/20 flex items-center justify-between">
@@ -318,6 +376,7 @@ export default function CheckoutPage() {
       </div>
 
       {/* Checkout Footer */}
+      {!cardPayment && (
       <div className="fixed bottom-0 inset-x-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/5 z-20 max-w-[430px] mx-auto">
         <button
           onClick={handleCreateOrder}
@@ -339,6 +398,7 @@ export default function CheckoutPage() {
         </button>
 
       </div>
+      )}
       <BottomNav />
     </div>
   );

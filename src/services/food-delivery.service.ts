@@ -188,6 +188,7 @@ export const getApprovedRestaurants = async (
 
   const constraints: Parameters<typeof query>[1][] = [
     where('status', '==', 'approved'),
+    where('stripeConnectStatus', '==', 'active'),
   ];
 
   if (filters?.cuisineType) {
@@ -429,7 +430,7 @@ export const createFoodOrder = async (
   if (!restaurant) {
     throw new Error('Restaurant introuvable');
   }
-  if (restaurant.status !== 'approved' || restaurant.isOpen === false) {
+  if (restaurant.status !== 'approved' || restaurant.stripeConnectStatus !== 'active' || restaurant.isOpen === false) {
     throw new Error('Ce restaurant n\'est pas disponible actuellement');
   }
 
@@ -478,10 +479,9 @@ export const createFoodOrder = async (
     // 1. Créer le document de commande conforme aux règles Firestore (paymentValidated = false)
     await setDoc(newOrderRef, order);
 
-    // 2. Valider le paiement via la Cloud Function adaptée au mode choisi
-    if (selectedPaymentMethod === 'card') {
-      await payFoodOrderWithCard(newOrderRef.id);
-    } else {
+    // 2. Le wallet est validé immédiatement côté serveur.
+    // Le paiement carte passe ensuite par Stripe Elements, puis confirmation serveur.
+    if (selectedPaymentMethod === 'wallet') {
       await payFoodOrderWithWallet(newOrderRef.id);
     }
   } catch (payError) {
@@ -493,13 +493,18 @@ export const createFoodOrder = async (
     throw new Error(`Paiement échoué: ${msg}`);
   }
 
-  logger.info('Commande de livraison créée et payée', {
+  logger.info(
+    selectedPaymentMethod === 'wallet'
+      ? 'Commande de livraison créée et payée'
+      : 'Commande de livraison créée, paiement carte en attente',
+    {
     orderId: newOrderRef.id,
     restaurantId: orderData.restaurantId,
     totalOrderPrice,
     paymentMethod: selectedPaymentMethod,
     pickupCode: order.pickupCode,
-  });
+    }
+  );
 
   return newOrderRef.id;
   } catch (error) {
@@ -529,14 +534,26 @@ export const payFoodOrderWithWallet = async (orderId: string): Promise<{ transac
 /**
  * Payer une commande de livraison via carte bancaire / Stripe (Cloud Function)
  */
-export const payFoodOrderWithCard = async (orderId: string): Promise<{ transactionId: string }> => {
+export const payFoodOrderWithCard = async (
+  orderId: string,
+  paymentIntentId?: string
+): Promise<{
+  transactionId?: string;
+  clientSecret?: string;
+  paymentIntentId?: string;
+  amount?: number;
+  currency?: string;
+}> => {
   try {
     const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
     const app = getApps().length ? getApp() : undefined;
     if (!app) throw new Error('Firebase app not initialized');
     const functions = getFunctions(app, functionsRegion);
-    const payCallable = httpsCallable<{ orderId: string }, { transactionId: string }>(functions, 'payFoodOrderWithCard');
-    const result = await payCallable({ orderId });
+    const payCallable = httpsCallable<
+      { orderId: string; paymentIntentId?: string },
+      { transactionId?: string; clientSecret?: string; paymentIntentId?: string; amount?: number; currency?: string }
+    >(functions, 'payFoodOrderWithCard');
+    const result = await payCallable({ orderId, paymentIntentId });
     return result.data;
   } catch (error) {
     console.error('[food-delivery.service] payFoodOrderWithCard failed:', error);

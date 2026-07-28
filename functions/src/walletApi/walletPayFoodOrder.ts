@@ -13,6 +13,10 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import * as admin from 'firebase-admin';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { WalletPayFoodOrderSchema } from '../validators/schemas.js';
+import {
+  calculateVerifiedFoodOrderTotals,
+  type VerifiedMenuItem,
+} from '../food/foodOrderPricing.js';
 
 const CURRENCY_CODE = 'CAD';
 
@@ -72,10 +76,42 @@ export const walletPayFoodOrder = onCall(
           return; // Déjà payée
         }
 
-        const totalOrderPrice = order.totalOrderPrice;
-        if (typeof totalOrderPrice !== 'number' || !Number.isFinite(totalOrderPrice) || totalOrderPrice <= 0) {
-          throw new HttpsError('invalid-argument', 'Montant de commande invalide');
+        const restaurantSnap = await tx.get(db.collection('restaurants').doc(order.restaurantId));
+        if (!restaurantSnap.exists) {
+          throw new HttpsError('not-found', 'Restaurant introuvable');
         }
+        const restaurant = restaurantSnap.data()!;
+        if (restaurant.status !== 'approved' || restaurant.stripeConnectStatus !== 'active') {
+          throw new HttpsError('failed-precondition', 'Restaurant indisponible pour le paiement.');
+        }
+
+        const menuItems = new Map<string, VerifiedMenuItem>();
+        for (const item of order.orderItems ?? []) {
+          const itemSnap = await tx.get(
+            db
+              .collection('restaurants')
+              .doc(order.restaurantId)
+              .collection('menu_items')
+              .doc(item.menuItemId),
+          );
+          if (itemSnap.exists) {
+            const data = itemSnap.data()!;
+            menuItems.set(item.menuItemId, {
+              name: data.name,
+              price: data.price,
+              isAvailable: data.isAvailable === true,
+            });
+          }
+        }
+
+        const verifiedTotals = calculateVerifiedFoodOrderTotals(
+          {
+            orderItems: order.orderItems ?? [],
+            deliveryDistance: order.deliveryDistance,
+            isWeekend: order.isWeekend === true,
+          },
+          menuItems,
+        );
 
         // 2. Vérifier le solde du portefeuille
         const walletDoc = await tx.get(walletRef);
@@ -83,10 +119,10 @@ export const walletPayFoodOrder = onCall(
           throw new HttpsError('not-found', 'Portefeuille introuvable');
         }
         const currentBalance = walletDoc.data()?.balance ?? 0;
-        if (currentBalance < totalOrderPrice) {
+        if (currentBalance < verifiedTotals.totalOrderPrice) {
           throw new HttpsError(
             'failed-precondition',
-            `Solde insuffisant: ${currentBalance.toFixed(2)} ${CURRENCY_CODE} disponibles (< ${totalOrderPrice.toFixed(2)} ${CURRENCY_CODE})`,
+            `Solde insuffisant: ${currentBalance.toFixed(2)} ${CURRENCY_CODE} disponibles (< ${verifiedTotals.totalOrderPrice.toFixed(2)} ${CURRENCY_CODE})`,
           );
         }
 
@@ -95,7 +131,7 @@ export const walletPayFoodOrder = onCall(
           id: transactionId,
           userId,
           type: 'payment',
-          amount: -totalOrderPrice,
+          amount: -verifiedTotals.totalOrderPrice,
           currency: CURRENCY_CODE,
           description: `Paiement commande repas chez ${order.restaurantName || 'Restaurant'}`,
           foodOrderId: orderId,
@@ -105,11 +141,15 @@ export const walletPayFoodOrder = onCall(
         });
 
         tx.update(walletRef, {
-          balance: currentBalance - totalOrderPrice,
+          balance: currentBalance - verifiedTotals.totalOrderPrice,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
         tx.update(orderRef, {
+          orderItems: verifiedTotals.orderItems,
+          basePrice: verifiedTotals.basePrice,
+          deliveryCost: verifiedTotals.deliveryCost,
+          totalOrderPrice: verifiedTotals.totalOrderPrice,
           paymentValidated: true,
           status: 'confirmed',
           paymentTransactionId: transactionId,

@@ -38,13 +38,18 @@ import { getDatabase } from 'firebase-admin/database';
 import { DELIVERY_SHARE_RATE } from './config/stripe.js';
 import { selectNearestDriver } from './utils/matching.js';
 import { enforceRateLimit } from './utils/rateLimiter.js';
+import { createStripeClient } from './stripe/stripe-client.js';
 
 // Lazy imports pour éviter le timeout de déploiement (10s)
-type CloudTasksClient = import('@google-cloud/tasks').CloudTasksClient;
 type OAuth2Client = import('google-auth-library').OAuth2Client;
 
-let _cloudTasksClient: CloudTasksClient | null = null;
-async function getCloudTasksClient() {
+type CloudTasksClientLike = {
+  queuePath(project: string, location: string, queue: string): string;
+  createTask(request: Record<string, unknown>): Promise<unknown>;
+};
+
+let _cloudTasksClient: CloudTasksClientLike | null = null;
+async function getCloudTasksClient(): Promise<CloudTasksClientLike> {
   if (!_cloudTasksClient) {
     const { CloudTasksClient } = await import('@google-cloud/tasks');
     _cloudTasksClient = new CloudTasksClient();
@@ -65,6 +70,7 @@ async function getOAuthClient() {
 const encryptionMasterKey = defineSecret('ENCRYPTION_MASTER_KEY');
 // Définir le secret Resend pour l'envoi d'emails OTP
 const resendApiKey = defineSecret('RESEND_API_KEY');
+const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
 // Initialiser Firebase Admin (vérifier si déjà initialisé pour éviter les erreurs)
 if (!admin.apps.length) {
@@ -782,7 +788,6 @@ export const onFoodOrderAccepted = onDocumentUpdated(
         cityId: after.cityId || 'edmonton',
         status: 'assigned',
         deliveryPreference: after.deliveryPreference ?? 'leave_at_door',
-        pinCode: after.pinCode ?? null,
         restaurantAddress: after.restaurantAddress,
         clientNeighbourhood: after.clientNeighbourhood ?? '',
         clientAddress: {
@@ -809,6 +814,13 @@ export const onFoodOrderAccepted = onDocumentUpdated(
 
       transaction.update(db.collection('drivers').doc(nearest.id), {
         activeDeliveryOrderId: orderId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      transaction.update(db.collection('food_orders').doc(orderId), {
+        driverId: nearest.id,
+        driverName: `${nearest.data.firstName ?? ''} ${nearest.data.lastName ?? ''}`.trim() || nearest.data.displayName || 'Livreur',
+        driverPhone: nearest.data.phone ?? '',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
@@ -957,6 +969,93 @@ export const onRestaurantCancelOrder = onDocumentUpdated(
       })
     }
   }
+)
+
+async function refundFoodOrderPayment(orderId: string, order: FirebaseFirestore.DocumentData): Promise<void> {
+  if (order.paymentValidated !== true || order.paymentRefunded === true) return
+
+  const db = admin.firestore()
+
+  if (order.paymentMethod === 'wallet') {
+    const originalTransactionId = order.paymentTransactionId
+    if (!originalTransactionId) return
+
+    const originalRef = db.collection('transactions').doc(originalTransactionId)
+    const refundRef = db.collection('transactions').doc(`refund_${originalTransactionId}`)
+    const walletRef = db.collection('wallets').doc(order.userId)
+    const orderRef = db.collection('food_orders').doc(orderId)
+
+    await db.runTransaction(async (tx) => {
+      const [originalSnap, refundSnap, walletSnap, orderSnap] = await Promise.all([
+        tx.get(originalRef),
+        tx.get(refundRef),
+        tx.get(walletRef),
+        tx.get(orderRef),
+      ])
+      if (!originalSnap.exists || !walletSnap.exists || !orderSnap.exists) return
+      if (refundSnap.exists || orderSnap.data()?.paymentRefunded === true) return
+
+      const original = originalSnap.data()!
+      const amount = Math.abs(original.amount ?? 0)
+      if (!Number.isFinite(amount) || amount <= 0) return
+
+      tx.set(refundRef, {
+        id: refundRef.id,
+        userId: order.userId,
+        type: 'refund',
+        amount,
+        currency: original.currency ?? 'CAD',
+        description: `Remboursement commande repas ${orderId}`,
+        reference: originalTransactionId,
+        foodOrderId: orderId,
+        status: 'completed',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      tx.update(walletRef, {
+        balance: (walletSnap.data()?.balance ?? 0) + amount,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      tx.update(orderRef, {
+        paymentRefunded: true,
+        refundTransactionId: refundRef.id,
+        refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    })
+    return
+  }
+
+  if (order.paymentMethod === 'card' && order.stripePaymentIntentId) {
+    const stripe = createStripeClient(stripeSecretKey.value())
+    const refund = await stripe.refunds.create(
+      {
+        payment_intent: order.stripePaymentIntentId,
+        reason: 'requested_by_customer',
+        metadata: { purpose: 'food_order_refund', orderId },
+      },
+      { idempotencyKey: `food_refund_${orderId}_${order.stripePaymentIntentId}` },
+    )
+
+    await db.collection('food_orders').doc(orderId).update({
+      paymentRefunded: true,
+      stripeRefundId: refund.id,
+      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+  }
+}
+
+export const onFoodOrderRefundRequired = onDocumentUpdated(
+  { document: 'food_orders/{orderId}', region: 'europe-west1', secrets: [stripeSecretKey] },
+  async (event) => {
+    if (!event.data) return
+    const before = event.data.before.data()
+    const after = event.data.after.data()
+    if (!before || !after || before.status === after.status) return
+    if (!['cancelled_by_restaurant', 'no_driver_available'].includes(after.status)) return
+    await refundFoodOrderPayment(event.params.orderId, after)
+  },
 )
 
 // ============================================================================
@@ -1121,6 +1220,12 @@ export const onDeliveryOrderTimeout = onRequest(
     }
 
     await orderRef.update({ driverId: nextDriver.id, status: 'assigned', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    await db.collection('food_orders').doc(orderId).update({
+      driverId: nextDriver.id,
+      driverName: `${nextDriver.data.firstName ?? ''} ${nextDriver.data.lastName ?? ''}`.trim() || nextDriver.data.displayName || 'Livreur',
+      driverPhone: nextDriver.data.phone ?? '',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
     await db.collection('drivers').doc(nextDriver.id).update({ activeDeliveryOrderId: orderId, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
     await admin.auth().setCustomUserClaims(nextDriver.id, { activeDeliveryOrderId: orderId })
 
@@ -1229,6 +1334,106 @@ export const logPinFailure = onCall(
       driverId: uid,
       clientPhone,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    })
+
+    return { success: true }
+  }
+)
+
+export const validateDeliveryPinAndComplete = onCall(
+  { region: 'europe-west1' },
+  async (request) => {
+    const uid = request.auth?.uid
+    if (!uid) throw new HttpsError('unauthenticated', 'Vous devez être connecté.')
+
+    const schema = z.object({
+      orderId: z.string().min(1),
+      pin: z.string().regex(/^\d{4}$/),
+    })
+    const { orderId, pin } = schema.parse(request.data)
+
+    const db = admin.firestore()
+    const deliveryRef = db.collection('food_delivery_orders').doc(orderId)
+    const foodOrderRef = db.collection('food_orders').doc(orderId)
+
+    await db.runTransaction(async (tx) => {
+      const [deliverySnap, foodOrderSnap] = await Promise.all([
+        tx.get(deliveryRef),
+        tx.get(foodOrderRef),
+      ])
+      if (!deliverySnap.exists || !foodOrderSnap.exists) {
+        throw new HttpsError('not-found', 'Commande introuvable.')
+      }
+
+      const deliveryOrder = deliverySnap.data()!
+      const foodOrder = foodOrderSnap.data()!
+
+      if (deliveryOrder.driverId !== uid) {
+        throw new HttpsError('permission-denied', 'Non autorisé.')
+      }
+      if (deliveryOrder.status !== 'arrived_client') {
+        throw new HttpsError('failed-precondition', 'La commande doit être arrivée chez le client.')
+      }
+      if (!['meet_outside', 'meet_at_door'].includes(deliveryOrder.deliveryPreference)) {
+        throw new HttpsError('failed-precondition', 'Cette commande ne nécessite pas de PIN.')
+      }
+      if (foodOrder.pinCode !== pin) {
+        throw new HttpsError('permission-denied', 'Code PIN incorrect.')
+      }
+
+      tx.update(deliveryRef, {
+        status: 'delivered',
+        deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    })
+
+    return { success: true }
+  }
+)
+
+export const validateFoodPickupCodeAndMarkPickedUp = onCall(
+  { region: 'europe-west1' },
+  async (request) => {
+    const uid = request.auth?.uid
+    if (!uid) throw new HttpsError('unauthenticated', 'Vous devez être connecté.')
+
+    const schema = z.object({
+      orderId: z.string().min(1),
+      pickupCode: z.string().trim().min(4).max(12),
+    })
+    const { orderId, pickupCode } = schema.parse(request.data)
+
+    const db = admin.firestore()
+    const deliveryRef = db.collection('food_delivery_orders').doc(orderId)
+    const foodOrderRef = db.collection('food_orders').doc(orderId)
+
+    await db.runTransaction(async (tx) => {
+      const [deliverySnap, foodOrderSnap] = await Promise.all([
+        tx.get(deliveryRef),
+        tx.get(foodOrderRef),
+      ])
+      if (!deliverySnap.exists || !foodOrderSnap.exists) {
+        throw new HttpsError('not-found', 'Commande introuvable.')
+      }
+
+      const deliveryOrder = deliverySnap.data()!
+      const foodOrder = foodOrderSnap.data()!
+      if (deliveryOrder.driverId !== uid) {
+        throw new HttpsError('permission-denied', 'Non autorisé.')
+      }
+      if (deliveryOrder.status !== 'waiting') {
+        throw new HttpsError('failed-precondition', 'La commande doit être en attente au restaurant.')
+      }
+      if (String(foodOrder.pickupCode ?? '').toUpperCase() !== pickupCode.toUpperCase()) {
+        throw new HttpsError('permission-denied', 'Code de récupération incorrect.')
+      }
+
+      tx.update(deliveryRef, {
+        status: 'picked_up',
+        pickedUpAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
     })
 
     return { success: true }

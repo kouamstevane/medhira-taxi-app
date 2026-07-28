@@ -132,6 +132,13 @@ export const WalletPayFoodOrderSchema = z.object({
 });
 export type WalletPayFoodOrderInput = z.infer<typeof WalletPayFoodOrderSchema>;
 
+/** `payFoodOrderWithCard` — body { orderId, paymentIntentId? } */
+export const PayFoodOrderWithCardSchema = z.object({
+  orderId: z.string().min(1),
+  paymentIntentId: z.string().min(1).optional(),
+});
+export type PayFoodOrderWithCardInput = z.infer<typeof PayFoodOrderWithCardSchema>;
+
 
 // ============================================================================
 // User Roles — spec §7.3

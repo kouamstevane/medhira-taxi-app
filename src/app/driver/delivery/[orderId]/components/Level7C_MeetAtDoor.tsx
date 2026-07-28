@@ -9,11 +9,10 @@ const MAX_ATTEMPTS = 3
 
 interface Props {
   order: FoodDeliveryOrder
-  validatePin: (pin: string) => boolean
   confirmDelivery: (method: 'photo' | 'pin', payload: string) => Promise<void>
 }
 
-export default function Level7C_MeetAtDoor({ order, validatePin, confirmDelivery }: Props) {
+export default function Level7C_MeetAtDoor({ order, confirmDelivery }: Props) {
   const [pin, setPin] = useState('')
   const [attempts, setAttempts] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +40,10 @@ export default function Level7C_MeetAtDoor({ order, validatePin, confirmDelivery
 
   const handleConfirm = async () => {
     if (attempts >= MAX_ATTEMPTS) return
-    if (!validatePin(pin)) {
+    setConfirming(true)
+    try {
+      await confirmDelivery('pin', pin)
+    } catch {
       const newAttempts = attempts + 1
       setAttempts(newAttempts)
       const remaining = MAX_ATTEMPTS - newAttempts
@@ -52,13 +54,6 @@ export default function Level7C_MeetAtDoor({ order, validatePin, confirmDelivery
         setError(`Code incorrect. ${remaining} tentative(s) restante(s).`)
       }
       setPin('')
-      return
-    }
-    setConfirming(true)
-    try {
-      await confirmDelivery('pin', pin)
-    } catch {
-      setError('Erreur lors de la validation. Réessayez.')
     } finally {
       setConfirming(false)
     }
@@ -70,11 +65,7 @@ export default function Level7C_MeetAtDoor({ order, validatePin, confirmDelivery
         <div className="text-center">
           <MaterialIcon name="door_front" className="text-primary text-[48px]" />
           <h2 className="text-xl font-bold text-white mt-2">Rendez-vous à la porte</h2>
-          <p className="text-slate-400 text-sm mt-1">Sonnez, remettez le sac, puis saisissez le code PIN.</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-slate-400 mb-1">Code PIN client</p>
-          <p className="text-4xl font-mono font-bold text-primary tracking-widest">{order.pinCode}</p>
+          <p className="text-slate-400 text-sm mt-1">Sonnez, remettez le sac, puis saisissez le code PIN communiqué par le client.</p>
         </div>
         {isBlocked ? (
           <div className="space-y-3">

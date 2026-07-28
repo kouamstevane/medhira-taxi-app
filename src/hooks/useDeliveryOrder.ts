@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { getDatabase, ref as rtdbRef, set } from 'firebase/database'
-import { db, getFirebaseStorage, auth } from '@/config/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, getFirebaseStorage, functions } from '@/config/firebase'
 import { retryWithBackoff } from '@/utils/retry'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
 
@@ -117,16 +118,17 @@ export function useDeliveryOrder(orderId: string) {
     }
   }, [orderId])
 
-  const confirmPickup = useCallback(async () => {
+  const confirmPickup = useCallback(async (pickupCode: string) => {
     try {
-      await updateDoc(doc(db, 'food_delivery_orders', orderId), {
-        status: 'picked_up' as DeliveryStatus,
-        updatedAt: serverTimestamp(),
-      })
+      const validate = httpsCallable<{ orderId: string; pickupCode: string }, { success: boolean }>(
+        functions,
+        'validateFoodPickupCodeAndMarkPickedUp'
+      )
+      await validate({ orderId, pickupCode })
     } catch (err) {
       console.error('[useDeliveryOrder] confirmPickup failed:', err)
-      setError('Erreur de connexion — réessayez')
-      throw new Error('Erreur de connexion — réessayez')
+      setError('Code de récupération incorrect ou expiré')
+      throw new Error('Code de récupération incorrect ou expiré')
     }
   }, [orderId])
 
@@ -143,6 +145,21 @@ export function useDeliveryOrder(orderId: string) {
 
   // confirmDelivery NON optimiste — bloquant jusqu'à confirmation Firestore
   const confirmDelivery = useCallback(async (method: 'photo' | 'pin', payload: string) => {
+    if (method === 'pin') {
+      try {
+        const validate = httpsCallable<{ orderId: string; pin: string }, { success: boolean }>(
+          functions,
+          'validateDeliveryPinAndComplete'
+        )
+        await validate({ orderId, pin: payload })
+      } catch (err) {
+        console.error('[useDeliveryOrder] confirmDelivery pin failed:', err)
+        setError('Code PIN incorrect ou expiré')
+        throw new Error('Code PIN incorrect ou expiré')
+      }
+      return
+    }
+
     const update: Record<string, unknown> = {
       status: 'delivered' as DeliveryStatus,
       deliveredAt: serverTimestamp(),

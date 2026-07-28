@@ -16,12 +16,15 @@ process.env.FIREBASE_STORAGE_BUCKET = 'test.firebasestorage.app';
 process.env.FIREBASE_MESSAGING_SENDER_ID = '123456789';
 process.env.FIREBASE_APP_ID = '1:123456789:web:abc123';
 
+const originalWarn = console.warn.bind(console);
+const originalError = console.error.bind(console);
+
 // Configuration de console pour les tests
 global.console = {
   ...console,
   // Conserver les logs pour le debugging
-  warn: (...args) => console.warn(...args),
-  error: (...args) => console.error(...args),
+  warn: (...args) => originalWarn(...args),
+  error: (...args) => originalError(...args),
 };
 
 console.log(' Setup Firestore Rules Tests initialisé');

@@ -7,13 +7,15 @@ import DriverFoodContacts from './DriverFoodContacts'
 interface Props {
   order: FoodDeliveryOrder
   updateStatus: (status: DeliveryStatus) => Promise<void>
-  confirmPickup: () => Promise<void>
+  confirmPickup: (pickupCode: string) => Promise<void>
   reportNotReady: () => Promise<void>
 }
 
 export default function Level4_WaitingPickup({ order, updateStatus, confirmPickup, reportNotReady }: Props) {
   const [loading, setLoading] = useState(false)
   const [reporting, setReporting] = useState(false)
+  const [pickupCode, setPickupCode] = useState('')
+  const [error, setError] = useState<string | null>(null)
   return (
     <div className="min-h-screen bg-background text-white flex flex-col p-4">
       <div className="flex-1 flex flex-col items-center justify-center space-y-6">
@@ -25,6 +27,16 @@ export default function Level4_WaitingPickup({ order, updateStatus, confirmPicku
         <DriverFoodContacts order={order} target="restaurant" />
       </div>
       <div className="space-y-3">
+        <input
+          value={pickupCode}
+          onChange={(event) => {
+            setPickupCode(event.target.value.toUpperCase().slice(0, 12))
+            setError(null)
+          }}
+          placeholder="Code de récupération"
+          className="w-full h-12 text-center font-mono bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:border-primary"
+        />
+        {error && <p className="text-red-400 text-sm text-center">{error}</p>}
         <button
           onClick={async () => { setReporting(true); try { await reportNotReady() } finally { setReporting(false) } }}
           disabled={reporting || loading}
@@ -33,8 +45,21 @@ export default function Level4_WaitingPickup({ order, updateStatus, confirmPicku
           {reporting ? '...' : 'Commande pas encore prête'}
         </button>
         <button
-          onClick={async () => { setLoading(true); try { await confirmPickup() } finally { setLoading(false) } }}
-          disabled={loading || reporting}
+          onClick={async () => {
+            if (pickupCode.trim().length < 4) {
+              setError('Saisissez le code fourni par le restaurant')
+              return
+            }
+            setLoading(true)
+            try {
+              await confirmPickup(pickupCode.trim())
+            } catch {
+              setError('Code de récupération incorrect')
+            } finally {
+              setLoading(false)
+            }
+          }}
+          disabled={loading || reporting || pickupCode.trim().length < 4}
           className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
         >
           {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" /> : "J'ai récupéré la commande"}

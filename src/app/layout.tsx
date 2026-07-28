@@ -19,7 +19,6 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import LayoutClient from "./LayoutClient";
-import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 
 const inter = { variable: '--font-sans' };

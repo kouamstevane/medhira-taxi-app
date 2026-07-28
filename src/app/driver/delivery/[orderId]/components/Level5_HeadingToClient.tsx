@@ -11,6 +11,8 @@ interface Props {
 
 export default function Level5_HeadingToClient({ order, updateStatus }: Props) {
   const [loading, setLoading] = useState(false)
+  const nextStatus: DeliveryStatus = order.status === 'picked_up' ? 'heading_to_client' : 'arrived_client'
+  const buttonLabel = order.status === 'picked_up' ? 'Je pars vers le client' : 'Je suis arrivé chez le client'
   return (
     <div className="min-h-screen bg-background text-white flex flex-col p-4">
       <div className="flex-1 flex flex-col items-center justify-center space-y-6">
@@ -26,11 +28,11 @@ export default function Level5_HeadingToClient({ order, updateStatus }: Props) {
         <DriverFoodContacts order={order} target="client" />
       </div>
       <button
-        onClick={async () => { setLoading(true); try { await updateStatus('arrived_client') } finally { setLoading(false) } }}
+        onClick={async () => { setLoading(true); try { await updateStatus(nextStatus) } finally { setLoading(false) } }}
         disabled={loading}
         className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
       >
-        {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" /> : "Je suis arrivé chez le client"}
+        {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" /> : buttonLabel}
       </button>
     </div>
   )

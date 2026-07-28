@@ -872,6 +872,15 @@ service cloud.firestore {
         && request.resource.data.clientId == resource.data.clientId
         && request.resource.data.totalAmount == resource.data.totalAmount
         && request.resource.data.driverEarnings == resource.data.driverEarnings
+        && request.resource.data.status != 'picked_up'
+        && (
+          request.resource.data.status != 'delivered'
+          || (
+            resource.data.deliveryPreference == 'leave_at_door'
+            && request.resource.data.proofPhotoUrl is string
+            && request.resource.data.proofPhotoUrl.size() > 0
+          )
+        )
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'updatedAt', 'pickedUpAt', 'deliveredAt', 'cancelledAt', 'proofPhotoUrl', 'restaurantWaitingStartedAt']);
 
@@ -893,7 +902,11 @@ service cloud.firestore {
                        request.resource.data.rating >= 1 &&
                        request.resource.data.rating <= 5 &&
                        request.resource.data.restaurantId is string &&
-                       request.resource.data.orderId is string;
+                       request.resource.data.orderId is string &&
+                       exists(/databases/$(database)/documents/food_orders/$(request.resource.data.orderId)) &&
+                       get(/databases/$(database)/documents/food_orders/$(request.resource.data.orderId)).data.userId == request.auth.uid &&
+                       get(/databases/$(database)/documents/food_orders/$(request.resource.data.orderId)).data.status == 'delivered' &&
+                       get(/databases/$(database)/documents/food_orders/$(request.resource.data.orderId)).data.restaurantId == request.resource.data.restaurantId;
       
       // Mise à jour et suppression : Non autorisées (immutabilité des avis)
       allow update: if false;
@@ -915,7 +928,11 @@ service cloud.firestore {
                        request.resource.data.rating >= 1 &&
                        request.resource.data.rating <= 5 &&
                        request.resource.data.driverId is string &&
-                       request.resource.data.orderId is string;
+                       request.resource.data.orderId is string &&
+                       exists(/databases/$(database)/documents/food_orders/$(request.resource.data.orderId)) &&
+                       get(/databases/$(database)/documents/food_orders/$(request.resource.data.orderId)).data.userId == request.auth.uid &&
+                       get(/databases/$(database)/documents/food_orders/$(request.resource.data.orderId)).data.status == 'delivered' &&
+                       get(/databases/$(database)/documents/food_orders/$(request.resource.data.orderId)).data.driverId == request.resource.data.driverId;
       
       // Mise à jour et suppression : Non autorisées (immutabilité des avis)
       allow update: if false;
