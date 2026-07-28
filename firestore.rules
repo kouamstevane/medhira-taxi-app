@@ -763,6 +763,24 @@ service cloud.firestore {
       
       // Suppression : Admin uniquement
       allow delete: if isAdmin();
+
+      function isValidMenuItem() {
+        return request.resource.data.name is string
+          && request.resource.data.name.size() >= 2
+          && request.resource.data.name.size() <= 120
+          && request.resource.data.description is string
+          && request.resource.data.description.size() <= 1000
+          && request.resource.data.price is number
+          && request.resource.data.price > 0
+          && request.resource.data.price <= 1000
+          && request.resource.data.category is string
+          && request.resource.data.category.size() >= 1
+          && request.resource.data.category.size() <= 80
+          && request.resource.data.isAvailable is bool
+          && request.resource.data.keys()
+            .hasOnly(['id', 'restaurantId', 'name', 'description', 'price', 'category',
+                      'imageUrl', 'isAvailable', 'createdAt', 'updatedAt']);
+      }
       
       // Sous-collection menu_items — Plats du restaurant (Règle 2)
       match /menu_items/{itemId} {
@@ -771,7 +789,11 @@ service cloud.firestore {
         
         // Écriture : Seul le propriétaire du restaurant parent
         // Modifications immédiatement visibles (Règle 2)
-        allow create, update, delete: if isAuthenticated() &&
+        allow create, update: if isAuthenticated() &&
+          get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid &&
+          isValidMenuItem();
+
+        allow delete: if isAuthenticated() &&
           get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
       }
     }
@@ -892,6 +914,7 @@ service cloud.firestore {
       
       // Création : L'auteur doit être l'utilisateur connecté
       allow create: if isAuthenticated() &&
+                       reviewId == request.resource.data.orderId + '_' + request.auth.uid &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.rating is number &&
                        request.resource.data.rating >= 1 &&
@@ -918,6 +941,7 @@ service cloud.firestore {
       
       // Création : L'auteur doit être l'utilisateur connecté
       allow create: if isAuthenticated() &&
+                       reviewId == request.resource.data.orderId + '_' + request.resource.data.driverId + '_' + request.auth.uid &&
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.rating is number &&
                        request.resource.data.rating >= 1 &&

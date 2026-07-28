@@ -158,7 +158,7 @@ describe('Food restoration Firestore rules', () => {
 
     await seedFoodOrder('delivered');
 
-    await assertSucceeds(setDoc(doc(db, 'restaurant_reviews', 'review-delivered'), {
+    await assertSucceeds(setDoc(doc(db, 'restaurant_reviews', `${orderId}_${clientId}`), {
       userId: clientId,
       restaurantId,
       orderId,
@@ -178,7 +178,7 @@ describe('Food restoration Firestore rules', () => {
     await seedFoodOrder('delivered');
     const db = testEnv.authenticatedContext(clientId).firestore();
 
-    await assertSucceeds(setDoc(doc(db, 'delivery_reviews', 'delivery-review'), {
+    await assertSucceeds(setDoc(doc(db, 'delivery_reviews', `${orderId}_${driverId}_${clientId}`), {
       userId: clientId,
       driverId,
       orderId,
@@ -188,6 +188,75 @@ describe('Food restoration Firestore rules', () => {
     await assertFails(setDoc(doc(db, 'delivery_reviews', 'delivery-review-wrong-driver'), {
       userId: clientId,
       driverId: 'another-driver',
+      orderId,
+      rating: 5,
+    }));
+  });
+
+  test('restaurant owner cannot publish invalid menu items', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'restaurants', restaurantId), {
+        ownerId: restaurantOwnerId,
+        status: 'approved',
+      });
+    });
+
+    const ownerDb = testEnv.authenticatedContext(restaurantOwnerId).firestore();
+    const itemRef = doc(ownerDb, 'restaurants', restaurantId, 'menu_items', 'bad-price');
+
+    await assertFails(setDoc(itemRef, {
+      name: 'Pizza',
+      description: 'Pizza maison',
+      price: -1,
+      category: 'plats',
+      isAvailable: true,
+    }));
+
+    await assertSucceeds(setDoc(doc(ownerDb, 'restaurants', restaurantId, 'menu_items', 'valid-item'), {
+      name: 'Pizza',
+      description: 'Pizza maison',
+      price: 12.5,
+      category: 'plats',
+      isAvailable: true,
+    }));
+  });
+
+  test('reviews are unique per order by requiring deterministic review ids', async () => {
+    await seedFoodOrder('delivered');
+    const db = testEnv.authenticatedContext(clientId).firestore();
+
+    await assertFails(setDoc(doc(db, 'restaurant_reviews', 'custom-review-id'), {
+      userId: clientId,
+      restaurantId,
+      orderId,
+      rating: 5,
+    }));
+
+    await assertSucceeds(setDoc(doc(db, 'restaurant_reviews', `${orderId}_${clientId}`), {
+      userId: clientId,
+      restaurantId,
+      orderId,
+      rating: 5,
+    }));
+
+    await assertFails(setDoc(doc(db, 'restaurant_reviews', `${orderId}_${clientId}`), {
+      userId: clientId,
+      restaurantId,
+      orderId,
+      rating: 4,
+    }));
+
+    await assertFails(setDoc(doc(db, 'delivery_reviews', 'custom-delivery-review-id'), {
+      userId: clientId,
+      driverId,
+      orderId,
+      rating: 5,
+    }));
+
+    await assertSucceeds(setDoc(doc(db, 'delivery_reviews', `${orderId}_${driverId}_${clientId}`), {
+      userId: clientId,
+      driverId,
       orderId,
       rating: 5,
     }));

@@ -53,7 +53,26 @@
       "$orderId": {
         "location": {
           ".read": "auth != null && (root.child('delivery_tracking').child($orderId).child('participants').child(auth.uid).val() == true || auth.token.role == 'admin')",
-          ".write": "auth != null && root.child('delivery_tracking').child($orderId).child('driverId').val() == auth.uid"
+          ".write": "auth != null && root.child('delivery_tracking').child($orderId).child('driverId').val() == auth.uid",
+          ".validate": "newData.hasChildren(['lat', 'lng', 'heading', 'speed', 'updatedAt'])",
+          "lat": {
+            ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+          },
+          "lng": {
+            ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+          },
+          "heading": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 360"
+          },
+          "speed": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100"
+          },
+          "updatedAt": {
+            ".validate": "newData.isNumber() && newData.val() <= now && newData.val() >= now - 86400000"
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       }
     }

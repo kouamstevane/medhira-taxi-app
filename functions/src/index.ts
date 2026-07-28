@@ -36,7 +36,7 @@ import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from 'firebas
 import * as crypto from 'crypto';
 import { getDatabase } from 'firebase-admin/database';
 import { DELIVERY_SHARE_RATE } from './config/stripe.js';
-import { selectNearestDriver } from './utils/matching.js';
+import { selectNearestDriver, type DriverCandidate } from './utils/matching.js';
 import { enforceRateLimit } from './utils/rateLimiter.js';
 import { createStripeClient } from './stripe/stripe-client.js';
 import {
@@ -44,6 +44,10 @@ import {
   getDeliveryOrderCancellationAfterRefusal,
   getFoodOrderStatusForDeliveryStatus,
   getNextDeliveryAssignmentAttempt,
+  getStalePendingPaymentCancellationUpdate,
+  isFoodOrderAssignableToDriver,
+  isFoodOrderPaymentExpired,
+  shouldSkipStaleDeliveryAssignment,
 } from './food/foodDeliveryLifecycle.js';
 
 // Lazy imports pour éviter le timeout de déploiement (10s)
@@ -114,7 +118,10 @@ async function setDeliveryTrackingAccess(
 
 async function scheduleDeliveryOrderTimeout(orderId: string, attemptNumber: number): Promise<void> {
   const cloudTasksClient = await getCloudTasksClient();
-  const PROJECT_ID = process.env.GCLOUD_PROJECT ?? '';
+  const PROJECT_ID = process.env.GCLOUD_PROJECT ?? process.env.GOOGLE_CLOUD_PROJECT;
+  if (!PROJECT_ID) {
+    throw new Error('GCLOUD_PROJECT is required to schedule delivery order timeouts');
+  }
   const LOCATION = 'europe-west1';
   const queuePath = cloudTasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout');
   await cloudTasksClient.createTask({
@@ -826,7 +833,8 @@ export const onFoodOrderAccepted = onDocumentUpdated(
       await setActiveDeliveryOrderClaim(after.userId, null)
       return
     }
-    const nearest = selectNearestDriver(candidatesWithLocation, after.restaurantAddress)
+    let remainingCandidates = candidatesWithLocation
+    let nearest = selectNearestDriver(remainingCandidates, after.restaurantAddress)
 
     // 4. Aucun livreur disponible
     if (!nearest) {
@@ -839,64 +847,108 @@ export const onFoodOrderAccepted = onDocumentUpdated(
     }
 
     // 5. Créer food_delivery_orders + marquer le driver comme occupé (transaction)
-    await db.runTransaction(async (transaction) => {
-      transaction.set(db.collection('food_delivery_orders').doc(orderId), {
+    let assignedDriver = false
+    let assignedCandidate: DriverCandidate | null = null
+    while (nearest && !assignedDriver) {
+      const candidate = nearest
+      await db.runTransaction(async (transaction) => {
+      const foodOrderRef = db.collection('food_orders').doc(orderId)
+      const deliveryOrderRef = db.collection('food_delivery_orders').doc(orderId)
+      const driverRef = db.collection('drivers').doc(candidate.id)
+      const [currentOrderSnap, deliveryOrderSnap, driverSnap] = await Promise.all([
+        transaction.get(foodOrderRef),
+        transaction.get(deliveryOrderRef),
+        transaction.get(driverRef),
+      ])
+      const currentOrder = currentOrderSnap.data()
+      const currentDriver = driverSnap.data()
+      if (shouldSkipStaleDeliveryAssignment(currentOrder, deliveryOrderSnap.exists)) return
+      if (currentDriver?.activeDeliveryOrderId != null) {
+        return
+      }
+
+      transaction.set(deliveryOrderRef, {
         orderId,
-        driverId: nearest.id,
-        restaurantId: after.restaurantId,
-        clientId: after.userId,
-        cityId: after.cityId || 'edmonton',
+        driverId: candidate.id,
+        restaurantId: currentOrder?.restaurantId ?? after.restaurantId,
+        clientId: currentOrder?.userId ?? after.userId,
+        cityId: currentOrder?.cityId || after.cityId || 'edmonton',
         status: 'assigned',
         assignmentAttempt: 1,
-        deliveryPreference: after.deliveryPreference ?? 'leave_at_door',
-        restaurantAddress: after.restaurantAddress,
-        clientNeighbourhood: after.clientNeighbourhood ?? '',
+        deliveryPreference: currentOrder?.deliveryPreference ?? after.deliveryPreference ?? 'leave_at_door',
+        restaurantAddress: currentOrder?.restaurantAddress ?? after.restaurantAddress,
+        clientNeighbourhood: currentOrder?.clientNeighbourhood ?? after.clientNeighbourhood ?? '',
         clientAddress: {
-          address: after.deliveryAddress ?? '',
-          lat: after.deliveryLocation?.lat ?? 0,
-          lng: after.deliveryLocation?.lng ?? 0,
-          instructions: after.deliveryInstructions ?? undefined,
+          address: currentOrder?.deliveryAddress ?? after.deliveryAddress ?? '',
+          lat: currentOrder?.deliveryLocation?.lat ?? after.deliveryLocation?.lat ?? 0,
+          lng: currentOrder?.deliveryLocation?.lng ?? after.deliveryLocation?.lng ?? 0,
+          instructions: currentOrder?.deliveryInstructions ?? after.deliveryInstructions ?? undefined,
         },
-        orderItems: (after.orderItems ?? []).map((item: { itemName: string; itemQuantity: number; itemPrice: number }) => ({
+        orderItems: (currentOrder?.orderItems ?? after.orderItems ?? []).map((item: { itemName: string; itemQuantity: number; itemPrice: number }) => ({
           name: item.itemName,
           qty: item.itemQuantity,
           price: item.itemPrice,
         })),
-        orderNumber: after.orderNumber ?? '',
-        restaurantName: after.restaurantName ?? '',
-        restaurantPhone: after.restaurantPhone ?? '',
-        clientPhone: after.customerPhone ?? '',
-        totalAmount: after.totalOrderPrice ?? 0,
-        driverEarnings: (after.deliveryCost ?? 0) * DELIVERY_SHARE_RATE,
+        orderNumber: currentOrder?.orderNumber ?? after.orderNumber ?? '',
+        restaurantName: currentOrder?.restaurantName ?? after.restaurantName ?? '',
+        restaurantPhone: currentOrder?.restaurantPhone ?? after.restaurantPhone ?? '',
+        clientPhone: currentOrder?.customerPhone ?? after.customerPhone ?? '',
+        totalAmount: currentOrder?.totalOrderPrice ?? after.totalOrderPrice ?? 0,
+        driverEarnings: (currentOrder?.deliveryCost ?? after.deliveryCost ?? 0) * DELIVERY_SHARE_RATE,
         cancellationImpactOnStats: true,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      transaction.update(db.collection('drivers').doc(nearest.id), {
+      transaction.update(driverRef, {
         activeDeliveryOrderId: orderId,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      transaction.update(db.collection('food_orders').doc(orderId), {
-        driverId: nearest.id,
-        driverName: `${nearest.data.firstName ?? ''} ${nearest.data.lastName ?? ''}`.trim() || nearest.data.displayName || 'Livreur',
-        driverPhone: nearest.data.phone ?? '',
+      transaction.update(foodOrderRef, {
+        driverId: candidate.id,
+        driverName: `${candidate.data.firstName ?? ''} ${candidate.data.lastName ?? ''}`.trim() || candidate.data.displayName || 'Livreur',
+        driverPhone: candidate.data.phone ?? '',
         deliveryAssignmentAttempt: 1,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      assignedDriver = true
+      assignedCandidate = candidate
     });
+      if (!assignedDriver) {
+        remainingCandidates = remainingCandidates.filter((candidate) => candidate.id !== nearest?.id)
+        nearest = selectNearestDriver(remainingCandidates, after.restaurantAddress)
+      }
+    }
 
-    await setDeliveryTrackingAccess(orderId, nearest.id, [nearest.id, after.userId])
+    if (!assignedDriver) {
+      const orderRef = db.collection('food_orders').doc(orderId)
+      await db.runTransaction(async (transaction) => {
+        const currentOrderSnap = await transaction.get(orderRef)
+        if (isFoodOrderAssignableToDriver(currentOrderSnap.data())) {
+          transaction.update(orderRef, {
+            status: 'no_driver_available',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          })
+        }
+      })
+      await setActiveDeliveryOrderClaim(after.userId, null)
+      return
+    }
+
+    const finalCandidate = assignedCandidate as DriverCandidate | null
+    if (!finalCandidate) return
+
+    await setDeliveryTrackingAccess(orderId, finalCandidate.id, [finalCandidate.id, after.userId])
 
     // 7. Émettre custom claim conservé pour compatibilité des clients déjà connectés
     await Promise.all([
-      setActiveDeliveryOrderClaim(nearest.id, orderId),
+      setActiveDeliveryOrderClaim(finalCandidate.id, orderId),
       setActiveDeliveryOrderClaim(after.userId, orderId),
     ])
 
     // 8. Notification FCM au livreur
-    const driverSnap = await db.collection('drivers').doc(nearest.id).get()
+    const driverSnap = await db.collection('drivers').doc(finalCandidate.id).get()
     const fcmToken = driverSnap.data()?.fcmToken
     if (fcmToken) {
       await admin.messaging().send({
@@ -940,10 +992,22 @@ async function reassignFoodDeliveryOrderAfterDriverRefusal(
   const foodOrderRef = db.collection('food_orders').doc(orderId)
 
   if (!canRetryDeliveryAssignment(currentAttempt)) {
-    await foodOrderRef.update({
-      status: 'no_driver_available',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    await db.runTransaction(async (tx) => {
+      tx.update(foodOrderRef, {
+        status: 'no_driver_available',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      tx.update(deliveryRef, {
+        ...getDeliveryOrderCancellationAfterRefusal(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
     })
+    await setActiveDeliveryOrderClaim(clientId, null)
+    return
+  }
+
+  const foodOrderSnap = await foodOrderRef.get()
+  if (!foodOrderSnap.exists) {
     await deliveryRef.update({
       ...getDeliveryOrderCancellationAfterRefusal(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -951,10 +1015,15 @@ async function reassignFoodDeliveryOrderAfterDriverRefusal(
     await setActiveDeliveryOrderClaim(clientId, null)
     return
   }
-
-  const foodOrderSnap = await foodOrderRef.get()
-  if (!foodOrderSnap.exists) return
   const foodOrder = foodOrderSnap.data()!
+  if (!['accepted', 'preparing', 'ready'].includes(String(foodOrder.status))) {
+    await deliveryRef.update({
+      ...getDeliveryOrderCancellationAfterRefusal(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    await setActiveDeliveryOrderClaim(clientId, null)
+    return
+  }
 
   const candidates = await db.collection('drivers')
     .where('cityId', '==', foodOrder.cityId ?? deliveryOrder.cityId ?? 'edmonton')
@@ -980,13 +1049,15 @@ async function reassignFoodDeliveryOrderAfterDriverRefusal(
     .filter((c): c is { id: string; data: FirebaseFirestore.DocumentData; loc: { lat: number; lng: number } } => c.loc != null)
 
   if (!foodOrder.restaurantAddress) {
-    await foodOrderRef.update({
-      status: 'no_driver_available',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-    await deliveryRef.update({
-      ...getDeliveryOrderCancellationAfterRefusal(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    await db.runTransaction(async (tx) => {
+      tx.update(foodOrderRef, {
+        status: 'no_driver_available',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      tx.update(deliveryRef, {
+        ...getDeliveryOrderCancellationAfterRefusal(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
     })
     await setActiveDeliveryOrderClaim(clientId, null)
     return
@@ -994,36 +1065,75 @@ async function reassignFoodDeliveryOrderAfterDriverRefusal(
 
   const nextDriver = selectNearestDriver(candidatesWithLocation, foodOrder.restaurantAddress)
   if (!nextDriver) {
-    await foodOrderRef.update({
-      status: 'no_driver_available',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-    await deliveryRef.update({
-      ...getDeliveryOrderCancellationAfterRefusal(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    await db.runTransaction(async (tx) => {
+      tx.update(foodOrderRef, {
+        status: 'no_driver_available',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      tx.update(deliveryRef, {
+        ...getDeliveryOrderCancellationAfterRefusal(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
     })
     await setActiveDeliveryOrderClaim(clientId, null)
     return
   }
 
   const nextAttempt = getNextDeliveryAssignmentAttempt(currentAttempt)
-  await deliveryRef.update({
-    driverId: nextDriver.id,
-    status: 'assigned',
-    assignmentAttempt: nextAttempt,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  let reassigned = false
+  await db.runTransaction(async (tx) => {
+    const [latestFoodOrderSnap, latestDeliverySnap, nextDriverSnap] = await Promise.all([
+      tx.get(foodOrderRef),
+      tx.get(deliveryRef),
+      tx.get(db.collection('drivers').doc(nextDriver.id)),
+    ])
+    const latestFoodOrder = latestFoodOrderSnap.data()
+    const latestDeliveryOrder = latestDeliverySnap.data()
+    const latestDriver = nextDriverSnap.data()
+    if (!latestFoodOrderSnap.exists || !latestDeliverySnap.exists) return
+    if (!['accepted', 'preparing', 'ready'].includes(String(latestFoodOrder?.status))) {
+      tx.update(deliveryRef, {
+        ...getDeliveryOrderCancellationAfterRefusal(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return
+    }
+    if (latestDeliveryOrder?.status !== 'refused') return
+    if (latestDriver?.activeDeliveryOrderId != null) {
+      tx.update(foodOrderRef, {
+        status: 'no_driver_available',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      tx.update(deliveryRef, {
+        ...getDeliveryOrderCancellationAfterRefusal(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      return
+    }
+
+    tx.update(deliveryRef, {
+      driverId: nextDriver.id,
+      status: 'assigned',
+      assignmentAttempt: nextAttempt,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    tx.update(foodOrderRef, {
+      driverId: nextDriver.id,
+      driverName: `${nextDriver.data.firstName ?? ''} ${nextDriver.data.lastName ?? ''}`.trim() || nextDriver.data.displayName || 'Livreur',
+      driverPhone: nextDriver.data.phone ?? '',
+      deliveryAssignmentAttempt: nextAttempt,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    tx.update(db.collection('drivers').doc(nextDriver.id), {
+      activeDeliveryOrderId: orderId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    reassigned = true
   })
-  await foodOrderRef.update({
-    driverId: nextDriver.id,
-    driverName: `${nextDriver.data.firstName ?? ''} ${nextDriver.data.lastName ?? ''}`.trim() || nextDriver.data.displayName || 'Livreur',
-    driverPhone: nextDriver.data.phone ?? '',
-    deliveryAssignmentAttempt: nextAttempt,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
-  await db.collection('drivers').doc(nextDriver.id).update({
-    activeDeliveryOrderId: orderId,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  })
+  if (!reassigned) {
+    await setActiveDeliveryOrderClaim(clientId, null)
+    return
+  }
   await setDeliveryTrackingAccess(orderId, nextDriver.id, [nextDriver.id, clientId])
   await setActiveDeliveryOrderClaim(nextDriver.id, orderId)
 
@@ -1228,6 +1338,34 @@ export const onFoodOrderRefundRequired = onDocumentUpdated(
   },
 )
 
+export const cleanupAbandonedFoodCardPayments = onSchedule(
+  { schedule: 'every 15 minutes', region: 'europe-west1' },
+  async () => {
+    const db = admin.firestore()
+    const threshold = admin.firestore.Timestamp.fromMillis(Date.now() - 30 * 60 * 1000)
+    const staleOrders = await db.collection('food_orders')
+      .where('status', '==', 'pending_payment')
+      .where('paymentMethod', '==', 'card')
+      .where('createdAt', '<=', threshold)
+      .limit(100)
+      .get()
+
+    const batch = db.batch()
+    let writeCount = 0
+    staleOrders.docs.forEach((orderDoc) => {
+      const order = orderDoc.data()
+      if (!isFoodOrderPaymentExpired(order)) return
+      batch.update(orderDoc.ref, {
+        ...getStalePendingPaymentCancellationUpdate(),
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      writeCount += 1
+    })
+    if (writeCount > 0) await batch.commit()
+  },
+)
+
 // ============================================================================
 // Task 8 — onDeliveryOrderCompleted + onDeliveryOrderTimeout
 // ============================================================================
@@ -1343,24 +1481,50 @@ export const onDeliveryOrderTimeout = onRequest(
     })
     await setActiveDeliveryOrderClaim(order.driverId, null)
 
+    const foodOrderRef = db.collection('food_orders').doc(orderId)
+
     if (attemptNumber >= 3) {
-      await db.collection('food_orders').doc(orderId).update({
-        status: 'no_driver_available',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      })
-      await orderRef.update({
-        status: 'cancelled',
-        cancellationReason: 'driver_cancelled',
-        cancellationImpactOnStats: false,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      await db.runTransaction(async (tx) => {
+        tx.update(foodOrderRef, {
+          status: 'no_driver_available',
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
+        tx.update(orderRef, {
+          status: 'cancelled',
+          cancellationReason: 'driver_cancelled',
+          cancellationImpactOnStats: false,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        })
       })
       await setActiveDeliveryOrderClaim(order.clientId, null)
       res.status(200).send('No driver available after 3 attempts')
       return
     }
 
-    const foodOrderSnap = await db.collection('food_orders').doc(orderId).get()
+    const foodOrderSnap = await foodOrderRef.get()
+    if (!foodOrderSnap.exists) {
+      await orderRef.update({
+        status: 'cancelled',
+        cancellationReason: 'food_order_missing',
+        cancellationImpactOnStats: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      await setActiveDeliveryOrderClaim(order.clientId, null)
+      res.status(200).send('Food order not found')
+      return
+    }
     const foodOrder = foodOrderSnap.data()!
+    if (!['accepted', 'preparing', 'ready'].includes(String(foodOrder.status))) {
+      await orderRef.update({
+        status: 'cancelled',
+        cancellationReason: 'food_order_not_assignable',
+        cancellationImpactOnStats: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      await setActiveDeliveryOrderClaim(order.clientId, null)
+      res.status(200).send('Food order not assignable')
+      return
+    }
 
     const candidates = await db.collection('drivers')
       .where('cityId', '==', foodOrder.cityId)
@@ -1388,27 +1552,56 @@ export const onDeliveryOrderTimeout = onRequest(
     const nextDriver = selectNearestDriver(candidatesWithLocation, foodOrder.restaurantAddress)
 
     if (!nextDriver) {
-      await db.collection('food_orders').doc(orderId).update({ status: 'no_driver_available', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
-      await orderRef.update({ status: 'cancelled', cancellationReason: 'driver_cancelled', cancellationImpactOnStats: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+      await db.runTransaction(async (tx) => {
+        tx.update(foodOrderRef, { status: 'no_driver_available', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+        tx.update(orderRef, { status: 'cancelled', cancellationReason: 'driver_cancelled', cancellationImpactOnStats: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+      })
       await setActiveDeliveryOrderClaim(order.clientId, null)
       res.status(200).send('No candidate found')
       return
     }
 
-    await orderRef.update({
-      driverId: nextDriver.id,
-      status: 'assigned',
-      assignmentAttempt: attemptNumber + 1,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    let reassigned = false
+    await db.runTransaction(async (tx) => {
+      const [latestOrderSnap, latestFoodOrderSnap, nextDriverSnap] = await Promise.all([
+        tx.get(orderRef),
+        tx.get(foodOrderRef),
+        tx.get(db.collection('drivers').doc(nextDriver.id)),
+      ])
+      const latestOrder = latestOrderSnap.data()
+      const latestFoodOrder = latestFoodOrderSnap.data()
+      const latestDriver = nextDriverSnap.data()
+      if (latestOrder?.status !== 'assigned') return
+      if (!['accepted', 'preparing', 'ready'].includes(String(latestFoodOrder?.status))) {
+        tx.update(orderRef, { status: 'cancelled', cancellationReason: 'food_order_not_assignable', cancellationImpactOnStats: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+        return
+      }
+      if (latestDriver?.activeDeliveryOrderId != null) {
+        tx.update(foodOrderRef, { status: 'no_driver_available', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+        tx.update(orderRef, { status: 'cancelled', cancellationReason: 'driver_cancelled', cancellationImpactOnStats: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+        return
+      }
+      tx.update(orderRef, {
+        driverId: nextDriver.id,
+        status: 'assigned',
+        assignmentAttempt: attemptNumber + 1,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      tx.update(foodOrderRef, {
+        driverId: nextDriver.id,
+        driverName: `${nextDriver.data.firstName ?? ''} ${nextDriver.data.lastName ?? ''}`.trim() || nextDriver.data.displayName || 'Livreur',
+        driverPhone: nextDriver.data.phone ?? '',
+        deliveryAssignmentAttempt: attemptNumber + 1,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+      tx.update(db.collection('drivers').doc(nextDriver.id), { activeDeliveryOrderId: orderId, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+      reassigned = true
     })
-    await db.collection('food_orders').doc(orderId).update({
-      driverId: nextDriver.id,
-      driverName: `${nextDriver.data.firstName ?? ''} ${nextDriver.data.lastName ?? ''}`.trim() || nextDriver.data.displayName || 'Livreur',
-      driverPhone: nextDriver.data.phone ?? '',
-      deliveryAssignmentAttempt: attemptNumber + 1,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    })
-    await db.collection('drivers').doc(nextDriver.id).update({ activeDeliveryOrderId: orderId, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    if (!reassigned) {
+      await setActiveDeliveryOrderClaim(order.clientId, null)
+      res.status(200).send('Order no longer assignable')
+      return
+    }
     await setDeliveryTrackingAccess(orderId, nextDriver.id, [nextDriver.id, order.clientId])
     await setActiveDeliveryOrderClaim(nextDriver.id, orderId)
 
@@ -1458,6 +1651,60 @@ export const onDriverRatingCreated = onDocumentCreated(
       })
     })
   }
+)
+
+export const onRestaurantReviewCreated = onDocumentCreated(
+  { document: 'restaurant_reviews/{reviewId}', region: 'europe-west1' },
+  async (event) => {
+    const review = event.data?.data()
+    if (!review) return
+    const rating = Number(review.rating)
+    if (!review.restaurantId || !Number.isFinite(rating) || rating < 1 || rating > 5) return
+
+    const db = admin.firestore()
+    const restaurantRef = db.collection('restaurants').doc(review.restaurantId)
+    await db.runTransaction(async (tx) => {
+      const restaurantSnap = await tx.get(restaurantRef)
+      const restaurant = restaurantSnap.data()
+      if (!restaurant) return
+      const currentCount = Number(restaurant.totalReviews ?? 0)
+      const currentRating = Number(restaurant.rating ?? 0)
+      const newCount = currentCount + 1
+      const newRating = ((currentRating * currentCount) + rating) / newCount
+      tx.update(restaurantRef, {
+        rating: Math.round(newRating * 10) / 10,
+        totalReviews: newCount,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    })
+  },
+)
+
+export const onDeliveryReviewCreated = onDocumentCreated(
+  { document: 'delivery_reviews/{reviewId}', region: 'europe-west1' },
+  async (event) => {
+    const review = event.data?.data()
+    if (!review) return
+    const rating = Number(review.rating)
+    if (!review.driverId || !Number.isFinite(rating) || rating < 1 || rating > 5) return
+
+    const db = admin.firestore()
+    const driverRef = db.collection('drivers').doc(review.driverId)
+    await db.runTransaction(async (tx) => {
+      const driverSnap = await tx.get(driverRef)
+      const driver = driverSnap.data()
+      if (!driver) return
+      const currentCount = Number(driver.ratingsCount ?? 0)
+      const currentRating = Number(driver.rating ?? 0)
+      const newCount = currentCount + 1
+      const newRating = ((currentRating * currentCount) + rating) / newCount
+      tx.update(driverRef, {
+        rating: Math.round(newRating * 10) / 10,
+        ratingsCount: newCount,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      })
+    })
+  },
 )
 
 const PIN_FAILURE_MAX_ATTEMPTS = 5;

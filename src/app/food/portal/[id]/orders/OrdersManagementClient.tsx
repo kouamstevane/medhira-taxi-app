@@ -32,7 +32,10 @@ export default function OrdersManagementClient() {
   const [currentUserUid, setCurrentUserUid] = useState<string | null>(null);
 
   useEffect(() => {
+    let unsubscribeOrders: (() => void) | undefined;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      unsubscribeOrders?.();
+      unsubscribeOrders = undefined;
       if (!user) {
         router.push('/login');
         return;
@@ -46,18 +49,28 @@ export default function OrdersManagementClient() {
         }
         setRestaurant(res);
         setCurrentUserUid(user.uid);
-
-        const items = await FoodDeliveryService.getRestaurantOrders(id);
-        setOrders(items);
+        unsubscribeOrders = FoodDeliveryService.subscribeRestaurantOrders(
+          id,
+          (items) => {
+            setOrders(items);
+            setLoading(false);
+          },
+          () => {
+            showError("Erreur lors du chargement des commandes");
+            setLoading(false);
+          },
+        );
       } catch (error) {
         console.error("Error loading orders:", error);
         showError("Erreur lors du chargement des commandes");
-      } finally {
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeOrders?.();
+      unsubscribe();
+    };
   }, [id, router, showError]);
 
   const updateOrderStatus = async (orderId: string, status: FoodOrder['status']) => {

@@ -3,6 +3,10 @@ import {
   getDeliveryOrderCancellationAfterRefusal,
   getFoodOrderStatusForDeliveryStatus,
   getNextDeliveryAssignmentAttempt,
+  getStalePendingPaymentCancellationUpdate,
+  isFoodOrderAssignableToDriver,
+  isFoodOrderPaymentExpired,
+  shouldSkipStaleDeliveryAssignment,
   RESTAURANT_CANCELLABLE_FOOD_ORDER_STATUSES,
 } from '../foodDeliveryLifecycle';
 
@@ -44,6 +48,29 @@ describe('foodDeliveryLifecycle', () => {
       status: 'cancelled',
       cancellationReason: 'driver_cancelled',
       cancellationImpactOnStats: false,
+    });
+  });
+
+  test('prevents stale accepted events from assigning drivers after cancellation', () => {
+    expect(isFoodOrderAssignableToDriver({ status: 'accepted', paymentValidated: true })).toBe(true);
+    expect(isFoodOrderAssignableToDriver({ status: 'cancelled_by_restaurant', paymentValidated: true })).toBe(false);
+    expect(isFoodOrderAssignableToDriver({ status: 'accepted', paymentValidated: false })).toBe(false);
+    expect(shouldSkipStaleDeliveryAssignment({ status: 'cancelled_by_restaurant', paymentValidated: true }, false)).toBe(true);
+    expect(shouldSkipStaleDeliveryAssignment({ status: 'accepted', paymentValidated: true }, true)).toBe(true);
+  });
+
+  test('expires abandoned card payments after the configured window', () => {
+    const now = Date.UTC(2026, 6, 28, 12, 0, 0);
+    const staleCreatedAt = new Date(now - 31 * 60 * 1000);
+    const freshCreatedAt = new Date(now - 10 * 60 * 1000);
+
+    expect(isFoodOrderPaymentExpired({ status: 'pending_payment', paymentMethod: 'card', createdAt: staleCreatedAt }, now)).toBe(true);
+    expect(isFoodOrderPaymentExpired({ status: 'pending_payment', paymentMethod: 'card', createdAt: freshCreatedAt }, now)).toBe(false);
+    expect(isFoodOrderPaymentExpired({ status: 'pending_payment', paymentMethod: 'wallet', createdAt: staleCreatedAt }, now)).toBe(false);
+    expect(getStalePendingPaymentCancellationUpdate()).toEqual({
+      status: 'cancelled',
+      cancelledBy: 'system',
+      cancellationReason: 'payment_abandoned',
     });
   });
 });

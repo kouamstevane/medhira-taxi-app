@@ -29,14 +29,14 @@ import {
   query, 
   where, 
   orderBy, 
-  addDoc,
   updateDoc,
   serverTimestamp,
-  runTransaction,
   limit,
   startAfter,
+  onSnapshot,
   DocumentData,
   QueryDocumentSnapshot,
+  Unsubscribe,
   setDoc
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -661,6 +661,35 @@ export const updateFoodOrderStatus = async (
   }
 };
 
+export const subscribeRestaurantOrders = (
+  restaurantId: string,
+  onOrders: (orders: FoodOrder[]) => void,
+  onError?: (error: Error) => void,
+  limitCount: number = 100,
+): Unsubscribe => {
+  const ordersRef = collection(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS);
+  const q = query(
+    ordersRef,
+    where('restaurantId', '==', restaurantId),
+    orderBy('createdAt', 'desc'),
+    limit(limitCount),
+  );
+
+  return onSnapshot(
+    q,
+    (querySnapshot) => {
+      onOrders(querySnapshot.docs.map((docSnap) => ({
+        ...docSnap.data(),
+        id: docSnap.id,
+      })) as FoodOrder[]);
+    },
+    (error) => {
+      console.error('[food-delivery.service] subscribeRestaurantOrders failed:', error);
+      onError?.(error);
+    },
+  );
+};
+
 /**
  * Assigner un chauffeur à une commande
  */
@@ -705,19 +734,14 @@ export const submitRestaurantReview = async (
     throw new Error('La note doit être entre 1 et 5');
   }
 
-  const reviewsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANT_REVIEWS);
-  const docRef = await addDoc(reviewsRef, {
+  const reviewId = `${review.orderId}_${review.userId}`;
+  const reviewRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANT_REVIEWS, reviewId);
+  await setDoc(reviewRef, {
     ...review,
     createdAt: serverTimestamp(),
   });
 
-  try {
-    await updateRestaurantRating(review.restaurantId, review.rating);
-  } catch (error) {
-    logger.warn('Erreur mise à jour rating restaurant', { error, restaurantId: review.restaurantId });
-  }
-
-  return docRef.id;
+  return reviewId;
   } catch (error) {
     console.error('[food-delivery.service] submitRestaurantReview failed:', error);
     throw error;
@@ -738,13 +762,14 @@ export const submitDeliveryReview = async (
     throw new Error('La note doit être entre 1 et 5');
   }
 
-  const reviewsRef = collection(db, FIRESTORE_COLLECTIONS.DELIVERY_REVIEWS);
-  const docRef = await addDoc(reviewsRef, {
+  const reviewId = `${review.orderId}_${review.driverId}_${review.userId}`;
+  const reviewRef = doc(db, FIRESTORE_COLLECTIONS.DELIVERY_REVIEWS, reviewId);
+  await setDoc(reviewRef, {
     ...review,
     createdAt: serverTimestamp(),
   });
 
-  return docRef.id;
+  return reviewId;
   } catch (error) {
     console.error('[food-delivery.service] submitDeliveryReview failed:', error);
     throw error;
@@ -777,32 +802,6 @@ export const getRestaurantReviews = async (
     console.error('[food-delivery.service] getRestaurantReviews failed:', error);
     throw error;
   }
-};
-
-/**
- * Mettre à jour la note moyenne d'un restaurant avec une moyenne incrémentale
- * pour éviter de lire tous les avis à chaque mise à jour.
- */
-const updateRestaurantRating = async (restaurantId: string, newRating: number): Promise<void> => {
-  const { increment } = await import('firebase/firestore');
-  const restaurantRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId);
-
-  await runTransaction(db, async (tx) => {
-    const restaurantSnap = await tx.get(restaurantRef);
-    if (!restaurantSnap.exists()) return;
-
-    const data = restaurantSnap.data();
-    const oldCount: number = data.totalReviews ?? 0;
-    const oldRating: number = data.rating ?? 0;
-    const newCount = oldCount + 1;
-    const newAvg = (oldRating * oldCount + newRating) / newCount;
-
-    tx.update(restaurantRef, {
-      rating: Math.round(newAvg * 10) / 10,
-      totalReviews: increment(1),
-      updatedAt: serverTimestamp(),
-    });
-  });
 };
 
 /**
@@ -938,6 +937,11 @@ export const FoodDeliveryService = {
       throw error;
     }
   },
+
+  /**
+   * Récupérer les commandes d'un restaurant
+   */
+  subscribeRestaurantOrders,
 
   /**
    * Récupérer les commandes d'un restaurant

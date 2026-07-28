@@ -1,4 +1,5 @@
 export const MAX_DELIVERY_ASSIGNMENT_ATTEMPTS = 3;
+export const PENDING_CARD_PAYMENT_EXPIRY_MS = 30 * 60 * 1000;
 
 export const FOOD_DELIVERY_TERMINAL_STATUSES = ['refused', 'delivered', 'cancelled'] as const;
 
@@ -44,5 +45,44 @@ export function getDeliveryOrderCancellationAfterRefusal() {
     status: 'cancelled',
     cancellationReason: 'driver_cancelled',
     cancellationImpactOnStats: false,
+  };
+}
+
+export function isFoodOrderAssignableToDriver(order: { status?: unknown; paymentValidated?: unknown } | null | undefined): boolean {
+  return order?.status === 'accepted' && order.paymentValidated === true;
+}
+
+export function shouldSkipStaleDeliveryAssignment(
+  order: { status?: unknown; paymentValidated?: unknown } | null | undefined,
+  deliveryOrderAlreadyExists: boolean,
+): boolean {
+  return deliveryOrderAlreadyExists || !isFoodOrderAssignableToDriver(order);
+}
+
+function toMillis(value: unknown): number | null {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (value && typeof (value as { toMillis?: unknown }).toMillis === 'function') {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  return null;
+}
+
+export function isFoodOrderPaymentExpired(
+  order: { status?: unknown; paymentMethod?: unknown; createdAt?: unknown },
+  nowMs = Date.now(),
+): boolean {
+  const createdAtMs = toMillis(order.createdAt);
+  return order.status === 'pending_payment'
+    && order.paymentMethod === 'card'
+    && createdAtMs != null
+    && nowMs - createdAtMs >= PENDING_CARD_PAYMENT_EXPIRY_MS;
+}
+
+export function getStalePendingPaymentCancellationUpdate() {
+  return {
+    status: 'cancelled',
+    cancelledBy: 'system',
+    cancellationReason: 'payment_abandoned',
   };
 }

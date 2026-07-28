@@ -3,6 +3,7 @@ import {
   calculateBasePrice,
   calculateDeliveryCost,
   calculateTotalOrderPrice,
+  subscribeRestaurantOrders,
 } from '@/services/food-delivery.service';
 import type { OrderItem } from '@/types/food-delivery';
 
@@ -95,6 +96,12 @@ describe('FoodDeliveryService — Unit Tests', () => {
         cancelledBy: 'client',
         cancellationReason: 'payment_failed',
       });
+    });
+  });
+
+  describe('restaurant order live subscription', () => {
+    it('exposes a realtime subscription API for restaurant portals', () => {
+      expect(typeof subscribeRestaurantOrders).toBe('function');
     });
   });
 });
