@@ -1,4 +1,5 @@
 import {
+  buildPaymentFailureCancellationUpdate,
   calculateBasePrice,
   calculateDeliveryCost,
   calculateTotalOrderPrice,
@@ -83,6 +84,16 @@ describe('FoodDeliveryService — Unit Tests', () => {
       const validMethods: ('wallet' | 'card')[] = ['wallet', 'card'];
       validMethods.forEach(method => {
         expect(['wallet', 'card']).toContain(method);
+      });
+    });
+  });
+
+  describe('payment failure cleanup', () => {
+    it('prépare une annulation client sans modifier paymentValidated', () => {
+      expect(buildPaymentFailureCancellationUpdate()).toEqual({
+        status: 'cancelled',
+        cancelledBy: 'client',
+        cancellationReason: 'payment_failed',
       });
     });
   });

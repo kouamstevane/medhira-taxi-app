@@ -39,6 +39,12 @@ import { DELIVERY_SHARE_RATE } from './config/stripe.js';
 import { selectNearestDriver } from './utils/matching.js';
 import { enforceRateLimit } from './utils/rateLimiter.js';
 import { createStripeClient } from './stripe/stripe-client.js';
+import {
+  canRetryDeliveryAssignment,
+  getDeliveryOrderCancellationAfterRefusal,
+  getFoodOrderStatusForDeliveryStatus,
+  getNextDeliveryAssignmentAttempt,
+} from './food/foodDeliveryLifecycle.js';
 
 // Lazy imports pour éviter le timeout de déploiement (10s)
 type OAuth2Client = import('google-auth-library').OAuth2Client;
@@ -75,6 +81,57 @@ const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 // Initialiser Firebase Admin (vérifier si déjà initialisé pour éviter les erreurs)
 if (!admin.apps.length) {
   admin.initializeApp();
+}
+
+async function setActiveDeliveryOrderClaim(uid: string | undefined | null, orderId: string | null): Promise<void> {
+  if (!uid) return;
+  try {
+    const user = await admin.auth().getUser(uid);
+    await admin.auth().setCustomUserClaims(uid, {
+      ...(user.customClaims ?? {}),
+      activeDeliveryOrderId: orderId,
+    });
+  } catch (err) {
+    console.warn('[setActiveDeliveryOrderClaim] Failed to update claims', { uid, orderId, err });
+  }
+}
+
+async function setDeliveryTrackingAccess(
+  orderId: string,
+  driverId: string,
+  participantIds: Array<string | undefined | null>,
+): Promise<void> {
+  const participants = participantIds.reduce<Record<string, boolean>>((acc, uid) => {
+    if (uid) acc[uid] = true;
+    return acc;
+  }, {});
+
+  await admin.database().ref(`delivery_tracking/${orderId}`).update({
+    driverId,
+    participants,
+  });
+}
+
+async function scheduleDeliveryOrderTimeout(orderId: string, attemptNumber: number): Promise<void> {
+  const cloudTasksClient = await getCloudTasksClient();
+  const PROJECT_ID = process.env.GCLOUD_PROJECT ?? '';
+  const LOCATION = 'europe-west1';
+  const queuePath = cloudTasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout');
+  await cloudTasksClient.createTask({
+    parent: queuePath,
+    task: {
+      httpRequest: {
+        httpMethod: 'POST',
+        url: `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/onDeliveryOrderTimeout`,
+        oidcToken: {
+          serviceAccountEmail: `${PROJECT_ID}@appspot.gserviceaccount.com`,
+        },
+        body: Buffer.from(JSON.stringify({ orderId, attemptNumber })).toString('base64'),
+        headers: { 'Content-Type': 'application/json' },
+      },
+      scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 90 },
+    },
+  });
 }
 
 /**
@@ -304,6 +361,7 @@ export const encryptSensitiveData = onCall(
 
 export { submitDriverApplication, createDriverProfile } from './driver/submitDriverApplication.js';
 export { submitRestaurantApplication } from './restaurant/submitRestaurantApplication.js';
+export { restaurantManageFoodOrderStatus } from './restaurant/manageFoodOrderStatus.js';
 export { activateClientRole } from './roles/activateClientRole.js';
 export { notifyAdminNewRestaurant } from './admin/notifyAdminNewRestaurant.js';
 export { createStripeConnectAccount } from './stripe/createStripeConnectAccount.js';
@@ -765,6 +823,7 @@ export const onFoodOrderAccepted = onDocumentUpdated(
         status: 'no_driver_available',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
+      await setActiveDeliveryOrderClaim(after.userId, null)
       return
     }
     const nearest = selectNearestDriver(candidatesWithLocation, after.restaurantAddress)
@@ -775,6 +834,7 @@ export const onFoodOrderAccepted = onDocumentUpdated(
         status: 'no_driver_available',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
+      await setActiveDeliveryOrderClaim(after.userId, null)
       return
     }
 
@@ -787,6 +847,7 @@ export const onFoodOrderAccepted = onDocumentUpdated(
         clientId: after.userId,
         cityId: after.cityId || 'edmonton',
         status: 'assigned',
+        assignmentAttempt: 1,
         deliveryPreference: after.deliveryPreference ?? 'leave_at_door',
         restaurantAddress: after.restaurantAddress,
         clientNeighbourhood: after.clientNeighbourhood ?? '',
@@ -821,12 +882,18 @@ export const onFoodOrderAccepted = onDocumentUpdated(
         driverId: nearest.id,
         driverName: `${nearest.data.firstName ?? ''} ${nearest.data.lastName ?? ''}`.trim() || nearest.data.displayName || 'Livreur',
         driverPhone: nearest.data.phone ?? '',
+        deliveryAssignmentAttempt: 1,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
 
-    // 7. Émettre custom claim pour les règles RTDB (tracking)
-    await admin.auth().setCustomUserClaims(nearest.id, { activeDeliveryOrderId: orderId })
+    await setDeliveryTrackingAccess(orderId, nearest.id, [nearest.id, after.userId])
+
+    // 7. Émettre custom claim conservé pour compatibilité des clients déjà connectés
+    await Promise.all([
+      setActiveDeliveryOrderClaim(nearest.id, orderId),
+      setActiveDeliveryOrderClaim(after.userId, orderId),
+    ])
 
     // 8. Notification FCM au livreur
     const driverSnap = await db.collection('drivers').doc(nearest.id).get()
@@ -843,32 +910,134 @@ export const onFoodOrderAccepted = onDocumentUpdated(
     }
 
     // 9. Planifier timeout 90s via Cloud Tasks
-    const cloudTasksClient = await getCloudTasksClient();
-    const PROJECT_ID = process.env.GCLOUD_PROJECT ?? ''
-    const LOCATION = 'europe-west1'
-    const FUNCTION_URL = `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net`
-    const queuePath = cloudTasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout')
-    await cloudTasksClient.createTask({
-      parent: queuePath,
-      task: {
-        httpRequest: {
-          httpMethod: 'POST',
-          url: `${FUNCTION_URL}/onDeliveryOrderTimeout`,
-          oidcToken: {
-            serviceAccountEmail: `${PROJECT_ID}@appspot.gserviceaccount.com`,
-          },
-          body: Buffer.from(JSON.stringify({ orderId, attemptNumber: 1 })).toString('base64'),
-          headers: { 'Content-Type': 'application/json' },
-        },
-        scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 90 },
-      },
-    })
+    await scheduleDeliveryOrderTimeout(orderId, 1)
   }
 )
 
 // ============================================================================
 // Task 7 — onDeliveryStatusChanged + onRestaurantCancelOrder
 // ============================================================================
+
+async function reassignFoodDeliveryOrderAfterDriverRefusal(
+  orderId: string,
+  deliveryOrder: FirebaseFirestore.DocumentData,
+): Promise<void> {
+  const db = admin.firestore()
+  const rtdb = getDatabase()
+  const currentDriverId = deliveryOrder.driverId as string | undefined
+  const clientId = deliveryOrder.clientId as string | undefined
+  const currentAttempt = Number(deliveryOrder.assignmentAttempt ?? 1)
+
+  if (currentDriverId) {
+    await db.collection('drivers').doc(currentDriverId).update({
+      activeDeliveryOrderId: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    await setActiveDeliveryOrderClaim(currentDriverId, null)
+  }
+
+  const deliveryRef = db.collection('food_delivery_orders').doc(orderId)
+  const foodOrderRef = db.collection('food_orders').doc(orderId)
+
+  if (!canRetryDeliveryAssignment(currentAttempt)) {
+    await foodOrderRef.update({
+      status: 'no_driver_available',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    await deliveryRef.update({
+      ...getDeliveryOrderCancellationAfterRefusal(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    await setActiveDeliveryOrderClaim(clientId, null)
+    return
+  }
+
+  const foodOrderSnap = await foodOrderRef.get()
+  if (!foodOrderSnap.exists) return
+  const foodOrder = foodOrderSnap.data()!
+
+  const candidates = await db.collection('drivers')
+    .where('cityId', '==', foodOrder.cityId ?? deliveryOrder.cityId ?? 'edmonton')
+    .where('isAvailable', '==', true)
+    .where('status', '==', 'approved')
+    .where('driverType', 'in', ['livreur', 'les_deux'])
+    .limit(20)
+    .get()
+
+  const activeCandidates = candidates.docs.filter((doc) => {
+    if (doc.id === currentDriverId) return false
+    const d = doc.data()
+    if (d.driverType === 'les_deux' && d.activeMode !== 'livraison') return false
+    if (d.activeDeliveryOrderId != null) return false
+    return true
+  })
+
+  const locationSnaps = await Promise.all(
+    activeCandidates.map((doc) => rtdb.ref(`driver_locations/${doc.id}`).get()),
+  )
+  const candidatesWithLocation = activeCandidates
+    .map((doc, i) => ({ id: doc.id, data: doc.data(), loc: locationSnaps[i].val() as { lat: number; lng: number } | null }))
+    .filter((c): c is { id: string; data: FirebaseFirestore.DocumentData; loc: { lat: number; lng: number } } => c.loc != null)
+
+  if (!foodOrder.restaurantAddress) {
+    await foodOrderRef.update({
+      status: 'no_driver_available',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    await deliveryRef.update({
+      ...getDeliveryOrderCancellationAfterRefusal(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    await setActiveDeliveryOrderClaim(clientId, null)
+    return
+  }
+
+  const nextDriver = selectNearestDriver(candidatesWithLocation, foodOrder.restaurantAddress)
+  if (!nextDriver) {
+    await foodOrderRef.update({
+      status: 'no_driver_available',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    await deliveryRef.update({
+      ...getDeliveryOrderCancellationAfterRefusal(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
+    await setActiveDeliveryOrderClaim(clientId, null)
+    return
+  }
+
+  const nextAttempt = getNextDeliveryAssignmentAttempt(currentAttempt)
+  await deliveryRef.update({
+    driverId: nextDriver.id,
+    status: 'assigned',
+    assignmentAttempt: nextAttempt,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  await foodOrderRef.update({
+    driverId: nextDriver.id,
+    driverName: `${nextDriver.data.firstName ?? ''} ${nextDriver.data.lastName ?? ''}`.trim() || nextDriver.data.displayName || 'Livreur',
+    driverPhone: nextDriver.data.phone ?? '',
+    deliveryAssignmentAttempt: nextAttempt,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  await db.collection('drivers').doc(nextDriver.id).update({
+    activeDeliveryOrderId: orderId,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  })
+  await setDeliveryTrackingAccess(orderId, nextDriver.id, [nextDriver.id, clientId])
+  await setActiveDeliveryOrderClaim(nextDriver.id, orderId)
+
+  const fcmToken = typeof nextDriver.data.fcmToken === 'string' ? nextDriver.data.fcmToken : null
+  if (fcmToken) {
+    await admin.messaging().send({
+      token: fcmToken,
+      notification: { title: 'Nouvelle commande', body: foodOrder.orderNumber ?? '' },
+      data: { type: 'delivery_order_new', orderId },
+    })
+  }
+
+  await scheduleDeliveryOrderTimeout(orderId, nextAttempt)
+}
 
 export const onDeliveryStatusChanged = onDocumentUpdated(
   { document: 'food_delivery_orders/{orderId}', region: 'europe-west1' },
@@ -879,17 +1048,13 @@ export const onDeliveryStatusChanged = onDocumentUpdated(
     if (!before || !after || before.status === after.status) return
 
     const db = admin.firestore()
-    const statusMapping: Record<string, string> = {
-      heading_to_restaurant: 'driver_heading_to_restaurant',
-      arrived_restaurant:    'driver_arrived_restaurant',
-      picked_up:             'picked_up',
-      heading_to_client:     'out_for_delivery',
-      arrived_client:        'arriving',
-      delivered:             'delivered',
-      cancelled:             'cancelled',
+
+    if (after.status === 'refused') {
+      await reassignFoodDeliveryOrderAfterDriverRefusal(event.params.orderId, after)
+      return
     }
 
-    const foodOrderStatus = statusMapping[after.status]
+    const foodOrderStatus = getFoodOrderStatusForDeliveryStatus(after.status)
     if (!foodOrderStatus) return
 
     await db.collection('food_orders').doc(event.params.orderId).update({
@@ -955,6 +1120,11 @@ export const onRestaurantCancelOrder = onDocumentUpdated(
       activeDeliveryOrderId: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
+
+    await Promise.all([
+      setActiveDeliveryOrderClaim(deliveryOrder.driverId, null),
+      setActiveDeliveryOrderClaim(deliveryOrder.clientId, null),
+    ])
 
     const driverSnap = await db.collection('drivers').doc(deliveryOrder.driverId).get()
     const fcmToken = driverSnap.data()?.fcmToken
@@ -1088,7 +1258,10 @@ export const onDeliveryOrderCompleted = onDocumentUpdated(
 
     await db.collection('drivers').doc(driverId).update(driverUpdate)
 
-    await admin.auth().setCustomUserClaims(driverId, { activeDeliveryOrderId: null })
+    await Promise.all([
+      setActiveDeliveryOrderClaim(driverId, null),
+      setActiveDeliveryOrderClaim(after.clientId, null),
+    ])
 
     await rtdb.ref(`delivery_tracking/${orderId}`).remove()
   }
@@ -1168,6 +1341,7 @@ export const onDeliveryOrderTimeout = onRequest(
       activeDeliveryOrderId: null,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
+    await setActiveDeliveryOrderClaim(order.driverId, null)
 
     if (attemptNumber >= 3) {
       await db.collection('food_orders').doc(orderId).update({
@@ -1180,6 +1354,7 @@ export const onDeliveryOrderTimeout = onRequest(
         cancellationImpactOnStats: false,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
+      await setActiveDeliveryOrderClaim(order.clientId, null)
       res.status(200).send('No driver available after 3 attempts')
       return
     }
@@ -1215,19 +1390,27 @@ export const onDeliveryOrderTimeout = onRequest(
     if (!nextDriver) {
       await db.collection('food_orders').doc(orderId).update({ status: 'no_driver_available', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
       await orderRef.update({ status: 'cancelled', cancellationReason: 'driver_cancelled', cancellationImpactOnStats: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+      await setActiveDeliveryOrderClaim(order.clientId, null)
       res.status(200).send('No candidate found')
       return
     }
 
-    await orderRef.update({ driverId: nextDriver.id, status: 'assigned', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
+    await orderRef.update({
+      driverId: nextDriver.id,
+      status: 'assigned',
+      assignmentAttempt: attemptNumber + 1,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    })
     await db.collection('food_orders').doc(orderId).update({
       driverId: nextDriver.id,
       driverName: `${nextDriver.data.firstName ?? ''} ${nextDriver.data.lastName ?? ''}`.trim() || nextDriver.data.displayName || 'Livreur',
       driverPhone: nextDriver.data.phone ?? '',
+      deliveryAssignmentAttempt: attemptNumber + 1,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
     await db.collection('drivers').doc(nextDriver.id).update({ activeDeliveryOrderId: orderId, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
-    await admin.auth().setCustomUserClaims(nextDriver.id, { activeDeliveryOrderId: orderId })
+    await setDeliveryTrackingAccess(orderId, nextDriver.id, [nextDriver.id, order.clientId])
+    await setActiveDeliveryOrderClaim(nextDriver.id, orderId)
 
     const driverSnap = await db.collection('drivers').doc(nextDriver.id).get()
     const fcmToken = driverSnap.data()?.fcmToken
@@ -1239,25 +1422,7 @@ export const onDeliveryOrderTimeout = onRequest(
       })
     }
 
-    const cloudTasksClient = await getCloudTasksClient();
-    const PROJECT_ID = process.env.GCLOUD_PROJECT ?? ''
-    const LOCATION = 'europe-west1'
-    const queuePath = cloudTasksClient.queuePath(PROJECT_ID, LOCATION, 'delivery-order-timeout')
-    await cloudTasksClient.createTask({
-      parent: queuePath,
-      task: {
-        httpRequest: {
-          httpMethod: 'POST',
-          url: `https://${LOCATION}-${PROJECT_ID}.cloudfunctions.net/onDeliveryOrderTimeout`,
-          oidcToken: {
-            serviceAccountEmail: `${PROJECT_ID}@appspot.gserviceaccount.com`,
-          },
-          body: Buffer.from(JSON.stringify({ orderId, attemptNumber: attemptNumber + 1 })).toString('base64'),
-          headers: { 'Content-Type': 'application/json' },
-        },
-        scheduleTime: { seconds: Math.floor(Date.now() / 1000) + 90 },
-      },
-    })
+    await scheduleDeliveryOrderTimeout(orderId, attemptNumber + 1)
 
     res.status(200).send(`Reassigned to ${nextDriver.id}, attempt ${attemptNumber + 1}`)
   }

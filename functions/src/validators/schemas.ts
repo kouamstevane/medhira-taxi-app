@@ -139,6 +139,14 @@ export const PayFoodOrderWithCardSchema = z.object({
 });
 export type PayFoodOrderWithCardInput = z.infer<typeof PayFoodOrderWithCardSchema>;
 
+export const RestaurantManageFoodOrderStatusSchema = z.object({
+  orderId: z.string().min(1),
+  status: z.enum(['accepted', 'preparing', 'ready', 'cancelled_by_restaurant']),
+  cancellationReason: z.string().min(1).max(500).optional(),
+}).strict();
+
+export type RestaurantManageFoodOrderStatusInput = z.infer<typeof RestaurantManageFoodOrderStatusSchema>;
+
 
 // ============================================================================
 // User Roles — spec §7.3

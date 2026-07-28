@@ -803,28 +803,23 @@ service cloud.firestore {
                        request.resource.data.orderItems is list &&
                        request.resource.data.deliveryAddress is string;
       
-      // Mise à jour — Client : confirmation paiement ou annulation
-      // Permet aussi la cancellation suite à échec paiement
+      // Mise à jour — Client : annulation uniquement.
+      // La validation du paiement et les transitions de commande passent par Cloud Functions.
       allow update: if isAuthenticated() &&
                        resource.data.userId == request.auth.uid &&
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['userId', 'restaurantId', 'driverId', 'driverName',
-                                  'driverPhone', 'totalOrderPrice', 'orderItems']);
+                       resource.data.status in ['pending_payment', 'pending', 'confirmed'] &&
+                       request.resource.data.status == 'cancelled' &&
+                       request.resource.data.paymentValidated == resource.data.paymentValidated &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['status', 'updatedAt', 'cancelledAt',
+                                   'cancelledBy', 'cancellationReason']);
       
-      // Mise à jour — Chauffeur assigné : progression livraison
-      // RESTRICTION : status, timestamps de livraison et updatedAt
+      // Mise à jour — Chauffeur assigné : données opérationnelles non critiques.
+      // Les transitions livraison passent par food_delivery_orders + Cloud Functions.
       allow update: if isAuthenticated() &&
                        resource.data.driverId == request.auth.uid &&
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['status', 'updatedAt', 'pickedUpAt', 'deliveredAt',
-                                   'cancelledAt', 'driverLocation']);
-      
-      // Mise à jour — Restaurateur : accepter/refuser des commandes
-      // Seul le propriétaire du restaurant peut modifier les commandes de son restaurant
-      allow update: if isAuthenticated() &&
-                       get(/databases/$(database)/documents/restaurants/$(resource.data.restaurantId)).data.ownerId == request.auth.uid &&
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['status', 'updatedAt', 'driverId', 'driverName', 'driverPhone']);
+                         .hasOnly(['updatedAt', 'driverLocation']);
       
       // Mise à jour — Admin : accès complet
       allow update: if isAdmin();

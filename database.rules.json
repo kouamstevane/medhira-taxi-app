@@ -52,8 +52,8 @@
     "delivery_tracking": {
       "$orderId": {
         "location": {
-          ".read": "auth != null",
-          ".write": "auth != null && auth.token.activeDeliveryOrderId === $orderId"
+          ".read": "auth != null && (root.child('delivery_tracking').child($orderId).child('participants').child(auth.uid).val() == true || auth.token.role == 'admin')",
+          ".write": "auth != null && root.child('delivery_tracking').child($orderId).child('driverId').val() == auth.uid"
         }
       }
     }

@@ -37,8 +37,7 @@ import {
   startAfter,
   DocumentData,
   QueryDocumentSnapshot,
-  setDoc,
-  Timestamp
+  setDoc
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApps, getApp } from 'firebase/app';
@@ -162,6 +161,12 @@ export const calculateTotalOrderPrice = (
     totalOrderPrice,
   };
 };
+
+export const buildPaymentFailureCancellationUpdate = () => ({
+  status: 'cancelled' as const,
+  cancelledBy: 'client' as const,
+  cancellationReason: 'payment_failed',
+});
 
 // ============================================================================
 // RESTAURANTS (Règles 1, 9, 10)
@@ -486,6 +491,16 @@ export const createFoodOrder = async (
     }
   } catch (payError) {
     const msg = (payError as Error).message;
+    await updateDoc(newOrderRef, {
+      ...buildPaymentFailureCancellationUpdate(),
+      cancelledAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }).catch((cleanupError) => {
+      logger.warn('Nettoyage commande paiement échoué impossible', {
+        orderId: newOrderRef.id,
+        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+      });
+    });
     logger.error('Création commande livraison échouée', {
       userId: orderData.userId,
       error: msg,
@@ -624,27 +639,20 @@ export const updateFoodOrderStatus = async (
   additionalData?: Partial<FoodOrder>
 ): Promise<void> => {
   try {
-  const orderRef = doc(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS, orderId);
+  const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+  const app = getApps().length ? getApp() : undefined;
+  if (!app) throw new Error('Firebase app not initialized');
+  const functions = getFunctions(app, functionsRegion);
+  const manageStatus = httpsCallable<
+    { orderId: string; status: FoodOrderStatus; cancellationReason?: string },
+    { success: boolean; orderId: string; status: FoodOrderStatus }
+  >(functions, 'restaurantManageFoodOrderStatus');
 
-  const updateData: Record<string, unknown> = {
+  await manageStatus({
+    orderId,
     status,
-    updatedAt: serverTimestamp(),
-    ...additionalData,
-  };
-
-  switch (status) {
-    case 'picked_up':
-      updateData.pickedUpAt = serverTimestamp();
-      break;
-    case 'delivered':
-      updateData.deliveredAt = serverTimestamp();
-      break;
-    case 'cancelled':
-      updateData.cancelledAt = serverTimestamp();
-      break;
-  }
-
-  await updateDoc(orderRef, updateData);
+    cancellationReason: additionalData?.cancellationReason,
+  });
 
   logger.info('Statut commande mis à jour', { orderId, status });
   } catch (error) {
@@ -857,6 +865,7 @@ export const FoodDeliveryService = {
   calculateDeliveryCost,
   calculateBasePrice,
   calculateTotalOrderPrice,
+  buildPaymentFailureCancellationUpdate,
   getApprovedRestaurants,
   getRestaurantMenu,
   createFoodOrder,

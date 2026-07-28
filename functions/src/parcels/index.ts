@@ -23,6 +23,35 @@ import {
 const TWILIO_SECRETS = [twilioAccountSid, twilioAuthToken, twilioFromNumber];
 const REGION = 'europe-west1';
 
+async function setActiveDeliveryOrderClaim(uid: string | undefined | null, orderId: string | null): Promise<void> {
+  if (!uid) return;
+  try {
+    const user = await admin.auth().getUser(uid);
+    await admin.auth().setCustomUserClaims(uid, {
+      ...(user.customClaims ?? {}),
+      activeDeliveryOrderId: orderId,
+    });
+  } catch (err) {
+    console.warn('[parcels] Failed to update active delivery claim', { uid, orderId, err });
+  }
+}
+
+async function setDeliveryTrackingAccess(
+  parcelId: string,
+  driverId: string,
+  participantIds: Array<string | undefined | null>,
+): Promise<void> {
+  const participants = participantIds.reduce<Record<string, boolean>>((acc, uid) => {
+    if (uid) acc[uid] = true;
+    return acc;
+  }, {});
+
+  await admin.database().ref(`delivery_tracking/${parcelId}`).update({
+    driverId,
+    participants,
+  });
+}
+
 interface ParcelDoc {
   parcelId: string;
   senderId: string;
@@ -120,8 +149,17 @@ export const onParcelCreated = onDocumentCreated(
       });
     });
 
-    // Custom claim required by RTDB rule on delivery_tracking/{parcelId}/location
-    await admin.auth().setCustomUserClaims(matched.id, { activeDeliveryOrderId: parcel.parcelId });
+    await setDeliveryTrackingAccess(parcel.parcelId, matched.id, [
+      matched.id,
+      parcel.senderId,
+      parcel.receiverId,
+    ]);
+
+    await Promise.all([
+      setActiveDeliveryOrderClaim(matched.id, parcel.parcelId),
+      setActiveDeliveryOrderClaim(parcel.senderId, parcel.parcelId),
+      setActiveDeliveryOrderClaim(parcel.receiverId, parcel.receiverId ? parcel.parcelId : null),
+    ]);
 
     // FCM notification to driver
     const fcmToken = driverDoc.data()?.fcmToken;
@@ -198,7 +236,11 @@ export const onParcelStatusChanged = onDocumentUpdated(
           activeDeliveryOrderId: null,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        await admin.auth().setCustomUserClaims(after.driverId, { activeDeliveryOrderId: null });
+        await Promise.all([
+          setActiveDeliveryOrderClaim(after.driverId, null),
+          setActiveDeliveryOrderClaim(after.senderId, null),
+          setActiveDeliveryOrderClaim(after.receiverId, null),
+        ]);
         await admin.database().ref(`delivery_tracking/${event.params.parcelId}`).remove();
       } catch (err) {
         console.error(`[onParcelStatusChanged] cleanup driver/tracking failed ${event.params.parcelId}:`, err);

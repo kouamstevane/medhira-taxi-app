@@ -15,6 +15,7 @@ describe('Food restoration Firestore rules', () => {
   const clientId = 'food-client';
   const otherClientId = 'food-other-client';
   const driverId = 'food-driver';
+  const restaurantOwnerId = 'food-restaurant-owner';
   const restaurantId = 'food-restaurant';
   const orderId = 'food-order';
 
@@ -40,11 +41,16 @@ describe('Food restoration Firestore rules', () => {
   const seedFoodOrder = async (status: string, overrides: Record<string, unknown> = {}) => {
     await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
       const db = context.firestore();
+      await setDoc(doc(db, 'restaurants', restaurantId), {
+        ownerId: restaurantOwnerId,
+        status: 'approved',
+      });
       await setDoc(doc(db, 'food_orders', orderId), {
         userId: clientId,
         restaurantId,
         driverId,
         status,
+        paymentValidated: status !== 'pending_payment',
         ...overrides,
       });
     });
@@ -73,6 +79,40 @@ describe('Food restoration Firestore rules', () => {
       status: 'picked_up',
       pickedUpAt: '2026-07-28T00:01:00.000Z',
       updatedAt: '2026-07-28T00:01:00.000Z',
+    }));
+  });
+
+  test('client cannot forge food order payment validation', async () => {
+    await seedFoodOrder('pending_payment', { paymentValidated: false });
+    const db = testEnv.authenticatedContext(clientId).firestore();
+
+    await assertFails(updateDoc(doc(db, 'food_orders', orderId), {
+      paymentValidated: true,
+      status: 'confirmed',
+      confirmedAt: '2026-07-28T00:01:00.000Z',
+      updatedAt: '2026-07-28T00:01:00.000Z',
+    }));
+  });
+
+  test('restaurant owner cannot perform food order status transitions directly', async () => {
+    await seedFoodOrder('confirmed');
+    const db = testEnv.authenticatedContext(restaurantOwnerId).firestore();
+
+    await assertFails(updateDoc(doc(db, 'food_orders', orderId), {
+      status: 'accepted',
+      updatedAt: '2026-07-28T00:01:00.000Z',
+    }));
+
+    await seedFoodOrder('pending_payment', { paymentValidated: false });
+    await assertFails(updateDoc(doc(db, 'food_orders', orderId), {
+      status: 'accepted',
+      updatedAt: '2026-07-28T00:02:00.000Z',
+    }));
+
+    await seedFoodOrder('confirmed');
+    await assertFails(updateDoc(doc(db, 'food_orders', orderId), {
+      status: 'delivered',
+      updatedAt: '2026-07-28T00:03:00.000Z',
     }));
   });
 

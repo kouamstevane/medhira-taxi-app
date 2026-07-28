@@ -4,9 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import { auth, db } from '@/config/firebase';
+import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
@@ -15,6 +14,11 @@ import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { ConversationLauncher } from '@/components/ConversationLauncher';
 import type { ConversationContext } from '@/types/conversation';
+import {
+  getRestaurantOrderStatusLabel,
+  RESTAURANT_ORDER_FILTERS,
+  RESTAURANT_REJECTABLE_STATUSES,
+} from './orderStatusUi';
 
 export default function OrdersManagementClient() {
   const params = useParams()
@@ -61,7 +65,7 @@ export default function OrdersManagementClient() {
       await FoodDeliveryService.updateFoodOrderStatus(orderId, status);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
       showSuccess(`Commande mise à jour : ${status}`);
-    } catch (error) {
+    } catch {
       showError("Erreur lors de la mise à jour");
     }
   };
@@ -124,7 +128,7 @@ export default function OrdersManagementClient() {
 
         {/* Filters */}
         <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
-          {['all', 'pending', 'preparing', 'ready', 'delivering', 'delivered', 'cancelled'].map((s) => (
+          {RESTAURANT_ORDER_FILTERS.map((s) => (
             <button
               key={s}
               onClick={() => setFilter(s as FoodOrder['status'] | 'all')}
@@ -134,7 +138,7 @@ export default function OrdersManagementClient() {
                   : 'glass-card border border-white/5 text-slate-400 hover:bg-white/10'
               }`}
             >
-              {s === 'all' ? 'Toutes' : s}
+              {getRestaurantOrderStatusLabel(s)}
             </button>
           ))}
         </div>
@@ -152,7 +156,7 @@ export default function OrdersManagementClient() {
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-white">Commande #{order.id.slice(-5).toUpperCase()}</h3>
                       <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${getStatusColor(order.status)}`}>
-                        {order.status}
+                        {getRestaurantOrderStatusLabel(order.status)}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
@@ -168,14 +172,7 @@ export default function OrdersManagementClient() {
                   <div className="flex gap-2">
                     {order.status === 'confirmed' && (
                       <button
-                        onClick={async () => {
-                          await updateDoc(doc(db, 'food_orders', order.id), {
-                            status: 'accepted',
-                            updatedAt: serverTimestamp(),
-                          });
-                          setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'accepted' as FoodOrder['status'] } : o));
-                          showSuccess('Commande acceptée — un livreur va être assigné');
-                        }}
+                        onClick={() => updateOrderStatus(order.id, 'accepted')}
                         className="w-full h-10 bg-primary text-white text-sm font-bold rounded-xl"
                       >
                         Accepter la commande (assigner un livreur)
@@ -197,7 +194,7 @@ export default function OrdersManagementClient() {
                         Prêt
                       </button>
                     )}
-                    {['pending', 'confirmed'].includes(order.status) && (
+                    {RESTAURANT_REJECTABLE_STATUSES.includes(order.status) && (
                       <button
                         onClick={() => updateOrderStatus(order.id, 'cancelled_by_restaurant')}
                         className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-2 rounded-xl text-xs font-bold hover:bg-destructive/20 transition"

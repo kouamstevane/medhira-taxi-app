@@ -5,7 +5,7 @@ import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { getDatabase, ref as rtdbRef, set } from 'firebase/database'
 import { httpsCallable } from 'firebase/functions'
-import { db, getFirebaseStorage, functions } from '@/config/firebase'
+import { auth, db, getFirebaseStorage, functions } from '@/config/firebase'
 import { retryWithBackoff } from '@/utils/retry'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
 
@@ -16,6 +16,12 @@ const ACTIVE_DELIVERY_STATUSES: DeliveryStatus[] = [
 
 export function validatePin(orderPin: string, input: string): boolean {
   return orderPin === input
+}
+
+export async function refreshDeliveryUploadClaims(
+  user: { getIdToken: (forceRefresh?: boolean) => Promise<string> } | null
+): Promise<void> {
+  await user?.getIdToken(true)
 }
 
 export function useDeliveryOrder(orderId: string) {
@@ -136,6 +142,7 @@ export function useDeliveryOrder(orderId: string) {
     const fileRef = storageRef(getFirebaseStorage(), `delivery_proofs/${orderId}/${Date.now()}.jpg`)
     return retryWithBackoff(
       async () => {
+        await refreshDeliveryUploadClaims(auth.currentUser)
         await uploadBytes(fileRef, file)
         return getDownloadURL(fileRef)
       },
