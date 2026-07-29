@@ -31,6 +31,9 @@ src/config/keys/*
 # Claude AI
 .claude/
 
+# Codex/agent local skills
+.agents/
+
 # Production builds
 /build
 /dist
