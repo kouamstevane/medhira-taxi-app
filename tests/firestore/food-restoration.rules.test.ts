@@ -64,6 +64,13 @@ describe('Food restoration Firestore rules', () => {
         clientId,
         status,
         deliveryPreference,
+        clientNeighbourhood: 'Downtown',
+        clientAddress: {
+          address: '100 Client Street, Edmonton',
+          lat: 53.55,
+          lng: -113.5,
+          instructions: 'Leave at the side door',
+        },
         totalAmount: 25,
         driverEarnings: 6,
         updatedAt: '2026-07-28T00:00:00.000Z',
@@ -90,6 +97,20 @@ describe('Food restoration Firestore rules', () => {
       paymentValidated: true,
       status: 'confirmed',
       confirmedAt: '2026-07-28T00:01:00.000Z',
+      updatedAt: '2026-07-28T00:01:00.000Z',
+    }));
+  });
+
+  test('client cannot directly cancel an already paid food order', async () => {
+    await seedFoodOrder('confirmed', { paymentValidated: true });
+    const db = testEnv.authenticatedContext(clientId).firestore();
+
+    await assertFails(updateDoc(doc(db, 'food_orders', orderId), {
+      status: 'cancelled',
+      paymentValidated: true,
+      cancelledBy: 'client',
+      cancellationReason: 'client_cancelled',
+      cancelledAt: '2026-07-28T00:01:00.000Z',
       updatedAt: '2026-07-28T00:01:00.000Z',
     }));
   });

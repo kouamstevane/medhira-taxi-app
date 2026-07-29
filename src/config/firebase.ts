@@ -1,6 +1,7 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
-import { getAuth, Auth } from "firebase/auth";
+import { connectAuthEmulator, getAuth, Auth } from "firebase/auth";
 import {
+  connectFirestoreEmulator,
   getFirestore,
   Firestore,
   initializeFirestore,
@@ -8,9 +9,9 @@ import {
   persistentMultipleTabManager,
   persistentSingleTabManager
 } from "firebase/firestore";
-import { getFunctions, Functions } from "firebase/functions";
-import { getStorage, type FirebaseStorage } from "firebase/storage";
-import { getDatabase, type Database } from "firebase/database";
+import { connectFunctionsEmulator, getFunctions, Functions } from "firebase/functions";
+import { connectStorageEmulator, getStorage, type FirebaseStorage } from "firebase/storage";
+import { connectDatabaseEmulator, getDatabase, type Database } from "firebase/database";
 import { Capacitor } from "@capacitor/core";
 
 export const firebaseConfig = {
@@ -33,6 +34,9 @@ if (!getApps().length) {
 }
 
 export const auth: Auth = getAuth(app);
+const useEmulators =
+  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true' &&
+  typeof window !== 'undefined';
 
 let firestoreInstance: Firestore;
 if (typeof window !== 'undefined') {
@@ -55,10 +59,25 @@ if (typeof window !== 'undefined') {
 export const db: Firestore = firestoreInstance;
 export const functions: Functions = getFunctions(app, 'europe-west1');
 
+if (useEmulators) {
+  const globalState = globalThis as typeof globalThis & {
+    __medjiraFirebaseEmulatorsConnected?: boolean;
+  };
+  if (!globalState.__medjiraFirebaseEmulatorsConnected) {
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+    connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+    globalState.__medjiraFirebaseEmulatorsConnected = true;
+  }
+}
+
 let _storage: FirebaseStorage | undefined;
 export const getFirebaseStorage = (): FirebaseStorage => {
   if (!_storage) {
     _storage = getStorage(app);
+    if (useEmulators) {
+      connectStorageEmulator(_storage, '127.0.0.1', 9199);
+    }
   }
   return _storage;
 };
@@ -67,6 +86,9 @@ let _rtdb: Database | undefined;
 export const getFirebaseDatabase = (): Database => {
   if (!_rtdb) {
     _rtdb = getDatabase(app);
+    if (useEmulators) {
+      connectDatabaseEmulator(_rtdb, '127.0.0.1', 9010);
+    }
   }
   return _rtdb;
 };

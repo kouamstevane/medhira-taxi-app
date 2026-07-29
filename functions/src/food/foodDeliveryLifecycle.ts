@@ -56,6 +56,105 @@ export function isFoodOrderPayable(order: { status?: unknown; paymentValidated?:
   return order?.status === 'pending_payment' && order.paymentValidated !== true;
 }
 
+type FoodDeliveryOrderItemSource = {
+  itemName: string;
+  itemQuantity: number;
+  itemPrice: number;
+};
+
+type AssignedFoodDeliveryOrderSource = {
+  restaurantId?: unknown;
+  userId?: unknown;
+  cityId?: unknown;
+  deliveryPreference?: unknown;
+  restaurantAddress?: unknown;
+  clientNeighbourhood?: unknown;
+  orderItems?: unknown;
+  orderNumber?: unknown;
+  restaurantName?: unknown;
+  restaurantPhone?: unknown;
+  customerPhone?: unknown;
+  totalOrderPrice?: unknown;
+  deliveryCost?: unknown;
+};
+
+type PickedUpFoodOrderSource = {
+  deliveryAddress?: unknown;
+  deliveryLocation?: unknown;
+  deliveryInstructions?: unknown;
+};
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function asString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function toDeliveryOrderItems(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item: FoodDeliveryOrderItemSource) => ({
+      name: item.itemName,
+      qty: item.itemQuantity,
+      price: item.itemPrice,
+    }))
+    : [];
+}
+
+export function buildAssignedFoodDeliveryOrderData({
+  orderId,
+  driverId,
+  source,
+  assignmentAttempt,
+  deliveryShareRate,
+}: {
+  orderId: string;
+  driverId: string;
+  source: AssignedFoodDeliveryOrderSource;
+  assignmentAttempt: number;
+  deliveryShareRate: number;
+}) {
+  return {
+    orderId,
+    driverId,
+    restaurantId: asString(source.restaurantId),
+    clientId: asString(source.userId),
+    cityId: asString(source.cityId, 'edmonton'),
+    status: 'assigned',
+    assignmentAttempt,
+    deliveryPreference: asString(source.deliveryPreference, 'leave_at_door'),
+    restaurantAddress: source.restaurantAddress,
+    clientNeighbourhood: asString(source.clientNeighbourhood),
+    orderItems: toDeliveryOrderItems(source.orderItems),
+    orderNumber: asString(source.orderNumber),
+    restaurantName: asString(source.restaurantName),
+    restaurantPhone: asString(source.restaurantPhone),
+    clientPhone: asString(source.customerPhone),
+    totalAmount: asNumber(source.totalOrderPrice),
+    driverEarnings: asNumber(source.deliveryCost) * deliveryShareRate,
+    cancellationImpactOnStats: true,
+  };
+}
+
+export function buildPickedUpClientAddress(source: PickedUpFoodOrderSource) {
+  const location = source.deliveryLocation as { lat?: unknown; lng?: unknown } | null | undefined;
+  const address: {
+    address: string;
+    lat: number;
+    lng: number;
+    instructions?: string;
+  } = {
+    address: asString(source.deliveryAddress),
+    lat: asNumber(location?.lat),
+    lng: asNumber(location?.lng),
+  };
+  if (typeof source.deliveryInstructions === 'string' && source.deliveryInstructions.trim()) {
+    address.instructions = source.deliveryInstructions;
+  }
+  return address;
+}
+
 export function shouldSkipStaleDeliveryAssignment(
   order: { status?: unknown; paymentValidated?: unknown } | null | undefined,
   deliveryOrderAlreadyExists: boolean,

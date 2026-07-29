@@ -168,6 +168,20 @@ export const buildPaymentFailureCancellationUpdate = () => ({
   cancellationReason: 'payment_failed',
 });
 
+export const canStartFoodOrderCheckout = ({
+  paymentMethod,
+  walletBalance,
+  estimatedTotal,
+}: {
+  paymentMethod: 'wallet' | 'card';
+  walletBalance: number | null;
+  estimatedTotal: number;
+}) => {
+  if (paymentMethod !== 'wallet') return true;
+  if (walletBalance === null) return true;
+  return walletBalance >= estimatedTotal;
+};
+
 // ============================================================================
 // RESTAURANTS (Règles 1, 9, 10)
 // ============================================================================
@@ -393,6 +407,14 @@ const CreateFoodOrderSchema = z.object({
   }).optional(),
 });
 
+export interface CreateFoodOrderResult {
+  orderId: string;
+  basePrice: number;
+  deliveryCost: number;
+  totalOrderPrice: number;
+  deliveryDistance: number;
+}
+
 /**
  * Créer une nouvelle commande de livraison de repas
  * 
@@ -419,7 +441,7 @@ export const createFoodOrder = async (
     cityId?: string;
     paymentMethod?: 'wallet' | 'card';
   }
-): Promise<string> => {
+): Promise<CreateFoodOrderResult> => {
   try {
     const validationResult = CreateFoodOrderSchema.safeParse(orderData);
     if (!validationResult.success) {
@@ -444,7 +466,7 @@ export const createFoodOrder = async (
         cityId?: string;
         paymentMethod?: 'wallet' | 'card';
       },
-      { orderId: string }
+      CreateFoodOrderResult
     >(functions, 'createFoodOrder');
     const selectedPaymentMethod = orderData.paymentMethod ?? 'wallet';
 
@@ -461,39 +483,18 @@ export const createFoodOrder = async (
       cityId: orderData.cityId,
       paymentMethod: selectedPaymentMethod,
     });
-    const orderId = result.data.orderId;
-
-    if (selectedPaymentMethod === 'wallet') {
-      try {
-        await payFoodOrderWithWallet(orderId);
-      } catch (payError) {
-        await updateDoc(doc(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS, orderId), {
-          ...buildPaymentFailureCancellationUpdate(),
-          cancelledAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }).catch((cleanupError) => {
-          logger.warn('Nettoyage commande paiement échoué impossible', {
-            orderId,
-            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-          });
-        });
-        const msg = payError instanceof Error ? payError.message : String(payError);
-        throw new Error(`Paiement échoué: ${msg}`);
-      }
-    }
+    const order = result.data;
 
     logger.info(
-      selectedPaymentMethod === 'wallet'
-        ? 'Commande de livraison créée et payée'
-        : 'Commande de livraison créée, paiement carte en attente',
+      'Commande de livraison créée, paiement en attente',
       {
-        orderId,
+        orderId: order.orderId,
         restaurantId: orderData.restaurantId,
         paymentMethod: selectedPaymentMethod,
       }
     );
 
-    return orderId;
+    return order;
   } catch (error) {
     console.error('[food-delivery.service] createFoodOrder failed:', error);
     throw error;
@@ -837,6 +838,7 @@ export const FoodDeliveryService = {
   calculateBasePrice,
   calculateTotalOrderPrice,
   buildPaymentFailureCancellationUpdate,
+  canStartFoodOrderCheckout,
   getApprovedRestaurants,
   getRestaurantMenu,
   createFoodOrder,

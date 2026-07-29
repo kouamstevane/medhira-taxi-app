@@ -189,6 +189,12 @@ export const createFoodOrder = onCall(
 
     await orderRef.create(order);
 
-    return { orderId: orderRef.id };
+    return {
+      orderId: orderRef.id,
+      basePrice: totals.basePrice,
+      deliveryCost: totals.deliveryCost,
+      totalOrderPrice: totals.totalOrderPrice,
+      deliveryDistance,
+    };
   },
 );

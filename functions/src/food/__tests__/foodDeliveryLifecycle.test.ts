@@ -1,5 +1,7 @@
 import {
   FOOD_DELIVERY_TERMINAL_STATUSES,
+  buildAssignedFoodDeliveryOrderData,
+  buildPickedUpClientAddress,
   getDeliveryOrderCancellationAfterRefusal,
   getFoodOrderStatusForDeliveryStatus,
   getNextDeliveryAssignmentAttempt,
@@ -64,6 +66,47 @@ describe('foodDeliveryLifecycle', () => {
     expect(isFoodOrderPayable({ status: 'pending_payment', paymentValidated: false })).toBe(true);
     expect(isFoodOrderPayable({ status: 'cancelled', paymentValidated: false })).toBe(false);
     expect(isFoodOrderPayable({ status: 'confirmed', paymentValidated: true })).toBe(false);
+  });
+
+  test('builds assigned delivery orders without exposing the full client address', () => {
+    const deliveryOrder = buildAssignedFoodDeliveryOrderData({
+      orderId: 'order-1',
+      driverId: 'driver-1',
+      source: {
+        restaurantId: 'restaurant-1',
+        userId: 'client-1',
+        cityId: 'edmonton',
+        deliveryPreference: 'leave_at_door',
+        restaurantAddress: { address: '1 Restaurant Street', lat: 53.54, lng: -113.49 },
+        clientNeighbourhood: 'Downtown',
+        orderItems: [{ itemName: 'Plat', itemQuantity: 1, itemPrice: 25 }],
+        orderNumber: '#42',
+        restaurantName: 'Le Test',
+        restaurantPhone: '+14165550000',
+        customerPhone: '+14165550111',
+        totalOrderPrice: 34,
+        deliveryCost: 9,
+      },
+      assignmentAttempt: 1,
+      deliveryShareRate: 0.8,
+    });
+
+    expect(deliveryOrder).toMatchObject({
+      status: 'assigned',
+      clientNeighbourhood: 'Downtown',
+    });
+    expect(deliveryOrder).not.toHaveProperty('clientAddress');
+  });
+
+  test('builds picked-up client address without undefined Firestore fields', () => {
+    expect(buildPickedUpClientAddress({
+      deliveryAddress: '100 Client Street',
+      deliveryLocation: { lat: 53.55, lng: -113.5 },
+    })).toEqual({
+      address: '100 Client Street',
+      lat: 53.55,
+      lng: -113.5,
+    });
   });
 
   test('expires abandoned payment attempts after the configured window', () => {

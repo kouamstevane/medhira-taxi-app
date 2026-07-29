@@ -241,3 +241,78 @@ describe('useRestaurantRegistration — handleStep1Submit Auth errors', () => {
     expect(result.current.error).toBeNull();
   });
 });
+
+describe('useRestaurantRegistration — restaurant submission contract', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    const firebaseConfig = require('@/config/firebase');
+    firebaseConfig.auth.currentUser = { uid: 'restaurant-owner', email: 'owner@test.fr' };
+  });
+
+  test('handleSubmit sends the Cloud Function data envelope expected by the backend', async () => {
+    const { httpsCallable } = require('firebase/functions');
+    const submitApplication = jest.fn().mockResolvedValue({ data: { restaurantId: 'rest_123' } });
+    httpsCallable.mockReturnValueOnce(submitApplication);
+
+    const { result } = renderHook(() => useRestaurantRegistration());
+
+    act(() => {
+      result.current.setStepData(3, {
+        name: 'Le Bistrot',
+        description: 'Restaurant français traditionnel',
+        cuisineType: ['Française'],
+        address: '12 Rue de Paris',
+        phone: '+33123456789',
+        email: 'bistrot@test.fr',
+        avgPricePerPerson: 25,
+        location: { lat: 48.8566, lng: 2.3522 },
+      });
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit({
+        openingHours: {
+          monday: { open: '09:00', close: '22:00', closed: false },
+        },
+      });
+    });
+
+    expect(submitApplication).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: 'Le Bistrot',
+        location: { lat: 48.8566, lng: 2.3522 },
+      }),
+    });
+    expect(mockReplace).toHaveBeenCalledWith('/restaurant/pending?id=rest_123');
+  });
+
+  test('handleSubmit refuses to call backend when restaurant coordinates are missing', async () => {
+    const { httpsCallable } = require('firebase/functions');
+    const submitApplication = jest.fn();
+    httpsCallable.mockReturnValueOnce(submitApplication);
+
+    const { result } = renderHook(() => useRestaurantRegistration());
+
+    act(() => {
+      result.current.setStepData(3, {
+        name: 'Le Bistrot',
+        description: 'Restaurant français traditionnel',
+        cuisineType: ['Française'],
+        address: '12 Rue de Paris',
+        phone: '+33123456789',
+        email: 'bistrot@test.fr',
+      });
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit({
+        openingHours: {
+          monday: { open: '09:00', close: '22:00', closed: false },
+        },
+      });
+    });
+
+    expect(submitApplication).not.toHaveBeenCalled();
+    expect(result.current.error).toContain('coordonnées');
+  });
+});

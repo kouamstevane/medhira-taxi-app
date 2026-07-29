@@ -20,6 +20,14 @@ export default function Level5_HeadingToClient({ order, updateStatus }: Props) {
         <div className="text-center">
           <h2 className="text-xl font-bold">En route vers le client</h2>
           <p className="text-slate-400 mt-1">{order.clientNeighbourhood}</p>
+          {order.clientAddress && (
+            <div className="mt-3 space-y-1">
+              <p className="text-white font-semibold">{order.clientAddress.address}</p>
+              {order.clientAddress.instructions && (
+                <p className="text-slate-300 text-sm">{order.clientAddress.instructions}</p>
+              )}
+            </div>
+          )}
         </div>
         <a href={`tel:${order.clientPhone}`}
           className="flex items-center gap-2 text-primary border border-primary/30 rounded-xl px-4 py-2 text-sm">

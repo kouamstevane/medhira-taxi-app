@@ -8,11 +8,12 @@ import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 
 import { CURRENCY_CODE } from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
+import type { CreateFoodOrderResult } from '@/services/food-delivery.service';
 
 const StripePaymentElement = dynamic(
   () => import('@/components/stripe/StripePaymentElement').then((module) => ({ default: module.StripePaymentElement })),
@@ -38,6 +39,7 @@ export default function CheckoutPage() {
     amount: number;
     currency: string;
   } | null>(null);
+  const [serverOrder, setServerOrder] = useState<CreateFoodOrderResult | null>(null);
 
   // Payment State
   const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'card'>('wallet');
@@ -97,6 +99,11 @@ export default function CheckoutPage() {
       .finally(() => setDistanceLoading(false));
   }, [restaurant, hasValidAddress, deliveryAddress]);
 
+  React.useEffect(() => {
+    setServerOrder(null);
+    setCardPayment(null);
+  }, [items, restaurant?.id, deliveryPreference, deliveryInstructions, deliveryAddress, paymentMethod]);
+
   if (!submitted && (!user || !restaurant || items.length === 0)) {
     return null;
   }
@@ -105,9 +112,28 @@ export default function CheckoutPage() {
   }
 
   const subtotal = getSubtotal();
-  const deliveryCost = FoodDeliveryService.calculateDeliveryCost(deliveryDistance, isWeekend);
-  const total = subtotal + deliveryCost;
+  const deliveryCost = serverOrder?.deliveryCost ?? FoodDeliveryService.calculateDeliveryCost(deliveryDistance, isWeekend);
+  const total = serverOrder?.totalOrderPrice ?? subtotal + deliveryCost;
+  const displayedSubtotal = serverOrder?.basePrice ?? subtotal;
+  const displayedDistance = serverOrder?.deliveryDistance ?? deliveryDistance;
   const isWalletInsufficient = paymentMethod === 'wallet' && walletBalance !== null && walletBalance < total;
+  const hasServerTotal = serverOrder != null;
+  const canStartCheckout = FoodDeliveryService.canStartFoodOrderCheckout({
+    paymentMethod,
+    walletBalance,
+    estimatedTotal: total,
+  });
+
+  const cancelUnpaidOrder = async (orderId: string, reason: string) => {
+    await updateDoc(doc(db, 'food_orders', orderId), {
+      ...FoodDeliveryService.buildPaymentFailureCancellationUpdate(),
+      cancellationReason: reason,
+      cancelledAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }).catch((cleanupError) => {
+      console.warn('Nettoyage commande paiement échoué impossible', cleanupError);
+    });
+  };
 
   const handleCreateOrder = async () => {
     if (loading) return;
@@ -118,13 +144,42 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (isWalletInsufficient) {
+    if (!canStartCheckout) {
       setErrorMsg(`Solde insuffisant (${(walletBalance ?? 0).toFixed(2)} ${CURRENCY_CODE} disponibles pour un total de ${total.toFixed(2)} ${CURRENCY_CODE}). Veuillez recharger votre portefeuille.`);
       return;
     }
 
     setLoading(true);
     try {
+      if (serverOrder) {
+        if (paymentMethod === 'card') {
+          const payment = await FoodDeliveryService.payFoodOrderWithCard(serverOrder.orderId);
+          if (!payment.clientSecret || !payment.amount || !payment.currency) {
+            throw new Error('Impossible de préparer le paiement carte.');
+          }
+          setCardPayment({
+            orderId: serverOrder.orderId,
+            clientSecret: payment.clientSecret,
+            amount: payment.amount,
+            currency: payment.currency,
+          });
+          return;
+        }
+
+        try {
+          await FoodDeliveryService.payFoodOrderWithWallet(serverOrder.orderId);
+        } catch (payError) {
+          await cancelUnpaidOrder(serverOrder.orderId, 'payment_failed');
+          const msg = payError instanceof Error ? payError.message : String(payError);
+          throw new Error(`Paiement échoué: ${msg}`);
+        }
+
+        setSubmitted(true);
+        router.push(`/food/orders/${serverOrder.orderId}`);
+        clearCart();
+        return;
+      }
+
       const orderItems = items.map(item => ({
         menuItemId: item.id!,
         itemName: item.name,
@@ -132,7 +187,7 @@ export default function CheckoutPage() {
         itemPrice: item.price
       }));
 
-      const orderId = await FoodDeliveryService.createFoodOrder({
+      const createdOrder = await FoodDeliveryService.createFoodOrder({
         userId: user!.uid,
         restaurantId: restaurant.id,
         orderItems,
@@ -143,24 +198,8 @@ export default function CheckoutPage() {
         deliveryInstructions,
         paymentMethod,
       });
-
-      if (paymentMethod === 'card') {
-        const payment = await FoodDeliveryService.payFoodOrderWithCard(orderId);
-        if (!payment.clientSecret || !payment.amount || !payment.currency) {
-          throw new Error('Impossible de préparer le paiement carte.');
-        }
-        setCardPayment({
-          orderId,
-          clientSecret: payment.clientSecret,
-          amount: payment.amount,
-          currency: payment.currency,
-        });
-        return;
-      }
-
-      setSubmitted(true);
-      router.push(`/food/orders/${orderId}`);
-      clearCart();
+      setServerOrder(createdOrder);
+      return;
     } catch (error: unknown) {
       console.error('Erreur lors de la validation:', error);
       const msg = error instanceof Error ? error.message : 'Une erreur est survenue lors de la validation de votre commande.';
@@ -259,10 +298,10 @@ export default function CheckoutPage() {
           <div className="border-t border-white/5 pt-4 space-y-2 text-sm text-slate-400">
             <div className="flex justify-between">
               <span>Sous-total</span>
-              <span>{subtotal.toFixed(2)} {CURRENCY_CODE}</span>
+              <span>{displayedSubtotal.toFixed(2)} {CURRENCY_CODE}</span>
             </div>
             <div className="flex justify-between">
-              <span>Frais de livraison ({distanceIsEstimate ? '~' : ''}{deliveryDistance.toFixed(1)} km)</span>
+              <span>Frais de livraison ({hasServerTotal ? '' : distanceIsEstimate ? '~' : ''}{displayedDistance.toFixed(1)} km)</span>
               <span>{deliveryCost.toFixed(2)} {CURRENCY_CODE}</span>
             </div>
             {isWeekend && (
@@ -277,6 +316,11 @@ export default function CheckoutPage() {
             <span>Total</span>
             <span>{total.toFixed(2)} {CURRENCY_CODE}</span>
           </div>
+          {hasServerTotal && (
+            <div className="mt-4 bg-primary/10 border border-primary/20 text-primary p-3 rounded-xl text-sm">
+              Montant vérifié par le serveur. Confirmez pour payer ce total.
+            </div>
+          )}
         </section>
 
         {/* Payment Method Selection */}
@@ -380,7 +424,7 @@ export default function CheckoutPage() {
       <div className="fixed bottom-0 inset-x-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/5 z-20 max-w-[430px] mx-auto">
         <button
           onClick={handleCreateOrder}
-          disabled={loading || (paymentMethod === 'wallet' && isWalletInsufficient) || !hasValidAddress}
+          disabled={loading || !canStartCheckout || !hasValidAddress}
           className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-lg py-4 rounded-xl hover:opacity-90 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
@@ -388,12 +432,16 @@ export default function CheckoutPage() {
               <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
               Traitement du paiement...
             </>
-          ) : (paymentMethod === 'wallet' && isWalletInsufficient) ? (
+          ) : isWalletInsufficient ? (
             'Solde portefeuille insuffisant'
           ) : !hasValidAddress ? (
             'Adresse de livraison manquante'
           ) : (
+            hasServerTotal ? (
+              `Confirmer et payer ${total.toFixed(2)} ${CURRENCY_CODE}`
+            ) : (
             `Payer ${total.toFixed(2)} ${CURRENCY_CODE}`
+            )
           )}
         </button>
 

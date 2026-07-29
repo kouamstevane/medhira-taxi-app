@@ -3,6 +3,7 @@ import {
   calculateBasePrice,
   calculateDeliveryCost,
   calculateTotalOrderPrice,
+  canStartFoodOrderCheckout,
   subscribeRestaurantOrders,
 } from '@/services/food-delivery.service';
 import type { OrderItem } from '@/types/food-delivery';
@@ -96,6 +97,29 @@ describe('FoodDeliveryService — Unit Tests', () => {
         cancelledBy: 'client',
         cancellationReason: 'payment_failed',
       });
+    });
+  });
+
+  describe('checkout preflight', () => {
+    it('bloque la création initiale si le wallet est déjà insuffisant pour le total estimé', () => {
+      expect(canStartFoodOrderCheckout({
+        paymentMethod: 'wallet',
+        walletBalance: 20,
+        estimatedTotal: 25,
+      })).toBe(false);
+    });
+
+    it('laisse le paiement carte et les wallets inconnus continuer vers la validation serveur', () => {
+      expect(canStartFoodOrderCheckout({
+        paymentMethod: 'card',
+        walletBalance: 0,
+        estimatedTotal: 25,
+      })).toBe(true);
+      expect(canStartFoodOrderCheckout({
+        paymentMethod: 'wallet',
+        walletBalance: null,
+        estimatedTotal: 25,
+      })).toBe(true);
     });
   });
 

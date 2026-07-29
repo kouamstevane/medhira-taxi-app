@@ -798,7 +798,7 @@ export interface FoodDeliveryOrder {
     lng: number
   }
   clientNeighbourhood: string       // Quartier client (révélé dès l'assignation)
-  clientAddress: {
+  clientAddress?: {
     address: string                 // Adresse complète (révélée seulement au statut picked_up)
     lat: number
     lng: number

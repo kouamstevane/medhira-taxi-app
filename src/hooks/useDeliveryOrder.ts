@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { getDatabase, ref as rtdbRef, set } from 'firebase/database'
+import { ref as rtdbRef, set } from 'firebase/database'
 import { httpsCallable } from 'firebase/functions'
-import { auth, db, getFirebaseStorage, functions } from '@/config/firebase'
+import { auth, db, getFirebaseDatabase, getFirebaseStorage, functions } from '@/config/firebase'
 import { retryWithBackoff } from '@/utils/retry'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
 
@@ -58,7 +58,7 @@ export function useDeliveryOrder(orderId: string) {
     const isActive = ACTIVE_DELIVERY_STATUSES.includes(localStatus)
 
     if (isActive && gpsWatchIdRef.current === null) {
-      const rtdb = getDatabase()
+      const rtdb = getFirebaseDatabase()
       const locationRef = rtdbRef(rtdb, `delivery_tracking/${orderId}/location`)
 
       gpsWatchIdRef.current = navigator.geolocation.watchPosition(

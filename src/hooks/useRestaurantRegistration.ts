@@ -44,7 +44,7 @@ export interface Step3Data {
   avgPricePerPerson?: number;
   imageUrl?: string;
   coverImageUrl?: string;
-  location?: { lat: number; lng: number };
+  location: { lat: number; lng: number };
 }
 
 export interface Step4Data {
@@ -223,6 +223,10 @@ export function useRestaurantRegistration() {
 
       const submit = httpsCallable(functions, 'submitRestaurantApplication');
 
+      if (!step3Data.location) {
+        throw new Error("Impossible de soumettre le restaurant sans coordonnées vérifiées.");
+      }
+
       const payload: Record<string, unknown> = {
         name: step3Data.name,
         description: step3Data.description,
@@ -236,11 +240,13 @@ export function useRestaurantRegistration() {
         openingHours: data.openingHours,
         location: step3Data.location,
       };
+
+      const requestPayload: Record<string, unknown> = { data: payload };
       if (resubmitRestaurantId) {
-        payload.restaurantId = resubmitRestaurantId;
+        requestPayload.restaurantId = resubmitRestaurantId;
       }
 
-      const result = await submit(payload);
+      const result = await submit(requestPayload);
       const resultData = result.data as { restaurantId: string };
       setRestaurantId(resultData.restaurantId);
       setSubmissionSuccess(true);

@@ -835,7 +835,8 @@ service cloud.firestore {
       // La validation du paiement et les transitions de commande passent par Cloud Functions.
       allow update: if isAuthenticated() &&
                        resource.data.userId == request.auth.uid &&
-                       resource.data.status in ['pending_payment', 'pending', 'confirmed'] &&
+                       resource.data.status == 'pending_payment' &&
+                       resource.data.paymentValidated == false &&
                        request.resource.data.status == 'cancelled' &&
                        request.resource.data.paymentValidated == resource.data.paymentValidated &&
                        request.resource.data.diff(resource.data).affectedKeys()
@@ -884,7 +885,8 @@ service cloud.firestore {
 
       allow create: if false;
 
-      allow update: if request.auth.uid == resource.data.driverId
+      allow update: if isAuthenticated()
+        && request.auth.uid == resource.data.driverId
         && (
           // Transition de statut valide
           isValidStatusTransition(resource.data.status, request.resource.data.status)
@@ -900,6 +902,7 @@ service cloud.firestore {
           request.resource.data.status != 'delivered'
           || (
             resource.data.deliveryPreference == 'leave_at_door'
+            && 'proofPhotoUrl' in request.resource.data
             && request.resource.data.proofPhotoUrl is string
             && request.resource.data.proofPhotoUrl.size() > 0
           )

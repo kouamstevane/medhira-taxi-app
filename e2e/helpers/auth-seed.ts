@@ -8,6 +8,7 @@ export interface SeedAuthUserInput {
   password?: string;
   emailVerified?: boolean;
   displayName?: string;
+  customClaims?: Record<string, unknown>;
 }
 
 export async function seedAuthUser(input: SeedAuthUserInput): Promise<void> {
@@ -30,6 +31,15 @@ export async function seedAuthUser(input: SeedAuthUserInput): Promise<void> {
     throw new Error(
       `seedAuthUser failed: ${res.status} ${await res.text()}`,
     );
+
+  if (input.customClaims) {
+    const { initializeApp, getApps } = await import('firebase-admin/app');
+    const { getAuth } = await import('firebase-admin/auth');
+    const app =
+      getApps().find((a) => a.name === 'p5-auth-seed') ??
+      initializeApp({ projectId: PROJECT_ID }, 'p5-auth-seed');
+    await getAuth(app).setCustomUserClaims(input.uid, input.customClaims);
+  }
 }
 
 export async function clearAuthEmulator(): Promise<void> {

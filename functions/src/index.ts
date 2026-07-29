@@ -35,11 +35,14 @@ import { z } from 'zod';
 import { onDocumentWritten, onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as crypto from 'crypto';
 import { getDatabase } from 'firebase-admin/database';
+import { FieldValue } from 'firebase-admin/firestore';
 import { DELIVERY_SHARE_RATE } from './config/stripe.js';
 import { selectNearestDriver, type DriverCandidate } from './utils/matching.js';
 import { enforceRateLimit } from './utils/rateLimiter.js';
 import { createStripeClient } from './stripe/stripe-client.js';
 import {
+  buildAssignedFoodDeliveryOrderData,
+  buildPickedUpClientAddress,
   canRetryDeliveryAssignment,
   getDeliveryOrderCancellationAfterRefusal,
   getFoodOrderStatusForDeliveryStatus,
@@ -868,34 +871,27 @@ export const onFoodOrderAccepted = onDocumentUpdated(
       }
 
       transaction.set(deliveryOrderRef, {
-        orderId,
-        driverId: candidate.id,
-        restaurantId: currentOrder?.restaurantId ?? after.restaurantId,
-        clientId: currentOrder?.userId ?? after.userId,
-        cityId: currentOrder?.cityId || after.cityId || 'edmonton',
-        status: 'assigned',
-        assignmentAttempt: 1,
-        deliveryPreference: currentOrder?.deliveryPreference ?? after.deliveryPreference ?? 'leave_at_door',
-        restaurantAddress: currentOrder?.restaurantAddress ?? after.restaurantAddress,
-        clientNeighbourhood: currentOrder?.clientNeighbourhood ?? after.clientNeighbourhood ?? '',
-        clientAddress: {
-          address: currentOrder?.deliveryAddress ?? after.deliveryAddress ?? '',
-          lat: currentOrder?.deliveryLocation?.lat ?? after.deliveryLocation?.lat ?? 0,
-          lng: currentOrder?.deliveryLocation?.lng ?? after.deliveryLocation?.lng ?? 0,
-          instructions: currentOrder?.deliveryInstructions ?? after.deliveryInstructions ?? undefined,
-        },
-        orderItems: (currentOrder?.orderItems ?? after.orderItems ?? []).map((item: { itemName: string; itemQuantity: number; itemPrice: number }) => ({
-          name: item.itemName,
-          qty: item.itemQuantity,
-          price: item.itemPrice,
-        })),
-        orderNumber: currentOrder?.orderNumber ?? after.orderNumber ?? '',
-        restaurantName: currentOrder?.restaurantName ?? after.restaurantName ?? '',
-        restaurantPhone: currentOrder?.restaurantPhone ?? after.restaurantPhone ?? '',
-        clientPhone: currentOrder?.customerPhone ?? after.customerPhone ?? '',
-        totalAmount: currentOrder?.totalOrderPrice ?? after.totalOrderPrice ?? 0,
-        driverEarnings: (currentOrder?.deliveryCost ?? after.deliveryCost ?? 0) * DELIVERY_SHARE_RATE,
-        cancellationImpactOnStats: true,
+        ...buildAssignedFoodDeliveryOrderData({
+          orderId,
+          driverId: candidate.id,
+          source: {
+            restaurantId: currentOrder?.restaurantId ?? after.restaurantId,
+            userId: currentOrder?.userId ?? after.userId,
+            cityId: currentOrder?.cityId || after.cityId || 'edmonton',
+            deliveryPreference: currentOrder?.deliveryPreference ?? after.deliveryPreference ?? 'leave_at_door',
+            restaurantAddress: currentOrder?.restaurantAddress ?? after.restaurantAddress,
+            clientNeighbourhood: currentOrder?.clientNeighbourhood ?? after.clientNeighbourhood ?? '',
+            orderItems: currentOrder?.orderItems ?? after.orderItems ?? [],
+            orderNumber: currentOrder?.orderNumber ?? after.orderNumber ?? '',
+            restaurantName: currentOrder?.restaurantName ?? after.restaurantName ?? '',
+            restaurantPhone: currentOrder?.restaurantPhone ?? after.restaurantPhone ?? '',
+            customerPhone: currentOrder?.customerPhone ?? after.customerPhone ?? '',
+            totalOrderPrice: currentOrder?.totalOrderPrice ?? after.totalOrderPrice ?? 0,
+            deliveryCost: currentOrder?.deliveryCost ?? after.deliveryCost ?? 0,
+          },
+          assignmentAttempt: 1,
+          deliveryShareRate: DELIVERY_SHARE_RATE,
+        }),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -1168,7 +1164,7 @@ export const onDeliveryStatusChanged = onDocumentUpdated(
 
     await db.collection('food_orders').doc(event.params.orderId).update({
       status: foodOrderStatus,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     })
 
     const sendClientNotif = async (title: string, body: string) => {
@@ -1332,7 +1328,7 @@ export const onFoodOrderRefundRequired = onDocumentUpdated(
     const before = event.data.before.data()
     const after = event.data.after.data()
     if (!before || !after || before.status === after.status) return
-    if (!['cancelled_by_restaurant', 'no_driver_available'].includes(after.status)) return
+    if (!['cancelled', 'cancelled_by_restaurant', 'no_driver_available'].includes(after.status)) return
     await refundFoodOrderPayment(event.params.orderId, after)
   },
 )
@@ -1840,6 +1836,7 @@ export const validateFoodPickupCodeAndMarkPickedUp = onCall(
 
       tx.update(deliveryRef, {
         status: 'picked_up',
+        clientAddress: buildPickedUpClientAddress(foodOrder),
         pickedUpAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
