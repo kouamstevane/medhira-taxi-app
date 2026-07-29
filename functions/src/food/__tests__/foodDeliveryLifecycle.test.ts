@@ -5,6 +5,7 @@ import {
   getNextDeliveryAssignmentAttempt,
   getStalePendingPaymentCancellationUpdate,
   isFoodOrderAssignableToDriver,
+  isFoodOrderPayable,
   isFoodOrderPaymentExpired,
   shouldSkipStaleDeliveryAssignment,
   RESTAURANT_CANCELLABLE_FOOD_ORDER_STATUSES,
@@ -59,14 +60,20 @@ describe('foodDeliveryLifecycle', () => {
     expect(shouldSkipStaleDeliveryAssignment({ status: 'accepted', paymentValidated: true }, true)).toBe(true);
   });
 
-  test('expires abandoned card payments after the configured window', () => {
+  test('allows payment only while the food order is pending payment', () => {
+    expect(isFoodOrderPayable({ status: 'pending_payment', paymentValidated: false })).toBe(true);
+    expect(isFoodOrderPayable({ status: 'cancelled', paymentValidated: false })).toBe(false);
+    expect(isFoodOrderPayable({ status: 'confirmed', paymentValidated: true })).toBe(false);
+  });
+
+  test('expires abandoned payment attempts after the configured window', () => {
     const now = Date.UTC(2026, 6, 28, 12, 0, 0);
     const staleCreatedAt = new Date(now - 31 * 60 * 1000);
     const freshCreatedAt = new Date(now - 10 * 60 * 1000);
 
     expect(isFoodOrderPaymentExpired({ status: 'pending_payment', paymentMethod: 'card', createdAt: staleCreatedAt }, now)).toBe(true);
     expect(isFoodOrderPaymentExpired({ status: 'pending_payment', paymentMethod: 'card', createdAt: freshCreatedAt }, now)).toBe(false);
-    expect(isFoodOrderPaymentExpired({ status: 'pending_payment', paymentMethod: 'wallet', createdAt: staleCreatedAt }, now)).toBe(false);
+    expect(isFoodOrderPaymentExpired({ status: 'pending_payment', paymentMethod: 'wallet', createdAt: staleCreatedAt }, now)).toBe(true);
     expect(getStalePendingPaymentCancellationUpdate()).toEqual({
       status: 'cancelled',
       cancelledBy: 'system',

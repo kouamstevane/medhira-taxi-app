@@ -14,6 +14,7 @@ import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { createStripeClient } from '../stripe/stripe-client.js';
+import { getActiveMarketCode } from '../config/market.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 
@@ -42,7 +43,6 @@ const PEAK_HOURS = {
 };
 
 const CURRENCY_CODE = 'CAD';
-const ACTIVE_MARKET = 'CA';
 
 const STRIPE_CURRENCY_BY_MARKET: Record<string, string | null> = {
   CM: null,
@@ -206,7 +206,7 @@ export const bookingsComplete = onCall(
 
         try {
           if (paymentMethod === 'card' && booking.stripePaymentIntentId) {
-            const currency = STRIPE_CURRENCY_BY_MARKET[ACTIVE_MARKET];
+            const currency = STRIPE_CURRENCY_BY_MARKET[getActiveMarketCode()];
             if (!currency) throw new Error('Devise non supportée');
 
             const price = Number(booking.price) + bookingBonus;

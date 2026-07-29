@@ -17,6 +17,7 @@ import {
   calculateVerifiedFoodOrderTotals,
   type VerifiedMenuItem,
 } from '../food/foodOrderPricing.js';
+import { isFoodOrderPayable } from '../food/foodDeliveryLifecycle.js';
 
 const CURRENCY_CODE = 'CAD';
 
@@ -74,6 +75,10 @@ export const walletPayFoodOrder = onCall(
 
         if (order.paymentValidated === true || order.status === 'confirmed') {
           return; // Déjà payée
+        }
+
+        if (!isFoodOrderPayable(order)) {
+          throw new HttpsError('failed-precondition', 'Cette commande ne peut plus être payée.');
         }
 
         const restaurantSnap = await tx.get(db.collection('restaurants').doc(order.restaurantId));

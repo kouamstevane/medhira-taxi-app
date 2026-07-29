@@ -57,6 +57,7 @@ function makeRequest(data: unknown, auth?: { uid: string }) {
 describe('createStripeConnectAccount', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.ACTIVE_MARKET = 'FR';
     mockedRateLimit.mockResolvedValue(undefined);
   });
 
@@ -164,6 +165,7 @@ describe('createStripeConnectAccount', () => {
     expect(mockStripeInstance.accounts.create).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'express',
+        country: 'FR',
         metadata: expect.objectContaining({ accountType: 'restaurant', restaurantId: 'r1' }),
       })
     );

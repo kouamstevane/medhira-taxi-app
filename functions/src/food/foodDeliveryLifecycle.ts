@@ -52,6 +52,10 @@ export function isFoodOrderAssignableToDriver(order: { status?: unknown; payment
   return order?.status === 'accepted' && order.paymentValidated === true;
 }
 
+export function isFoodOrderPayable(order: { status?: unknown; paymentValidated?: unknown } | null | undefined): boolean {
+  return order?.status === 'pending_payment' && order.paymentValidated !== true;
+}
+
 export function shouldSkipStaleDeliveryAssignment(
   order: { status?: unknown; paymentValidated?: unknown } | null | undefined,
   deliveryOrderAlreadyExists: boolean,
@@ -74,7 +78,7 @@ export function isFoodOrderPaymentExpired(
 ): boolean {
   const createdAtMs = toMillis(order.createdAt);
   return order.status === 'pending_payment'
-    && order.paymentMethod === 'card'
+    && (order.paymentMethod === 'card' || order.paymentMethod === 'wallet')
     && createdAtMs != null
     && nowMs - createdAtMs >= PENDING_CARD_PAYMENT_EXPIRY_MS;
 }

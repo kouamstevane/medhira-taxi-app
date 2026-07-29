@@ -147,6 +147,7 @@ export interface FoodOrder {
   id: string;
   userId: string; // Client qui commande
   restaurantId: string; // Restaurant
+  restaurantOwnerId?: string; // UID Firebase du propriétaire restaurant
   driverId?: string; // Chauffeur assigné
   orderItems: OrderItem[];
   deliveryDistance: number; // Distance en km

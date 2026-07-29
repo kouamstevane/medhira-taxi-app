@@ -9,6 +9,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, auth, functions } from '@/config/firebase';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { Restaurant } from '@/types/food-delivery';
+import { CURRENCY_CODE } from '@/utils/constants';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -244,7 +245,7 @@ export default function AdminRestaurantsPage() {
                           {restaurant.cuisineType.slice(0, 2).join(', ')}
                           {restaurant.cuisineType.length > 2 && '...'}
                         </div>
-                        <div className="text-[11px] text-slate-500">Budget: {restaurant.avgPricePerPerson}€/pers</div>
+                        <div className="text-[11px] text-slate-500">Budget: {restaurant.avgPricePerPerson} {CURRENCY_CODE}/pers</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
@@ -340,7 +341,7 @@ export default function AdminRestaurantsPage() {
                     </div>
                     <div>
                       <span className="block text-[10px] text-slate-500 uppercase mb-1">Budget Moyen</span>
-                      <p className="text-sm font-bold text-white">{selectedRestaurant.avgPricePerPerson}€ / Personne</p>
+                      <p className="text-sm font-bold text-white">{selectedRestaurant.avgPricePerPerson} {CURRENCY_CODE} / Personne</p>
                     </div>
                   </div>
                 </section>

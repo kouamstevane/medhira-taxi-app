@@ -5,6 +5,7 @@ import { z } from 'zod';
 import * as admin from 'firebase-admin';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { createStripeClient } from './stripe-client.js';
+import { getActiveMarketCountryCode } from '../config/market.js';
 
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const APP_BASE_URL = defineSecret('APP_BASE_URL');
@@ -45,7 +46,7 @@ export async function handleCreateStripeConnectAccount(request: CallableRequest<
     if (!accountId) {
       const account = await stripe.accounts.create({
         type: 'express',
-        country: 'FR',
+        country: getActiveMarketCountryCode(),
         email: r.ownerEmail,
         metadata: { accountType: 'restaurant', ownerUid: uid, restaurantId },
         capabilities: { card_payments: { requested: true }, transfers: { requested: true } },

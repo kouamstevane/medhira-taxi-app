@@ -1,4 +1,4 @@
-import { calculateVerifiedFoodOrderTotals, toStripeAmount } from '../foodOrderPricing';
+import { calculateRoadDistanceKm, calculateVerifiedFoodOrderTotals, toStripeAmount } from '../foodOrderPricing';
 
 describe('foodOrderPricing', () => {
   test('recalculates item prices from menu documents instead of trusting client prices', () => {
@@ -41,5 +41,23 @@ describe('foodOrderPricing', () => {
 
   test('converts CAD amounts to Stripe cents', () => {
     expect(toStripeAmount(36.5, 'cad')).toBe(3650);
+  });
+
+  test('rejects client-supplied distance when server distance is available', () => {
+    const result = calculateRoadDistanceKm({
+      clientDistanceKm: 0.1,
+      serverDistanceKm: 8.42,
+    });
+
+    expect(result).toBe(8.42);
+  });
+
+  test('rejects orders when no trusted server distance is available', () => {
+    expect(() =>
+      calculateRoadDistanceKm({
+        clientDistanceKm: 1,
+        serverDistanceKm: null,
+      }),
+    ).toThrow('Distance de livraison indisponible');
   });
 });

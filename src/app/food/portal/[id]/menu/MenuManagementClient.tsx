@@ -13,6 +13,7 @@ import { ToastContainer } from '@/components/ui/Toast';
 import { ERROR_MESSAGES } from '@/utils/constants';
 import type { Restaurant, MenuItem } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
+import { CURRENCY_CODE } from '@/utils/constants';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 
 export default function MenuManagementClient() {
@@ -105,7 +106,8 @@ export default function MenuManagementClient() {
     try {
       const itemData: Partial<MenuItem> = {
         ...form,
-        description: form.description || undefined,
+        description: form.description.trim(),
+        imageUrl: form.imageUrl.trim() || undefined,
         price: parseFloat(form.price),
         restaurantId: id,
         id: editingItem?.id
@@ -310,7 +312,7 @@ export default function MenuManagementClient() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Prix (XOF) *</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Prix ({CURRENCY_CODE}) *</label>
                   <input
                     type="number"
                     value={form.price}

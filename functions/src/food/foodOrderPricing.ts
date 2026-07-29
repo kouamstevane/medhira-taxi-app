@@ -43,8 +43,24 @@ export interface VerifiedFoodOrderTotals {
   totalOrderPrice: number;
 }
 
+export interface TrustedDistanceInput {
+  clientDistanceKm?: number;
+  serverDistanceKm: number | null;
+}
+
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+export function calculateRoadDistanceKm(input: TrustedDistanceInput): number {
+  if (input.serverDistanceKm == null) {
+    throw new HttpsError('failed-precondition', 'Distance de livraison indisponible.');
+  }
+  const distance = Number(input.serverDistanceKm);
+  if (!Number.isFinite(distance) || distance < 0 || distance > 100) {
+    throw new HttpsError('failed-precondition', 'Distance de livraison indisponible.');
+  }
+  return distance;
 }
 
 export function calculateDeliveryCost(deliveryDistance: number, isWeekend: boolean): number {

@@ -98,6 +98,10 @@ export const payFoodOrderWithCard = onCall(
           };
         }
 
+        if (order.status !== 'pending_payment') {
+          throw new HttpsError('failed-precondition', 'Cette commande ne peut plus être payée.');
+        }
+
         const restaurantSnap = await tx.get(db.collection('restaurants').doc(order.restaurantId));
         if (!restaurantSnap.exists) {
           throw new HttpsError('not-found', 'Restaurant introuvable');

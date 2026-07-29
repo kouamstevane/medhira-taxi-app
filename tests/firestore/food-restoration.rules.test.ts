@@ -94,6 +94,26 @@ describe('Food restoration Firestore rules', () => {
     }));
   });
 
+  test('client cannot create food orders directly', async () => {
+    const db = testEnv.authenticatedContext(clientId).firestore();
+
+    await assertFails(setDoc(doc(db, 'food_orders', 'client-created-order'), {
+      id: 'client-created-order',
+      userId: clientId,
+      restaurantId,
+      orderItems: [{ menuItemId: 'item-1', itemName: 'Plat', itemQuantity: 1, itemPrice: 12 }],
+      deliveryDistance: 1,
+      isWeekend: false,
+      deliveryAddress: '123 Rue Test',
+      basePrice: 12,
+      deliveryCost: 1.5,
+      totalOrderPrice: 13.5,
+      status: 'pending_payment',
+      pickupCode: 'ABC123',
+      paymentValidated: false,
+    }));
+  });
+
   test('restaurant owner cannot perform food order status transitions directly', async () => {
     await seedFoodOrder('confirmed');
     const db = testEnv.authenticatedContext(restaurantOwnerId).firestore();
@@ -219,6 +239,26 @@ describe('Food restoration Firestore rules', () => {
       price: 12.5,
       category: 'plats',
       isAvailable: true,
+    }));
+  });
+
+  test('restaurant owner can toggle legacy menu item availability without rewriting the full item', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'restaurants', restaurantId), {
+        ownerId: restaurantOwnerId,
+        status: 'approved',
+      });
+      await setDoc(doc(db, 'restaurants', restaurantId, 'menu_items', 'legacy-item'), {
+        name: 'Ancien plat',
+        isAvailable: true,
+      });
+    });
+
+    const ownerDb = testEnv.authenticatedContext(restaurantOwnerId).firestore();
+    await assertSucceeds(updateDoc(doc(ownerDb, 'restaurants', restaurantId, 'menu_items', 'legacy-item'), {
+      isAvailable: false,
+      updatedAt: '2026-07-28T00:05:00.000Z',
     }));
   });
 

@@ -139,6 +139,30 @@ export const PayFoodOrderWithCardSchema = z.object({
 });
 export type PayFoodOrderWithCardInput = z.infer<typeof PayFoodOrderWithCardSchema>;
 
+export const CreateFoodOrderRequestSchema = z.object({
+  restaurantId: z.string().min(1),
+  orderItems: z.array(z.object({
+    menuItemId: z.string().min(1),
+    itemName: z.string().min(1).max(200),
+    itemQuantity: z.number().int().positive().max(99),
+    itemPrice: z.number().positive(),
+  })).min(1).max(99),
+  isWeekend: z.boolean(),
+  deliveryAddress: z.string().min(5).max(500),
+  deliveryLocation: z.object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+  }).optional(),
+  deliveryPreference: z.enum(['leave_at_door', 'meet_outside', 'meet_at_door']).optional(),
+  deliveryInstructions: z.string().max(500).optional(),
+  customerPhone: z.string().max(32).optional(),
+  clientNeighbourhood: z.string().max(120).optional(),
+  cityId: z.string().min(1).max(64).optional(),
+  paymentMethod: z.enum(['wallet', 'card']).optional(),
+}).strict();
+
+export type CreateFoodOrderRequestInput = z.infer<typeof CreateFoodOrderRequestSchema>;
+
 export const RestaurantManageFoodOrderStatusSchema = z.object({
   orderId: z.string().min(1),
   status: z.enum(['accepted', 'preparing', 'ready', 'cancelled_by_restaurant']),
@@ -182,7 +206,7 @@ export const RestaurantApplicationDataSchema = z.object({
       closed: z.boolean(),
     }),
   ).optional(),
-  location: z.object({ lat: z.number(), lng: z.number() }).optional(),
+  location: z.object({ lat: z.number(), lng: z.number() }),
 }).strict();
 
 export const SubmitRestaurantApplicationRequestSchema = z.object({

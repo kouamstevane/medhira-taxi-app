@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CUISINE_TYPES } from '@/utils/restaurant-constants';
 import type { Step3Data } from '@/hooks/useRestaurantRegistration';
+import { CURRENCY_CODE } from '@/utils/constants';
 
 interface Step3RestaurantProps {
   onNext: (data: Step3Data) => void;
@@ -20,6 +21,7 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
   const [phone, setPhone] = useState(initialData?.phone || '');
   const [email, setEmail] = useState(initialData?.email || '');
   const [avgPrice, setAvgPrice] = useState(initialData?.avgPricePerPerson?.toString() || '');
+  const [location, setLocation] = useState(initialData?.location);
   const [error, setError] = useState<string | null>(null);
 
   const toggleCuisine = (cuisine: string) => {
@@ -28,7 +30,19 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
     );
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const geocodeAddress = async (value: string): Promise<{ lat: number; lng: number } | null> => {
+    if (location && value.trim() === address.trim()) return location;
+    const googleApi = typeof window !== 'undefined' ? window.google : undefined;
+    if (!googleApi?.maps?.Geocoder) return null;
+
+    const geocoder = new googleApi.maps.Geocoder();
+    const response = await geocoder.geocode({ address: value });
+    const result = response.results?.[0]?.geometry?.location;
+    if (!result) return null;
+    return { lat: result.lat(), lng: result.lng() };
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -39,6 +53,13 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
     if (!phone.trim()) { setError('Le téléphone est requis.'); return; }
     if (!email.trim()) { setError("L'email du restaurant est requis."); return; }
 
+    const resolvedLocation = await geocodeAddress(address.trim()).catch(() => null);
+    if (!resolvedLocation) {
+      setError("Impossible de vérifier les coordonnées de cette adresse. Vérifiez l'adresse puis réessayez.");
+      return;
+    }
+    setLocation(resolvedLocation);
+
     onNext({
       name: name.trim(),
       description: description.trim(),
@@ -47,6 +68,7 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
       phone: phone.trim(),
       email: email.trim(),
       avgPricePerPerson: avgPrice ? parseFloat(avgPrice) : undefined,
+      location: resolvedLocation,
     });
   };
 
@@ -96,7 +118,7 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
 
           <div>
             <label htmlFor="restAddress" className="block text-sm font-medium text-gray-300 mb-1">Adresse</label>
-            <input id="restAddress" type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="12 Rue de la Paix, 75002 Paris" required aria-required="true" />
+            <input id="restAddress" type="text" value={address} onChange={(e) => { setAddress(e.target.value); setLocation(undefined); }} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="12 Rue de la Paix, 75002 Paris" required aria-required="true" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -111,7 +133,7 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
           </div>
 
           <div>
-            <label htmlFor="avgPrice" className="block text-sm font-medium text-gray-300 mb-1">Prix moyen par personne (€, optionnel)</label>
+            <label htmlFor="avgPrice" className="block text-sm font-medium text-gray-300 mb-1">Prix moyen par personne ({CURRENCY_CODE}, optionnel)</label>
             <input id="avgPrice" type="number" value={avgPrice} onChange={(e) => setAvgPrice(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="25" min="0" step="1" />
           </div>
 

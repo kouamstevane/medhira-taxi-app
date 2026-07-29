@@ -369,6 +369,7 @@ export const encryptSensitiveData = onCall(
 export { submitDriverApplication, createDriverProfile } from './driver/submitDriverApplication.js';
 export { submitRestaurantApplication } from './restaurant/submitRestaurantApplication.js';
 export { restaurantManageFoodOrderStatus } from './restaurant/manageFoodOrderStatus.js';
+export { createFoodOrder } from './food/createFoodOrder.js';
 export { activateClientRole } from './roles/activateClientRole.js';
 export { notifyAdminNewRestaurant } from './admin/notifyAdminNewRestaurant.js';
 export { createStripeConnectAccount } from './stripe/createStripeConnectAccount.js';
@@ -847,11 +848,10 @@ export const onFoodOrderAccepted = onDocumentUpdated(
     }
 
     // 5. Créer food_delivery_orders + marquer le driver comme occupé (transaction)
-    let assignedDriver = false
     let assignedCandidate: DriverCandidate | null = null
-    while (nearest && !assignedDriver) {
+    while (nearest && !assignedCandidate) {
       const candidate = nearest
-      await db.runTransaction(async (transaction) => {
+      const result = await db.runTransaction(async (transaction): Promise<'assigned' | 'retry' | 'stale'> => {
       const foodOrderRef = db.collection('food_orders').doc(orderId)
       const deliveryOrderRef = db.collection('food_delivery_orders').doc(orderId)
       const driverRef = db.collection('drivers').doc(candidate.id)
@@ -862,9 +862,9 @@ export const onFoodOrderAccepted = onDocumentUpdated(
       ])
       const currentOrder = currentOrderSnap.data()
       const currentDriver = driverSnap.data()
-      if (shouldSkipStaleDeliveryAssignment(currentOrder, deliveryOrderSnap.exists)) return
+      if (shouldSkipStaleDeliveryAssignment(currentOrder, deliveryOrderSnap.exists)) return 'stale'
       if (currentDriver?.activeDeliveryOrderId != null) {
-        return
+        return 'retry'
       }
 
       transaction.set(deliveryOrderRef, {
@@ -912,16 +912,19 @@ export const onFoodOrderAccepted = onDocumentUpdated(
         deliveryAssignmentAttempt: 1,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      assignedDriver = true
-      assignedCandidate = candidate
+      return 'assigned'
     });
-      if (!assignedDriver) {
+      if (result === 'assigned') {
+        assignedCandidate = candidate
+      } else if (result === 'retry') {
         remainingCandidates = remainingCandidates.filter((candidate) => candidate.id !== nearest?.id)
         nearest = selectNearestDriver(remainingCandidates, after.restaurantAddress)
+      } else {
+        break
       }
     }
 
-    if (!assignedDriver) {
+    if (!assignedCandidate) {
       const orderRef = db.collection('food_orders').doc(orderId)
       await db.runTransaction(async (transaction) => {
         const currentOrderSnap = await transaction.get(orderRef)
@@ -936,19 +939,16 @@ export const onFoodOrderAccepted = onDocumentUpdated(
       return
     }
 
-    const finalCandidate = assignedCandidate as DriverCandidate | null
-    if (!finalCandidate) return
-
-    await setDeliveryTrackingAccess(orderId, finalCandidate.id, [finalCandidate.id, after.userId])
+    await setDeliveryTrackingAccess(orderId, assignedCandidate.id, [assignedCandidate.id, after.userId])
 
     // 7. Émettre custom claim conservé pour compatibilité des clients déjà connectés
     await Promise.all([
-      setActiveDeliveryOrderClaim(finalCandidate.id, orderId),
+      setActiveDeliveryOrderClaim(assignedCandidate.id, orderId),
       setActiveDeliveryOrderClaim(after.userId, orderId),
     ])
 
     // 8. Notification FCM au livreur
-    const driverSnap = await db.collection('drivers').doc(finalCandidate.id).get()
+    const driverSnap = await db.collection('drivers').doc(assignedCandidate.id).get()
     const fcmToken = driverSnap.data()?.fcmToken
     if (fcmToken) {
       await admin.messaging().send({
@@ -1080,8 +1080,7 @@ async function reassignFoodDeliveryOrderAfterDriverRefusal(
   }
 
   const nextAttempt = getNextDeliveryAssignmentAttempt(currentAttempt)
-  let reassigned = false
-  await db.runTransaction(async (tx) => {
+  const reassignmentResult = await db.runTransaction(async (tx): Promise<'reassigned' | 'not_reassigned'> => {
     const [latestFoodOrderSnap, latestDeliverySnap, nextDriverSnap] = await Promise.all([
       tx.get(foodOrderRef),
       tx.get(deliveryRef),
@@ -1090,15 +1089,15 @@ async function reassignFoodDeliveryOrderAfterDriverRefusal(
     const latestFoodOrder = latestFoodOrderSnap.data()
     const latestDeliveryOrder = latestDeliverySnap.data()
     const latestDriver = nextDriverSnap.data()
-    if (!latestFoodOrderSnap.exists || !latestDeliverySnap.exists) return
+    if (!latestFoodOrderSnap.exists || !latestDeliverySnap.exists) return 'not_reassigned'
     if (!['accepted', 'preparing', 'ready'].includes(String(latestFoodOrder?.status))) {
       tx.update(deliveryRef, {
         ...getDeliveryOrderCancellationAfterRefusal(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
-      return
+      return 'not_reassigned'
     }
-    if (latestDeliveryOrder?.status !== 'refused') return
+    if (latestDeliveryOrder?.status !== 'refused') return 'not_reassigned'
     if (latestDriver?.activeDeliveryOrderId != null) {
       tx.update(foodOrderRef, {
         status: 'no_driver_available',
@@ -1108,7 +1107,7 @@ async function reassignFoodDeliveryOrderAfterDriverRefusal(
         ...getDeliveryOrderCancellationAfterRefusal(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
-      return
+      return 'not_reassigned'
     }
 
     tx.update(deliveryRef, {
@@ -1128,9 +1127,9 @@ async function reassignFoodDeliveryOrderAfterDriverRefusal(
       activeDeliveryOrderId: orderId,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     })
-    reassigned = true
+    return 'reassigned'
   })
-  if (!reassigned) {
+  if (reassignmentResult !== 'reassigned') {
     await setActiveDeliveryOrderClaim(clientId, null)
     return
   }
@@ -1338,14 +1337,13 @@ export const onFoodOrderRefundRequired = onDocumentUpdated(
   },
 )
 
-export const cleanupAbandonedFoodCardPayments = onSchedule(
+export const cleanupAbandonedFoodPayments = onSchedule(
   { schedule: 'every 15 minutes', region: 'europe-west1' },
   async () => {
     const db = admin.firestore()
     const threshold = admin.firestore.Timestamp.fromMillis(Date.now() - 30 * 60 * 1000)
     const staleOrders = await db.collection('food_orders')
       .where('status', '==', 'pending_payment')
-      .where('paymentMethod', '==', 'card')
       .where('createdAt', '<=', threshold)
       .limit(100)
       .get()
@@ -1561,8 +1559,7 @@ export const onDeliveryOrderTimeout = onRequest(
       return
     }
 
-    let reassigned = false
-    await db.runTransaction(async (tx) => {
+    const reassignmentResult = await db.runTransaction(async (tx): Promise<'reassigned' | 'not_reassigned'> => {
       const [latestOrderSnap, latestFoodOrderSnap, nextDriverSnap] = await Promise.all([
         tx.get(orderRef),
         tx.get(foodOrderRef),
@@ -1571,15 +1568,15 @@ export const onDeliveryOrderTimeout = onRequest(
       const latestOrder = latestOrderSnap.data()
       const latestFoodOrder = latestFoodOrderSnap.data()
       const latestDriver = nextDriverSnap.data()
-      if (latestOrder?.status !== 'assigned') return
+      if (latestOrder?.status !== 'assigned') return 'not_reassigned'
       if (!['accepted', 'preparing', 'ready'].includes(String(latestFoodOrder?.status))) {
         tx.update(orderRef, { status: 'cancelled', cancellationReason: 'food_order_not_assignable', cancellationImpactOnStats: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
-        return
+        return 'not_reassigned'
       }
       if (latestDriver?.activeDeliveryOrderId != null) {
         tx.update(foodOrderRef, { status: 'no_driver_available', updatedAt: admin.firestore.FieldValue.serverTimestamp() })
         tx.update(orderRef, { status: 'cancelled', cancellationReason: 'driver_cancelled', cancellationImpactOnStats: false, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
-        return
+        return 'not_reassigned'
       }
       tx.update(orderRef, {
         driverId: nextDriver.id,
@@ -1595,9 +1592,9 @@ export const onDeliveryOrderTimeout = onRequest(
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       })
       tx.update(db.collection('drivers').doc(nextDriver.id), { activeDeliveryOrderId: orderId, updatedAt: admin.firestore.FieldValue.serverTimestamp() })
-      reassigned = true
+      return 'reassigned'
     })
-    if (!reassigned) {
+    if (reassignmentResult !== 'reassigned') {
       await setActiveDeliveryOrderClaim(order.clientId, null)
       res.status(200).send('Order no longer assignable')
       return

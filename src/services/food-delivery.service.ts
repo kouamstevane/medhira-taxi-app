@@ -204,8 +204,9 @@ export const getApprovedRestaurants = async (
     constraints.push(where('avgPricePerPerson', '<=', filters.maxAvgPricePerPerson));
   }
 
-  // orderBy obligatoire avant startAfter sinon l'ordre Firestore est indéfini
-  // et la pagination produit des doublons / des manques entre pages.
+  if (filters?.maxAvgPricePerPerson) {
+    constraints.push(orderBy('avgPricePerPerson', 'asc'));
+  }
   constraints.push(orderBy('createdAt', 'desc'));
 
   if (lastVisible) {
@@ -420,108 +421,79 @@ export const createFoodOrder = async (
   }
 ): Promise<string> => {
   try {
-  const validationResult = CreateFoodOrderSchema.safeParse(orderData);
-  if (!validationResult.success) {
-    throw new Error(`Données de commande invalides: ${validationResult.error.message}`);
-  }
+    const validationResult = CreateFoodOrderSchema.safeParse(orderData);
+    if (!validationResult.success) {
+      throw new Error(`Données de commande invalides: ${validationResult.error.message}`);
+    }
 
-  const { basePrice, deliveryCost, totalOrderPrice } = calculateTotalOrderPrice(
-    orderData.orderItems,
-    orderData.deliveryDistance,
-    orderData.isWeekend
-  );
+    const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+    const app = getApps().length ? getApp() : undefined;
+    if (!app) throw new Error('Firebase app not initialized');
+    const functions = getFunctions(app, functionsRegion);
+    const createCallable = httpsCallable<
+      {
+        restaurantId: string;
+        orderItems: OrderItem[];
+        isWeekend: boolean;
+        deliveryAddress: string;
+        deliveryLocation?: { lat: number; lng: number };
+        deliveryPreference?: 'leave_at_door' | 'meet_outside' | 'meet_at_door';
+        deliveryInstructions?: string;
+        customerPhone?: string;
+        clientNeighbourhood?: string;
+        cityId?: string;
+        paymentMethod?: 'wallet' | 'card';
+      },
+      { orderId: string }
+    >(functions, 'createFoodOrder');
+    const selectedPaymentMethod = orderData.paymentMethod ?? 'wallet';
 
-  const restaurant = await getRestaurantById(orderData.restaurantId);
-  if (!restaurant) {
-    throw new Error('Restaurant introuvable');
-  }
-  if (restaurant.status !== 'approved' || restaurant.stripeConnectStatus !== 'active' || restaurant.isOpen === false) {
-    throw new Error('Ce restaurant n\'est pas disponible actuellement');
-  }
+    const result = await createCallable({
+      restaurantId: orderData.restaurantId,
+      orderItems: orderData.orderItems,
+      isWeekend: orderData.isWeekend,
+      deliveryAddress: orderData.deliveryAddress,
+      deliveryLocation: orderData.deliveryLocation,
+      deliveryPreference: orderData.deliveryPreference,
+      deliveryInstructions: orderData.deliveryInstructions,
+      customerPhone: orderData.customerPhone,
+      clientNeighbourhood: orderData.clientNeighbourhood,
+      cityId: orderData.cityId,
+      paymentMethod: selectedPaymentMethod,
+    });
+    const orderId = result.data.orderId;
 
-  const ordersRef = collection(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS);
-  const newOrderRef = doc(ordersRef);
-
-  const pickupCode = generatePickupCode();
-  const selectedPaymentMethod = orderData.paymentMethod ?? 'wallet';
-
-  const order: Record<string, unknown> = {
-    id: newOrderRef.id,
-    userId: orderData.userId,
-    restaurantId: orderData.restaurantId,
-    orderItems: orderData.orderItems,
-    deliveryDistance: orderData.deliveryDistance,
-    isWeekend: orderData.isWeekend,
-    deliveryAddress: orderData.deliveryAddress,
-    basePrice,
-    deliveryCost,
-    totalOrderPrice,
-    status: 'pending_payment',
-    pickupCode,
-    paymentValidated: false,
-    paymentMethod: selectedPaymentMethod,
-    restaurantName: restaurant.name,
-    restaurantPhone: restaurant.phone || '',
-    restaurantAddress: {
-      address: restaurant.address || '',
-      lat: restaurant.location?.lat ?? 0,
-      lng: restaurant.location?.lng ?? 0,
-    },
-    deliveryPreference: orderData.deliveryPreference ?? 'leave_at_door',
-    customerPhone: orderData.customerPhone ?? '',
-    clientNeighbourhood: orderData.clientNeighbourhood ?? '',
-    cityId: orderData.cityId ?? 'edmonton',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-
-  // Only set optional fields when defined — Firestore rejects `undefined` values
-  if (orderData.deliveryLocation) order.deliveryLocation = orderData.deliveryLocation;
-  if (restaurant.imageUrl) order.restaurantImage = restaurant.imageUrl;
-  if (orderData.deliveryInstructions) order.deliveryInstructions = orderData.deliveryInstructions;
-
-  try {
-    // 1. Créer le document de commande conforme aux règles Firestore (paymentValidated = false)
-    await setDoc(newOrderRef, order);
-
-    // 2. Le wallet est validé immédiatement côté serveur.
-    // Le paiement carte passe ensuite par Stripe Elements, puis confirmation serveur.
     if (selectedPaymentMethod === 'wallet') {
-      await payFoodOrderWithWallet(newOrderRef.id);
+      try {
+        await payFoodOrderWithWallet(orderId);
+      } catch (payError) {
+        await updateDoc(doc(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS, orderId), {
+          ...buildPaymentFailureCancellationUpdate(),
+          cancelledAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }).catch((cleanupError) => {
+          logger.warn('Nettoyage commande paiement échoué impossible', {
+            orderId,
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          });
+        });
+        const msg = payError instanceof Error ? payError.message : String(payError);
+        throw new Error(`Paiement échoué: ${msg}`);
+      }
     }
-  } catch (payError) {
-    const msg = (payError as Error).message;
-    await updateDoc(newOrderRef, {
-      ...buildPaymentFailureCancellationUpdate(),
-      cancelledAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }).catch((cleanupError) => {
-      logger.warn('Nettoyage commande paiement échoué impossible', {
-        orderId: newOrderRef.id,
-        error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-      });
-    });
-    logger.error('Création commande livraison échouée', {
-      userId: orderData.userId,
-      error: msg,
-    });
-    throw new Error(`Paiement échoué: ${msg}`);
-  }
 
-  logger.info(
-    selectedPaymentMethod === 'wallet'
-      ? 'Commande de livraison créée et payée'
-      : 'Commande de livraison créée, paiement carte en attente',
-    {
-    orderId: newOrderRef.id,
-    restaurantId: orderData.restaurantId,
-    totalOrderPrice,
-    paymentMethod: selectedPaymentMethod,
-    pickupCode: order.pickupCode,
-    }
-  );
+    logger.info(
+      selectedPaymentMethod === 'wallet'
+        ? 'Commande de livraison créée et payée'
+        : 'Commande de livraison créée, paiement carte en attente',
+      {
+        orderId,
+        restaurantId: orderData.restaurantId,
+        paymentMethod: selectedPaymentMethod,
+      }
+    );
 
-  return newOrderRef.id;
+    return orderId;
   } catch (error) {
     console.error('[food-delivery.service] createFoodOrder failed:', error);
     throw error;
@@ -910,6 +882,11 @@ export const FoodDeliveryService = {
       ...itemData,
       id: itemId,
       restaurantId,
+      name: itemData.name ?? '',
+      description: itemData.description ?? '',
+      price: itemData.price ?? 0,
+      category: itemData.category ?? 'Plats',
+      isAvailable: itemData.isAvailable ?? true,
       updatedAt: serverTimestamp(),
     };
 

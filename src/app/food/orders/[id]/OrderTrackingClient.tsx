@@ -56,6 +56,17 @@ export const getFoodOrderStepIndex = (status?: FoodOrderStatus): number => {
   }
 };
 
+export const getRestaurantConversationUid = (order: Pick<FoodOrder, 'restaurantId'> & { restaurantOwnerId?: string }): string =>
+  order.restaurantOwnerId || order.restaurantId;
+
+export const resolveRestaurantConversationUid = async (
+  order: Pick<FoodOrder, 'restaurantId'> & { restaurantOwnerId?: string },
+  getOwnerId: (restaurantId: string) => Promise<string | null | undefined>,
+): Promise<string> => {
+  if (order.restaurantOwnerId) return order.restaurantOwnerId;
+  return (await getOwnerId(order.restaurantId)) || order.restaurantId;
+};
+
 export default function OrderTrackingClient() {
   const params = useParams()
   const orderId = params.id as string
@@ -64,6 +75,7 @@ export default function OrderTrackingClient() {
   const { currentUser, userData } = useAuth();
 
   const [order, setOrder] = useState<FoodOrder | null>(null);
+  const [restaurantConversationUid, setRestaurantConversationUid] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -111,6 +123,28 @@ export default function OrderTrackingClient() {
 
     return () => unsubscribe();
   }, [orderId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!order) {
+      setRestaurantConversationUid(null);
+      return;
+    }
+
+    resolveRestaurantConversationUid(order, async (restaurantId) => {
+      const restaurant = await FoodDeliveryService.getRestaurantById(restaurantId);
+      return restaurant?.ownerId;
+    }).then((uid) => {
+      if (!cancelled) setRestaurantConversationUid(uid);
+    }).catch((err) => {
+      console.error('Erreur résolution propriétaire restaurant:', err);
+      if (!cancelled) setRestaurantConversationUid(getRestaurantConversationUid(order));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [order]);
 
   const currentStepIndex = getFoodOrderStepIndex(order?.status);
 
@@ -192,7 +226,7 @@ export default function OrderTrackingClient() {
       role: 'client',
     },
     participantB: {
-      uid: order.restaurantId,
+      uid: restaurantConversationUid || getRestaurantConversationUid(order),
       name: order.restaurantName || 'Restaurant',
       role: 'restaurant',
     },

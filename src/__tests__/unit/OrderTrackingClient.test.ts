@@ -1,4 +1,8 @@
-import { getFoodOrderStepIndex } from '@/app/food/orders/[id]/OrderTrackingClient';
+import {
+  getFoodOrderStepIndex,
+  getRestaurantConversationUid,
+  resolveRestaurantConversationUid,
+} from '@/app/food/orders/[id]/OrderTrackingClient';
 import type { FoodOrderStatus } from '@/types/food-delivery';
 
 describe('OrderTrackingClient — getFoodOrderStepIndex Unit Tests', () => {
@@ -34,5 +38,24 @@ describe('OrderTrackingClient — getFoodOrderStepIndex Unit Tests', () => {
     expect(getFoodOrderStepIndex('cancelled')).toBe(-1);
     expect(getFoodOrderStepIndex('cancelled_by_restaurant')).toBe(-1);
     expect(getFoodOrderStepIndex('no_driver_available')).toBe(-1);
+  });
+});
+
+describe('OrderTrackingClient — getRestaurantConversationUid Unit Tests', () => {
+  it('utilise l\'UID propriétaire restaurant quand il est présent', () => {
+    expect(getRestaurantConversationUid({ restaurantId: 'rest_123', restaurantOwnerId: 'owner_123' })).toBe('owner_123');
+  });
+
+  it('conserve un fallback legacy sur restaurantId', () => {
+    expect(getRestaurantConversationUid({ restaurantId: 'rest_123' })).toBe('rest_123');
+  });
+
+  it('résout le propriétaire restaurant pour les anciennes commandes sans restaurantOwnerId', async () => {
+    await expect(
+      resolveRestaurantConversationUid(
+        { restaurantId: 'rest_123' },
+        async () => 'owner_legacy',
+      ),
+    ).resolves.toBe('owner_legacy');
   });
 });
