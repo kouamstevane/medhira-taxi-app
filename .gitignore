@@ -33,6 +33,7 @@ src/config/keys/*
 
 # Codex/agent local skills
 .agents/
+skills-lock.json
 
 # Production builds
 /build
