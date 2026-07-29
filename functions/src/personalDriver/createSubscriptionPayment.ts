@@ -87,6 +87,11 @@ interface CreateSubscriptionPaymentResult {
   currency: string;
 }
 
+interface UserPaymentProfile {
+  stripeCustomerId?: string;
+  defaultPaymentMethodId?: string;
+}
+
 interface SubscriptionPaymentClaim {
   isCreator: boolean;
   data?: FirebaseFirestore.DocumentData;
@@ -110,6 +115,20 @@ function isPaymentCreationClaimStale(data: FirebaseFirestore.DocumentData, now: 
 
 function getPaymentCreationError(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 500) : 'Erreur inconnue lors de la création du paiement.';
+}
+
+async function getUserPaymentProfile(
+  db: FirebaseFirestore.Firestore,
+  userId: string,
+): Promise<UserPaymentProfile> {
+  const userSnap = await db.collection('users').doc(userId).get();
+  if (!userSnap.exists) return {};
+  const userData = userSnap.data();
+  return {
+    stripeCustomerId: typeof userData?.stripeCustomerId === 'string' ? userData.stripeCustomerId : undefined,
+    defaultPaymentMethodId:
+      typeof userData?.defaultPaymentMethodId === 'string' ? userData.defaultPaymentMethodId : undefined,
+  };
 }
 
 async function markPaymentCreationFailed(
@@ -252,11 +271,14 @@ export const createPersonalDriverSubscriptionPayment = onCall(
 
     const amountInSmallestUnit = Math.round(amount * 100);
     const paymentCreationAttempt = subscriptionClaim.paymentCreationAttempt ?? 1;
+    const userPaymentProfile = await getUserPaymentProfile(db, request.auth.uid);
     const paymentIntent = await getStripe().paymentIntents.create(
       {
         amount: amountInSmallestUnit,
         currency: CURRENCY,
         capture_method: 'automatic',
+        ...(userPaymentProfile.stripeCustomerId ? { customer: userPaymentProfile.stripeCustomerId } : {}),
+        setup_future_usage: 'off_session',
         metadata: {
           purpose: 'personal_driver_subscription',
           subscriptionId,
@@ -324,6 +346,8 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       totalAmount: amount,
       currency: CURRENCY,
       stripePaymentIntentId: paymentIntent.id,
+      stripeCustomerId: userPaymentProfile.stripeCustomerId ?? null,
+      defaultPaymentMethodId: userPaymentProfile.defaultPaymentMethodId ?? null,
       paymentStatus: 'authorized',
       createdAt: new Date(),
     });

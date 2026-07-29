@@ -15,6 +15,30 @@ async function assertAdminUser(uid: string): Promise<void> {
   }
 }
 
+function isCapturedPaymentStatus(paymentStatus: unknown): boolean {
+  return paymentStatus === 'captured' || paymentStatus === 'paid' || paymentStatus === 'succeeded';
+}
+
+async function assertAssignableDriver(driverId: string): Promise<void> {
+  const driverSnap = await getDb().collection('drivers').doc(driverId).get();
+  if (!driverSnap.exists) {
+    throw new HttpsError('not-found', 'Chauffeur introuvable.');
+  }
+
+  const driver = driverSnap.data();
+  const approved =
+    driver?.status === 'approved' ||
+    driver?.driverStatus === 'approved' ||
+    driver?.kycStatus === 'approved';
+  if (!approved) {
+    throw new HttpsError('failed-precondition', 'Le chauffeur doit être approuvé avant affectation.');
+  }
+
+  if (driver?.isAvailable === false || driver?.availabilityStatus === 'busy_personal_driver') {
+    throw new HttpsError('failed-precondition', 'Le chauffeur sélectionné n’est pas disponible.');
+  }
+}
+
 const adminActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('validateSubscription'),
@@ -63,6 +87,9 @@ export const adminManagePersonalDriver = onCall(
         throw new HttpsError('not-found', 'Abonnement introuvable.');
       }
       const subscription = subSnap.data();
+      if (subscription?.status !== 'pending_validation' || !isCapturedPaymentStatus(subscription?.paymentStatus)) {
+        throw new HttpsError('failed-precondition', 'Le paiement doit être capturé avant validation.');
+      }
       const batch = db.batch();
       batch.update(subRef, {
         status: 'active',
@@ -95,12 +122,16 @@ export const adminManagePersonalDriver = onCall(
     }
 
     if (payload.action === 'assignTrip') {
+      await assertAssignableDriver(payload.driverId);
       const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
       const tripSnap = await tripRef.get();
       if (!tripSnap.exists) {
         throw new HttpsError('not-found', 'Trajet introuvable.');
       }
       const trip = tripSnap.data();
+      if (trip?.status && !['scheduled', 'driver_assigned'].includes(trip.status)) {
+        throw new HttpsError('failed-precondition', 'Ce trajet ne peut pas être affecté dans son statut actuel.');
+      }
       const batch = db.batch();
       batch.update(tripRef, {
         assignedDriverId: payload.driverId,
@@ -134,6 +165,7 @@ export const adminManagePersonalDriver = onCall(
     }
 
     if (payload.action === 'reassignDriverEmergency') {
+      await assertAssignableDriver(payload.newDriverId);
       const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
       const tripSnap = await tripRef.get();
       if (!tripSnap.exists) {

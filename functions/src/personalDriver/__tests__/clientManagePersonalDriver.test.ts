@@ -94,6 +94,8 @@ describe('clientManagePersonalDriver', () => {
         status: 'active',
         selectedPlanId: 'classic',
         specialTripsUsed: 1,
+        monthlyDistanceKm: 100,
+        specialTripsDistanceUsedKm: 5,
       }),
     });
 
@@ -116,7 +118,33 @@ describe('clientManagePersonalDriver', () => {
     }));
     expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
       specialTripsUsed: { __increment: 1 },
+      specialTripsDistanceUsedKm: { __increment: 18 },
+      monthlyDistanceKmRemaining: 77,
     }));
+  });
+
+  it('rejects a special trip that exceeds remaining monthly kilometers', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    mockTransaction.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        userId: 'client_1',
+        status: 'active',
+        selectedPlanId: 'classic',
+        specialTripsUsed: 0,
+        monthlyDistanceKm: 20,
+        specialTripsDistanceUsedKm: 5,
+      }),
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({
+      action: 'requestSpecialTrip',
+      subscriptionId: 'sub_1',
+      pickupAddress: 'Clinique',
+      destinationAddress: 'Aeroport',
+      scheduledAtIso: '2026-08-12T09:30:00',
+      distanceKm: 18,
+    }, 'client_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
   });
 
   it('rejects special trips after the plan quota is exhausted', async () => {

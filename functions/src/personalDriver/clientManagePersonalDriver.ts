@@ -21,6 +21,10 @@ function getPlanId(data: FirebaseFirestore.DocumentData): PersonalDriverPlanId {
   return 'basic';
 }
 
+function roundDistance(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
 const clientActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('cancelTrip'),
@@ -101,6 +105,16 @@ export const clientManagePersonalDriver = onCall(
         throw new HttpsError('failed-precondition', 'Votre quota de trajets spéciaux est épuisé pour cette période.');
       }
 
+      const monthlyDistanceKm = Number(subscription.monthlyDistanceKm ?? 0);
+      const specialTripsDistanceUsedKm = Number(subscription.specialTripsDistanceUsedKm ?? 0);
+      const remainingDistanceKm = roundDistance(monthlyDistanceKm - specialTripsDistanceUsedKm);
+      if (monthlyDistanceKm > 0 && payload.distanceKm > remainingDistanceKm) {
+        throw new HttpsError('failed-precondition', 'Ce trajet dépasse le kilométrage restant de votre forfait.');
+      }
+      const nextRemainingDistanceKm = monthlyDistanceKm > 0
+        ? roundDistance(remainingDistanceKm - payload.distanceKm)
+        : null;
+
       transaction.set(tripRef, {
         subscriptionId: payload.subscriptionId,
         userId: uid,
@@ -120,6 +134,8 @@ export const clientManagePersonalDriver = onCall(
 
       transaction.update(subscriptionRef, {
         specialTripsUsed: admin.firestore.FieldValue.increment(1),
+        specialTripsDistanceUsedKm: admin.firestore.FieldValue.increment(payload.distanceKm),
+        ...(nextRemainingDistanceKm !== null ? { monthlyDistanceKmRemaining: nextRemainingDistanceKm } : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 

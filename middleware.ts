@@ -59,6 +59,7 @@ const PUBLIC_ROUTES = [
 
 const PROTECTED_ROUTES = [
   '/dashboard',
+  '/personal-driver/dashboard',
   '/taxi',
   '/wallet',
   '/profil',
@@ -67,6 +68,7 @@ const PROTECTED_ROUTES = [
 
 const DRIVER_ROUTES = [
   '/driver/dashboard',
+  '/driver/personal-driver',
   '/driver/profile',
   '/driver/verify',
 ];

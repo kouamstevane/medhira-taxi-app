@@ -294,10 +294,7 @@ service cloud.firestore {
                        (isAuthenticated() &&
                         resource.data.assignedDriverId == request.auth.uid &&
                         request.resource.data.diff(resource.data).affectedKeys()
-                          .hasOnly(['status', 'statusHistory', 'updatedAt',
-                                    'driverLocation', 'driverStatus', 'pickupTime',
-                                    'completionTime', 'startedAt', 'completedAt',
-                                    'arrivedAt', 'cancelledAt']));
+                          .hasOnly(['updatedAt', 'driverLocation', 'driverStatus']));
     }
     
     // ============================================================================

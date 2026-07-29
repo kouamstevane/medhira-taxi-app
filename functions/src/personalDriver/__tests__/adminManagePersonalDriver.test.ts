@@ -2,6 +2,7 @@ export {};
 
 const mockSubRef = { get: jest.fn(), update: jest.fn() };
 const mockTripRef = { get: jest.fn(), update: jest.fn() };
+const mockDriverRef = { get: jest.fn() };
 const mockAdminRef = { get: jest.fn() };
 const mockNotificationRef = {};
 const mockBatch = {
@@ -13,6 +14,7 @@ const mockBatch = {
 const mockDb = {
   collection: jest.fn((name: string) => {
     if (name === 'admins') return { doc: jest.fn(() => mockAdminRef) };
+    if (name === 'drivers') return { doc: jest.fn(() => mockDriverRef) };
     if (name === 'personal_driver_subscriptions') return { doc: jest.fn(() => mockSubRef) };
     if (name === 'personal_driver_trips') return { doc: jest.fn(() => mockTripRef) };
     if (name === 'notifications') return { doc: jest.fn(() => mockNotificationRef) };
@@ -48,6 +50,7 @@ describe('adminManagePersonalDriver', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockBatch.commit.mockResolvedValue(undefined);
+    mockDriverRef.get.mockResolvedValue({ exists: true, data: () => ({ status: 'approved', isAvailable: true }) });
   });
 
   it('rejects unauthenticated requests', async () => {
@@ -69,7 +72,10 @@ describe('adminManagePersonalDriver', () => {
   it('validates a subscription for admin users', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
     mockAdminRef.get.mockResolvedValue({ exists: true });
-    mockSubRef.get.mockResolvedValue({ exists: true, data: () => ({ userId: 'user_1' }) });
+    mockSubRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ userId: 'user_1', status: 'pending_validation', paymentStatus: 'captured' }),
+    });
 
     const result = await adminManagePersonalDriver(
       makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1'),
@@ -84,6 +90,21 @@ describe('adminManagePersonalDriver', () => {
       mockNotificationRef,
       expect.objectContaining({ userId: 'user_1', type: 'personal_driver_subscription_validated' }),
     );
+  });
+
+  it('rejects validation when payment is not captured', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    mockAdminRef.get.mockResolvedValue({ exists: true });
+    mockSubRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ userId: 'user_1', status: 'pending_payment', paymentStatus: 'authorized' }),
+    });
+
+    await expect(
+      adminManagePersonalDriver(
+        makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1'),
+      ),
+    ).rejects.toMatchObject({ code: 'failed-precondition' });
   });
 
   it('assigns driver and vehicle to a trip', async () => {
@@ -111,5 +132,21 @@ describe('adminManagePersonalDriver', () => {
       mockNotificationRef,
       expect.objectContaining({ userId: 'driver_1', type: 'personal_driver_trip_assigned_driver' }),
     );
+  });
+
+  it('rejects assigning a trip to a non-approved driver', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    mockAdminRef.get.mockResolvedValue({ exists: true });
+    mockTripRef.get.mockResolvedValue({ exists: true, data: () => ({ userId: 'user_1', status: 'scheduled' }) });
+    mockDriverRef.get.mockResolvedValue({ exists: true, data: () => ({ status: 'pending', isAvailable: true }) });
+
+    await expect(
+      adminManagePersonalDriver(
+        makeRequest(
+          { action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1' },
+          'admin_1',
+        ),
+      ),
+    ).rejects.toMatchObject({ code: 'failed-precondition' });
   });
 });

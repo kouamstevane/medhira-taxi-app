@@ -58,16 +58,21 @@ export interface PersonalDriverPriceComparison {
 export interface PersonalDriverSubscription {
   id: string;
   userId: string;
-  planId: PersonalDriverPlanId;
+  planId?: PersonalDriverPlanId;
+  selectedPlanId: PersonalDriverPlanId;
   status: PersonalDriverSubscriptionStatus;
   startDate: string;
   endDate: string;
   monthlyDistanceKm: number;
-  totalPriceBeforeTax: number;
-  totalPriceWithTax: number;
+  monthlyDistanceKmRemaining?: number;
+  specialTripsDistanceUsedKm?: number;
+  totalPriceBeforeTax?: number;
+  totalPriceWithTax?: number;
+  totalAmount: number;
+  currency: string;
   includedSpecialTrips: number;
   specialTripsUsed: number;
-  specialTripsRemaining: number;
+  specialTripsRemaining?: number;
   pickupAddress: string;
   destinationAddress: string;
   tripType: PersonalDriverTripType;
@@ -76,7 +81,7 @@ export interface PersonalDriverSubscription {
   returnTime?: string;
   passengerCount: number;
   notes?: string;
-  createdAt: string;
+  createdAt: string | Date | { toDate: () => Date };
 }
 
 export interface PersonalDriverTrip {

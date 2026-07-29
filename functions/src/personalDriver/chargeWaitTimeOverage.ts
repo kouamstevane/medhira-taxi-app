@@ -21,6 +21,11 @@ function getDb(): FirebaseFirestore.Firestore {
   return admin.firestore();
 }
 
+async function isAdminUser(uid: string): Promise<boolean> {
+  const adminSnap = await getDb().collection('admins').doc(uid).get();
+  return adminSnap.exists;
+}
+
 interface ChargeWaitTimeInput {
   tripId: string;
   elapsedMinutes: number;
@@ -48,6 +53,17 @@ export const chargePersonalDriverWaitTimeOverage = onCall(
     const tripData = tripSnap.data();
     if (!tripData) throw new HttpsError('not-found', 'Données de trajet manquantes.');
 
+    const callerIsAssignedDriver = tripData.assignedDriverId === request.auth.uid;
+    const callerIsOwner = tripData.userId === request.auth.uid;
+    const callerIsAdmin = await isAdminUser(request.auth.uid);
+    if (!callerIsAssignedDriver && !callerIsOwner && !callerIsAdmin) {
+      throw new HttpsError('permission-denied', 'Vous ne pouvez pas facturer ce trajet.');
+    }
+
+    if (tripData.overageWaitBilled === true) {
+      throw new HttpsError('failed-precondition', 'Les frais d’attente de ce trajet ont déjà été traités.');
+    }
+
     const subscriptionRef = db.collection('personal_driver_subscriptions').doc(tripData.subscriptionId);
     const subSnap = await subscriptionRef.get();
     if (!subSnap.exists) throw new HttpsError('not-found', 'Abonnement introuvable.');
@@ -68,6 +84,13 @@ export const chargePersonalDriverWaitTimeOverage = onCall(
 
     const overageMinutes = Math.max(0, Math.floor(elapsedMinutes) - freeMinutes);
     if (overageMinutes <= 0) {
+      await tripRef.update({
+        waitTimeMinutes: elapsedMinutes,
+        overageWaitMinutes: 0,
+        overageWaitFeeAmount: 0,
+        overageWaitBilled: false,
+        updatedAt: new Date(),
+      });
       return { success: true, feeBilled: 0, overageMinutes: 0 };
     }
 
@@ -76,25 +99,26 @@ export const chargePersonalDriverWaitTimeOverage = onCall(
 
     const customerId = subData?.stripeCustomerId;
     const paymentMethodId = subData?.defaultPaymentMethodId;
+    if (!customerId || !paymentMethodId) {
+      throw new HttpsError('failed-precondition', 'Aucune carte enregistrée ne permet de facturer le dépassement.');
+    }
 
     let paymentIntentId: string | null = null;
-    if (customerId && paymentMethodId) {
-      const paymentIntent = await getStripe().paymentIntents.create({
-        amount: feeInCents,
-        currency: DEFAULT_CURRENCY,
-        customer: customerId,
-        payment_method: paymentMethodId,
-        off_session: true,
-        confirm: true,
-        description: `Frais de dépassement d'attente (${overageMinutes} min) - Trajet #${tripId}`,
-        metadata: {
-          purpose: 'personal_driver_wait_overage',
-          tripId,
-          subscriptionId: tripData.subscriptionId,
-        },
-      });
-      paymentIntentId = paymentIntent.id;
-    }
+    const paymentIntent = await getStripe().paymentIntents.create({
+      amount: feeInCents,
+      currency: DEFAULT_CURRENCY,
+      customer: customerId,
+      payment_method: paymentMethodId,
+      off_session: true,
+      confirm: true,
+      description: `Frais de dépassement d'attente (${overageMinutes} min) - Trajet #${tripId}`,
+      metadata: {
+        purpose: 'personal_driver_wait_overage',
+        tripId,
+        subscriptionId: tripData.subscriptionId,
+      },
+    });
+    paymentIntentId = paymentIntent.id;
 
     await tripRef.update({
       waitTimeMinutes: elapsedMinutes,

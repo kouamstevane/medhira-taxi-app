@@ -116,11 +116,11 @@ describe('Personal Driver Stripe webhook', () => {
     await stripeWebhookInstant(request, response());
 
     expect(mockTransaction.get).toHaveBeenCalledWith(mockSubscriptionRef);
-    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, {
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
       paymentStatus: 'captured',
       status: 'pending_validation',
       paidAt: serverTimestamp,
-    });
+    }));
     expect(mockTransaction.set).toHaveBeenCalledWith(mockNotificationRef, expect.objectContaining({
       notificationId,
       userId,

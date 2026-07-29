@@ -474,6 +474,11 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
       tx.update(subscriptionRef, {
         paymentStatus: PAYMENT_STATUS.CAPTURED,
         status: 'pending_validation',
+        stripeCustomerId: typeof pi.customer === 'string' ? pi.customer : subscription?.stripeCustomerId ?? null,
+        defaultPaymentMethodId:
+          typeof pi.payment_method === 'string'
+            ? pi.payment_method
+            : subscription?.defaultPaymentMethodId ?? null,
         paidAt: serverTS(),
       });
       tx.set(notificationRef, {

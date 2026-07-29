@@ -113,12 +113,20 @@ describe('Personal driver Firestore rules', () => {
     await assertSucceeds(getDoc(doc(db, 'personal_driver_trips', tripId)));
   });
 
-  test('assigned driver can update only operational trip fields', async () => {
+  test('assigned driver cannot advance trip status directly through Firestore', async () => {
+    const db = testEnv.authenticatedContext(driverId).firestore();
+
+    await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
+      status: 'en_route',
+      statusHistory: [{ status: 'en_route' }],
+      updatedAt: '2026-07-24T10:05:00.000Z',
+    }));
+  });
+
+  test('assigned driver can update only non-status operational trip fields', async () => {
     const db = testEnv.authenticatedContext(driverId).firestore();
 
     await assertSucceeds(updateDoc(doc(db, 'personal_driver_trips', tripId), {
-      status: 'en_route',
-      statusHistory: [{ status: 'en_route' }],
       updatedAt: '2026-07-24T10:05:00.000Z',
       driverLocation: { latitude: 4.06, longitude: 9.71 },
     }));

@@ -44,4 +44,11 @@ describe('Personal Driver quality gate configuration', () => {
     expect(existsSync(join(process.cwd(), '.github/workflows/personal-driver-quality.yml'))).toBe(true);
     expect(existsSync(join(process.cwd(), 'docs/quality/personal-driver-quality-gate.md'))).toBe(true);
   });
+
+  it('protects Personal Driver client and driver routes in middleware', () => {
+    const middlewareSource = readFileSync(join(process.cwd(), 'middleware.ts'), 'utf8');
+
+    expect(middlewareSource).toContain("'/personal-driver/dashboard'");
+    expect(middlewareSource).toContain("'/driver/personal-driver'");
+  });
 });

@@ -2,6 +2,7 @@ export {};
 
 const subscriptionId = 'a'.repeat(64);
 const mockSubscriptionRef = { id: subscriptionId, get: jest.fn() };
+const mockUserRef = { get: jest.fn() };
 const mockTripRef = { id: 'trip_123' };
 const mockTransaction = {
   get: jest.fn(),
@@ -13,6 +14,7 @@ const mockBatch = {
   commit: jest.fn(),
 };
 const mockSubscriptionDoc = jest.fn(() => mockSubscriptionRef);
+const mockUserDoc = jest.fn(() => mockUserRef);
 const mockTripDoc = jest.fn(() => mockTripRef);
 const mockDb = {
   batch: jest.fn(() => mockBatch),
@@ -20,6 +22,8 @@ const mockDb = {
   collection: jest.fn((name: string) => ({
     doc: name === 'personal_driver_subscriptions'
       ? mockSubscriptionDoc
+      : name === 'users'
+        ? mockUserDoc
       : mockTripDoc,
   })),
 };
@@ -81,6 +85,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSubscriptionRef.get.mockReset();
+    mockUserRef.get.mockReset();
     mockTransaction.get.mockReset();
     mockTransaction.create.mockReset();
     mockTransaction.update.mockReset();
@@ -90,6 +95,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     mockStripe.paymentIntents.retrieve.mockReset();
     mockStripe.paymentIntents.cancel.mockReset();
     mockSubscriptionRef.get.mockResolvedValue({ exists: false });
+    mockUserRef.get.mockResolvedValue({ exists: false });
     mockTransaction.get.mockResolvedValue({ exists: false });
     mockBatch.commit.mockResolvedValue(undefined);
     mockStripe.paymentIntents.create.mockResolvedValue({

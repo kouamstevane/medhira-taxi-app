@@ -14,6 +14,10 @@ function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'Erreur inconnue';
 }
 
+function getSubscriptionPlanLabel(subscription: SubscriptionRow): string {
+  return subscription.selectedPlanId || subscription.planId || 'forfait inconnu';
+}
+
 export function PersonalDriverAdminPageClient() {
   const [subscriptionId, setSubscriptionId] = useState('');
   const [tripId, setTripId] = useState('');
@@ -208,7 +212,7 @@ export function PersonalDriverAdminPageClient() {
                 >
                   <span className="block text-xs font-bold text-white">{subscription.id}</span>
                   <span className="mt-1 block text-xs text-slate-400">
-                    {subscription.status || 'statut inconnu'} · {subscription.planId || 'forfait inconnu'} · {subscription.pickupAddress || 'départ non renseigné'}
+                    {subscription.status || 'statut inconnu'} · {getSubscriptionPlanLabel(subscription)} · {subscription.pickupAddress || 'départ non renseigné'}
                   </span>
                 </button>
               ))
