@@ -1,17 +1,19 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { FormSkeleton } from '@/components/ui/Skeleton';
 
-const RegisterContent = dynamic(() => import('./RegisterContent'), {
-  ssr: false,
-  loading: () => (
+export default function RegisterPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace('/auth/register/phone');
+  }, [router]);
+
+  return (
     <div className="min-h-screen flex items-center justify-center bg-background p-6">
       <div className="w-full max-w-md"><FormSkeleton /></div>
     </div>
-  )
-});
-
-export default function RegisterPage() {
-  return <RegisterContent />;
+  );
 }

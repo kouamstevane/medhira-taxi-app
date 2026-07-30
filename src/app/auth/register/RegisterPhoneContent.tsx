@@ -1,29 +1,56 @@
 "use client";
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { auth, db } from '@/config/firebase';
+import { auth } from '@/config/firebase';
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
-  PhoneAuthProvider,
-  signInWithCredential,
   AuthErrorCodes,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { isValidPhoneNumber, isValidPassword } from '@/lib/validation';
-import { SUPPORTED_COUNTRIES, ERROR_MESSAGES } from '@/utils/constants';
+import { InputField } from '@/components/forms';
+import { isValidPhoneNumber } from '@/lib/validation';
+import { ACTIVE_MARKET, SUPPORTED_COUNTRIES, ERROR_MESSAGES } from '@/utils/constants';
 import { getErrorMessage, getErrorCode } from '@/utils/error-utils';
+import { confirmPhoneSignIn, upsertPhoneClientUserDocument } from '@/services/auth.service';
+import { cn } from '@/lib/utils';
+import {
+  driverFieldLabelClassName,
+  driverPrimaryButtonClassName,
+  driverSecondaryButtonClassName,
+} from '@/app/driver/register/components/driverOnboardingStyles';
+
+type FieldErrors = Partial<Record<'fullName' | 'phone', string>>;
+
+const getFirebaseServerResponseMessage = (error: unknown) => {
+  const serverResponse = (error as { customData?: { serverResponse?: unknown } })?.customData?.serverResponse;
+  if (typeof serverResponse !== 'string') return null;
+
+  try {
+    const parsed = JSON.parse(serverResponse) as { error?: { message?: unknown } };
+    return typeof parsed.error?.message === 'string' ? parsed.error.message : null;
+  } catch {
+    return serverResponse;
+  }
+};
+
+const splitFullName = (fullName: string) => {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? '',
+    lastName: parts.slice(1).join(' '),
+  };
+};
+
+const recaptchaSubmitButtonId = 'phone-auth-submit-button';
 
 export default function RegisterPhoneContent() {
   const router = useRouter();
+  const phoneInputId = useId();
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+    fullName: '',
     phone: '',
-    password: '',
-    confirmPassword: '',
   });
   const [code, setCode] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(SUPPORTED_COUNTRIES[0]);
@@ -32,8 +59,10 @@ export default function RegisterPhoneContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const recaptchaVerifier = useRef<RecaptchaVerifier | null>(null);
   const countryDropdownRef = useRef<HTMLDivElement>(null);
+  const showDeveloperSmsDiagnostics = process.env.NODE_ENV !== 'production';
 
   useEffect(() => {
     // Désactiver la vérification reCAPTCHA pour les tests en développement
@@ -67,31 +96,31 @@ export default function RegisterPhoneContent() {
       [e.target.name]: e.target.value,
     });
     setError(null);
+    setFieldErrors((current) => ({ ...current, [e.target.name]: undefined }));
   };
 
   const handleCountrySelect = (country: typeof SUPPORTED_COUNTRIES[0]) => {
     setSelectedCountry(country);
     setIsCountryDropdownOpen(false);
+    setError(null);
+    setFieldErrors((current) => ({ ...current, phone: undefined }));
   };
 
-  const handleSendCode = async () => {
-    if (!formData.firstName || !formData.lastName) {
-      setError('Veuillez remplir votre nom et prénom');
-      return;
-    }
+  const handleSendCode = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
 
-    if (!formData.phone || formData.phone.length < 8) {
-      setError('Veuillez entrer un numéro de téléphone valide');
-      return;
+    const nextFieldErrors: FieldErrors = {};
+    const nameParts = splitFullName(formData.fullName);
+    if (!formData.fullName.trim()) {
+      nextFieldErrors.fullName = 'Nom complet requis';
+    } else if (!nameParts.lastName) {
+      nextFieldErrors.fullName = 'Entrez votre nom et prénom';
     }
+    if (!formData.phone.trim()) nextFieldErrors.phone = 'Numéro de téléphone requis';
 
-    if (!isValidPassword(formData.password)) {
-      setError('Le mot de passe doit contenir au moins 8 caractères avec majuscule, minuscule et chiffre');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Les mots de passe ne correspondent pas');
+    if (Object.keys(nextFieldErrors).length > 0) {
+      setFieldErrors(nextFieldErrors);
+      setError('Vérifiez les champs obligatoires.');
       return;
     }
 
@@ -106,10 +135,12 @@ export default function RegisterPhoneContent() {
 
     if (!isValidPhoneNumber(fullPhoneNumber, selectedCountry.dialCode)) {
       const expectedLength = countryLengths[selectedCountry.dialCode] || 9;
-      setError(`Numéro invalide pour ${selectedCountry.name}. Utilisez ${selectedCountry.dialCode} + ${expectedLength} chiffres`);
+      setFieldErrors({ phone: `Utilisez ${expectedLength} chiffres après ${selectedCountry.dialCode}` });
+      setError(`Numéro invalide pour ${selectedCountry.name}.`);
       return;
     }
 
+    setFieldErrors({});
     setLoading(true);
     setError(null);
     setSuccess(null);
@@ -124,12 +155,10 @@ export default function RegisterPhoneContent() {
       let appVerifier = recaptchaVerifier.current;
 
       if (!appVerifier) {
-        appVerifier = new RecaptchaVerifier(auth, "recaptcha-container", {
+        appVerifier = new RecaptchaVerifier(auth, recaptchaSubmitButtonId, {
           size: "invisible", //invisible, normal
 
-          callback: (response: string) => {
-            // reCAPTCHA résolu
-          }
+          callback: () => {},
         });
         recaptchaVerifier.current = appVerifier;
       }
@@ -141,7 +170,7 @@ export default function RegisterPhoneContent() {
       );
 
       setVerificationId(confirmation.verificationId);
-      setSuccess(`Code de vérification envoyé au ${fullPhoneNumber}`);
+      setSuccess(`Demande de code envoyée à ${fullPhoneNumber}`);
     } catch (error: unknown) {
       const errorCode = getErrorCode(error);
       if (process.env.NODE_ENV === 'development' && errorCode === 'auth/captcha-check-failed') {
@@ -155,14 +184,14 @@ export default function RegisterPhoneContent() {
           if (recaptchaVerifier.current) {
             try {
               recaptchaVerifier.current.clear();
-            } catch (e) {
+            } catch {
               // Ignore cleanup errors
             }
             recaptchaVerifier.current = null;
           }
 
           // Create new verifier
-          const newVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          const newVerifier = new RecaptchaVerifier(auth, recaptchaSubmitButtonId, {
             size: 'invisible',
           });
           recaptchaVerifier.current = newVerifier;
@@ -175,7 +204,7 @@ export default function RegisterPhoneContent() {
           );
 
           setVerificationId(confirmation.verificationId);
-          setSuccess(`Code de vérification envoyé au ${fullPhoneNumber}`);
+          setSuccess(`Demande de code envoyée à ${fullPhoneNumber}`);
           return; // Exit successfully
         } catch (retryError) {
           // If retry fails, handle as usual
@@ -185,11 +214,14 @@ export default function RegisterPhoneContent() {
       } else {
         // Ne pas clear le recaptcha en cas d'erreur pour permettre le retry
         // si c'est une erreur liée au captcha, on le reset
-        if (error instanceof Error && error.message.includes('reCAPTCHA')) {
+        if (
+          errorCode === 'auth/invalid-app-credential' ||
+          (error instanceof Error && error.message.includes('reCAPTCHA'))
+        ) {
           if (recaptchaVerifier.current && typeof recaptchaVerifier.current.clear === 'function') {
             try {
               recaptchaVerifier.current.clear();
-            } catch (e) {
+            } catch {
               // Ignorer si déjà clear
             }
             recaptchaVerifier.current = null;
@@ -202,7 +234,9 @@ export default function RegisterPhoneContent() {
     }
   };
 
-  const handleVerifyCode = async () => {
+  const handleVerifyCode = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+
     if (!code || code.length < 6) {
       setError('Veuillez entrer le code complet');
       return;
@@ -214,43 +248,18 @@ export default function RegisterPhoneContent() {
     try {
       if (!verificationId) throw new Error('Aucun ID de vérification disponible');
 
-      const credential = PhoneAuthProvider.credential(verificationId, code);
-      const userCredential = await signInWithCredential(auth, credential);
-      await createUserDocument(userCredential.user);
+      const user = await confirmPhoneSignIn(verificationId, code);
+      const nameParts = splitFullName(formData.fullName);
+      await upsertPhoneClientUserDocument(user, {
+        firstName: nameParts.firstName,
+        lastName: nameParts.lastName,
+        country: selectedCountry.code,
+      });
       router.push('/auth/setup-payment');
     } catch (error: unknown) {
       handleAuthError(error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const createUserDocument = async (user: { uid: string; phoneNumber?: string | null }) => {
-    const userDocRef = doc(db, 'users', user.uid);
-    const docSnapshot = await getDoc(userDocRef);
-
-    if (!docSnapshot.exists()) {
-      // V1 (spec §6.2/§7.3) : roles cumulatifs + activeRole.
-      // Inscription téléphone P1 ⇒ rôle client uniquement.
-      await setDoc(userDocRef, {
-        uid: user.uid,
-        phoneNumber: user.phoneNumber || null,
-        email: null,
-        emailVerified: false,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        roles: {
-          client: {
-            enabled: true,
-            joinedAt: serverTimestamp(),
-          },
-        },
-        activeRole: 'client',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        profileImageUrl: '',
-        country: selectedCountry.code,
-      });
     }
   };
 
@@ -273,6 +282,7 @@ export default function RegisterPhoneContent() {
     let errorMessage = "Une erreur est survenue";
     const errorCode = getErrorCode(error);
     const errorMsg = getErrorMessage(error);
+    const serverResponseMessage = getFirebaseServerResponseMessage(error);
 
     switch (errorCode) {
       case AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER:
@@ -288,10 +298,17 @@ export default function RegisterPhoneContent() {
         errorMessage = ERROR_MESSAGES.NETWORK_ERROR;
         break;
       case 'auth/invalid-app-credential':
-        errorMessage = "Configuration invalide. Vérifiez que localhost est autorisé dans la console Firebase et que la clé API est correcte.";
+        errorMessage = process.env.NODE_ENV !== 'production' && serverResponseMessage
+          ? `Jeton reCAPTCHA refusé : ${serverResponseMessage}`
+          : "La vérification reCAPTCHA a été refusée. Rechargez la page puis réessayez.";
         break;
       case 'auth/captcha-check-failed':
         errorMessage = "La vérification reCAPTCHA a échoué. Veuillez réessayer.";
+        break;
+      case 'auth/internal-error':
+        errorMessage = process.env.NODE_ENV !== 'production' && serverResponseMessage
+          ? `Erreur Firebase interne : ${serverResponseMessage}`
+          : "Erreur Firebase interne. Veuillez réessayer plus tard.";
         break;
       default:
         if (errorMsg && (errorMsg.includes('verifier') || errorMsg.includes('_reset'))) {
@@ -305,270 +322,239 @@ export default function RegisterPhoneContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Card */}
-        <div className="glass-card rounded-2xl overflow-hidden border border-white/5">
-          {/* Header */}
-          <div className="bg-background px-6 py-4 border-b border-white/5">
-            <Link href="/login" className="inline-flex items-center text-white hover:text-primary transition-colors">
-              <MaterialIcon name="arrow_back" size="sm" className="mr-2" />
+    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
+      <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-hidden">
+        <div className="h-12 w-full" />
+
+        <div className="px-6">
+          <Link href="/auth/role" className="inline-flex items-center text-slate-400 hover:text-primary transition-colors">
+            <MaterialIcon name="arrow_back" size="md" className="mr-2" />
               Retour
             </Link>
-          </div>
-
-          {/* Body */}
-          <div className="p-6 space-y-4">
-            <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-white mb-2">
-                Inscription Client
-              </h1>
-              <p className="text-sm text-slate-400">
-                Inscrivez-vous avec votre numéro de téléphone
-              </p>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-500/10 border-l-4 border-red-500 p-4 rounded-r-lg">
-                <p className="text-sm text-red-400">{error}</p>
-              </div>
-            )}
-
-            {/* Success Message */}
-            {success && (
-              <div className="bg-green-500/10 border-l-4 border-green-500 p-4 rounded-r-lg">
-                <p className="text-sm text-green-400">{success}</p>
-              </div>
-            )}
-
-            {!verificationId ? (
-              <div className="space-y-4">
-                {/* Prénom */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Prénom *
-                  </label>
-                  <input
-                    type="text"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
-                    placeholder="Jean"
-                    required
-                  />
-                </div>
-
-                {/* Nom */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Nom *
-                  </label>
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
-                    placeholder="Dupont"
-                    required
-                  />
-                </div>
-
-                {/* Numéro de téléphone */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Numéro de téléphone *
-                  </label>
-                  <div className="flex">
-                    {/* Sélecteur de pays */}
-                    <div className="relative" ref={countryDropdownRef}>
-                      <button
-                        type="button"
-                        onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
-                        className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-white/5 bg-white/5 text-slate-300 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-primary h-[48px]"
-                      >
-                        <span className="mr-2 text-lg">{selectedCountry.flag}</span>
-                        <span className="text-sm">{selectedCountry.dialCode}</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="ml-1 h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </button>
-
-                      {isCountryDropdownOpen && (
-                        <div className="absolute z-10 mt-1 w-64 max-h-60 overflow-y-auto glass-card border border-white/10 rounded-lg">
-                          <div className="py-1">
-                            {SUPPORTED_COUNTRIES.map((country) => (
-                              <button
-                                key={country.code}
-                                type="button"
-                                onClick={() => handleCountrySelect(country)}
-                                className={`flex items-center w-full px-4 py-2 text-sm text-left hover:bg-white/10 ${
-                                  selectedCountry.code === country.code ? 'bg-primary text-white hover:bg-primary/80' : 'text-slate-300'
-                                }`}
-                              >
-                                <span className="text-lg mr-3">{country.flag}</span>
-                                <span className="font-medium mr-2">{country.dialCode}</span>
-                                <span className="text-slate-400">{country.name}</span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <input
-                      type="tel"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, '').slice(0, 15);
-                        setFormData({ ...formData, phone: value });
-                        setError(null);
-                      }}
-                      className="glass-input flex-1 rounded-r-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5 h-[48px]"
-                      placeholder={selectedCountry.defaultNumber}
-                      required
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Pays sélectionné: {selectedCountry.name} {selectedCountry.flag} • Exemple: {selectedCountry.defaultNumber}
-                  </p>
-                </div>
-
-                {/* Mot de passe */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Mot de passe *
-                  </label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
-                    placeholder="•••••••"
-                    required
-                  />
-                </div>
-
-                {/* Confirmer mot de passe */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Confirmer le mot de passe *
-                  </label>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-primary bg-white/5"
-                    placeholder="•••••••"
-                    required
-                  />
-                </div>
-
-                {/* Bouton envoyer le code */}
-                <button
-                  onClick={handleSendCode}
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Envoi en cours...
-                    </>
-                  ) : (
-                    'Envoyer le code de vérification'
-                  )}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Code de vérification (6 chiffres)
-                  </label>
-                  <input
-                    type="text"
-                    value={code}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, '');
-                      setCode(value.slice(0, 6));
-                      setError(null);
-                    }}
-                    className="glass-input w-full rounded-lg border border-white/5 p-3 text-white text-base placeholder-slate-500 bg-white/5 focus:ring-2 focus:ring-primary focus:border-primary"
-                    placeholder="123456"
-                    maxLength={6}
-                  />
-                </div>
-
-                <div className="flex space-x-3">
-                  <button
-                    onClick={handleVerifyCode}
-                    disabled={loading}
-                    className="flex-1 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-3 px-4 rounded-lg transition flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Vérification...
-                      </>
-                    ) : (
-                      'Créer mon compte'
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleReset}
-                    disabled={loading}
-                    className="px-4 py-3 border border-white/10 rounded-lg text-slate-300 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Annuler
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleSendCode}
-                  className="text-sm text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={loading}
-                >
-                  Renvoyer le code
-                </button>
-              </div>
-            )}
-
-            {/* Lien vers inscription par email */}
-            <div className="text-center pt-4 border-t border-white/5">
-              <p className="text-sm text-slate-400">
-                Vous préférez vous inscrire par email ?{' '}
-                <Link href="/auth/register" className="text-primary hover:underline font-medium">
-                  Inscription par email
-                </Link>
-              </p>
-            </div>
-          </div>
         </div>
 
-        {/* Footer */}
-        <div className="mt-4 text-center">
+        <div className="flex flex-col items-center justify-center pt-6 pb-8">
+          <div className="bg-primary/10 p-3 rounded-xl mb-3">
+            <MaterialIcon name="local_taxi" className="text-primary text-[32px] font-bold" />
+          </div>
+          <h2 className="text-primary text-2xl font-bold tracking-tight">Medjira</h2>
+        </div>
+
+        <div className="px-6 text-center">
+          <h1 className="text-white text-[28px] font-bold leading-tight mb-2">Créer un compte</h1>
+          <p className="text-slate-400 text-base font-normal">Inscription rapide par téléphone</p>
+        </div>
+
+        {error && (
+          <div className="mx-6 mt-6 p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
+            <MaterialIcon name="error" size="md" className="text-destructive mt-0.5" />
+            <span className="text-destructive text-sm">{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div className="mx-6 mt-6 p-3 bg-green-500/10 border border-green-500/30 rounded-xl flex items-start gap-2">
+            <MaterialIcon name="check_circle" size="md" className="text-green-400 mt-0.5" />
+            <span className="text-green-400 text-sm">{success}</span>
+          </div>
+        )}
+
+        {!verificationId ? (
+          <form onSubmit={handleSendCode} aria-label="Inscription par téléphone" className="mt-8 px-6 space-y-4" noValidate>
+            <InputField
+              label="Nom complet"
+              type="text"
+              name="fullName"
+              value={formData.fullName}
+              onChange={handleChange}
+              placeholder="Jean Dupont"
+              autoComplete="name"
+              error={fieldErrors.fullName}
+              required
+            />
+
+            <div className="space-y-2" ref={countryDropdownRef}>
+              <label htmlFor={phoneInputId} className={cn(driverFieldLabelClassName, 'block')}>
+                Numéro de téléphone
+                <span className="text-red-500 ml-1">*</span>
+              </label>
+              <div className="glass-input autofill-dark flex h-14 overflow-hidden rounded-xl border border-white/[0.08] bg-[#1A1A1A] text-white shadow-sm transition-all duration-200 focus-within:border-[#f29200] focus-within:ring-2 focus-within:ring-[#f29200]">
+                <button
+                  type="button"
+                  onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
+                  aria-label={`Indicatif ${selectedCountry.name} ${selectedCountry.dialCode}`}
+                  aria-haspopup="listbox"
+                  aria-expanded={isCountryDropdownOpen}
+                  className="flex h-full shrink-0 items-center gap-2 border-r border-white/[0.08] px-3 text-sm font-semibold text-white outline-none transition-colors hover:bg-white/[0.04] focus:bg-white/[0.04]"
+                >
+                  <span>{selectedCountry.code}</span>
+                  <span className="text-slate-300">{selectedCountry.dialCode}</span>
+                  <MaterialIcon name="expand_more" size="sm" className="text-slate-400" />
+                </button>
+                <input
+                  id={phoneInputId}
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '').slice(0, 15);
+                    setFormData({ ...formData, phone: value });
+                    setError(null);
+                    setFieldErrors((current) => ({ ...current, phone: undefined }));
+                  }}
+                  placeholder={selectedCountry.defaultNumber}
+                  inputMode="tel"
+                  autoComplete="tel-national"
+                  aria-invalid={fieldErrors.phone ? 'true' : undefined}
+                  aria-describedby={fieldErrors.phone ? `${phoneInputId}-error` : `${phoneInputId}-helper`}
+                  className="h-full min-w-0 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-slate-500"
+                  required
+                />
+              </div>
+
+              {isCountryDropdownOpen && (
+                <div role="listbox" aria-label="Pays disponibles" className="mt-2 w-full max-h-56 overflow-y-auto glass-card border border-white/10 rounded-xl shadow-xl">
+                  <div className="py-1">
+                    {SUPPORTED_COUNTRIES.map((country) => (
+                      <button
+                        key={country.code}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedCountry.code === country.code}
+                        onClick={() => handleCountrySelect(country)}
+                        className={`flex items-center w-full px-4 py-3 text-sm text-left hover:bg-white/10 ${
+                          selectedCountry.code === country.code ? 'bg-primary/20 text-white' : 'text-slate-300'
+                        }`}
+                      >
+                        <span className="font-semibold mr-3">{country.code}</span>
+                        <span className="font-medium mr-2">{country.dialCode}</span>
+                        <span className="text-slate-400">{country.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {fieldErrors.phone ? (
+                <p id={`${phoneInputId}-error`} className="mt-1 text-sm text-red-500 flex items-center">
+                  {fieldErrors.phone}
+                </p>
+              ) : (
+                <p id={`${phoneInputId}-helper`} className="mt-1 text-sm text-slate-400">
+                  Exemple: {selectedCountry.defaultNumber}
+                </p>
+              )}
+            </div>
+
+            <button
+              id={recaptchaSubmitButtonId}
+              type="submit"
+              disabled={loading}
+              className={driverPrimaryButtonClassName}
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Envoi en cours...
+                </>
+              ) : (
+                'Envoyer le code de vérification'
+              )}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyCode} aria-label="Vérification du téléphone" className="mt-8 px-6 space-y-4">
+            <InputField
+              label="Code de vérification (6 chiffres)"
+              type="text"
+              value={code}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, '');
+                setCode(value.slice(0, 6));
+                setError(null);
+              }}
+              icon={<MaterialIcon name="pin" size="md" />}
+              placeholder="123456"
+              maxLength={6}
+              inputMode="numeric"
+              autoComplete="one-time-code"
+            />
+
+            <div className="flex space-x-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className={cn(driverPrimaryButtonClassName, 'flex-1')}
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Vérification...
+                  </>
+                ) : (
+                  'Créer mon compte'
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={loading}
+                className={cn(driverSecondaryButtonClassName, 'w-auto px-4 rounded-2xl')}
+              >
+                Changer le numéro
+              </button>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
+              <p className="font-semibold text-white">Vous n'avez rien reçu ?</p>
+              <p className="mt-1 text-slate-400">
+                Le SMS peut prendre jusqu'à une minute. Vérifiez le réseau, le numéro saisi et les SMS bloqués avant de renvoyer.
+              </p>
+              {showDeveloperSmsDiagnostics && (
+                <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-left text-xs text-amber-100">
+                  <p className="font-semibold text-amber-50">Diagnostic développeur</p>
+                  <p className="mt-1">
+                    Si Firebase accepte la demande mais que le SMS n'arrive pas, vérifiez Authentication &gt; Settings &gt; SMS region policy et autorisez {selectedCountry.code}.
+                  </p>
+                  <p className="mt-1 text-amber-200">
+                    Pays choisi : {selectedCountry.code} · Marché actif : {ACTIVE_MARKET}
+                  </p>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleSendCode()}
+                className="mt-3 text-sm font-bold text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading}
+              >
+                Renvoyer le code
+              </button>
+            </div>
+          </form>
+            )}
+
+        <div className="mt-auto pb-10 pt-8 text-center">
+          <p className="text-slate-400 text-sm">
+            Vous avez déjà un compte ?
+            <Link href="/login" className="text-primary font-bold ml-1 hover:underline">
+              Se connecter
+            </Link>
+          </p>
+        </div>
+
+        <div className="px-6 pb-4 text-center">
           <p className="text-xs text-white/80">
             En vous inscrivant, vous acceptez nos Conditions d'utilisation et Politique de confidentialité
           </p>
         </div>
 
-        {/* Recaptcha container always rendered for persistence */}
-        <div id="recaptcha-container"></div>
       </div>
     </div>
   );

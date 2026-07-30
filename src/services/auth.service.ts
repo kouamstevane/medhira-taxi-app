@@ -16,6 +16,8 @@ import {
   User,
   sendEmailVerification,
   reload,
+  PhoneAuthProvider,
+  signInWithCredential,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
@@ -436,6 +438,55 @@ export const createUserDocument = async (
     profileImageUrl: data.profileImageUrl ?? null,
     emailVerified: data.emailVerified ?? false,
     country: data.country ?? null,
+    roles: {
+      client: { enabled: true, joinedAt: serverTimestamp() },
+    },
+    activeRole: 'client',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+};
+
+export const confirmPhoneSignIn = async (
+  verificationId: string,
+  code: string,
+): Promise<User> => {
+  const credential = PhoneAuthProvider.credential(verificationId, code);
+  const result = await signInWithCredential(auth, credential);
+  return result.user;
+};
+
+export const upsertPhoneClientUserDocument = async (
+  user: { uid: string; phoneNumber?: string | null },
+  profile: {
+    firstName: string;
+    lastName: string;
+    country?: string | null;
+  },
+): Promise<void> => {
+  const userRef = doc(db, 'users', user.uid);
+  const userSnap = await getDoc(userRef);
+
+  if (userSnap.exists()) {
+    await updateDoc(userRef, {
+      phoneNumber: user.phoneNumber ?? null,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      country: profile.country ?? null,
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
+
+  await setDoc(userRef, {
+    uid: user.uid,
+    email: null,
+    phoneNumber: user.phoneNumber ?? null,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    profileImageUrl: '',
+    emailVerified: false,
+    country: profile.country ?? null,
     roles: {
       client: { enabled: true, joinedAt: serverTimestamp() },
     },

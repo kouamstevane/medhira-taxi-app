@@ -199,6 +199,10 @@ input, textarea, select {
   font-size: 16px;
 }
 
+.autofill-dark:-webkit-autofill,
+.autofill-dark:-webkit-autofill:hover,
+.autofill-dark:-webkit-autofill:focus,
+.autofill-dark:-webkit-autofill:active,
 [data-driver-onboarding-form] input:-webkit-autofill,
 [data-driver-onboarding-form] input:-webkit-autofill:hover,
 [data-driver-onboarding-form] input:-webkit-autofill:focus,

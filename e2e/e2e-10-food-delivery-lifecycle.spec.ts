@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { Timestamp } from 'firebase-admin/firestore';
 import { clearAuthEmulator, seedAuthUser } from './helpers/auth-seed';
-import { clearFirestoreEmulator, seedDoc } from './helpers/firestore-seed';
+import { clearFirestoreEmulator, getDocData, seedDoc } from './helpers/firestore-seed';
 
 test.beforeEach(async () => {
   await clearFirestoreEmulator();
@@ -157,6 +157,7 @@ test('E2E-10 — Cycle livraison restaurant complet côté livreur et client', a
   await page.getByPlaceholder(/email/i).fill(driver.email);
   await page.getByPlaceholder(/mot de passe/i).fill(driver.password);
   await page.getByRole('button', { name: /se connecter/i }).click();
+  await expect(page).toHaveURL(/\/driver\/dashboard/, { timeout: 15000 });
 
   await page.goto(`/driver/delivery/${orderId}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByText('Nouvelle commande')).toBeVisible();
@@ -170,7 +171,7 @@ test('E2E-10 — Cycle livraison restaurant complet côté livreur et client', a
 
   await page.getByPlaceholder(/code de récupération/i).fill('ABC123');
   await page.getByRole('button', { name: /j'ai récupéré la commande/i }).click();
-  await expect(page.getByRole('button', { name: /Je pars vers le client/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Je pars vers le client/i })).toBeVisible({ timeout: 45000 });
   await expect(page.getByText('100 Client Street, Edmonton')).toBeVisible();
   await page.getByRole('button', { name: /Je pars vers le client/i }).click();
   await expect(page.getByRole('button', { name: /Je suis arrivé chez le client/i })).toBeVisible();
@@ -182,13 +183,20 @@ test('E2E-10 — Cycle livraison restaurant complet côté livreur et client', a
     buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
   });
   await page.getByRole('button', { name: /confirmer la livraison/i }).click();
-  await expect(page).toHaveURL(/\/driver\/dashboard/);
+  await expect(page).toHaveURL(/\/driver\/dashboard/, { timeout: 45000 });
+  await expect
+    .poll(
+      async () => (await getDocData<{ status?: string }>(`food_orders/${orderId}`))?.status,
+      { timeout: 60000 },
+    )
+    .toBe('delivered');
 
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder(/email/i).fill(client.email);
   await page.getByPlaceholder(/mot de passe/i).fill(client.password);
   await page.getByRole('button', { name: /se connecter/i }).click();
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
   await page.goto(`/food/orders/${orderId}`, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByText('Livrée')).toBeVisible();
+  await expect(page.locator('span').filter({ hasText: /^Livrée$/ })).toBeVisible();
   await expect(page.getByText(/Comment s'est passée votre commande/i)).toBeVisible();
 });

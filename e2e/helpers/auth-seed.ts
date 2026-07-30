@@ -12,34 +12,25 @@ export interface SeedAuthUserInput {
 }
 
 export async function seedAuthUser(input: SeedAuthUserInput): Promise<void> {
-  const url = `http://${AUTH_HOST}/identitytoolkit.googleapis.com/v1/projects/${PROJECT_ID}/accounts?key=fake-api-key`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer owner',
-    },
-    body: JSON.stringify({
-      localId: input.uid,
-      email: input.email,
-      password: input.password ?? 'password123',
-      emailVerified: input.emailVerified ?? true,
-      displayName: input.displayName,
-    }),
-  });
-  if (!res.ok)
-    throw new Error(
-      `seedAuthUser failed: ${res.status} ${await res.text()}`,
-    );
-
-  if (input.customClaims) {
-    const { initializeApp, getApps } = await import('firebase-admin/app');
-    const { getAuth } = await import('firebase-admin/auth');
-    const app =
-      getApps().find((a) => a.name === 'p5-auth-seed') ??
-      initializeApp({ projectId: PROJECT_ID }, 'p5-auth-seed');
-    await getAuth(app).setCustomUserClaims(input.uid, input.customClaims);
+  if (!process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    process.env.FIREBASE_AUTH_EMULATOR_HOST = AUTH_HOST;
   }
+
+  const { initializeApp, getApps } = await import('firebase-admin/app');
+  const { getAuth } = await import('firebase-admin/auth');
+  const app =
+    getApps().find((a) => a.name === 'p5-auth-seed') ??
+    initializeApp({ projectId: PROJECT_ID }, 'p5-auth-seed');
+  const auth = getAuth(app);
+  await auth.createUser({
+    uid: input.uid,
+    email: input.email,
+    password: input.password ?? 'password123',
+    emailVerified: input.emailVerified ?? true,
+    displayName: input.displayName,
+  });
+  if (input.customClaims)
+    await auth.setCustomUserClaims(input.uid, input.customClaims);
 }
 
 export async function clearAuthEmulator(): Promise<void> {

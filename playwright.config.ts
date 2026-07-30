@@ -27,7 +27,7 @@ export default defineConfig({
       NEXT_PUBLIC_USE_FIREBASE_EMULATORS: 'true',
     },
     url: 'http://localhost:3001',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120000,
   },
 });

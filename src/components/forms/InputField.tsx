@@ -53,7 +53,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
       : '';
 
     const sharedInputChromeClassName =
-      'glass-input h-14 rounded-xl outline-none text-white placeholder:text-slate-500 transition-all';
+      'glass-input autofill-dark h-14 rounded-xl outline-none text-white placeholder:text-slate-500 transition-all';
 
     const iconPaddingClass = icon ? 'pl-11' : '';
     const rightIconPaddingClass = rightIcon ? 'pr-11' : '';

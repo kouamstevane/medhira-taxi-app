@@ -13,6 +13,7 @@ describe('InputField', () => {
 
     expect(screen.getByText('Email')).toHaveClass('text-[#9CA3AF]')
     expect(screen.getByTestId('driver-field')).toHaveClass('glass-input')
+    expect(screen.getByTestId('driver-field')).toHaveClass('autofill-dark')
     expect(screen.getByTestId('driver-field')).toHaveClass('focus:ring-2')
     expect(screen.getByTestId('driver-field')).toHaveClass('focus:ring-[#f29200]')
     expect(screen.getByTestId('driver-field')).toHaveClass('focus:border-[#f29200]')

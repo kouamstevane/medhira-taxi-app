@@ -15,7 +15,7 @@ const ROLES = [
     title: 'Client',
     description: 'Commandez des courses, des repas ou des colis.',
     icon: 'person',
-    href: '/auth/register?role=client',
+    href: '/auth/register/phone',
     color: 'bg-blue-500',
   },
   {
