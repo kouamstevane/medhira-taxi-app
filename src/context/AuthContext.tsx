@@ -110,6 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           onboarding: data.onboarding,
           country: data.country,
           address: data.address,
+          stripeCustomerId: data.stripeCustomerId,
+          defaultPaymentMethodId: data.defaultPaymentMethodId,
+          setupIntentId: data.setupIntentId,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
         };

@@ -75,6 +75,9 @@ export interface UserData {
 
   country?: string;
   address?: string;
+  stripeCustomerId?: string;
+  defaultPaymentMethodId?: string;
+  setupIntentId?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

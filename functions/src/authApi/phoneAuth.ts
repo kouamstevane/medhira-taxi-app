@@ -14,6 +14,8 @@ import { enforceRateLimit as firestoreRateLimit } from '../utils/rateLimiter.js'
 const twilioAccountSid = defineSecret('TWILIO_ACCOUNT_SID');
 const twilioAuthToken = defineSecret('TWILIO_AUTH_TOKEN');
 const twilioVerifyServiceSid = defineSecret('TWILIO_VERIFY_SERVICE_SID');
+const VERIFY_APP_NAME = 'Medjira';
+const VERIFY_SMS_LOCALE = 'en';
 
 type TwilioVerificationStatus = 'approved' | 'pending' | 'canceled';
 
@@ -181,6 +183,8 @@ export const authStartPhoneVerification = onCall(
             await getVerifyService().verifications.create({
               to: phoneNumber,
               channel: 'sms',
+              customFriendlyName: VERIFY_APP_NAME,
+              locale: VERIFY_SMS_LOCALE,
             });
           } catch (err) {
             console.error('[authStartPhoneVerification] Twilio error:', err);
