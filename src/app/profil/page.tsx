@@ -49,7 +49,7 @@ interface InfoRowProps {
   emptyLabel?: string;
 }
 
-function InfoRow({ label, value, emptyLabel = 'Non renseignÃ©' }: InfoRowProps) {
+function InfoRow({ label, value, emptyLabel = 'Non renseigné' }: InfoRowProps) {
   const displayValue = value && value.length > 0 ? value : emptyLabel;
 
   return (
@@ -194,13 +194,13 @@ export default function ProfilPage() {
       // Update local state
       setUserData(prev => ({ ...prev, ...data }));
       setEditing(false);
-      showSuccess("Profil mis Ã  jour avec succÃ¨s");
+      showSuccess("Profil mis à jour avec succès");
     } catch (error) {
-      // Logger les dÃ©tails de l'erreur pour le debugging
-      logFirestoreError(error, "mise Ã  jour du profil client");
+      // Logger les détails de l'erreur pour le debugging
+      logFirestoreError(error, "mise à jour du profil client");
 
-      // Afficher un message d'erreur explicite Ã  l'utilisateur
-      const errorMessage = getFirestoreErrorMessage(error, "mise Ã  jour de votre profil");
+      // Afficher un message d'erreur explicite à l'utilisateur
+      const errorMessage = getFirestoreErrorMessage(error, "mise à jour de votre profil");
       showError(errorMessage);
       setError(errorMessage);
     } finally {
@@ -210,7 +210,7 @@ export default function ProfilPage() {
 
   const fetchHistory = async (userId: string) => {
     try {
-      // Obtenir la date du dÃ©but de la journÃ©e (00:00:00)
+      // Obtenir la date du début de la journée (00:00:00)
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
 
@@ -248,7 +248,7 @@ export default function ProfilPage() {
       setHistory(combinedHistory.slice(0, 5));
     } catch (error) {
       console.error("Erreur chargement historique:", error);
-      // Ne pas bloquer l'affichage du profil si l'historique Ã©choue
+      // Ne pas bloquer l'affichage du profil si l'historique échoue
     }
   };
 
@@ -259,8 +259,8 @@ export default function ProfilPage() {
       await signOut(auth);
       router.replace('/login');
     } catch (err) {
-      console.error('Erreur de dÃ©connexion:', err);
-      showError("Impossible de vous dÃ©connecter. RÃ©essayez.");
+      console.error('Erreur de déconnexion:', err);
+      showError("Impossible de vous déconnecter. Réessayez.");
       setLoggingOut(false);
     }
   };
@@ -272,16 +272,16 @@ export default function ProfilPage() {
       const requestAccountDeletion = httpsCallable(functions, 'requestAccountDeletion');
       await requestAccountDeletion({ confirm: 'DELETE_MY_ACCOUNT' });
       try { await signOut(auth); } catch {}
-      showSuccess('Votre compte a Ã©tÃ© supprimÃ©.');
+      showSuccess('Votre compte a été supprimé.');
       router.replace('/login');
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       console.error('Erreur suppression compte:', error);
-      let msg = "Impossible de supprimer le compte. RÃ©essayez plus tard.";
+      let msg = "Impossible de supprimer le compte. Réessayez plus tard.";
       if (error?.message?.includes('courses') || error?.message?.includes('commandes')) {
         msg = "Vous avez des courses ou commandes en cours. Annulez-les ou attendez leur fin avant de supprimer le compte.";
       } else if (error?.code === 'functions/resource-exhausted') {
-        msg = "Trop de tentatives. RÃ©essayez dans une heure.";
+        msg = "Trop de tentatives. Réessayez dans une heure.";
       }
       showError(msg);
       setDeleting(false);
@@ -378,14 +378,14 @@ export default function ProfilPage() {
                   label="Email"
                   value={userData.email}
                   disabled
-                  helperText="L'adresse email ne peut pas Ãªtre modifiÃ©e."
+                  helperText="L'adresse email ne peut pas être modifiée."
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InputField
                   {...form.register('firstName')}
-                  label="PrÃ©nom"
-                  placeholder="PrÃ©nom"
+                  label="Prénom"
+                  placeholder="Prénom"
                   required
                 />
                 <InputField
@@ -400,7 +400,7 @@ export default function ProfilPage() {
                  <InputField
                   type="tel"
                   {...form.register('phone')}
-                  label="NumÃ©ro de tÃ©lÃ©phone"
+                  label="Numéro de téléphone"
                   placeholder="514XXXXXXX"
                   helperText="Format sans le code pays (+1)."
                   required
@@ -502,7 +502,7 @@ export default function ProfilPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
-                <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sÃ©curitÃ©</p>
+                <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sécurité</p>
               </div>
               <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
             </div>
@@ -525,14 +525,14 @@ export default function ProfilPage() {
                 </div>
                 <h3 className="text-xl font-bold text-white">Supprimer votre compte ?</h3>
                 <p className="text-slate-400 text-sm mt-2">
-                  Cette action est <strong className="text-destructive">irrÃ©versible</strong>. Vos donnÃ©es personnelles seront supprimÃ©es et votre historique de courses sera anonymisÃ© conformÃ©ment au RGPD.
+                  Cette action est <strong className="text-destructive">irréversible</strong>. Vos données personnelles seront supprimées et votre historique de courses sera anonymisé conformément au RGPD.
                 </p>
               </div>
 
               <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-4 text-xs text-slate-300 space-y-1">
-                <p>â€¢ Profil, photos et documents : supprimÃ©s</p>
-                <p>â€¢ Historique financier : anonymisÃ© (obligation lÃ©gale)</p>
-                <p>â€¢ Vous serez immÃ©diatement dÃ©connectÃ©</p>
+                <p>• Profil, photos et documents : supprimés</p>
+                <p>• Historique financier : anonymisé (obligation légale)</p>
+                <p>• Vous serez immédiatement déconnecté</p>
               </div>
 
               <label className="block text-sm text-slate-300 mb-2">
@@ -576,7 +576,7 @@ export default function ProfilPage() {
           </div>
         )}
 
-        {/* Section DerniÃ¨res commandes */}
+        {/* Section Dernières commandes */}
         <div className="mt-8">
           <h2 className="text-xl font-bold text-white mb-4">Commandes du jour</h2>
           <div className="space-y-3">
@@ -596,7 +596,7 @@ export default function ProfilPage() {
                     <div>
                       <p className="font-semibold text-white">{type} - {destination || description}</p>
                       <p className="text-sm text-slate-400">
-                        {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} Ã  {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} â€¢ {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
+                        {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} • {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
                       </p>
                     </div>
                     <span className={`px-3 py-1 text-xs font-medium rounded-full ${
