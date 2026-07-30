@@ -7,3 +7,7 @@
 
 export { authSendVerificationCode } from './sendVerificationCode.js';
 export { authVerifyCode } from './verifyCode.js';
+export {
+  authStartPhoneVerification,
+  authVerifyPhoneCode,
+} from './phoneAuth.js';

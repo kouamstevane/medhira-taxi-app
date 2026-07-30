@@ -2,18 +2,15 @@
 import { useState, useEffect, useRef, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { auth } from '@/config/firebase';
-import {
-  RecaptchaVerifier,
-  signInWithPhoneNumber,
-  AuthErrorCodes,
-} from 'firebase/auth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { InputField } from '@/components/forms';
 import { isValidPhoneNumber } from '@/lib/validation';
-import { ACTIVE_MARKET, SUPPORTED_COUNTRIES, ERROR_MESSAGES } from '@/utils/constants';
+import { SUPPORTED_COUNTRIES, ERROR_MESSAGES } from '@/utils/constants';
 import { getErrorMessage, getErrorCode } from '@/utils/error-utils';
-import { confirmPhoneSignIn, upsertPhoneClientUserDocument } from '@/services/auth.service';
+import {
+  startTwilioPhoneVerification,
+  verifyTwilioPhoneCodeAndSignIn,
+} from '@/services/auth.service';
 import { cn } from '@/lib/utils';
 import {
   driverFieldLabelClassName,
@@ -23,18 +20,6 @@ import {
 
 type FieldErrors = Partial<Record<'fullName' | 'phone', string>>;
 
-const getFirebaseServerResponseMessage = (error: unknown) => {
-  const serverResponse = (error as { customData?: { serverResponse?: unknown } })?.customData?.serverResponse;
-  if (typeof serverResponse !== 'string') return null;
-
-  try {
-    const parsed = JSON.parse(serverResponse) as { error?: { message?: unknown } };
-    return typeof parsed.error?.message === 'string' ? parsed.error.message : null;
-  } catch {
-    return serverResponse;
-  }
-};
-
 const splitFullName = (fullName: string) => {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
   return {
@@ -42,8 +27,6 @@ const splitFullName = (fullName: string) => {
     lastName: parts.slice(1).join(' '),
   };
 };
-
-const recaptchaSubmitButtonId = 'phone-auth-submit-button';
 
 export default function RegisterPhoneContent() {
   const router = useRouter();
@@ -55,28 +38,13 @@ export default function RegisterPhoneContent() {
   const [code, setCode] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(SUPPORTED_COUNTRIES[0]);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
-  const [verificationId, setVerificationId] = useState<string | null>(null);
+  const [verificationPhone, setVerificationPhone] = useState<string | null>(null);
+  const [maskedVerificationPhone, setMaskedVerificationPhone] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const recaptchaVerifier = useRef<RecaptchaVerifier | null>(null);
   const countryDropdownRef = useRef<HTMLDivElement>(null);
-  const showDeveloperSmsDiagnostics = process.env.NODE_ENV !== 'production';
-
-  useEffect(() => {
-    // Désactiver la vérification reCAPTCHA pour les tests en développement
-    // Cela permet d'utiliser les numéros de test Firebase sans le widget
-    // if (process.env.NODE_ENV === 'development') {
-    //   auth.settings.appVerificationDisabledForTesting = true;
-    // }
-
-    return () => {
-      if (recaptchaVerifier.current) {
-        recaptchaVerifier.current.clear();
-      }
-    };
-  }, []);
 
   // Fermer le dropdown quand on clique ailleurs
   useEffect(() => {
@@ -146,89 +114,13 @@ export default function RegisterPhoneContent() {
     setSuccess(null);
 
     try {
-      // En développement, on peut désactiver la vérification pour les numéros de test
-      // En développement, on active reCAPTCHA pour supporter les vrais numéros
-      // if (process.env.NODE_ENV === 'development') {
-      //   auth.settings.appVerificationDisabledForTesting = false;
-      // }
+      const result = await startTwilioPhoneVerification(fullPhoneNumber);
 
-      let appVerifier = recaptchaVerifier.current;
-
-      if (!appVerifier) {
-        appVerifier = new RecaptchaVerifier(auth, recaptchaSubmitButtonId, {
-          size: "invisible", //invisible, normal
-
-          callback: () => {},
-        });
-        recaptchaVerifier.current = appVerifier;
-      }
-
-      const confirmation = await signInWithPhoneNumber(
-        auth,
-        fullPhoneNumber,
-        appVerifier!
-      );
-
-      setVerificationId(confirmation.verificationId);
-      setSuccess(`Demande de code envoyée à ${fullPhoneNumber}`);
+      setVerificationPhone(result.phoneNumber);
+      setMaskedVerificationPhone(result.maskedPhone);
+      setSuccess(`Demande de code envoyée à ${result.maskedPhone}`);
     } catch (error: unknown) {
-      const errorCode = getErrorCode(error);
-      if (process.env.NODE_ENV === 'development' && errorCode === 'auth/captcha-check-failed') {
-        console.warn("Échec de la vérification test, nouvelle tentative avec vérification réelle...");
-
-        try {
-          // Disable testing mode to force real captcha
-          auth.settings.appVerificationDisabledForTesting = false;
-
-          // Clear existing verifier
-          if (recaptchaVerifier.current) {
-            try {
-              recaptchaVerifier.current.clear();
-            } catch {
-              // Ignore cleanup errors
-            }
-            recaptchaVerifier.current = null;
-          }
-
-          // Create new verifier
-          const newVerifier = new RecaptchaVerifier(auth, recaptchaSubmitButtonId, {
-            size: 'invisible',
-          });
-          recaptchaVerifier.current = newVerifier;
-
-          // Retry sign-in
-          const confirmation = await signInWithPhoneNumber(
-            auth,
-            fullPhoneNumber,
-            newVerifier
-          );
-
-          setVerificationId(confirmation.verificationId);
-          setSuccess(`Demande de code envoyée à ${fullPhoneNumber}`);
-          return; // Exit successfully
-        } catch (retryError) {
-          // If retry fails, handle as usual
-          console.error("Retry failed:", retryError);
-          handleAuthError(retryError);
-        }
-      } else {
-        // Ne pas clear le recaptcha en cas d'erreur pour permettre le retry
-        // si c'est une erreur liée au captcha, on le reset
-        if (
-          errorCode === 'auth/invalid-app-credential' ||
-          (error instanceof Error && error.message.includes('reCAPTCHA'))
-        ) {
-          if (recaptchaVerifier.current && typeof recaptchaVerifier.current.clear === 'function') {
-            try {
-              recaptchaVerifier.current.clear();
-            } catch {
-              // Ignorer si déjà clear
-            }
-            recaptchaVerifier.current = null;
-          }
-        }
-        handleAuthError(error);
-      }
+      handleAuthError(error);
     } finally {
       setLoading(false);
     }
@@ -246,14 +138,17 @@ export default function RegisterPhoneContent() {
     setError(null);
 
     try {
-      if (!verificationId) throw new Error('Aucun ID de vérification disponible');
+      if (!verificationPhone) throw new Error('Aucun numéro en attente de vérification');
 
-      const user = await confirmPhoneSignIn(verificationId, code);
       const nameParts = splitFullName(formData.fullName);
-      await upsertPhoneClientUserDocument(user, {
-        firstName: nameParts.firstName,
-        lastName: nameParts.lastName,
-        country: selectedCountry.code,
+      await verifyTwilioPhoneCodeAndSignIn({
+        phoneNumber: verificationPhone,
+        code,
+        profile: {
+          firstName: nameParts.firstName,
+          lastName: nameParts.lastName,
+          country: selectedCountry.code,
+        },
       });
       router.push('/auth/setup-payment');
     } catch (error: unknown) {
@@ -264,11 +159,8 @@ export default function RegisterPhoneContent() {
   };
 
   const handleReset = () => {
-    if (recaptchaVerifier.current) {
-      recaptchaVerifier.current.clear();
-      recaptchaVerifier.current = null;
-    }
-    setVerificationId(null);
+    setVerificationPhone(null);
+    setMaskedVerificationPhone(null);
     setCode('');
     setError(null);
     setSuccess(null);
@@ -282,37 +174,32 @@ export default function RegisterPhoneContent() {
     let errorMessage = "Une erreur est survenue";
     const errorCode = getErrorCode(error);
     const errorMsg = getErrorMessage(error);
-    const serverResponseMessage = getFirebaseServerResponseMessage(error);
 
     switch (errorCode) {
-      case AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER:
-        errorMessage = "Trop de tentatives. Veuillez réessayer plus tard.";
+      case 'functions/resource-exhausted':
+        errorMessage = errorMsg || "Trop de tentatives. Veuillez réessayer plus tard.";
         break;
-      case AuthErrorCodes.INVALID_PHONE_NUMBER:
+      case 'functions/failed-precondition':
+        errorMessage = errorMsg || "Le service SMS n'est pas encore prêt pour ce numéro.";
+        break;
+      case 'functions/invalid-argument':
+      case 'auth/invalid-phone-number':
         errorMessage = ERROR_MESSAGES.INVALID_PHONE;
         break;
       case 'auth/invalid-verification-code':
+      case 'functions/permission-denied':
         errorMessage = "Code de vérification invalide";
         break;
-      case AuthErrorCodes.NETWORK_REQUEST_FAILED:
+      case 'functions/unavailable':
+      case 'auth/network-request-failed':
         errorMessage = ERROR_MESSAGES.NETWORK_ERROR;
         break;
-      case 'auth/invalid-app-credential':
-        errorMessage = process.env.NODE_ENV !== 'production' && serverResponseMessage
-          ? `Jeton reCAPTCHA refusé : ${serverResponseMessage}`
-          : "La vérification reCAPTCHA a été refusée. Rechargez la page puis réessayez.";
-        break;
-      case 'auth/captcha-check-failed':
-        errorMessage = "La vérification reCAPTCHA a échoué. Veuillez réessayer.";
-        break;
-      case 'auth/internal-error':
-        errorMessage = process.env.NODE_ENV !== 'production' && serverResponseMessage
-          ? `Erreur Firebase interne : ${serverResponseMessage}`
-          : "Erreur Firebase interne. Veuillez réessayer plus tard.";
+      case 'functions/internal':
+        errorMessage = "Le service SMS est temporairement indisponible. Vérifiez la configuration Twilio et réessayez.";
         break;
       default:
-        if (errorMsg && (errorMsg.includes('verifier') || errorMsg.includes('_reset'))) {
-          errorMessage = "Erreur interne lors de l'initialisation du captcha. Veuillez rafraîchir la page.";
+        if (errorMsg && !errorMsg.includes('Firebase')) {
+          errorMessage = errorMsg;
         } else {
           errorMessage = "Une erreur est survenue lors de l'authentification. Veuillez réessayer.";
         }
@@ -359,7 +246,7 @@ export default function RegisterPhoneContent() {
           </div>
         )}
 
-        {!verificationId ? (
+        {!verificationPhone ? (
           <form onSubmit={handleSendCode} aria-label="Inscription par téléphone" className="mt-8 px-6 space-y-4" noValidate>
             <InputField
               label="Nom complet"
@@ -447,7 +334,6 @@ export default function RegisterPhoneContent() {
             </div>
 
             <button
-              id={recaptchaSubmitButtonId}
               type="submit"
               disabled={loading}
               className={driverPrimaryButtonClassName}
@@ -517,16 +403,10 @@ export default function RegisterPhoneContent() {
               <p className="mt-1 text-slate-400">
                 Le SMS peut prendre jusqu'à une minute. Vérifiez le réseau, le numéro saisi et les SMS bloqués avant de renvoyer.
               </p>
-              {showDeveloperSmsDiagnostics && (
-                <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-left text-xs text-amber-100">
-                  <p className="font-semibold text-amber-50">Diagnostic développeur</p>
-                  <p className="mt-1">
-                    Si Firebase accepte la demande mais que le SMS n'arrive pas, vérifiez Authentication &gt; Settings &gt; SMS region policy et autorisez {selectedCountry.code}.
-                  </p>
-                  <p className="mt-1 text-amber-200">
-                    Pays choisi : {selectedCountry.code} · Marché actif : {ACTIVE_MARKET}
-                  </p>
-                </div>
+              {maskedVerificationPhone && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Code envoyé à {maskedVerificationPhone}
+                </p>
               )}
               <button
                 type="button"

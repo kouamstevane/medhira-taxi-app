@@ -101,8 +101,8 @@ export default function PrivacyPage() {
                             </li>
                             <li>
                                 <strong>Identifiants de connexion</strong> :
-                                authentification Firebase (email / téléphone /
-                                Google / Apple).
+                                authentification Firebase (email / Google /
+                                Apple) et vérification téléphone par SMS.
                             </li>
                             <li>
                                 <strong>Photo de profil</strong> et, pour les

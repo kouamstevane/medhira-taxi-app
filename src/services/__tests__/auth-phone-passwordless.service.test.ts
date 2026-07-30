@@ -1,106 +1,85 @@
+const mockCallable = jest.fn();
+
 jest.mock('@/config/firebase', () => ({
   auth: { name: 'mock-auth' },
-  db: { name: 'mock-db' },
+  functions: { region: 'europe-west1' },
+}));
+
+jest.mock('firebase/functions', () => ({
+  httpsCallable: jest.fn(() => mockCallable),
 }));
 
 jest.mock('firebase/auth', () => ({
-  PhoneAuthProvider: {
-    credential: jest.fn(),
-  },
-  signInWithCredential: jest.fn(),
+  signInWithCustomToken: jest.fn(),
 }));
 
-jest.mock('firebase/firestore', () => ({
-  doc: jest.fn(),
-  getDoc: jest.fn(),
-  setDoc: jest.fn(),
-  updateDoc: jest.fn(),
-  serverTimestamp: jest.fn(() => 'server-timestamp'),
-}));
-
-import { PhoneAuthProvider, signInWithCredential } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { signInWithCustomToken } from 'firebase/auth';
+import { httpsCallable } from 'firebase/functions';
 import {
-  confirmPhoneSignIn,
-  upsertPhoneClientUserDocument,
+  startTwilioPhoneVerification,
+  verifyTwilioPhoneCodeAndSignIn,
 } from '@/services/auth.service';
-import { auth, db } from '@/config/firebase';
+import { auth, functions } from '@/config/firebase';
 
-describe('phone passwordless auth service', () => {
+describe('Twilio phone passwordless auth service', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (doc as jest.Mock).mockReturnValue({ path: 'users/phone-user-1' });
   });
 
-  it('confirms a phone OTP with Firebase Auth and returns the signed-in user', async () => {
-    const user = { uid: 'phone-user-1', phoneNumber: '+237655744484' };
-    (PhoneAuthProvider.credential as jest.Mock).mockReturnValue('phone-credential');
-    (signInWithCredential as jest.Mock).mockResolvedValue({ user });
+  it('starts a Twilio phone verification through a Cloud Function', async () => {
+    mockCallable.mockResolvedValue({
+      data: {
+        success: true,
+        phoneNumber: '+15550123456',
+        maskedPhone: '+1******3456',
+        resendAfterSec: 60,
+      },
+    });
 
-    const result = await confirmPhoneSignIn('verification-id', '123456');
+    const result = await startTwilioPhoneVerification('+15550123456');
 
-    expect(PhoneAuthProvider.credential).toHaveBeenCalledWith('verification-id', '123456');
-    expect(signInWithCredential).toHaveBeenCalledWith(auth, 'phone-credential');
-    expect(result).toBe(user);
+    expect(httpsCallable).toHaveBeenCalledWith(functions, 'authStartPhoneVerification');
+    expect(mockCallable).toHaveBeenCalledWith({ phoneNumber: '+15550123456' });
+    expect(result.maskedPhone).toBe('+1******3456');
   });
 
-  it('creates a client profile for a new phone-auth user without password data', async () => {
-    (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
+  it('verifies a Twilio code and signs in with the returned Firebase custom token', async () => {
+    const user = { uid: 'client_phone_123', phoneNumber: '+237682821031' };
+    mockCallable.mockResolvedValue({
+      data: {
+        success: true,
+        uid: 'client_phone_123',
+        customToken: 'firebase-custom-token',
+        isNewUser: true,
+      },
+    });
+    (signInWithCustomToken as jest.Mock).mockResolvedValue({ user });
 
-    await upsertPhoneClientUserDocument(
-      { uid: 'phone-user-1', phoneNumber: '+237655744484' },
-      { firstName: 'Jean', lastName: 'Dupont', country: 'CM' },
-    );
-
-    expect(doc).toHaveBeenCalledWith(db, 'users', 'phone-user-1');
-    expect(setDoc).toHaveBeenCalledWith(
-      { path: 'users/phone-user-1' },
-      expect.objectContaining({
-        uid: 'phone-user-1',
-        email: null,
-        phoneNumber: '+237655744484',
+    const result = await verifyTwilioPhoneCodeAndSignIn({
+      phoneNumber: '+237682821031',
+      code: '123456',
+      profile: {
         firstName: 'Jean',
         lastName: 'Dupont',
-        emailVerified: false,
-        profileImageUrl: '',
         country: 'CM',
-        activeRole: 'client',
-        roles: {
-          client: {
-            enabled: true,
-            joinedAt: 'server-timestamp',
-          },
-        },
-        createdAt: 'server-timestamp',
-        updatedAt: 'server-timestamp',
-      }),
-    );
-    expect(setDoc).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        password: expect.anything(),
-      }),
-    );
-  });
-
-  it('updates profile details for an existing phone-auth user without overwriting roles', async () => {
-    (getDoc as jest.Mock).mockResolvedValue({ exists: () => true });
-
-    await upsertPhoneClientUserDocument(
-      { uid: 'phone-user-1', phoneNumber: '+237655744484' },
-      { firstName: 'Jeanne', lastName: 'Martin', country: 'FR' },
-    );
-
-    expect(updateDoc).toHaveBeenCalledWith(
-      { path: 'users/phone-user-1' },
-      {
-        phoneNumber: '+237655744484',
-        firstName: 'Jeanne',
-        lastName: 'Martin',
-        country: 'FR',
-        updatedAt: 'server-timestamp',
       },
-    );
-    expect(setDoc).not.toHaveBeenCalled();
+    });
+
+    expect(httpsCallable).toHaveBeenCalledWith(functions, 'authVerifyPhoneCode');
+    expect(mockCallable).toHaveBeenCalledWith({
+      phoneNumber: '+237682821031',
+      code: '123456',
+      profile: {
+        firstName: 'Jean',
+        lastName: 'Dupont',
+        country: 'CM',
+      },
+    });
+    expect(signInWithCustomToken).toHaveBeenCalledWith(auth, 'firebase-custom-token');
+    expect(result).toEqual({
+      uid: 'client_phone_123',
+      isNewUser: true,
+      user,
+    });
   });
 });

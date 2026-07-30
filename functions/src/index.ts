@@ -2272,7 +2272,9 @@ export {
 
 export {
   authSendVerificationCode,
+  authStartPhoneVerification,
   authVerifyCode,
+  authVerifyPhoneCode,
 } from './authApi/index.js';
 
 export {

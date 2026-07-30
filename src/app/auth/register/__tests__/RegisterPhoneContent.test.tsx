@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RegisterPhoneContent from '@/app/auth/register/RegisterPhoneContent';
-import { auth } from '@/config/firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import {
+  startTwilioPhoneVerification,
+  verifyTwilioPhoneCodeAndSignIn,
+} from '@/services/auth.service';
 
 const push = jest.fn();
 
@@ -11,25 +13,17 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
-jest.mock('@/config/firebase', () => ({
-  auth: { settings: {} },
-}));
-
 jest.mock('firebase/auth', () => ({
   AuthErrorCodes: {
     TOO_MANY_ATTEMPTS_TRY_LATER: 'auth/too-many-requests',
     INVALID_PHONE_NUMBER: 'auth/invalid-phone-number',
     NETWORK_REQUEST_FAILED: 'auth/network-request-failed',
   },
-  RecaptchaVerifier: jest.fn().mockImplementation(() => ({
-    clear: jest.fn(),
-  })),
-  signInWithPhoneNumber: jest.fn(),
 }));
 
 jest.mock('@/services/auth.service', () => ({
-  confirmPhoneSignIn: jest.fn(),
-  upsertPhoneClientUserDocument: jest.fn(),
+  startTwilioPhoneVerification: jest.fn(),
+  verifyTwilioPhoneCodeAndSignIn: jest.fn(),
 }));
 
 describe('RegisterPhoneContent passwordless flow', () => {
@@ -62,7 +56,7 @@ describe('RegisterPhoneContent passwordless flow', () => {
 
     expect(screen.getByText('Nom complet requis')).toBeInTheDocument();
     expect(screen.getByText('Numéro de téléphone requis')).toBeInTheDocument();
-    expect(signInWithPhoneNumber).not.toHaveBeenCalled();
+    expect(startTwilioPhoneVerification).not.toHaveBeenCalled();
   });
 
   it('uses a compact identity field and an integrated phone country prefix', () => {
@@ -95,8 +89,11 @@ describe('RegisterPhoneContent passwordless flow', () => {
   });
 
   it('submits the phone form from the form submit event', async () => {
-    (signInWithPhoneNumber as jest.Mock).mockResolvedValue({
-      verificationId: 'verification-id',
+    (startTwilioPhoneVerification as jest.Mock).mockResolvedValue({
+      success: true,
+      phoneNumber: '+15550123456',
+      maskedPhone: '+1******3456',
+      resendAfterSec: 60,
     });
 
     render(<RegisterPhoneContent />);
@@ -110,17 +107,16 @@ describe('RegisterPhoneContent passwordless flow', () => {
     fireEvent.submit(screen.getByRole('form', { name: /Inscription par téléphone/i }));
 
     await waitFor(() => {
-      expect(signInWithPhoneNumber).toHaveBeenCalledWith(
-        auth,
-        '+15550123456',
-        expect.anything(),
-      );
+      expect(startTwilioPhoneVerification).toHaveBeenCalledWith('+15550123456');
     });
   });
 
-  it('sends a Firebase SMS code with the selected phone number', async () => {
-    (signInWithPhoneNumber as jest.Mock).mockResolvedValue({
-      verificationId: 'verification-id',
+  it('sends a Twilio SMS code with the selected phone number', async () => {
+    (startTwilioPhoneVerification as jest.Mock).mockResolvedValue({
+      success: true,
+      phoneNumber: '+15550123456',
+      maskedPhone: '+1******3456',
+      resendAfterSec: 60,
     });
 
     render(<RegisterPhoneContent />);
@@ -134,44 +130,17 @@ describe('RegisterPhoneContent passwordless flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /Envoyer le code/i }));
 
     await waitFor(() => {
-      expect(signInWithPhoneNumber).toHaveBeenCalledWith(
-        auth,
-        '+15550123456',
-        expect.anything(),
-      );
+      expect(startTwilioPhoneVerification).toHaveBeenCalledWith('+15550123456');
     });
     expect(await screen.findByText('Code de vérification (6 chiffres)')).toBeInTheDocument();
   });
 
-  it('initializes invisible reCAPTCHA on the visible submit button', async () => {
-    (signInWithPhoneNumber as jest.Mock).mockResolvedValue({
-      verificationId: 'verification-id',
-    });
-
-    render(<RegisterPhoneContent />);
-
-    const submitButton = screen.getByRole('button', { name: /Envoyer le code/i });
-
-    fireEvent.change(screen.getByPlaceholderText('Jean Dupont'), {
-      target: { name: 'fullName', value: 'Jean Dupont' },
-    });
-    fireEvent.change(screen.getByPlaceholderText('5550123456'), {
-      target: { value: '5550123456' },
-    });
-    fireEvent.click(submitButton);
-
-    await waitFor(() => {
-      expect(RecaptchaVerifier).toHaveBeenCalledWith(
-        auth,
-        submitButton.id,
-        expect.objectContaining({ size: 'invisible' }),
-      );
-    });
-  });
-
   it('explains what to do when the SMS does not arrive', async () => {
-    (signInWithPhoneNumber as jest.Mock).mockResolvedValue({
-      verificationId: 'verification-id',
+    (startTwilioPhoneVerification as jest.Mock).mockResolvedValue({
+      success: true,
+      phoneNumber: '+15550123456',
+      maskedPhone: '+1******3456',
+      resendAfterSec: 60,
     });
 
     render(<RegisterPhoneContent />);
@@ -184,16 +153,19 @@ describe('RegisterPhoneContent passwordless flow', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Envoyer le code/i }));
 
-    expect(await screen.findByText('Demande de code envoyée à +15550123456')).toBeInTheDocument();
+    expect(await screen.findByText('Demande de code envoyée à +1******3456')).toBeInTheDocument();
     expect(screen.queryByText(/Code de vérification envoyé/i)).not.toBeInTheDocument();
     expect(screen.getByText("Vous n'avez rien reçu ?")).toBeInTheDocument();
     expect(screen.getByText(/Le SMS peut prendre jusqu'à une minute/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Changer le numéro/i })).toBeInTheDocument();
   });
 
-  it('shows developer diagnostics when a Cameroon SMS request is accepted but the code may not arrive', async () => {
-    (signInWithPhoneNumber as jest.Mock).mockResolvedValue({
-      verificationId: 'verification-id',
+  it('does not show Firebase SMS diagnostics after a Twilio request is accepted', async () => {
+    (startTwilioPhoneVerification as jest.Mock).mockResolvedValue({
+      success: true,
+      phoneNumber: '+237682821031',
+      maskedPhone: '+237*****1031',
+      resendAfterSec: 60,
     });
 
     render(<RegisterPhoneContent />);
@@ -208,23 +180,15 @@ describe('RegisterPhoneContent passwordless flow', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Envoyer le code/i }));
 
-    expect(await screen.findByText('Demande de code envoyée à +237682821031')).toBeInTheDocument();
-    expect(screen.getByText(/Diagnostic développeur/i)).toBeInTheDocument();
-    expect(screen.getByText(/SMS region policy/i)).toBeInTheDocument();
-    expect(screen.getByText(/Marché actif : CA/i)).toBeInTheDocument();
+    expect(await screen.findByText('Demande de code envoyée à +237*****1031')).toBeInTheDocument();
+    expect(screen.queryByText(/Diagnostic développeur/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/SMS region policy/i)).not.toBeInTheDocument();
   });
 
-  it('surfaces Firebase internal phone auth details in development', async () => {
-    (signInWithPhoneNumber as jest.Mock).mockRejectedValue({
-      code: 'auth/internal-error',
-      message: 'Firebase: Error (auth/internal-error).',
-      customData: {
-        serverResponse: JSON.stringify({
-          error: {
-            message: 'TOO_MANY_ATTEMPTS_TRY_LATER',
-          },
-        }),
-      },
+  it('surfaces Twilio start verification errors', async () => {
+    (startTwilioPhoneVerification as jest.Mock).mockRejectedValue({
+      code: 'functions/resource-exhausted',
+      message: 'Trop de codes envoyés. Réessayez plus tard.',
     });
 
     render(<RegisterPhoneContent />);
@@ -239,21 +203,13 @@ describe('RegisterPhoneContent passwordless flow', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Envoyer le code/i }));
 
-    expect(await screen.findByText(/Erreur Firebase interne/i)).toBeInTheDocument();
-    expect(screen.getByText(/TOO_MANY_ATTEMPTS_TRY_LATER/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Trop de codes envoyés/i)).toBeInTheDocument();
   });
 
-  it('surfaces Firebase invalid app credential details in development', async () => {
-    (signInWithPhoneNumber as jest.Mock).mockRejectedValue({
-      code: 'auth/invalid-app-credential',
-      message: 'Firebase: Error (auth/invalid-app-credential).',
-      customData: {
-        serverResponse: JSON.stringify({
-          error: {
-            message: 'INVALID_APP_CREDENTIAL : Recaptcha token is invalid.',
-          },
-        }),
-      },
+  it('explains when the Twilio callable is not deployed or configured', async () => {
+    (startTwilioPhoneVerification as jest.Mock).mockRejectedValue({
+      code: 'functions/internal',
+      message: 'internal',
     });
 
     render(<RegisterPhoneContent />);
@@ -268,7 +224,53 @@ describe('RegisterPhoneContent passwordless flow', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Envoyer le code/i }));
 
-    expect(await screen.findByText(/Jeton reCAPTCHA refusé/i)).toBeInTheDocument();
-    expect(screen.getByText(/Recaptcha token is invalid/i)).toBeInTheDocument();
+    expect(await screen.findByText(/service SMS est temporairement indisponible/i)).toBeInTheDocument();
+  });
+
+  it('verifies the Twilio code and routes the client to payment setup', async () => {
+    (startTwilioPhoneVerification as jest.Mock).mockResolvedValue({
+      success: true,
+      phoneNumber: '+237682821031',
+      maskedPhone: '+237*****1031',
+      resendAfterSec: 60,
+    });
+    (verifyTwilioPhoneCodeAndSignIn as jest.Mock).mockResolvedValue({
+      uid: 'client_phone_123',
+      isNewUser: true,
+      user: {
+        uid: 'client_phone_123',
+      },
+    });
+
+    render(<RegisterPhoneContent />);
+
+    fireEvent.change(screen.getByPlaceholderText('Jean Dupont'), {
+      target: { name: 'fullName', value: 'Jean Dupont' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Indicatif Canada \+1/i }));
+    fireEvent.click(screen.getByRole('option', { name: /CM \+237 Cameroun/i }));
+    fireEvent.change(screen.getByPlaceholderText('655744484'), {
+      target: { value: '682821031' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Envoyer le code/i }));
+
+    await screen.findByText('Code de vérification (6 chiffres)');
+    fireEvent.change(screen.getByPlaceholderText('123456'), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Créer mon compte/i }));
+
+    await waitFor(() => {
+      expect(verifyTwilioPhoneCodeAndSignIn).toHaveBeenCalledWith({
+        phoneNumber: '+237682821031',
+        code: '123456',
+        profile: {
+          firstName: 'Jean',
+          lastName: 'Dupont',
+          country: 'CM',
+        },
+      });
+      expect(push).toHaveBeenCalledWith('/auth/setup-payment');
+    });
   });
 });

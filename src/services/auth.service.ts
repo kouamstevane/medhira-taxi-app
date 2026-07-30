@@ -16,11 +16,11 @@ import {
   User,
   sendEmailVerification,
   reload,
-  PhoneAuthProvider,
-  signInWithCredential,
+  signInWithCustomToken,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, functions } from '@/config/firebase';
 import { UserData } from '@/types';
 import { Capacitor } from '@capacitor/core';
 import { SocialLogin } from '@capgo/capacitor-social-login';
@@ -447,53 +447,56 @@ export const createUserDocument = async (
   });
 };
 
-export const confirmPhoneSignIn = async (
-  verificationId: string,
-  code: string,
-): Promise<User> => {
-  const credential = PhoneAuthProvider.credential(verificationId, code);
-  const result = await signInWithCredential(auth, credential);
-  return result.user;
-};
+export interface TwilioPhoneVerificationResult {
+  success: true;
+  phoneNumber: string;
+  maskedPhone: string;
+  resendAfterSec: number;
+}
 
-export const upsertPhoneClientUserDocument = async (
-  user: { uid: string; phoneNumber?: string | null },
+export interface VerifyTwilioPhoneCodeInput {
+  phoneNumber: string;
+  code: string;
   profile: {
     firstName: string;
     lastName: string;
     country?: string | null;
-  },
-): Promise<void> => {
-  const userRef = doc(db, 'users', user.uid);
-  const userSnap = await getDoc(userRef);
+  };
+}
 
-  if (userSnap.exists()) {
-    await updateDoc(userRef, {
-      phoneNumber: user.phoneNumber ?? null,
-      firstName: profile.firstName,
-      lastName: profile.lastName,
-      country: profile.country ?? null,
-      updatedAt: serverTimestamp(),
-    });
-    return;
-  }
+interface VerifyTwilioPhoneCodeResult {
+  success: true;
+  uid: string;
+  customToken: string;
+  isNewUser: boolean;
+}
 
-  await setDoc(userRef, {
-    uid: user.uid,
-    email: null,
-    phoneNumber: user.phoneNumber ?? null,
-    firstName: profile.firstName,
-    lastName: profile.lastName,
-    profileImageUrl: '',
-    emailVerified: false,
-    country: profile.country ?? null,
-    roles: {
-      client: { enabled: true, joinedAt: serverTimestamp() },
-    },
-    activeRole: 'client',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+export const startTwilioPhoneVerification = async (
+  phoneNumber: string,
+): Promise<TwilioPhoneVerificationResult> => {
+  const callable = httpsCallable<
+    { phoneNumber: string },
+    TwilioPhoneVerificationResult
+  >(functions, 'authStartPhoneVerification');
+  const result = await callable({ phoneNumber });
+  return result.data;
+};
+
+export const verifyTwilioPhoneCodeAndSignIn = async (
+  input: VerifyTwilioPhoneCodeInput,
+): Promise<{ uid: string; isNewUser: boolean; user: User }> => {
+  const callable = httpsCallable<
+    VerifyTwilioPhoneCodeInput,
+    VerifyTwilioPhoneCodeResult
+  >(functions, 'authVerifyPhoneCode');
+  const result = await callable(input);
+  const credential = await signInWithCustomToken(auth, result.data.customToken);
+
+  return {
+    uid: result.data.uid,
+    isNewUser: result.data.isNewUser,
+    user: credential.user,
+  };
 };
 
 /**
