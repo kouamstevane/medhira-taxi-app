@@ -62,7 +62,7 @@ export function NativeStripeSetup({
           </div>
         </div>
         <p className="text-slate-400 text-sm text-center">
-          Appuyez sur le bouton ci-dessous pour ajouter votre carte bancaire.
+          Appuyez sur le bouton ci-dessous pour ajouter une carte bancaire.
         </p>
       </div>
 
@@ -83,7 +83,7 @@ export function NativeStripeSetup({
         ) : (
           <>
             <MaterialIcon name="credit_card" size="md" />
-            Ajouter ma carte
+            Ajouter une carte
           </>
         )}
       </button>

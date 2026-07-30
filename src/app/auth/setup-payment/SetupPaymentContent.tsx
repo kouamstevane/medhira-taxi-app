@@ -93,7 +93,7 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
         ) : (
           <>
             <MaterialIcon name="credit_card" size="md" />
-            Ajouter ma carte
+            Ajouter une carte
           </>
         )}
       </button>
@@ -109,7 +109,6 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
 export default function SetupPaymentContent() {
   const router = useRouter();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [setupIntentId, setSetupIntentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -149,7 +148,6 @@ export default function SetupPaymentContent() {
       const data = result.data;
 
       setClientSecret(data.clientSecret);
-      setSetupIntentId(data.setupIntentId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erreur lors du chargement';
       console.error('[SetupPayment] Erreur:', msg);
@@ -182,7 +180,6 @@ export default function SetupPaymentContent() {
   const handleRetry = () => {
     setError(null);
     setClientSecret(null);
-    setSetupIntentId(null);
     fetchSetupIntent();
   };
 
@@ -261,10 +258,10 @@ export default function SetupPaymentContent() {
 
         <div className="px-6 text-center">
           <h1 className="text-white text-[28px] font-bold leading-tight mb-2">
-            Ajoutez votre carte
+            Préparez vos futurs paiements
           </h1>
           <p className="text-slate-400 text-base font-normal">
-            Enregistrez une carte bancaire pour payer vos courses facilement et en toute sécurité.
+            Ajoutez une carte pour réserver plus vite. Aucun montant ne sera débité maintenant.
           </p>
         </div>
 
@@ -326,14 +323,14 @@ export default function SetupPaymentContent() {
               className="w-full h-14 flex items-center justify-center gap-2 rounded-2xl border border-white/10 text-slate-400 font-medium active:scale-[0.98] transition-transform hover:text-slate-300 hover:border-white/20"
             >
               <MaterialIcon name="schedule" size="md" />
-              Plus tard
+              Continuer sans carte
             </button>
           </div>
         )}
 
         <div className="px-6 mt-6 text-center text-xs text-slate-500 space-y-1">
           <p>Vous pourrez ajouter votre carte plus tard depuis votre profil.</p>
-          <p>Aucun montant ne sera débité lors de cette étape.</p>
+          <p>Vous pourrez aussi utiliser votre portefeuille quand son solde est suffisant.</p>
         </div>
 
         <div className="mt-auto pb-10 pt-8 text-center px-6">
