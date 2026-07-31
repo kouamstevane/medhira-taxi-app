@@ -94,6 +94,10 @@ export default function AdminDriversPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const isAdmin = useAdminAuth();
+  const [invitationEmail, setInvitationEmail] = useState('');
+  const [invitationRole, setInvitationRole] = useState<'chauffeur' | 'livreur' | 'les_deux'>('chauffeur');
+  const [invitationName, setInvitationName] = useState('');
+  const [invitationLoading, setInvitationLoading] = useState(false);
 
   const PAGE_SIZE = 25;
 
@@ -220,6 +224,30 @@ export default function AdminDriversPage() {
       setError(message);
     } finally {
       setProcessing(null);
+    }
+  };
+
+  const handleCreateInvitation = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setInvitationLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const createInvitation = httpsCallable(functions, 'adminCreateDriverInvitation');
+      const result = await createInvitation({
+        email: invitationEmail.trim(),
+        role: invitationRole,
+        applicantName: invitationName.trim() || undefined,
+      });
+      const data = result.data as { code: string; expiresAt: number };
+      const expiry = new Date(data.expiresAt).toLocaleString('fr-FR');
+      setSuccess(`Invitation envoyée. Code : ${data.code} — expiration : ${expiry}`);
+      setInvitationEmail('');
+      setInvitationName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impossible de créer l’invitation');
+    } finally {
+      setInvitationLoading(false);
     }
   };
 
@@ -384,6 +412,23 @@ export default function AdminDriversPage() {
             </div>
           )}
         </div>
+
+        <form onSubmit={handleCreateInvitation} className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-white">Inviter un nouveau postulant</h2>
+            <p className="mt-1 text-xs text-slate-400">Le code envoyé par email sera valable 48 heures.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <input required type="email" value={invitationEmail} onChange={(e) => setInvitationEmail(e.target.value)} placeholder="Email du postulant" className="glass-input rounded-xl px-3 py-2 text-sm" />
+            <input value={invitationName} onChange={(e) => setInvitationName(e.target.value)} placeholder="Nom (optionnel)" className="glass-input rounded-xl px-3 py-2 text-sm" />
+            <select value={invitationRole} onChange={(e) => setInvitationRole(e.target.value as typeof invitationRole)} className="glass-input rounded-xl px-3 py-2 text-sm">
+              <option value="chauffeur">Chauffeur</option>
+              <option value="livreur">Livreur</option>
+              <option value="les_deux">Chauffeur / Livreur</option>
+            </select>
+            <button disabled={invitationLoading} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{invitationLoading ? 'Envoi…' : 'Générer et envoyer'}</button>
+          </div>
+        </form>
 
         {/* Search & Action Bar */}
         <div className="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between">

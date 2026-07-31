@@ -26,4 +26,11 @@ describe('RoleSelectionPage', () => {
       '/auth/register/phone',
     );
   });
+
+  it('does not expose the legacy driver registration from role selection', () => {
+    render(<RoleSelectionPage />);
+
+    expect(screen.queryByRole('link', { name: /Chauffeur \/ Livreur/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Recevez des courses et gagnez de l'argent/i)).not.toBeInTheDocument();
+  });
 });

@@ -308,3 +308,45 @@ export async function sendAdminRestaurantNotification(input: {
   await maybeRecordDevEmail(adminPayload);
   await resend.emails.send(adminPayload);
 }
+
+export interface DriverInvitationEmailParams {
+  to: string;
+  code: string;
+  expiresAt: Date;
+  role: 'chauffeur' | 'livreur' | 'les_deux';
+  invitationId: string;
+  apiKey?: string;
+}
+
+export async function sendDriverInvitationEmail(
+  params: DriverInvitationEmailParams,
+): Promise<SendEmailResult> {
+  const resolvedApiKey = params.apiKey || process.env.RESEND_API_KEY;
+  if (!resolvedApiKey) throw new Error('RESEND_API_KEY manquant.');
+
+  const roleLabel = params.role === 'les_deux' ? 'chauffeur/livreur' : params.role;
+  const expiry = params.expiresAt.toLocaleString('fr-FR', {
+    dateStyle: 'full',
+    timeStyle: 'short',
+    timeZone: 'Africa/Lagos',
+  });
+  const appUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://medjira.com';
+  const invitationUrl = `${appUrl}/auth/driver-invitation?invitationId=${encodeURIComponent(params.invitationId)}`;
+  const payload = {
+    from: `Medjira <${process.env.RESEND_FROM_EMAIL || 'medjira@medjira.com'}>`,
+    to: params.to,
+    subject: 'Votre invitation à créer un compte Medjira',
+    html: `<!DOCTYPE html><html lang="fr"><body style="margin:0;background:#f6f7f9;font-family:Arial,sans-serif;color:#27303b"><main style="max-width:600px;margin:32px auto;background:#fff;border-radius:14px;overflow:hidden"><header style="background:#f29200;padding:28px;text-align:center;color:#fff"><h1 style="margin:0">Invitation Medjira</h1><p style="margin:8px 0 0">Création de votre compte ${roleLabel}</p></header><section style="padding:32px"><p>Bonjour,</p><p>Après étude de votre candidature, nous vous invitons à créer votre compte Medjira afin de poursuivre votre inscription en tant que <strong>${roleLabel}</strong>.</p><div style="padding:24px;text-align:center;background:#fff7ed;border:2px solid #f29200;border-radius:10px;margin:24px 0"><div style="font-size:12px;color:#6b7280">Votre code personnel</div><div style="font-size:32px;font-weight:700;letter-spacing:6px;margin-top:10px">${params.code}</div></div><p><strong>Validité : 48 heures.</strong> Ce code expirera le <strong>${expiry}</strong>. Passé ce délai, il ne pourra plus être utilisé.</p><p><a href="${invitationUrl}" style="display:inline-block;background:#f29200;color:#fff;text-decoration:none;padding:14px 22px;border-radius:8px;font-weight:700">Créer mon compte</a></p><p>Si vous n’êtes pas à l’origine de cette demande, ignorez cet email.</p><p>Cordialement,<br><strong>L’équipe Medjira</strong></p></section><footer style="padding:20px;text-align:center;color:#6b7280;font-size:12px">Invitation ${params.invitationId} · Medjira</footer></main></body></html>`,
+  };
+  await maybeRecordDevEmail(payload);
+  const resend = new (loadResendCtor())(resolvedApiKey);
+  const result = await resend.emails.send({
+    ...payload,
+    tags: [
+      { name: 'type', value: 'driver_invitation' },
+      { name: 'invitation_id', value: params.invitationId },
+    ],
+  });
+  if (result.error) throw new Error(`Erreur Resend: ${result.error.message}`);
+  return { messageId: result.data?.id };
+}

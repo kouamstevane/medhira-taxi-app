@@ -9,6 +9,21 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { getDashboardRouteFor } from '@/services/roles.service';
 import type { ActiveRole } from '@/types/user';
 
+/*
+ * ANCIEN PARCOURS CHAUFFEUR/LIVREUR — À CONSERVER
+ *
+ * Ce parcours est temporairement masqué de /auth/role/.
+ * Ne pas supprimer ce code : il pourra être réactivé ultérieurement.
+ */
+// const LEGACY_DRIVER_ROLE = {
+//   id: 'chauffeur',
+//   title: 'Chauffeur / Livreur',
+//   description: 'Recevez des courses et gagnez de l\'argent.',
+//   icon: 'directions_car',
+//   href: '/driver/register',
+//   color: 'bg-orange-500',
+// } as const;
+
 const ROLES = [
   {
     id: 'client',
@@ -17,14 +32,6 @@ const ROLES = [
     icon: 'person',
     href: '/auth/register/phone',
     color: 'bg-blue-500',
-  },
-  {
-    id: 'chauffeur',
-    title: 'Chauffeur / Livreur',
-    description: 'Recevez des courses et gagnez de l\'argent.',
-    icon: 'directions_car',
-    href: '/driver/register',
-    color: 'bg-orange-500',
   },
   {
     id: 'restaurateur',

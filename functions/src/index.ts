@@ -2278,6 +2278,12 @@ export {
 } from './authApi/index.js';
 
 export {
+  adminCreateDriverInvitation,
+  validateDriverInvitation,
+  completeDriverInvitation,
+} from './driver/driverInvitation.js';
+
+export {
   walletGetBalance,
   walletEnsure,
   walletFailTransaction,
