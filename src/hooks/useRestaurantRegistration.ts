@@ -20,6 +20,7 @@ import { httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
 import { db, auth, functions } from '@/config/firebase';
 import { mapHttpsError } from '@/services/cloud-functions.helpers';
+import { AuthService } from '@/services';
 
 export interface Step1Data {
   firstName: string;
@@ -154,6 +155,21 @@ export function useRestaurantRegistration() {
       setLoading(false);
     }
   }, []);
+
+  const handleGoogleSignIn = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await AuthService.signInWithGoogle();
+      skipToStep3();
+    } catch (err: unknown) {
+      const mapped = mapHttpsError(err);
+      setError(mapped.message);
+      toast.error(mapped.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [skipToStep3]);
 
   const handleStep2Verified = useCallback(async () => {
     setStep2DataState({ emailVerified: true });
@@ -369,6 +385,7 @@ export function useRestaurantRegistration() {
     setError,
     clearError,
     handleStep1Submit,
+    handleGoogleSignIn,
     handleStep2Verified,
     handleDraftSave,
     saveDraftDebounced,

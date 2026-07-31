@@ -25,6 +25,7 @@ function RestaurantRegisterWizard() {
     step4Data,
     goToStep,
     handleStep1Submit,
+    handleGoogleSignIn,
     handleStep2Verified,
     handleDraftSave,
     handleSubmit,
@@ -88,6 +89,7 @@ function RestaurantRegisterWizard() {
       {currentStep === 1 && (
         <Step1Account
           onSubmit={handleStep1Submit}
+          onGoogleSignIn={handleGoogleSignIn}
           loading={loading}
           error={error}
         />

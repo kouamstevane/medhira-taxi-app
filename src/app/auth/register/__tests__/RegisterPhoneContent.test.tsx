@@ -3,6 +3,7 @@ import RegisterPhoneContent from '@/app/auth/register/RegisterPhoneContent';
 import {
   startTwilioPhoneVerification,
   verifyTwilioPhoneCodeAndSignIn,
+  signInWithGoogle,
 } from '@/services/auth.service';
 
 const push = jest.fn();
@@ -24,6 +25,7 @@ jest.mock('firebase/auth', () => ({
 jest.mock('@/services/auth.service', () => ({
   startTwilioPhoneVerification: jest.fn(),
   verifyTwilioPhoneCodeAndSignIn: jest.fn(),
+  signInWithGoogle: jest.fn(),
 }));
 
 describe('RegisterPhoneContent passwordless flow', () => {
@@ -296,6 +298,22 @@ describe('RegisterPhoneContent passwordless flow', () => {
           country: 'CM',
         },
       });
+      expect(push).toHaveBeenCalledWith('/auth/setup-payment');
+    });
+  });
+
+  it('renders Google sign in button and triggers signInWithGoogle on click', async () => {
+    (signInWithGoogle as jest.Mock).mockResolvedValue({ uid: 'google_123' });
+
+    render(<RegisterPhoneContent />);
+
+    const googleBtn = screen.getByRole('button', { name: /Continuer avec Google/i });
+    expect(googleBtn).toBeInTheDocument();
+
+    fireEvent.click(googleBtn);
+
+    await waitFor(() => {
+      expect(signInWithGoogle).toHaveBeenCalled();
       expect(push).toHaveBeenCalledWith('/auth/setup-payment');
     });
   });
