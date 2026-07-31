@@ -135,6 +135,32 @@ describe('RegisterPhoneContent passwordless flow', () => {
     expect(await screen.findByText('Code de vérification (6 chiffres)')).toBeInTheDocument();
   });
 
+  it('accepts a single name before sending a Twilio SMS code', async () => {
+    (startTwilioPhoneVerification as jest.Mock).mockResolvedValue({
+      success: true,
+      phoneNumber: '+237682821031',
+      maskedPhone: '+237*****1031',
+      resendAfterSec: 60,
+    });
+
+    render(<RegisterPhoneContent />);
+
+    fireEvent.change(screen.getByPlaceholderText('Jean Dupont'), {
+      target: { name: 'fullName', value: 'kameni' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Indicatif Canada \+1/i }));
+    fireEvent.click(screen.getByRole('option', { name: /CM \+237 Cameroun/i }));
+    fireEvent.change(screen.getByPlaceholderText('655744484'), {
+      target: { value: '682821031' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Envoyer le code/i }));
+
+    await waitFor(() => {
+      expect(startTwilioPhoneVerification).toHaveBeenCalledWith('+237682821031');
+    });
+    expect(screen.queryByText('Entrez votre nom et prénom')).not.toBeInTheDocument();
+  });
+
   it('explains what to do when the SMS does not arrive', async () => {
     (startTwilioPhoneVerification as jest.Mock).mockResolvedValue({
       success: true,

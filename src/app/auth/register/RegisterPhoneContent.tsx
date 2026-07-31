@@ -81,8 +81,6 @@ export default function RegisterPhoneContent() {
     const nameParts = splitFullName(formData.fullName);
     if (!formData.fullName.trim()) {
       nextFieldErrors.fullName = 'Nom complet requis';
-    } else if (!nameParts.lastName) {
-      nextFieldErrors.fullName = 'Entrez votre nom et prénom';
     }
     if (!formData.phone.trim()) nextFieldErrors.phone = 'Numéro de téléphone requis';
 

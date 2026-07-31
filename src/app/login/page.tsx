@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { auth, db } from '@/config/firebase';
 import {
-  signInWithEmailAndPassword,
   AuthErrorCodes,
   signOut,
 } from 'firebase/auth';
@@ -13,22 +12,43 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { AuthService } from '@/services';
 import {
+  startTwilioPhoneVerification,
+  verifyTwilioPhoneCodeAndSignIn,
+} from '@/services/auth.service';
+import {
   getRouteForAuthenticatedProfile,
   toRestaurantEffectiveStatus,
   type DriverStatus,
 } from '@/services/roles.service';
 import type { UserData } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { ERROR_MESSAGES } from '@/utils/constants';
+import { ERROR_MESSAGES, SUPPORTED_COUNTRIES } from '@/utils/constants';
+import { isValidPhoneNumber } from '@/lib/validation';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const phoneInputId = useId();
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState(SUPPORTED_COUNTRIES[0]);
+  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
+  const [verificationPhone, setVerificationPhone] = useState<string | null>(null);
+  const [maskedVerificationPhone, setMaskedVerificationPhone] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { authStatus, userData } = useAuth();
   const router = useRouter();
+  const countryDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(event.target as Node)) {
+        setIsCountryDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (authStatus !== 'authenticated' || !userData) return;
@@ -42,10 +62,55 @@ export default function LoginPage() {
     router.replace(route);
   }, [authStatus, router, userData]);
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const routeAuthenticatedUser = async (uid: string) => {
+    const userSnap = await getDoc(doc(db, 'users', uid));
+    if (!userSnap.exists()) {
+      await signOut(auth);
+      setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
+      return;
+    }
+    const userData = userSnap.data() as UserData;
+
+    const driverSnap = userData.roles?.driver
+      ? await getDoc(doc(db, 'drivers', uid))
+      : null;
+    const restaurantId = userData.roles?.restaurant?.restaurantId;
+    const restaurantSnap = restaurantId
+      ? await getDoc(doc(db, 'restaurants', restaurantId))
+      : null;
+
+    const driverStatus = driverSnap?.data()?.status as DriverStatus | undefined;
+    const restaurantStatus = toRestaurantEffectiveStatus(restaurantSnap?.data());
+
+    const route = getRouteForAuthenticatedProfile(userData, {
+      driver: driverStatus,
+      restaurant: restaurantStatus,
+    });
+    if (!route) {
+      await signOut(auth);
+      setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
+      return;
+    }
+
+    router.replace(route);
+  };
+
+  const buildPhoneNumber = () => {
+    const cleanPhone = phone.replace(/\D/g, '').replace(/^0+/, '');
+    return `${selectedCountry.dialCode}${cleanPhone}`;
+  };
+
+  const handleSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError(ERROR_MESSAGES.REQUIRED_FIELDS);
+
+    if (!phone.trim()) {
+      setError('Numéro de téléphone requis');
+      return;
+    }
+
+    const fullPhoneNumber = buildPhoneNumber();
+    if (!isValidPhoneNumber(fullPhoneNumber, selectedCountry.dialCode)) {
+      setError(`Numéro invalide pour ${selectedCountry.name}.`);
       return;
     }
 
@@ -53,36 +118,9 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      const userSnap = await getDoc(doc(db, 'users', cred.user.uid));
-      if (!userSnap.exists()) {
-        await signOut(auth);
-        setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
-        return;
-      }
-      const userData = userSnap.data() as UserData;
-
-      const driverSnap = userData.roles?.driver
-        ? await getDoc(doc(db, 'drivers', cred.user.uid))
-        : null;
-      const restaurantId = userData.roles?.restaurant?.restaurantId;
-      const restaurantSnap = restaurantId
-        ? await getDoc(doc(db, 'restaurants', restaurantId))
-        : null;
-
-      const driverStatus = driverSnap?.data()?.status as DriverStatus | undefined;
-      const restaurantStatus = toRestaurantEffectiveStatus(restaurantSnap?.data());
-
-      const route = getRouteForAuthenticatedProfile(userData, {
-        driver: driverStatus,
-        restaurant: restaurantStatus,
-      });
-      if (!route) {
-        await signOut(auth);
-        setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
-        return;
-      }
-      router.replace(route);
+      const result = await startTwilioPhoneVerification(fullPhoneNumber);
+      setVerificationPhone(result.phoneNumber);
+      setMaskedVerificationPhone(result.maskedPhone);
     } catch (err: unknown) {
       handleAuthError(err);
     } finally {
@@ -90,44 +128,49 @@ export default function LoginPage() {
     }
   };
 
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!verificationPhone) {
+      setError('Aucun numéro en attente de vérification');
+      return;
+    }
+
+    if (!code || code.length < 6) {
+      setError('Veuillez entrer le code complet');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await verifyTwilioPhoneCodeAndSignIn({
+        phoneNumber: verificationPhone,
+        code,
+      });
+      await routeAuthenticatedUser(result.uid);
+    } catch (err: unknown) {
+      handleAuthError(err);
+      setLoading(false);
+    }
+  };
+
+  const handleResetPhone = () => {
+    setVerificationPhone(null);
+    setMaskedVerificationPhone(null);
+    setCode('');
+    setError(null);
+  };
+
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
     try {
       const user = await AuthService.signInWithGoogle();
-      const uid = user.uid;
-      const userSnap = await getDoc(doc(db, 'users', uid));
-      if (!userSnap.exists()) {
-        await signOut(auth);
-        setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
-        return;
-      }
-      const userData = userSnap.data() as UserData;
-
-      const driverSnap = userData.roles?.driver
-        ? await getDoc(doc(db, 'drivers', uid))
-        : null;
-      const restaurantId = userData.roles?.restaurant?.restaurantId;
-      const restaurantSnap = restaurantId
-        ? await getDoc(doc(db, 'restaurants', restaurantId))
-        : null;
-
-      const driverStatus = driverSnap?.data()?.status as DriverStatus | undefined;
-      const restaurantStatus = toRestaurantEffectiveStatus(restaurantSnap?.data());
-
-      const route = getRouteForAuthenticatedProfile(userData, {
-        driver: driverStatus,
-        restaurant: restaurantStatus,
-      });
-      if (!route) {
-        await signOut(auth);
-        setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
-        return;
-      }
-      router.replace(route);
+      await routeAuthenticatedUser(user.uid);
     } catch (err: unknown) {
       handleAuthError(err);
-    } finally {
       setLoading(false);
     }
   };
@@ -138,22 +181,27 @@ export default function LoginPage() {
 
     switch (err.code) {
       case AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER:
-        errorMessage = "Trop de tentatives. Veuillez réessayer plus tard.";
+      case 'functions/resource-exhausted':
+        errorMessage = err.message || "Trop de tentatives. Veuillez réessayer plus tard.";
         break;
-      case AuthErrorCodes.INVALID_EMAIL:
-        errorMessage = ERROR_MESSAGES.INVALID_EMAIL;
+      case 'functions/invalid-argument':
+        errorMessage = err.message === 'Nom complet requis.'
+          ? "Ce numéro n'est pas encore inscrit. Créez un compte pour continuer."
+          : err.message || ERROR_MESSAGES.INVALID_PHONE;
         break;
-      case AuthErrorCodes.USER_DELETED:
-      case AuthErrorCodes.INVALID_PASSWORD:
-      case 'auth/wrong-password':
-      case 'auth/user-not-found':
-        errorMessage = "Email ou mot de passe incorrect";
+      case 'auth/invalid-verification-code':
+      case 'functions/permission-denied':
+        errorMessage = 'Code de vérification invalide';
         break;
       case AuthErrorCodes.NETWORK_REQUEST_FAILED:
+      case 'functions/unavailable':
         errorMessage = ERROR_MESSAGES.NETWORK_ERROR;
         break;
       case 'auth/popup-closed-by-user':
         errorMessage = "Connexion Google annulée";
+        break;
+      case 'functions/internal':
+        errorMessage = "Le service SMS est temporairement indisponible. Réessayez.";
         break;
       default:
         errorMessage = err.message || ERROR_MESSAGES.AUTH_ERROR;
@@ -166,10 +214,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
       <div className="relative flex min-h-screen w-full flex-col max-w-[375px] mx-auto overflow-hidden">
-        {/* Top Safe Area */}
         <div className="h-12 w-full" />
 
-        {/* Brand Logo */}
         <div className="flex flex-col items-center justify-center pt-8 pb-10">
           <div className="bg-primary/10 p-3 rounded-xl mb-3">
             <MaterialIcon name="local_taxi" className="text-primary text-[32px] font-bold" />
@@ -177,13 +223,11 @@ export default function LoginPage() {
           <h2 className="text-primary text-2xl font-bold tracking-tight">Medjira</h2>
         </div>
 
-        {/* Heading */}
         <div className="px-6 text-center">
           <h1 className="text-white text-[32px] font-bold leading-tight mb-2">Bon retour !</h1>
           <p className="text-slate-400 text-base font-normal">Connectez-vous pour continuer</p>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="mx-6 mt-6 p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start gap-2">
             <MaterialIcon name="error" size="md" className="text-destructive mt-0.5" />
@@ -191,88 +235,146 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Form */}
-        <form onSubmit={handleEmailLogin} className="mt-10 px-6 space-y-4">
-          {/* Email */}
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <MaterialIcon name="mail" size="md" className="text-slate-500" />
-            </div>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(null); }}
-              className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
-              placeholder="Votre email"
-              required
-              autoComplete="email"
-            />
-          </div>
+        {!verificationPhone ? (
+          <form onSubmit={handleSendCode} aria-label="Connexion par téléphone" className="mt-10 px-6 space-y-4" noValidate>
+            <p className="text-center text-sm font-semibold text-white">Connexion par téléphone</p>
 
-          {/* Password */}
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <MaterialIcon name="lock" size="md" className="text-slate-500" />
-            </div>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setError(null); }}
-              className="glass-input w-full h-14 pl-12 pr-12 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
-              placeholder="Mot de passe"
-              required
-              autoComplete="current-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center"
-            >
-              <MaterialIcon
-                name={showPassword ? 'visibility_off' : 'visibility'}
-                size="md"
-                className="text-slate-500"
-              />
-            </button>
-          </div>
+            <div className="space-y-2" ref={countryDropdownRef}>
+              <label htmlFor={phoneInputId} className="block text-sm font-medium text-slate-400">
+                Numéro de téléphone
+              </label>
+              <div className="glass-input flex h-14 overflow-hidden rounded-xl border border-white/[0.08] bg-[#1A1A1A] text-white transition-all focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
+                <button
+                  type="button"
+                  onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
+                  aria-label={`Indicatif ${selectedCountry.name} ${selectedCountry.dialCode}`}
+                  aria-haspopup="listbox"
+                  aria-expanded={isCountryDropdownOpen}
+                  className="flex h-full shrink-0 items-center gap-2 border-r border-white/[0.08] px-3 text-sm font-semibold text-white outline-none transition-colors hover:bg-white/[0.04]"
+                >
+                  <span>{selectedCountry.code}</span>
+                  <span className="text-slate-300">{selectedCountry.dialCode}</span>
+                  <MaterialIcon name="expand_more" size="sm" className="text-slate-400" />
+                </button>
+                <input
+                  id={phoneInputId}
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(e.target.value.replace(/\D/g, '').slice(0, 15));
+                    setError(null);
+                  }}
+                  placeholder={selectedCountry.defaultNumber}
+                  inputMode="tel"
+                  autoComplete="tel-national"
+                  className="h-full min-w-0 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-slate-500"
+                  required
+                />
+              </div>
 
-          {/* Forgot Password */}
-          <div className="flex justify-end pt-1">
-            <Link href="/auth/reset-password" className="text-primary text-sm font-semibold hover:underline">
-              Mot de passe oublié ?
-            </Link>
-          </div>
-
-          {/* CTA Button */}
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Connexion...
-                </>
-              ) : (
-                'Se connecter'
+              {isCountryDropdownOpen && (
+                <div role="listbox" aria-label="Pays disponibles" className="mt-2 w-full max-h-56 overflow-y-auto glass-card border border-white/10 rounded-xl shadow-xl">
+                  <div className="py-1">
+                    {SUPPORTED_COUNTRIES.map((country) => (
+                      <button
+                        key={country.code}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedCountry.code === country.code}
+                        onClick={() => {
+                          setSelectedCountry(country);
+                          setIsCountryDropdownOpen(false);
+                          setError(null);
+                        }}
+                        className={`flex items-center w-full px-4 py-3 text-sm text-left hover:bg-white/10 ${
+                          selectedCountry.code === country.code ? 'bg-primary/20 text-white' : 'text-slate-300'
+                        }`}
+                      >
+                        <span className="font-semibold mr-3">{country.code}</span>
+                        <span className="font-medium mr-2">{country.dialCode}</span>
+                        <span className="text-slate-400">{country.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
-            </button>
-          </div>
-        </form>
+            </div>
 
-        {/* Divider */}
+            <div className="pt-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Envoi...
+                  </>
+                ) : (
+                  'Envoyer le code'
+                )}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyCode} aria-label="Vérification du téléphone" className="mt-10 px-6 space-y-4">
+            <div className="text-center">
+              <p className="text-sm font-semibold text-white">Code de vérification</p>
+              {maskedVerificationPhone && (
+                <p className="mt-1 text-sm text-slate-400">SMS envoyé à {maskedVerificationPhone}</p>
+              )}
+            </div>
+
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <MaterialIcon name="pin" size="md" className="text-slate-500" />
+              </div>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                  setError(null);
+                }}
+                className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white text-base placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                placeholder="123456"
+                maxLength={6}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                required
+              />
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {loading ? 'Vérification...' : 'Se connecter'}
+              </button>
+              <button
+                type="button"
+                onClick={handleResetPhone}
+                disabled={loading}
+                className="h-14 px-4 glass-card border border-white/10 text-slate-300 font-medium rounded-2xl hover:bg-white/5 transition-all disabled:opacity-50"
+              >
+                Modifier
+              </button>
+            </div>
+          </form>
+        )}
+
         <div className="flex items-center px-6 my-10 space-x-4">
           <div className="flex-1 h-[1px] bg-slate-800" />
           <span className="text-slate-500 text-sm font-medium">ou continuer avec</span>
           <div className="flex-1 h-[1px] bg-slate-800" />
         </div>
 
-        {/* Google Login */}
         <div className="px-6">
           <button
             onClick={handleGoogleLogin}
@@ -290,7 +392,6 @@ export default function LoginPage() {
           </button>
         </div>
 
-        {/* Footer */}
         <div className="mt-auto pb-10 text-center">
           <p className="text-slate-400 text-sm">
             Pas de compte ?

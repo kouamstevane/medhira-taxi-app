@@ -30,7 +30,7 @@ export interface PhoneAuthDeps {
   upsertClientUser(input: {
     uid: string;
     phoneNumber: string;
-    profile: {
+    profile?: {
       firstName: string;
       lastName: string;
       country?: string;
@@ -77,11 +77,13 @@ function normalizeCode(value: unknown): string {
 }
 
 function normalizeProfile(input: VerifyPhoneCodeInput['profile']) {
+  if (input === undefined) return undefined;
+
   const firstName = typeof input?.firstName === 'string' ? input.firstName.trim() : '';
   const lastName = typeof input?.lastName === 'string' ? input.lastName.trim() : '';
   const country = typeof input?.country === 'string' ? input.country.trim().toUpperCase() : undefined;
 
-  if (!firstName || !lastName) {
+  if (!firstName) {
     throw new HttpsError('invalid-argument', 'Nom complet requis.');
   }
 
@@ -137,7 +139,6 @@ export async function handleVerifyPhoneCode(
 ): Promise<VerifyPhoneCodeResult> {
   const phoneNumber = normalizePhoneNumber(input.phoneNumber);
   const code = normalizeCode(input.code);
-  const profile = normalizeProfile(input.profile);
 
   await deps.enforceRateLimit({
     identifier: context.ip,
@@ -160,6 +161,7 @@ export async function handleVerifyPhoneCode(
   }
 
   const existingIdentity = await deps.findPhoneIdentity(phoneNumber);
+  const profile = normalizeProfile(input.profile);
   const identity = existingIdentity ?? await deps.createPhoneIdentity(phoneNumber);
 
   await deps.upsertClientUser({

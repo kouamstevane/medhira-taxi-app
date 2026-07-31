@@ -118,7 +118,7 @@ async function createPhoneIdentity(phoneNumber: string): Promise<{ uid: string }
 async function upsertClientUser(input: {
   uid: string;
   phoneNumber: string;
-  profile: {
+  profile?: {
     firstName: string;
     lastName: string;
     country?: string;
@@ -136,9 +136,11 @@ async function upsertClientUser(input: {
       phoneNumber: input.phoneNumber,
       phoneVerified: true,
       phoneVerifiedAt,
-      firstName: input.profile.firstName,
-      lastName: input.profile.lastName,
-      ...(input.profile.country ? { country: input.profile.country } : {}),
+      ...(input.profile ? {
+        firstName: input.profile.firstName,
+        lastName: input.profile.lastName,
+        ...(input.profile.country ? { country: input.profile.country } : {}),
+      } : {}),
       updatedAt: now,
     });
     return;
@@ -151,10 +153,10 @@ async function upsertClientUser(input: {
     phoneVerified: true,
     phoneVerifiedAt,
     emailVerified: false,
-    firstName: input.profile.firstName,
-    lastName: input.profile.lastName,
+    firstName: input.profile?.firstName ?? '',
+    lastName: input.profile?.lastName ?? '',
     profileImageUrl: '',
-    ...(input.profile.country ? { country: input.profile.country } : { country: null }),
+    ...(input.profile?.country ? { country: input.profile.country } : { country: null }),
     roles: {
       client: {
         enabled: true,

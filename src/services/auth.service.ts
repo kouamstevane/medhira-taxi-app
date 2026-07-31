@@ -457,7 +457,7 @@ export interface TwilioPhoneVerificationResult {
 export interface VerifyTwilioPhoneCodeInput {
   phoneNumber: string;
   code: string;
-  profile: {
+  profile?: {
     firstName: string;
     lastName: string;
     country?: string | null;

@@ -101,6 +101,100 @@ describe('Twilio phone auth core', () => {
     });
   });
 
+  it('accepts profile details with a single name', async () => {
+    const deps = makeDeps();
+    deps.checkVerification.mockResolvedValue('approved');
+    deps.findPhoneIdentity.mockResolvedValue(null);
+    deps.createPhoneIdentity.mockResolvedValue({ uid: 'client_phone_123' });
+    deps.createCustomToken.mockResolvedValue('firebase-custom-token');
+
+    await handleVerifyPhoneCode(
+      {
+        phoneNumber: '+237682821031',
+        code: '123456',
+        profile: {
+          firstName: 'kameni',
+          lastName: '',
+          country: 'CM',
+        },
+      },
+      { ip: '203.0.113.10' },
+      deps,
+    );
+
+    expect(deps.upsertClientUser).toHaveBeenCalledWith({
+      uid: 'client_phone_123',
+      phoneNumber: '+237682821031',
+      profile: {
+        firstName: 'kameni',
+        lastName: '',
+        country: 'CM',
+      },
+      phoneVerifiedAt: new Date('2026-07-30T12:00:00.000Z'),
+    });
+  });
+
+  it('verifies a Twilio code and creates a new phone identity without requiring profile details', async () => {
+    const deps = makeDeps();
+    deps.checkVerification.mockResolvedValue('approved');
+    deps.findPhoneIdentity.mockResolvedValue(null);
+    deps.createPhoneIdentity.mockResolvedValue({ uid: 'client_phone_123' });
+    deps.createCustomToken.mockResolvedValue('firebase-custom-token');
+
+    const result = await handleVerifyPhoneCode(
+      {
+        phoneNumber: '+237682821031',
+        code: '123456',
+      },
+      { ip: '203.0.113.10' },
+      deps,
+    );
+
+    expect(result).toEqual({
+      success: true,
+      uid: 'client_phone_123',
+      customToken: 'firebase-custom-token',
+      isNewUser: true,
+    });
+    expect(deps.createPhoneIdentity).toHaveBeenCalledWith('+237682821031');
+    expect(deps.upsertClientUser).toHaveBeenCalledWith({
+      uid: 'client_phone_123',
+      phoneNumber: '+237682821031',
+      profile: undefined,
+      phoneVerifiedAt: new Date('2026-07-30T12:00:00.000Z'),
+    });
+  });
+
+  it('verifies an existing phone identity without requiring profile details', async () => {
+    const deps = makeDeps();
+    deps.checkVerification.mockResolvedValue('approved');
+    deps.findPhoneIdentity.mockResolvedValue({ uid: 'client_phone_123' });
+    deps.createCustomToken.mockResolvedValue('firebase-custom-token');
+
+    const result = await handleVerifyPhoneCode(
+      {
+        phoneNumber: '+237682821031',
+        code: '123456',
+      },
+      { ip: '203.0.113.10' },
+      deps,
+    );
+
+    expect(result).toEqual({
+      success: true,
+      uid: 'client_phone_123',
+      customToken: 'firebase-custom-token',
+      isNewUser: false,
+    });
+    expect(deps.createPhoneIdentity).not.toHaveBeenCalled();
+    expect(deps.upsertClientUser).toHaveBeenCalledWith({
+      uid: 'client_phone_123',
+      phoneNumber: '+237682821031',
+      profile: undefined,
+      phoneVerifiedAt: new Date('2026-07-30T12:00:00.000Z'),
+    });
+  });
+
   it('rejects an incorrect Twilio code without creating a session', async () => {
     const deps = makeDeps();
     deps.checkVerification.mockResolvedValue('pending');
