@@ -107,6 +107,10 @@ export default function HomePage() {
               Créer un compte
             </button>
           </Link>
+
+          <Link href="/auth/driver-application" className="mt-1 flex items-center justify-center gap-2 text-sm font-semibold text-slate-400 transition hover:text-primary">
+            <MaterialIcon name="local_taxi" size="sm" /> Vous souhaitez devenir Chauffeur / Livreur ?
+          </Link>
         </div>
 
 
