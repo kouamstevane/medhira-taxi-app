@@ -145,6 +145,56 @@ export async function sendVerificationCodeEmail(
 
 const APP_URL = 'https://medjira.com';
 
+interface DriverApplicationNotificationParams {
+  to: string;
+  applicationId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  city: string;
+  role: 'chauffeur' | 'livreur' | 'les_deux';
+  fileName: string;
+  cvBuffer: Buffer;
+  apiKey?: string;
+}
+
+export async function sendDriverApplicationNotification(
+  params: DriverApplicationNotificationParams,
+): Promise<SendEmailResult> {
+  const resolvedApiKey = params.apiKey || process.env.RESEND_API_KEY;
+  if (!resolvedApiKey) throw new Error('RESEND_API_KEY manquant.');
+  const resend = new (loadResendCtor())(resolvedApiKey);
+  const fromEmail = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'medjira@medjira.com';
+  const subject = `Nouvelle candidature ${params.role} — ${params.fullName}`;
+  const text = [
+    'Une nouvelle candidature Chauffeur / Livreur est disponible.',
+    '',
+    `Nom : ${params.fullName}`,
+    `Email : ${params.email}`,
+    `Téléphone : ${params.phone}`,
+    `Ville : ${params.city}`,
+    `Poste : ${params.role}`,
+    `Référence : ${params.applicationId}`,
+    '',
+    'Le CV est joint à cet e-mail. La candidature est enregistrée avec le statut pending_review.',
+  ].join('\n');
+  const emailPayload = {
+    from: `Medjira <${fromEmail}>`,
+    to: params.to,
+    subject,
+    text,
+    html: `<p>Une nouvelle candidature Chauffeur / Livreur est disponible.</p><ul><li><strong>Nom :</strong> ${params.fullName}</li><li><strong>Email :</strong> ${params.email}</li><li><strong>Téléphone :</strong> ${params.phone}</li><li><strong>Ville :</strong> ${params.city}</li><li><strong>Poste :</strong> ${params.role}</li><li><strong>Référence :</strong> ${params.applicationId}</li></ul><p>Le CV est joint à cet e-mail. La candidature est enregistrée avec le statut <strong>pending_review</strong>.</p>`,
+  };
+  await maybeRecordDevEmail(emailPayload);
+  const result = await resend.emails.send({
+    ...emailPayload,
+    attachments: [{ filename: params.fileName, content: params.cvBuffer }],
+    tags: [{ name: 'type', value: 'driver_application' }, { name: 'application_id', value: params.applicationId }],
+  });
+  if (result.error) throw new Error(`Erreur Resend: ${result.error.message}`);
+  return { messageId: result.data?.id };
+}
+
 function driverGetApprovalTemplate(driverName: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:'Inter',Arial,sans-serif;line-height:1.6;color:#333;margin:0;padding:0}.container{max-width:600px;margin:0 auto;padding:20px;border:1px solid #eee}.header{background-color:#f29200;color:white;padding:30px 20px;text-align:center;border-radius:8px 8px 0 0}.content{padding:30px;background-color:#fff}.button{display:inline-block;padding:14px 28px;background-color:#f29200;color:white!important;text-decoration:none;border-radius:6px;margin-top:25px;font-weight:bold}.footer{padding:20px;text-align:center;font-size:12px;color:#888}</style></head><body><div class="container"><div class="header"><h1 style="margin:0">🎉 Félicitations ${driverName} !</h1></div><div class="content"><p>Bonjour <strong>${driverName}</strong>,</p><p>Votre demande d'inscription en tant que chauffeur sur <strong>Medjira</strong> a été <strong>approuvée</strong> !</p><p>Vous pouvez maintenant vous connecter et commencer à recevoir des courses.</p><div style="text-align:center"><a href="${APP_URL}/driver/login" class="button">Se connecter maintenant</a></div><p style="margin-top:30px">Bienvenue dans l'équipe Medjira !</p><p>Cordialement,<br>L'équipe Medjira</p></div><div class="footer">&copy; ${new Date().getFullYear()} Medjira. Tous droits réservés.</div></div></body></html>`;
 }

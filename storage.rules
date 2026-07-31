@@ -48,6 +48,19 @@ service firebase.storage {
                 && (request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf');
       allow delete: if request.auth != null && request.auth.uid == driverId;
     }
+
+    // Temporary CV intake: anonymous applicants may write only their own
+    // application path. CVs remain private and are read by Admin SDK only.
+    match /driverApplications/{applicantUid}/{applicationId}/cv/{fileName} {
+      allow write: if request.auth != null
+        && request.auth.uid == applicantUid
+        && request.auth.token.firebase.sign_in_provider == 'anonymous'
+        && request.resource.size <= 5 * 1024 * 1024
+        && (request.resource.contentType == 'application/pdf'
+          || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        && fileName.matches('^[a-zA-Z0-9._-]+\\.(pdf|docx)$');
+      allow read, delete: if false;
+    }
     
     // Images des véhicules
     match /vehicles/{vehicleId}/{allPaths=**} {

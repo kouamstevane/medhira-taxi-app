@@ -59,6 +59,18 @@ export interface Driver {
   isActive?: boolean;
 }
 
+interface DriverApplication {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  city: string;
+  role: 'chauffeur' | 'livreur' | 'les_deux';
+  status: string;
+  cv?: { fileName?: string };
+  createdAt?: { toDate?: () => Date };
+}
+
 const DriverSkeleton = () => (
   <div className="space-y-4 animate-pulse p-4">
     {[1, 2, 3, 4, 5].map((i) => (
@@ -98,6 +110,7 @@ export default function AdminDriversPage() {
   const [invitationRole, setInvitationRole] = useState<'chauffeur' | 'livreur' | 'les_deux'>('chauffeur');
   const [invitationName, setInvitationName] = useState('');
   const [invitationLoading, setInvitationLoading] = useState(false);
+  const [applications, setApplications] = useState<DriverApplication[]>([]);
 
   const PAGE_SIZE = 25;
 
@@ -166,6 +179,14 @@ export default function AdminDriversPage() {
 
     return () => unsubscribe();
   }, [filter, isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const applicationsQuery = query(collection(db, 'driverApplications'), where('status', '==', 'pending_review'), orderBy('createdAt', 'desc'), limit(20));
+    return onSnapshot(applicationsQuery, (snapshot) => {
+      setApplications(snapshot.docs.map((application) => ({ id: application.id, ...application.data() })) as DriverApplication[]);
+    }, (err) => logger.error('Chargement des candidatures', err instanceof Error ? err : new Error(String(err))));
+  }, [isAdmin]);
 
   const loadMore = async () => {
     if (!lastDoc || loadingMore) return;
@@ -249,6 +270,23 @@ export default function AdminDriversPage() {
     } finally {
       setInvitationLoading(false);
     }
+  };
+
+  const handleDownloadApplicationCv = async (applicationId: string) => {
+    try {
+      const getCv = httpsCallable<{ applicationId: string }, { url: string }>(functions, 'adminGetDriverApplicationCv');
+      const result = await getCv({ applicationId });
+      window.open(result.data.url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impossible de télécharger le CV');
+    }
+  };
+
+  const handleApplicationForInvitation = (application: DriverApplication) => {
+    setInvitationEmail(application.email);
+    setInvitationName(application.fullName);
+    setInvitationRole(application.role);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
 
@@ -412,6 +450,11 @@ export default function AdminDriversPage() {
             </div>
           )}
         </div>
+
+        {applications.length > 0 && <section className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-5">
+          <div className="mb-4"><h2 className="text-base font-semibold text-white">Candidatures à étudier</h2><p className="mt-1 text-xs text-slate-400">Les CV sont privés et accessibles uniquement aux administrateurs.</p></div>
+          <div className="space-y-3">{applications.map((application) => <div key={application.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center md:justify-between"><div><p className="font-semibold text-white">{application.fullName} <span className="text-xs font-normal text-primary">({application.role})</span></p><p className="text-xs text-slate-400">{application.email} · {application.phone} · {application.city}</p><p className="mt-1 text-[11px] text-slate-500">{application.cv?.fileName ?? 'CV joint'} · Réf. {application.id}</p></div><div className="flex gap-2"><button type="button" onClick={() => handleDownloadApplicationCv(application.id)} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/10">Voir le CV</button><button type="button" onClick={() => handleApplicationForInvitation(application)} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">Préparer l’invitation</button></div></div>)}</div>
+        </section>}
 
         <form onSubmit={handleCreateInvitation} className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
           <div className="mb-4">
