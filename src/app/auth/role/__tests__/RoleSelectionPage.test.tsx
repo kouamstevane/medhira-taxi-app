@@ -33,4 +33,13 @@ describe('RoleSelectionPage', () => {
     expect(screen.queryByRole('link', { name: /Chauffeur \/ Livreur/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Recevez des courses et gagnez de l'argent/i)).not.toBeInTheDocument();
   });
+
+  it('offers a direct CV application link without exposing driver registration', () => {
+    render(<RoleSelectionPage />);
+
+    expect(screen.getByRole('link', { name: /Envoyer mon CV par e-mail/i })).toHaveAttribute(
+      'href',
+      '/auth/driver-application',
+    );
+  });
 });
