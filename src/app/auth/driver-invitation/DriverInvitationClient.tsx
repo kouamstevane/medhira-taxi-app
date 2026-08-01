@@ -117,7 +117,7 @@ export default function DriverInvitationClient() {
               <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="glass-input mt-2 w-full rounded-xl px-4 py-3" placeholder="vous@exemple.com" />
             </label>
             <label className="block text-sm text-slate-300">Code reçu par email
-              <input required value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="glass-input mt-2 w-full rounded-xl px-4 py-3 uppercase tracking-[0.25em]" placeholder="ABCDE-23456" />
+              <input required value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="glass-input mt-2 w-full rounded-xl px-4 py-3 uppercase tracking-[0.2em]" placeholder="AB12CD34" />
             </label>
             <p className="text-xs leading-5 text-slate-500">Votre code est valable 48 heures. Passé ce délai, il expirera automatiquement.</p>
             <button disabled={loading} className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50">{loading ? 'Vérification…' : 'Vérifier mon invitation'}</button>

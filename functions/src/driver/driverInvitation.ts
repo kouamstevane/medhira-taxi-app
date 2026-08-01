@@ -29,8 +29,8 @@ function normalizeEmail(email: string): string {
 
 function generateCode(): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const bytes = randomBytes(10);
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('').match(/.{1,5}/g)!.join('-');
+  const bytes = randomBytes(8);
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
 }
 
 function hashCode(code: string, salt: string): string {
