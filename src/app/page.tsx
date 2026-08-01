@@ -108,8 +108,8 @@ export default function HomePage() {
             </button>
           </Link>
 
-          <Link href="/auth/driver-application" className="mt-2 flex items-center justify-center gap-2 text-sm font-semibold text-primary transition hover:text-primary/80 hover:underline">
-            <MaterialIcon name="local_taxi" size="sm" className="text-primary" /> Vous souhaitez devenir Chauffeur / Livreur ?
+          <Link href="/auth/driver-application" className="mt-3 flex items-center justify-center gap-2 py-1 text-base font-semibold text-primary transition hover:text-primary/80 hover:underline">
+            <MaterialIcon name="local_taxi" size="md" className="text-primary" /> Vous souhaitez devenir Chauffeur / Livreur ?
           </Link>
         </div>
 
