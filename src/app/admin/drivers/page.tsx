@@ -28,6 +28,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
+import { getPendingApplicationsSummary } from './adminDriversUi';
 
 export interface Driver {
   id: string;
@@ -407,31 +408,72 @@ export default function AdminDriversPage() {
   return (
     <div className="min-h-screen bg-background text-white">
       <AdminHeader
-        title="Gestion des Chauffeurs"
-        subtitle="Validation et suivi des chauffeurs"
+        title="Candidatures & conducteurs"
+        subtitle="Étude des candidatures et suivi des conducteurs"
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <section className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 sm:p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-white">Candidatures à étudier</h2>
+              <p className="mt-1 text-xs text-slate-400">
+                {applicationsLoading ? 'Recherche des nouveaux dossiers…' : getPendingApplicationsSummary(applications.length)}.
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">Les CV sont privés et accessibles uniquement aux administrateurs.</p>
+            </div>
+            <span className="min-w-8 rounded-full bg-primary px-2 py-1 text-center text-xs font-bold text-black">
+              {applicationsLoading ? '…' : applications.length}
+            </span>
+          </div>
+          {applicationsLoading ? (
+            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">Chargement des candidatures...</p>
+          ) : applicationsError ? (
+            <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">{applicationsError}</p>
+          ) : applications.length === 0 ? (
+            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">Aucune candidature en attente pour le moment.</p>
+          ) : (
+            <div className="space-y-3">
+              {applications.map((application) => (
+                <div key={application.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-white">{application.fullName ?? 'Postulant'} <span className="text-xs font-normal text-primary">{application.role ? `(${application.role})` : ''}</span></p>
+                    <p className="truncate text-xs text-slate-400">{application.email}</p>
+                    <p className="mt-1 truncate text-[11px] text-slate-500">{application.cv?.fileName ?? 'CV joint'} · Réf. {application.id}</p>
+                  </div>
+                  <div className="flex w-full gap-2 sm:w-auto">
+                    <button type="button" onClick={() => handleDownloadApplicationCv(application.id)} className="flex-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/10 sm:flex-none">Voir le CV</button>
+                    <button type="button" onClick={() => handleApplicationForInvitation(application)} className="flex-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white sm:flex-none">Préparer l’invitation</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Statistics or Quick Filters Card */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`relative overflow-hidden group p-4 rounded-2xl border transition-all duration-500 ${
+              className={`relative min-h-20 overflow-hidden rounded-2xl border p-3 text-left transition-all duration-300 group md:p-4 ${
                 filter === f
                   ? 'bg-primary/10 border-primary/30'
                   : 'glass-card border-white/5 hover:border-white/10'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className={`text-sm font-semibold capitalize transition-colors ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
+                <span className={`text-xs font-semibold capitalize transition-colors md:text-sm ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
                   {f === 'all' ? 'Tous' : f === 'pending' ? 'En attente' : f === 'approved' ? 'Approuvés' : 'Refusés'}
                 </span>
-                <div className={`p-2 rounded-lg transition-colors ${filter === f ? 'bg-primary text-black' : 'bg-white/5 text-slate-400'}`}>
+                <div className={`rounded-lg p-1.5 transition-colors md:p-2 ${filter === f ? 'bg-primary text-black' : 'bg-white/5 text-slate-400'}`}>
                   {f === 'all' ? <MaterialIcon name="verified_user" size="sm" /> : f === 'pending' ? <MaterialIcon name="warning" size="sm" /> : f === 'approved' ? <MaterialIcon name="check_circle" size="sm" /> : <MaterialIcon name="cancel" size="sm" />}
                 </div>
               </div>
+              <span className={`mt-2 block text-lg font-bold ${filter === f ? 'text-primary' : 'text-slate-300'}`}>
+                {f === 'all' ? drivers.length : drivers.filter((driver) => driver.status === f).length}
+              </span>
               {filter === f && <div className="absolute bottom-0 left-0 h-1 w-full bg-primary" />}
             </button>
           ))}
@@ -469,36 +511,6 @@ export default function AdminDriversPage() {
             </div>
           )}
         </div>
-
-        <section className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-5">
-          <div className="mb-4">
-            <h2 className="text-base font-semibold text-white">Candidatures à étudier</h2>
-            <p className="mt-1 text-xs text-slate-400">Les CV sont privés et accessibles uniquement aux administrateurs.</p>
-          </div>
-          {applicationsLoading ? (
-            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">Chargement des candidatures...</p>
-          ) : applicationsError ? (
-            <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">{applicationsError}</p>
-          ) : applications.length === 0 ? (
-            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">Aucune candidature en attente pour le moment.</p>
-          ) : (
-            <div className="space-y-3">
-              {applications.map((application) => (
-                <div key={application.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="font-semibold text-white">{application.fullName ?? 'Postulant'} <span className="text-xs font-normal text-primary">{application.role ? `(${application.role})` : ''}</span></p>
-                    <p className="text-xs text-slate-400">{application.email}</p>
-                    <p className="mt-1 text-[11px] text-slate-500">{application.cv?.fileName ?? 'CV joint'} · Réf. {application.id}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => handleDownloadApplicationCv(application.id)} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/10">Voir le CV</button>
-                    <button type="button" onClick={() => handleApplicationForInvitation(application)} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white">Préparer l’invitation</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
 
         <form onSubmit={handleCreateInvitation} className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
           <div className="mb-4">
