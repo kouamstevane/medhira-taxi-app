@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   collection,
   query,
@@ -28,7 +28,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
-import { getApplicationActionsClassName, getPendingApplicationsSummary } from './adminDriversUi';
+import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary } from './adminDriversUi';
 
 export interface Driver {
   id: string;
@@ -114,6 +114,7 @@ export default function AdminDriversPage() {
   const [applications, setApplications] = useState<DriverApplication[]>([]);
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
+  const invitationFormRef = useRef<HTMLFormElement>(null);
 
   const PAGE_SIZE = 25;
 
@@ -306,7 +307,11 @@ export default function AdminDriversPage() {
     setInvitationEmail(application.email);
     setInvitationName(application.fullName ?? '');
     if (application.role) setInvitationRole(application.role);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setError(null);
+    setSuccess(getInvitationPreparedMessage(application.email));
+    requestAnimationFrame(() => {
+      invitationFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   };
 
 
@@ -443,7 +448,7 @@ export default function AdminDriversPage() {
                   </div>
                   <div className={getApplicationActionsClassName()}>
                     <button type="button" onClick={() => handleDownloadApplicationCv(application.id)} className="w-full rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/10 sm:w-auto">Voir le CV</button>
-                    <button type="button" onClick={() => handleApplicationForInvitation(application)} className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white sm:w-auto">Préparer l’invitation</button>
+                    <button type="button" onClick={() => handleApplicationForInvitation(application)} className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white sm:w-auto">Préremplir l’invitation</button>
                   </div>
                 </div>
               ))}
@@ -512,7 +517,7 @@ export default function AdminDriversPage() {
           )}
         </div>
 
-        <form onSubmit={handleCreateInvitation} className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+        <form ref={invitationFormRef} id="driver-invitation-form" onSubmit={handleCreateInvitation} className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
           <div className="mb-4">
             <h2 className="text-base font-semibold text-white">Inviter un nouveau postulant</h2>
             <p className="mt-1 text-xs text-slate-400">Le code envoyé par email sera valable 48 heures.</p>

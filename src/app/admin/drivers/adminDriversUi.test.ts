@@ -1,4 +1,10 @@
-import { getApplicationActionsClassName, getPendingApplicationsSummary } from './adminDriversUi';
+import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary } from './adminDriversUi';
+
+describe('getInvitationPreparedMessage', () => {
+  it('confirms which applicant is ready for invitation', () => {
+    expect(getInvitationPreparedMessage('candidate@example.com')).toBe('Formulaire d’invitation prérempli pour candidate@example.com.');
+  });
+});
 
 describe('getApplicationActionsClassName', () => {
   it('keeps application actions inside the card on mobile', () => {
