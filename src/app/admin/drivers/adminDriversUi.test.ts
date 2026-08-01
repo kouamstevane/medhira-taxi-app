@@ -1,4 +1,11 @@
-import { getPendingApplicationsSummary } from './adminDriversUi';
+import { getApplicationActionsClassName, getPendingApplicationsSummary } from './adminDriversUi';
+
+describe('getApplicationActionsClassName', () => {
+  it('keeps application actions inside the card on mobile', () => {
+    expect(getApplicationActionsClassName()).toContain('flex-col');
+    expect(getApplicationActionsClassName()).toContain('sm:flex-row');
+  });
+});
 
 describe('getPendingApplicationsSummary', () => {
   it('gives the admin an actionable summary when applications are pending', () => {

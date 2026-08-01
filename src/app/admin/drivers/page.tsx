@@ -28,7 +28,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
-import { getPendingApplicationsSummary } from './adminDriversUi';
+import { getApplicationActionsClassName, getPendingApplicationsSummary } from './adminDriversUi';
 
 export interface Driver {
   id: string;
@@ -441,9 +441,9 @@ export default function AdminDriversPage() {
                     <p className="truncate text-xs text-slate-400">{application.email}</p>
                     <p className="mt-1 truncate text-[11px] text-slate-500">{application.cv?.fileName ?? 'CV joint'} · Réf. {application.id}</p>
                   </div>
-                  <div className="flex w-full gap-2 sm:w-auto">
-                    <button type="button" onClick={() => handleDownloadApplicationCv(application.id)} className="flex-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/10 sm:flex-none">Voir le CV</button>
-                    <button type="button" onClick={() => handleApplicationForInvitation(application)} className="flex-1 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white sm:flex-none">Préparer l’invitation</button>
+                  <div className={getApplicationActionsClassName()}>
+                    <button type="button" onClick={() => handleDownloadApplicationCv(application.id)} className="w-full rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/10 sm:w-auto">Voir le CV</button>
+                    <button type="button" onClick={() => handleApplicationForInvitation(application)} className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white sm:w-auto">Préparer l’invitation</button>
                   </div>
                 </div>
               ))}
