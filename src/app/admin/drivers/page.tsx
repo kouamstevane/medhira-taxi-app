@@ -61,10 +61,10 @@ export interface Driver {
 
 interface DriverApplication {
   id: string;
-  fullName: string;
+  fullName?: string;
   email: string;
-  phone: string;
-  city: string;
+  phone?: string;
+  city?: string;
   role: 'chauffeur' | 'livreur' | 'les_deux';
   status: string;
   cv?: { fileName?: string };
@@ -284,7 +284,7 @@ export default function AdminDriversPage() {
 
   const handleApplicationForInvitation = (application: DriverApplication) => {
     setInvitationEmail(application.email);
-    setInvitationName(application.fullName);
+    setInvitationName(application.fullName ?? '');
     setInvitationRole(application.role);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

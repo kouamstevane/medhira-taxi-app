@@ -148,9 +148,9 @@ const APP_URL = 'https://medjira.com';
 interface DriverApplicationNotificationParams {
   to: string;
   applicationId: string;
-  fullName: string;
+  fullName?: string;
   email: string;
-  phone: string;
+  phone?: string;
   city?: string;
   role: 'chauffeur' | 'livreur' | 'les_deux';
   fileName: string;
@@ -169,9 +169,9 @@ export async function sendDriverApplicationNotification(
   const text = [
     'Une nouvelle candidature Chauffeur / Livreur est disponible.',
     '',
-    `Nom : ${params.fullName}`,
+    `Nom : ${params.fullName || 'À relever dans le CV'}`,
     `Email : ${params.email}`,
-    `Téléphone : ${params.phone}`,
+    `Téléphone : ${params.phone || 'À relever dans le CV'}`,
     `Ville : ${params.city || 'Non précisée — voir le CV'}`,
     `Poste : ${params.role}`,
     `Référence : ${params.applicationId}`,
@@ -183,7 +183,7 @@ export async function sendDriverApplicationNotification(
     to: params.to,
     subject,
     text,
-    html: `<p>Une nouvelle candidature Chauffeur / Livreur est disponible.</p><ul><li><strong>Nom :</strong> ${params.fullName}</li><li><strong>Email :</strong> ${params.email}</li><li><strong>Téléphone :</strong> ${params.phone}</li><li><strong>Ville :</strong> ${params.city || 'Non précisée — voir le CV'}</li><li><strong>Poste :</strong> ${params.role}</li><li><strong>Référence :</strong> ${params.applicationId}</li></ul><p>Le CV est joint à cet e-mail. La candidature est enregistrée avec le statut <strong>pending_review</strong>.</p>`,
+    html: `<p>Une nouvelle candidature Chauffeur / Livreur est disponible.</p><ul><li><strong>Nom :</strong> ${params.fullName || 'À relever dans le CV'}</li><li><strong>Email :</strong> ${params.email}</li><li><strong>Téléphone :</strong> ${params.phone || 'À relever dans le CV'}</li><li><strong>Ville :</strong> ${params.city || 'À relever dans le CV'}</li><li><strong>Poste :</strong> ${params.role}</li><li><strong>Référence :</strong> ${params.applicationId}</li></ul><p>Le CV est joint à cet e-mail. La candidature est enregistrée avec le statut <strong>pending_review</strong>.</p>`,
   };
   await maybeRecordDevEmail(emailPayload);
   const result = await resend.emails.send({

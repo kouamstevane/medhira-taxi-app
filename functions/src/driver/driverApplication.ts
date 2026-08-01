@@ -14,9 +14,9 @@ const ALLOWED_CONTENT_TYPES = ['application/pdf', 'application/vnd.openxmlformat
 
 export const DriverApplicationSubmissionSchema = z.object({
   applicationId: z.string().regex(/^[a-zA-Z0-9_-]{10,128}$/),
-  fullName: z.string().trim().min(2).max(120),
+  fullName: z.string().trim().min(2).max(120).optional(),
   email: z.string().trim().email().max(254),
-  phone: z.string().trim().min(6).max(32),
+  phone: z.string().trim().min(6).max(32).optional(),
   city: z.string().trim().min(2).max(100).optional(),
   role: z.enum(['chauffeur', 'livreur', 'les_deux']),
   fileName: z.string().regex(/^[a-zA-Z0-9._-]{1,120}\.(pdf|docx)$/i),
