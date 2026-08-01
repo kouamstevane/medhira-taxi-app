@@ -14,7 +14,7 @@ const INVITATION_TTL_MS = 48 * 60 * 60 * 1000;
 const CreateSchema = z.object({
   email: z.string().trim().email().max(254),
   role: z.enum(ROLE_VALUES),
-  applicantName: z.string().trim().max(120).optional(),
+  applicantName: z.string().trim().max(120).nullable().optional(),
   adminNote: z.string().trim().max(1000).optional(),
 });
 const ValidateSchema = z.object({
