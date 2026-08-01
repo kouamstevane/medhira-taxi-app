@@ -44,6 +44,7 @@ export const NOTIFICATION_TOPICS = {
 
 class PushNotificationService {
     private isInitialized = false;
+    private nonNativeWarningShown = false;
     private token: string | null = null;
     private listeners: Set<(data: ActionPerformed) => void> = new Set();
 
@@ -57,7 +58,10 @@ class PushNotificationService {
         }
 
         if (!Capacitor.isNativePlatform()) {
-            console.warn('[PushNotifications] Plateforme non-native, notifications limitées');
+            if (!this.nonNativeWarningShown) {
+                console.warn('[PushNotifications] Plateforme non-native, notifications limitées');
+                this.nonNativeWarningShown = true;
+            }
             return;
         }
 

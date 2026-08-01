@@ -189,9 +189,16 @@ export default function AdminDriversPage() {
     }
     setApplicationsLoading(true);
     setApplicationsError(null);
-    const applicationsQuery = query(collection(db, 'driverApplications'), where('status', '==', 'pending_review'), orderBy('createdAt', 'desc'), limit(20));
+    // Keep this query index-free while the production composite index is building.
+    const applicationsQuery = query(collection(db, 'driverApplications'), where('status', '==', 'pending_review'), limit(20));
     return onSnapshot(applicationsQuery, (snapshot) => {
-      setApplications(snapshot.docs.map((application) => ({ id: application.id, ...application.data() })) as DriverApplication[]);
+      const nextApplications = snapshot.docs.map((application) => ({ id: application.id, ...application.data() })) as DriverApplication[];
+      nextApplications.sort((first, second) => {
+        const firstTime = first.createdAt?.toDate?.().getTime() ?? 0;
+        const secondTime = second.createdAt?.toDate?.().getTime() ?? 0;
+        return secondTime - firstTime;
+      });
+      setApplications(nextApplications);
       setApplicationsLoading(false);
     }, (err) => {
       logger.error('Chargement des candidatures', err instanceof Error ? err : new Error(String(err)));
