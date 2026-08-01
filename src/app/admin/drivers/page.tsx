@@ -108,7 +108,6 @@ export default function AdminDriversPage() {
   const isAdmin = useAdminAuth();
   const [invitationEmail, setInvitationEmail] = useState('');
   const [invitationRole, setInvitationRole] = useState<'chauffeur' | 'livreur' | 'les_deux'>('chauffeur');
-  const [invitationName, setInvitationName] = useState('');
   const [invitationLoading, setInvitationLoading] = useState(false);
   const [applications, setApplications] = useState<DriverApplication[]>([]);
   const [applicationsLoading, setApplicationsLoading] = useState(true);
@@ -277,13 +276,11 @@ export default function AdminDriversPage() {
       const result = await createInvitation({
         email: invitationEmail.trim(),
         role: invitationRole,
-        applicantName: invitationName.trim() || undefined,
       });
       const data = result.data as { code: string; expiresAt: number };
       const expiry = new Date(data.expiresAt).toLocaleString('fr-FR');
       showSuccess(`Invitation envoyée. Code : ${data.code} — expiration : ${expiry}`);
       setInvitationEmail('');
-      setInvitationName('');
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Impossible de créer l’invitation');
     } finally {
@@ -303,7 +300,6 @@ export default function AdminDriversPage() {
 
   const handleApplicationForInvitation = (application: DriverApplication) => {
     setInvitationEmail(application.email);
-    setInvitationName(application.fullName ?? '');
     if (application.role) setInvitationRole(application.role);
     showSuccess(getInvitationPreparedMessage(application.email));
     requestAnimationFrame(() => {
@@ -496,9 +492,8 @@ export default function AdminDriversPage() {
             <h2 className="text-base font-semibold text-white">Inviter un nouveau postulant</h2>
             <p className="mt-1 text-xs text-slate-400">Le code envoyé par email sera valable 48 heures.</p>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <input required type="email" value={invitationEmail} onChange={(e) => setInvitationEmail(e.target.value)} placeholder="Email du postulant" className="glass-input rounded-xl px-3 py-2 text-sm" />
-            <input value={invitationName} onChange={(e) => setInvitationName(e.target.value)} placeholder="Nom (optionnel)" className="glass-input rounded-xl px-3 py-2 text-sm" />
             <select value={invitationRole} onChange={(e) => setInvitationRole(e.target.value as typeof invitationRole)} className="glass-input rounded-xl px-3 py-2 text-sm">
               <option value="chauffeur">Chauffeur</option>
               <option value="livreur">Livreur</option>
