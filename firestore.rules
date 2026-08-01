@@ -227,6 +227,12 @@ service cloud.firestore {
       // Écriture : Non autorisée via client SDK (Admin SDK ou console Firebase uniquement)
       allow write: if false;
     }
+
+    // Driver applications contain private CV metadata. Only admins may list or read them.
+    match /driverApplications/{applicationId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     
     // ============================================================================
     // COLLECTION WALLETS
