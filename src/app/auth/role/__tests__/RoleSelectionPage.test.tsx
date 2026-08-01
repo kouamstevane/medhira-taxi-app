@@ -30,14 +30,16 @@ describe('RoleSelectionPage', () => {
   it('does not expose the legacy driver registration from role selection', () => {
     render(<RoleSelectionPage />);
 
-    expect(screen.queryByRole('link', { name: /Chauffeur \/ Livreur/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryAllByRole('link').some((link) => link.getAttribute('href') === '/driver/register'),
+    ).toBe(false);
     expect(screen.queryByText(/Recevez des courses et gagnez de l'argent/i)).not.toBeInTheDocument();
   });
 
-  it('offers a direct CV application link without exposing driver registration', () => {
+  it('offers a direct driver application link without exposing driver registration', () => {
     render(<RoleSelectionPage />);
 
-    expect(screen.getByRole('link', { name: /Envoyer mon CV par e-mail/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Vous souhaitez devenir Chauffeur \/ Livreur/i })).toHaveAttribute(
       'href',
       '/auth/driver-application',
     );

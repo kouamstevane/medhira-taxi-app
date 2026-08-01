@@ -106,8 +106,8 @@ export default function RoleSelectionPage() {
           href="/auth/driver-application"
           className="mt-7 flex items-center justify-center gap-2 py-1 text-base font-semibold text-primary transition hover:text-primary/80 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
         >
-          <MaterialIcon name="mail" size="md" className="text-primary" />
-          Envoyer mon CV par e-mail
+          <MaterialIcon name="local_taxi" size="md" className="text-primary" />
+          Vous souhaitez devenir Chauffeur / Livreur ?
         </Link>
 
         <p className="text-center text-sm text-slate-400 mt-8">
