@@ -165,25 +165,20 @@ export async function sendDriverApplicationNotification(
   if (!resolvedApiKey) throw new Error('RESEND_API_KEY manquant.');
   const resend = new (loadResendCtor())(resolvedApiKey);
   const fromEmail = process.env.RESEND_FROM_EMAIL || process.env.FROM_EMAIL || 'medjira@medjira.com';
-  const subject = `Nouvelle candidature ${params.role} — ${params.fullName}`;
+  const subject = 'Nouvelle candidature Chauffeur / Livreur';
   const text = [
     'Une nouvelle candidature Chauffeur / Livreur est disponible.',
     '',
-    `Nom : ${params.fullName || 'À relever dans le CV'}`,
     `Email : ${params.email}`,
-    `Téléphone : ${params.phone || 'À relever dans le CV'}`,
-    `Ville : ${params.city || 'Non précisée — voir le CV'}`,
-    `Poste : ${params.role || 'À déterminer après étude du CV'}`,
-    `Référence : ${params.applicationId}`,
     '',
-    'Le CV est joint à cet e-mail. La candidature est enregistrée avec le statut pending_review.',
+    'Le CV est joint à cet e-mail.',
   ].join('\n');
   const emailPayload = {
     from: `Medjira <${fromEmail}>`,
     to: params.to,
     subject,
     text,
-    html: `<p>Une nouvelle candidature Chauffeur / Livreur est disponible.</p><ul><li><strong>Nom :</strong> ${params.fullName || 'À relever dans le CV'}</li><li><strong>Email :</strong> ${params.email}</li><li><strong>Téléphone :</strong> ${params.phone || 'À relever dans le CV'}</li><li><strong>Ville :</strong> ${params.city || 'À relever dans le CV'}</li><li><strong>Poste :</strong> ${params.role || 'À déterminer après étude du CV'}</li><li><strong>Référence :</strong> ${params.applicationId}</li></ul><p>Le CV est joint à cet e-mail. La candidature est enregistrée avec le statut <strong>pending_review</strong>.</p>`,
+    html: `<p>Une nouvelle candidature Chauffeur / Livreur est disponible.</p><p><strong>Email :</strong> ${params.email}</p><p>Le CV est joint à cet e-mail.</p>`,
   };
   await maybeRecordDevEmail(emailPayload);
   const result = await resend.emails.send({

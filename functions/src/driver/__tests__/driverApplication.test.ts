@@ -1,9 +1,15 @@
 import {
   DriverApplicationSubmissionSchema,
+  DRIVER_APPLICATION_CALLABLE_OPTIONS,
   buildDriverApplicationStoragePath,
+  buildDriverApplicationRecord,
 } from '../driverApplication';
 
 describe('driver application intake', () => {
+  test('allows browser callable requests from the public application', () => {
+    expect(DRIVER_APPLICATION_CALLABLE_OPTIONS.cors).toBe(true);
+  });
+
   test('builds a private storage path scoped to the anonymous applicant', () => {
     expect(buildDriverApplicationStoragePath('anon-123', 'application-456', 'CV Jean Dupont.pdf'))
       .toBe('driverApplications/anon-123/application-456/cv/CV_Jean_Dupont.pdf');
@@ -63,6 +69,21 @@ describe('driver application intake', () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  test('omits optional fields that are not provided before writing to Firestore', () => {
+    const record = buildDriverApplicationRecord('anon-123', {
+      applicationId: 'application-456',
+      email: 'jean@example.com',
+      fileName: 'cv-jean.pdf',
+      contentType: 'application/pdf',
+      size: 1024,
+    }, 'driverApplications/anon-123/application-456/cv/cv-jean.pdf', { size: '1024', contentType: 'application/pdf' });
+
+    expect(record).not.toHaveProperty('fullName');
+    expect(record).not.toHaveProperty('phone');
+    expect(record).not.toHaveProperty('city');
+    expect(record).not.toHaveProperty('role');
   });
 
   test('rejects unsupported CV formats and oversized files', () => {

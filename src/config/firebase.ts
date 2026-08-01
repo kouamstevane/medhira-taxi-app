@@ -82,6 +82,32 @@ export const getFirebaseStorage = (): FirebaseStorage => {
   return _storage;
 };
 
+let _driverApplicationAuth: Auth | undefined;
+let _driverApplicationFunctions: Functions | undefined;
+let _driverApplicationStorage: FirebaseStorage | undefined;
+
+export const getDriverApplicationFirebaseClients = () => {
+  if (!_driverApplicationAuth || !_driverApplicationFunctions || !_driverApplicationStorage) {
+    const driverApplicationApp = getApps().find((candidate) => candidate.name === 'driver-application')
+      ?? initializeApp(firebaseConfig, 'driver-application');
+    _driverApplicationAuth = getAuth(driverApplicationApp);
+    _driverApplicationFunctions = getFunctions(driverApplicationApp, 'europe-west1');
+    _driverApplicationStorage = getStorage(driverApplicationApp);
+
+    if (useEmulators) {
+      connectAuthEmulator(_driverApplicationAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
+      connectFunctionsEmulator(_driverApplicationFunctions, '127.0.0.1', 5001);
+      connectStorageEmulator(_driverApplicationStorage, '127.0.0.1', 9199);
+    }
+  }
+
+  return {
+    auth: _driverApplicationAuth,
+    functions: _driverApplicationFunctions,
+    storage: _driverApplicationStorage,
+  };
+};
+
 let _rtdb: Database | undefined;
 export const getFirebaseDatabase = (): Database => {
   if (!_rtdb) {

@@ -12,6 +12,8 @@ const APPLICATION_EMAIL = 'medjiraservices@gmail.com';
 const MAX_CV_SIZE = 5 * 1024 * 1024;
 const ALLOWED_CONTENT_TYPES = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'] as const;
 
+export const DRIVER_APPLICATION_CALLABLE_OPTIONS = { region: 'europe-west1', cors: true } as const;
+
 export const DriverApplicationSubmissionSchema = z.object({
   applicationId: z.string().regex(/^[a-zA-Z0-9_-]{10,128}$/),
   fullName: z.string().trim().min(2).max(120).optional(),
@@ -25,6 +27,33 @@ export const DriverApplicationSubmissionSchema = z.object({
 }).strict();
 
 export type DriverApplicationSubmission = z.infer<typeof DriverApplicationSubmissionSchema>;
+
+export function buildDriverApplicationRecord(
+  uid: string,
+  input: DriverApplicationSubmission,
+  storagePath: string,
+  metadata: { size?: string | number; contentType?: string },
+) {
+  const now = admin.firestore.Timestamp.now();
+  return {
+    applicantUid: uid,
+    ...(input.fullName !== undefined && { fullName: input.fullName }),
+    email: input.email.toLowerCase(),
+    ...(input.phone !== undefined && { phone: input.phone }),
+    ...(input.city !== undefined && { city: input.city }),
+    ...(input.role !== undefined && { role: input.role }),
+    status: 'pending_review',
+    cv: {
+      path: storagePath,
+      fileName: sanitizeFileName(input.fileName),
+      contentType: metadata.contentType,
+      size: Number(metadata.size),
+    },
+    createdAt: now,
+    updatedAt: now,
+    notifiedEmail: APPLICATION_EMAIL,
+  };
+}
 
 function sanitizeFileName(fileName: string): string {
   return fileName.trim().replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
@@ -44,7 +73,7 @@ function requireAnonymousApplicant(request: CallableRequest): string {
 }
 
 export const createDriverApplicationUpload = onCall(
-  { region: 'europe-west1' },
+  DRIVER_APPLICATION_CALLABLE_OPTIONS,
   async (request: CallableRequest) => {
     const uid = requireAnonymousApplicant(request);
     await enforceRateLimit({ identifier: uid, bucket: 'driver:application-upload', limit: 5, windowSec: 3600 });
@@ -54,7 +83,7 @@ export const createDriverApplicationUpload = onCall(
 );
 
 export const submitDriverApplicationWithCv = onCall(
-  { region: 'europe-west1', secrets: [resendApiKey] },
+  { ...DRIVER_APPLICATION_CALLABLE_OPTIONS, secrets: [resendApiKey] },
   async (request: CallableRequest) => {
     const uid = requireAnonymousApplicant(request);
     await enforceRateLimit({ identifier: uid, bucket: 'driver:application-submit', limit: 3, windowSec: 3600 });
@@ -87,19 +116,8 @@ export const submitDriverApplicationWithCv = onCall(
     const existing = await applicationRef.get();
     if (existing.exists) throw new HttpsError('already-exists', 'Cette candidature a déjà été envoyée.');
 
-    const now = admin.firestore.Timestamp.now();
     await applicationRef.set({
-      applicantUid: uid,
-      fullName: input.fullName,
-      email: input.email.toLowerCase(),
-      phone: input.phone,
-      city: input.city,
-      role: input.role,
-      status: 'pending_review',
-      cv: { path: storagePath, fileName: sanitizeFileName(input.fileName), contentType: metadata.contentType, size: Number(metadata.size) },
-      createdAt: now,
-      updatedAt: now,
-      notifiedEmail: APPLICATION_EMAIL,
+      ...buildDriverApplicationRecord(uid, input, storagePath, metadata),
     });
 
     try {

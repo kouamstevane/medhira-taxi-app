@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { signInAnonymously } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes } from 'firebase/storage';
-import { auth, functions, getFirebaseStorage } from '@/config/firebase';
+import { getDriverApplicationFirebaseClients } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { InputField } from '@/components/forms';
 import { driverPrimaryButtonClassName, driverUploadEmptyClassName } from '@/app/driver/register/components/driverOnboardingStyles';
+import { getDriverApplicationErrorMessage, validateDriverApplicationForm } from './validation';
 
 const APPLICATION_EMAIL = 'medjiraservices@gmail.com';
 const MAX_CV_SIZE = 5 * 1024 * 1024;
@@ -34,25 +35,31 @@ export default function DriverApplicationPage() {
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
+    const validationMessage = validateDriverApplicationForm(email, cv);
+    if (validationMessage) {
+      setMessage(validationMessage);
+      return;
+    }
     if (!cv || !ALLOWED_TYPES.includes(cv.type) || cv.size > MAX_CV_SIZE) {
       setMessage({ type: 'error', text: 'Ajoutez un CV au format PDF ou DOCX, de 5 Mo maximum.' });
       return;
     }
     setSubmitting(true);
     try {
-      const currentUser = auth.currentUser ?? (await signInAnonymously(auth)).user;
-      const createUpload = httpsCallable<undefined, { applicationId: string }>(functions, 'createDriverApplicationUpload');
+      const { auth: applicationAuth, functions: applicationFunctions, storage: applicationStorage } = getDriverApplicationFirebaseClients();
+      const currentUser = applicationAuth.currentUser ?? (await signInAnonymously(applicationAuth)).user;
+      const createUpload = httpsCallable<undefined, { applicationId: string }>(applicationFunctions, 'createDriverApplicationUpload');
       const { data } = await createUpload();
       const applicationId = data.applicationId;
-      await uploadBytes(ref(getFirebaseStorage(), storagePath(currentUser.uid, applicationId, cv.name)), cv, { contentType: cv.type });
-      const submitApplication = httpsCallable(functions, 'submitDriverApplicationWithCv');
+      await uploadBytes(ref(applicationStorage, storagePath(currentUser.uid, applicationId, cv.name)), cv, { contentType: cv.type });
+      const submitApplication = httpsCallable(applicationFunctions, 'submitDriverApplicationWithCv');
       await submitApplication({ applicationId, email, fileName: safeFileName(cv.name), contentType: cv.type, size: cv.size });
       setMessage({ type: 'success', text: 'Votre candidature a bien été envoyée. Notre équipe va l’étudier et vous contactera par e-mail si votre profil est retenu.' });
       setEmail(''); setCv(null);
       const fileInput = document.getElementById('cv-file') as HTMLInputElement | null;
       if (fileInput) fileInput.value = '';
     } catch (error) {
-      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Impossible d’envoyer votre candidature. Réessayez ou utilisez l’envoi par e-mail.' });
+      setMessage({ type: 'error', text: getDriverApplicationErrorMessage(error) });
     } finally {
       setSubmitting(false);
     }
@@ -72,7 +79,7 @@ export default function DriverApplicationPage() {
 
           <div className="space-y-6 p-8 sm:p-10">
             {message && <div className={`rounded-2xl border p-4 text-sm ${message.type === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-rose-400/30 bg-rose-400/10 text-rose-200'}`}>{message.text}</div>}
-            <form onSubmit={submit} className="space-y-4">
+            <form noValidate onSubmit={submit} className="space-y-4">
               <InputField required label="Adresse e-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jean@email.com" />
               <label htmlFor="cv-file" className={driverUploadEmptyClassName}><span className="flex items-center gap-2 font-semibold text-white"><MaterialIcon name="attach_file" size="sm" /> {cv ? cv.name : 'Joindre votre CV'} <span className="text-red-500">*</span></span><span className="mt-2 text-sm text-slate-400">PDF ou DOCX uniquement · 5 Mo maximum</span><input id="cv-file" required type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="sr-only" onChange={(e) => setCv(e.target.files?.[0] ?? null)} /></label>
               <button type="submit" disabled={submitting} className={driverPrimaryButtonClassName}><MaterialIcon name={submitting ? 'progress_activity' : 'send'} size="sm" /> {submitting ? 'Envoi en cours…' : 'Envoyer ma candidature'}</button>
