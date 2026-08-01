@@ -52,7 +52,16 @@ export const adminCreateDriverInvitation = onCall(
     const adminUid = await requireAdmin(request);
     await enforceRateLimit({ identifier: adminUid, bucket: 'admin:createDriverInvitation', limit: 20, windowSec: 60 });
     const parsed = CreateSchema.safeParse(request.data);
-    if (!parsed.success) throw new HttpsError('invalid-argument', 'Email, poste ou données invalides.');
+    if (!parsed.success) {
+      console.error('[adminCreateDriverInvitation] invalid payload', {
+        keys: request.data && typeof request.data === 'object' ? Object.keys(request.data) : [],
+        fieldTypes: request.data && typeof request.data === 'object'
+          ? Object.fromEntries(Object.entries(request.data).map(([key, value]) => [key, typeof value]))
+          : typeof request.data,
+        issues: parsed.error.issues.map(({ path, code }) => ({ path, code })),
+      });
+      throw new HttpsError('invalid-argument', 'Email, poste ou données invalides.');
+    }
 
     const input = parsed.data;
     const email = normalizeEmail(input.email);
