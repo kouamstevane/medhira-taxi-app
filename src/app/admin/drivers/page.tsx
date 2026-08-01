@@ -65,7 +65,7 @@ interface DriverApplication {
   email: string;
   phone?: string;
   city?: string;
-  role: 'chauffeur' | 'livreur' | 'les_deux';
+  role?: 'chauffeur' | 'livreur' | 'les_deux';
   status: string;
   cv?: { fileName?: string };
   createdAt?: { toDate?: () => Date };
@@ -285,7 +285,7 @@ export default function AdminDriversPage() {
   const handleApplicationForInvitation = (application: DriverApplication) => {
     setInvitationEmail(application.email);
     setInvitationName(application.fullName ?? '');
-    setInvitationRole(application.role);
+    if (application.role) setInvitationRole(application.role);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 

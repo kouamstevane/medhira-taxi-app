@@ -53,6 +53,18 @@ describe('driver application intake', () => {
     expect(result.success).toBe(true);
   });
 
+  test('accepts the final application with only email and CV', () => {
+    const result = DriverApplicationSubmissionSchema.safeParse({
+      applicationId: 'application-456',
+      email: 'jean@example.com',
+      fileName: 'cv-jean.pdf',
+      contentType: 'application/pdf',
+      size: 1024,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   test('rejects unsupported CV formats and oversized files', () => {
     const result = DriverApplicationSubmissionSchema.safeParse({
       applicationId: 'application-456',

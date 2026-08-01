@@ -18,7 +18,7 @@ export const DriverApplicationSubmissionSchema = z.object({
   email: z.string().trim().email().max(254),
   phone: z.string().trim().min(6).max(32).optional(),
   city: z.string().trim().min(2).max(100).optional(),
-  role: z.enum(['chauffeur', 'livreur', 'les_deux']),
+  role: z.enum(['chauffeur', 'livreur', 'les_deux']).optional(),
   fileName: z.string().regex(/^[a-zA-Z0-9._-]{1,120}\.(pdf|docx)$/i),
   contentType: z.enum(ALLOWED_CONTENT_TYPES),
   size: z.number().int().positive().max(MAX_CV_SIZE),

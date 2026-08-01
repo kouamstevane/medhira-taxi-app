@@ -7,7 +7,7 @@ import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes } from 'firebase/storage';
 import { auth, functions, getFirebaseStorage } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { InputField, SelectField } from '@/components/forms';
+import { InputField } from '@/components/forms';
 import { driverPrimaryButtonClassName, driverUploadEmptyClassName } from '@/app/driver/register/components/driverOnboardingStyles';
 
 const APPLICATION_EMAIL = 'medjiraservices@gmail.com';
@@ -24,7 +24,6 @@ function storagePath(uid: string, applicationId: string, fileName: string): stri
 
 export default function DriverApplicationPage() {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'chauffeur' | 'livreur' | 'les_deux'>('chauffeur');
   const [cv, setCv] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -47,7 +46,7 @@ export default function DriverApplicationPage() {
       const applicationId = data.applicationId;
       await uploadBytes(ref(getFirebaseStorage(), storagePath(currentUser.uid, applicationId, cv.name)), cv, { contentType: cv.type });
       const submitApplication = httpsCallable(functions, 'submitDriverApplicationWithCv');
-      await submitApplication({ applicationId, email, role, fileName: safeFileName(cv.name), contentType: cv.type, size: cv.size });
+      await submitApplication({ applicationId, email, fileName: safeFileName(cv.name), contentType: cv.type, size: cv.size });
       setMessage({ type: 'success', text: 'Votre candidature a bien été envoyée. Notre équipe va l’étudier et vous contactera par e-mail si votre profil est retenu.' });
       setEmail(''); setCv(null);
       const fileInput = document.getElementById('cv-file') as HTMLInputElement | null;
@@ -74,8 +73,7 @@ export default function DriverApplicationPage() {
           <div className="space-y-6 p-8 sm:p-10">
             {message && <div className={`rounded-2xl border p-4 text-sm ${message.type === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-rose-400/30 bg-rose-400/10 text-rose-200'}`}>{message.text}</div>}
             <form onSubmit={submit} className="space-y-4">
-              <InputField required label="Adresse e-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jean@email.com" helperText="Cette adresse sera utilisée pour vous envoyer la réponse et le code d’invitation." />
-              <SelectField required label="Poste souhaité" value={role} onChange={(e) => setRole(e.target.value as typeof role)} options={[{ value: 'chauffeur', label: 'Chauffeur' }, { value: 'livreur', label: 'Livreur' }, { value: 'les_deux', label: 'Chauffeur et Livreur' }]} />
+              <InputField required label="Adresse e-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jean@email.com" />
               <label htmlFor="cv-file" className={driverUploadEmptyClassName}><span className="flex items-center gap-2 font-semibold text-white"><MaterialIcon name="attach_file" size="sm" /> {cv ? cv.name : 'Joindre votre CV'} <span className="text-red-500">*</span></span><span className="mt-2 text-sm text-slate-400">PDF ou DOCX uniquement · 5 Mo maximum</span><input id="cv-file" required type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="sr-only" onChange={(e) => setCv(e.target.files?.[0] ?? null)} /></label>
               <button type="submit" disabled={submitting} className={driverPrimaryButtonClassName}><MaterialIcon name={submitting ? 'progress_activity' : 'send'} size="sm" /> {submitting ? 'Envoi en cours…' : 'Envoyer ma candidature'}</button>
             </form>
