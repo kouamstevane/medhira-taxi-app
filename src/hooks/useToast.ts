@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useCallback } from 'react';
-import { Toast, ToastType } from '@/components/ui/Toast';
+import React, { useCallback } from 'react';
+import { toast as globalToast } from 'react-hot-toast';
+import { GlobalToast, Toast, ToastType } from '@/components/ui/Toast';
 
 interface UseToastReturn {
   toasts: Toast[];
@@ -15,17 +16,21 @@ interface UseToastReturn {
 }
 
 export const useToast = (): UseToastReturn => {
-  const [toasts, setToasts] = useState<Toast[]>([]);
-
   const removeToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    globalToast.dismiss(id);
   }, []);
 
   const showToast = useCallback((message: string, type: ToastType = 'info', duration: number = 5000) => {
     const id = Math.random().toString(36).substring(2, 9);
     const newToast: Toast = { id, message, type, duration };
-    
-    setToasts((prev) => [...prev, newToast]);
+
+    globalToast.custom((toastInstance) => (
+      React.createElement(GlobalToast, {
+        toast: newToast,
+        visible: toastInstance.visible,
+        onDismiss: () => globalToast.dismiss(toastInstance.id),
+      })
+    ), { id, duration });
   }, []);
 
   const showSuccess = useCallback((message: string, duration?: number) => {
@@ -45,11 +50,11 @@ export const useToast = (): UseToastReturn => {
   }, [showToast]);
 
   const clearAll = useCallback(() => {
-    setToasts([]);
+    globalToast.dismiss();
   }, []);
 
   return {
-    toasts,
+    toasts: [],
     showToast,
     showSuccess,
     showError,

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
-import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -17,6 +16,46 @@ interface ToastProps {
   toast: Toast;
   onRemove: (id: string) => void;
 }
+
+interface GlobalToastProps {
+  toast: Toast;
+  visible: boolean;
+  onDismiss: () => void;
+}
+
+export const GlobalToast: React.FC<GlobalToastProps> = ({ toast, visible, onDismiss }) => {
+  const icons = {
+    success: <CheckCircle className="h-5 w-5 text-emerald-400" />,
+    error: <AlertCircle className="h-5 w-5 text-rose-400" />,
+    warning: <AlertTriangle className="h-5 w-5 text-amber-400" />,
+    info: <Info className="h-5 w-5 text-blue-400" />,
+  };
+
+  const borders = {
+    success: 'border-emerald-500/30',
+    error: 'border-rose-500/30',
+    warning: 'border-amber-500/30',
+    info: 'border-blue-500/30',
+  };
+
+  return (
+    <div
+      role="status"
+      className={`flex w-[min(92vw,420px)] items-start gap-3 rounded-xl border bg-[#1A1A1A]/95 p-4 text-white shadow-2xl backdrop-blur-md ${borders[toast.type]} ${visible ? 'medjira-toast-enter' : 'medjira-toast-exit'}`}
+    >
+      <span className="mt-0.5 shrink-0">{icons[toast.type]}</span>
+      <p className="min-w-0 flex-1 text-sm font-medium leading-5">{toast.message}</p>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="-m-1 shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+        aria-label="Fermer la notification"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+};
 
 const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
   const [isExiting, setIsExiting] = useState(false);
@@ -46,7 +85,7 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
 
   const getStyles = () => {
     const baseStyles = "transform transition-all duration-300 ease-in-out";
-    const exitStyles = isExiting ? "opacity-0 translate-x-full" : "opacity-100 translate-x-0";
+    const exitStyles = isExiting ? "opacity-0 -translate-x-full" : "opacity-100 translate-x-0";
     
     const typeStyles = {
       success: "border-l-4 border-[#10B981] bg-[#10B981]/10",

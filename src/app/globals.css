@@ -306,6 +306,26 @@ input, textarea, select {
   animation: slideUp 0.3s ease-out;
 }
 
+@keyframes medjira-toast-enter {
+  from { opacity: 0; transform: translateX(32px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes medjira-toast-exit {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-120%); }
+}
+
+.medjira-toast-enter { animation: medjira-toast-enter 280ms ease-out both; }
+.medjira-toast-exit { animation: medjira-toast-exit 280ms ease-in both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .medjira-toast-enter,
+  .medjira-toast-exit {
+    animation-duration: 1ms;
+  }
+}
+
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 

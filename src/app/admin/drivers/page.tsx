@@ -19,6 +19,7 @@ import { db, auth, functions } from '@/config/firebase';
 import type { DriverPrivate } from '@/types/firestore-collections';
 import { suspendDriver, unsuspendDriver, deactivateDriver, reactivateDriver } from '@/services/admin.service';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { useToast } from '@/hooks/useToast';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('AdminDrivers');
@@ -100,8 +101,6 @@ export default function AdminDriversPage() {
   const [selectedDriverPrivate, setSelectedDriverPrivate] = useState<DriverPrivate | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -115,6 +114,7 @@ export default function AdminDriversPage() {
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
   const invitationFormRef = useRef<HTMLFormElement>(null);
+  const { showError, showSuccess } = useToast();
 
   const PAGE_SIZE = 25;
 
@@ -177,12 +177,12 @@ export default function AdminDriversPage() {
       setLoading(false);
     }, (err) => {
       logger.error('Chargement des chauffeurs', err instanceof Error ? err : new Error(String(err)));
-      setError('Erreur lors du chargement des chauffeurs');
+      showError('Erreur lors du chargement des chauffeurs');
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [filter, isAdmin]);
+  }, [filter, isAdmin, showError]);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -236,8 +236,7 @@ export default function AdminDriversPage() {
 
   const handleAdminAction = async (action: string, driverId: string, reason?: string) => {
     setProcessing(driverId);
-    setError(null);
-    setSuccess(null);
+
 
     try {
       if (!auth.currentUser) throw new Error('Non authentifié');
@@ -256,14 +255,14 @@ export default function AdminDriversPage() {
         await adminManageDriver({ action, driverId, reason });
       }
 
-      setSuccess(`Action "${action}" effectuée avec succès`);
+      showSuccess(`Action "${action}" effectuée avec succès`);
       setSelectedDriver(null);
       setRejectionReason('');
       setActionModal({ show: false, action: null, driver: null, reason: '' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erreur lors de la mise à jour du statut';
       logger.error('Action admin sur chauffeur', err instanceof Error ? err : new Error(String(err)));
-      setError(message);
+      showError(message);
     } finally {
       setProcessing(null);
     }
@@ -272,8 +271,7 @@ export default function AdminDriversPage() {
   const handleCreateInvitation = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setInvitationLoading(true);
-    setError(null);
-    setSuccess(null);
+
     try {
       const createInvitation = httpsCallable(functions, 'adminCreateDriverInvitation');
       const result = await createInvitation({
@@ -283,11 +281,11 @@ export default function AdminDriversPage() {
       });
       const data = result.data as { code: string; expiresAt: number };
       const expiry = new Date(data.expiresAt).toLocaleString('fr-FR');
-      setSuccess(`Invitation envoyée. Code : ${data.code} — expiration : ${expiry}`);
+      showSuccess(`Invitation envoyée. Code : ${data.code} — expiration : ${expiry}`);
       setInvitationEmail('');
       setInvitationName('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossible de créer l’invitation');
+      showError(err instanceof Error ? err.message : 'Impossible de créer l’invitation');
     } finally {
       setInvitationLoading(false);
     }
@@ -299,7 +297,7 @@ export default function AdminDriversPage() {
       const result = await getCv({ applicationId });
       window.open(result.data.url, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossible de télécharger le CV');
+      showError(err instanceof Error ? err.message : 'Impossible de télécharger le CV');
     }
   };
 
@@ -307,8 +305,7 @@ export default function AdminDriversPage() {
     setInvitationEmail(application.email);
     setInvitationName(application.fullName ?? '');
     if (application.role) setInvitationRole(application.role);
-    setError(null);
-    setSuccess(getInvitationPreparedMessage(application.email));
+    showSuccess(getInvitationPreparedMessage(application.email));
     requestAnimationFrame(() => {
       invitationFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
@@ -317,8 +314,7 @@ export default function AdminDriversPage() {
 
   const handleDeleteDriver = async (driverId: string): Promise<DriverDeletionResult> => {
     setProcessing(driverId);
-    setError(null);
-    setSuccess(null);
+
 
     const startTime = Date.now();
 
@@ -333,7 +329,7 @@ export default function AdminDriversPage() {
       const cfResult = await adminDeleteDriverComplete({ driverId });
       const cfData = cfResult.data as DriverDeletionResult;
 
-      setSuccess('Le compte chauffeur et toutes ses données ont été supprimés définitivement');
+      showSuccess('Le compte chauffeur et toutes ses données ont été supprimés définitivement');
       setDeleteModalOpen(false);
       setDriverToDelete(null);
       setSelectedDriver(null);
@@ -342,7 +338,7 @@ export default function AdminDriversPage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la suppression du compte';
       logger.error('Suppression chauffeur', err instanceof Error ? err : new Error(String(err)));
-      setError(errorMessage);
+      showError(errorMessage);
 
       return {
         success: false,
@@ -493,28 +489,6 @@ export default function AdminDriversPage() {
               {t === 'all' ? 'Tous types' : t === 'les_deux' ? 'Les deux' : t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
-        </div>
-
-        {/* Global Messages */}
-        <div className="space-y-4 mb-6">
-          {error && (
-            <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <MaterialIcon name="warning" size="md" className="shrink-0" />
-              <p className="text-sm font-medium flex-1">{error}</p>
-              <button onClick={() => setError(null)} className="p-1 hover:bg-rose-500/10 rounded-lg">
-                <MaterialIcon name="cancel" size="sm" />
-              </button>
-            </div>
-          )}
-          {success && (
-            <div className="p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <MaterialIcon name="check_circle" size="md" className="shrink-0" />
-              <p className="text-sm font-medium flex-1">{success}</p>
-              <button onClick={() => setSuccess(null)} className="p-1 hover:bg-green-500/10 rounded-lg">
-                <MaterialIcon name="cancel" size="sm" />
-              </button>
-            </div>
-          )}
         </div>
 
         <form ref={invitationFormRef} id="driver-invitation-form" onSubmit={handleCreateInvitation} className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">

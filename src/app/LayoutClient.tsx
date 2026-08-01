@@ -81,15 +81,15 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       {/* Toast notifications */}
       <Toaster
         position="top-center"
+        reverseOrder={false}
+        gutter={10}
         toastOptions={{
+          duration: 5000,
           style: {
-            background: '#1A1A1A',
-            color: '#FFFFFF',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: '12px',
-            fontSize: '14px',
+            background: 'transparent',
+            boxShadow: 'none',
+            padding: 0,
           },
-          success: { iconTheme: { primary: '#f29200', secondary: '#0F0F0F' } },
         }}
       />
 
