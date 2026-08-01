@@ -25,6 +25,21 @@ describe('driver application intake', () => {
     expect(result.success).toBe(true);
   });
 
+  test('allows the city to be omitted because the CV can contain it', () => {
+    const result = DriverApplicationSubmissionSchema.safeParse({
+      applicationId: 'application-456',
+      fullName: 'Jean Dupont',
+      email: 'jean@example.com',
+      phone: '+33612345678',
+      role: 'chauffeur',
+      fileName: 'cv-jean.pdf',
+      contentType: 'application/pdf',
+      size: 1024,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   test('rejects unsupported CV formats and oversized files', () => {
     const result = DriverApplicationSubmissionSchema.safeParse({
       applicationId: 'application-456',

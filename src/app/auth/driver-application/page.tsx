@@ -7,6 +7,8 @@ import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes } from 'firebase/storage';
 import { auth, functions, getFirebaseStorage } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { InputField, SelectField } from '@/components/forms';
+import { driverPrimaryButtonClassName, driverUploadEmptyClassName } from '@/app/driver/register/components/driverOnboardingStyles';
 
 const APPLICATION_EMAIL = 'medjiraservices@gmail.com';
 const MAX_CV_SIZE = 5 * 1024 * 1024;
@@ -48,7 +50,7 @@ export default function DriverApplicationPage() {
       const applicationId = data.applicationId;
       await uploadBytes(ref(getFirebaseStorage(), storagePath(currentUser.uid, applicationId, cv.name)), cv, { contentType: cv.type });
       const submitApplication = httpsCallable(functions, 'submitDriverApplicationWithCv');
-      await submitApplication({ applicationId, fullName, email, phone, city, role, fileName: safeFileName(cv.name), contentType: cv.type, size: cv.size });
+      await submitApplication({ applicationId, fullName, email, phone, ...(city.trim() ? { city: city.trim() } : {}), role, fileName: safeFileName(cv.name), contentType: cv.type, size: cv.size });
       setMessage({ type: 'success', text: 'Votre candidature a bien été envoyée. Notre équipe va l’étudier et vous contactera par e-mail si votre profil est retenu.' });
       setFullName(''); setEmail(''); setPhone(''); setCity(''); setCv(null);
       const fileInput = document.getElementById('cv-file') as HTMLInputElement | null;
@@ -76,14 +78,14 @@ export default function DriverApplicationPage() {
             {message && <div className={`rounded-2xl border p-4 text-sm ${message.type === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-rose-400/30 bg-rose-400/10 text-rose-200'}`}>{message.text}</div>}
             <form onSubmit={submit} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="text-sm text-slate-300">Nom complet<input required value={fullName} onChange={(e) => setFullName(e.target.value)} className="glass-input mt-2 w-full rounded-xl px-3 py-3 text-white" placeholder="Jean Dupont" /></label>
-                <label className="text-sm text-slate-300">Adresse e-mail<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="glass-input mt-2 w-full rounded-xl px-3 py-3 text-white" placeholder="jean@email.com" /></label>
-                <label className="text-sm text-slate-300">Téléphone<input required value={phone} onChange={(e) => setPhone(e.target.value)} className="glass-input mt-2 w-full rounded-xl px-3 py-3 text-white" placeholder="+33..." /></label>
-                <label className="text-sm text-slate-300">Ville<input required value={city} onChange={(e) => setCity(e.target.value)} className="glass-input mt-2 w-full rounded-xl px-3 py-3 text-white" placeholder="Votre ville" /></label>
+                <InputField required label="Nom complet" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Jean Dupont" />
+                <InputField required label="Adresse e-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jean@email.com" />
+                <InputField required label="Téléphone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+33..." />
+                <InputField label="Ville" helperText="Facultatif si elle figure sur votre CV" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Votre ville" />
               </div>
-              <label className="block text-sm text-slate-300">Poste souhaité<select value={role} onChange={(e) => setRole(e.target.value as typeof role)} className="glass-input mt-2 w-full rounded-xl px-3 py-3 text-white"><option value="chauffeur">Chauffeur</option><option value="livreur">Livreur</option><option value="les_deux">Chauffeur et Livreur</option></select></label>
-              <label htmlFor="cv-file" className="block cursor-pointer rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-5 text-sm text-slate-300 hover:bg-primary/10"><span className="flex items-center gap-2 font-semibold text-white"><MaterialIcon name="attach_file" size="sm" /> {cv ? cv.name : 'Joindre votre CV'}</span><span className="mt-2 block text-xs text-slate-400">PDF ou DOCX uniquement · 5 Mo maximum</span><input id="cv-file" required type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="sr-only" onChange={(e) => setCv(e.target.files?.[0] ?? null)} /></label>
-              <button type="submit" disabled={submitting} className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 font-bold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"><MaterialIcon name={submitting ? 'progress_activity' : 'send'} size="sm" /> {submitting ? 'Envoi en cours…' : 'Envoyer ma candidature'}</button>
+              <SelectField required label="Poste souhaité" value={role} onChange={(e) => setRole(e.target.value as typeof role)} options={[{ value: 'chauffeur', label: 'Chauffeur' }, { value: 'livreur', label: 'Livreur' }, { value: 'les_deux', label: 'Chauffeur et Livreur' }]} />
+              <label htmlFor="cv-file" className={driverUploadEmptyClassName}><span className="flex items-center gap-2 font-semibold text-white"><MaterialIcon name="attach_file" size="sm" /> {cv ? cv.name : 'Joindre votre CV'} <span className="text-red-500">*</span></span><span className="mt-2 text-sm text-slate-400">PDF ou DOCX uniquement · 5 Mo maximum</span><input id="cv-file" required type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="sr-only" onChange={(e) => setCv(e.target.files?.[0] ?? null)} /></label>
+              <button type="submit" disabled={submitting} className={driverPrimaryButtonClassName}><MaterialIcon name={submitting ? 'progress_activity' : 'send'} size="sm" /> {submitting ? 'Envoi en cours…' : 'Envoyer ma candidature'}</button>
             </form>
 
             <div className="border-t border-white/10 pt-5 text-center"><p className="text-xs text-slate-500">Vous préférez utiliser votre messagerie ?</p><a href={`mailto:${APPLICATION_EMAIL}?subject=${subject}&body=${body}`} className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"><MaterialIcon name="mail" size="sm" /> Envoyer mon CV par e-mail</a></div>
