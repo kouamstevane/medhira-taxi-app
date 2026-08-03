@@ -15,10 +15,6 @@ async function assertAdminUser(uid: string): Promise<void> {
   }
 }
 
-function isCapturedPaymentStatus(paymentStatus: unknown): boolean {
-  return paymentStatus === 'captured' || paymentStatus === 'paid' || paymentStatus === 'succeeded';
-}
-
 async function assertAssignableDriver(driverId: string): Promise<void> {
   const driverSnap = await getDb().collection('drivers').doc(driverId).get();
   if (!driverSnap.exists) {
@@ -40,10 +36,6 @@ async function assertAssignableDriver(driverId: string): Promise<void> {
 }
 
 const adminActionSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('validateSubscription'),
-    subscriptionId: z.string().min(1),
-  }),
   z.object({
     action: z.literal('cancelSubscription'),
     subscriptionId: z.string().min(1),
@@ -79,36 +71,6 @@ export const adminManagePersonalDriver = onCall(
 
     const db = getDb();
     const payload = parsed.data;
-
-    if (payload.action === 'validateSubscription') {
-      const subRef = db.collection('personal_driver_subscriptions').doc(payload.subscriptionId);
-      const subSnap = await subRef.get();
-      if (!subSnap.exists) {
-        throw new HttpsError('not-found', 'Abonnement introuvable.');
-      }
-      const subscription = subSnap.data();
-      if (subscription?.status !== 'pending_validation' || !isCapturedPaymentStatus(subscription?.paymentStatus)) {
-        throw new HttpsError('failed-precondition', 'Le paiement doit être capturé avant validation.');
-      }
-      const batch = db.batch();
-      batch.update(subRef, {
-        status: 'active',
-        validatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        validatedBy: request.auth.uid,
-      });
-      if (subscription?.userId) {
-        batch.set(db.collection('notifications').doc(), {
-          userId: subscription.userId,
-          type: 'personal_driver_subscription_validated',
-          title: 'Abonnement Personal Driver validé',
-          message: 'Votre abonnement Personal Driver est actif. Vos trajets planifiés peuvent maintenant être suivis dans votre tableau de bord.',
-          read: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-      await batch.commit();
-      return { success: true };
-    }
 
     if (payload.action === 'cancelSubscription') {
       const subRef = db.collection('personal_driver_subscriptions').doc(payload.subscriptionId);

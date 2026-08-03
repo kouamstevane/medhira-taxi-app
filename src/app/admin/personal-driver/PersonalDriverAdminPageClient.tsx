@@ -19,7 +19,6 @@ function getSubscriptionPlanLabel(subscription: SubscriptionRow): string {
 }
 
 export function PersonalDriverAdminPageClient() {
-  const [subscriptionId, setSubscriptionId] = useState('');
   const [tripId, setTripId] = useState('');
   const [driverId, setDriverId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
@@ -46,7 +45,7 @@ export function PersonalDriverAdminPageClient() {
       setSubscriptions(
         subscriptionSnap.docs
           .map((doc) => ({ id: doc.id, ...doc.data() }) as SubscriptionRow)
-          .filter((subscription) => ['pending_validation', 'pending_payment', 'active'].includes(subscription.status || ''))
+          .filter((subscription) => ['pending_payment', 'payment_failed', 'active', 'expired'].includes(subscription.status || ''))
           .slice(0, 8),
       );
       setTrips(
@@ -65,24 +64,6 @@ export function PersonalDriverAdminPageClient() {
   useEffect(() => {
     void loadOperations();
   }, []);
-
-  const handleValidateSubscription = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!subscriptionId.trim()) return;
-    setLoading(true);
-    setMessage(null);
-    try {
-      const callable = httpsCallable(functions, 'adminManagePersonalDriver');
-      await callable({ action: 'validateSubscription', subscriptionId: subscriptionId.trim() });
-      setMessage(`Abonnement ${subscriptionId} validé avec succès.`);
-      setSubscriptionId('');
-      void loadOperations();
-    } catch (err: unknown) {
-      setMessage(`Erreur: ${getErrorMessage(err)}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleAssignTrip = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +126,7 @@ export function PersonalDriverAdminPageClient() {
           </h1>
         </div>
         <p className="mt-1 text-xs text-slate-400">
-          Validation des abonnements, affectations de la flotte et gestion des alertes d'urgence.
+          Suivi des abonnements, affectations de la flotte et gestion des alertes d'urgence.
         </p>
       </div>
 
@@ -207,7 +188,7 @@ export function PersonalDriverAdminPageClient() {
                 <button
                   key={subscription.id}
                   type="button"
-                  onClick={() => setSubscriptionId(subscription.id)}
+                  onClick={() => setMessage(`Abonnement ${subscription.id}: ${subscription.status || 'statut inconnu'}.`)}
                   className="w-full rounded-lg border border-white/10 bg-black/10 p-3 text-left transition hover:bg-white/5"
                 >
                   <span className="block text-xs font-bold text-white">{subscription.id}</span>
@@ -256,29 +237,6 @@ export function PersonalDriverAdminPageClient() {
           </div>
         </div>
       </section>
-
-      <form onSubmit={handleValidateSubscription} className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-4">
-        <h2 className="text-sm font-bold text-white flex items-center gap-2">
-          <MaterialIcon name="check_circle" size="sm" className="text-emerald-400" />
-          Valider un abonnement client (Post-Paiement)
-        </h2>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            placeholder="ID de l'abonnement (ex: sub-xyz)"
-            value={subscriptionId}
-            onChange={(e) => setSubscriptionId(e.target.value)}
-            className="min-h-11 flex-1 rounded-xl border border-white/10 bg-white/5 px-4 text-xs text-white outline-none focus:border-primary"
-          />
-          <button
-            type="submit"
-            disabled={loading || !subscriptionId.trim()}
-            className="min-h-11 rounded-xl bg-emerald-600 px-6 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50 transition"
-          >
-            {loading ? 'Validation...' : 'Valider l\'abonnement'}
-          </button>
-        </div>
-      </form>
 
       <form onSubmit={handleAssignTrip} className="rounded-xl border border-white/10 bg-white/5 p-5 space-y-4">
         <h2 className="text-sm font-bold text-white flex items-center gap-2">

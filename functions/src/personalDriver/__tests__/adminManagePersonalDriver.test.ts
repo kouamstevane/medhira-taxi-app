@@ -69,42 +69,25 @@ describe('adminManagePersonalDriver', () => {
     ).rejects.toMatchObject({ code: 'permission-denied' });
   });
 
-  it('validates a subscription for admin users', async () => {
+  it('rejects manual subscription validation for admin users', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
     mockAdminRef.get.mockResolvedValue({ exists: true });
-    mockSubRef.get.mockResolvedValue({
-      exists: true,
-      data: () => ({ userId: 'user_1', status: 'pending_validation', paymentStatus: 'captured' }),
-    });
-
-    const result = await adminManagePersonalDriver(
-      makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1'),
-    );
-
-    expect(result).toEqual({ success: true });
-    expect(mockBatch.update).toHaveBeenCalledWith(
-      mockSubRef,
-      expect.objectContaining({ status: 'active', validatedBy: 'admin_1' }),
-    );
-    expect(mockBatch.set).toHaveBeenCalledWith(
-      mockNotificationRef,
-      expect.objectContaining({ userId: 'user_1', type: 'personal_driver_subscription_validated' }),
-    );
+    await expect(
+      adminManagePersonalDriver(
+        makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1'),
+      ),
+    ).rejects.toMatchObject({ code: 'invalid-argument' });
   });
 
-  it('rejects validation when payment is not captured', async () => {
+  it('does not expose a payment validation path', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
     mockAdminRef.get.mockResolvedValue({ exists: true });
-    mockSubRef.get.mockResolvedValue({
-      exists: true,
-      data: () => ({ userId: 'user_1', status: 'pending_payment', paymentStatus: 'authorized' }),
-    });
 
     await expect(
       adminManagePersonalDriver(
         makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1'),
       ),
-    ).rejects.toMatchObject({ code: 'failed-precondition' });
+    ).rejects.toMatchObject({ code: 'invalid-argument' });
   });
 
   it('assigns driver and vehicle to a trip', async () => {

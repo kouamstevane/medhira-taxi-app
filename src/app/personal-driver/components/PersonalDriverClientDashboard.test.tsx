@@ -30,12 +30,12 @@ describe('PersonalDriverClientDashboard Component', () => {
     });
   });
 
-  it('renders pending validation subscription details', async () => {
+  it('renders pending payment subscription details', async () => {
     (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
       id: 'sub_123',
       userId: 'user_123',
       selectedPlanId: 'classic',
-      status: 'pending_validation',
+      status: 'pending_payment',
       monthlyDistanceKm: 440,
       startDate: '2026-08-01',
       pickupAddress: '100 rue Principale',
@@ -57,7 +57,7 @@ describe('PersonalDriverClientDashboard Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/MON ACCÈS PERSONAL DRIVER/i)).toBeInTheDocument();
-      expect(screen.getByText(/En attente de validation/i)).toBeInTheDocument();
+      expect(screen.getByText(/Paiement en attente/i)).toBeInTheDocument();
       expect(screen.getByText(/440 km/i)).toBeInTheDocument();
       expect(screen.getAllByText(/100 rue Principale/i).length).toBeGreaterThan(0);
     });

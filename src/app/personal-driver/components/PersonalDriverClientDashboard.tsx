@@ -19,7 +19,7 @@ import type {
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending_payment: { label: 'Paiement en attente', color: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
-  pending_validation: { label: 'En attente de validation', color: 'bg-blue-500/15 text-blue-400 border border-blue-500/30' },
+  payment_failed: { label: 'Paiement échoué', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
   active: { label: 'Abonnement Actif', color: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' },
   cancelled: { label: 'Annulé', color: 'bg-gray-500/15 text-gray-400 border border-gray-500/30' },
   expired: { label: 'Expiré', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
@@ -154,7 +154,7 @@ export function PersonalDriverClientDashboard() {
 
   const rawPlanId = subscription.planId || (subscription as unknown as { selectedPlanId: PersonalDriverPlanId }).selectedPlanId || 'classic';
   const planInfo = PERSONAL_DRIVER_PLANS[rawPlanId] || PERSONAL_DRIVER_PLANS.classic;
-  const statusInfo = STATUS_LABELS[subscription.status] || STATUS_LABELS.pending_validation;
+  const statusInfo = STATUS_LABELS[subscription.status] || STATUS_LABELS.pending_payment;
   const includedSpecialTrips = planInfo.includedSpecialTrips;
   const specialTripsUsed = subscription.specialTripsUsed ?? 0;
   const specialTripsRemaining = Math.max(0, includedSpecialTrips - specialTripsUsed);
