@@ -26,7 +26,7 @@ export const getApprovalTemplate = (driverName: string) => `
         <p>Nous avons le plaisir de vous informer que votre demande d'inscription en tant que chauffeur sur la plateforme <strong>Medjira</strong> a été <strong>approuvée</strong> !</p>
         <p>Vous faites désormais partie de l'élite des transporteurs partenaires. Vous pouvez maintenant vous connecter à votre compte et commencer à recevoir des courses.</p>
         <div style="text-align: center;">
-          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/driver/login" class="button">
+          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://medjira-service.web.app'}/driver/login" class="button">
             Se connecter maintenant
           </a>
         </div>
@@ -191,7 +191,7 @@ export const getReactivationTemplate = (driverName: string) => `
           <p style="margin: 10px 0 0 0;">Vous pouvez à nouveau vous connecter et reprendre vos activités immédiatemment.</p>
         </div>
         <div style="text-align: center;">
-          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/driver/login" class="button">
+          <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://medjira-service.web.app'}/driver/login" class="button">
             Reprendre la route
           </a>
         </div>

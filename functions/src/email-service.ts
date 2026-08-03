@@ -143,7 +143,7 @@ export async function sendVerificationCodeEmail(
   return { messageId: result.data?.id };
 }
 
-const APP_URL = 'https://medjira.com';
+const APP_URL = 'https://medjira-service.web.app';
 
 interface DriverApplicationNotificationParams {
   to: string;
