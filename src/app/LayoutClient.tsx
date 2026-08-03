@@ -11,6 +11,8 @@
 
 import React, { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { useAuth } from '@/hooks/useAuth';
 import { useKeyboard } from '@/hooks/useKeyboard';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -18,6 +20,7 @@ import { Header } from '@/components/layout/Header';
 import { VoipCallProvider } from '@/context/VoipCallProvider';
 import { Toaster } from 'react-hot-toast';
 import { NotificationHandler } from '@/components/notifications/NotificationHandler';
+import { getDriverInvitationPathFromUrl } from '@/app/auth/driver-invitation/driver-invitation-links';
 
 interface LayoutClientProps {
   children: React.ReactNode;
@@ -64,6 +67,34 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     };
     window.addEventListener('app:navigate', handler);
     return () => window.removeEventListener('app:navigate', handler);
+  }, [router]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const navigateFromAppUrl = (url: string) => {
+      const path = getDriverInvitationPathFromUrl(url);
+      if (path) router.replace(path);
+    };
+
+    let listener: Awaited<ReturnType<typeof App.addListener>> | undefined;
+    let disposed = false;
+
+    void App.addListener('appUrlOpen', ({ url }) => navigateFromAppUrl(url)).then((handle) => {
+      if (disposed) {
+        void handle.remove();
+      } else {
+        listener = handle;
+      }
+    });
+    void App.getLaunchUrl().then((launch) => {
+      if (launch?.url) navigateFromAppUrl(launch.url);
+    });
+
+    return () => {
+      disposed = true;
+      if (listener) void listener.remove();
+    };
   }, [router]);
 
   const shouldHideHeader = NO_HEADER_ROUTES.some((route) => {

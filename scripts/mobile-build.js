@@ -2,6 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import {
+    getNextBuildDirectory,
+    getStaticExportDirectory,
+} from './next-build-path.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,10 +92,20 @@ async function runBuild() {
             moveToStaging(middlewareFile, 'middleware.ts');
         }
 
-        const nextCacheDir = path.join(__dirname, '../.next');
+        const nextCacheDir = path.join(
+            __dirname,
+            '..',
+            getNextBuildDirectory({ isMobile: true }),
+        );
         if (fs.existsSync(nextCacheDir)) {
             console.log('Nettoyage du cache Next.js...');
             fs.rmSync(nextCacheDir, { recursive: true, force: true });
+        }
+
+        const staticOutputDir = path.join(__dirname, '../out');
+        if (fs.existsSync(staticOutputDir)) {
+            console.log('Nettoyage de l’ancien export statique...');
+            fs.rmSync(staticOutputDir, { recursive: true, force: true });
         }
 
         console.log('Compilation Next.js (Static Export)...');
@@ -100,12 +114,31 @@ async function runBuild() {
             env: { ...process.env, MOBILE_BUILD: 'true' }
         });
 
+        const staticExportDir = path.join(
+            __dirname,
+            '..',
+            getStaticExportDirectory({ isMobile: true }),
+        );
+        if (!fs.existsSync(path.join(staticExportDir, 'index.html'))) {
+            throw new Error(`Export statique introuvable : ${staticExportDir}.`);
+        }
+        if (staticExportDir !== staticOutputDir) {
+            fs.renameSync(staticExportDir, staticOutputDir);
+        }
+
         console.log('Synchronisation Capacitor...');
-        execSync('npx cap sync', { stdio: 'inherit' });
+        const capacitorPlatform = ['android', 'ios'].includes(process.env.CAPACITOR_PLATFORM)
+            ? process.env.CAPACITOR_PLATFORM
+            : null;
+        execSync(
+            capacitorPlatform ? `npx cap sync ${capacitorPlatform}` : 'npx cap sync',
+            { stdio: 'inherit' },
+        );
 
         console.log('Build mobile terminé avec succès !');
     } catch (error) {
         console.error('Erreur pendant le build:', error.message);
+        process.exitCode = 1;
     } finally {
         await restoreFiles();
     }

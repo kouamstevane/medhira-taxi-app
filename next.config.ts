@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
+import { getNextBuildDirectory } from './scripts/next-build-path.mjs';
 
 const isMobile = process.env.MOBILE_BUILD === 'true';
 
 const nextConfig: NextConfig = {
+  distDir: getNextBuildDirectory({ isMobile }),
   outputFileTracingRoot: __dirname,
   async redirects() {
     return [

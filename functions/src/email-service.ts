@@ -363,6 +363,16 @@ export interface DriverInvitationEmailParams {
   apiKey?: string;
 }
 
+export function buildDriverInvitationUrl(
+  invitationId: string,
+  baseUrl = process.env.DRIVER_APP_LINK_BASE_URL
+    || 'https://medjira-service.web.app',
+): string {
+  const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+  const params = new URLSearchParams({ invitationId });
+  return `${normalizedBaseUrl}/auth/driver-invitation?${params.toString()}`;
+}
+
 export async function sendDriverInvitationEmail(
   params: DriverInvitationEmailParams,
 ): Promise<SendEmailResult> {
@@ -375,8 +385,7 @@ export async function sendDriverInvitationEmail(
     timeStyle: 'short',
     timeZone: 'Africa/Lagos',
   });
-  const appUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://medjira.com';
-  const invitationUrl = `${appUrl}/auth/driver-invitation?invitationId=${encodeURIComponent(params.invitationId)}`;
+  const invitationUrl = buildDriverInvitationUrl(params.invitationId);
   const payload = {
     from: `Medjira <${process.env.RESEND_FROM_EMAIL || 'medjira@medjira.com'}>`,
     to: params.to,
