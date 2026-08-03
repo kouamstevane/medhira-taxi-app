@@ -6,12 +6,8 @@ import {
   query,
   where,
   orderBy,
-  limit,
   onSnapshot,
-  startAfter,
-  getDocs,
   doc,
-  DocumentSnapshot,
   Timestamp,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -29,6 +25,11 @@ import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
 import { DriverDetailsDrawer } from '@/components/admin/DriverDetailsDrawer';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
+import {
+  countAdminDriversByStatus,
+  filterAdminDrivers,
+  hideReviewedDriverApplications,
+} from './adminDriversData';
 import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary } from './adminDriversUi';
 import { buildAdminDriverActionPayload } from './adminDriversActions';
 
@@ -39,7 +40,7 @@ export interface Driver {
   email: string;
   phone: string;
   phoneNumber?: string;
-  status: 'pending' | 'approved' | 'rejected' | 'available' | 'offline' | 'busy' | 'action_required';
+  status: 'pending' | 'approved' | 'rejected' | 'available' | 'offline' | 'busy' | 'action_required' | 'suspended';
   driverType?: 'chauffeur' | 'livreur' | 'les_deux';
   licenseNumber: string;
   city: string;
@@ -97,14 +98,12 @@ export default function AdminDriversPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [driverTypeFilter, setDriverTypeFilter] = useState<'all' | 'chauffeur' | 'livreur' | 'les_deux'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   // RGPD #C2 : documents/PII depuis la sous-collection privée
   const [selectedDriverPrivate, setSelectedDriverPrivate] = useState<DriverPrivate | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
-  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const isAdmin = useAdminAuth();
   const [invitationEmail, setInvitationEmail] = useState('');
@@ -137,8 +136,7 @@ export default function AdminDriversPage() {
 
   useEffect(() => {
     setCurrentPage(0);
-    setDrivers([]);
-  }, [filter]);
+  }, [filter, driverTypeFilter, searchTerm]);
 
   // RGPD #C2 : souscrire à la sous-collection privée du driver sélectionné
   useEffect(() => {
@@ -157,13 +155,19 @@ export default function AdminDriversPage() {
   }, [selectedDriver]);
 
   useEffect(() => {
+    if (!selectedDriver) return;
+    const liveDriver = drivers.find((driver) => driver.id === selectedDriver.id);
+    if (liveDriver && liveDriver !== selectedDriver) {
+      setSelectedDriver(liveDriver);
+    }
+  }, [drivers, selectedDriver]);
+
+  useEffect(() => {
     if (!isAdmin) return;
 
     setLoading(true);
     const driversRef = collection(db, 'drivers');
-    const q = filter === 'all'
-      ? query(driversRef, orderBy('createdAt', 'desc'), limit(PAGE_SIZE))
-      : query(driversRef, where('status', '==', filter), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+    const q = query(driversRef, orderBy('createdAt', 'desc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const driversData = snapshot.docs.map(doc => ({
@@ -172,8 +176,6 @@ export default function AdminDriversPage() {
       })) as Driver[];
 
       setDrivers(driversData);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-      setHasMore(snapshot.docs.length === PAGE_SIZE);
       setLoading(false);
     }, (err) => {
       logger.error('Chargement des chauffeurs', err instanceof Error ? err : new Error(String(err)));
@@ -182,7 +184,7 @@ export default function AdminDriversPage() {
     });
 
     return () => unsubscribe();
-  }, [filter, isAdmin, showError]);
+  }, [isAdmin, showError]);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -192,7 +194,7 @@ export default function AdminDriversPage() {
     setApplicationsLoading(true);
     setApplicationsError(null);
     // Keep this query index-free while the production composite index is building.
-    const applicationsQuery = query(collection(db, 'driverApplications'), where('status', '==', 'pending_review'), limit(20));
+    const applicationsQuery = query(collection(db, 'driverApplications'), where('status', '==', 'pending_review'));
     return onSnapshot(applicationsQuery, (snapshot) => {
       const nextApplications = snapshot.docs.map((application) => ({ id: application.id, ...application.data() })) as DriverApplication[];
       nextApplications.sort((first, second) => {
@@ -208,31 +210,6 @@ export default function AdminDriversPage() {
       setApplicationsLoading(false);
     });
   }, [isAdmin]);
-
-  const loadMore = async () => {
-    if (!lastDoc || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const driversRef = collection(db, 'drivers');
-      const q = filter === 'all'
-        ? query(driversRef, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE))
-        : query(driversRef, where('status', '==', filter), orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(PAGE_SIZE));
-
-      const snapshot = await getDocs(q);
-      const newDrivers = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Driver[];
-
-      setDrivers(prev => [...prev, ...newDrivers]);
-      setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-      setHasMore(snapshot.docs.length === PAGE_SIZE);
-    } catch (err) {
-      logger.error('Chargement page suivante', err instanceof Error ? err : new Error(String(err)));
-    } finally {
-      setLoadingMore(false);
-    }
-  };
 
   const handleAdminAction = async (action: string, driverId: string, reason?: string) => {
     setProcessing(driverId);
@@ -364,6 +341,7 @@ export default function AdminDriversPage() {
       pending: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
       approved: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
       rejected: 'bg-rose-500/10 text-rose-500 border-rose-500/20',
+      suspended: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
       available: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
       offline: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
       busy: 'bg-sky-500/10 text-sky-500 border-sky-500/20',
@@ -374,6 +352,7 @@ export default function AdminDriversPage() {
       pending: 'En attente',
       approved: 'Approuvé',
       rejected: 'Refusé',
+      suspended: 'Suspendu',
       available: 'Disponible',
       offline: 'Hors ligne',
       busy: 'En course',
@@ -403,6 +382,23 @@ export default function AdminDriversPage() {
     return null;
   }
 
+  const visibleApplications = hideReviewedDriverApplications(applications, drivers);
+  const filteredDrivers = filterAdminDrivers(drivers, {
+    status: filter,
+    driverType: driverTypeFilter,
+    search: searchTerm,
+  });
+  const driverCounts = countAdminDriversByStatus(drivers);
+  const totalPages = Math.max(1, Math.ceil(filteredDrivers.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages - 1);
+  const paginatedDrivers = filteredDrivers.slice(safeCurrentPage * PAGE_SIZE, (safeCurrentPage + 1) * PAGE_SIZE);
+  const countsByFilter = {
+    all: driverCounts.all,
+    pending: driverCounts.pending,
+    approved: driverCounts.approved,
+    rejected: driverCounts.rejected,
+  };
+
   return (
     <div className="min-h-screen bg-background text-white">
       <AdminHeader
@@ -416,23 +412,23 @@ export default function AdminDriversPage() {
             <div>
               <h2 className="text-base font-semibold text-white">Candidatures à étudier</h2>
               <p className="mt-1 text-xs text-slate-400">
-                {applicationsLoading ? 'Recherche des nouveaux dossiers…' : getPendingApplicationsSummary(applications.length)}.
+                {applicationsLoading ? 'Recherche des nouveaux dossiers…' : getPendingApplicationsSummary(visibleApplications.length)}.
               </p>
               <p className="mt-1 text-[11px] text-slate-500">Les CV sont privés et accessibles uniquement aux administrateurs.</p>
             </div>
             <span className="min-w-8 rounded-full bg-primary px-2 py-1 text-center text-xs font-bold text-black">
-              {applicationsLoading ? '…' : applications.length}
+              {applicationsLoading ? '…' : visibleApplications.length}
             </span>
           </div>
           {applicationsLoading ? (
             <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">Chargement des candidatures...</p>
           ) : applicationsError ? (
             <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">{applicationsError}</p>
-          ) : applications.length === 0 ? (
+          ) : visibleApplications.length === 0 ? (
             <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">Aucune candidature en attente pour le moment.</p>
           ) : (
             <div className="space-y-3">
-              {applications.map((application) => (
+              {visibleApplications.map((application) => (
                 <div key={application.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-white">{application.fullName ?? 'Postulant'} <span className="text-xs font-normal text-primary">{application.role ? `(${application.role})` : ''}</span></p>
@@ -470,7 +466,7 @@ export default function AdminDriversPage() {
                 </div>
               </div>
               <span className={`mt-2 block text-lg font-bold ${filter === f ? 'text-primary' : 'text-slate-300'}`}>
-                {f === 'all' ? drivers.length : drivers.filter((driver) => driver.status === f).length}
+                {countsByFilter[f]}
               </span>
               {filter === f && <div className="absolute bottom-0 left-0 h-1 w-full bg-primary" />}
             </button>
@@ -510,14 +506,12 @@ export default function AdminDriversPage() {
             <MaterialIcon name="search" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              aria-label="Rechercher un chauffeur"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Rechercher un chauffeur..."
               className="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl text-sm"
             />
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="p-2.5 glass-card border border-white/5 rounded-xl hover:bg-white/5 text-slate-400 transition">
-              <MaterialIcon name="filter_list" size="sm" />
-            </button>
           </div>
         </div>
 
@@ -525,7 +519,7 @@ export default function AdminDriversPage() {
         <div className="glass-card border border-white/5 rounded-3xl overflow-hidden">
           {loading ? (
             <DriverSkeleton />
-          ) : drivers.length === 0 ? (
+          ) : filteredDrivers.length === 0 ? (
             <div className="py-24 text-center">
               <div className="inline-flex p-4 rounded-full bg-white/5 mb-4 text-slate-500">
                 <MaterialIcon name="person" size="xl" />
@@ -549,7 +543,7 @@ export default function AdminDriversPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {drivers.filter(d => driverTypeFilter === 'all' || (d.driverType ?? 'chauffeur') === driverTypeFilter).slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map((driver) => (
+                  {paginatedDrivers.map((driver) => (
                     <tr key={driver.id} className="group hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-4">
@@ -620,38 +614,27 @@ export default function AdminDriversPage() {
               {/* Pagination controls */}
               <div className="flex items-center justify-between px-6 py-4 border-t border-white/5">
                 <span className="text-xs text-slate-500">
-                  {drivers.length} chauffeur{drivers.length !== 1 ? 's' : ''} chargés
+                  {filteredDrivers.length} chauffeur{filteredDrivers.length !== 1 ? 's' : ''} affiché{filteredDrivers.length !== 1 ? 's' : ''}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                    disabled={currentPage === 0}
+                    disabled={safeCurrentPage === 0}
                     className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                     title="Page précédente"
                   >
                     <MaterialIcon name="chevron_left" size="sm" />
                   </button>
                   <span className="text-xs text-slate-400 px-2">
-                    {currentPage + 1} / {Math.ceil(drivers.length / PAGE_SIZE) || 1}
+                    {safeCurrentPage + 1} / {totalPages}
                   </span>
-                  {(currentPage + 1) * PAGE_SIZE < drivers.length ? (
+                  {safeCurrentPage + 1 < totalPages ? (
                     <button
                       onClick={() => setCurrentPage(p => p + 1)}
                       className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 transition-all"
                       title="Page suivante"
                     >
                       <MaterialIcon name="chevron_right" size="sm" />
-                    </button>
-                  ) : hasMore ? (
-                    <button
-                      onClick={() => {
-                        loadMore();
-                        setCurrentPage(p => p + 1);
-                      }}
-                      disabled={loadingMore}
-                      className="px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-xs font-semibold hover:bg-primary/20 transition-all disabled:opacity-50"
-                    >
-                      {loadingMore ? 'Chargement...' : 'Charger plus'}
                     </button>
                   ) : (
                     <button disabled className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 opacity-30 cursor-not-allowed">
