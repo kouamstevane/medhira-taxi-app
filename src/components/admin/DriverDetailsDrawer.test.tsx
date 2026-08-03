@@ -77,6 +77,8 @@ describe('DriverDetailsDrawer', () => {
 
     await user.click(screen.getByRole('button', { name: 'Approuver le profil' }));
     expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Approuver le profil' })).toHaveClass('from-primary', 'to-[#ffae33]', 'text-white');
+    expect(screen.getByText('Validation requise').parentElement).toHaveClass('text-primary');
 
     rerender(
       <DriverDetailsDrawer

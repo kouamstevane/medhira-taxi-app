@@ -231,7 +231,7 @@ export function DriverDetailsDrawer({
         <footer className="shrink-0 border-t border-white/10 bg-[#0d0d0d]/95 p-3 backdrop-blur-xl sm:p-4">
           {driver.status === 'pending' ? (
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-emerald-400">
+              <div className="flex items-center gap-2 text-primary">
                 <MaterialIcon name="verified_user" size="sm" />
                 <h3 className="text-sm font-bold">Validation requise</h3>
               </div>
@@ -250,7 +250,7 @@ export function DriverDetailsDrawer({
                     type="button"
                     onClick={onApprove}
                     disabled={processing}
-                    className="order-2 h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-3 text-[10px] font-black uppercase tracking-wider text-black shadow-[0_0_18px_rgba(16,185,129,0.18)] transition-all hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                    className="order-2 h-11 rounded-xl bg-gradient-to-r from-primary to-[#ffae33] px-3 text-[10px] font-black uppercase tracking-wider text-white shadow-[0_0_18px_rgba(242,146,0,0.22)] transition-all hover:brightness-110 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     {processing ? 'Traitement...' : 'Approuver le profil'}
                   </button>
