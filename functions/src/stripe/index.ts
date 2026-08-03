@@ -24,6 +24,7 @@ import { DRIVER_SHARE_RATE } from '../config/stripe.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { createStripeClient } from './stripe-client.js';
 import { buildDriverIndividualPrefill } from './driver-prefill.js';
+import { generatePersonalDriverTrips } from '../personalDriver/tripGeneration.js';
 
 // Type alias pour les événements Stripe (compatible Stripe v22 / NodeNext)
 type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;
@@ -280,7 +281,7 @@ export const stripeWebhookInstant = onRequest(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[stripeWebhookInstant] Erreur ${event.type}:`, msg);
-      res.json({ received: true, warning: msg });
+      res.status(500).json({ received: false, error: msg });
     }
   },
 );
@@ -450,6 +451,7 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
     const db = getDb();
     const subscriptionRef = db.collection('personal_driver_subscriptions').doc(metadata.subscriptionId);
     const notificationRef = db.collection('notifications').doc(`personal_driver_payment_${piId}`);
+    let subscriptionForTripGeneration: Parameters<typeof generatePersonalDriverTrips>[1] | null = null;
 
     await db.runTransaction(async (tx) => {
       const subscriptionSnap = await tx.get(subscriptionRef);
@@ -464,16 +466,22 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
         return;
       }
 
-      const canCapturePayment = subscription?.status === 'pending_payment' &&
-        (subscription.paymentStatus === PAYMENT_STATUS.AUTHORIZED || subscription.paymentStatus === 'pending');
-      if (!canCapturePayment) {
+      if (subscription?.status === 'active' && subscription.paymentStatus === 'succeeded') {
         console.warn(`[Webhook] personal_driver_subscription déjà traité: ${metadata.subscriptionId}`);
+        subscriptionForTripGeneration = {
+          ...subscription,
+          id: metadata.subscriptionId,
+        } as unknown as Parameters<typeof generatePersonalDriverTrips>[1];
         return;
       }
 
+      const canConfirmPayment = subscription?.status === 'pending_payment' &&
+        ['creating', 'pending', 'requires_action'].includes(subscription.paymentStatus);
+      if (!canConfirmPayment) return;
+
       tx.update(subscriptionRef, {
-        paymentStatus: PAYMENT_STATUS.CAPTURED,
-        status: 'pending_validation',
+        paymentStatus: 'succeeded',
+        status: 'active',
         stripeCustomerId: typeof pi.customer === 'string' ? pi.customer : subscription?.stripeCustomerId ?? null,
         defaultPaymentMethodId:
           typeof pi.payment_method === 'string'
@@ -481,11 +489,22 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
             : subscription?.defaultPaymentMethodId ?? null,
         paidAt: serverTS(),
       });
+      subscriptionForTripGeneration = {
+        ...subscription,
+        id: metadata.subscriptionId,
+        paymentStatus: 'succeeded',
+        status: 'active',
+        stripeCustomerId: typeof pi.customer === 'string' ? pi.customer : subscription?.stripeCustomerId ?? null,
+        defaultPaymentMethodId:
+          typeof pi.payment_method === 'string'
+            ? pi.payment_method
+            : subscription?.defaultPaymentMethodId ?? null,
+      } as unknown as Parameters<typeof generatePersonalDriverTrips>[1];
       tx.set(notificationRef, {
         notificationId: notificationRef.id,
         userId: metadata.userId,
         title: 'Paiement Personal Driver confirme',
-        body: 'Votre abonnement Personal Driver est en attente de validation.',
+        body: 'Votre abonnement Personal Driver est actif.',
         type: 'payment_received',
         metadata: {
           subscriptionId: metadata.subscriptionId,
@@ -495,6 +514,10 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
         createdAt: serverTS(),
       });
     });
+
+    if (subscriptionForTripGeneration) {
+      await generatePersonalDriverTrips(db, subscriptionForTripGeneration);
+    }
   }
 }
 
@@ -525,6 +548,22 @@ async function onPaymentIntentFailed(pi: Record<string, unknown>): Promise<void>
       stripePaymentIntentId: piId,
       createdAt:             serverTS(),
       updatedAt:             serverTS(),
+    });
+  }
+
+  if (metadata.purpose === 'personal_driver_subscription' && metadata.subscriptionId && metadata.userId) {
+    const subscriptionRef = db.collection('personal_driver_subscriptions').doc(metadata.subscriptionId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(subscriptionRef);
+      if (!snap.exists) return;
+      const subscription = snap.data();
+      if (subscription?.userId !== metadata.userId) return;
+      if (subscription.paymentStatus === 'succeeded') return;
+      tx.update(subscriptionRef, {
+        status: 'payment_failed',
+        paymentStatus: 'failed',
+        paymentError: errorMsg,
+      });
     });
   }
 }
@@ -560,6 +599,21 @@ async function onPaymentIntentCanceled(pi: Record<string, unknown>): Promise<voi
       tx.update(bookingRef, { paymentStatus: PAYMENT_STATUS.CANCELLED });
     });
   }
+
+  if (metadata.purpose === 'personal_driver_subscription' && metadata.subscriptionId && metadata.userId) {
+    const db = getDb();
+    const subscriptionRef = db.collection('personal_driver_subscriptions').doc(metadata.subscriptionId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(subscriptionRef);
+      if (!snap.exists) return;
+      const subscription = snap.data();
+      if (subscription?.userId !== metadata.userId || subscription.paymentStatus === 'succeeded') return;
+      tx.update(subscriptionRef, {
+        status: 'cancelled',
+        paymentStatus: 'cancelled',
+      });
+    });
+  }
 }
 
 async function onPaymentIntentRequiresAction(pi: Record<string, unknown>): Promise<void> {
@@ -573,6 +627,23 @@ async function onPaymentIntentRequiresAction(pi: Record<string, unknown>): Promi
       paymentStatus:             PAYMENT_STATUS.REQUIRES_ACTION,
       paymentActionRequired:     actionType ?? 'unknown',
       paymentActionRedirectUrl: redirectObj?.url ?? null,
+    });
+  }
+
+  if (metadata.purpose === 'personal_driver_subscription' && metadata.subscriptionId && metadata.userId) {
+    const db = getDb();
+    const subscriptionRef = db.collection('personal_driver_subscriptions').doc(metadata.subscriptionId);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(subscriptionRef);
+      if (!snap.exists) return;
+      const subscription = snap.data();
+      if (subscription?.userId !== metadata.userId || subscription.paymentStatus === 'succeeded') return;
+      tx.update(subscriptionRef, {
+        status: 'pending_payment',
+        paymentStatus: 'requires_action',
+        paymentActionRequired: actionType ?? 'unknown',
+        paymentActionRedirectUrl: redirectObj?.url ?? null,
+      });
     });
   }
 }

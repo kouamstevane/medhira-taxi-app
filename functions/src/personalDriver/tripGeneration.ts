@@ -4,7 +4,7 @@ import type { PersonalDriverPlanId, PersonalDriverWeekday } from './pricing.js';
 
 type PersonalDriverTripType = 'one_way' | 'round_trip';
 
-interface PersonalDriverTripGenerationSubscription {
+export interface PersonalDriverTripGenerationSubscription {
   id: string;
   userId: string;
   status: string;
@@ -15,7 +15,7 @@ interface PersonalDriverTripGenerationSubscription {
   selectedWeekdays: PersonalDriverWeekday[];
   tripType: PersonalDriverTripType;
   departureTime: string;
-  returnTime?: string;
+  returnTime?: string | null;
   pickupAddress: string;
   destinationAddress: string;
   selectedPlanId?: PersonalDriverPlanId;
@@ -39,7 +39,7 @@ export async function generatePersonalDriverTrips(
     selectedWeekdays: subscription.selectedWeekdays,
     tripType: subscription.tripType,
     departureTime: subscription.departureTime,
-    returnTime: subscription.returnTime,
+    returnTime: subscription.returnTime ?? undefined,
     pickupAddress: subscription.pickupAddress,
     destinationAddress: subscription.destinationAddress,
     planId: subscription.selectedPlanId ?? subscription.planId ?? 'basic',
