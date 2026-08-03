@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { getAdminHeaderNavItemClassName } from './adminHeaderUi';
 
 interface AdminHeaderProps {
   title: string;
@@ -38,11 +39,7 @@ export default function AdminHeader({ title, subtitle }: AdminHeaderProps) {
                 <button
                   key={item.href}
                   onClick={() => router.push(item.href)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 whitespace-nowrap ${
-                    isActive
-                      ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                      : 'glass-card text-slate-300 border border-white/10 hover:border-primary/50'
-                  }`}
+                  className={getAdminHeaderNavItemClassName(isActive)}
                 >
                   <MaterialIcon name={item.icon} size="sm" />
                   {item.label}

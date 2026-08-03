@@ -31,6 +31,22 @@ interface StatusResult {
 
 const FUNCTIONS_REGION = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      (reason) => {
+        clearTimeout(timeoutId);
+        reject(reason);
+      },
+    );
+  });
+}
+
 // Libellés FR pour les requirements Stripe (extensible — fallback = clé brute).
 const REQUIREMENT_LABELS: Record<string, string> = {
   'individual.id_number': 'Numéro d\'identification (NAS / SIN)',
@@ -60,13 +76,14 @@ function PaymentSetupContent() {
   const router = useRouter();
   const params = useSearchParams();
   const onboardingState = params.get('onboarding'); // 'success' | 'refresh' | null
-  const { currentUser, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
 
   const [statusData, setStatusData] = useState<StatusResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const browserListenerRef = useRef<{ remove: () => void } | null>(null);
+  const freshOnboardingStartedRef = useRef(false);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -77,7 +94,7 @@ function PaymentSetupContent() {
   }, []);
 
   const fetchStatus = useCallback(async () => {
-    const user = auth.currentUser || currentUser;
+    const user = auth.currentUser;
     if (!user) {
       if (!authLoading) {
         router.push('/driver/login');
@@ -87,11 +104,15 @@ function PaymentSetupContent() {
 
     setLoading(true);
     setError(null);
+    let initialStatus: StatusResult | null = null;
     try {
       // 1) Lecture Firestore directe pour affichage immédiat / fallback
-      let initialStatus: StatusResult | null = null;
       try {
-        const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
+        const driverDoc = await withTimeout(
+          getDoc(doc(db, 'drivers', user.uid)),
+          8000,
+          'Délai d\'attente dépassé lors de la lecture du compte Stripe.',
+        );
         if (driverDoc.exists()) {
           const d = driverDoc.data();
           const req = (d.requirements ?? {}) as Record<string, unknown>;
@@ -120,15 +141,19 @@ function PaymentSetupContent() {
 
       // 2) Rafraîchissement via Cloud Function avec race/timeout gracieux
       try {
-        await user.getIdToken(true);
+        await withTimeout(
+          user.getIdToken(true),
+          8000,
+          'Délai d\'attente dépassé lors de la vérification Stripe.',
+        );
         const fn = getFunctions(app, FUNCTIONS_REGION);
         const call = httpsCallable<unknown, StatusResult>(fn, 'getStripeAccountStatus');
 
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Délai d\'attente dépassé (timeout).')), 8000)
+        const res = await withTimeout(
+          call({}),
+          8000,
+          'Délai d\'attente dépassé lors de la vérification Stripe.',
         );
-
-        const res = (await Promise.race([call({}), timeoutPromise])) as { data: StatusResult };
         if (mountedRef.current && res?.data) {
           setStatusData(res.data);
         }
@@ -142,13 +167,13 @@ function PaymentSetupContent() {
     } catch (e: unknown) {
       const err = e as { message?: string };
       console.error('[PaymentSetup] fetch failed', err);
-      if (mountedRef.current && !statusData) {
+      if (mountedRef.current && !initialStatus) {
         setError(err.message || 'Impossible de récupérer le statut Stripe.');
       }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, [router, currentUser, authLoading, statusData]);
+  }, [router, authLoading]);
 
   useEffect(() => {
     fetchStatus();
@@ -211,6 +236,21 @@ function PaymentSetupContent() {
       if (mountedRef.current) setRetrying(false);
     }
   }, [statusData?.accountId, fetchStatus, router]);
+
+  useEffect(() => {
+    if (
+      onboardingState !== 'fresh' ||
+      authLoading ||
+      loading ||
+      !statusData ||
+      freshOnboardingStartedRef.current
+    ) {
+      return;
+    }
+
+    freshOnboardingStartedRef.current = true;
+    void handleResume();
+  }, [onboardingState, authLoading, loading, statusData, handleResume]);
 
   // États UI ----------------------------------------------------------------
 

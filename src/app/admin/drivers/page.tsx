@@ -30,6 +30,7 @@ import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
 import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary } from './adminDriversUi';
+import { buildAdminDriverActionPayload } from './adminDriversActions';
 
 export interface Driver {
   id: string;
@@ -251,7 +252,7 @@ export default function AdminDriversPage() {
         await reactivateDriver(driverId, adminUid);
       } else {
         const adminManageDriver = httpsCallable(functions, 'adminManageDriver');
-        await adminManageDriver({ action, driverId, reason });
+        await adminManageDriver(buildAdminDriverActionPayload(action, driverId, reason));
       }
 
       showSuccess(`Action "${action}" effectuée avec succès`);
