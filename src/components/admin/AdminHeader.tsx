@@ -32,28 +32,30 @@ export default function AdminHeader({ title, subtitle }: AdminHeaderProps) {
             <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mt-1">{subtitle}</p>
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <button
-                  key={item.href}
-                  onClick={() => router.push(item.href)}
-                  className={getAdminHeaderNavItemClassName(isActive)}
-                >
-                  <MaterialIcon name={item.icon} size="sm" />
-                  {item.label}
-                </button>
-              );
-            })}
-            <div className="w-px h-6 bg-white/10 mx-2 hidden md:block" />
+          <div className="flex min-w-0 items-center gap-2">
             <button
               onClick={() => router.push('/dashboard')}
-              className="group flex items-center gap-2 px-4 py-2 glass-card hover:bg-white/5 border border-white/10 text-slate-300 rounded-xl transition-all duration-300 whitespace-nowrap"
+              aria-label="Retourner au dashboard client"
+              className="group flex shrink-0 items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-slate-300 glass-card transition-all duration-300 hover:bg-white/5"
             >
-              <MaterialIcon name="chevron_left" size="sm" className="group-hover:-translate-x-1 transition-transform" />
+              <MaterialIcon name="home" size="sm" className="group-hover:-translate-y-0.5 transition-transform" />
               <span className="text-sm font-medium">Dashboard</span>
             </button>
+            <div data-testid="admin-navigation-scroll" className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-2 no-scrollbar md:pb-0">
+              {navItems.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <button
+                    key={item.href}
+                    onClick={() => router.push(item.href)}
+                    className={getAdminHeaderNavItemClassName(isActive)}
+                  >
+                    <MaterialIcon name={item.icon} size="sm" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
