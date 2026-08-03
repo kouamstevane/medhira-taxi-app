@@ -126,10 +126,10 @@ export function DriverDetailsDrawer({
       : 'Chauffeur';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-end" role="dialog" aria-modal="true" aria-labelledby="driver-details-title">
+    <div className="fixed inset-0 z-40 flex items-center justify-end" role="dialog" aria-modal="true" aria-labelledby="driver-details-title">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={onClose} aria-hidden="true" />
 
-      <aside className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-white/10 bg-[#0d0d0d] animate-in slide-in-from-right duration-500 motion-reduce:animate-none">
+      <aside className="relative flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-white/10 bg-[#0d0d0d] pb-20 animate-in slide-in-from-right duration-500 motion-reduce:animate-none">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/5 bg-[#0d0d0d]/90 p-4 backdrop-blur-xl sm:p-6">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-primary to-[#ffae33] text-base font-black text-black shadow-[0_0_18px_rgba(242,146,0,0.25)]">

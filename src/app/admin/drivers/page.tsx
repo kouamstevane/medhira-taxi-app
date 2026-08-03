@@ -29,7 +29,7 @@ import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
 import { DriverDetailsDrawer } from '@/components/admin/DriverDetailsDrawer';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
-import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary, isAdminBottomNavVisible } from './adminDriversUi';
+import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary } from './adminDriversUi';
 import { buildAdminDriverActionPayload } from './adminDriversActions';
 
 export interface Driver {
@@ -684,7 +684,7 @@ export default function AdminDriversPage() {
 
       {/* Action Decision Modal */}
       {actionModal.show && actionModal.driver && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setActionModal({ show: false, action: null, driver: null, reason: '' })} />
           <div className="relative glass-card border border-white/10 rounded-3xl max-w-md w-full p-8 animate-in zoom-in-95 duration-300">
             <div className="flex items-center gap-4 mb-6">
@@ -742,11 +742,7 @@ export default function AdminDriversPage() {
           driver={driverToDelete}
         />
       )}
-      {isAdminBottomNavVisible({
-        driverDetailsOpen: selectedDriver !== null,
-        actionModalOpen: actionModal.show,
-        deleteModalOpen,
-      }) && <BottomNav items={adminNavItems} />}
+      <BottomNav items={adminNavItems} />
     </div>
   );
 }

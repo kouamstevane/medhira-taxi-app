@@ -109,4 +109,11 @@ describe('DriverDetailsDrawer', () => {
     expect(screen.getByText('Aucun document numérique disponible.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Fermer les détails du chauffeur' })).toBeInTheDocument();
   });
+
+  it('keeps the fixed navigation layer above the drawer without covering its footer', () => {
+    render(<DriverDetailsDrawer {...makeProps()} />);
+
+    expect(screen.getByRole('dialog')).toHaveClass('z-40');
+    expect(screen.getByRole('complementary')).toHaveClass('pb-20');
+  });
 });

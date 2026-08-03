@@ -11,15 +11,3 @@ export function getPendingApplicationsSummary(count: number): string {
     ? 'Aucune candidature en attente'
     : `${count} candidature${count === 1 ? '' : 's'} nécessitent votre attention`;
 }
-
-export function isAdminBottomNavVisible({
-  driverDetailsOpen,
-  actionModalOpen,
-  deleteModalOpen,
-}: {
-  driverDetailsOpen: boolean;
-  actionModalOpen: boolean;
-  deleteModalOpen: boolean;
-}): boolean {
-  return !driverDetailsOpen && !actionModalOpen && !deleteModalOpen;
-}
