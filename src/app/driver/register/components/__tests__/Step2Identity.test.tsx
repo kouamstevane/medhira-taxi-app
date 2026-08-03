@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { Capacitor } from '@capacitor/core';
+import { LocationSettings } from '@/plugins/location-settings';
 import Step2Identity from '../Step2Identity';
 
 jest.mock('@capacitor/camera', () => ({
@@ -8,7 +10,10 @@ jest.mock('@capacitor/camera', () => ({
 }));
 
 jest.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: jest.fn(() => false) },
+  Capacitor: {
+    isNativePlatform: jest.fn(() => false),
+    getPlatform: jest.fn(() => 'web'),
+  },
 }));
 
 jest.mock('@/hooks/useToast', () => ({
@@ -21,6 +26,20 @@ jest.mock('@/hooks/useGoogleMaps', () => ({
   useGoogleMaps: () => ({
     autocompleteService: null,
   }),
+}));
+
+var mockGetCurrentPosition = jest.fn();
+
+jest.mock('@/hooks/useCapacitorGeolocation', () => ({
+  useCapacitorGeolocation: () => ({
+    getCurrentPosition: mockGetCurrentPosition,
+  }),
+}));
+
+jest.mock('@/plugins/location-settings', () => ({
+  LocationSettings: {
+    open: jest.fn(),
+  },
 }));
 
 jest.mock('@/app/taxi/components/AddressInput', () => ({
@@ -41,6 +60,10 @@ describe('Step2Identity', () => {
   beforeEach(() => {
     URL.createObjectURL = jest.fn(() => 'blob:test-photo');
     URL.revokeObjectURL = jest.fn();
+    mockGetCurrentPosition.mockReset();
+    (LocationSettings.open as jest.Mock).mockReset();
+    (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(false);
+    (Capacitor.getPlatform as jest.Mock).mockReturnValue('web');
   });
 
   afterEach(() => {
@@ -112,23 +135,11 @@ describe('Step2Identity', () => {
   });
 
   it('does not show a success text after using current location', async () => {
-    Object.defineProperty(global.navigator, 'geolocation', {
-      configurable: true,
-      value: {
-        getCurrentPosition: (success: (position: GeolocationPosition) => void) =>
-          success({
-            coords: {
-              latitude: 4.0511,
-              longitude: 9.7679,
-              accuracy: 1,
-              altitude: null,
-              altitudeAccuracy: null,
-              heading: null,
-              speed: null,
-            },
-            timestamp: Date.now(),
-          } as GeolocationPosition),
-      },
+    mockGetCurrentPosition.mockResolvedValue({
+      lat: 4.0511,
+      lng: 9.7679,
+      accuracy: 1,
+      timestamp: Date.now(),
     });
 
     Object.defineProperty(global.window, 'google', {
@@ -162,8 +173,67 @@ describe('Step2Identity', () => {
 
     await waitFor(() => {
       expect(screen.queryByText(/Position détectée et adresse remplie automatiquement/i)).not.toBeInTheDocument();
+      expect(screen.getByDisplayValue('Douala')).toBeInTheDocument();
     });
   });
+
+  it('uses the shared Capacitor geolocation service for the current location', async () => {
+    const browserPosition = {
+      coords: {
+        latitude: 4.0511,
+        longitude: 9.7679,
+        accuracy: 1,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+      },
+      timestamp: Date.now(),
+    } as GeolocationPosition;
+    const nativeLocation = {
+      lat: browserPosition.coords.latitude,
+      lng: browserPosition.coords.longitude,
+      accuracy: browserPosition.coords.accuracy,
+      timestamp: browserPosition.timestamp,
+    };
+    mockGetCurrentPosition.mockResolvedValue(nativeLocation);
+
+    Object.defineProperty(global.navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        getCurrentPosition: jest.fn(),
+      },
+    });
+
+    render(<Step2Identity onNext={jest.fn()} onBack={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /utiliser ma position/i }));
+
+    await waitFor(() => {
+      expect(mockGetCurrentPosition).toHaveBeenCalledWith('booking', false);
+    });
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('explains when Android location services are disabled and opens their settings', async () => {
+    (Capacitor.isNativePlatform as jest.Mock).mockReturnValue(true);
+    (Capacitor.getPlatform as jest.Mock).mockReturnValue('android');
+    mockGetCurrentPosition.mockRejectedValue(new Error('Location services are not enabled.'));
+
+    render(<Step2Identity onNext={jest.fn()} onBack={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /utiliser ma position/i }));
+
+    const settingsButton = await screen.findByRole('button', { name: /activer la localisation/i });
+    expect(screen.getByText(/services de localisation sont désactivés/i)).toBeInTheDocument();
+
+    fireEvent.click(settingsButton);
+
+    await waitFor(() => {
+      expect(LocationSettings.open).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('submits the form even when the detected address has no zip code', async () => {
     const onNext = jest.fn();
     const photo = new File(['photo'], 'biometric.jpg', { type: 'image/jpeg' });

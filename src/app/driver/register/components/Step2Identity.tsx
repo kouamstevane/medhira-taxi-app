@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/useToast';
 import { InputField } from '@/components/forms/InputField';
 import { ERROR_MESSAGES } from '@/utils/constants';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { LocationSettings } from '@/plugins/location-settings';
 import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { PlaceSuggestion } from '@/types';
 import { isValidPhoneNumber } from '@/lib/validation';
@@ -104,6 +106,7 @@ function parseCountryFields(addressComponents: google.maps.GeocoderAddressCompon
 export default function Step2Identity({ onNext, onBack, initialData, initialPhoto, loading }: Step2IdentityProps) {
   const { showError } = useToast();
   const { autocompleteService } = useGoogleMaps();
+  const { getCurrentPosition } = useCapacitorGeolocation();
 
   const { register, handleSubmit, formState: { errors }, setValue, watch } = useForm<Step2FormData>({
     mode: 'onBlur',
@@ -136,6 +139,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
   const phoneAutoDetectRef = useRef(false);
   const [locationFeedback, setLocationFeedback] = useState<LocationFeedback>(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [canOpenLocationSettings, setCanOpenLocationSettings] = useState(false);
 
   const applyPhonePrefix = useCallback((countryCode?: string | null, force = false) => {
     const nextPrefix = getDialCodeForCountryCode(countryCode);
@@ -257,20 +261,11 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
 
   const handleUseCurrentLocation = useCallback(async () => {
     setLocationFeedback(null);
+    setCanOpenLocationSettings(false);
     setIsLocating(true);
 
     try {
-      if (typeof navigator === 'undefined' || !navigator.geolocation) {
-        throw new Error("La géolocalisation n'est pas disponible sur cet appareil.");
-      }
-
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 30000,
-        });
-      });
+      const position = await getCurrentPosition('booking', false);
 
       if (!window.google?.maps?.Geocoder) {
         throw new Error('Google Maps est indisponible pour convertir votre position en adresse.');
@@ -279,7 +274,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
       const geocoder = new window.google.maps.Geocoder();
       const result = await new Promise<google.maps.GeocoderResult>((resolve, reject) => {
         geocoder.geocode(
-          { location: { lat: position.coords.latitude, lng: position.coords.longitude } },
+          { location: { lat: position.lat, lng: position.lng } },
           (results, status) => {
             if (status === 'OK' && results && results.length > 0) {
               resolve(results[0]);
@@ -296,13 +291,26 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
       );
       setLocationFeedback({ type: 'success', message: 'Position détectée et adresse remplie automatiquement.' });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "Impossible d'obtenir votre position.";
+      const rawMessage = error instanceof Error ? error.message : "Impossible d'obtenir votre position.";
+      const locationServicesDisabled = /location services are not enabled/i.test(rawMessage);
+      const message = locationServicesDisabled
+        ? 'Les services de localisation sont désactivés. Activez la localisation de votre téléphone, puis réessayez.'
+        : rawMessage;
+      setCanOpenLocationSettings(locationServicesDisabled && Capacitor.getPlatform() === 'android');
       setLocationFeedback({ type: 'error', message });
       showError(message);
     } finally {
       setIsLocating(false);
     }
-  }, [applyCountryFields, showError]);
+  }, [applyCountryFields, getCurrentPosition, showError]);
+
+  const handleOpenLocationSettings = useCallback(async () => {
+    try {
+      await LocationSettings.open();
+    } catch {
+      showError('Impossible d’ouvrir les réglages de localisation. Activez la localisation depuis les réglages Android.');
+    }
+  }, [showError]);
 
   const phoneCountry = getCountryByDialCode(phonePrefix);
   const phonePlaceholder = phoneCountry
@@ -599,9 +607,18 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                 Utiliser ma position
               </button>
               {locationFeedback?.type === 'error' && (
-                <p className={`mt-2 text-sm ${locationFeedback.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {locationFeedback.message}
-                </p>
+                <div className="mt-2 space-y-2">
+                  <p className="text-sm text-red-400">{locationFeedback.message}</p>
+                  {canOpenLocationSettings && (
+                    <button
+                      type="button"
+                      onClick={handleOpenLocationSettings}
+                      className="text-sm font-semibold text-[#f29200] underline underline-offset-4"
+                    >
+                      Activer la localisation
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
