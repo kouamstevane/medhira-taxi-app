@@ -7,6 +7,7 @@ import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { deleteDriverCompletely } from './driverDeletion.js';
 import { sendDriverStatusEmail } from '../email-service.js';
 import { getDriverRejectionReason } from './adminDriverRejection.js';
+import { syncDriverApplicationStatus } from './driverApplicationSync.js';
 
 const resendApiKey = defineSecret('RESEND_API_KEY');
 const CANONICAL_DRIVER_DOCUMENT_KEYS = [
@@ -86,6 +87,27 @@ export const adminManageDriver = onCall(
       `${driverData?.firstName || ''} ${driverData?.lastName || ''}`.trim() ||
       'Chauffeur';
 
+    const syncApplicationReview = async (
+      status: 'approved' | 'rejected',
+      reviewReason?: string,
+    ) => {
+      try {
+        await syncDriverApplicationStatus({
+          driverEmail,
+          driverId,
+          adminUid: uid,
+          status,
+          reason: reviewReason,
+        });
+      } catch (error) {
+        console.warn('[adminManageDriver] Failed to synchronize driver application', {
+          driverId,
+          status,
+          error,
+        });
+      }
+    };
+
     const notifyDriver = async (
       type:
         | 'approval'
@@ -129,6 +151,7 @@ export const adminManageDriver = onCall(
         } catch (e) {
           console.warn('[adminManageDriver] Failed to write roles.driver on user', { driverId, error: e });
         }
+        await syncApplicationReview('approved');
         await notifyDriver('approval');
         return { success: true, message: 'Chauffeur approuvé avec succès' };
 
@@ -143,6 +166,7 @@ export const adminManageDriver = onCall(
             rejectedBy: uid,
             updatedAt: now,
           });
+          await syncApplicationReview('rejected', driverRejectionReason);
           await notifyDriver('rejection', driverRejectionReason);
           return { success: true, message: 'Chauffeur refusé' };
         }
