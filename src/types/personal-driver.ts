@@ -3,10 +3,18 @@ export type PersonalDriverTripType = 'one_way' | 'round_trip';
 export type PersonalDriverWeekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type PersonalDriverSubscriptionStatus =
   | 'pending_payment'
-  | 'pending_validation'
   | 'active'
+  | 'payment_failed'
   | 'cancelled'
   | 'expired';
+export type PersonalDriverPaymentStatus =
+  | 'creating'
+  | 'pending'
+  | 'requires_action'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+export type PersonalDriverTaxStatus = 'pending_confirmation';
 export type PersonalDriverTripStatus =
   | 'scheduled'
   | 'driver_assigned'
@@ -61,13 +69,25 @@ export interface PersonalDriverSubscription {
   planId?: PersonalDriverPlanId;
   selectedPlanId: PersonalDriverPlanId;
   status: PersonalDriverSubscriptionStatus;
+  paymentStatus?: PersonalDriverPaymentStatus;
   startDate: string;
   endDate: string;
+  periodStartDate?: string;
+  periodEndDateExclusive?: string;
+  periodStartAtUtc?: string | Date | { toDate: () => Date };
+  periodEndAtUtc?: string | Date | { toDate: () => Date };
+  serviceTimeZone?: string;
+  pickupLocation?: {
+    latitude: number;
+    longitude: number;
+  };
   monthlyDistanceKm: number;
   monthlyDistanceKmRemaining?: number;
   specialTripsDistanceUsedKm?: number;
   totalPriceBeforeTax?: number;
   totalPriceWithTax?: number;
+  taxStatus?: PersonalDriverTaxStatus;
+  taxAmount?: number;
   totalAmount: number;
   currency: string;
   includedSpecialTrips: number;
@@ -81,6 +101,7 @@ export interface PersonalDriverSubscription {
   returnTime?: string;
   passengerCount: number;
   notes?: string;
+  paidAt?: string | Date | { toDate: () => Date };
   createdAt: string | Date | { toDate: () => Date };
 }
 
@@ -100,10 +121,13 @@ export interface PersonalDriverTrip {
   assignedDriverName?: string;
   assignedVehicleId: string | null;
   driverArrivedAtIso?: string;
+  waitStartedAt?: string | Date | { toDate: () => Date };
+  waitEndedAt?: string | Date | { toDate: () => Date };
   waitTimeMinutes?: number;
   overageWaitMinutes?: number;
   overageWaitFeeAmount?: number;
   overageWaitBilled?: boolean;
+  overageChargeStatus?: 'processing' | 'billed' | 'failed' | 'review_required';
   cancelledBy?: 'client' | 'driver' | 'admin';
   clientCancelledLostKm?: boolean;
   driverAlertFlagged?: boolean;
