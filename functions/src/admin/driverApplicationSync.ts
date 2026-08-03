@@ -31,24 +31,25 @@ export async function syncDriverApplicationStatus(input: {
   if (!email) return 0;
 
   const firestore = admin.firestore();
-  const snapshot = await firestore.collection('driverApplications').where('email', '==', email).get();
-  const batch = firestore.batch();
+  const snapshot = await firestore.collection('driverApplications').where('status', '==', 'pending_review').get();
   const reviewUpdate = buildDriverApplicationReviewUpdate(input);
-  const timestamps = {
-    reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-  let updatedCount = 0;
+  const matchingApplications = snapshot.docs.filter((application) => (
+    normalizeDriverApplicationEmail(application.data().email) === email
+  ));
 
-  snapshot.docs.forEach((application) => {
-    if (application.data().status !== 'pending_review') return;
-    batch.update(application.ref, { ...reviewUpdate, ...timestamps });
-    updatedCount += 1;
-  });
+  for (let offset = 0; offset < matchingApplications.length; offset += 450) {
+    const batch = firestore.batch();
+    const timestamps = {
+      reviewedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
 
-  if (updatedCount > 0) {
+    matchingApplications.slice(offset, offset + 450).forEach((application) => {
+      batch.update(application.ref, { ...reviewUpdate, ...timestamps });
+    });
+
     await batch.commit();
   }
 
-  return updatedCount;
+  return matchingApplications.length;
 }
