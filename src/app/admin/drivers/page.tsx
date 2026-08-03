@@ -24,9 +24,9 @@ import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('AdminDrivers');
 import type { DriverDeletionResult } from '@/utils/driver-deletion.service';
-import Image from 'next/image';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
+import { DriverDetailsDrawer } from '@/components/admin/DriverDetailsDrawer';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
 import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary } from './adminDriversUi';
@@ -665,225 +665,21 @@ export default function AdminDriversPage() {
         </div>
       </main>
 
-      {/* Modern Side Modal (Drawer style) for Details */}
       {selectedDriver && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end">
-          {/* Overlay */}
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
-            onClick={() => { setSelectedDriver(null); setRejectionReason(''); }}
-          />
-
-          {/* Content */}
-          <div className="relative h-full w-full max-w-2xl bg-[#0d0d0d] border-l border-white/10 overflow-y-auto animate-in slide-in-from-right duration-500">
-            <div className="sticky top-0 z-50 bg-[#0d0d0d]/80 backdrop-blur-xl border-b border-white/5 p-6 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-primary to-[#ffae33] flex items-center justify-center text-black font-black text-xl shadow-[0_0_20px_rgba(242,146,0,0.3)]">
-                  {selectedDriver.firstName[0]}{selectedDriver.lastName[0]}
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold text-white">{selectedDriver.firstName} {selectedDriver.lastName}</h2>
-                  <div className="flex items-center gap-2">
-                    {getStatusBadge(selectedDriver.status)}
-                    <span className="text-[10px] text-slate-500 font-mono">ID: {selectedDriver.id.substring(0, 8)}...</span>
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => { setSelectedDriver(null); setRejectionReason(''); }}
-                className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors"
-              >
-                <MaterialIcon name="cancel" size="lg" className="text-slate-400" />
-              </button>
-            </div>
-
-            <div className="p-8 space-y-12">
-              {/* Informations Personnelles */}
-              <section>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                    <MaterialIcon name="person" size="md" />
-                  </div>
-                  <h3 className="text-lg font-bold text-white">Informations Personnelles</h3>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 p-6 bg-white/[0.02] border border-white/5 rounded-2xl">
-                  {[
-                    { label: 'Prénom', value: selectedDriver.firstName },
-                    { label: 'Nom', value: selectedDriver.lastName },
-                    { label: 'Email', value: selectedDriver.email },
-                    { label: 'Téléphone', value: (selectedDriver.phone || selectedDriver.phoneNumber) },
-                    { label: 'Numéro de permis', value: (selectedDriver.licenseNumber || 'Non renseigné') },
-                    { label: 'Classe de permis', value: (selectedDriverPrivate?.licenseClass || 'Non renseignée') },
-                    { label: 'Numéro fiscal / SIRET', value: (selectedDriverPrivate?.taxId || 'Non renseigné') },
-                    { label: 'Adresse de résidence', value: (selectedDriverPrivate?.address || 'Non renseignée') },
-                    { label: 'Ville', value: (selectedDriver.city || 'Non renseignée') },
-                    { label: 'Code Postal', value: (selectedDriver.zipCode || 'Non renseigné') },
-                    { label: 'Province', value: (selectedDriverPrivate?.province || 'Non renseignée') },
-                    { label: 'Pays', value: (selectedDriverPrivate?.country || 'Non renseigné') },
-                  ].map((item, idx) => (
-                    <div key={idx}>
-                      <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{item.label}</span>
-                      <p className="text-sm text-slate-300 font-medium">{item.value || 'N/A'}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Informations Véhicule */}
-              <section>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                    <MaterialIcon name="directions_car" size="md" />
-                  </div>
-                  <h3 className="text-lg font-bold text-white">Véhicule</h3>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 p-6 bg-white/[0.02] border border-white/5 rounded-2xl">
-                  {[
-                    { label: 'Marque/Modèle', value: (selectedDriver.car?.brand ? `${selectedDriver.car.brand} ${selectedDriver.car.model}` : (selectedDriver.car?.model || selectedDriver.carModel)) },
-                    { label: 'Plaque d\'immatriculation', value: (selectedDriver.car?.plate || selectedDriver.carPlate) },
-                    { label: 'Couleur', value: (selectedDriver.car?.color || selectedDriver.carColor) },
-                    { label: 'Déclaration 4 portes VTC', value: (selectedDriverPrivate?.hasFourDoors ? 'Oui, certifié' : 'Non') },
-                  ].map((item, idx) => (
-                    <div key={idx}>
-                      <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">{item.label}</span>
-                      <p className="text-sm text-slate-300 font-medium">{item.value || 'N/A'}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              {/* Documents */}
-              <section>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                    <MaterialIcon name="description" size="md" />
-                  </div>
-                  <h3 className="text-lg font-bold text-white">Documents Officiels</h3>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {(() => {
-                    const pd = selectedDriverPrivate?.documents ?? {};
-                    const urlOf = (key: string): string | undefined => {
-                      const v = pd[key];
-                      if (!v) return undefined;
-                      if (typeof v === 'string') return v || undefined;
-                      return v.url ?? undefined;
-                    };
-                    return [
-                      { label: 'Photo de profil', src: urlOf('biometricPhoto'), id: 'biometricPhoto' },
-                      { label: 'Admissibilité au travail', src: urlOf('workEligibility'), id: 'workEligibility' },
-                      { label: 'Dossier de conduite', src: urlOf('driversAbstract'), id: 'driversAbstract' },
-                      { label: 'Permis (Recto)', src: urlOf('licenseFront') || urlOf('licensePhoto'), id: 'licensePhoto' },
-                      { label: 'Permis (Verso)', src: urlOf('licenseBack'), id: 'licenseBack' },
-                      { label: 'Carte grise', src: urlOf('carRegistration'), id: 'carRegistration' },
-                      { label: 'Assurance', src: urlOf('insurance'), id: 'insurance' },
-                      { label: 'Contrôle Technique', src: urlOf('techControl'), id: 'techControl' },
-                      { label: 'Véhicule (Extérieur)', src: urlOf('vehicleExterior'), id: 'vehicleExterior' },
-                    ];
-                  })().map((doc, idx) => doc.src ? (
-                    <div key={idx} className="group flex flex-col gap-2">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{doc.label}</span>
-                      <div className="relative aspect-[4/3] rounded-2xl overflow-hidden border border-white/10 bg-white/5 ring-1 ring-white/5 hover:ring-primary/50 transition-all duration-300">
-                        <a href={doc.src} target="_blank" rel="noopener noreferrer" className="block h-full w-full">
-                          <Image
-                            src={doc.src}
-                            alt={doc.label}
-                            fill
-                            className="object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity backdrop-blur-[2px]">
-                            <span className="px-4 py-2 bg-white/10 backdrop-blur-md rounded-xl text-xs font-bold border border-white/20">Agrandir</span>
-                          </div>
-                        </a>
-                      </div>
-                    </div>
-                  ) : null)}
-                </div>
-
-                {(!selectedDriverPrivate?.documents || Object.values(selectedDriverPrivate.documents).every(v => {
-                  if (!v) return true;
-                  if (typeof v === 'string') return !v;
-                  return !v.url;
-                })) && (
-                  <div className="p-8 text-center bg-white/5 border border-white/10 rounded-2xl">
-                    <p className="text-slate-500 text-sm">Aucun document numérique disponible.</p>
-                  </div>
-                )}
-              </section>
-
-              {/* Actions Section */}
-              <div className="pt-8 border-t border-white/10">
-                {selectedDriver.status === 'pending' ? (
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-3">
-                      <MaterialIcon name="verified_user" size="md" className="text-emerald-500" />
-                      <h3 className="text-lg font-bold text-emerald-500">Validation Requise</h3>
-                    </div>
-
-                    <div className="flex flex-col gap-4">
-                      <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
-                        <p className="text-xs text-emerald-400 mb-4 font-medium italic">
-                          En approuvant ce chauffeur, il sera immédiatement autorisé à accepter des courses.
-                        </p>
-                        <button
-                          onClick={() => handleAdminAction('approve', selectedDriver.id)}
-                          disabled={processing === selectedDriver.id}
-                          className="w-full h-14 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-black font-black uppercase tracking-wider rounded-2xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
-                        >
-                          {processing === selectedDriver.id ? 'Traitement en cours...' : 'Approuver le profil'}
-                        </button>
-                      </div>
-
-                      <div className="p-4 bg-rose-500/5 border border-rose-500/10 rounded-2xl space-y-4">
-                        <textarea
-                          value={rejectionReason}
-                          onChange={(e) => setRejectionReason(e.target.value)}
-                          placeholder="Motif détaillé du refus..."
-                          className="glass-input w-full p-4 rounded-2xl text-sm min-h-[100px]"
-                        />
-                        <button
-                          onClick={() => handleAdminAction('reject', selectedDriver.id, rejectionReason.trim())}
-                          disabled={processing === selectedDriver.id || !rejectionReason.trim()}
-                          className="w-full h-12 bg-white/5 hover:bg-rose-500/10 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 text-slate-400 font-bold uppercase text-xs tracking-widest rounded-2xl transition-all disabled:opacity-50"
-                        >
-                          {processing === selectedDriver.id ? 'Traitement...' : 'Refuser l\'inscription'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <h3 className="text-lg font-bold text-white">Options Administratives</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      {selectedDriver.isSuspended ? (
-                        <button
-                          onClick={() => handleAdminAction('unsuspend', selectedDriver.id)}
-                          className="h-12 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-bold transition-all uppercase tracking-widest"
-                        >
-                          Lever la suspension
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setActionModal({ show: true, action: 'suspend', driver: selectedDriver, reason: '' })}
-                          className="h-12 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 rounded-xl text-xs font-bold transition-all uppercase tracking-widest"
-                        >
-                          Suspendre
-                        </button>
-                      )}
-                      <button
-                        onClick={() => openDeleteModal(selectedDriver)}
-                        className="h-12 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-xl text-xs font-bold transition-all uppercase tracking-widest"
-                      >
-                        Suppression Définitive
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <DriverDetailsDrawer
+          driver={selectedDriver}
+          privateData={selectedDriverPrivate}
+          rejectionReason={rejectionReason}
+          processing={processing === selectedDriver.id}
+          onClose={() => { setSelectedDriver(null); setRejectionReason(''); }}
+          onRejectionReasonChange={setRejectionReason}
+          onApprove={() => handleAdminAction('approve', selectedDriver.id)}
+          onReject={() => handleAdminAction('reject', selectedDriver.id, rejectionReason.trim())}
+          onSuspend={() => setActionModal({ show: true, action: 'suspend', driver: selectedDriver, reason: '' })}
+          onUnsuspend={() => handleAdminAction('unsuspend', selectedDriver.id)}
+          onDelete={() => openDeleteModal(selectedDriver)}
+          getStatusBadge={getStatusBadge}
+        />
       )}
 
       {/* Action Decision Modal */}
