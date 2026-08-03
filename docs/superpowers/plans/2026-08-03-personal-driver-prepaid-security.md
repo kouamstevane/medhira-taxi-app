@@ -12,7 +12,9 @@
 
 - Personal Driver is a prepaid package, not a recurring Stripe subscription.
 - Each package is valid for exactly 30 calendar days using an inclusive start and exclusive end boundary.
-- A package is usable only when `status === 'active'`, payment is confirmed, and the current market date is before `periodEndDateExclusive`.
+- A package is usable only when `status === 'active'`, `paymentStatus === 'succeeded'`, and the current UTC instant is before `periodEndAtUtc` derived from the persisted `serviceTimeZone`.
+- `status` is `pending_payment | active | payment_failed | cancelled | expired`; `paymentStatus` is `creating | pending | requires_action | succeeded | failed | cancelled`.
+- The package timezone is resolved server-side from the authoritative pickup location and persisted as an IANA `serviceTimeZone`; no Cloud Function runtime timezone is authoritative.
 - The administrator never validates distances, trips, payments, or subscriptions; successful Stripe payment activates the package automatically.
 - Tax remains `taxStatus: 'pending_confirmation'`, `taxAmount: 0`, and the charged amount is the confirmed pre-tax subtotal.
 - Client-provided distance fields are informational and never determine payment or quota deduction.
@@ -28,6 +30,7 @@
 Create these focused backend units:
 
 - `functions/src/personalDriver/period.ts`: calendar-date parsing, 30-day exclusive boundary, weekday occurrence counting, and market-date normalization.
+- `functions/src/personalDriver/locationTimeZone.ts`: server-side address resolution, pickup coordinates, Google Time Zone API lookup, and IANA timezone-to-UTC conversion.
 - `functions/src/personalDriver/entitlement.ts`: fail-closed subscription entitlement checks and transactional expiry.
 - `functions/src/personalDriver/routeDistance.ts`: server-only Google Distance Matrix route calculation used by Personal Driver.
 - `functions/src/personalDriver/tripGeneration.ts`: deterministic, idempotent trip draft generation after payment success.
@@ -75,17 +78,22 @@ Extend these tests:
 
 **Files:**
 - Create: `functions/src/personalDriver/period.ts`
+- Create: `functions/src/personalDriver/locationTimeZone.ts`
 - Create: `functions/src/personalDriver/entitlement.ts`
 - Create: `functions/src/personalDriver/__tests__/period.test.ts`
+- Create: `functions/src/personalDriver/__tests__/locationTimeZone.test.ts`
 - Create: `functions/src/personalDriver/__tests__/entitlement.test.ts`
 - Modify: `src/types/personal-driver.ts`
 
 **Interfaces:**
 - `getPeriodEndDateExclusive(startDate: string): string`
 - `countWeekdayOccurrences(startDate: string, periodEndDateExclusive: string, weekdays: readonly number[]): number`
-- `isSubscriptionEntitled(data: FirebaseFirestore.DocumentData | undefined, marketDate: string): boolean`
-- `expireSubscriptionIfNeeded(db, subscriptionRef, marketDate): Promise<boolean>`
-- `PersonalDriverPaymentStatus = 'creating_payment' | 'pending' | 'authorized' | 'captured' | 'succeeded' | 'failed' | 'cancelled' | 'requires_action'`
+- `resolvePickupLocationAndTimeZone(address: string, referenceInstant: Date): Promise<{ latitude: number; longitude: number; serviceTimeZone: string }>`
+- `localDateTimeToUtc(localDate: string, localTime: string, serviceTimeZone: string): Date`
+- `isSubscriptionEntitled(data: FirebaseFirestore.DocumentData | undefined, nowUtc: Date): boolean`
+- `expireSubscriptionIfNeeded(db, subscriptionRef, nowUtc: Date): Promise<boolean>`
+- `PersonalDriverSubscriptionStatus = 'pending_payment' | 'active' | 'payment_failed' | 'cancelled' | 'expired'`
+- `PersonalDriverPaymentStatus = 'creating' | 'pending' | 'requires_action' | 'succeeded' | 'failed' | 'cancelled'`
 
 - [ ] **Step 1: Write failing pure period tests**
 
@@ -109,38 +117,48 @@ Expected: FAIL because `period.ts` and its exported functions do not exist.
 
 - [ ] **Step 3: Implement the period helpers**
 
-Use calendar components, not `Date.now()` or a millisecond duration, so February and daylight-saving boundaries remain calendar-correct. Reject malformed dates and duplicate/out-of-range weekdays with ordinary `Error` values; callables will translate them to `HttpsError('invalid-argument', ...)`.
+Use calendar components in the persisted IANA `serviceTimeZone`, not `Date.now()` or a fixed millisecond duration, so February and daylight-saving boundaries remain calendar-correct. Persist both local calendar boundaries and UTC instants. Reject malformed dates and duplicate/out-of-range weekdays with ordinary `Error` values; callables will translate them to `HttpsError('invalid-argument', ...)`.
 
-- [ ] **Step 4: Write failing entitlement tests**
+- [ ] **Step 4: Write failing location/timezone tests**
+
+Mock server geocoding and Time Zone API responses. Assert that the server resolves the pickup address, sends latitude/longitude plus a timestamp to Time Zone API, persists the returned IANA `timeZoneId`, rejects an unresolved/ambiguous address, and converts a local midnight boundary using the timezone rules rather than a fixed offset.
+
+- [ ] **Step 5: Implement location and timezone resolution**
+
+Use the server Google secret, never client coordinates. Extract the authoritative latitude/longitude from the server geocoder, call the Time Zone API, require `status === 'OK'` and a valid IANA `timeZoneId`, and fail closed otherwise. Use the IANA identifier with the runtime timezone database for local date/time-to-UTC conversion; do not treat `rawOffset` as a permanent offset. The API requires the Time Zone API to be enabled and billing configured, so missing configuration is an explicit failed precondition.
+
+- [ ] **Step 6: Write failing entitlement tests**
 
 ```ts
 it('requires active status, confirmed payment, complete period, and current date', () => {
   const valid = {
-    status: 'active', paymentStatus: 'captured',
-    periodStartDate: '2026-07-01', periodEndDateExclusive: '2026-07-31',
+    status: 'active', paymentStatus: 'succeeded',
+    periodStartAtUtc: new Date('2026-07-01T04:00:00.000Z'),
+    periodEndAtUtc: new Date('2026-07-31T04:00:00.000Z'),
   };
-  expect(isSubscriptionEntitled(valid, '2026-07-30')).toBe(true);
-  expect(isSubscriptionEntitled(valid, '2026-07-31')).toBe(false);
-  expect(isSubscriptionEntitled({ ...valid, paymentStatus: 'pending' }, '2026-07-30')).toBe(false);
-  expect(isSubscriptionEntitled({ status: 'active' }, '2026-07-30')).toBe(false);
+  expect(isSubscriptionEntitled(valid, new Date('2026-07-01T03:59:59.000Z'))).toBe(false);
+  expect(isSubscriptionEntitled(valid, new Date('2026-07-30T12:00:00.000Z'))).toBe(true);
+  expect(isSubscriptionEntitled(valid, new Date('2026-07-31T04:00:00.000Z'))).toBe(false);
+  expect(isSubscriptionEntitled({ ...valid, paymentStatus: 'pending' }, new Date('2026-07-30T12:00:00.000Z'))).toBe(false);
+  expect(isSubscriptionEntitled({ status: 'active' }, new Date('2026-07-30T12:00:00.000Z'))).toBe(false);
 });
 ```
 
-- [ ] **Step 5: Implement fail-closed entitlement and expiry**
+- [ ] **Step 7: Implement fail-closed entitlement and expiry**
 
-`expireSubscriptionIfNeeded` must read the document in a transaction, change only `active` records whose `periodEndDateExclusive <= marketDate` to `expired`, and return whether the record is entitled after the transaction. Missing period/payment fields return `false` and are never inferred from legacy `startDate`/`endDate`.
+`expireSubscriptionIfNeeded` must read the document in a transaction, change only `active` records whose `periodEndAtUtc <= nowUtc` to `expired`, and return whether the record is entitled after the transaction. Missing period/payment fields return `false` and are never inferred from legacy `startDate`/`endDate`.
 
-- [ ] **Step 6: Update frontend types and make the tests pass**
+- [ ] **Step 8: Update frontend types and make the tests pass**
 
-Replace normal `pending_validation` with explicit payment states, add `periodStartDate`, `periodEndDateExclusive`, `paymentStatus`, `taxStatus`, `taxAmount`, `paidAt`, `waitStartedAt`, `waitEndedAt`, and `overageChargeStatus`. Keep legacy fields optional only for rendering old records; backend entitlement must not use them.
+Replace normal `pending_validation` with the explicit status/payment unions, add local period dates, `periodStartAtUtc`, `periodEndAtUtc`, `serviceTimeZone`, `pickupLocation`, `paymentStatus`, `taxStatus`, `taxAmount`, `paidAt`, `waitStartedAt`, `waitEndedAt`, and `overageChargeStatus`. Keep legacy fields optional only for rendering old records; backend entitlement must not use them.
 
-- [ ] **Step 7: Run and commit**
+- [ ] **Step 9: Run and commit**
 
-Run: `npm --prefix functions exec jest src/personalDriver/__tests__/period.test.ts src/personalDriver/__tests__/entitlement.test.ts --runInBand` and `npm --prefix functions run build`
+Run: `npm --prefix functions exec jest src/personalDriver/__tests__/period.test.ts src/personalDriver/__tests__/locationTimeZone.test.ts src/personalDriver/__tests__/entitlement.test.ts --runInBand` and `npm --prefix functions run build`
 
 Expected: PASS and a clean TypeScript build.
 
-Commit: `git add functions/src/personalDriver/period.ts functions/src/personalDriver/entitlement.ts functions/src/personalDriver/__tests__/period.test.ts functions/src/personalDriver/__tests__/entitlement.test.ts src/types/personal-driver.ts && git commit -m "feat: add personal driver period entitlement model"`
+Commit: `git add functions/src/personalDriver/period.ts functions/src/personalDriver/locationTimeZone.ts functions/src/personalDriver/entitlement.ts functions/src/personalDriver/__tests__/period.test.ts functions/src/personalDriver/__tests__/locationTimeZone.test.ts functions/src/personalDriver/__tests__/entitlement.test.ts src/types/personal-driver.ts && git commit -m "feat: add personal driver period entitlement model"`
 
 ---
 
@@ -241,7 +259,7 @@ Expected: FAIL because the generator does not exist.
 
 - [ ] **Step 3: Implement idempotent generation and authoritative period scheduling**
 
-Generate only when `paymentStatus` is confirmed and `status` is `active`. Use `periodStartDate` and `periodEndDateExclusive`, and write with `merge: true` so replayed webhook delivery cannot duplicate or overwrite driver assignment. Persist `distanceKm` on each regular draft from the authoritative route values.
+Generate only when `paymentStatus === 'succeeded'` and `status === 'active'`. Use the local period boundaries and `serviceTimeZone` to generate UTC schedule instants, and write with `merge: true` so replayed webhook delivery cannot duplicate or overwrite driver assignment. Persist `distanceKm` on each regular draft from the authoritative route values.
 
 - [ ] **Step 4: Add failing initial-payment tests**
 
@@ -250,13 +268,15 @@ Extend `createSubscriptionPayment.test.ts` to assert:
 - a forged `monthlyDistanceKm`, `distanceOneWayKm`, or `distanceReturnKm` cannot alter the PaymentIntent amount;
 - the backend calls the route helper and weekday counter;
 - the package stores `periodStartDate`, `periodEndDateExclusive`, `taxStatus: 'pending_confirmation'`, and `taxAmount: 0`;
+- the package stores `serviceTimeZone`, `pickupLocation`, `periodStartAtUtc`, and `periodEndAtUtc` resolved by the server;
+- a package with an authoritative monthly distance of 440 stores `monthlyDistanceKm: 440` and `monthlyDistanceKmRemaining: 440`, with `specialTripsUsed: 0` and `specialTripsDistanceUsedKm: 0`;
 - the initial callable stores no trips before Stripe success;
 - the package starts with `paymentStatus: 'pending'`/creation claim and no entitlement;
 - same `requestId` returns the same PaymentIntent.
 
 - [ ] **Step 5: Implement the initial callable changes**
 
-Remove client distance fields from the billing decision (they may remain optional request fields for backward-compatible clients). Calculate the route using the server helper, calculate weekday occurrences for the exact 30-day period, calculate the pre-tax amount, persist authoritative fields, create the PaymentIntent with metadata, and leave trip generation to `payment_intent.succeeded`.
+Remove client distance fields from the billing decision (they may remain optional request fields for backward-compatible clients). Resolve the pickup location/timezone, calculate the route using the server helper, calculate weekday occurrences for the exact 30-day period in `serviceTimeZone`, calculate the pre-tax amount, persist `monthlyDistanceKmRemaining` equal to the authoritative total distance and all zero usage counters, create the PaymentIntent with metadata, and leave trip generation to `payment_intent.succeeded`.
 
 - [ ] **Step 6: Run and commit**
 
@@ -309,7 +329,7 @@ Expected: FAIL because the callable does not exist.
 
 - [ ] **Step 3: Implement the renewal callable**
 
-Validate the authenticated owner and source document. Accept only source ID and request ID. Recalculate Google route distance, clone immutable configuration, create a deterministic new subscription ID from owner/source/request, choose `periodStartDate = old.periodEndDateExclusive` while still active or the current market date after expiry, set a new exclusive end, zero all quota counters, and create the PaymentIntent with a renewal-specific idempotency key. Never update the old document.
+Validate the authenticated owner and source document. Accept only source ID and request ID. Use the persisted source `serviceTimeZone` and pickup location, recalculate the Google route distance, clone immutable configuration, create a deterministic new subscription ID from owner/source/request, choose the next local period start as the old exclusive local end while still active or the current local market date after expiry, derive UTC boundaries with the same timezone, set `monthlyDistanceKmRemaining` equal to the new authoritative monthly distance, zero all usage counters, and create the PaymentIntent with a renewal-specific idempotency key. Never update the old document.
 
 - [ ] **Step 4: Add frontend renewal service tests and implementation**
 
@@ -332,7 +352,7 @@ Commit: `git add functions/src/personalDriver/renewSubscriptionPayment.ts functi
 
 - [ ] **Step 1: Add failing webhook transition tests**
 
-Assert that `payment_intent.succeeded` changes a valid pending package directly to `status: 'active'`, `paymentStatus: 'captured'`, stores Stripe customer/payment method, and invokes idempotent trip generation. Assert that `payment_intent.payment_failed`, `.canceled`, and `.requires_action` write `failed`, `cancelled`, and `requires_action` respectively without entitlement. Assert duplicate success does not regress an active package or duplicate drafts.
+Assert that `payment_intent.succeeded` changes a valid pending package directly to `status: 'active'`, `paymentStatus: 'succeeded'`, stores Stripe customer/payment method, and invokes idempotent trip generation. Assert that `payment_intent.payment_failed`, `.canceled`, and `.requires_action` write `failed`, `cancelled`, and `requires_action` respectively without entitlement. Assert duplicate success does not regress an active package or duplicate drafts.
 
 - [ ] **Step 2: Add a failing retry-visible handler test**
 
@@ -369,7 +389,7 @@ Expected: FAIL because the callable currently trusts `payload.distanceKm` and ch
 
 - [ ] **Step 3: Implement the transactional entitlement and route flow**
 
-Before quota checks, read the subscription and call `expireSubscriptionIfNeeded` logic within the same transaction boundary. Validate `scheduledAtIso` is within `[periodStartDate, periodEndDateExclusive)`. Calculate the route from submitted addresses before the transaction, then re-check all entitlement and quota values inside the transaction and write the server distance. Ignore the client `distanceKm` value except for schema compatibility.
+Before quota checks, read the subscription and call `expireSubscriptionIfNeeded` logic within the same transaction boundary. Parse `scheduledAtIso` and validate its local calendar date in the subscription's `serviceTimeZone` is within `[periodStartDate, periodEndDateExclusive)`. Calculate the route from submitted addresses before the transaction, then re-check all entitlement and quota values inside the transaction and write the server distance. Ignore the client `distanceKm` value except for schema compatibility.
 
 - [ ] **Step 4: Run and commit**
 
@@ -389,7 +409,7 @@ Commit: `git add functions/src/personalDriver/clientManagePersonalDriver.ts func
 
 - [ ] **Step 1: Add failing operational authorization tests**
 
-Assert that the old `validateSubscription` action is rejected/removed, assignment and emergency reassignment reject unpaid, failed, expired, cancelled, or legacy-incomplete subscriptions, and valid active/captured packages assign successfully. Repeat the same cases for each driver status transition.
+Assert that the old `validateSubscription` action is rejected/removed, assignment and emergency reassignment reject unpaid, failed, expired, cancelled, or legacy-incomplete subscriptions, and valid active/succeeded packages assign successfully. Repeat the same cases for each driver status transition.
 
 - [ ] **Step 2: Run tests and verify failure**
 
@@ -403,7 +423,7 @@ Delete `validateSubscription` from the admin action schema and handler. Keep ope
 
 - [ ] **Step 4: Add server wait timestamp writes**
 
-When the new status is `driver_arrived`, write `waitStartedAt: serverTimestamp()` and clear any stale end/charge claim. When the new status is `passenger_picked_up`, write `waitEndedAt: serverTimestamp()`. Do not accept client timestamps.
+When the new status is `driver_arrived`, require a server-validated device location, compare it with the stored server-resolved `pickupLocation`, enforce the configured accuracy and pickup-radius limits, then write `waitStartedAt: serverTimestamp()` and clear any stale end/charge claim. If the location is malformed, too inaccurate, or outside the configured radius, reject the arrival for automatic billing and mark the trip for operational review. When the new status is `passenger_picked_up`, write `waitEndedAt: serverTimestamp()`. Do not accept client timestamps. The radius and accuracy limits must be explicit deployment configuration; do not invent a silent fallback.
 
 - [ ] **Step 5: Run and commit**
 
@@ -572,7 +592,7 @@ Expected: production build succeeds, no whitespace errors, and only intended fil
 
 - [ ] **Step 6: Review security invariants manually**
 
-Confirm in the final diff that no callable uses client distance for money/quota, no normal path references `pending_validation`, no assignment/status path skips entitlement, no wait charge accepts `elapsedMinutes`, no Stripe webhook handler converts processing errors to HTTP 200, and no tax rate has been introduced.
+Confirm in the final diff that no callable uses client distance for money/quota, no normal path references `pending_validation`, no assignment/status path skips entitlement, no package uses a runtime timezone or fixed UTC offset for calendar logic, no wait charge accepts `elapsedMinutes`, no arrival bypasses the configured pickup geofence, no Stripe webhook handler converts processing errors to HTTP 200, and no tax rate has been introduced.
 
 - [ ] **Step 7: Commit verification-only adjustments if needed**
 

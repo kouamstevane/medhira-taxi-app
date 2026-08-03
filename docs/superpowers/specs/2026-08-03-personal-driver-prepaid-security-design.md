@@ -12,6 +12,8 @@ Make Personal Driver a fully automated, server-authoritative prepaid service val
 - The administrator may still perform operational actions such as assigning an approved driver or emergency reassignment; those actions must pass the same server-side entitlement checks.
 - Tax calculation is explicitly deferred. The backend stores a pending tax state, the UI says “Taxes : à confirmer”, and Stripe charges only the confirmed pre-tax subtotal.
 - Existing records missing authoritative period or payment data fail closed and require a new package rather than being silently trusted.
+- The package service timezone is derived server-side from the authoritative pickup location and stored as an IANA `serviceTimeZone` such as `America/Toronto`; no function-runtime timezone is used.
+- The server stores business-local calendar dates/times for audit and derives UTC instants for timestamps and comparisons. A 30-day period means 30 calendar days in `serviceTimeZone`, including daylight-saving transitions.
 
 ## Authoritative distance and price flow
 
@@ -30,14 +32,20 @@ For special trips, the callable calculates the road distance from the submitted 
 
 If Google Maps cannot produce a valid route, the operation fails closed. There is no fallback distance and no client override.
 
+The server resolves the pickup address to coordinates, obtains its IANA timezone through the Google Time Zone API, and persists `pickupLocation` and `serviceTimeZone` on the subscription. The API request uses latitude/longitude and a timestamp; its returned `timeZoneId` is the authoritative identifier, while calendar arithmetic uses the IANA timezone rules. If address resolution or timezone resolution is ambiguous or unavailable, package creation fails closed. A special trip does not change the subscription timezone; its schedule is interpreted using the subscription's persisted `serviceTimeZone`.
+
 ## Period and entitlement model
 
-The initial package uses the requested start date as its inclusive period start. The end boundary is exclusive and is exactly 30 calendar days after the start date. The package is usable only while the current market date is within that half-open interval.
+The initial package uses the requested start date as its inclusive local period start in `serviceTimeZone`. The end boundary is exclusive and is exactly 30 calendar days after the start date in that timezone. The package is usable only before the UTC instant corresponding to the exclusive local end boundary.
 
 The subscription stores the authoritative period, payment, quota, and tax fields:
 
 - `periodStartDate`;
 - `periodEndDateExclusive`;
+- `periodStartAtUtc`;
+- `periodEndAtUtc`;
+- `serviceTimeZone`;
+- `pickupLocation`;
 - `status`;
 - `paymentStatus`;
 - `monthlyDistanceKm`;
@@ -49,7 +57,14 @@ The subscription stores the authoritative period, payment, quota, and tax fields
 - `taxAmount: 0`;
 - `totalAmount` equal to the pre-tax subtotal.
 
-An entitlement is usable only when `status === 'active'`, payment status is captured/succeeded, and the current date is before the exclusive end date. Every operation that can create, assign, start, or bill a trip checks this condition on the server. When an active record is encountered after its end boundary, the server marks it expired transactionally before rejecting the operation.
+The authoritative subscription states are:
+
+- `status`: `pending_payment | active | payment_failed | cancelled | expired`;
+- `paymentStatus`: `creating | pending | requires_action | succeeded | failed | cancelled`.
+
+The normal flow is `status: pending_payment` with `paymentStatus: creating` or `pending`, then Stripe success writes `paymentStatus: succeeded` and `status: active` atomically. A failed payment writes `paymentStatus: failed` and `status: payment_failed`. A cancelled PaymentIntent writes `paymentStatus: cancelled` and `status: cancelled`. `requires_action` never grants entitlement. There is no `pending_validation`, `authorized`, `captured`, or `payment_creation_failed` state in the normal Personal Driver model.
+
+An entitlement is usable only when `status === 'active'`, `paymentStatus === 'succeeded'`, and the current UTC instant is before `periodEndAtUtc`. Every operation that can create, assign, start, or bill a trip checks this condition on the server. When an active record is encountered after its end boundary, the server marks it expired transactionally before rejecting the operation.
 
 The normal payment state flow is:
 
@@ -64,8 +79,8 @@ The dashboard exposes a “Renouveler” action for expired, cancelled, failed, 
 The server loads the source subscription, verifies ownership, copies its immutable trip configuration, recalculates the route distances, and creates a new subscription and PaymentIntent with a distinct idempotency key.
 
 - If the previous period is still active, the new period starts at its exclusive end date.
-- If the previous period has expired, the new period starts on the current market date.
-- Quotas are initialized to zero usage on the new document.
+- If the previous period has expired, the new period starts on the current local calendar date in the persisted `serviceTimeZone`.
+- Quotas are initialized with `monthlyDistanceKmRemaining === monthlyDistanceKm`, `specialTripsUsed === 0`, and `specialTripsDistanceUsedKm === 0` on the new document.
 - The old subscription is never overwritten.
 - Replaying the same renewal request returns the same new PaymentIntent rather than creating another one.
 
@@ -73,7 +88,7 @@ The server loads the source subscription, verifies ownership, copies its immutab
 
 Trip drafts are created idempotently after payment confirmation, using deterministic IDs derived from the subscription ID and trip index. Replayed webhooks cannot duplicate drafts.
 
-Admin assignment and emergency reassignment read the associated subscription in the same transaction as the trip and reject the operation unless the payment is confirmed and the period is active. The driver status callable performs the same check in its transaction before every allowed transition.
+Admin assignment and emergency reassignment read the associated subscription in the same transaction as the trip and reject the operation unless `status === 'active'`, `paymentStatus === 'succeeded'`, and the period is active. The driver status callable performs the same check in its transaction before every allowed transition.
 
 The client special-trip callable checks the same entitlement, validates that the requested date is within the active period, recalculates the route distance, and atomically increments the special-trip and distance quotas.
 
@@ -84,6 +99,8 @@ The driver status flow records wait timestamps with Firestore server timestamps:
 - `driver_arrived` sets `waitStartedAt`;
 - `passenger_picked_up` sets `waitEndedAt`.
 
+At `driver_arrived`, the server also validates the driver's submitted device location against the server-resolved `pickupLocation` and a required configured pickup radius. The location sample must satisfy the configured accuracy limit. An out-of-radius or malformed sample blocks overage billing and marks the trip for operational review; it does not trigger manual validation for normal trips. This is a fraud-resistance signal, not an absolute proof against a compromised device.
+
 The billing callable no longer trusts `elapsedMinutes`. It calculates elapsed minutes from those timestamps and rejects malformed, negative, or excessive durations. A configurable maximum wait duration fails closed and requires operational handling rather than silently charging an arbitrary amount.
 
 Before calling Stripe, the billing callable acquires a Firestore transaction claim on the trip. The claim has `processing`, `billed`, and `failed` states, a deterministic idempotency key, and stale-claim recovery. Stripe PaymentIntent creation uses that same deterministic idempotency key. A second concurrent request cannot create a second charge.
@@ -92,7 +109,7 @@ Before calling Stripe, the billing callable acquires a Firestore transaction cla
 
 The Personal Driver branch handles:
 
-- successful payment: captured payment, automatic activation, and idempotent trip generation;
+- successful payment: succeeded payment, automatic activation, and idempotent trip generation;
 - failed payment: explicit failed status and no entitlement;
 - cancelled payment: explicit cancelled status and no entitlement;
 - required customer action: a pending-action status and no entitlement until success.
