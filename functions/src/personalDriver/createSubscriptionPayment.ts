@@ -11,7 +11,9 @@ import {
   type PersonalDriverPlanId,
   type PersonalDriverWeekday,
 } from './pricing.js';
-import { buildPersonalDriverTripDrafts } from './schedule.js';
+import { calculateAuthoritativeMonthlyDistanceKm, calculateServerRoute } from './routeDistance.js';
+import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js';
+import { localDateTimeToUtc, resolvePickupLocationAndTimeZone } from './locationTimeZone.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const CURRENCY = DEFAULT_CURRENCY;
@@ -35,8 +37,8 @@ function getDb(): FirebaseFirestore.Firestore {
 
 function isCalendarDate(value: string): boolean {
   const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
 function toMoney(value: number): number {
@@ -62,20 +64,14 @@ const inputSchema = z.object({
   departureTime: z.string().trim().regex(TIME_PATTERN, 'Heure de départ invalide'),
   returnTime: z.string().trim().regex(TIME_PATTERN, 'Heure de retour invalide').optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isCalendarDate, 'Date de début invalide'),
-  distanceOneWayKm: z.number().finite().positive().max(1000),
-  distanceReturnKm: z.number().finite().nonnegative().max(1000),
-  monthlyDistanceKm: z.number().finite().positive().max(100000),
+  distanceOneWayKm: z.number().finite().positive().max(1000).optional(),
+  distanceReturnKm: z.number().finite().nonnegative().max(1000).optional(),
+  monthlyDistanceKm: z.number().finite().positive().max(100000).optional(),
   passengerCount: z.number().int().min(1).max(8),
   notes: z.string().trim().max(1000).optional(),
 }).superRefine((data, context) => {
   if (data.tripType === 'round_trip' && !data.returnTime) {
     context.addIssue({ code: 'custom', path: ['returnTime'], message: 'Heure de retour requise pour un aller-retour' });
-  }
-  if (data.tripType === 'one_way' && data.distanceReturnKm !== 0) {
-    context.addIssue({ code: 'custom', path: ['distanceReturnKm'], message: 'La distance retour doit être nulle pour un aller simple' });
-  }
-  if (data.tripType === 'round_trip' && data.distanceReturnKm <= 0) {
-    context.addIssue({ code: 'custom', path: ['distanceReturnKm'], message: 'Distance retour requise pour un aller-retour' });
   }
 });
 
@@ -145,14 +141,14 @@ async function markPaymentCreationFailed(
     const data = subscription.data();
     if (
       !data
-      || data.paymentStatus !== 'creating_payment'
+      || data.paymentStatus !== 'creating'
       || data.paymentCreationClaimId !== paymentCreationClaimId
     ) {
       return;
     }
 
     transaction.update(subscriptionRef, {
-      paymentStatus: 'payment_creation_failed',
+      paymentStatus: 'creating',
       paymentCreationFailedAt: new Date(),
       paymentCreationError: getPaymentCreationError(error),
       paymentCreationAttempt: getPaymentCreationAttempt(data) + (advancePaymentCreationAttempt ? 1 : 0),
@@ -180,8 +176,27 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       throw new HttpsError('invalid-argument', 'Le forfait Basic est disponible du lundi au vendredi uniquement.');
     }
 
+    const periodEndDateExclusive = getPeriodEndDateExclusive(input.startDate);
+    const occurrences = countWeekdayOccurrences(input.startDate, periodEndDateExclusive, selectedWeekdays);
+    const pickupLocation = await resolvePickupLocationAndTimeZone(input.pickupAddress, new Date());
+    const outboundRoute = await calculateServerRoute({
+      origin: input.pickupAddress,
+      destination: input.destinationAddress,
+    });
+    const returnRoute = input.tripType === 'round_trip'
+      ? await calculateServerRoute({
+        origin: input.destinationAddress,
+        destination: input.pickupAddress,
+      })
+      : null;
+    const authoritativeMonthlyDistanceKm = calculateAuthoritativeMonthlyDistanceKm({
+      outboundKm: outboundRoute.distanceKm,
+      returnKm: returnRoute?.distanceKm ?? 0,
+      tripType: input.tripType,
+      occurrences,
+    });
     const priceComparison = calculatePersonalDriverPrices({
-      monthlyDistanceKm: input.monthlyDistanceKm,
+      monthlyDistanceKm: authoritativeMonthlyDistanceKm,
       requestedWeekdays: selectedWeekdays,
     });
     const selectedPlanPrice = priceComparison.plans[selectedPlanId];
@@ -194,6 +209,8 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     if (amount > MAX_AMOUNT) {
       throw new HttpsError('invalid-argument', `Montant maximum : ${MAX_AMOUNT}`);
     }
+    const periodStartAtUtc = localDateTimeToUtc(input.startDate, '00:00', pickupLocation.serviceTimeZone);
+    const periodEndAtUtc = localDateTimeToUtc(periodEndDateExclusive, '00:00', pickupLocation.serviceTimeZone);
 
     const db = getDb();
     const subscriptionRef = db.collection('personal_driver_subscriptions')
@@ -209,10 +226,10 @@ export const createPersonalDriverSubscriptionPayment = onCall(
           return { isCreator: false };
         }
 
-        const canReclaim = existingData.paymentStatus === 'payment_creation_failed'
-          || (
-            existingData.paymentStatus === 'creating_payment'
-            && isPaymentCreationClaimStale(existingData, paymentCreationClaimedAt)
+        const canReclaim = existingData.paymentStatus === 'creating'
+          && (
+            Boolean(existingData.paymentCreationError)
+            || isPaymentCreationClaimStale(existingData, paymentCreationClaimedAt)
           );
         if (!canReclaim) {
           return { isCreator: false, data: existingData };
@@ -220,7 +237,7 @@ export const createPersonalDriverSubscriptionPayment = onCall(
 
         const paymentCreationAttempt = getPaymentCreationAttempt(existingData);
         transaction.update(subscriptionRef, {
-          paymentStatus: 'creating_payment',
+          paymentStatus: 'creating',
           paymentCreationClaimId,
           paymentCreationClaimedAt,
           paymentCreationError: null,
@@ -232,7 +249,7 @@ export const createPersonalDriverSubscriptionPayment = onCall(
         id: subscriptionId,
         userId,
         status: 'pending_payment',
-        paymentStatus: 'creating_payment',
+        paymentStatus: 'creating',
         paymentCreationClaimId,
         paymentCreationClaimedAt,
         paymentCreationAttempt: 1,
@@ -247,7 +264,7 @@ export const createPersonalDriverSubscriptionPayment = onCall(
         throw new HttpsError('internal', 'Impossible de récupérer le paiement existant.');
       }
 
-      if (existingData.paymentStatus === 'creating_payment') {
+      if (existingData.paymentStatus === 'creating') {
         throw new HttpsError('aborted', 'Création du paiement en cours. Veuillez réessayer.');
       }
 
@@ -310,18 +327,6 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       throw new HttpsError('internal', 'Impossible de créer le PaymentIntent : client_secret manquant.');
     }
 
-    const trips = buildPersonalDriverTripDrafts({
-      subscriptionId,
-      userId: request.auth.uid,
-      startDate: input.startDate,
-      selectedWeekdays,
-      tripType: input.tripType,
-      departureTime: input.departureTime,
-      returnTime: input.returnTime,
-      pickupAddress: input.pickupAddress,
-      destinationAddress: input.destinationAddress,
-      planId: selectedPlanId,
-    });
     const batch = db.batch();
     batch.set(subscriptionRef, {
       id: subscriptionId,
@@ -335,27 +340,34 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       departureTime: input.departureTime,
       returnTime: input.returnTime ?? null,
       startDate: input.startDate,
-      distanceOneWayKm: input.distanceOneWayKm,
-      distanceReturnKm: input.distanceReturnKm,
-      monthlyDistanceKm: input.monthlyDistanceKm,
+      periodStartDate: input.startDate,
+      periodEndDateExclusive,
+      periodStartAtUtc,
+      periodEndAtUtc,
+      serviceTimeZone: pickupLocation.serviceTimeZone,
+      pickupLocation: {
+        latitude: pickupLocation.latitude,
+        longitude: pickupLocation.longitude,
+      },
+      distanceOneWayKm: outboundRoute.distanceKm,
+      distanceReturnKm: returnRoute?.distanceKm ?? 0,
+      monthlyDistanceKm: authoritativeMonthlyDistanceKm,
+      monthlyDistanceKmRemaining: authoritativeMonthlyDistanceKm,
+      specialTripsUsed: 0,
+      specialTripsDistanceUsedKm: 0,
       passengerCount: input.passengerCount,
       notes: input.notes ?? null,
       selectedPlanPrice,
       priceComparison,
       taxAmount,
+      taxStatus: 'pending_confirmation',
       totalAmount: amount,
       currency: CURRENCY,
       stripePaymentIntentId: paymentIntent.id,
       stripeCustomerId: userPaymentProfile.stripeCustomerId ?? null,
       defaultPaymentMethodId: userPaymentProfile.defaultPaymentMethodId ?? null,
-      paymentStatus: 'authorized',
+      paymentStatus: 'pending',
       createdAt: new Date(),
-    });
-    trips.forEach((trip, index) => {
-      batch.set(db.collection('personal_driver_trips').doc(`${subscriptionId}_${index}`), {
-        ...trip,
-        createdAt: new Date(),
-      });
     });
     try {
       await batch.commit();

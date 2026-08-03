@@ -31,6 +31,10 @@ const mockStripe = {
   paymentIntents: { create: jest.fn(), retrieve: jest.fn(), cancel: jest.fn() },
 };
 const mockCreateStripeClient = jest.fn(() => mockStripe);
+const mockCalculateServerRoute = jest.fn();
+const mockCalculateAuthoritativeMonthlyDistanceKm = jest.fn();
+const mockResolvePickupLocationAndTimeZone = jest.fn();
+const mockLocalDateTimeToUtc = jest.fn((date: string, time: string) => new Date(`${date}T${time}:00.000Z`));
 
 jest.mock('firebase-admin', () => ({
   apps: [],
@@ -56,6 +60,16 @@ jest.mock('firebase-functions/params', () => ({
 
 jest.mock('../../stripe/stripe-client', () => ({
   createStripeClient: mockCreateStripeClient,
+}));
+
+jest.mock('../routeDistance', () => ({
+  calculateServerRoute: mockCalculateServerRoute,
+  calculateAuthoritativeMonthlyDistanceKm: mockCalculateAuthoritativeMonthlyDistanceKm,
+}));
+
+jest.mock('../locationTimeZone', () => ({
+  resolvePickupLocationAndTimeZone: mockResolvePickupLocationAndTimeZone,
+  localDateTimeToUtc: mockLocalDateTimeToUtc,
 }));
 
 const validPayload = {
@@ -94,6 +108,16 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     mockStripe.paymentIntents.create.mockReset();
     mockStripe.paymentIntents.retrieve.mockReset();
     mockStripe.paymentIntents.cancel.mockReset();
+    mockCalculateServerRoute.mockReset();
+    mockCalculateAuthoritativeMonthlyDistanceKm.mockReset();
+    mockResolvePickupLocationAndTimeZone.mockReset();
+    mockCalculateServerRoute.mockResolvedValue({ distanceKm: 12.5, durationMinutes: 30 });
+    mockCalculateAuthoritativeMonthlyDistanceKm.mockReturnValue(62.5);
+    mockResolvePickupLocationAndTimeZone.mockResolvedValue({
+      latitude: 45.5017,
+      longitude: -73.5673,
+      serviceTimeZone: 'America/Toronto',
+    });
     mockSubscriptionRef.get.mockResolvedValue({ exists: false });
     mockUserRef.get.mockResolvedValue({ exists: false });
     mockTransaction.get.mockResolvedValue({ exists: false });
@@ -140,13 +164,14 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
   });
 
-  it('rejects subscriptions above the existing Stripe amount limit', async () => {
+  it('rejects server-calculated subscriptions above the Stripe amount limit', async () => {
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+    mockCalculateAuthoritativeMonthlyDistanceKm.mockReturnValueOnce(10000);
 
     await expect(createPersonalDriverSubscriptionPayment(makeRequest({
       ...validPayload,
       selectedPlanId: 'premium',
-      monthlyDistanceKm: 10000,
+      monthlyDistanceKm: 1,
     }, 'user_123'))).rejects.toMatchObject({ code: 'invalid-argument' });
 
     expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
@@ -185,7 +210,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     expect(otherUserSubscriptionId).not.toBe(firstSubscriptionId);
   });
 
-  it('recalculates the price and creates the subscription, trips, and PaymentIntent', async () => {
+  it('recalculates the price and creates the subscription and PaymentIntent without trips', async () => {
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
 
     const result = await createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'));
@@ -194,13 +219,13 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       subscriptionId,
       paymentIntentId: 'pi_123',
       clientSecret: 'pi_123_secret',
-      amount: 450,
+      amount: 300,
       currency: 'cad',
     });
     expect(mockSubscriptionDoc).toHaveBeenCalledWith(expect.stringMatching(/^[a-f0-9]{64}$/));
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        amount: 45000,
+        amount: 30000,
         currency: 'cad',
         metadata: {
           purpose: 'personal_driver_subscription',
@@ -217,23 +242,53 @@ describe('createPersonalDriverSubscriptionPayment', () => {
         userId: 'user_123',
         status: 'pending_payment',
         selectedPlanId: 'basic',
-        selectedPlanPrice: expect.objectContaining({ totalBeforeTax: 450 }),
-        priceComparison: expect.objectContaining({ monthlyDistanceKm: 300 }),
+        selectedPlanPrice: expect.objectContaining({ totalBeforeTax: 300 }),
+        priceComparison: expect.objectContaining({ monthlyDistanceKm: 62.5 }),
         taxAmount: 0,
-        totalAmount: 450,
+        totalAmount: 300,
         stripePaymentIntentId: 'pi_123',
-        paymentStatus: 'authorized',
+        paymentStatus: 'pending',
       }),
     );
     const tripWrites = mockBatch.set.mock.calls.filter((call) => call[0] === mockTripRef);
-    expect(tripWrites).toHaveLength(5);
-    expect(tripWrites.map((call) => call[1])).toEqual(expect.arrayContaining([
-      expect.objectContaining({ status: 'scheduled', subscriptionId }),
-    ]));
+    expect(tripWrites).toHaveLength(0);
     expect(mockBatch.commit).toHaveBeenCalledTimes(1);
     const subscriptionWrite = mockBatch.set.mock.calls.find((call) => call[0] === mockSubscriptionRef)?.[1];
     expect(subscriptionWrite).not.toHaveProperty('priceComparison.recommendationReasons');
-    expect(subscriptionWrite).toHaveProperty('priceComparison.plans.basic.totalBeforeTax', 450);
+    expect(subscriptionWrite).toHaveProperty('priceComparison.plans.basic.totalBeforeTax', 300);
+  });
+
+  it('uses server route distance and creates no trips before payment success', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+
+    const result = await createPersonalDriverSubscriptionPayment(makeRequest({
+      ...validPayload,
+      selectedPlanId: 'classic',
+      monthlyDistanceKm: 1000,
+      distanceOneWayKm: 999,
+      distanceReturnKm: 0,
+    }, 'user_123'));
+
+    expect(result.amount).toBe(450);
+    expect(mockCalculateServerRoute).toHaveBeenCalledWith({
+      origin: validPayload.pickupAddress,
+      destination: validPayload.destinationAddress,
+    });
+    expect(mockBatch.set.mock.calls.filter((call) => call[0] === mockTripRef)).toHaveLength(0);
+    expect(mockBatch.set).toHaveBeenCalledWith(
+      mockSubscriptionRef,
+      expect.objectContaining({
+        monthlyDistanceKm: 62.5,
+        monthlyDistanceKmRemaining: 62.5,
+        periodStartDate: '2026-07-27',
+        periodEndDateExclusive: '2026-08-26',
+        serviceTimeZone: 'America/Toronto',
+        pickupLocation: { latitude: 45.5017, longitude: -73.5673 },
+        taxStatus: 'pending_confirmation',
+        taxAmount: 0,
+        paymentStatus: 'pending',
+      }),
+    );
   });
 
   it('returns the persisted pending subscription payment for a retried request', async () => {
@@ -299,11 +354,11 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     expect(mockTransaction.create).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
       userId: 'user_123',
       status: 'pending_payment',
-      paymentStatus: 'creating_payment',
+      paymentStatus: 'creating',
     }));
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
-      expect.objectContaining({ amount: 45000 }),
+      expect.objectContaining({ amount: 30000 }),
       expect.objectContaining({ idempotencyKey: `personal_driver_subscription_${subscriptionId}_1` }),
     );
 
@@ -332,7 +387,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     });
 
     expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
-      paymentStatus: 'payment_creation_failed',
+      paymentStatus: 'creating',
       paymentCreationFailedAt: expect.any(Date),
       paymentCreationError: 'Stripe unavailable',
     }));
@@ -350,7 +405,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       data: () => ({
         userId: 'user_123',
         status: 'pending_payment',
-        paymentStatus: 'creating_payment',
+        paymentStatus: 'creating',
         paymentCreationClaimedAt: new Date(Date.now() - (60 * 60 * 1000)),
         paymentCreationAttempt: 1,
       }),
@@ -361,7 +416,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     );
 
     expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
-      paymentStatus: 'creating_payment',
+      paymentStatus: 'creating',
       paymentCreationClaimedAt: expect.any(Date),
     }));
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
@@ -408,7 +463,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       { idempotencyKey: 'cancel_personal_driver_subscription_pi_123' },
     );
     expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
-      paymentStatus: 'payment_creation_failed',
+      paymentStatus: 'creating',
       paymentCreationAttempt: 2,
     }));
   });

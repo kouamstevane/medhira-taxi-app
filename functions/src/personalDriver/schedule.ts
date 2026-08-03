@@ -1,4 +1,5 @@
 import type { PersonalDriverPlanId, PersonalDriverWeekday } from './pricing.js';
+import { localDateTimeToUtc } from './locationTimeZone.js';
 
 export interface PersonalDriverTripDraft {
   subscriptionId: string;
@@ -11,12 +12,15 @@ export interface PersonalDriverTripDraft {
   destinationAddress: string;
   assignedDriverId: null;
   assignedVehicleId: null;
+  distanceKm: number;
 }
 
 export function buildPersonalDriverTripDrafts(input: {
   subscriptionId: string;
   userId: string;
-  startDate: string;
+  periodStartDate: string;
+  periodEndDateExclusive: string;
+  serviceTimeZone: string;
   selectedWeekdays: PersonalDriverWeekday[];
   tripType: 'one_way' | 'round_trip';
   departureTime: string;
@@ -24,25 +28,30 @@ export function buildPersonalDriverTripDrafts(input: {
   pickupAddress: string;
   destinationAddress: string;
   planId: PersonalDriverPlanId;
+  distanceOneWayKm: number;
+  distanceReturnKm: number;
 }): PersonalDriverTripDraft[] {
   if (input.tripType === 'round_trip' && !input.returnTime?.trim()) {
     throw new Error('returnTime is required for round_trip subscriptions');
   }
 
-  const [year, month, day] = input.startDate.split('-').map(Number);
-  const startDate = new Date(year, month - 1, day);
+  const [year, month, day] = input.periodStartDate.split('-').map(Number);
+  const [endYear, endMonth, endDay] = input.periodEndDateExclusive.split('-').map(Number);
+  const startDate = new Date(Date.UTC(year, month - 1, day));
+  const endDate = new Date(Date.UTC(endYear, endMonth - 1, endDay));
+  if (!Number.isFinite(startDate.getTime()) || !Number.isFinite(endDate.getTime()) || endDate <= startDate) {
+    throw new Error('Invalid personal driver period');
+  }
   const selectedWeekdays = new Set(input.selectedWeekdays);
   const trips: PersonalDriverTripDraft[] = [];
 
-  for (let offset = 0; offset < 30; offset += 1) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + offset);
-    if (!selectedWeekdays.has(date.getDay() as PersonalDriverWeekday)) continue;
+  for (const date = new Date(startDate); date < endDate; date.setUTCDate(date.getUTCDate() + 1)) {
+    if (!selectedWeekdays.has(date.getUTCDay() as PersonalDriverWeekday)) continue;
 
     const dateString = [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, '0'),
-      String(date.getDate()).padStart(2, '0'),
+      date.getUTCFullYear(),
+      String(date.getUTCMonth() + 1).padStart(2, '0'),
+      String(date.getUTCDate()).padStart(2, '0'),
     ].join('-');
     trips.push({
       subscriptionId: input.subscriptionId,
@@ -50,11 +59,12 @@ export function buildPersonalDriverTripDrafts(input: {
       planId: input.planId,
       direction: 'outbound',
       status: 'scheduled',
-      scheduledAtIso: `${dateString}T${input.departureTime}:00`,
+      scheduledAtIso: localDateTimeToUtc(dateString, input.departureTime, input.serviceTimeZone).toISOString(),
       pickupAddress: input.pickupAddress,
       destinationAddress: input.destinationAddress,
       assignedDriverId: null,
       assignedVehicleId: null,
+      distanceKm: input.distanceOneWayKm,
     });
 
     if (input.tripType === 'round_trip') {
@@ -64,11 +74,12 @@ export function buildPersonalDriverTripDrafts(input: {
         planId: input.planId,
         direction: 'return',
         status: 'scheduled',
-        scheduledAtIso: `${dateString}T${input.returnTime}:00`,
+        scheduledAtIso: localDateTimeToUtc(dateString, input.returnTime!, input.serviceTimeZone).toISOString(),
         pickupAddress: input.destinationAddress,
         destinationAddress: input.pickupAddress,
         assignedDriverId: null,
         assignedVehicleId: null,
+        distanceKm: input.distanceReturnKm,
       });
     }
   }
