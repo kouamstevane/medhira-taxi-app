@@ -2252,6 +2252,7 @@ export { stripePaymentIntent } from './stripe/stripePaymentIntent.js';
 export { stripeWalletRecharge } from './stripe/stripeWalletRecharge.js';
 export {
   createPersonalDriverSubscriptionPayment,
+  renewPersonalDriverSubscriptionPayment,
   adminManagePersonalDriver,
   driverUpdatePersonalDriverTrip,
   chargePersonalDriverWaitTimeOverage,

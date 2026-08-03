@@ -3,6 +3,7 @@ jest.mock('firebase-functions/params', () => ({
 }));
 
 import {
+  getLocalCalendarDate,
   localDateTimeToUtc,
   resolvePickupLocationAndTimeZone,
 } from '../locationTimeZone.js';
@@ -60,5 +61,10 @@ describe('personal driver location timezone resolution', () => {
   it('converts local midnight using IANA daylight-saving rules', () => {
     expect(localDateTimeToUtc('2026-03-09', '00:00', 'America/Toronto').toISOString())
       .toBe('2026-03-09T04:00:00.000Z');
+  });
+
+  it('formats the server instant as a local service calendar date', () => {
+    expect(getLocalCalendarDate(new Date('2026-08-03T03:00:00.000Z'), 'America/Toronto')).toBe('2026-08-02');
+    expect(getLocalCalendarDate(new Date('2026-08-03T04:00:00.000Z'), 'America/Toronto')).toBe('2026-08-03');
   });
 });

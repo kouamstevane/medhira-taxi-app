@@ -129,6 +129,17 @@ function matchesLocalDateTime(instant: Date, localDateTime: string, serviceTimeZ
   ].every((value, index) => value === [local.year, local.month, local.day, local.hour, local.minute, local.second][index]);
 }
 
+export function getLocalCalendarDate(instant: Date, serviceTimeZone: string): string {
+  if (!Number.isFinite(instant.getTime())) throw new Error('Invalid instant');
+  assertValidTimeZone(serviceTimeZone);
+  const local = getLocalParts(instant, serviceTimeZone);
+  return [
+    local.year,
+    String(local.month).padStart(2, '0'),
+    String(local.day).padStart(2, '0'),
+  ].join('-');
+}
+
 export function localDateTimeToUtc(localDate: string, localTime: string, serviceTimeZone: string): Date {
   const localDateTime = `${localDate}T${localTime}`;
   const match = CALENDAR_DATE_TIME_PATTERN.exec(localDateTime);
