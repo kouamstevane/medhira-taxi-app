@@ -88,7 +88,18 @@ describe('DriverDetailsDrawer', () => {
         })}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'Refuser' }));
+    await user.click(screen.getByRole('button', { name: 'Refuser le profil' }));
+    expect(onReject).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows rejection without a custom reason', async () => {
+    const user = userEvent.setup();
+    const onReject = jest.fn();
+
+    render(<DriverDetailsDrawer {...makeProps({ onReject })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Refuser le profil' }));
+
     expect(onReject).toHaveBeenCalledTimes(1);
   });
 

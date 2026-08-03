@@ -236,32 +236,34 @@ export function DriverDetailsDrawer({
                 <h3 className="text-sm font-bold">Validation requise</h3>
               </div>
               <p className="text-[11px] leading-4 text-slate-400">L'approbation autorisera immédiatement ce chauffeur à accepter des courses.</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={onApprove}
-                  disabled={processing}
-                  className="order-1 h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-black shadow-[0_0_18px_rgba(16,185,129,0.18)] transition-all hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 sm:order-2"
-                >
-                  {processing ? 'Traitement...' : 'Approuver le profil'}
-                </button>
-                <div className="order-2 flex gap-2 sm:order-1">
-                  <input
-                    aria-label="Motif détaillé du refus..."
-                    value={rejectionReason}
-                    onChange={(event) => onRejectionReasonChange(event.target.value)}
-                    placeholder="Motif du refus..."
-                    className="glass-input min-w-0 flex-1 rounded-xl px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-                  />
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={onReject}
-                    disabled={processing || !rejectionReason.trim()}
-                    className="h-11 shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 text-[10px] font-bold uppercase tracking-wider text-slate-300 transition-all hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                    disabled={processing}
+                    className="order-1 h-11 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 text-[10px] font-bold uppercase tracking-wider text-rose-300 transition-all hover:border-rose-400/60 hover:bg-rose-500/20 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                   >
-                    Refuser
+                    Refuser le profil
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onApprove}
+                    disabled={processing}
+                    className="order-2 h-11 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-3 text-[10px] font-black uppercase tracking-wider text-black shadow-[0_0_18px_rgba(16,185,129,0.18)] transition-all hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  >
+                    {processing ? 'Traitement...' : 'Approuver le profil'}
                   </button>
                 </div>
+                <label htmlFor="driver-rejection-reason" className="sr-only">Motif du refus (facultatif)</label>
+                <input
+                  id="driver-rejection-reason"
+                  aria-label="Motif détaillé du refus (facultatif)"
+                  value={rejectionReason}
+                  onChange={(event) => onRejectionReasonChange(event.target.value)}
+                  placeholder="Motif du refus (facultatif)..."
+                  className="glass-input h-10 w-full rounded-xl px-3 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                />
               </div>
             </div>
           ) : (

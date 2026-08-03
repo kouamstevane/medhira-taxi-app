@@ -29,7 +29,7 @@ import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
 import { DriverDetailsDrawer } from '@/components/admin/DriverDetailsDrawer';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
-import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary } from './adminDriversUi';
+import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary, isAdminBottomNavVisible } from './adminDriversUi';
 import { buildAdminDriverActionPayload } from './adminDriversActions';
 
 export interface Driver {
@@ -742,7 +742,11 @@ export default function AdminDriversPage() {
           driver={driverToDelete}
         />
       )}
-      <BottomNav items={adminNavItems} />
+      {isAdminBottomNavVisible({
+        driverDetailsOpen: selectedDriver !== null,
+        actionModalOpen: actionModal.show,
+        deleteModalOpen,
+      }) && <BottomNav items={adminNavItems} />}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { requireAdmin } from './_shared.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { deleteDriverCompletely } from './driverDeletion.js';
 import { sendDriverStatusEmail } from '../email-service.js';
+import { getDriverRejectionReason } from './adminDriverRejection.js';
 
 const resendApiKey = defineSecret('RESEND_API_KEY');
 const CANONICAL_DRIVER_DOCUMENT_KEYS = [
@@ -132,21 +133,19 @@ export const adminManageDriver = onCall(
         return { success: true, message: 'Chauffeur approuvé avec succès' };
 
       case 'reject':
-        if (!reason)
-          throw new HttpsError(
-            'invalid-argument',
-            'Raison requise pour le refus',
-          );
-        await driverRef.update({
-          status: 'rejected',
-          rejectionReason: reason,
-          rejectionCode: rejectionCode ?? 'R005',
-          rejectedAt: now,
-          rejectedBy: uid,
-          updatedAt: now,
-        });
-        await notifyDriver('rejection', reason);
-        return { success: true, message: 'Chauffeur refusé' };
+        {
+          const driverRejectionReason = getDriverRejectionReason(reason);
+          await driverRef.update({
+            status: 'rejected',
+            rejectionReason: driverRejectionReason,
+            rejectionCode: rejectionCode ?? 'R005',
+            rejectedAt: now,
+            rejectedBy: uid,
+            updatedAt: now,
+          });
+          await notifyDriver('rejection', driverRejectionReason);
+          return { success: true, message: 'Chauffeur refusé' };
+        }
 
       case 'suspend':
         if (!reason)

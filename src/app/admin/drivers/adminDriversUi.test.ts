@@ -1,4 +1,9 @@
-import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary } from './adminDriversUi';
+import {
+  getApplicationActionsClassName,
+  getInvitationPreparedMessage,
+  getPendingApplicationsSummary,
+  isAdminBottomNavVisible,
+} from './adminDriversUi';
 
 describe('getInvitationPreparedMessage', () => {
   it('confirms which applicant is ready for invitation', () => {
@@ -20,5 +25,14 @@ describe('getPendingApplicationsSummary', () => {
 
   it('explains the empty state without creating urgency', () => {
     expect(getPendingApplicationsSummary(0)).toBe('Aucune candidature en attente');
+  });
+});
+
+describe('isAdminBottomNavVisible', () => {
+  it('hides navigation while an admin overlay is open', () => {
+    expect(isAdminBottomNavVisible({ driverDetailsOpen: true, actionModalOpen: false, deleteModalOpen: false })).toBe(false);
+    expect(isAdminBottomNavVisible({ driverDetailsOpen: false, actionModalOpen: true, deleteModalOpen: false })).toBe(false);
+    expect(isAdminBottomNavVisible({ driverDetailsOpen: false, actionModalOpen: false, deleteModalOpen: true })).toBe(false);
+    expect(isAdminBottomNavVisible({ driverDetailsOpen: false, actionModalOpen: false, deleteModalOpen: false })).toBe(true);
   });
 });

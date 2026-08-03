@@ -11,8 +11,8 @@ export function buildAdminDriverActionPayload(
 ): AdminDriverActionPayload {
   const payload: AdminDriverActionPayload = { action, driverId };
 
-  if (reason !== undefined) {
-    payload.reason = reason;
+  if (reason?.trim()) {
+    payload.reason = reason.trim();
   }
 
   return payload;
