@@ -1,5 +1,6 @@
 import {
   cancelPersonalDriverTripByClient,
+  getPendingPersonalDriverRenewal,
   getPersonalDriverSubscriptionById,
   requestSpecialTrip,
 } from './subscription.service';
@@ -8,6 +9,7 @@ import { doc } from 'firebase/firestore';
 
 const mockCallable = jest.fn();
 const mockGetDoc = jest.fn();
+const mockGetDocs = jest.fn();
 
 jest.mock('firebase/functions', () => ({
   httpsCallable: jest.fn(() => mockCallable),
@@ -17,7 +19,7 @@ jest.mock('firebase/firestore', () => ({
   collection: jest.fn(),
   doc: jest.fn((_db, collectionName: string, documentId: string) => ({ collectionName, documentId })),
   getDoc: (...args: unknown[]) => mockGetDoc(...args),
-  getDocs: jest.fn(),
+  getDocs: (...args: unknown[]) => mockGetDocs(...args),
   limit: jest.fn(),
   orderBy: jest.fn(),
   query: jest.fn(),
@@ -83,4 +85,42 @@ describe('Personal Driver subscription client actions', () => {
     expect(doc).toHaveBeenCalledWith({}, 'personal_driver_subscriptions', 'sub_1');
     expect(mockGetDoc).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['activating', 'activation_failed'])(
+    'selects a paid renewal whose activation is %s',
+    async (activationStatus) => {
+      mockGetDocs.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            id: 'sub_renewal',
+            data: () => ({
+              userId: 'client_1',
+              sourceSubscriptionId: 'sub_active',
+              status: 'pending_payment',
+              paymentStatus: 'succeeded',
+              activationStatus,
+            }),
+          },
+          {
+            id: 'sub_active',
+            data: () => ({
+              userId: 'client_1',
+              status: 'active',
+              paymentStatus: 'succeeded',
+              activationStatus: 'active',
+            }),
+          },
+        ],
+      });
+
+      await expect(getPendingPersonalDriverRenewal('client_1')).resolves.toEqual(
+        expect.objectContaining({
+          id: 'sub_renewal',
+          paymentStatus: 'succeeded',
+          activationStatus,
+        }),
+      );
+    },
+  );
 });

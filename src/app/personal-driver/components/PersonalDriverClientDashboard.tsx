@@ -11,6 +11,7 @@ import {
   cancelPersonalDriverTripByClient,
   getCurrentPersonalDriverSubscription,
   getPendingPersonalDriverRenewal,
+  getPersonalDriverSubscriptionById,
   getPersonalDriverTripsForSubscription,
   requestSpecialTrip,
   renewPersonalDriverSubscriptionPayment,
@@ -47,6 +48,11 @@ const StripePaymentElement = dynamic(
   () => import('@/components/stripe/StripePaymentElement').then((module) => ({ default: module.StripePaymentElement })),
   { ssr: false, loading: () => <div className="h-52 rounded-xl border border-white/10 bg-white/5" /> },
 );
+
+const ACTIVATION_POLL_INTERVAL_MS = 2_000;
+const ACTIVATION_POLL_TIMEOUT_MS = 60_000;
+
+type RenewalActivationProgress = 'idle' | 'preparing' | 'failed' | 'timeout';
 
 function toDate(value: unknown): Date | null {
   if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
@@ -91,7 +97,12 @@ export function PersonalDriverClientDashboard() {
   const [renewalLoading, setRenewalLoading] = useState(false);
   const [renewalPayment, setRenewalPayment] = useState<RenewPersonalDriverSubscriptionPaymentResult | null>(null);
   const [renewalError, setRenewalError] = useState<string | null>(null);
+  const [renewalActivationProgress, setRenewalActivationProgress] = useState<RenewalActivationProgress>('idle');
+  const [renewalActivationSubscriptionId, setRenewalActivationSubscriptionId] = useState<string | null>(null);
   const renewalRecoveryAttemptRef = useRef<string | null>(null);
+  const renewalActivationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const renewalActivationRunRef = useRef(0);
+  const renewalActivationPollingIdRef = useRef<string | null>(null);
 
   const reloadData = useCallback(async () => {
     if (!currentUser?.uid) return;
@@ -100,10 +111,19 @@ export function PersonalDriverClientDashboard() {
         getCurrentPersonalDriverSubscription(currentUser.uid),
         getPendingPersonalDriverRenewal(currentUser.uid),
       ]);
-      setSubscription(sub);
+      const paidRenewal = pending?.paymentStatus === 'succeeded'
+        && (pending.activationStatus === 'activating' || pending.activationStatus === 'activation_failed');
+      const displayedSubscription = paidRenewal ? pending : sub;
+      setSubscription(displayedSubscription);
       setPendingRenewal(pending);
-      if (sub?.id) {
-        const tripList = await getPersonalDriverTripsForSubscription(sub.id);
+      if (paidRenewal && pending) {
+        setRenewalActivationSubscriptionId(pending.id);
+        setRenewalActivationProgress(
+          pending.activationStatus === 'activation_failed' ? 'failed' : 'preparing',
+        );
+      }
+      if (displayedSubscription?.id) {
+        const tripList = await getPersonalDriverTripsForSubscription(displayedSubscription.id);
         setTrips(tripList);
       } else {
         setTrips([]);
@@ -112,6 +132,51 @@ export function PersonalDriverClientDashboard() {
       console.error('Erreur chargement abonnement:', err);
     }
   }, [currentUser?.uid]);
+
+  const beginRenewalActivationPolling = useCallback((subscriptionId: string) => {
+    if (renewalActivationTimerRef.current) clearTimeout(renewalActivationTimerRef.current);
+    renewalActivationRunRef.current += 1;
+    const runId = renewalActivationRunRef.current;
+    const startedAt = Date.now();
+    renewalActivationPollingIdRef.current = subscriptionId;
+    setRenewalActivationSubscriptionId(subscriptionId);
+    setRenewalActivationProgress('preparing');
+    setRenewalError(null);
+
+    const pollActivation = async () => {
+      if (renewalActivationRunRef.current !== runId) return;
+      if (Date.now() - startedAt >= ACTIVATION_POLL_TIMEOUT_MS) {
+        renewalActivationPollingIdRef.current = null;
+        setRenewalActivationProgress('timeout');
+        return;
+      }
+      try {
+        const updatedSubscription = await getPersonalDriverSubscriptionById(subscriptionId);
+        if (renewalActivationRunRef.current !== runId) return;
+        if (updatedSubscription) {
+          setSubscription(updatedSubscription);
+          if (updatedSubscription.activationStatus === 'active') {
+            renewalActivationPollingIdRef.current = null;
+            setPendingRenewal(null);
+            setRenewalActivationProgress('idle');
+            setTrips(await getPersonalDriverTripsForSubscription(subscriptionId));
+            return;
+          }
+          setPendingRenewal(updatedSubscription);
+          if (updatedSubscription.activationStatus === 'activation_failed') {
+            renewalActivationPollingIdRef.current = null;
+            setRenewalActivationProgress('failed');
+            return;
+          }
+        }
+      } catch {}
+      if (renewalActivationRunRef.current === runId) {
+        renewalActivationTimerRef.current = setTimeout(pollActivation, ACTIVATION_POLL_INTERVAL_MS);
+      }
+    };
+
+    renewalActivationTimerRef.current = setTimeout(pollActivation, ACTIVATION_POLL_INTERVAL_MS);
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -122,10 +187,31 @@ export function PersonalDriverClientDashboard() {
     loadData();
   }, [currentUser?.uid, reloadData]);
 
+  useEffect(() => () => {
+    renewalActivationRunRef.current += 1;
+    if (renewalActivationTimerRef.current) clearTimeout(renewalActivationTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (pendingRenewal?.paymentStatus !== 'succeeded') return;
+    setRenewalActivationSubscriptionId(pendingRenewal.id);
+    if (pendingRenewal.activationStatus === 'activation_failed') {
+      setRenewalActivationProgress('failed');
+      return;
+    }
+    if (
+      pendingRenewal.activationStatus === 'activating'
+      && renewalActivationPollingIdRef.current !== pendingRenewal.id
+    ) {
+      beginRenewalActivationPolling(pendingRenewal.id);
+    }
+  }, [beginRenewalActivationPolling, pendingRenewal]);
+
   useEffect(() => {
     if (
       !subscription
       || !pendingRenewal
+      || pendingRenewal.paymentStatus === 'succeeded'
       || renewalPayment
       || renewalLoading
       || renewalRecoveryAttemptRef.current === pendingRenewal.id
@@ -335,6 +421,24 @@ export function PersonalDriverClientDashboard() {
             {renewalError}
           </div>
         )}
+        {renewalActivationProgress === 'preparing'
+          && renewalActivationSubscriptionId !== subscription.id && (
+          <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-semibold text-emerald-300" role="status">
+            Paiement confirmé — préparation de vos trajets…
+          </p>
+        )}
+        {renewalActivationProgress === 'timeout' && (
+          <div className="mt-4 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="alert">
+            <p>La préparation prend plus de temps que prévu. Votre paiement reste confirmé.</p>
+            <button
+              type="button"
+              onClick={() => renewalActivationSubscriptionId && beginRenewalActivationPolling(renewalActivationSubscriptionId)}
+              className="min-h-10 rounded-lg border border-amber-400/40 px-4 font-bold text-amber-100"
+            >
+              Réessayer la vérification
+            </button>
+          </div>
+        )}
         {renewalPayment && (
           <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
             <h3 className="mb-3 text-sm font-bold text-white">Paiement du renouvellement</h3>
@@ -350,8 +454,9 @@ export function PersonalDriverClientDashboard() {
               amount={renewalPayment.amount}
               currency={renewalPayment.currency}
               onSuccess={() => {
+                const subscriptionId = renewalPayment.subscriptionId;
                 setRenewalPayment(null);
-                void reloadData();
+                beginRenewalActivationPolling(subscriptionId);
               }}
               onError={setRenewalError}
               submitLabel={`Payer ${formatPersonalDriverCurrency(renewalPayment.quote.totalAmount, renewalPayment.quote.currency)}`}
@@ -438,9 +543,18 @@ export function PersonalDriverClientDashboard() {
             Paiement confirmé — préparation de vos trajets…
           </p>
         ) : trips.length === 0 && activationStatus === 'activation_failed' ? (
-          <div className="py-8 text-center text-sm text-red-300" role="alert">
+          <div className="space-y-3 py-8 text-center text-sm text-red-300" role="alert">
             <p className="font-semibold">La préparation de vos trajets a échoué.</p>
             <p className="mt-2">Actualisez cette page dans quelques instants pour vérifier la nouvelle tentative, puis contactez l’assistance si nécessaire.</p>
+            {renewalActivationSubscriptionId === subscription.id && (
+              <button
+                type="button"
+                onClick={() => beginRenewalActivationPolling(subscription.id)}
+                className="min-h-10 rounded-lg border border-red-400/40 px-4 font-bold text-red-100"
+              >
+                Réessayer la vérification
+              </button>
+            )}
           </div>
         ) : trips.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-400">

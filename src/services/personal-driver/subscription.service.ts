@@ -131,9 +131,12 @@ export async function getPendingPersonalDriverRenewal(
   if (snapshot.empty) return null;
   const doc = snapshot.docs.find((candidate) => {
     const data = candidate.data();
+    const awaitingPayment = ['creating', 'pending', 'requires_action'].includes(data.paymentStatus);
+    const awaitingActivation = data.paymentStatus === 'succeeded'
+      && ['activating', 'activation_failed'].includes(data.activationStatus);
     return typeof data.sourceSubscriptionId === 'string'
       && data.status === 'pending_payment'
-      && ['creating', 'pending', 'requires_action'].includes(data.paymentStatus);
+      && (awaitingPayment || awaitingActivation);
   });
   if (!doc) return null;
   return { id: doc.id, ...doc.data() } as PersonalDriverSubscription;

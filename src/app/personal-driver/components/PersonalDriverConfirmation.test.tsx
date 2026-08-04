@@ -30,8 +30,11 @@ jest.mock('next/dynamic', () => () => {
 });
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
+let mockSearchParams = new URLSearchParams();
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
+  useSearchParams: () => mockSearchParams,
 }));
 
 const sampleConfig = {
@@ -137,6 +140,7 @@ const authoritativePayment = {
 describe('PersonalDriverConfirmation Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSearchParams = new URLSearchParams();
     sessionStorage.clear();
     sessionStorage.setItem('medjira.personalDriver.config.v1', JSON.stringify(sampleConfig));
     sessionStorage.setItem('medjira.personalDriver.estimate.v1', JSON.stringify(sampleEstimate));
@@ -201,6 +205,10 @@ describe('PersonalDriverConfirmation Component', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Payer 723,45/i }));
 
     expect(screen.getByText('Paiement confirmé — préparation de vos trajets…')).toBeVisible();
+    expect(mockReplace).toHaveBeenCalledWith(
+      '/personal-driver/confirmation?payment=submitted&subscriptionId=sub_123',
+      { scroll: false },
+    );
     expect(getPersonalDriverSubscriptionById).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
 
@@ -258,5 +266,68 @@ describe('PersonalDriverConfirmation Component', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/plus de temps que prévu/i);
     expect(screen.getByRole('alert')).toHaveTextContent(/actualisez/i);
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('resumes a submitted subscription from the URL after refresh and retries verification after timeout', async () => {
+    mockSearchParams = new URLSearchParams('payment=submitted&subscriptionId=sub_123');
+    (getPersonalDriverSubscriptionById as jest.Mock).mockResolvedValue({
+      id: 'sub_123',
+      activationStatus: 'activating',
+    });
+    jest.useFakeTimers();
+
+    render(<PersonalDriverConfirmation />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Paiement confirmé — préparation de vos trajets…')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Préparer le paiement sécurisé/i })).not.toBeInTheDocument();
+    expect(createPersonalDriverSubscriptionPayment).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/plus de temps que prévu/i);
+    const retryButton = screen.getByRole('button', { name: /Réessayer la vérification/i });
+    (getPersonalDriverSubscriptionById as jest.Mock).mockResolvedValue({
+      id: 'sub_123',
+      activationStatus: 'active',
+    });
+    fireEvent.click(retryButton);
+
+    expect(screen.getByText('Paiement confirmé — préparation de vos trajets…')).toBeVisible();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/personal-driver/dashboard?payment=success&subscriptionId=sub_123');
+    expect(createPersonalDriverSubscriptionPayment).not.toHaveBeenCalled();
+  });
+
+  it('resumes the submitted subscription from the URL when checkout session data is unavailable', async () => {
+    mockSearchParams = new URLSearchParams('payment=submitted&subscriptionId=sub_123');
+    sessionStorage.clear();
+    (getPersonalDriverSubscriptionById as jest.Mock).mockResolvedValue({
+      id: 'sub_123',
+      activationStatus: 'active',
+    });
+    jest.useFakeTimers();
+
+    render(<PersonalDriverConfirmation />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('Paiement confirmé — préparation de vos trajets…')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /Préparer le paiement sécurisé/i })).not.toBeInTheDocument();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/personal-driver/dashboard?payment=success&subscriptionId=sub_123');
+    expect(createPersonalDriverSubscriptionPayment).not.toHaveBeenCalled();
   });
 });
