@@ -34,6 +34,9 @@ test.describe('Personal Driver V1 smoke', () => {
         estimate: personalDriverEstimateSession,
       },
     );
+    await page.goto('/personal-driver/estimation', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/Aller.*8,2 km/i)).toBeVisible();
+    await expect(page.getByText(/Retour.*13,4 km/i)).toBeVisible();
     await page.goto('/personal-driver/confirmation', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'CLASSIC' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Préparer le paiement sécurisé/i })).toBeVisible();

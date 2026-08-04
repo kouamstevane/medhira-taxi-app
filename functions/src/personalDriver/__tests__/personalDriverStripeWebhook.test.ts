@@ -325,7 +325,9 @@ describe('Personal Driver Stripe webhook', () => {
 
   it('returns a retryable error when post-payment trip generation fails', async () => {
     const { stripeWebhookInstant } = require('../../stripe/index');
-    mockGeneratePersonalDriverTrips.mockRejectedValueOnce(new Error('trip generation failed'));
+    mockGeneratePersonalDriverTrips
+      .mockRejectedValueOnce(new Error('trip generation failed'))
+      .mockResolvedValueOnce(undefined);
     const request = {
       method: 'POST',
       headers: { 'stripe-signature': 'signature' },
@@ -334,12 +336,21 @@ describe('Personal Driver Stripe webhook', () => {
     const res = response();
 
     await stripeWebhookInstant(request, res);
+    const stateAfterFailure = { ...subscriptionData };
+    const retryResponse = response();
+    await stripeWebhookInstant(request, retryResponse);
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ received: false, error: 'trip generation failed' });
-    expect(subscriptionData).toMatchObject({
+    expect(stateAfterFailure).toMatchObject({
       status: 'pending_payment',
       paymentStatus: 'pending',
+    });
+    expect(mockGeneratePersonalDriverTrips).toHaveBeenCalledTimes(2);
+    expect(retryResponse.json).toHaveBeenCalledWith({ received: true });
+    expect(subscriptionData).toMatchObject({
+      status: 'active',
+      paymentStatus: 'succeeded',
     });
   });
 });

@@ -125,6 +125,7 @@ describe('clientManagePersonalDriver', () => {
   });
 
   it('creates a special trip only when quota remains', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-03T12:00:00.000Z'));
     const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
     mockCalculateServerRoute.mockResolvedValue({ distanceKm: 8.2, durationMinutes: 30 });
     mockTransaction.get.mockResolvedValue({

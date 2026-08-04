@@ -2,9 +2,9 @@ import { httpsCallable } from 'firebase/functions';
 import {
   cancelPersonalDriverTripByClient,
   createPersonalDriverSubscriptionPayment,
+  getCurrentPersonalDriverSubscription,
   requestSpecialTrip,
 } from '@/services/personal-driver/subscription.service';
-import * as personalDriverSubscriptionService from '@/services/personal-driver/subscription.service';
 import {
   personalDriverContractFixture,
   personalDriverSpecialTripFixture,
@@ -14,6 +14,31 @@ jest.mock('firebase/functions', () => ({
   httpsCallable: jest.fn(),
 }));
 
+jest.mock('firebase/firestore', () => ({
+  collection: jest.fn(),
+  getDocs: jest.fn(),
+  limit: jest.fn(),
+  orderBy: jest.fn(),
+  query: jest.fn(),
+  where: jest.fn(),
+}));
+
+const {
+  collection: mockCollection,
+  getDocs: mockGetDocs,
+  limit: mockLimit,
+  orderBy: mockOrderBy,
+  query: mockQuery,
+  where: mockWhere,
+} = jest.requireMock('firebase/firestore') as {
+  collection: jest.Mock;
+  getDocs: jest.Mock;
+  limit: jest.Mock;
+  orderBy: jest.Mock;
+  query: jest.Mock;
+  where: jest.Mock;
+};
+
 jest.mock('@/config/firebase', () => ({
   db: {},
   functions: { region: 'europe-west1' },
@@ -22,6 +47,11 @@ jest.mock('@/config/firebase', () => ({
 describe('Personal Driver frontend/backend callable contracts', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCollection.mockReturnValue({ id: 'personal_driver_subscriptions' });
+    mockWhere.mockReturnValue({});
+    mockOrderBy.mockReturnValue({});
+    mockLimit.mockReturnValue({});
+    mockQuery.mockReturnValue({});
     (httpsCallable as jest.Mock).mockReturnValue(jest.fn().mockResolvedValue({
       data: {
         subscriptionId: 'sub_contract',
@@ -65,13 +95,33 @@ describe('Personal Driver frontend/backend callable contracts', () => {
   });
 
   it('exposes the active subscription instead of a newer pending renewal', async () => {
-    const subscriptionViewService = (personalDriverSubscriptionService as unknown as {
-      getPersonalDriverSubscriptionView?: (userId: string) => Promise<unknown>;
-    }).getPersonalDriverSubscriptionView;
+    mockGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'pending-renewal',
+          data: () => ({
+            userId: 'user-1',
+            status: 'pending_payment',
+            paymentStatus: 'pending',
+            createdAt: new Date('2026-08-03T11:00:00.000Z'),
+          }),
+        },
+        {
+          id: 'active-subscription',
+          data: () => ({
+            userId: 'user-1',
+            status: 'active',
+            paymentStatus: 'succeeded',
+            createdAt: new Date('2026-08-01T11:00:00.000Z'),
+          }),
+        },
+      ],
+    });
 
-    expect(subscriptionViewService).toEqual(expect.any(Function));
-    expect(await subscriptionViewService?.('user-1')).toMatchObject({
-      active: { id: 'active-subscription' },
+    expect(await getCurrentPersonalDriverSubscription('user-1')).toMatchObject({
+      id: 'active-subscription',
+      status: 'active',
     });
   });
 
