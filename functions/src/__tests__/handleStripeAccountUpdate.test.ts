@@ -149,3 +149,4 @@ describe('handleStripeAccountUpdate — onAccountUpdated', () => {
     expect(mockFirestore.doc).not.toHaveBeenCalled();
   });
 });
+export {};

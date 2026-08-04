@@ -1,5 +1,7 @@
 const sourceRef = { id: 'sub_old', get: jest.fn() };
 const newRef = { id: 'sub_new', get: jest.fn() };
+export {};
+
 const mockTransaction = {
   get: jest.fn(),
   create: jest.fn(),
