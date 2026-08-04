@@ -209,6 +209,15 @@ describe('driverUpdatePersonalDriverTrip', () => {
       tripId: 'trip_1',
       status: 'driver_arrived',
     }, 'driver_1'))).rejects.toMatchObject({ code: 'invalid-argument' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      operationalReviewRequired: true,
+      operationalReviewReason: 'driver_arrival_gps_missing',
+      operationalReviewEvidence: {
+        driverLocation: { latitude: null, longitude: null },
+        pickupLocation: { latitude: 45.5017, longitude: -73.5673 },
+        accuracyMeters: null,
+      },
+    }));
   });
 
   it('rejects arrival outside the pickup radius', async () => {

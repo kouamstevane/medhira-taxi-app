@@ -89,9 +89,11 @@ describe('Personal driver Firestore rules', () => {
     }));
     await assertFails(deleteDoc(doc(db, 'personal_driver_subscriptions', subscriptionId)));
     await assertSucceeds(getDoc(doc(db, 'personal_driver_trips', tripId)));
-    await assertSucceeds(updateDoc(doc(db, 'personal_driver_trips', tripId), {
+    await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
       assignedDriverId: 'replacement-driver',
     }));
+    await assertFails(setDoc(doc(db, 'personal_driver_trips', 'admin-created-trip'), trip));
+    await assertFails(deleteDoc(doc(db, 'personal_driver_trips', tripId)));
   });
 
   test('subscription owner cannot change status or payment fields', async () => {

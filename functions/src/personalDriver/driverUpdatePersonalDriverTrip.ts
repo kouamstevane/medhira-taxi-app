@@ -96,10 +96,31 @@ export const driverUpdatePersonalDriverTrip = onCall(
 
       let gpsReviewRequired = false;
       if (newStatus === 'driver_arrived') {
-        if (lat === undefined || lng === undefined || accuracy === undefined) {
-          throw new HttpsError('invalid-argument', 'La position GPS et sa précision sont obligatoires à l’arrivée.');
-        }
         const pickupLocation = tripData?.pickupLocation;
+        if (lat === undefined || lng === undefined || accuracy === undefined) {
+          const pickupEvidence = pickupLocation
+            && typeof pickupLocation.latitude === 'number'
+            && typeof pickupLocation.longitude === 'number'
+            ? { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude }
+            : null;
+          transaction.update(tripRef, {
+            operationalReviewRequired: true,
+            operationalReviewReason: 'driver_arrival_gps_missing',
+            operationalReviewAt: admin.firestore.FieldValue.serverTimestamp(),
+            operationalReviewBy: request.auth!.uid,
+            operationalReviewEvidence: {
+              driverLocation: { latitude: lat ?? null, longitude: lng ?? null },
+              pickupLocation: pickupEvidence,
+              accuracyMeters: accuracy ?? null,
+            },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          return {
+            kind: 'gps_review_required' as const,
+            errorCode: 'invalid-argument' as const,
+            errorMessage: 'La position GPS et sa précision sont obligatoires à l’arrivée.',
+          };
+        }
         if (
           !pickupLocation
           || typeof pickupLocation.latitude !== 'number'
@@ -137,7 +158,13 @@ export const driverUpdatePersonalDriverTrip = onCall(
         }
       }
 
-      if (gpsReviewRequired) return { kind: 'gps_review_required' as const };
+      if (gpsReviewRequired) {
+        return {
+          kind: 'gps_review_required' as const,
+          errorCode: 'failed-precondition' as const,
+          errorMessage: 'La position GPS ne confirme pas l’arrivée au lieu de prise en charge.',
+        };
+      }
 
       if (newStatus === 'passenger_picked_up' && !tripData?.waitStartedAt) {
         throw new HttpsError('failed-precondition', 'Le début serveur de l’attente est introuvable.');
@@ -200,7 +227,7 @@ export const driverUpdatePersonalDriverTrip = onCall(
       throw new HttpsError('failed-precondition', 'Le forfait a expiré.');
     }
     if (result.kind === 'gps_review_required') {
-      throw new HttpsError('failed-precondition', 'La position GPS ne confirme pas l’arrivée au lieu de prise en charge.');
+      throw new HttpsError(result.errorCode, result.errorMessage);
     }
 
     return { success: true, status: newStatus };

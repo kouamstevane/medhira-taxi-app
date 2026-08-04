@@ -6,6 +6,7 @@
  */
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { googleMapsApiKey } from '../config/googleMaps.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { calculateServerRoute } from '../personalDriver/routeDistance.js';
 
@@ -17,6 +18,7 @@ interface DistancePayload {
 export const distanceCalculate = onCall(
   {
     region: 'europe-west1',
+    secrets: [googleMapsApiKey],
   },
   async (request: CallableRequest<DistancePayload>) => {
     if (!request.auth) {

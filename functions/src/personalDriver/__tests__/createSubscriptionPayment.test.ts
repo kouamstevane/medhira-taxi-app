@@ -31,6 +31,7 @@ const mockStripe = {
   paymentIntents: { create: jest.fn(), retrieve: jest.fn(), cancel: jest.fn() },
 };
 const mockCreateStripeClient = jest.fn(() => mockStripe);
+const mockCallableOptions: unknown[] = [];
 const mockCalculateServerRoute = jest.fn();
 const mockCalculateAuthoritativeMonthlyDistanceKm = jest.fn();
 const mockResolvePickupLocationAndTimeZone = jest.fn();
@@ -44,7 +45,10 @@ jest.mock('firebase-admin', () => ({
 }));
 
 jest.mock('firebase-functions/v2/https', () => ({
-  onCall: (_options: unknown, handler: unknown) => handler,
+  onCall: (options: unknown, handler: unknown) => {
+    mockCallableOptions.push(options);
+    return handler;
+  },
   HttpsError: class HttpsError extends Error {
     code: string;
 
@@ -56,7 +60,7 @@ jest.mock('firebase-functions/v2/https', () => ({
 }));
 
 jest.mock('firebase-functions/params', () => ({
-  defineSecret: () => ({ value: () => 'sk_test_123' }),
+  defineSecret: (name: string) => ({ name, value: () => 'sk_test_123' }),
 }));
 
 jest.mock('../../stripe/stripe-client', () => ({
@@ -100,6 +104,7 @@ function makeRequest(data: unknown, uid?: string) {
 describe('createPersonalDriverSubscriptionPayment', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCallableOptions.length = 0;
     mockSubscriptionRef.get.mockReset();
     mockUserRef.get.mockReset();
     mockTransaction.get.mockReset();
@@ -135,6 +140,16 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       client_secret: 'pi_123_secret',
     });
     mockStripe.paymentIntents.cancel.mockResolvedValue({ id: 'pi_123', status: 'canceled' });
+  });
+
+  it('declares Stripe and Google Maps secrets for deployment', () => {
+    require('../createSubscriptionPayment');
+
+    const options = mockCallableOptions[0] as { secrets?: Array<{ name: string }> };
+    expect(options.secrets?.map((secret) => secret.name)).toEqual([
+      'STRIPE_SECRET_KEY',
+      'GOOGLE_MAPS_API_KEY',
+    ]);
   });
 
   it('requires authentication', async () => {

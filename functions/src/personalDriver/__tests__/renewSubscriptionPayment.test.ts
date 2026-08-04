@@ -24,6 +24,7 @@ const mockStripe = {
 const mockCalculateServerRoute = jest.fn();
 const mockResolveAddressCoordinates = jest.fn();
 const mockCreateStripeClient = jest.fn(() => mockStripe);
+const mockCallableOptions: unknown[] = [];
 
 jest.mock('firebase-admin', () => ({
   apps: [{}],
@@ -34,7 +35,7 @@ jest.mock('firebase-admin', () => ({
 }));
 
 jest.mock('firebase-functions/params', () => ({
-  defineSecret: () => ({ value: () => 'sk_test_123' }),
+  defineSecret: (name: string) => ({ name, value: () => 'sk_test_123' }),
 }));
 
 jest.mock('../../stripe/stripe-client', () => ({
@@ -58,7 +59,10 @@ jest.mock('../locationTimeZone', () => ({
 }));
 
 jest.mock('firebase-functions/v2/https', () => ({
-  onCall: (_options: unknown, handler: unknown) => handler,
+  onCall: (options: unknown, handler: unknown) => {
+    mockCallableOptions.push(options);
+    return handler;
+  },
   HttpsError: class HttpsError extends Error {
     code: string;
 
@@ -103,6 +107,7 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
     jest.clearAllMocks();
+    mockCallableOptions.length = 0;
     sourceRef.get.mockResolvedValue({ exists: true, data: () => sourceSubscription });
     newRef.get.mockResolvedValue({ exists: false });
     transactionData = undefined;
@@ -134,6 +139,16 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('declares Stripe and Google Maps secrets for deployment', () => {
+    require('../renewSubscriptionPayment');
+
+    const options = mockCallableOptions[0] as { secrets?: Array<{ name: string }> };
+    expect(options.secrets?.map((secret) => secret.name)).toEqual([
+      'STRIPE_SECRET_KEY',
+      'GOOGLE_MAPS_API_KEY',
+    ]);
   });
 
   it('chains an active renewal, resets quotas, and replays the same payment', async () => {

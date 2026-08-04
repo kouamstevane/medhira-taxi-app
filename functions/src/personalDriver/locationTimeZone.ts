@@ -1,6 +1,4 @@
-import { defineSecret } from 'firebase-functions/params';
-
-const googleMapsApiKey = defineSecret('GOOGLE_MAPS_API_KEY');
+import { googleMapsApiKey } from '../config/googleMaps.js';
 const MAX_ADDRESS_LENGTH = 500;
 const CALENDAR_DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):([0-5]\d)$/;
 

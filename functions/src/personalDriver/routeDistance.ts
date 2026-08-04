@@ -1,6 +1,4 @@
-import { defineSecret } from 'firebase-functions/params';
-
-const googleMapsApiKey = defineSecret('GOOGLE_MAPS_API_KEY');
+import { googleMapsApiKey } from '../config/googleMaps.js';
 const MAX_LOCATION_LENGTH = 500;
 const FORBIDDEN_LOCATION_CHARS = /[\x00-\x1F\x7F]/;
 

@@ -294,13 +294,12 @@ service cloud.firestore {
                       resource.data.assignedDriverId == request.auth.uid ||
                       isAdmin());
 
-      allow create, delete: if isAdmin();
+      allow create, delete: if false;
 
-      allow update: if isAdmin() ||
-                       (isAuthenticated() &&
-                        resource.data.assignedDriverId == request.auth.uid &&
-                        request.resource.data.diff(resource.data).affectedKeys()
-                          .hasOnly(['updatedAt', 'driverLocation', 'driverStatus']));
+      allow update: if isAuthenticated() &&
+                       resource.data.assignedDriverId == request.auth.uid &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['updatedAt', 'driverLocation', 'driverStatus']);
     }
     
     // ============================================================================

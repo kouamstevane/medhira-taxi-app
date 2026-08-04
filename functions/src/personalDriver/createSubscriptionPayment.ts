@@ -5,6 +5,7 @@ import type Stripe from 'stripe';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DEFAULT_CURRENCY } from '../config/stripe.js';
+import { googleMapsApiKey } from '../config/googleMaps.js';
 import { createStripeClient } from '../stripe/stripe-client.js';
 import {
   calculatePersonalDriverPrices,
@@ -158,7 +159,7 @@ async function markPaymentCreationFailed(
 }
 
 export const createPersonalDriverSubscriptionPayment = onCall(
-  { region: 'europe-west1', secrets: [stripeSecretKey] },
+  { region: 'europe-west1', secrets: [stripeSecretKey, googleMapsApiKey] },
   async (request: CallableRequest<unknown>): Promise<CreateSubscriptionPaymentResult> => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Vous devez être connecté.');

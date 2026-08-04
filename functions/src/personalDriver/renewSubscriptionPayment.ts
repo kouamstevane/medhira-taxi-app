@@ -5,6 +5,7 @@ import type Stripe from 'stripe';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { DEFAULT_CURRENCY } from '../config/stripe.js';
+import { googleMapsApiKey } from '../config/googleMaps.js';
 import { createStripeClient } from '../stripe/stripe-client.js';
 import {
   calculateAuthoritativeMonthlyDistanceKm,
@@ -115,7 +116,7 @@ export interface RenewSubscriptionPaymentResult {
 }
 
 export const renewPersonalDriverSubscriptionPayment = onCall(
-  { region: 'europe-west1', secrets: [stripeSecretKey] },
+  { region: 'europe-west1', secrets: [stripeSecretKey, googleMapsApiKey] },
   async (request: CallableRequest<unknown>): Promise<RenewSubscriptionPaymentResult> => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
     const parsed = inputSchema.safeParse(request.data);
