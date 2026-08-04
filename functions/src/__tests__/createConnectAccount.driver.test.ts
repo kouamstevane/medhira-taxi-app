@@ -9,18 +9,30 @@ const mockDriverDocRef = {
     doc: jest.fn(() => mockPrivateDocRef),
   })),
 };
-
-const mockFirestoreInstance = {
-  collection: jest.fn(() => ({
-    doc: jest.fn(() => mockDriverDocRef),
-  })),
+const mockRateLimitDocRef = {};
+const mockRateLimitTransaction = {
+  get: jest.fn().mockResolvedValue({ exists: false }),
+  set: jest.fn(),
+  update: jest.fn(),
 };
 
-var mockFieldValue = { serverTimestamp: jest.fn(() => 'SERVER_TIMESTAMP') };
+const mockFirestoreInstance = {
+  collection: jest.fn((name: string) => ({
+    doc: jest.fn(() => name === 'rateLimits' ? mockRateLimitDocRef : mockDriverDocRef),
+  })),
+  runTransaction: jest.fn(async (callback: (transaction: typeof mockRateLimitTransaction) => Promise<unknown>) => (
+    callback(mockRateLimitTransaction)
+  )),
+};
+
+var mockFieldValue = {
+  serverTimestamp: jest.fn(() => 'SERVER_TIMESTAMP'),
+  increment: jest.fn((value: number) => ({ increment: value })),
+};
 var firestoreFn = jest.fn(() => mockFirestoreInstance) as any;
 firestoreFn.FieldValue = mockFieldValue;
+firestoreFn.Timestamp = { fromMillis: jest.fn((value: number) => value) };
 var mockEnforceRateLimit = jest.fn();
-var mockBuildDriverIndividualPrefill = jest.fn();
 var mockCreateStripeClient = jest.fn(() => mockStripeInstance);
 
 jest.mock('firebase-admin', () => ({
@@ -37,10 +49,6 @@ jest.mock('../config/stripe.js', () => ({
 
 jest.mock('../stripe/stripe-client.js', () => ({
   createStripeClient: mockCreateStripeClient,
-}), { virtual: true });
-
-jest.mock('../stripe/driver-prefill.js', () => ({
-  buildDriverIndividualPrefill: mockBuildDriverIndividualPrefill,
 }), { virtual: true });
 
 const mockStripeInstance = {
@@ -104,30 +112,6 @@ describe('createConnectAccount driver flow', () => {
     jest.clearAllMocks();
     mockEnforceRateLimit.mockResolvedValue(undefined);
     mockCreateStripeClient.mockReturnValue(mockStripeInstance);
-    mockBuildDriverIndividualPrefill.mockReturnValue({
-      firstName: 'Ste',
-      lastName: 'Jgf',
-      rawPhone: '15245369852',
-      phone: '+15245369852',
-      dob: { day: 30, month: 4, year: 2000 },
-      individual: {
-        first_name: 'Ste',
-        last_name: 'Jgf',
-        phone: '+15245369852',
-        dob: { day: 30, month: 4, year: 2000 },
-        address: {
-          line1: '123 Rue Principale',
-          city: 'Montreal',
-          postal_code: 'H2X 1Y4',
-          state: 'Quebec',
-          country: 'CA',
-        },
-        relationship: {
-          title: 'Chauffeur professionnel',
-        },
-        email: 'driver@example.com',
-      },
-    });
   });
 
   it('uses Firebase driver data to build the Stripe payload, including postal address', async () => {
@@ -159,25 +143,6 @@ describe('createConnectAccount driver flow', () => {
       makeRequest({ country: 'CA' }, { uid: 'driver-1', token: { email: 'driver@example.com', email_verified: true } }),
       undefined as any
     );
-
-    expect(mockBuildDriverIndividualPrefill).toHaveBeenCalledWith({
-      tokenEmail: 'driver@example.com',
-      country: 'CA',
-      requestIndividual: undefined,
-      driverData: expect.objectContaining({
-        driverType: 'chauffeur',
-        firstName: 'Ste',
-        lastName: 'Jgf',
-        phone: '15245369852',
-        city: 'Montreal',
-        zipCode: 'H2X 1Y4',
-      }),
-      privateData: expect.objectContaining({
-        dob: '2000-04-30',
-        address: '123 Rue Principale',
-        province: 'Quebec',
-      }),
-    });
 
     expect(result).toEqual({ accountId: 'acct_123', status: 'pending' });
     expect(mockStripeInstance.accounts.create).toHaveBeenCalledTimes(1);
