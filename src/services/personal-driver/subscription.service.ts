@@ -107,6 +107,41 @@ function isPendingActivation(subscription: PersonalDriverSubscription): boolean 
       || ['pending_payment', 'activating', 'activation_failed'].includes(subscription.activationStatus));
 }
 
+function isPendingRenewal(subscription: PersonalDriverSubscription): boolean {
+  if (subscription.status !== 'pending_payment'
+    || typeof subscription.sourceSubscriptionId !== 'string'
+    || !subscription.sourceSubscriptionId.trim()) return false;
+  const awaitingPayment = ['creating', 'pending', 'requires_action'].includes(
+    subscription.paymentStatus ?? '',
+  );
+  const awaitingActivation = subscription.paymentStatus === 'succeeded'
+    && ['activating', 'activation_failed'].includes(subscription.activationStatus ?? '');
+  return awaitingPayment || awaitingActivation;
+}
+
+function getPendingPeriodRank(
+  subscription: PersonalDriverSubscription,
+  now: Date,
+): number | null {
+  const periodStart = toDate(subscription.periodStartAtUtc);
+  const periodEnd = toDate(subscription.periodEndAtUtc);
+  if (periodEnd && periodEnd <= now) return null;
+  if (periodStart && periodEnd && periodEnd <= periodStart) return null;
+  if (!periodStart || !periodEnd) return Number.POSITIVE_INFINITY;
+  return Math.max(0, periodStart.getTime() - now.getTime());
+}
+
+function isFutureActiveSubscription(
+  subscription: PersonalDriverSubscription,
+  now: Date,
+): boolean {
+  const periodStart = toDate(subscription.periodStartAtUtc);
+  return subscription.status === 'active'
+    && subscription.paymentStatus === 'succeeded'
+    && !!periodStart
+    && periodStart > now;
+}
+
 export async function getPersonalDriverSubscriptionView(userId: string): Promise<{
   active: PersonalDriverSubscription | null;
   pending: PersonalDriverSubscription | null;
@@ -134,18 +169,18 @@ export async function getPersonalDriverSubscriptionView(userId: string): Promise
     ) - (
       toDate(left.periodStartAtUtc)?.getTime() ?? 0
     ))[0] ?? null;
-  const pendingActivation = subscriptions.find(isPendingActivation) ?? null;
-  const futureActive = subscriptions
-    .filter((subscription) => subscription.status === 'active'
-      && subscription.paymentStatus === 'succeeded'
-      && (toDate(subscription.periodStartAtUtc)?.getTime() ?? 0) > now.getTime())
-    .sort((left, right) => (
-      toDate(left.periodStartAtUtc)?.getTime() ?? Number.MAX_SAFE_INTEGER
-    ) - (
-      toDate(right.periodStartAtUtc)?.getTime() ?? Number.MAX_SAFE_INTEGER
-    ))[0] ?? null;
+  const pending = subscriptions
+    .filter((subscription) => isPendingActivation(subscription)
+      || isFutureActiveSubscription(subscription, now))
+    .map((subscription) => ({
+      rank: getPendingPeriodRank(subscription, now),
+      subscription,
+    }))
+    .filter((candidate): candidate is { rank: number; subscription: PersonalDriverSubscription } =>
+      candidate.rank !== null)
+    .sort((left, right) => left.rank - right.rank)[0]?.subscription ?? null;
 
-  return { active, pending: pendingActivation ?? futureActive };
+  return { active, pending };
 }
 
 export async function getCurrentPersonalDriverSubscription(
@@ -166,7 +201,20 @@ export async function getPersonalDriverSubscriptionById(
 export async function getPendingPersonalDriverRenewal(
   userId: string,
 ): Promise<PersonalDriverSubscription | null> {
-  return (await getPersonalDriverSubscriptionView(userId)).pending;
+  if (!userId) return null;
+  const subscriptionsQuery = query(
+    collection(db, 'personal_driver_subscriptions'),
+    where('userId', '==', userId),
+    where('status', '==', 'pending_payment'),
+    orderBy('createdAt', 'desc'),
+  );
+  const snapshot = await getDocs(subscriptionsQuery);
+  return snapshot.docs
+    .map((subscriptionDoc) => ({
+      id: subscriptionDoc.id,
+      ...subscriptionDoc.data(),
+    }) as PersonalDriverSubscription)
+    .find(isPendingRenewal) ?? null;
 }
 
 export async function getPersonalDriverTripsForSubscription(

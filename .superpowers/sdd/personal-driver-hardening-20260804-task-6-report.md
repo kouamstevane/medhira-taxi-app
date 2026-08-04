@@ -58,3 +58,26 @@ The root `test` script hard-codes Jest watch mode, so `--watch=false` was append
 - `src/quality/personal-driver-contract.test.ts`
 
 These files were required to enforce active-only trip loading while preserving activation lifecycle visibility and to move the existing quality contract to the new subscription-view API.
+
+## Review follow-up: period-aware pending selection and wrapper compatibility
+
+### Changes
+
+- Pending view candidates with a dated period ending at or before `now` are excluded.
+- Current/future pending activation documents and future active renewals are ranked by period proximity, with the nearest valid period ahead of undated legacy fallbacks.
+- `getPendingPersonalDriverRenewal` again performs its own pending-only query and returns only records with a non-empty `sourceSubscriptionId` and an eligible payment or activation lifecycle.
+- Initial pending purchases and future active subscriptions remain available to the broader subscription view but are never returned by the legacy renewal wrapper.
+
+### RED/GREEN evidence
+
+- RED: `npm test -- --runInBand src/services/personal-driver/subscription.service.test.ts --watch=false -t "prefers the nearest future"` — 2 expected failures; stale pending records were returned instead of the nearest future active/pending renewal.
+- GREEN: the same focused command — 2 tests passed after period-aware filtering and ranking.
+- RED: `npm test -- --runInBand src/services/personal-driver/subscription.service.test.ts --watch=false -t "pending renewal"` — the 2 new wrapper regressions failed because the broader view returned an initial purchase; 2 existing renewal lifecycle cases passed.
+- GREEN: the same focused command — all 4 matching tests passed after restoring wrapper-specific filtering.
+
+### Bounded verification
+
+- `npm test -- --runInBand src/services/personal-driver/subscription.service.test.ts src/__tests__/unit/firestoreIndexes.test.ts --watch=false` — 2 suites, 20 tests passed.
+- `npm test -- --runInBand src/app/personal-driver/components/PersonalDriverClientDashboard.test.tsx src/quality/personal-driver-contract.test.ts --watch=false` — 2 suites, 15 tests passed.
+- `npx eslint src/services/personal-driver/subscription.service.ts src/services/personal-driver/subscription.service.test.ts` — passed.
+- No Firestore indexes were changed or deployed in this follow-up.

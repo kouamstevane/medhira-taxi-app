@@ -112,6 +112,88 @@ describe('Personal Driver subscription client actions', () => {
     });
   });
 
+  it('prefers the nearest future active renewal over a stale failed activation', async () => {
+    mockGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'stale_failed_activation',
+          data: () => ({
+            userId: 'client_1',
+            sourceSubscriptionId: 'expired_source',
+            status: 'pending_payment',
+            paymentStatus: 'succeeded',
+            activationStatus: 'activation_failed',
+            periodStartAtUtc: new Date('2026-07-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+          }),
+        },
+        {
+          id: 'nearest_future_active',
+          data: () => ({
+            userId: 'client_1',
+            sourceSubscriptionId: 'current_active',
+            status: 'active',
+            paymentStatus: 'succeeded',
+            activationStatus: 'active',
+            periodStartAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-10-01T00:00:00.000Z'),
+          }),
+        },
+        {
+          id: 'current_active',
+          data: () => ({
+            userId: 'client_1',
+            status: 'active',
+            paymentStatus: 'succeeded',
+            periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+          }),
+        },
+      ],
+    });
+
+    await expect(getPersonalDriverSubscriptionView('client_1')).resolves.toEqual({
+      active: expect.objectContaining({ id: 'current_active' }),
+      pending: expect.objectContaining({ id: 'nearest_future_active' }),
+    });
+  });
+
+  it('prefers the nearest future pending renewal over a stale pending payment', async () => {
+    mockGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'stale_pending_payment',
+          data: () => ({
+            userId: 'client_1',
+            sourceSubscriptionId: 'expired_source',
+            status: 'pending_payment',
+            paymentStatus: 'pending',
+            periodStartAtUtc: new Date('2026-07-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+          }),
+        },
+        {
+          id: 'nearest_future_pending',
+          data: () => ({
+            userId: 'client_1',
+            sourceSubscriptionId: 'current_active',
+            status: 'pending_payment',
+            paymentStatus: 'pending',
+            periodStartAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-10-01T00:00:00.000Z'),
+          }),
+        },
+      ],
+    });
+
+    await expect(getPersonalDriverSubscriptionView('client_1')).resolves.toEqual({
+      active: null,
+      pending: expect.objectContaining({ id: 'nearest_future_pending' }),
+    });
+  });
+
   it('returns only the pending subscription when no active period contains now', async () => {
     mockGetDocs.mockResolvedValue({
       empty: false,
@@ -182,6 +264,95 @@ describe('Personal Driver subscription client actions', () => {
     });
     expect(doc).toHaveBeenCalledWith({}, 'personal_driver_subscriptions', 'sub_1');
     expect(mockGetDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not expose broader view-only candidates as a pending renewal', async () => {
+    mockGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'initial_pending_purchase',
+          data: () => ({
+            userId: 'client_1',
+            status: 'pending_payment',
+            paymentStatus: 'pending',
+            periodStartAtUtc: new Date('2026-08-05T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-09-05T00:00:00.000Z'),
+          }),
+        },
+        {
+          id: 'future_active_period',
+          data: () => ({
+            userId: 'client_1',
+            sourceSubscriptionId: 'current_active',
+            status: 'active',
+            paymentStatus: 'succeeded',
+            activationStatus: 'active',
+            periodStartAtUtc: new Date('2026-09-05T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-10-05T00:00:00.000Z'),
+          }),
+        },
+        {
+          id: 'legacy_activation_state',
+          data: () => ({
+            userId: 'client_1',
+            sourceSubscriptionId: 'current_active',
+            status: 'pending_payment',
+            paymentStatus: 'succeeded',
+            periodStartAtUtc: new Date('2026-08-06T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-09-06T00:00:00.000Z'),
+          }),
+        },
+      ],
+    });
+
+    await expect(getPendingPersonalDriverRenewal('client_1')).resolves.toBeNull();
+  });
+
+  it('selects only an eligible sourced pending renewal from broader view candidates', async () => {
+    mockGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'initial_pending_purchase',
+          data: () => ({
+            userId: 'client_1',
+            status: 'pending_payment',
+            paymentStatus: 'pending',
+            periodStartAtUtc: new Date('2026-08-05T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-09-05T00:00:00.000Z'),
+          }),
+        },
+        {
+          id: 'future_active_period',
+          data: () => ({
+            userId: 'client_1',
+            sourceSubscriptionId: 'current_active',
+            status: 'active',
+            paymentStatus: 'succeeded',
+            activationStatus: 'active',
+            periodStartAtUtc: new Date('2026-09-05T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-10-05T00:00:00.000Z'),
+          }),
+        },
+        {
+          id: 'eligible_pending_renewal',
+          data: () => ({
+            userId: 'client_1',
+            sourceSubscriptionId: 'current_active',
+            status: 'pending_payment',
+            paymentStatus: 'requires_action',
+            activationStatus: 'pending_payment',
+            periodStartAtUtc: new Date('2026-10-05T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-11-05T00:00:00.000Z'),
+          }),
+        },
+      ],
+    });
+
+    await expect(getPendingPersonalDriverRenewal('client_1')).resolves.toEqual(
+      expect.objectContaining({ id: 'eligible_pending_renewal' }),
+    );
   });
 
   it.each(['activating', 'activation_failed'])(
