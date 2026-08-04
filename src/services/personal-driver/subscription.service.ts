@@ -47,6 +47,8 @@ export interface CreatePersonalDriverSubscriptionPaymentResult {
   currency: string;
 }
 
+export type RenewPersonalDriverSubscriptionPaymentResult = CreatePersonalDriverSubscriptionPaymentResult;
+
 export async function createPersonalDriverSubscriptionPayment(
   input: CreatePersonalDriverSubscriptionPaymentInput,
 ): Promise<CreatePersonalDriverSubscriptionPaymentResult> {
@@ -56,6 +58,18 @@ export async function createPersonalDriverSubscriptionPayment(
   >(functions, 'createPersonalDriverSubscriptionPayment');
 
   const response = await callable(input);
+  return response.data;
+}
+
+export async function renewPersonalDriverSubscriptionPayment(
+  sourceSubscriptionId: string,
+  requestId: string,
+): Promise<RenewPersonalDriverSubscriptionPaymentResult> {
+  const callable = httpsCallable<
+    { sourceSubscriptionId: string; requestId: string },
+    RenewPersonalDriverSubscriptionPaymentResult
+  >(functions, 'renewPersonalDriverSubscriptionPayment');
+  const response = await callable({ sourceSubscriptionId, requestId });
   return response.data;
 }
 

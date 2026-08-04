@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -10,6 +11,8 @@ import {
   getCurrentPersonalDriverSubscription,
   getPersonalDriverTripsForSubscription,
   requestSpecialTrip,
+  renewPersonalDriverSubscriptionPayment,
+  type RenewPersonalDriverSubscriptionPaymentResult,
 } from '@/services/personal-driver/subscription.service';
 import type {
   PersonalDriverPlanId,
@@ -36,6 +39,11 @@ const TRIP_STATUS_BADGES: Record<string, { label: string; color: string }> = {
   cancelled: { label: 'Annulé (Km perdus)', color: 'bg-red-500/10 text-red-400 border border-red-500/20' },
 };
 
+const StripePaymentElement = dynamic(
+  () => import('@/components/stripe/StripePaymentElement').then((module) => ({ default: module.StripePaymentElement })),
+  { ssr: false, loading: () => <div className="h-52 rounded-xl border border-white/10 bg-white/5" /> },
+);
+
 export function PersonalDriverClientDashboard() {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -51,6 +59,9 @@ export function PersonalDriverClientDashboard() {
   const [specialDate, setSpecialDate] = useState('');
   const [specialTime, setSpecialTime] = useState('');
   const [specialDistance, setSpecialDistance] = useState('15');
+  const [renewalLoading, setRenewalLoading] = useState(false);
+  const [renewalPayment, setRenewalPayment] = useState<RenewPersonalDriverSubscriptionPaymentResult | null>(null);
+  const [renewalError, setRenewalError] = useState<string | null>(null);
 
   const reloadData = useCallback(async () => {
     if (!currentUser?.uid) return;
@@ -118,6 +129,21 @@ export function PersonalDriverClientDashboard() {
       console.error('Erreur réservation trajet spécial:', err);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleRenewal = async () => {
+    if (!subscription || renewalLoading) return;
+    setRenewalLoading(true);
+    setRenewalError(null);
+    try {
+      const requestId = `renew-${subscription.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const payment = await renewPersonalDriverSubscriptionPayment(subscription.id, requestId);
+      setRenewalPayment(payment);
+    } catch (err) {
+      setRenewalError(err instanceof Error ? err.message : 'Impossible de préparer le renouvellement.');
+    } finally {
+      setRenewalLoading(false);
     }
   };
 
@@ -210,6 +236,44 @@ export function PersonalDriverClientDashboard() {
           </div>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-white">Renouveler votre forfait</h2>
+            <p className="mt-1 text-xs text-slate-400">Un nouveau paiement crée une nouvelle période de 30 jours.</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleRenewal}
+            disabled={renewalLoading}
+            className="min-h-10 rounded-lg bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
+          >
+            {renewalLoading ? 'Préparation...' : 'Renouveler'}
+          </button>
+        </div>
+        {renewalError && (
+          <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+            {renewalError}
+          </div>
+        )}
+        {renewalPayment && (
+          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+            <h3 className="mb-3 text-sm font-bold text-white">Paiement du renouvellement</h3>
+            <StripePaymentElement
+              clientSecret={renewalPayment.clientSecret}
+              amount={renewalPayment.amount}
+              currency={renewalPayment.currency}
+              onSuccess={() => {
+                setRenewalPayment(null);
+                void reloadData();
+              }}
+              onError={setRenewalError}
+              submitLabel={`Payer ${renewalPayment.amount.toLocaleString('fr-CA', { minimumFractionDigits: 2 })} $`}
+            />
+          </div>
+        )}
+      </section>
 
       {/* VOS AVANTAGES FORFAIT */}
       <div className="rounded-2xl border border-white/10 bg-card p-6 shadow-xl">
