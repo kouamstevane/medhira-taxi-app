@@ -3,7 +3,7 @@ import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { calculateServerRoute } from './routeDistance.js';
 import { isSubscriptionEntitled } from './entitlement.js';
-import { resolveAddressCoordinates } from './locationTimeZone.js';
+import { localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
 
 type PersonalDriverPlanId = 'basic' | 'classic' | 'premium';
 
@@ -26,6 +26,19 @@ function getPlanId(data: FirebaseFirestore.DocumentData): PersonalDriverPlanId {
 
 function roundDistance(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+function toDate(value: unknown): Date | null {
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return date instanceof Date && Number.isFinite(date.getTime()) ? date : null;
+  }
+  if (typeof value === 'string') {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  return null;
 }
 
 const clientActionSchema = z.discriminatedUnion('action', [
@@ -118,6 +131,26 @@ export const clientManagePersonalDriver = onCall(
         throw new HttpsError('failed-precondition', 'Les trajets spéciaux sont disponibles après activation de l’abonnement.');
       }
 
+      const scheduledAtMatch = /^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/.exec(payload.scheduledAtIso);
+      if (!scheduledAtMatch || typeof subscription.serviceTimeZone !== 'string') {
+        throw new HttpsError('invalid-argument', 'Date ou fuseau du trajet spécial invalide.');
+      }
+      let scheduledAtUtc: Date;
+      try {
+        scheduledAtUtc = localDateTimeToUtc(
+          scheduledAtMatch[1],
+          `${scheduledAtMatch[2]}:${scheduledAtMatch[3]}`,
+          subscription.serviceTimeZone,
+        );
+      } catch {
+        throw new HttpsError('invalid-argument', 'L’horaire local du trajet spécial est invalide.');
+      }
+      const periodStartAtUtc = toDate(subscription.periodStartAtUtc);
+      const periodEndAtUtc = toDate(subscription.periodEndAtUtc);
+      if (!periodStartAtUtc || !periodEndAtUtc || scheduledAtUtc < periodStartAtUtc || scheduledAtUtc >= periodEndAtUtc) {
+        throw new HttpsError('failed-precondition', 'Le trajet spécial doit être compris dans la période du forfait.');
+      }
+
       const planId = getPlanId(subscription);
       const includedSpecialTrips = SPECIAL_TRIP_LIMITS[planId];
       const specialTripsUsed = Number(subscription.specialTripsUsed ?? 0);
@@ -147,7 +180,7 @@ export const clientManagePersonalDriver = onCall(
         pickupAddress: payload.pickupAddress,
         destinationAddress: payload.destinationAddress,
         pickupLocation,
-        scheduledAtIso: payload.scheduledAtIso,
+        scheduledAtIso: scheduledAtUtc.toISOString(),
         status: 'scheduled',
         distanceKm,
         assignedDriverId: null,

@@ -49,6 +49,7 @@ jest.mock('../routeDistance', () => ({
 
 jest.mock('../locationTimeZone', () => ({
   resolveAddressCoordinates: mockResolveAddressCoordinates,
+  localDateTimeToUtc: (date: string, time: string) => new Date(`${date}T${time}:00.000Z`),
 }));
 
 jest.mock('../entitlement', () => ({
@@ -110,6 +111,10 @@ describe('clientManagePersonalDriver', () => {
         status: 'active',
         selectedPlanId: 'classic',
         specialTripsUsed: 1,
+        paymentStatus: 'succeeded',
+        periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+        periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+        serviceTimeZone: 'America/Toronto',
         monthlyDistanceKm: 100,
         monthlyDistanceKmRemaining: 95,
         specialTripsDistanceUsedKm: 5,
@@ -149,6 +154,10 @@ describe('clientManagePersonalDriver', () => {
         status: 'active',
         selectedPlanId: 'classic',
         specialTripsUsed: 0,
+        paymentStatus: 'succeeded',
+        periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+        periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+        serviceTimeZone: 'America/Toronto',
         monthlyDistanceKm: 20,
         monthlyDistanceKmRemaining: 15,
         specialTripsDistanceUsedKm: 5,
@@ -174,6 +183,10 @@ describe('clientManagePersonalDriver', () => {
         status: 'active',
         selectedPlanId: 'classic',
         specialTripsUsed: 2,
+        paymentStatus: 'succeeded',
+        periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+        periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+        serviceTimeZone: 'America/Toronto',
         monthlyDistanceKm: 100,
         monthlyDistanceKmRemaining: 100,
       }),
