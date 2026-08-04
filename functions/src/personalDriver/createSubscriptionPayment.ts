@@ -224,36 +224,6 @@ async function waitForSubscriptionPayment(
   throw new HttpsError('aborted', 'Création du paiement trop longue. Veuillez réessayer.');
 }
 
-async function auditPaymentFinalizationFailure(
-  db: FirebaseFirestore.Firestore,
-  subscriptionRef: FirebaseFirestore.DocumentReference,
-  lockRef: FirebaseFirestore.DocumentReference,
-  input: {
-    ownerId: string;
-    attempt: number;
-    paymentIntentId: string;
-  },
-): Promise<{ paymentPersisted: boolean; creatorStillOwnsAttempt: boolean }> {
-  return db.runTransaction(async (transaction) => {
-    const subscriptionSnapshot = await transaction.get(subscriptionRef);
-    const lockSnapshot = await transaction.get(lockRef);
-    const subscription = subscriptionSnapshot.exists ? subscriptionSnapshot.data() : undefined;
-    const lock = lockSnapshot.exists ? lockSnapshot.data() : undefined;
-    return {
-      paymentPersisted: subscription?.stripePaymentIntentId === input.paymentIntentId,
-      creatorStillOwnsAttempt: subscription?.paymentStatus === 'creating'
-        && subscription.paymentCreationOwnerId === input.ownerId
-        && subscription.paymentCreationAttempt === input.attempt
-        && typeof subscription.stripePaymentIntentId !== 'string'
-        && lock?.state === 'creating'
-        && lock.subscriptionId === subscriptionRef.id
-        && lock.ownerId === input.ownerId
-        && lock.attempt === input.attempt
-        && typeof lock.paymentIntentId !== 'string',
-    };
-  });
-}
-
 export const createPersonalDriverSubscriptionPayment = onCall(
   { region: 'europe-west1', secrets: [stripeSecretKey, googleMapsApiKey] },
   async (request: CallableRequest<unknown>): Promise<CreateSubscriptionPaymentResult> => {
@@ -525,55 +495,6 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       });
     } catch (error) {
       if (error instanceof HttpsError && error.code === 'aborted') throw error;
-      let finalizationAudit = { paymentPersisted: false, creatorStillOwnsAttempt: false };
-      try {
-        finalizationAudit = await auditPaymentFinalizationFailure(
-          db,
-          subscriptionRef,
-          subscriptionClaim.lockRef,
-          {
-            ownerId: paymentCreationOwnerId,
-            attempt: subscriptionClaim.attempt,
-            paymentIntentId: paymentIntent.id,
-          },
-        );
-      } catch (verificationError) {
-        console.error('[createPersonalDriverSubscriptionPayment] Failed to audit payment finalization ownership', {
-          paymentIntentId: paymentIntent.id,
-          error: verificationError instanceof Error ? verificationError.message : verificationError,
-        });
-      }
-
-      if (!finalizationAudit.paymentPersisted && finalizationAudit.creatorStillOwnsAttempt) {
-        let paymentIntentWasCancelled = false;
-        try {
-          await getStripe().paymentIntents.cancel(paymentIntent.id, undefined, {
-            idempotencyKey: `cancel_personal_driver_subscription_${paymentIntent.id}`,
-          });
-          paymentIntentWasCancelled = true;
-        } catch (cancelError) {
-          console.error('[createPersonalDriverSubscriptionPayment] Failed to cancel orphaned PaymentIntent', {
-            paymentIntentId: paymentIntent.id,
-            error: cancelError instanceof Error ? cancelError.message : cancelError,
-          });
-        }
-        if (paymentIntentWasCancelled) {
-          try {
-            await markPaymentCreationFailed(
-              db,
-              subscriptionRef,
-              subscriptionClaim.lockRef,
-              paymentCreationOwnerId,
-              error,
-            );
-          } catch (markError) {
-            console.error('[createPersonalDriverSubscriptionPayment] Failed to mark subscription persistence failure', {
-              subscriptionId,
-              error: markError instanceof Error ? markError.message : markError,
-            });
-          }
-        }
-      }
       throw new HttpsError('internal', 'Impossible d’enregistrer l’abonnement.');
     }
 

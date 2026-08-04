@@ -296,6 +296,57 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
     expect(mockCalculateServerRoute).not.toHaveBeenCalled();
   });
 
+  it('reclaims an expired creating renewal during reload recovery and completes its payment', async () => {
+    transactionData = {
+      id: 'sub_new',
+      userId: 'user_1',
+      sourceSubscriptionId: 'sub_old',
+      status: 'pending_payment',
+      paymentStatus: 'creating',
+      periodStartDate: '2026-08-31',
+      paymentCreationOwnerId: 'expired_owner',
+      paymentCreationClaimedAt: new Date(Date.now() - (60 * 60 * 1000)),
+      paymentCreationAttempt: 1,
+    };
+    lockData = {
+      userId: 'user_1',
+      periodStartDate: '2026-08-31',
+      subscriptionId: 'sub_new',
+      state: 'creating',
+      ownerId: 'expired_owner',
+      attempt: 1,
+      leaseExpiresAt: new Date(Date.now() - 1),
+    };
+    newRef.get.mockResolvedValue({ exists: true, data: () => transactionData });
+    const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
+
+    await expect(renewPersonalDriverSubscriptionPayment(makeRequest({
+      sourceSubscriptionId: 'sub_old',
+      requestId: 'recover-sub_new',
+      pendingSubscriptionId: 'sub_new',
+    }))).resolves.toEqual(expect.objectContaining({
+      subscriptionId: 'sub_new',
+      paymentIntentId: 'pi_renew_1',
+      clientSecret: 'pi_renew_1_secret',
+    }));
+
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
+    expect(transactionData).toMatchObject({
+      id: 'sub_new',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      paymentCreationAttempt: 1,
+      stripePaymentIntentId: 'pi_renew_1',
+    });
+    expect(transactionData?.paymentCreationOwnerId).not.toBe('expired_owner');
+    expect(lockData).toMatchObject({
+      subscriptionId: 'sub_new',
+      state: 'pending_payment',
+      attempt: 1,
+      paymentIntentId: 'pi_renew_1',
+    });
+  });
+
   it('rejects an active source whose payment is not succeeded', async () => {
     const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
     mockStripe.paymentIntents.create.mockClear();

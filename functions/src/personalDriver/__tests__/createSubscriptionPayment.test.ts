@@ -672,7 +672,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
   });
 
-  it('cancels the PaymentIntent when Firestore persistence fails', async () => {
+  it('leaves the idempotent PaymentIntent recoverable when Firestore persistence fails', async () => {
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     const run = async (callback: (transaction: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction);
     mockDb.runTransaction
@@ -684,34 +684,16 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       code: 'internal',
     });
 
-    expect(mockStripe.paymentIntents.cancel).toHaveBeenCalledWith(
-      'pi_123',
-      undefined,
-      { idempotencyKey: 'cancel_personal_driver_subscription_pi_123' },
-    );
-  });
-
-  it('marks an orphaned commit failure recoverable after cancellation', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
-    const run = async (callback: (transaction: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction);
-    mockDb.runTransaction
-      .mockImplementationOnce(run)
-      .mockRejectedValueOnce(new Error('Firestore unavailable'))
-      .mockImplementation(run);
-
-    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).rejects.toMatchObject({
-      code: 'internal',
+    expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
+    expect(transactionData).toMatchObject({
+      status: 'pending_payment',
+      paymentStatus: 'creating',
+      paymentCreationAttempt: 1,
     });
-
-    expect(mockStripe.paymentIntents.cancel).toHaveBeenCalledWith(
-      'pi_123',
-      undefined,
-      { idempotencyKey: 'cancel_personal_driver_subscription_pi_123' },
-    );
-    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
-      status: 'payment_failed',
-      paymentStatus: 'failed',
-    }));
+    expect(lockDocuments.values().next().value).toMatchObject({
+      state: 'creating',
+      attempt: 1,
+    });
   });
 
   it('does not cancel a PaymentIntent when the failed commit persisted its subscription', async () => {
@@ -729,31 +711,13 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       code: 'internal',
     });
 
-    expect(mockDb.runTransaction).toHaveBeenCalledTimes(3);
+    expect(mockDb.runTransaction).toHaveBeenCalledTimes(2);
     expect(transactionData).toMatchObject({
       status: 'pending_payment',
       paymentStatus: 'pending',
       stripePaymentIntentId: 'pi_123',
     });
     expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
-  });
-
-  it('still returns an internal error when compensation cancellation fails', async () => {
-    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
-    const run = async (callback: (transaction: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction);
-    mockDb.runTransaction
-      .mockImplementationOnce(run)
-      .mockRejectedValueOnce(new Error('Firestore unavailable'))
-      .mockImplementation(run);
-    mockStripe.paymentIntents.cancel.mockRejectedValue(new Error('Stripe unavailable'));
-    const consoleError = jest.spyOn(console, 'error').mockImplementation();
-
-    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).rejects.toMatchObject({
-      code: 'internal',
-    });
-
-    expect(consoleError).toHaveBeenCalled();
-    consoleError.mockRestore();
   });
 
   it('does not cancel the shared PaymentIntent after the creating lease changes owner', async () => {
@@ -775,7 +739,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
   });
 
-  it('audits lock ownership before compensating a generic finalization failure', async () => {
+  it('does not compensate a generic finalization failure after the lease changes owner', async () => {
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     const run = async (callback: (transaction: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction);
     mockDb.runTransaction
@@ -797,6 +761,31 @@ describe('createPersonalDriverSubscriptionPayment', () => {
 
     expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
     expect(lockDocuments.values().next().value).toMatchObject({ ownerId: 'new_owner', attempt: 2 });
+  });
+
+  it('does not cancel the shared PaymentIntent before a later owner reclaims failed finalization', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+    const run = async (callback: (transaction: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction);
+    mockDb.runTransaction
+      .mockImplementationOnce(run)
+      .mockRejectedValueOnce(new Error('Firestore unavailable'))
+      .mockImplementation(run);
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).rejects.toMatchObject({
+      code: 'internal',
+    });
+    const firstOwnerId = transactionData?.paymentCreationOwnerId;
+    const firstIdempotencyKey = mockStripe.paymentIntents.create.mock.calls[0][1].idempotencyKey;
+    jest.setSystemTime(Date.now() + (10 * 60 * 1000) + 1);
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).resolves.toEqual(
+      expect.objectContaining({ paymentIntentId: 'pi_123' }),
+    );
+
+    expect(transactionData?.paymentCreationOwnerId).not.toBe(firstOwnerId);
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(2);
+    expect(mockStripe.paymentIntents.create.mock.calls[1][1].idempotencyKey).toBe(firstIdempotencyKey);
+    expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
   });
 
   it('keeps distinct initial request IDs on one user-period PaymentIntent', async () => {

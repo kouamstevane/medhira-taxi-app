@@ -180,6 +180,9 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
     }
 
     const now = new Date();
+    const paymentCreationOwnerId = randomUUID();
+    let periodStartDate: string;
+    let claim: ClaimSubscriptionPeriodLockResult | undefined;
     if (pendingSubscriptionId) {
       const pendingRef = db.collection('personal_driver_subscriptions').doc(pendingSubscriptionId);
       const pendingSnapshot = await pendingRef.get();
@@ -189,79 +192,104 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         !pending
         || pending.userId !== userId
         || pending.sourceSubscriptionId !== sourceSubscriptionId
-        || pending.status !== 'pending_payment'
-        || !['creating', 'pending', 'requires_action'].includes(pending.paymentStatus)
+        || !(
+          (pending.status === 'pending_payment' && ['creating', 'pending', 'requires_action'].includes(pending.paymentStatus))
+          || (pending.status === 'active' && pending.paymentStatus === 'succeeded')
+        )
         || typeof pendingPeriodStartDate !== 'string'
         || !isCalendarDate(pendingPeriodStartDate)
       ) {
         throw new HttpsError('failed-precondition', 'Renouvellement en attente invalide.');
       }
 
-      const recoveryClaim = await db.runTransaction<ClaimSubscriptionPeriodLockResult>(async (transaction) => (
-        claimSubscriptionPeriodLock(transaction, db, {
+      const recoveryClaim = await db.runTransaction<ClaimSubscriptionPeriodLockResult>(async (transaction) => {
+        const periodClaim = await claimSubscriptionPeriodLock(transaction, db, {
           userId,
           periodStartDate: pendingPeriodStartDate,
           requestedSubscriptionId: pendingSubscriptionId,
-          ownerId: randomUUID(),
+          ownerId: paymentCreationOwnerId,
           now,
-        })
-      ));
-      if (
-        recoveryClaim.kind !== 'existing'
-        || recoveryClaim.subscriptionId !== pendingSubscriptionId
-        || !['creating', 'pending_payment'].includes(recoveryClaim.state)
-      ) {
-        throw new HttpsError('failed-precondition', 'Le paiement en attente ne peut pas être récupéré.');
+        });
+        if (periodClaim.subscriptionId !== pendingSubscriptionId) {
+          throw new HttpsError('failed-precondition', 'Le paiement en attente ne peut pas être récupéré.');
+        }
+        if (periodClaim.kind === 'claimed') {
+          if (!periodClaim.subscriptionExists) {
+            throw new HttpsError('failed-precondition', 'Le paiement en attente ne peut pas être récupéré.');
+          }
+          transaction.update(pendingRef, {
+            id: pendingSubscriptionId,
+            userId,
+            sourceSubscriptionId,
+            periodStartDate: pendingPeriodStartDate,
+            status: 'pending_payment',
+            paymentStatus: 'creating',
+            paymentCreationOwnerId,
+            paymentCreationClaimedAt: now,
+            paymentCreationAttempt: periodClaim.attempt,
+            paymentCreationError: null,
+          });
+        }
+        return periodClaim;
+      });
+      if (recoveryClaim.kind === 'existing') {
+        const settledData = recoveryClaim.state === 'creating'
+          ? await waitForRenewalPayment(pendingRef)
+          : (await pendingRef.get()).data();
+        const reusablePayment = settledData?.status === 'active'
+          ? settledData.paymentStatus === 'succeeded'
+          : settledData?.status === 'pending_payment'
+            && ['pending', 'requires_action'].includes(settledData.paymentStatus);
+        if (
+          settledData?.userId !== userId
+          || settledData.sourceSubscriptionId !== sourceSubscriptionId
+          || settledData.periodStartDate !== pendingPeriodStartDate
+          || !reusablePayment
+          || typeof settledData.stripePaymentIntentId !== 'string'
+        ) {
+          throw new HttpsError('failed-precondition', 'Le paiement en attente ne peut pas être récupéré.');
+        }
+        const existingPaymentIntent = await getStripe().paymentIntents.retrieve(settledData.stripePaymentIntentId);
+        if (!existingPaymentIntent.client_secret) {
+          throw new HttpsError('internal', 'Secret du paiement de renouvellement manquant.');
+        }
+        return {
+          subscriptionId: pendingSubscriptionId,
+          paymentIntentId: existingPaymentIntent.id,
+          clientSecret: existingPaymentIntent.client_secret,
+          amount: Number(settledData.totalAmount ?? 0),
+          currency: String(settledData.currency ?? CURRENCY),
+          quote: getPersistedAuthoritativeQuote(settledData),
+        };
       }
-      const settledData = recoveryClaim.state === 'creating'
-        ? await waitForRenewalPayment(pendingRef)
-        : (await pendingRef.get()).data();
-      if (
-        settledData?.userId !== userId
-        || settledData.sourceSubscriptionId !== sourceSubscriptionId
-        || settledData.periodStartDate !== pendingPeriodStartDate
-        || settledData.status !== 'pending_payment'
-        || !['pending', 'requires_action'].includes(settledData.paymentStatus)
-        || typeof settledData.stripePaymentIntentId !== 'string'
-      ) {
-        throw new HttpsError('failed-precondition', 'Le paiement en attente ne peut pas être récupéré.');
-      }
-      const existingPaymentIntent = await getStripe().paymentIntents.retrieve(settledData.stripePaymentIntentId);
-      if (!existingPaymentIntent.client_secret) {
-        throw new HttpsError('internal', 'Secret du paiement de renouvellement manquant.');
-      }
-      return {
-        subscriptionId: pendingSubscriptionId,
-        paymentIntentId: existingPaymentIntent.id,
-        clientSecret: existingPaymentIntent.client_secret,
-        amount: Number(settledData.totalAmount ?? 0),
-        currency: String(settledData.currency ?? CURRENCY),
-        quote: getPersistedAuthoritativeQuote(settledData),
-      };
+      periodStartDate = pendingPeriodStartDate;
+      claim = recoveryClaim;
+    } else {
+      periodStartDate = sourceStatus === 'active' && now < sourcePeriodEndAtUtc
+        ? sourcePeriodEndDate
+        : getLocalCalendarDate(now, serviceTimeZone);
     }
 
-    const periodStartDate = sourceStatus === 'active' && now < sourcePeriodEndAtUtc
-      ? sourcePeriodEndDate
-      : getLocalCalendarDate(now, serviceTimeZone);
     const tripType = source.tripType === 'round_trip' ? 'round_trip' : 'one_way';
     const departureTime = getSourceString(source, 'departureTime');
     const returnTime = tripType === 'round_trip' ? getSourceString(source, 'returnTime') : null;
-    try {
-      assertValidSubscriptionSchedule({
-        startDate: periodStartDate,
-        departureTime,
-        returnTime,
-        tripType,
-        serviceTimeZone,
-        now,
-      });
-    } catch {
-      throw new HttpsError('failed-precondition', 'La date ou les horaires du forfait source sont invalides.');
+    if (!pendingSubscriptionId) {
+      try {
+        assertValidSubscriptionSchedule({
+          startDate: periodStartDate,
+          departureTime,
+          returnTime,
+          tripType,
+          serviceTimeZone,
+          now,
+        });
+      } catch {
+        throw new HttpsError('failed-precondition', 'La date ou les horaires du forfait source sont invalides.');
+      }
     }
 
     const requestedRenewalId = createRenewalId(userId, sourceSubscriptionId, requestId);
-    const paymentCreationOwnerId = randomUUID();
-    const claim = await db.runTransaction<ClaimSubscriptionPeriodLockResult>(async (transaction) => {
+    claim ??= await db.runTransaction<ClaimSubscriptionPeriodLockResult>(async (transaction) => {
       const periodClaim = await claimSubscriptionPeriodLock(transaction, db, {
         userId,
         periodStartDate,
