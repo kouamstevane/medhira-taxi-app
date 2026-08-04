@@ -33,6 +33,7 @@ describe('personal driver trip generation', () => {
     departureTime: '08:00',
     pickupAddress: 'A',
     destinationAddress: 'B',
+    pickupLocation: { latitude: 45.5, longitude: -73.5 },
     selectedPlanId: 'basic' as PersonalDriverPlanId,
     distanceOneWayKm: 12.5,
     distanceReturnKm: 0,

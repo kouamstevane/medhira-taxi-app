@@ -1,6 +1,9 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
+import { calculateServerRoute } from './routeDistance.js';
+import { isSubscriptionEntitled } from './entitlement.js';
+import { resolveAddressCoordinates } from './locationTimeZone.js';
 
 type PersonalDriverPlanId = 'basic' | 'classic' | 'premium';
 
@@ -36,7 +39,7 @@ const clientActionSchema = z.discriminatedUnion('action', [
     pickupAddress: z.string().trim().min(3).max(500),
     destinationAddress: z.string().trim().min(3).max(500),
     scheduledAtIso: z.string().trim().min(10).max(40),
-    distanceKm: z.number().finite().positive().max(1000),
+    distanceKm: z.number().finite().positive().max(1000).optional(),
   }),
 ]);
 
@@ -84,6 +87,13 @@ export const clientManagePersonalDriver = onCall(
 
     const subscriptionRef = db.collection('personal_driver_subscriptions').doc(payload.subscriptionId);
     const tripRef = db.collection('personal_driver_trips').doc();
+    const [authoritativeRoute, pickupLocation] = await Promise.all([
+      calculateServerRoute({
+        origin: payload.pickupAddress,
+        destination: payload.destinationAddress,
+      }),
+      resolveAddressCoordinates(payload.pickupAddress),
+    ]);
     return db.runTransaction(async (transaction) => {
       const subscriptionSnap = await transaction.get(subscriptionRef);
       if (!subscriptionSnap.exists) {
@@ -94,7 +104,17 @@ export const clientManagePersonalDriver = onCall(
       if (subscription?.userId !== uid) {
         throw new HttpsError('permission-denied', 'Cet abonnement ne vous appartient pas.');
       }
-      if (subscription.status !== 'active') {
+      const now = new Date();
+      if (!isSubscriptionEntitled(subscription, now)) {
+        const periodEndAtUtc = subscription.periodEndAtUtc instanceof Date
+          ? subscription.periodEndAtUtc
+          : subscription.periodEndAtUtc?.toDate?.() ?? new Date(subscription.periodEndAtUtc);
+        if (subscription.status === 'active' && Number.isFinite(periodEndAtUtc.getTime()) && now >= periodEndAtUtc) {
+          transaction.update(subscriptionRef, {
+            status: 'expired',
+            expiredAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
         throw new HttpsError('failed-precondition', 'Les trajets spéciaux sont disponibles après activation de l’abonnement.');
       }
 
@@ -106,13 +126,16 @@ export const clientManagePersonalDriver = onCall(
       }
 
       const monthlyDistanceKm = Number(subscription.monthlyDistanceKm ?? 0);
-      const specialTripsDistanceUsedKm = Number(subscription.specialTripsDistanceUsedKm ?? 0);
-      const remainingDistanceKm = roundDistance(monthlyDistanceKm - specialTripsDistanceUsedKm);
-      if (monthlyDistanceKm > 0 && payload.distanceKm > remainingDistanceKm) {
+      const monthlyDistanceKmRemaining = Number(subscription.monthlyDistanceKmRemaining ?? monthlyDistanceKm);
+      if (!Number.isFinite(monthlyDistanceKmRemaining) || monthlyDistanceKmRemaining < 0) {
+        throw new HttpsError('failed-precondition', 'Le quota kilométrique du forfait est invalide.');
+      }
+      const distanceKm = authoritativeRoute.distanceKm;
+      if (monthlyDistanceKm > 0 && distanceKm > monthlyDistanceKmRemaining) {
         throw new HttpsError('failed-precondition', 'Ce trajet dépasse le kilométrage restant de votre forfait.');
       }
       const nextRemainingDistanceKm = monthlyDistanceKm > 0
-        ? roundDistance(remainingDistanceKm - payload.distanceKm)
+        ? roundDistance(monthlyDistanceKmRemaining - distanceKm)
         : null;
 
       transaction.set(tripRef, {
@@ -123,9 +146,10 @@ export const clientManagePersonalDriver = onCall(
         isSpecialTrip: true,
         pickupAddress: payload.pickupAddress,
         destinationAddress: payload.destinationAddress,
+        pickupLocation,
         scheduledAtIso: payload.scheduledAtIso,
         status: 'scheduled',
-        distanceKm: payload.distanceKm,
+        distanceKm,
         assignedDriverId: null,
         assignedVehicleId: null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -134,7 +158,7 @@ export const clientManagePersonalDriver = onCall(
 
       transaction.update(subscriptionRef, {
         specialTripsUsed: admin.firestore.FieldValue.increment(1),
-        specialTripsDistanceUsedKm: admin.firestore.FieldValue.increment(payload.distanceKm),
+        specialTripsDistanceUsedKm: admin.firestore.FieldValue.increment(distanceKm),
         ...(nextRemainingDistanceKm !== null ? { monthlyDistanceKmRemaining: nextRemainingDistanceKm } : {}),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });

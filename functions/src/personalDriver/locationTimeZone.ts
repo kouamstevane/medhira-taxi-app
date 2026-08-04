@@ -65,6 +65,11 @@ async function geocodeAddress(address: string): Promise<Coordinates> {
   return coordinates;
 }
 
+export async function resolveAddressCoordinates(address: string): Promise<Coordinates> {
+  assertValidAddress(address);
+  return geocodeAddress(address);
+}
+
 async function resolveTimeZone(coordinates: Coordinates, referenceInstant: Date): Promise<string> {
   const url = new URL('https://maps.googleapis.com/maps/api/timezone/json');
   url.searchParams.set('location', `${coordinates.latitude},${coordinates.longitude}`);
@@ -80,9 +85,8 @@ export async function resolvePickupLocationAndTimeZone(
   address: string,
   referenceInstant: Date,
 ): Promise<Coordinates & { serviceTimeZone: string }> {
-  assertValidAddress(address);
   if (!Number.isFinite(referenceInstant.getTime())) throw new Error('Invalid reference instant');
-  const coordinates = await geocodeAddress(address);
+  const coordinates = await resolveAddressCoordinates(address);
   const serviceTimeZone = await resolveTimeZone(coordinates, referenceInstant);
   return { ...coordinates, serviceTimeZone };
 }

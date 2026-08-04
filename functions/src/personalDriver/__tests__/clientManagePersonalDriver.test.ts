@@ -18,6 +18,8 @@ const mockDb = {
   })),
   runTransaction: jest.fn((callback: (tx: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction)),
 };
+const mockCalculateServerRoute = jest.fn();
+const mockResolveAddressCoordinates = jest.fn();
 
 jest.mock('firebase-admin', () => ({
   apps: [{}],
@@ -41,6 +43,18 @@ jest.mock('firebase-functions/v2/https', () => ({
   },
 }));
 
+jest.mock('../routeDistance', () => ({
+  calculateServerRoute: mockCalculateServerRoute,
+}));
+
+jest.mock('../locationTimeZone', () => ({
+  resolveAddressCoordinates: mockResolveAddressCoordinates,
+}));
+
+jest.mock('../entitlement', () => ({
+  isSubscriptionEntitled: jest.fn(() => true),
+}));
+
 function makeRequest(data: unknown, uid?: string) {
   return { data, auth: uid ? { uid } : undefined } as never;
 }
@@ -48,6 +62,8 @@ function makeRequest(data: unknown, uid?: string) {
 describe('clientManagePersonalDriver', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCalculateServerRoute.mockResolvedValue({ distanceKm: 18, durationMinutes: 30 });
+    mockResolveAddressCoordinates.mockResolvedValue({ latitude: 45.5, longitude: -73.5 });
   });
 
   it('rejects unauthenticated requests', async () => {
@@ -95,6 +111,7 @@ describe('clientManagePersonalDriver', () => {
         selectedPlanId: 'classic',
         specialTripsUsed: 1,
         monthlyDistanceKm: 100,
+        monthlyDistanceKmRemaining: 95,
         specialTripsDistanceUsedKm: 5,
       }),
     });
@@ -105,7 +122,7 @@ describe('clientManagePersonalDriver', () => {
       pickupAddress: 'Clinique',
       destinationAddress: 'Aeroport',
       scheduledAtIso: '2026-08-12T09:30:00',
-      distanceKm: 18,
+      distanceKm: 999,
     }, 'client_1'));
 
     expect(result).toEqual({ success: true, tripId: 'special_1', specialTripsRemaining: 0 });
@@ -133,6 +150,7 @@ describe('clientManagePersonalDriver', () => {
         selectedPlanId: 'classic',
         specialTripsUsed: 0,
         monthlyDistanceKm: 20,
+        monthlyDistanceKmRemaining: 15,
         specialTripsDistanceUsedKm: 5,
       }),
     });
@@ -143,7 +161,7 @@ describe('clientManagePersonalDriver', () => {
       pickupAddress: 'Clinique',
       destinationAddress: 'Aeroport',
       scheduledAtIso: '2026-08-12T09:30:00',
-      distanceKm: 18,
+      distanceKm: 1,
     }, 'client_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
   });
 
@@ -156,6 +174,8 @@ describe('clientManagePersonalDriver', () => {
         status: 'active',
         selectedPlanId: 'classic',
         specialTripsUsed: 2,
+        monthlyDistanceKm: 100,
+        monthlyDistanceKmRemaining: 100,
       }),
     });
 
@@ -165,7 +185,7 @@ describe('clientManagePersonalDriver', () => {
       pickupAddress: 'Clinique',
       destinationAddress: 'Aeroport',
       scheduledAtIso: '2026-08-12T09:30:00',
-      distanceKm: 18,
+      distanceKm: 1,
     }, 'client_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
   });
 });

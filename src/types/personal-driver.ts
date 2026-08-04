@@ -116,6 +116,10 @@ export interface PersonalDriverTrip {
   status: PersonalDriverTripStatus;
   scheduledAtIso: string;
   pickupAddress: string;
+  pickupLocation?: {
+    latitude: number;
+    longitude: number;
+  };
   destinationAddress: string;
   assignedDriverId: string | null;
   assignedDriverName?: string;
@@ -127,7 +131,7 @@ export interface PersonalDriverTrip {
   overageWaitMinutes?: number;
   overageWaitFeeAmount?: number;
   overageWaitBilled?: boolean;
-  overageChargeStatus?: 'processing' | 'billed' | 'failed' | 'review_required';
+  overageChargeStatus?: 'processing' | 'not_required' | 'billed' | 'failed' | 'review_required';
   cancelledBy?: 'client' | 'driver' | 'admin';
   clientCancelledLostKm?: boolean;
   driverAlertFlagged?: boolean;

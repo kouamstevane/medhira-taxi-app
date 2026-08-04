@@ -1,6 +1,7 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
+import { isSubscriptionEntitled } from './entitlement.js';
 
 function getDb(): FirebaseFirestore.Firestore {
   if (!admin.apps.length) admin.initializeApp();
@@ -32,6 +33,17 @@ async function assertAssignableDriver(driverId: string): Promise<void> {
 
   if (driver?.isAvailable === false || driver?.availabilityStatus === 'busy_personal_driver') {
     throw new HttpsError('failed-precondition', 'Le chauffeur sélectionné n’est pas disponible.');
+  }
+}
+
+async function assertTripSubscriptionEntitled(trip: FirebaseFirestore.DocumentData | undefined): Promise<void> {
+  const subscriptionId = trip?.subscriptionId;
+  if (typeof subscriptionId !== 'string' || !subscriptionId) {
+    throw new HttpsError('failed-precondition', 'Le forfait du trajet est introuvable.');
+  }
+  const subscriptionSnap = await getDb().collection('personal_driver_subscriptions').doc(subscriptionId).get();
+  if (!subscriptionSnap.exists || !isSubscriptionEntitled(subscriptionSnap.data(), new Date())) {
+    throw new HttpsError('failed-precondition', 'Le forfait doit être payé et actif avant affectation.');
   }
 }
 
@@ -94,6 +106,7 @@ export const adminManagePersonalDriver = onCall(
       if (trip?.status && !['scheduled', 'driver_assigned'].includes(trip.status)) {
         throw new HttpsError('failed-precondition', 'Ce trajet ne peut pas être affecté dans son statut actuel.');
       }
+      await assertTripSubscriptionEntitled(trip);
       const batch = db.batch();
       batch.update(tripRef, {
         assignedDriverId: payload.driverId,
@@ -134,6 +147,7 @@ export const adminManagePersonalDriver = onCall(
         throw new HttpsError('not-found', 'Trajet introuvable.');
       }
       const trip = tripSnap.data();
+      await assertTripSubscriptionEntitled(trip);
       const batch = db.batch();
       batch.update(tripRef, {
         assignedDriverId: payload.newDriverId,

@@ -67,7 +67,23 @@ export function PersonalDriverDriverPageClient() {
     setMessage(null);
     try {
       const callable = httpsCallable(functions, 'driverUpdatePersonalDriverTrip');
-      await callable({ tripId: tripId.trim(), status });
+      let location: { lat: number; lng: number; accuracy: number } | undefined;
+      if (status === 'driver_arrived') {
+        if (!navigator.geolocation) throw new Error('La géolocalisation est indisponible sur cet appareil.');
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 10000,
+          });
+        });
+        location = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        };
+      }
+      await callable({ tripId: tripId.trim(), status, ...location });
 
       if (status === 'driver_arrived') {
         setIsWaiting(true);
@@ -76,21 +92,18 @@ export function PersonalDriverDriverPageClient() {
         setMessage(`Chauffeur arrivé sur place pour le trajet ${tripId}. Chronomètre d'attente démarré.`);
       } else if (status === 'passenger_picked_up') {
         setIsWaiting(false);
-        const elapsedMinutes = Math.ceil(elapsedSeconds / 60);
-
-        // Call Stripe overage charging callable
         const chargeCallable = httpsCallable(functions, 'chargePersonalDriverWaitTimeOverage');
         const chargeRes = (await chargeCallable({
           tripId: tripId.trim(),
-          elapsedMinutes,
-        })) as { data: { success: boolean; feeBilled: number; overageMinutes: number } };
+        })) as { data: { success: boolean; waitTimeMinutes: number; feeBilled: number; overageMinutes: number } };
+        const serverWaitTimeMinutes = chargeRes.data?.waitTimeMinutes ?? 0;
 
         if (chargeRes.data?.overageMinutes > 0) {
           setMessage(
-            `Passager à bord. Temps d'attente total : ${elapsedMinutes} min (${chargeRes.data.overageMinutes} min de dépassement). Prélèvement Stripe immédiat de ${chargeRes.data.feeBilled.toFixed(2)} $.`,
+            `Passager à bord. Temps d'attente total : ${serverWaitTimeMinutes} min (${chargeRes.data.overageMinutes} min de dépassement). Prélèvement Stripe immédiat de ${chargeRes.data.feeBilled.toFixed(2)} $.`,
           );
         } else {
-          setMessage(`Passager à bord. Attente de ${elapsedMinutes} min dans les limites gratuites du forfait.`);
+          setMessage(`Passager à bord. Attente de ${serverWaitTimeMinutes} min dans les limites gratuites du forfait.`);
         }
       } else {
         setMessage(`Statut du trajet ${tripId} mis à jour : ${status}`);

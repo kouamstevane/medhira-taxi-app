@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { buildPersonalDriverTripDrafts } from './schedule.js';
 import type { PersonalDriverPlanId, PersonalDriverWeekday } from './pricing.js';
+import type { PersonalDriverCoordinate } from './geolocation.js';
 
 type PersonalDriverTripType = 'one_way' | 'round_trip';
 
@@ -18,6 +19,7 @@ export interface PersonalDriverTripGenerationSubscription {
   returnTime?: string | null;
   pickupAddress: string;
   destinationAddress: string;
+  pickupLocation: PersonalDriverCoordinate;
   selectedPlanId?: PersonalDriverPlanId;
   planId?: PersonalDriverPlanId;
   distanceOneWayKm: number;
@@ -42,6 +44,7 @@ export async function generatePersonalDriverTrips(
     returnTime: subscription.returnTime ?? undefined,
     pickupAddress: subscription.pickupAddress,
     destinationAddress: subscription.destinationAddress,
+    pickupLocation: subscription.pickupLocation,
     planId: subscription.selectedPlanId ?? subscription.planId ?? 'basic',
     distanceOneWayKm: subscription.distanceOneWayKm,
     distanceReturnKm: subscription.distanceReturnKm,

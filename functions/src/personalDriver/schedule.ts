@@ -1,5 +1,6 @@
 import type { PersonalDriverPlanId, PersonalDriverWeekday } from './pricing.js';
 import { localDateTimeToUtc } from './locationTimeZone.js';
+import type { PersonalDriverCoordinate } from './geolocation.js';
 
 export interface PersonalDriverTripDraft {
   subscriptionId: string;
@@ -10,6 +11,7 @@ export interface PersonalDriverTripDraft {
   scheduledAtIso: string;
   pickupAddress: string;
   destinationAddress: string;
+  pickupLocation: PersonalDriverCoordinate;
   assignedDriverId: null;
   assignedVehicleId: null;
   distanceKm: number;
@@ -27,6 +29,7 @@ export function buildPersonalDriverTripDrafts(input: {
   returnTime?: string;
   pickupAddress: string;
   destinationAddress: string;
+  pickupLocation: PersonalDriverCoordinate;
   planId: PersonalDriverPlanId;
   distanceOneWayKm: number;
   distanceReturnKm: number;
@@ -62,6 +65,7 @@ export function buildPersonalDriverTripDrafts(input: {
       scheduledAtIso: localDateTimeToUtc(dateString, input.departureTime, input.serviceTimeZone).toISOString(),
       pickupAddress: input.pickupAddress,
       destinationAddress: input.destinationAddress,
+      pickupLocation: input.pickupLocation,
       assignedDriverId: null,
       assignedVehicleId: null,
       distanceKm: input.distanceOneWayKm,
@@ -77,6 +81,7 @@ export function buildPersonalDriverTripDrafts(input: {
         scheduledAtIso: localDateTimeToUtc(dateString, input.returnTime!, input.serviceTimeZone).toISOString(),
         pickupAddress: input.destinationAddress,
         destinationAddress: input.pickupAddress,
+        pickupLocation: input.pickupLocation,
         assignedDriverId: null,
         assignedVehicleId: null,
         distanceKm: input.distanceReturnKm,

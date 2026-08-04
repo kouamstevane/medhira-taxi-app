@@ -1,6 +1,8 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
+import { assertDriverNearPickup } from './geolocation.js';
+import { isSubscriptionEntitled } from './entitlement.js';
 export type PersonalDriverTripStatus =
   | 'scheduled'
   | 'driver_assigned'
@@ -35,6 +37,7 @@ const inputSchema = z.object({
   ]),
   lat: z.number().optional(),
   lng: z.number().optional(),
+  accuracy: z.number().finite().nonnegative().optional(),
 });
 
 export const driverUpdatePersonalDriverTrip = onCall(
@@ -49,7 +52,7 @@ export const driverUpdatePersonalDriverTrip = onCall(
       throw new HttpsError('invalid-argument', parsed.error.issues[0].message);
     }
 
-    const { tripId, status: newStatus, lat, lng } = parsed.data;
+    const { tripId, status: newStatus, lat, lng, accuracy } = parsed.data;
     const db = getDb();
     const tripRef = db.collection('personal_driver_trips').doc(tripId);
     const driverRef = db.collection('drivers').doc(request.auth.uid);
@@ -65,6 +68,15 @@ export const driverUpdatePersonalDriverTrip = onCall(
         throw new HttpsError('permission-denied', 'Ce trajet ne vous est pas attribué.');
       }
 
+      if (typeof tripData.subscriptionId !== 'string' || !tripData.subscriptionId) {
+        throw new HttpsError('failed-precondition', 'Le forfait du trajet est introuvable.');
+      }
+      const entitlementRef = db.collection('personal_driver_subscriptions').doc(tripData.subscriptionId);
+      const subscriptionSnap = await transaction.get(entitlementRef);
+      if (!subscriptionSnap.exists || !isSubscriptionEntitled(subscriptionSnap.data(), new Date())) {
+        throw new HttpsError('failed-precondition', 'Le forfait doit être payé et actif pour poursuivre ce trajet.');
+      }
+
       const currentStatus: PersonalDriverTripStatus = tripData?.status || 'scheduled';
       const allowed = ALLOWED_TRANSITIONS[currentStatus] || [];
       if (!allowed.includes(newStatus as PersonalDriverTripStatus)) {
@@ -74,18 +86,46 @@ export const driverUpdatePersonalDriverTrip = onCall(
         );
       }
 
+      if (newStatus === 'driver_arrived') {
+        if (lat === undefined || lng === undefined || accuracy === undefined) {
+          throw new HttpsError('invalid-argument', 'La position GPS et sa précision sont obligatoires à l’arrivée.');
+        }
+        const pickupLocation = tripData?.pickupLocation;
+        if (
+          !pickupLocation
+          || typeof pickupLocation.latitude !== 'number'
+          || typeof pickupLocation.longitude !== 'number'
+        ) {
+          throw new HttpsError('failed-precondition', 'Le point de prise en charge du trajet est introuvable.');
+        }
+        try {
+          assertDriverNearPickup(
+            { latitude: lat, longitude: lng },
+            { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude },
+            accuracy,
+          );
+        } catch {
+          throw new HttpsError('failed-precondition', 'La position GPS ne confirme pas l’arrivée au lieu de prise en charge.');
+        }
+      }
+
       const statusHistory = tripData?.statusHistory || [];
       statusHistory.push({
         status: newStatus,
         changedAt: new Date().toISOString(),
         changedBy: request.auth!.uid,
-        location: lat !== undefined && lng !== undefined ? { lat, lng } : null,
+        location: lat !== undefined && lng !== undefined
+          ? { lat, lng, accuracy: accuracy ?? null }
+          : null,
       });
 
       transaction.update(tripRef, {
         status: newStatus,
         statusHistory,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...(newStatus === 'driver_arrived'
+          ? { driverArrivedAt: admin.firestore.FieldValue.serverTimestamp() }
+          : {}),
       });
 
       const driverAvailabilityUpdate =
@@ -105,7 +145,9 @@ export const driverUpdatePersonalDriverTrip = onCall(
 
       transaction.update(driverRef, {
         ...driverAvailabilityUpdate,
-        ...(lat !== undefined && lng !== undefined ? { currentLocation: { lat, lng } } : {}),
+        ...(lat !== undefined && lng !== undefined
+          ? { currentLocation: { lat, lng, accuracy: accuracy ?? null } }
+          : {}),
       });
     });
 

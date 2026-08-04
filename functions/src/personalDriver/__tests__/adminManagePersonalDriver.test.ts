@@ -51,6 +51,15 @@ describe('adminManagePersonalDriver', () => {
     jest.clearAllMocks();
     mockBatch.commit.mockResolvedValue(undefined);
     mockDriverRef.get.mockResolvedValue({ exists: true, data: () => ({ status: 'approved', isAvailable: true }) });
+    mockSubRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        status: 'active',
+        paymentStatus: 'succeeded',
+        periodStartAtUtc: new Date('2026-01-01T00:00:00.000Z'),
+        periodEndAtUtc: new Date('2027-01-01T00:00:00.000Z'),
+      }),
+    });
   });
 
   it('rejects unauthenticated requests', async () => {
@@ -93,7 +102,7 @@ describe('adminManagePersonalDriver', () => {
   it('assigns driver and vehicle to a trip', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
     mockAdminRef.get.mockResolvedValue({ exists: true });
-    mockTripRef.get.mockResolvedValue({ exists: true, data: () => ({ userId: 'user_1' }) });
+    mockTripRef.get.mockResolvedValue({ exists: true, data: () => ({ userId: 'user_1', subscriptionId: 'sub_1' }) });
 
     const result = await adminManagePersonalDriver(
       makeRequest(

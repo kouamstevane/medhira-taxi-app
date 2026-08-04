@@ -4,6 +4,10 @@ const mockTripRef = { get: jest.fn(), update: jest.fn() };
 const mockSubscriptionRef = { get: jest.fn() };
 const mockAdminRef = { get: jest.fn() };
 const mockPaymentIntentsCreate = jest.fn();
+const mockTransaction = {
+  get: jest.fn(),
+  update: jest.fn(),
+};
 
 const mockDb = {
   collection: jest.fn((name: string) => {
@@ -12,12 +16,15 @@ const mockDb = {
     if (name === 'admins') return { doc: jest.fn(() => mockAdminRef) };
     throw new Error(`Unexpected collection ${name}`);
   }),
+  runTransaction: jest.fn((callback: (tx: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction)),
 };
 
 jest.mock('firebase-admin', () => ({
   apps: [{}],
   initializeApp: jest.fn(),
-  firestore: jest.fn(() => mockDb),
+  firestore: Object.assign(jest.fn(() => mockDb), {
+    FieldValue: { serverTimestamp: jest.fn(() => ({ __ts: true })) },
+  }),
 }));
 
 jest.mock('firebase-functions/params', () => ({
@@ -59,6 +66,19 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
         planId: 'classic',
         isSpecialTrip: false,
         overageWaitBilled: false,
+        driverArrivedAt: new Date(Date.now() - 9 * 60 * 1000),
+      }),
+    });
+    mockTransaction.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        subscriptionId: 'sub_1',
+        userId: 'client_1',
+        assignedDriverId: 'driver_1',
+        planId: 'classic',
+        isSpecialTrip: false,
+        overageWaitBilled: false,
+        driverArrivedAt: new Date(Date.now() - 9 * 60 * 1000),
       }),
     });
     mockSubscriptionRef.get.mockResolvedValue({
@@ -70,7 +90,7 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
       }),
     });
     mockAdminRef.get.mockResolvedValue({ exists: false });
-    mockPaymentIntentsCreate.mockResolvedValue({ id: 'pi_overage_1' });
+    mockPaymentIntentsCreate.mockResolvedValue({ id: 'pi_overage_1', status: 'succeeded' });
   });
 
   it('rejects callers who are not the assigned driver, owner, or admin', async () => {
@@ -91,12 +111,12 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
     await expect(
       chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1', elapsedMinutes: 9 }, 'driver_1')),
     ).rejects.toMatchObject({ code: 'failed-precondition' });
-    expect(mockTripRef.update).not.toHaveBeenCalled();
+    expect(mockTripRef.update).toHaveBeenCalledWith(expect.objectContaining({ overageChargeStatus: 'failed' }));
   });
 
   it('rejects billing the same overage twice', async () => {
     const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
-    mockTripRef.get.mockResolvedValue({
+    const billedTripSnapshot = {
       exists: true,
       data: () => ({
         subscriptionId: 'sub_1',
@@ -105,7 +125,9 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
         planId: 'classic',
         overageWaitBilled: true,
       }),
-    });
+    };
+    mockTripRef.get.mockResolvedValue(billedTripSnapshot);
+    mockTransaction.get.mockResolvedValue(billedTripSnapshot);
 
     await expect(
       chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1', elapsedMinutes: 9 }, 'driver_1')),
@@ -121,6 +143,7 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
 
     expect(result).toEqual({
       success: true,
+      waitTimeMinutes: 9,
       feeBilled: 2,
       overageMinutes: 4,
       paymentIntentId: 'pi_overage_1',
@@ -130,7 +153,7 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
       customer: 'cus_1',
       payment_method: 'pm_1',
       confirm: true,
-    }));
+    }), { idempotencyKey: 'personal_driver_wait_trip_1' });
     expect(mockTripRef.update).toHaveBeenCalledWith(expect.objectContaining({
       overageWaitBilled: true,
       overagePaymentIntentId: 'pi_overage_1',
