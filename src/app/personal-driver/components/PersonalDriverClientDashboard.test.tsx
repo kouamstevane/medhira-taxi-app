@@ -4,6 +4,7 @@ import { PersonalDriverClientDashboard } from './PersonalDriverClientDashboard';
 import {
   getCurrentPersonalDriverSubscription,
   getPendingPersonalDriverRenewal,
+  getPersonalDriverSubscriptionView,
   getPersonalDriverSubscriptionById,
   getPersonalDriverTripsForSubscription,
   renewPersonalDriverSubscriptionPayment,
@@ -12,6 +13,7 @@ import {
 jest.mock('@/services/personal-driver/subscription.service', () => ({
   getCurrentPersonalDriverSubscription: jest.fn(),
   getPendingPersonalDriverRenewal: jest.fn(),
+  getPersonalDriverSubscriptionView: jest.fn(),
   getPersonalDriverSubscriptionById: jest.fn(),
   getPersonalDriverTripsForSubscription: jest.fn(),
   renewPersonalDriverSubscriptionPayment: jest.fn(),
@@ -31,6 +33,16 @@ describe('PersonalDriverClientDashboard Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getPendingPersonalDriverRenewal as jest.Mock).mockResolvedValue(null);
+    (getPersonalDriverSubscriptionView as jest.Mock).mockImplementation(async () => {
+      const [current, pending] = await Promise.all([
+        (getCurrentPersonalDriverSubscription as jest.Mock)(),
+        (getPendingPersonalDriverRenewal as jest.Mock)(),
+      ]);
+      return {
+        active: current?.status === 'active' ? current : null,
+        pending: pending ?? (current?.status === 'active' ? null : current),
+      };
+    });
   });
 
   afterEach(() => {
@@ -119,6 +131,8 @@ describe('PersonalDriverClientDashboard Component', () => {
 
     expect(await screen.findByText('Paiement confirmé — préparation de vos trajets…')).toBeVisible();
     expect(screen.queryByText(/Votre calendrier est en préparation/i)).not.toBeInTheDocument();
+    expect(getPersonalDriverSubscriptionView).toHaveBeenCalledWith('user_123');
+    expect(getPersonalDriverTripsForSubscription).not.toHaveBeenCalled();
   });
 
   it('renders activation failure and refresh guidance instead of an empty calendar message', async () => {
@@ -177,6 +191,8 @@ describe('PersonalDriverClientDashboard Component', () => {
     expect(screen.queryByText('Ancien départ')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Réessayer la vérification/i })).toBeVisible();
     expect(renewPersonalDriverSubscriptionPayment).not.toHaveBeenCalled();
+    expect(getPersonalDriverTripsForSubscription).toHaveBeenCalledWith('sub_active');
+    expect(getPersonalDriverTripsForSubscription).not.toHaveBeenCalledWith('sub_renewal');
   });
 
   it('enables special trips only for an active paid package and shows exact persisted dates', async () => {
@@ -324,6 +340,56 @@ describe('PersonalDriverClientDashboard Component', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/préparation de vos trajets a échoué/i);
     expect(screen.getByRole('button', { name: /Réessayer la vérification/i })).toBeVisible();
     expect(renewPersonalDriverSubscriptionPayment).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads the current subscription view before fetching trips after renewal activation', async () => {
+    (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
+      id: 'sub_active',
+      userId: 'user_123',
+      selectedPlanId: 'classic',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      monthlyDistanceKm: 440,
+      pickupAddress: 'Ancien départ',
+      destinationAddress: 'Ancienne destination',
+    });
+    (getPersonalDriverTripsForSubscription as jest.Mock).mockResolvedValue([]);
+    (renewPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue({
+      subscriptionId: 'sub_renewed',
+      paymentIntentId: 'pi_renewed',
+      clientSecret: 'secret_renewed',
+      amount: 451.25,
+      currency: 'cad',
+      quote: { totalAmount: 451.25, currency: 'cad' },
+    });
+    (getPersonalDriverSubscriptionById as jest.Mock).mockResolvedValue({
+      id: 'sub_renewed',
+      userId: 'user_123',
+      sourceSubscriptionId: 'sub_active',
+      selectedPlanId: 'classic',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      activationStatus: 'active',
+      periodStartAtUtc: '2026-09-01T00:00:00.000Z',
+      periodEndAtUtc: '2026-10-01T00:00:00.000Z',
+      monthlyDistanceKm: 440,
+      pickupAddress: 'Nouveau départ',
+      destinationAddress: 'Nouvelle destination',
+    });
+
+    render(<PersonalDriverClientDashboard />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Renouveler' }));
+    jest.useFakeTimers();
+    fireEvent.click(await screen.findByRole('button', { name: /Payer 451,25/i }));
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(getPersonalDriverSubscriptionById).toHaveBeenCalledWith('sub_renewed');
+    expect(getPersonalDriverSubscriptionView).toHaveBeenCalledTimes(2);
+    expect(getPersonalDriverTripsForSubscription).toHaveBeenCalledWith('sub_active');
+    expect(getPersonalDriverTripsForSubscription).not.toHaveBeenCalledWith('sub_renewed');
   });
 
   it('recovers a pending renewal payment after reload and disables another checkout', async () => {

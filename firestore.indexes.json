@@ -718,8 +718,8 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
+          "fieldPath": "periodEndAtUtc",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -732,8 +732,8 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "scheduledAt",
-          "order": "DESCENDING"
+          "fieldPath": "scheduledAtIso",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -746,8 +746,8 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "scheduledAt",
-          "order": "DESCENDING"
+          "fieldPath": "scheduledAtIso",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -760,8 +760,8 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "scheduledAt",
-          "order": "DESCENDING"
+          "fieldPath": "scheduledAtIso",
+          "order": "ASCENDING"
         }
       ]
     }

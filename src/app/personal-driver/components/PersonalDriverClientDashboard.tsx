@@ -9,8 +9,7 @@ import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import {
   cancelPersonalDriverTripByClient,
-  getCurrentPersonalDriverSubscription,
-  getPendingPersonalDriverRenewal,
+  getPersonalDriverSubscriptionView,
   getPersonalDriverSubscriptionById,
   getPersonalDriverTripsForSubscription,
   requestSpecialTrip,
@@ -107,13 +106,10 @@ export function PersonalDriverClientDashboard() {
   const reloadData = useCallback(async () => {
     if (!currentUser?.uid) return;
     try {
-      const [sub, pending] = await Promise.all([
-        getCurrentPersonalDriverSubscription(currentUser.uid),
-        getPendingPersonalDriverRenewal(currentUser.uid),
-      ]);
+      const { active, pending } = await getPersonalDriverSubscriptionView(currentUser.uid);
       const paidRenewal = pending?.paymentStatus === 'succeeded'
         && (pending.activationStatus === 'activating' || pending.activationStatus === 'activation_failed');
-      const displayedSubscription = paidRenewal ? pending : sub;
+      const displayedSubscription = paidRenewal ? pending : active ?? pending;
       setSubscription(displayedSubscription);
       setPendingRenewal(pending);
       if (paidRenewal && pending) {
@@ -122,8 +118,8 @@ export function PersonalDriverClientDashboard() {
           pending.activationStatus === 'activation_failed' ? 'failed' : 'preparing',
         );
       }
-      if (displayedSubscription?.id) {
-        const tripList = await getPersonalDriverTripsForSubscription(displayedSubscription.id);
+      if (active?.id) {
+        const tripList = await getPersonalDriverTripsForSubscription(active.id);
         setTrips(tripList);
       } else {
         setTrips([]);
@@ -154,14 +150,13 @@ export function PersonalDriverClientDashboard() {
         const updatedSubscription = await getPersonalDriverSubscriptionById(subscriptionId);
         if (renewalActivationRunRef.current !== runId) return;
         if (updatedSubscription) {
-          setSubscription(updatedSubscription);
           if (updatedSubscription.activationStatus === 'active') {
             renewalActivationPollingIdRef.current = null;
-            setPendingRenewal(null);
             setRenewalActivationProgress('idle');
-            setTrips(await getPersonalDriverTripsForSubscription(subscriptionId));
+            await reloadData();
             return;
           }
+          setSubscription(updatedSubscription);
           setPendingRenewal(updatedSubscription);
           if (updatedSubscription.activationStatus === 'activation_failed') {
             renewalActivationPollingIdRef.current = null;
@@ -176,7 +171,7 @@ export function PersonalDriverClientDashboard() {
     };
 
     renewalActivationTimerRef.current = setTimeout(pollActivation, ACTIVATION_POLL_INTERVAL_MS);
-  }, []);
+  }, [reloadData]);
 
   useEffect(() => {
     async function loadData() {
@@ -211,17 +206,17 @@ export function PersonalDriverClientDashboard() {
     if (
       !subscription
       || !pendingRenewal
+      || !pendingRenewal.sourceSubscriptionId
       || pendingRenewal.paymentStatus === 'succeeded'
       || renewalPayment
       || renewalLoading
       || renewalRecoveryAttemptRef.current === pendingRenewal.id
     ) return;
     renewalRecoveryAttemptRef.current = pendingRenewal.id;
-    const sourceSubscriptionId = pendingRenewal.sourceSubscriptionId ?? subscription.id;
     setRenewalLoading(true);
     setRenewalError(null);
     renewPersonalDriverSubscriptionPayment(
-      sourceSubscriptionId,
+      pendingRenewal.sourceSubscriptionId,
       `recover-${pendingRenewal.id}`,
       pendingRenewal.id,
     )

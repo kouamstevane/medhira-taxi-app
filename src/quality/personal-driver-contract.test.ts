@@ -2,7 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 import {
   cancelPersonalDriverTripByClient,
   createPersonalDriverSubscriptionPayment,
-  getCurrentPersonalDriverSubscription,
+  getPersonalDriverSubscriptionView,
   requestSpecialTrip,
 } from '@/services/personal-driver/subscription.service';
 import {
@@ -95,6 +95,7 @@ describe('Personal Driver frontend/backend callable contracts', () => {
   });
 
   it('exposes the active subscription instead of a newer pending renewal', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-04T12:00:00.000Z'));
     mockGetDocs.mockResolvedValue({
       empty: false,
       docs: [
@@ -104,6 +105,8 @@ describe('Personal Driver frontend/backend callable contracts', () => {
             userId: 'user-1',
             status: 'pending_payment',
             paymentStatus: 'pending',
+            periodStartAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-10-01T00:00:00.000Z'),
             createdAt: new Date('2026-08-03T11:00:00.000Z'),
           }),
         },
@@ -113,16 +116,25 @@ describe('Personal Driver frontend/backend callable contracts', () => {
             userId: 'user-1',
             status: 'active',
             paymentStatus: 'succeeded',
+            periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
             createdAt: new Date('2026-08-01T11:00:00.000Z'),
           }),
         },
       ],
     });
 
-    expect(await getCurrentPersonalDriverSubscription('user-1')).toMatchObject({
-      id: 'active-subscription',
-      status: 'active',
+    expect(await getPersonalDriverSubscriptionView('user-1')).toMatchObject({
+      active: {
+        id: 'active-subscription',
+        status: 'active',
+      },
+      pending: {
+        id: 'pending-renewal',
+        status: 'pending_payment',
+      },
     });
+    jest.useRealTimers();
   });
 
   it('routes client cancellation through clientManagePersonalDriver', async () => {

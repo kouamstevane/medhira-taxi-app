@@ -82,29 +82,76 @@ export async function renewPersonalDriverSubscriptionPayment(
   return response.data;
 }
 
+function toDate(value: unknown): Date | null {
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return date instanceof Date && Number.isFinite(date.getTime()) ? date : null;
+  }
+  if (typeof value !== 'string') return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function containsDate(subscription: PersonalDriverSubscription, date: Date): boolean {
+  const periodStart = toDate(subscription.periodStartAtUtc);
+  const periodEnd = toDate(subscription.periodEndAtUtc);
+  return !!periodStart && !!periodEnd && periodEnd > periodStart && date >= periodStart && date < periodEnd;
+}
+
+function isPendingActivation(subscription: PersonalDriverSubscription): boolean {
+  if (subscription.status !== 'pending_payment') return false;
+  if (['creating', 'pending', 'requires_action'].includes(subscription.paymentStatus ?? '')) return true;
+  return subscription.paymentStatus === 'succeeded'
+    && (subscription.activationStatus === undefined
+      || ['pending_payment', 'activating', 'activation_failed'].includes(subscription.activationStatus));
+}
+
+export async function getPersonalDriverSubscriptionView(userId: string): Promise<{
+  active: PersonalDriverSubscription | null;
+  pending: PersonalDriverSubscription | null;
+}> {
+  if (!userId) return { active: null, pending: null };
+
+  const subscriptionsQuery = query(
+    collection(db, 'personal_driver_subscriptions'),
+    where('userId', '==', userId),
+    where('status', 'in', ['active', 'pending_payment']),
+    orderBy('createdAt', 'desc'),
+  );
+  const snapshot = await getDocs(subscriptionsQuery);
+  const subscriptions = snapshot.docs.map((subscriptionDoc) => ({
+    id: subscriptionDoc.id,
+    ...subscriptionDoc.data(),
+  })) as PersonalDriverSubscription[];
+  const now = new Date();
+  const active = subscriptions
+    .filter((subscription) => subscription.status === 'active'
+      && subscription.paymentStatus === 'succeeded'
+      && containsDate(subscription, now))
+    .sort((left, right) => (
+      toDate(right.periodStartAtUtc)?.getTime() ?? 0
+    ) - (
+      toDate(left.periodStartAtUtc)?.getTime() ?? 0
+    ))[0] ?? null;
+  const pendingActivation = subscriptions.find(isPendingActivation) ?? null;
+  const futureActive = subscriptions
+    .filter((subscription) => subscription.status === 'active'
+      && subscription.paymentStatus === 'succeeded'
+      && (toDate(subscription.periodStartAtUtc)?.getTime() ?? 0) > now.getTime())
+    .sort((left, right) => (
+      toDate(left.periodStartAtUtc)?.getTime() ?? Number.MAX_SAFE_INTEGER
+    ) - (
+      toDate(right.periodStartAtUtc)?.getTime() ?? Number.MAX_SAFE_INTEGER
+    ))[0] ?? null;
+
+  return { active, pending: pendingActivation ?? futureActive };
+}
+
 export async function getCurrentPersonalDriverSubscription(
   userId: string,
 ): Promise<PersonalDriverSubscription | null> {
-  if (!userId) return null;
-
-  const q = query(
-    collection(db, 'personal_driver_subscriptions'),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    limit(10),
-  );
-
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return null;
-
-  const doc = snapshot.docs.find((candidate) => {
-    const data = candidate.data();
-    return data.status === 'active' && data.paymentStatus === 'succeeded';
-  }) ?? snapshot.docs[0];
-  return {
-    id: doc.id,
-    ...doc.data(),
-  } as PersonalDriverSubscription;
+  return (await getPersonalDriverSubscriptionView(userId)).active;
 }
 
 export async function getPersonalDriverSubscriptionById(
@@ -119,27 +166,7 @@ export async function getPersonalDriverSubscriptionById(
 export async function getPendingPersonalDriverRenewal(
   userId: string,
 ): Promise<PersonalDriverSubscription | null> {
-  if (!userId) return null;
-
-  const q = query(
-    collection(db, 'personal_driver_subscriptions'),
-    where('userId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    limit(10),
-  );
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return null;
-  const doc = snapshot.docs.find((candidate) => {
-    const data = candidate.data();
-    const awaitingPayment = ['creating', 'pending', 'requires_action'].includes(data.paymentStatus);
-    const awaitingActivation = data.paymentStatus === 'succeeded'
-      && ['activating', 'activation_failed'].includes(data.activationStatus);
-    return typeof data.sourceSubscriptionId === 'string'
-      && data.status === 'pending_payment'
-      && (awaitingPayment || awaitingActivation);
-  });
-  if (!doc) return null;
-  return { id: doc.id, ...doc.data() } as PersonalDriverSubscription;
+  return (await getPersonalDriverSubscriptionView(userId)).pending;
 }
 
 export async function getPersonalDriverTripsForSubscription(

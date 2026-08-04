@@ -1,11 +1,12 @@
 import {
   cancelPersonalDriverTripByClient,
   getPendingPersonalDriverRenewal,
+  getPersonalDriverSubscriptionView,
   getPersonalDriverSubscriptionById,
   requestSpecialTrip,
 } from './subscription.service';
 import { httpsCallable } from 'firebase/functions';
-import { doc } from 'firebase/firestore';
+import { doc, where } from 'firebase/firestore';
 
 const mockCallable = jest.fn();
 const mockGetDoc = jest.fn();
@@ -34,7 +35,104 @@ jest.mock('@/config/firebase', () => ({
 describe('Personal Driver subscription client actions', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-04T12:00:00.000Z'));
     mockCallable.mockResolvedValue({ data: { success: true, tripId: 'trip_special', specialTripsRemaining: 1 } });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('returns an older current subscription beside a newer pending renewal', async () => {
+    mockGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'pending_newer',
+          data: () => ({
+            userId: 'client_1',
+            status: 'pending_payment',
+            paymentStatus: 'pending',
+            periodStartAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-10-01T00:00:00.000Z'),
+          }),
+        },
+        {
+          id: 'active_older',
+          data: () => ({
+            userId: 'client_1',
+            status: 'active',
+            paymentStatus: 'succeeded',
+            periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+          }),
+        },
+      ],
+    });
+
+    await expect(getPersonalDriverSubscriptionView('client_1')).resolves.toEqual({
+      active: expect.objectContaining({ id: 'active_older' }),
+      pending: expect.objectContaining({ id: 'pending_newer' }),
+    });
+    expect(where).toHaveBeenCalledWith('status', 'in', ['active', 'pending_payment']);
+  });
+
+  it('uses the active period containing now instead of a newer future active renewal', async () => {
+    mockGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'future_active_renewal',
+          data: () => ({
+            userId: 'client_1',
+            sourceSubscriptionId: 'current_active',
+            status: 'active',
+            paymentStatus: 'succeeded',
+            activationStatus: 'active',
+            periodStartAtUtc: { toDate: () => new Date('2026-09-01T00:00:00.000Z') },
+            periodEndAtUtc: { toDate: () => new Date('2026-10-01T00:00:00.000Z') },
+          }),
+        },
+        {
+          id: 'current_active',
+          data: () => ({
+            userId: 'client_1',
+            status: 'active',
+            paymentStatus: 'succeeded',
+            periodStartAtUtc: { toDate: () => new Date('2026-08-01T00:00:00.000Z') },
+            periodEndAtUtc: { toDate: () => new Date('2026-09-01T00:00:00.000Z') },
+          }),
+        },
+      ],
+    });
+
+    await expect(getPersonalDriverSubscriptionView('client_1')).resolves.toEqual({
+      active: expect.objectContaining({ id: 'current_active' }),
+      pending: expect.objectContaining({ id: 'future_active_renewal' }),
+    });
+  });
+
+  it('returns only the pending subscription when no active period contains now', async () => {
+    mockGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'pending_only',
+          data: () => ({
+            userId: 'client_1',
+            status: 'pending_payment',
+            paymentStatus: 'succeeded',
+            periodStartAtUtc: '2026-09-01T00:00:00.000Z',
+            periodEndAtUtc: '2026-10-01T00:00:00.000Z',
+          }),
+        },
+      ],
+    });
+
+    await expect(getPersonalDriverSubscriptionView('client_1')).resolves.toEqual({
+      active: null,
+      pending: expect.objectContaining({ id: 'pending_only' }),
+    });
   });
 
   it('cancels trips through the secure callable', async () => {
