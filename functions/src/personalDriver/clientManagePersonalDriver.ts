@@ -2,7 +2,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { calculateServerRoute } from './routeDistance.js';
-import { isSubscriptionEntitled } from './entitlement.js';
+import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './entitlement.js';
 import { localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
 
 type PersonalDriverPlanId = 'basic' | 'classic' | 'premium';
@@ -18,10 +18,18 @@ function getDb(): FirebaseFirestore.Firestore {
   return admin.firestore();
 }
 
-function getPlanId(data: FirebaseFirestore.DocumentData): PersonalDriverPlanId {
+function getPlanId(data: FirebaseFirestore.DocumentData): PersonalDriverPlanId | null {
   const planId = data.selectedPlanId ?? data.planId;
   if (planId === 'basic' || planId === 'classic' || planId === 'premium') return planId;
-  return 'basic';
+  return null;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return isFiniteNumber(value) && Number.isInteger(value) && value >= 0;
 }
 
 function roundDistance(value: number): number {
@@ -107,7 +115,7 @@ export const clientManagePersonalDriver = onCall(
       }),
       resolveAddressCoordinates(payload.pickupAddress),
     ]);
-    return db.runTransaction(async (transaction) => {
+    const result = await db.runTransaction(async (transaction) => {
       const subscriptionSnap = await transaction.get(subscriptionRef);
       if (!subscriptionSnap.exists) {
         throw new HttpsError('not-found', 'Abonnement introuvable.');
@@ -118,16 +126,10 @@ export const clientManagePersonalDriver = onCall(
         throw new HttpsError('permission-denied', 'Cet abonnement ne vous appartient pas.');
       }
       const now = new Date();
+      if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, now)) {
+        return { kind: 'expired' as const };
+      }
       if (!isSubscriptionEntitled(subscription, now)) {
-        const periodEndAtUtc = subscription.periodEndAtUtc instanceof Date
-          ? subscription.periodEndAtUtc
-          : subscription.periodEndAtUtc?.toDate?.() ?? new Date(subscription.periodEndAtUtc);
-        if (subscription.status === 'active' && Number.isFinite(periodEndAtUtc.getTime()) && now >= periodEndAtUtc) {
-          transaction.update(subscriptionRef, {
-            status: 'expired',
-            expiredAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        }
         throw new HttpsError('failed-precondition', 'Les trajets spéciaux sont disponibles après activation de l’abonnement.');
       }
 
@@ -152,24 +154,39 @@ export const clientManagePersonalDriver = onCall(
       }
 
       const planId = getPlanId(subscription);
+      if (!planId) {
+        throw new HttpsError('failed-precondition', 'La formule du forfait est invalide.');
+      }
       const includedSpecialTrips = SPECIAL_TRIP_LIMITS[planId];
-      const specialTripsUsed = Number(subscription.specialTripsUsed ?? 0);
-      if (specialTripsUsed >= includedSpecialTrips) {
+      const persistedIncludedSpecialTrips = subscription.includedSpecialTrips;
+      const specialTripsUsed = subscription.specialTripsUsed;
+      const monthlyDistanceKm = subscription.monthlyDistanceKm;
+      const monthlyDistanceKmRemaining = subscription.monthlyDistanceKmRemaining;
+      const specialTripsDistanceUsedKm = subscription.specialTripsDistanceUsedKm;
+      if (
+        !isNonNegativeInteger(persistedIncludedSpecialTrips)
+        || persistedIncludedSpecialTrips !== includedSpecialTrips
+        || !isNonNegativeInteger(specialTripsUsed)
+        || specialTripsUsed > persistedIncludedSpecialTrips
+        || !isFiniteNumber(monthlyDistanceKm)
+        || monthlyDistanceKm <= 0
+        || !isFiniteNumber(monthlyDistanceKmRemaining)
+        || monthlyDistanceKmRemaining < 0
+        || monthlyDistanceKmRemaining > monthlyDistanceKm
+        || !isFiniteNumber(specialTripsDistanceUsedKm)
+        || specialTripsDistanceUsedKm < 0
+      ) {
+        throw new HttpsError('failed-precondition', 'Les quotas autoritatifs du forfait sont incomplets ou invalides.');
+      }
+      if (specialTripsUsed >= persistedIncludedSpecialTrips) {
         throw new HttpsError('failed-precondition', 'Votre quota de trajets spéciaux est épuisé pour cette période.');
       }
 
-      const monthlyDistanceKm = Number(subscription.monthlyDistanceKm ?? 0);
-      const monthlyDistanceKmRemaining = Number(subscription.monthlyDistanceKmRemaining ?? monthlyDistanceKm);
-      if (!Number.isFinite(monthlyDistanceKmRemaining) || monthlyDistanceKmRemaining < 0) {
-        throw new HttpsError('failed-precondition', 'Le quota kilométrique du forfait est invalide.');
-      }
       const distanceKm = authoritativeRoute.distanceKm;
-      if (monthlyDistanceKm > 0 && distanceKm > monthlyDistanceKmRemaining) {
+      if (distanceKm > monthlyDistanceKmRemaining) {
         throw new HttpsError('failed-precondition', 'Ce trajet dépasse le kilométrage restant de votre forfait.');
       }
-      const nextRemainingDistanceKm = monthlyDistanceKm > 0
-        ? roundDistance(monthlyDistanceKmRemaining - distanceKm)
-        : null;
+      const nextRemainingDistanceKm = roundDistance(monthlyDistanceKmRemaining - distanceKm);
 
       transaction.set(tripRef, {
         subscriptionId: payload.subscriptionId,
@@ -192,15 +209,24 @@ export const clientManagePersonalDriver = onCall(
       transaction.update(subscriptionRef, {
         specialTripsUsed: admin.firestore.FieldValue.increment(1),
         specialTripsDistanceUsedKm: admin.firestore.FieldValue.increment(distanceKm),
-        ...(nextRemainingDistanceKm !== null ? { monthlyDistanceKmRemaining: nextRemainingDistanceKm } : {}),
+        monthlyDistanceKmRemaining: nextRemainingDistanceKm,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
       return {
+        kind: 'created' as const,
         success: true,
         tripId: tripRef.id,
-        specialTripsRemaining: Math.max(0, includedSpecialTrips - specialTripsUsed - 1),
+        specialTripsRemaining: Math.max(0, persistedIncludedSpecialTrips - specialTripsUsed - 1),
       };
     });
+    if (result.kind === 'expired') {
+      throw new HttpsError('failed-precondition', 'Le forfait a expiré.');
+    }
+    return {
+      success: result.success,
+      tripId: result.tripId,
+      specialTripsRemaining: result.specialTripsRemaining,
+    };
   },
 );

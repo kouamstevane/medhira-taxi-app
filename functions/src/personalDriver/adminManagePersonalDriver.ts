@@ -1,7 +1,7 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
-import { isSubscriptionEntitled } from './entitlement.js';
+import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './entitlement.js';
 
 function getDb(): FirebaseFirestore.Firestore {
   if (!admin.apps.length) admin.initializeApp();
@@ -99,7 +99,7 @@ export const adminManagePersonalDriver = onCall(
     if (payload.action === 'assignTrip') {
       const driverRef = db.collection('drivers').doc(payload.driverId);
       const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
-      await db.runTransaction(async (transaction) => {
+      const result = await db.runTransaction(async (transaction) => {
         const tripSnap = await transaction.get(tripRef);
         if (!tripSnap.exists) throw new HttpsError('not-found', 'Trajet introuvable.');
         const trip = tripSnap.data();
@@ -115,7 +115,12 @@ export const adminManagePersonalDriver = onCall(
         const driverSnap = await transaction.get(driverRef);
         if (!subscriptionSnap.exists) throw new HttpsError('not-found', 'Abonnement introuvable.');
         if (!driverSnap.exists) throw new HttpsError('not-found', 'Chauffeur introuvable.');
-        assertTripSubscriptionEntitled(trip, subscriptionSnap.data());
+        const subscriptionRef = db.collection('personal_driver_subscriptions').doc(trip.subscriptionId);
+        const subscription = subscriptionSnap.data();
+        if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, new Date())) {
+          return { kind: 'expired' as const };
+        }
+        assertTripSubscriptionEntitled(trip, subscription);
         assertAssignableDriver(payload.driverId, driverSnap.data());
 
         transaction.update(tripRef, {
@@ -145,14 +150,18 @@ export const adminManagePersonalDriver = onCall(
           read: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        return { kind: 'assigned' as const };
       });
+      if (result.kind === 'expired') {
+        throw new HttpsError('failed-precondition', 'Le forfait a expiré.');
+      }
       return { success: true };
     }
 
     if (payload.action === 'reassignDriverEmergency') {
       const driverRef = db.collection('drivers').doc(payload.newDriverId);
       const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
-      await db.runTransaction(async (transaction) => {
+      const result = await db.runTransaction(async (transaction) => {
         const tripSnap = await transaction.get(tripRef);
         if (!tripSnap.exists) throw new HttpsError('not-found', 'Trajet introuvable.');
         const trip = tripSnap.data();
@@ -165,7 +174,12 @@ export const adminManagePersonalDriver = onCall(
         const driverSnap = await transaction.get(driverRef);
         if (!subscriptionSnap.exists) throw new HttpsError('not-found', 'Abonnement introuvable.');
         if (!driverSnap.exists) throw new HttpsError('not-found', 'Chauffeur introuvable.');
-        assertTripSubscriptionEntitled(trip, subscriptionSnap.data());
+        const subscriptionRef = db.collection('personal_driver_subscriptions').doc(trip.subscriptionId);
+        const subscription = subscriptionSnap.data();
+        if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, new Date())) {
+          return { kind: 'expired' as const };
+        }
+        assertTripSubscriptionEntitled(trip, subscription);
         assertAssignableDriver(payload.newDriverId, driverSnap.data());
 
         transaction.update(tripRef, {
@@ -196,7 +210,11 @@ export const adminManagePersonalDriver = onCall(
           read: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        return { kind: 'reassigned' as const };
       });
+      if (result.kind === 'expired') {
+        throw new HttpsError('failed-precondition', 'Le forfait a expiré.');
+      }
       return { success: true };
     }
 

@@ -5,6 +5,22 @@ const mockTripRef = { id: 'trip_1' };
 const mockDriverRef = { id: 'driver_1' };
 const mockAdminRef = { get: jest.fn() };
 const mockNotificationRef = { id: 'notification_1' };
+const mockIsSubscriptionEntitled = jest.fn((subscription: Record<string, unknown>) => (
+  subscription?.status === 'active' && subscription?.paymentStatus === 'succeeded'
+));
+const mockMarkExpiredSubscriptionInTransaction = jest.fn((
+  transaction: { update: jest.Mock },
+  subscriptionRef: unknown,
+  subscription: Record<string, unknown>,
+  now: Date,
+) => {
+  const periodEnd = subscription?.periodEndAtUtc instanceof Date ? subscription.periodEndAtUtc : null;
+  if (subscription?.status === 'active' && periodEnd && now >= periodEnd) {
+    transaction.update(subscriptionRef, { status: 'expired', expiredAt: 'EXPIRED' });
+    return true;
+  }
+  return false;
+});
 const mockTransaction = {
   get: jest.fn(),
   update: jest.fn(),
@@ -39,6 +55,11 @@ jest.mock('firebase-functions/v2/https', () => ({
       this.code = code;
     }
   },
+}));
+
+jest.mock('../entitlement', () => ({
+  isSubscriptionEntitled: mockIsSubscriptionEntitled,
+  markExpiredSubscriptionInTransaction: mockMarkExpiredSubscriptionInTransaction,
 }));
 
 function makeRequest(data: unknown, uid?: string) {
@@ -122,5 +143,18 @@ describe('adminManagePersonalDriver', () => {
       action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1',
     }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
     expect(mockTransaction.update).not.toHaveBeenCalled();
+  });
+
+  it('marks an expired subscription before rejecting assignment', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    subscriptionData.periodEndAtUtc = new Date('2026-08-01T00:00:00.000Z');
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1',
+    }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubRef, expect.objectContaining({
+      status: 'expired',
+    }));
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockTripRef, expect.anything());
   });
 });

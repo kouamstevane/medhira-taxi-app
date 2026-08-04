@@ -1,12 +1,29 @@
+import { defineInt } from 'firebase-functions/params';
+
 export interface PersonalDriverCoordinate {
   latitude: number;
   longitude: number;
 }
 
-export const PERSONAL_DRIVER_ARRIVAL_GPS_CONFIG = Object.freeze({
-  maxDistanceMeters: 250,
-  maxAccuracyMeters: 100,
-});
+const maxDistanceMetersParam = defineInt('PERSONAL_DRIVER_ARRIVAL_MAX_DISTANCE_METERS');
+const maxAccuracyMetersParam = defineInt('PERSONAL_DRIVER_ARRIVAL_MAX_ACCURACY_METERS');
+
+export interface PersonalDriverArrivalGpsConfig {
+  maxDistanceMeters: number;
+  maxAccuracyMeters: number;
+}
+
+export function getPersonalDriverArrivalGpsConfig(): PersonalDriverArrivalGpsConfig {
+  const maxDistanceMeters = maxDistanceMetersParam.value();
+  const maxAccuracyMeters = maxAccuracyMetersParam.value();
+  if (!Number.isInteger(maxDistanceMeters) || maxDistanceMeters <= 0) {
+    throw new Error('Personal Driver arrival distance threshold is not configured');
+  }
+  if (!Number.isInteger(maxAccuracyMeters) || maxAccuracyMeters <= 0) {
+    throw new Error('Personal Driver arrival accuracy threshold is not configured');
+  }
+  return Object.freeze({ maxDistanceMeters, maxAccuracyMeters });
+}
 
 function assertCoordinate(coordinate: PersonalDriverCoordinate): void {
   if (
@@ -41,7 +58,7 @@ export function assertDriverNearPickup(
   driverLocation: PersonalDriverCoordinate,
   pickupLocation: PersonalDriverCoordinate,
   accuracyMeters: number,
-  config = PERSONAL_DRIVER_ARRIVAL_GPS_CONFIG,
+  config = getPersonalDriverArrivalGpsConfig(),
 ): void {
   if (!Number.isFinite(accuracyMeters) || accuracyMeters < 0 || accuracyMeters > config.maxAccuracyMeters) {
     throw new Error('GPS accuracy is insufficient');

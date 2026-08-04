@@ -52,10 +52,6 @@ jest.mock('../locationTimeZone', () => ({
   localDateTimeToUtc: (date: string, time: string) => new Date(`${date}T${time}:00.000Z`),
 }));
 
-jest.mock('../entitlement', () => ({
-  isSubscriptionEntitled: jest.fn(() => true),
-}));
-
 function makeRequest(data: unknown, uid?: string) {
   return { data, auth: uid ? { uid } : undefined } as never;
 }
@@ -110,6 +106,7 @@ describe('clientManagePersonalDriver', () => {
         userId: 'client_1',
         status: 'active',
         selectedPlanId: 'classic',
+        includedSpecialTrips: 2,
         specialTripsUsed: 1,
         paymentStatus: 'succeeded',
         periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
@@ -200,5 +197,91 @@ describe('clientManagePersonalDriver', () => {
       scheduledAtIso: '2026-08-12T09:30:00',
       distanceKm: 1,
     }, 'client_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+  });
+
+  it('rejects a special trip when authoritative quota fields are incomplete', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    mockTransaction.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        userId: 'client_1',
+        status: 'active',
+        selectedPlanId: 'classic',
+        paymentStatus: 'succeeded',
+        periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+        periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+        serviceTimeZone: 'America/Toronto',
+        monthlyDistanceKm: 100,
+        monthlyDistanceKmRemaining: 100,
+        specialTripsDistanceUsedKm: 0,
+      }),
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({
+      action: 'requestSpecialTrip',
+      subscriptionId: 'sub_1',
+      pickupAddress: 'Clinique',
+      destinationAddress: 'Aeroport',
+      scheduledAtIso: '2026-08-12T09:30:00',
+    }, 'client_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.set).not.toHaveBeenCalled();
+    expect(mockTransaction.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects a special trip when the total kilometer quota is missing', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    mockTransaction.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        userId: 'client_1',
+        status: 'active',
+        selectedPlanId: 'classic',
+        includedSpecialTrips: 2,
+        specialTripsUsed: 0,
+        paymentStatus: 'succeeded',
+        periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+        periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+        serviceTimeZone: 'America/Toronto',
+        monthlyDistanceKmRemaining: 100,
+        specialTripsDistanceUsedKm: 0,
+      }),
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({
+      action: 'requestSpecialTrip',
+      subscriptionId: 'sub_1',
+      pickupAddress: 'Clinique',
+      destinationAddress: 'Aeroport',
+      scheduledAtIso: '2026-08-12T09:30:00',
+    }, 'client_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.set).not.toHaveBeenCalled();
+    expect(mockTransaction.update).not.toHaveBeenCalled();
+  });
+
+  it('marks an expired subscription before rejecting a special trip request', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    mockTransaction.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        userId: 'client_1',
+        status: 'active',
+        selectedPlanId: 'classic',
+        paymentStatus: 'succeeded',
+        periodStartAtUtc: new Date('2026-07-01T00:00:00.000Z'),
+        periodEndAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({
+      action: 'requestSpecialTrip',
+      subscriptionId: 'sub_1',
+      pickupAddress: 'Clinique',
+      destinationAddress: 'Aeroport',
+      scheduledAtIso: '2026-08-12T09:30:00',
+    }, 'client_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
+      status: 'expired',
+    }));
+    expect(mockTransaction.set).not.toHaveBeenCalled();
   });
 });

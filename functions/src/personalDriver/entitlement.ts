@@ -25,6 +25,24 @@ export function isSubscriptionEntitled(
   return nowUtc >= periodStartAtUtc && nowUtc < periodEndAtUtc;
 }
 
+export function markExpiredSubscriptionInTransaction(
+  transaction: FirebaseFirestore.Transaction,
+  subscriptionRef: FirebaseFirestore.DocumentReference,
+  data: FirebaseFirestore.DocumentData | undefined,
+  nowUtc: Date,
+): boolean {
+  const periodEndAtUtc = toDate(data?.periodEndAtUtc);
+  if (data?.status !== 'active' || !periodEndAtUtc || !Number.isFinite(nowUtc.getTime()) || nowUtc < periodEndAtUtc) {
+    return false;
+  }
+
+  transaction.update(subscriptionRef, {
+    status: 'expired',
+    expiredAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return true;
+}
+
 export async function expireSubscriptionIfNeeded(
   db: FirebaseFirestore.Firestore,
   subscriptionRef: FirebaseFirestore.DocumentReference,
@@ -34,14 +52,7 @@ export async function expireSubscriptionIfNeeded(
     const snapshot = await transaction.get(subscriptionRef);
     if (!snapshot.exists) return false;
     const data = snapshot.data();
-    const periodEndAtUtc = toDate(data?.periodEndAtUtc);
-    if (data?.status === 'active' && periodEndAtUtc && nowUtc >= periodEndAtUtc) {
-      transaction.update(subscriptionRef, {
-        status: 'expired',
-        expiredAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      return false;
-    }
+    if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, data, nowUtc)) return false;
     return isSubscriptionEntitled(data, nowUtc);
   });
 }

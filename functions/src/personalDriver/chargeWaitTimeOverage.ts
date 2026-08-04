@@ -4,7 +4,7 @@ import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { DEFAULT_CURRENCY } from '../config/stripe.js';
 import { createStripeClient } from '../stripe/stripe-client.js';
-import { isSubscriptionEntitled } from './entitlement.js';
+import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './entitlement.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const maximumWaitMinutesParam = defineInt('PERSONAL_DRIVER_MAX_WAIT_MINUTES');
@@ -82,7 +82,11 @@ interface ChargeableClaim {
   idempotencyKey: string;
 }
 
-type WaitChargeClaim = AlreadyBilledClaim | ReviewClaim | FreeClaim | ChargeableClaim;
+interface ExpiredClaim {
+  kind: 'expired';
+}
+
+type WaitChargeClaim = AlreadyBilledClaim | ReviewClaim | FreeClaim | ChargeableClaim | ExpiredClaim;
 
 function updateFailedClaim(
   db: FirebaseFirestore.Firestore,
@@ -140,6 +144,9 @@ export const chargePersonalDriverWaitTimeOverage = onCall(
         || tripData.userId === request.auth!.uid
         || tripData.assignedDriverId === request.auth!.uid;
       if (!authorized) throw new HttpsError('permission-denied', 'Vous ne pouvez pas facturer ce trajet.');
+      if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, now)) {
+        return { kind: 'expired' };
+      }
       if (!isSubscriptionEntitled(subscription, now)) {
         throw new HttpsError('failed-precondition', 'Le forfait doit être payé et actif pour facturer l’attente.');
       }
@@ -236,6 +243,7 @@ export const chargePersonalDriverWaitTimeOverage = onCall(
         ...(claim.paymentIntentId ? { paymentIntentId: claim.paymentIntentId } : {}),
       };
     }
+    if (claim.kind === 'expired') throw new HttpsError('failed-precondition', 'Le forfait a expiré.');
     if (claim.kind === 'review_required') throw new HttpsError('failed-precondition', claim.message);
     if (claim.kind === 'free') {
       return { success: true, waitTimeMinutes: claim.waitTimeMinutes, feeBilled: 0, overageMinutes: 0 };

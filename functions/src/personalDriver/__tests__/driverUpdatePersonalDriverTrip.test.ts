@@ -1,9 +1,31 @@
 export {};
 
+jest.mock('firebase-functions/params', () => ({
+  defineInt: jest.fn((name: string) => ({
+    value: jest.fn(() => name === 'PERSONAL_DRIVER_ARRIVAL_MAX_DISTANCE_METERS' ? 250 : 100),
+  })),
+}));
+
 const mockTripRef = {};
 const mockSubscriptionRef = {};
 const mockDriverRef = {};
 const mockTripData: Record<string, unknown> = {};
+const mockIsSubscriptionEntitled = jest.fn((subscription: Record<string, unknown>) => (
+  subscription?.status === 'active' && subscription?.paymentStatus === 'succeeded'
+));
+const mockMarkExpiredSubscriptionInTransaction = jest.fn((
+  transaction: { update: jest.Mock },
+  subscriptionRef: unknown,
+  subscription: Record<string, unknown>,
+  now: Date,
+) => {
+  const periodEnd = subscription?.periodEndAtUtc instanceof Date ? subscription.periodEndAtUtc : null;
+  if (subscription?.status === 'active' && periodEnd && now >= periodEnd) {
+    transaction.update(subscriptionRef, { status: 'expired', expiredAt: 'EXPIRED' });
+    return true;
+  }
+  return false;
+});
 
 const mockTransaction = {
   get: jest.fn(),
@@ -44,7 +66,8 @@ jest.mock('firebase-functions/v2/https', () => ({
 }));
 
 jest.mock('../entitlement', () => ({
-  isSubscriptionEntitled: jest.fn(() => true),
+  isSubscriptionEntitled: mockIsSubscriptionEntitled,
+  markExpiredSubscriptionInTransaction: mockMarkExpiredSubscriptionInTransaction,
 }));
 
 function makeRequest(data: unknown, uid?: string) {
@@ -202,6 +225,36 @@ describe('driverUpdatePersonalDriverTrip', () => {
       lng: -73.5673,
       accuracy: 20,
     }, 'driver_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      operationalReviewRequired: true,
+      operationalReviewReason: 'driver_arrival_gps_mismatch',
+    }));
+  });
+
+  it('marks an expired subscription before rejecting a status update', async () => {
+    Object.assign(mockTripData, { status: 'driver_assigned' });
+    mockTransaction.get.mockImplementation((ref: unknown) => Promise.resolve(
+      ref === mockSubscriptionRef
+        ? {
+            exists: true,
+            data: () => ({
+              status: 'active',
+              paymentStatus: 'succeeded',
+              periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+              periodEndAtUtc: new Date('2026-08-02T00:00:00.000Z'),
+            }),
+          }
+        : { exists: true, data: () => mockTripData },
+    ));
+
+    const { driverUpdatePersonalDriverTrip } = require('../driverUpdatePersonalDriverTrip');
+    await expect(driverUpdatePersonalDriverTrip(
+      makeRequest({ tripId: 'trip_1', status: 'driver_en_route' }, 'driver_1'),
+    )).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
+      status: 'expired',
+    }));
+    expect(mockTransaction.update.mock.calls.some(([ref]) => ref === mockTripRef)).toBe(false);
   });
 
   it('rejects invalid status transition driver_assigned -> completed', async () => {

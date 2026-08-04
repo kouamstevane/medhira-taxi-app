@@ -1,8 +1,8 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
-import { assertDriverNearPickup } from './geolocation.js';
-import { isSubscriptionEntitled } from './entitlement.js';
+import { assertDriverNearPickup, getPersonalDriverArrivalGpsConfig } from './geolocation.js';
+import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './entitlement.js';
 export type PersonalDriverTripStatus =
   | 'scheduled'
   | 'driver_assigned'
@@ -57,7 +57,7 @@ export const driverUpdatePersonalDriverTrip = onCall(
     const tripRef = db.collection('personal_driver_trips').doc(tripId);
     const driverRef = db.collection('drivers').doc(request.auth.uid);
 
-    await db.runTransaction(async (transaction) => {
+    const result = await db.runTransaction(async (transaction) => {
       const snap = await transaction.get(tripRef);
       if (!snap.exists) {
         throw new HttpsError('not-found', 'Trajet introuvable.');
@@ -73,7 +73,15 @@ export const driverUpdatePersonalDriverTrip = onCall(
       }
       const entitlementRef = db.collection('personal_driver_subscriptions').doc(tripData.subscriptionId);
       const subscriptionSnap = await transaction.get(entitlementRef);
-      if (!subscriptionSnap.exists || !isSubscriptionEntitled(subscriptionSnap.data(), new Date())) {
+      if (!subscriptionSnap.exists) {
+        throw new HttpsError('failed-precondition', 'Le forfait doit être payé et actif pour poursuivre ce trajet.');
+      }
+      const now = new Date();
+      const subscription = subscriptionSnap.data();
+      if (markExpiredSubscriptionInTransaction(transaction, entitlementRef, subscription, now)) {
+        return { kind: 'expired' as const };
+      }
+      if (!isSubscriptionEntitled(subscription, now)) {
         throw new HttpsError('failed-precondition', 'Le forfait doit être payé et actif pour poursuivre ce trajet.');
       }
 
@@ -86,6 +94,7 @@ export const driverUpdatePersonalDriverTrip = onCall(
         );
       }
 
+      let gpsReviewRequired = false;
       if (newStatus === 'driver_arrived') {
         if (lat === undefined || lng === undefined || accuracy === undefined) {
           throw new HttpsError('invalid-argument', 'La position GPS et sa précision sont obligatoires à l’arrivée.');
@@ -98,16 +107,37 @@ export const driverUpdatePersonalDriverTrip = onCall(
         ) {
           throw new HttpsError('failed-precondition', 'Le point de prise en charge du trajet est introuvable.');
         }
+        let gpsConfig;
+        try {
+          gpsConfig = getPersonalDriverArrivalGpsConfig();
+        } catch {
+          throw new HttpsError('failed-precondition', 'La configuration GPS d’arrivée est indisponible.');
+        }
         try {
           assertDriverNearPickup(
             { latitude: lat, longitude: lng },
             { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude },
             accuracy,
+            gpsConfig,
           );
         } catch {
-          throw new HttpsError('failed-precondition', 'La position GPS ne confirme pas l’arrivée au lieu de prise en charge.');
+          transaction.update(tripRef, {
+            operationalReviewRequired: true,
+            operationalReviewReason: 'driver_arrival_gps_mismatch',
+            operationalReviewAt: admin.firestore.FieldValue.serverTimestamp(),
+            operationalReviewBy: request.auth!.uid,
+            operationalReviewEvidence: {
+              driverLocation: { latitude: lat, longitude: lng },
+              pickupLocation: { latitude: pickupLocation.latitude, longitude: pickupLocation.longitude },
+              accuracyMeters: accuracy,
+            },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          gpsReviewRequired = true;
         }
       }
+
+      if (gpsReviewRequired) return { kind: 'gps_review_required' as const };
 
       if (newStatus === 'passenger_picked_up' && !tripData?.waitStartedAt) {
         throw new HttpsError('failed-precondition', 'Le début serveur de l’attente est introuvable.');
@@ -163,7 +193,15 @@ export const driverUpdatePersonalDriverTrip = onCall(
           ? { currentLocation: { lat, lng, accuracy: accuracy ?? null } }
           : {}),
       });
+      return { kind: 'updated' as const };
     });
+
+    if (result.kind === 'expired') {
+      throw new HttpsError('failed-precondition', 'Le forfait a expiré.');
+    }
+    if (result.kind === 'gps_review_required') {
+      throw new HttpsError('failed-precondition', 'La position GPS ne confirme pas l’arrivée au lieu de prise en charge.');
+    }
 
     return { success: true, status: newStatus };
   },

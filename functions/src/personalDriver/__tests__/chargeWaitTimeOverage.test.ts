@@ -4,6 +4,22 @@ const mockTripRef = { id: 'trip_1' };
 const mockSubscriptionRef = { id: 'sub_1' };
 const mockAdminRef = { get: jest.fn() };
 const mockPaymentIntentsCreate = jest.fn();
+const mockIsSubscriptionEntitled = jest.fn((subscription: Record<string, unknown>) => (
+  subscription?.status === 'active' && subscription?.paymentStatus === 'succeeded'
+));
+const mockMarkExpiredSubscriptionInTransaction = jest.fn((
+  transaction: { update: jest.Mock },
+  subscriptionRef: unknown,
+  subscription: Record<string, unknown>,
+  now: Date,
+) => {
+  const periodEnd = subscription?.periodEndAtUtc instanceof Date ? subscription.periodEndAtUtc : null;
+  if (subscription?.status === 'active' && periodEnd && now >= periodEnd) {
+    transaction.update(subscriptionRef, { status: 'expired', expiredAt: 'EXPIRED' });
+    return true;
+  }
+  return false;
+});
 const mockTransaction = {
   get: jest.fn(),
   update: jest.fn(),
@@ -49,6 +65,11 @@ jest.mock('firebase-functions/v2/https', () => ({
       this.code = code;
     }
   },
+}));
+
+jest.mock('../entitlement', () => ({
+  isSubscriptionEntitled: mockIsSubscriptionEntitled,
+  markExpiredSubscriptionInTransaction: mockMarkExpiredSubscriptionInTransaction,
 }));
 
 function makeRequest(data: unknown, uid = 'driver_1') {
@@ -214,6 +235,18 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
       feeBilled: 0,
       overageMinutes: 0,
     });
+    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it('marks an expired subscription before rejecting wait-time billing', async () => {
+    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
+    subscriptionData.periodEndAtUtc = new Date('2026-08-01T00:00:00.000Z');
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' })))
+      .rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
+      status: 'expired',
+    }));
     expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
   });
 });

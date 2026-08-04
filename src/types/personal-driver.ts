@@ -140,4 +140,13 @@ export interface PersonalDriverTrip {
   clientCancelledLostKm?: boolean;
   driverAlertFlagged?: boolean;
   driverAlertReason?: string;
+  operationalReviewRequired?: boolean;
+  operationalReviewReason?: 'driver_arrival_gps_mismatch';
+  operationalReviewAt?: string | Date | { toDate: () => Date };
+  operationalReviewBy?: string;
+  operationalReviewEvidence?: {
+    driverLocation: { latitude: number; longitude: number };
+    pickupLocation: { latitude: number; longitude: number };
+    accuracyMeters: number;
+  };
 }
