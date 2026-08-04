@@ -4,6 +4,7 @@ import {
   createPersonalDriverSubscriptionPayment,
   requestSpecialTrip,
 } from '@/services/personal-driver/subscription.service';
+import * as personalDriverSubscriptionService from '@/services/personal-driver/subscription.service';
 import {
   personalDriverContractFixture,
   personalDriverSpecialTripFixture,
@@ -33,7 +34,10 @@ describe('Personal Driver frontend/backend callable contracts', () => {
   });
 
   it('sends the subscription payment payload expected by the backend schema', async () => {
-    await createPersonalDriverSubscriptionPayment(personalDriverContractFixture);
+    await createPersonalDriverSubscriptionPayment({
+      ...personalDriverContractFixture,
+      distanceReturnKm: 13.4,
+    });
 
     expect(httpsCallable).toHaveBeenCalledWith(
       { region: 'europe-west1' },
@@ -51,13 +55,24 @@ describe('Personal Driver frontend/backend callable contracts', () => {
       returnTime: '17:30',
       startDate: '2026-08-03',
       distanceOneWayKm: 12.4,
-      distanceReturnKm: 12.4,
+      distanceReturnKm: 13.4,
       monthlyDistanceKm: 620,
       passengerCount: 1,
       notes: 'Fixture contrat Personal Driver',
     });
     expect(callable.mock.calls[0][0]).not.toHaveProperty('planId');
     expect(callable.mock.calls[0][0]).not.toHaveProperty('weekdays');
+  });
+
+  it('exposes the active subscription instead of a newer pending renewal', async () => {
+    const subscriptionViewService = (personalDriverSubscriptionService as unknown as {
+      getPersonalDriverSubscriptionView?: (userId: string) => Promise<unknown>;
+    }).getPersonalDriverSubscriptionView;
+
+    expect(subscriptionViewService).toEqual(expect.any(Function));
+    expect(await subscriptionViewService?.('user-1')).toMatchObject({
+      active: { id: 'active-subscription' },
+    });
   });
 
   it('routes client cancellation through clientManagePersonalDriver', async () => {

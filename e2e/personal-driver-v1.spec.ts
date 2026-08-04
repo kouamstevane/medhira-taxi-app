@@ -24,7 +24,13 @@ test.describe('Personal Driver V1 smoke', () => {
       {
         configKey: personalDriverConfigSessionKey,
         estimateKey: personalDriverEstimateSessionKey,
-        config: personalDriverClassicConfiguration,
+        config: {
+          ...personalDriverClassicConfiguration,
+          distanceOneWayKm: 8.2,
+          distanceReturnKm: 13.4,
+          distanceKm: 8.2,
+          monthlyDistanceKm: 540,
+        },
         estimate: personalDriverEstimateSession,
       },
     );

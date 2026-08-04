@@ -263,4 +263,38 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
     await expect(secondRequest).resolves.toEqual(expect.objectContaining({ paymentIntentId: 'pi_renew_concurrent' }));
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps distinct renewal request IDs on one pending renewal PaymentIntent', async () => {
+    const pendingRenewals = new Map<string, Record<string, unknown>>();
+    mockDb.collection.mockImplementation((name: string) => ({
+      doc: (id: string) => name === 'personal_driver_subscriptions'
+        ? (id === 'sub_old' ? sourceRef : { id })
+        : { id },
+    }));
+    mockDb.runTransaction.mockImplementation(async (callback: (transaction: typeof mockTransaction) => Promise<unknown>) => {
+      mockTransaction.get.mockImplementation(async (ref: { id: string }) => {
+        const data = pendingRenewals.get(ref.id);
+        return data ? { exists: true, data: () => data } : { exists: false };
+      });
+      mockTransaction.create.mockImplementation((ref: { id: string }, data: Record<string, unknown>) => {
+        pendingRenewals.set(ref.id, data);
+      });
+      mockTransaction.update.mockImplementation((ref: { id: string }, data: Record<string, unknown>) => {
+        pendingRenewals.set(ref.id, { ...pendingRenewals.get(ref.id), ...data });
+      });
+      return callback(mockTransaction);
+    });
+    const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
+
+    await renewPersonalDriverSubscriptionPayment(makeRequest({
+      sourceSubscriptionId: 'sub_old',
+      requestId: 'renew_first',
+    }));
+    await renewPersonalDriverSubscriptionPayment(makeRequest({
+      sourceSubscriptionId: 'sub_old',
+      requestId: 'renew_second',
+    }));
+
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
+  });
 });

@@ -86,7 +86,7 @@ const validPayload = {
   tripType: 'one_way',
   selectedWeekdays: [1],
   departureTime: '08:00',
-  startDate: '2026-07-27',
+  startDate: '2026-08-04',
   distanceOneWayKm: 10,
   distanceReturnKm: 0,
   monthlyDistanceKm: 300,
@@ -103,6 +103,7 @@ function makeRequest(data: unknown, uid?: string) {
 
 describe('createPersonalDriverSubscriptionPayment', () => {
   beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-03T12:00:00.000Z'));
     jest.clearAllMocks();
     mockCallableOptions.length = 0;
     mockSubscriptionRef.get.mockReset();
@@ -142,6 +143,10 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     mockStripe.paymentIntents.cancel.mockResolvedValue({ id: 'pi_123', status: 'canceled' });
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('declares Stripe and Google Maps secrets for deployment', () => {
     require('../createSubscriptionPayment');
 
@@ -178,6 +183,32 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       ...validPayload,
       tripType: 'round_trip',
       distanceReturnKm: 10,
+    }, 'user_123'))).rejects.toMatchObject({ code: 'invalid-argument' });
+
+    expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a subscription whose start date is before the fixed service date', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+    const pastStartPayload = {
+      ...validPayload,
+      startDate: '2026-08-02',
+    };
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(pastStartPayload, 'user_123')))
+      .rejects.toMatchObject({ code: 'invalid-argument' });
+
+    expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a round trip whose return time is not after its departure time', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest({
+      ...validPayload,
+      tripType: 'round_trip',
+      returnTime: '07:30',
+      distanceReturnKm: 13.4,
     }, 'user_123'))).rejects.toMatchObject({ code: 'invalid-argument' });
 
     expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
@@ -301,8 +332,8 @@ describe('createPersonalDriverSubscriptionPayment', () => {
         monthlyDistanceKm: 62.5,
         monthlyDistanceKmRemaining: 62.5,
         includedSpecialTrips: 2,
-        periodStartDate: '2026-07-27',
-        periodEndDateExclusive: '2026-08-26',
+        periodStartDate: '2026-08-04',
+        periodEndDateExclusive: '2026-09-03',
         serviceTimeZone: 'America/Toronto',
         pickupLocation: { latitude: 45.5017, longitude: -73.5673 },
         taxStatus: 'pending_confirmation',

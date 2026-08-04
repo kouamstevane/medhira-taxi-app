@@ -337,5 +337,9 @@ describe('Personal Driver Stripe webhook', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ received: false, error: 'trip generation failed' });
+    expect(subscriptionData).toMatchObject({
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+    });
   });
 });

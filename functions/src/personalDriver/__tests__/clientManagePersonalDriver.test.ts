@@ -63,6 +63,10 @@ describe('clientManagePersonalDriver', () => {
     mockResolveAddressCoordinates.mockResolvedValue({ latitude: 45.5, longitude: -73.5 });
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('rejects unauthenticated requests', async () => {
     const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
 
@@ -87,6 +91,28 @@ describe('clientManagePersonalDriver', () => {
     }));
   });
 
+  it('clears an assigned trip before completing the client cancellation reconciliation', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    mockTransaction.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        userId: 'client_1',
+        status: 'assigned',
+        assignedDriverId: 'driver_1',
+        assignedVehicleId: 'vehicle_1',
+      }),
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({ action: 'cancelTrip', tripId: 'trip_1' }, 'client_1')))
+      .resolves.toEqual({ success: true });
+
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      status: 'cancelled',
+      assignedDriverId: null,
+      assignedVehicleId: null,
+    }));
+  });
+
   it('rejects cancellation by a different client', async () => {
     const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
     mockTransaction.get.mockResolvedValue({
@@ -100,6 +126,7 @@ describe('clientManagePersonalDriver', () => {
 
   it('creates a special trip only when quota remains', async () => {
     const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    mockCalculateServerRoute.mockResolvedValue({ distanceKm: 8.2, durationMinutes: 30 });
     mockTransaction.get.mockResolvedValue({
       exists: true,
       data: () => ({
@@ -112,9 +139,9 @@ describe('clientManagePersonalDriver', () => {
         periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
         periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
         serviceTimeZone: 'America/Toronto',
-        monthlyDistanceKm: 100,
-        monthlyDistanceKmRemaining: 95,
-        specialTripsDistanceUsedKm: 5,
+        monthlyDistanceKm: 50,
+        monthlyDistanceKmRemaining: 50,
+        specialTripsDistanceUsedKm: 0,
       }),
     });
 
@@ -127,7 +154,13 @@ describe('clientManagePersonalDriver', () => {
       distanceKm: 999,
     }, 'client_1'));
 
-    expect(result).toEqual({ success: true, tripId: 'special_1', specialTripsRemaining: 0 });
+    expect(result).toEqual(expect.objectContaining({
+      success: true,
+      tripId: 'special_1',
+      specialTripsRemaining: 0,
+      officialDistanceKm: 8.2,
+      monthlyDistanceKmRemaining: 41.8,
+    }));
     expect(mockTransaction.set).toHaveBeenCalledWith(mockNewTripRef, expect.objectContaining({
       direction: 'special',
       isSpecialTrip: true,
@@ -137,9 +170,42 @@ describe('clientManagePersonalDriver', () => {
     }));
     expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
       specialTripsUsed: { __increment: 1 },
-      specialTripsDistanceUsedKm: { __increment: 18 },
-      monthlyDistanceKmRemaining: 77,
+      specialTripsDistanceUsedKm: { __increment: 8.2 },
+      monthlyDistanceKmRemaining: 41.8,
     }));
+  });
+
+  it('rejects a special trip that is already in the past on the fixed service clock', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-03T12:00:00.000Z'));
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    mockTransaction.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        userId: 'client_1',
+        status: 'active',
+        selectedPlanId: 'classic',
+        includedSpecialTrips: 2,
+        specialTripsUsed: 0,
+        paymentStatus: 'succeeded',
+        periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+        periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+        serviceTimeZone: 'America/Toronto',
+        monthlyDistanceKm: 50,
+        monthlyDistanceKmRemaining: 50,
+        specialTripsDistanceUsedKm: 0,
+      }),
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({
+      action: 'requestSpecialTrip',
+      subscriptionId: 'sub_1',
+      pickupAddress: 'Clinique',
+      destinationAddress: 'Aeroport',
+      scheduledAtIso: '2026-08-02T09:30:00',
+      distanceKm: 8.2,
+    }, 'client_1'))).rejects.toMatchObject({ code: 'invalid-argument' });
+
+    expect(mockTransaction.set).not.toHaveBeenCalled();
   });
 
   it('rejects a special trip that exceeds remaining monthly kilometers', async () => {
