@@ -4,9 +4,20 @@ import type {
   PersonalDriverPriceComparison,
   PersonalDriverPriceInput,
 } from '@/types/personal-driver';
+import { CURRENCY_CODE } from '@/utils/constants';
 import { PERSONAL_DRIVER_PLANS } from './plans';
 
 const PLAN_ORDER: PersonalDriverPlanId[] = ['basic', 'classic', 'premium'];
+
+export function formatPersonalDriverCurrency(
+  amount: number,
+  currency = CURRENCY_CODE,
+): string {
+  return new Intl.NumberFormat('fr-CA', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+  }).format(amount);
+}
 
 function isPlanEligible(
   planId: PersonalDriverPlanId,

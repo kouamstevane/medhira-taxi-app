@@ -108,6 +108,28 @@ const sampleEstimate = {
   configuration: sampleConfig,
 };
 
+const authoritativePayment = {
+  subscriptionId: 'sub_123',
+  paymentIntentId: 'pi_123',
+  clientSecret: 'secret_123',
+  amount: 723.45,
+  currency: 'cad',
+  quote: {
+    distanceOneWayKm: 10,
+    distanceReturnKm: 13.4,
+    monthlyDistanceKm: 514.8,
+    selectedPlanPrice: {
+      ...sampleEstimate.selectedPlan,
+      distanceAmount: 566.28,
+      totalBeforeTax: 723.45,
+      minimumApplied: false,
+    },
+    taxAmount: 0 as const,
+    totalAmount: 723.45,
+    currency: 'cad',
+  },
+};
+
 describe('PersonalDriverConfirmation Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -125,17 +147,12 @@ describe('PersonalDriverConfirmation Component', () => {
     expect(screen.getByText(/Aller-retour/i)).toBeInTheDocument();
     expect(screen.getAllByText(/440 km/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/650(\.|,)00 \$/i).length).toBeGreaterThan(0);
+    expect(screen.getByText('Estimation indicative')).toBeVisible();
     expect(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i })).toBeInTheDocument();
   });
 
-  it('creates a PaymentIntent with the selected estimate plan and then renders Stripe Elements', async () => {
-    (createPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue({
-      subscriptionId: 'sub_123',
-      paymentIntentId: 'pi_123',
-      clientSecret: 'secret_123',
-      amount: 650,
-      currency: 'cad',
-    });
+  it('replaces the browser estimate with the exact callable quote before rendering Stripe Elements', async () => {
+    (createPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue(authoritativePayment);
 
     render(<PersonalDriverConfirmation />);
 
@@ -154,23 +171,22 @@ describe('PersonalDriverConfirmation Component', () => {
       );
     });
     expect(await screen.findByText('Stripe Elements prêt: secret_123')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Payer 650,00/i })).toBeInTheDocument();
+    expect(screen.getByText('23,4 km')).toBeVisible();
+    expect(screen.getAllByText(/723,45/).length).toBeGreaterThan(0);
+    expect(screen.getByText('CAD')).toBeVisible();
+    expect(screen.getByText('Taxes non calculées')).toBeVisible();
+    expect(screen.queryByText('Estimation indicative')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Payer 723,45/i })).toBeInTheDocument();
   });
 
   it('redirects to dashboard only after Stripe confirms the payment', async () => {
-    (createPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue({
-      subscriptionId: 'sub_123',
-      paymentIntentId: 'pi_123',
-      clientSecret: 'secret_123',
-      amount: 650,
-      currency: 'cad',
-    });
+    (createPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue(authoritativePayment);
 
     render(<PersonalDriverConfirmation />);
 
     fireEvent.click(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i }));
     expect(mockPush).not.toHaveBeenCalled();
-    fireEvent.click(await screen.findByRole('button', { name: /Payer 650,00/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Payer 723,45/i }));
 
     expect(mockPush).toHaveBeenCalledWith('/personal-driver/dashboard?payment=success&subscriptionId=sub_123');
   });

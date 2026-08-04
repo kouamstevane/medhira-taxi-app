@@ -10,6 +10,7 @@ import {
 import { db, functions } from '@/config/firebase';
 import type {
   PersonalDriverPlanId,
+  PersonalDriverAuthoritativeQuote,
   PersonalDriverSubscription,
   PersonalDriverTrip,
   PersonalDriverTripType,
@@ -45,6 +46,7 @@ export interface CreatePersonalDriverSubscriptionPaymentResult {
   clientSecret: string;
   amount: number;
   currency: string;
+  quote: PersonalDriverAuthoritativeQuote;
 }
 
 export type RenewPersonalDriverSubscriptionPaymentResult = CreatePersonalDriverSubscriptionPaymentResult;

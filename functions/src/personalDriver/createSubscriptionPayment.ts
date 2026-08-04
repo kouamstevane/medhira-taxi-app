@@ -11,6 +11,7 @@ import {
   calculatePersonalDriverPrices,
   SPECIAL_TRIP_LIMITS,
   type PersonalDriverPlanId,
+  type PersonalDriverPlanPrice,
   type PersonalDriverWeekday,
 } from './pricing.js';
 import { calculateAuthoritativeMonthlyDistanceKm, calculateServerRoute } from './routeDistance.js';
@@ -81,6 +82,17 @@ interface CreateSubscriptionPaymentResult {
   clientSecret: string;
   amount: number;
   currency: string;
+  quote: PersonalDriverAuthoritativeQuote;
+}
+
+interface PersonalDriverAuthoritativeQuote {
+  distanceOneWayKm: number;
+  distanceReturnKm: number;
+  monthlyDistanceKm: number;
+  selectedPlanPrice: PersonalDriverPlanPrice;
+  taxAmount: 0;
+  totalAmount: number;
+  currency: string;
 }
 
 interface UserPaymentProfile {
@@ -92,6 +104,20 @@ interface SubscriptionPaymentClaim {
   isCreator: boolean;
   data?: FirebaseFirestore.DocumentData;
   paymentCreationAttempt?: number;
+}
+
+function getPersistedAuthoritativeQuote(
+  data: FirebaseFirestore.DocumentData,
+): PersonalDriverAuthoritativeQuote {
+  return {
+    distanceOneWayKm: Number(data.distanceOneWayKm),
+    distanceReturnKm: Number(data.distanceReturnKm),
+    monthlyDistanceKm: Number(data.monthlyDistanceKm),
+    selectedPlanPrice: data.selectedPlanPrice as PersonalDriverPlanPrice,
+    taxAmount: 0,
+    totalAmount: Number(data.totalAmount),
+    currency: String(data.currency ?? CURRENCY),
+  };
 }
 
 async function getPersistedPaymentReplay(
@@ -120,6 +146,7 @@ async function getPersistedPaymentReplay(
     clientSecret: paymentIntent.client_secret,
     amount: data.totalAmount,
     currency: data.currency,
+    quote: getPersistedAuthoritativeQuote(data),
   };
 }
 
@@ -261,6 +288,15 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     if (amount > MAX_AMOUNT) {
       throw new HttpsError('invalid-argument', `Montant maximum : ${MAX_AMOUNT}`);
     }
+    const quote: PersonalDriverAuthoritativeQuote = {
+      distanceOneWayKm: outboundRoute.distanceKm,
+      distanceReturnKm: returnRoute?.distanceKm ?? 0,
+      monthlyDistanceKm: authoritativeMonthlyDistanceKm,
+      selectedPlanPrice,
+      taxAmount,
+      totalAmount: amount,
+      currency: CURRENCY,
+    };
     const periodStartAtUtc = localDateTimeToUtc(input.startDate, '00:00', pickupLocation.serviceTimeZone);
     const periodEndAtUtc = localDateTimeToUtc(periodEndDateExclusive, '00:00', pickupLocation.serviceTimeZone);
 
@@ -331,10 +367,11 @@ export const createPersonalDriverSubscriptionPayment = onCall(
         clientSecret: existingPaymentIntent.client_secret,
         amount: existingData.totalAmount,
         currency: existingData.currency,
+        quote: getPersistedAuthoritativeQuote(existingData),
       };
     }
 
-    const amountInSmallestUnit = Math.round(amount * 100);
+    const amountInSmallestUnit = Math.round(quote.totalAmount * 100);
     const paymentCreationAttempt = subscriptionClaim.paymentCreationAttempt ?? 1;
     const userPaymentProfile = await getUserPaymentProfile(db, request.auth.uid);
     const paymentIntent = await getStripe().paymentIntents.create(
@@ -398,21 +435,21 @@ export const createPersonalDriverSubscriptionPayment = onCall(
         longitude: pickupLocation.longitude,
       },
       destinationLocation,
-      distanceOneWayKm: outboundRoute.distanceKm,
-      distanceReturnKm: returnRoute?.distanceKm ?? 0,
-      monthlyDistanceKm: authoritativeMonthlyDistanceKm,
-      monthlyDistanceKmRemaining: authoritativeMonthlyDistanceKm,
+      distanceOneWayKm: quote.distanceOneWayKm,
+      distanceReturnKm: quote.distanceReturnKm,
+      monthlyDistanceKm: quote.monthlyDistanceKm,
+      monthlyDistanceKmRemaining: quote.monthlyDistanceKm,
       includedSpecialTrips: SPECIAL_TRIP_LIMITS[selectedPlanId],
       specialTripsUsed: 0,
       specialTripsDistanceUsedKm: 0,
       passengerCount: input.passengerCount,
       notes: input.notes ?? null,
-      selectedPlanPrice,
+      selectedPlanPrice: quote.selectedPlanPrice,
       priceComparison,
-      taxAmount,
+      taxAmount: quote.taxAmount,
       taxStatus: 'pending_confirmation',
-      totalAmount: amount,
-      currency: CURRENCY,
+      totalAmount: quote.totalAmount,
+      currency: quote.currency,
       stripePaymentIntentId: paymentIntent.id,
       stripeCustomerId: userPaymentProfile.stripeCustomerId ?? null,
       defaultPaymentMethodId: userPaymentProfile.defaultPaymentMethodId ?? null,
@@ -469,8 +506,9 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       subscriptionId,
       paymentIntentId: paymentIntent.id,
       clientSecret: paymentIntent.client_secret,
-      amount,
-      currency: CURRENCY,
+      amount: quote.totalAmount,
+      currency: quote.currency,
+      quote,
     };
   },
 );

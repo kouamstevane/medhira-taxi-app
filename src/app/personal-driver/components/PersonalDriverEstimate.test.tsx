@@ -33,9 +33,10 @@ describe('PersonalDriverEstimate', () => {
   it('compares the 440 km monthly prices and recommends Classic', () => {
     render(<PersonalDriverEstimate configuration={configuration} onContinue={jest.fn()} />);
 
-    expect(screen.getByText('660,00 CAD')).toBeVisible();
-    expect(screen.getByText('550,00 CAD')).toBeVisible();
-    expect(screen.getByText('650,00 CAD')).toBeVisible();
+    expect(screen.getByText('Estimation indicative')).toBeVisible();
+    expect(screen.getByText(/660,00/)).toBeVisible();
+    expect(screen.getByText(/550,00/)).toBeVisible();
+    expect(screen.getByText(/650,00/)).toBeVisible();
     expect(screen.getByText('Recommande')).toBeVisible();
     expect(screen.getByText('Classic')).toBeVisible();
   });
@@ -83,8 +84,8 @@ describe('PersonalDriverEstimate', () => {
       />,
     );
 
-    expect(screen.getByText('660,90 CAD')).toBeVisible();
-    expect(screen.getByText('550,75 CAD')).toBeVisible();
+    expect(screen.getByText(/660,90/)).toBeVisible();
+    expect(screen.getByText(/550,75/)).toBeVisible();
   });
 
   it('uses one route heading and an inner estimate heading', () => {

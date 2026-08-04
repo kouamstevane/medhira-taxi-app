@@ -14,7 +14,7 @@ import {
 import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js';
 import { getLocalCalendarDate, localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
 import { calculatePersonalDriverPrices, SPECIAL_TRIP_LIMITS } from './pricing.js';
-import type { PersonalDriverPlanId, PersonalDriverWeekday } from './pricing.js';
+import type { PersonalDriverPlanId, PersonalDriverPlanPrice, PersonalDriverWeekday } from './pricing.js';
 import { assertValidSubscriptionSchedule } from './subscriptionSchedule.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
@@ -108,12 +108,37 @@ interface RenewalClaim {
   data?: FirebaseFirestore.DocumentData;
 }
 
+export interface PersonalDriverAuthoritativeQuote {
+  distanceOneWayKm: number;
+  distanceReturnKm: number;
+  monthlyDistanceKm: number;
+  selectedPlanPrice: PersonalDriverPlanPrice;
+  taxAmount: 0;
+  totalAmount: number;
+  currency: string;
+}
+
+function getPersistedAuthoritativeQuote(
+  data: FirebaseFirestore.DocumentData,
+): PersonalDriverAuthoritativeQuote {
+  return {
+    distanceOneWayKm: Number(data.distanceOneWayKm),
+    distanceReturnKm: Number(data.distanceReturnKm),
+    monthlyDistanceKm: Number(data.monthlyDistanceKm),
+    selectedPlanPrice: data.selectedPlanPrice as PersonalDriverPlanPrice,
+    taxAmount: 0,
+    totalAmount: Number(data.totalAmount),
+    currency: String(data.currency ?? CURRENCY),
+  };
+}
+
 export interface RenewSubscriptionPaymentResult {
   subscriptionId: string;
   paymentIntentId: string;
   clientSecret: string;
   amount: number;
   currency: string;
+  quote: PersonalDriverAuthoritativeQuote;
 }
 
 export const renewPersonalDriverSubscriptionPayment = onCall(
@@ -227,6 +252,7 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         clientSecret: existingPaymentIntent.client_secret,
         amount: Number(settledData?.totalAmount ?? 0),
         currency: String(settledData?.currency ?? CURRENCY),
+        quote: getPersistedAuthoritativeQuote(settledData ?? {}),
       };
     }
 
@@ -271,10 +297,19 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
     if (amount > MAX_AMOUNT) throw new HttpsError('invalid-argument', `Montant maximum : ${MAX_AMOUNT}`);
     const periodStartAtUtc = localDateTimeToUtc(periodStartDate, '00:00', serviceTimeZone);
     const periodEndAtUtc = localDateTimeToUtc(periodEndDateExclusive, '00:00', serviceTimeZone);
+    const quote: PersonalDriverAuthoritativeQuote = {
+      distanceOneWayKm: outboundRoute.distanceKm,
+      distanceReturnKm: returnRoute?.distanceKm ?? 0,
+      monthlyDistanceKm,
+      selectedPlanPrice,
+      taxAmount: 0,
+      totalAmount: amount,
+      currency: CURRENCY,
+    };
     const paymentIntent = await getStripe().paymentIntents.create(
       {
-        amount: Math.round(amount * 100),
-        currency: CURRENCY,
+        amount: Math.round(quote.totalAmount * 100),
+        currency: quote.currency,
         capture_method: 'automatic',
         ...(typeof source.stripeCustomerId === 'string' ? { customer: source.stripeCustomerId } : {}),
         setup_future_usage: 'off_session',
@@ -327,21 +362,21 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         serviceTimeZone,
         pickupLocation: source.pickupLocation,
         destinationLocation,
-        distanceOneWayKm: outboundRoute.distanceKm,
-        distanceReturnKm: returnRoute?.distanceKm ?? 0,
-        monthlyDistanceKm,
-        monthlyDistanceKmRemaining: monthlyDistanceKm,
+        distanceOneWayKm: quote.distanceOneWayKm,
+        distanceReturnKm: quote.distanceReturnKm,
+        monthlyDistanceKm: quote.monthlyDistanceKm,
+        monthlyDistanceKmRemaining: quote.monthlyDistanceKm,
         includedSpecialTrips: SPECIAL_TRIP_LIMITS[selectedPlanPrice.planId],
         specialTripsUsed: 0,
         specialTripsDistanceUsedKm: 0,
         passengerCount: Number(source.passengerCount ?? 1),
         notes: source.notes ?? null,
-        selectedPlanPrice,
+        selectedPlanPrice: quote.selectedPlanPrice,
         priceComparison,
         taxStatus: 'pending_confirmation',
-        taxAmount: 0,
-        totalAmount: amount,
-        currency: CURRENCY,
+        taxAmount: quote.taxAmount,
+        totalAmount: quote.totalAmount,
+        currency: quote.currency,
         stripePaymentIntentId: paymentIntent.id,
         stripeCustomerId: typeof source.stripeCustomerId === 'string' ? source.stripeCustomerId : null,
         defaultPaymentMethodId: source.defaultPaymentMethodId ?? null,
@@ -354,8 +389,9 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
       subscriptionId: renewalId,
       paymentIntentId: paymentIntent.id,
       clientSecret: paymentIntent.client_secret,
-      amount,
-      currency: CURRENCY,
+      amount: quote.totalAmount,
+      currency: quote.currency,
+      quote,
     };
   },
 );

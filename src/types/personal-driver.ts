@@ -56,6 +56,16 @@ export interface PersonalDriverPlanPrice {
   savingsComparedToBasic: number;
 }
 
+export interface PersonalDriverAuthoritativeQuote {
+  distanceOneWayKm: number;
+  distanceReturnKm: number;
+  monthlyDistanceKm: number;
+  selectedPlanPrice: PersonalDriverPlanPrice;
+  taxAmount: 0;
+  totalAmount: number;
+  currency: string;
+}
+
 export interface PersonalDriverPriceComparison {
   monthlyDistanceKm: number;
   plans: Record<PersonalDriverPlanId, PersonalDriverPlanPrice>;

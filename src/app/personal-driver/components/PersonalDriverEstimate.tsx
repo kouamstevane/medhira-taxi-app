@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import type { PersonalDriverConfiguration } from './PersonalDriverConfigurator';
 import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
-import { calculatePersonalDriverPrices } from '@/services/personal-driver/pricing.service';
+import {
+  calculatePersonalDriverPrices,
+  formatPersonalDriverCurrency,
+} from '@/services/personal-driver/pricing.service';
 import type { PersonalDriverPlanId } from '@/types/personal-driver';
 
 export const PERSONAL_DRIVER_ESTIMATE_SESSION_KEY = 'medjira.personalDriver.estimate.v1';
@@ -17,10 +20,6 @@ const planIds: PersonalDriverPlanId[] = ['basic', 'classic', 'premium'];
 
 function formatKm(distanceKm: number): string {
   return distanceKm.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
-}
-
-function formatCad(amount: number): string {
-  return `${amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} CAD`;
 }
 
 export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDriverEstimateProps) {
@@ -65,6 +64,7 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
         <div className="mb-4">
           <p className="text-sm font-semibold text-primary">VOTRE ESTIMATION</p>
           <h2 id="estimate-heading" className="text-2xl font-bold text-white">Choisissez votre forfait</h2>
+          <p className="mt-1 text-sm text-slate-400">Estimation indicative</p>
         </div>
         <p className="mb-4 text-sm text-slate-400">{comparison.recommendationReasons.join(' ')}</p>
 
@@ -97,7 +97,7 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
                       <h2 className="text-lg font-bold text-white">{plan.name}</h2>
                       {isRecommended && <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-bold text-primary">Recommande</span>}
                     </div>
-                    <p className="mt-1 text-xl font-bold text-white">{formatCad(price.totalBeforeTax)} <span className="text-sm font-medium text-slate-400">/ mois</span></p>
+                    <p className="mt-1 text-xl font-bold text-white">{formatPersonalDriverCurrency(price.totalBeforeTax)} <span className="text-sm font-medium text-slate-400">/ mois</span></p>
                     {!price.isEligible && <p className="mt-2 text-sm text-amber-300">Ce forfait ne couvre pas tous les jours choisis.</p>}
                     {price.minimumApplied && (
                       <p className="mt-2 text-sm text-slate-400">Le minimum de {formatKm(price.minimumBillableKm)} km est applique pour ce forfait.</p>

@@ -281,6 +281,18 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       clientSecret: 'pi_123_secret',
       amount: 300,
       currency: 'cad',
+      quote: {
+        distanceOneWayKm: 12.5,
+        distanceReturnKm: 0,
+        monthlyDistanceKm: 62.5,
+        selectedPlanPrice: expect.objectContaining({
+          planId: 'basic',
+          totalBeforeTax: 300,
+        }),
+        taxAmount: 0,
+        totalAmount: 300,
+        currency: 'cad',
+      },
     });
     expect(mockSubscriptionDoc).toHaveBeenCalledWith(expect.stringMatching(/^[a-f0-9]{64}$/));
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
@@ -353,6 +365,56 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     );
   });
 
+  it('returns the exact authoritative round-trip quote used by Stripe and Firestore', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+    mockCalculateServerRoute
+      .mockResolvedValueOnce({ distanceKm: 10, durationMinutes: 20 })
+      .mockResolvedValueOnce({ distanceKm: 13.4, durationMinutes: 24 });
+    mockCalculateAuthoritativeMonthlyDistanceKm.mockReturnValueOnce(117);
+
+    const result = await createPersonalDriverSubscriptionPayment(makeRequest({
+      ...validPayload,
+      tripType: 'round_trip',
+      returnTime: '17:00',
+      distanceOneWayKm: 999,
+      distanceReturnKm: 999,
+      monthlyDistanceKm: 999,
+    }, 'user_123'));
+
+    expect(result).toEqual(expect.objectContaining({
+      amount: 300,
+      currency: 'cad',
+      quote: {
+        distanceOneWayKm: 10,
+        distanceReturnKm: 13.4,
+        monthlyDistanceKm: 117,
+        selectedPlanPrice: expect.objectContaining({
+          planId: 'basic',
+          totalBeforeTax: 300,
+        }),
+        taxAmount: 0,
+        totalAmount: 300,
+        currency: 'cad',
+      },
+    }));
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: result.quote.totalAmount * 100 }),
+      expect.any(Object),
+    );
+    expect(mockBatch.set).toHaveBeenCalledWith(
+      mockSubscriptionRef,
+      expect.objectContaining({
+        distanceOneWayKm: result.quote.distanceOneWayKm,
+        distanceReturnKm: result.quote.distanceReturnKm,
+        monthlyDistanceKm: result.quote.monthlyDistanceKm,
+        taxAmount: result.quote.taxAmount,
+        totalAmount: result.quote.totalAmount,
+        currency: result.quote.currency,
+      }),
+    );
+    expect(result.amount).toBe(result.quote.totalAmount);
+  });
+
   it('returns the persisted pending subscription payment for a retried request', async () => {
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     mockTransaction.get.mockResolvedValue({
@@ -361,6 +423,11 @@ describe('createPersonalDriverSubscriptionPayment', () => {
         userId: 'user_123',
         status: 'pending_payment',
         stripePaymentIntentId: 'pi_existing',
+        distanceOneWayKm: 12.5,
+        distanceReturnKm: 0,
+        monthlyDistanceKm: 62.5,
+        selectedPlanPrice: { planId: 'classic', totalBeforeTax: 450 },
+        taxAmount: 0,
         totalAmount: 450,
         currency: 'cad',
       }),
@@ -376,6 +443,15 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       clientSecret: 'pi_existing_secret',
       amount: 450,
       currency: 'cad',
+      quote: {
+        distanceOneWayKm: 12.5,
+        distanceReturnKm: 0,
+        monthlyDistanceKm: 62.5,
+        selectedPlanPrice: { planId: 'classic', totalBeforeTax: 450 },
+        taxAmount: 0,
+        totalAmount: 450,
+        currency: 'cad',
+      },
     });
 
     expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
@@ -395,6 +471,11 @@ describe('createPersonalDriverSubscriptionPayment', () => {
         userId: 'user_123',
         paymentStatus: 'pending',
         stripePaymentIntentId: 'pi_123',
+        distanceOneWayKm: 12.5,
+        distanceReturnKm: 0,
+        monthlyDistanceKm: 62.5,
+        selectedPlanPrice: expect.objectContaining({ planId: 'basic', totalBeforeTax: 300 }),
+        taxAmount: 0,
         totalAmount: 300,
         currency: 'cad',
       }),
@@ -405,6 +486,11 @@ describe('createPersonalDriverSubscriptionPayment', () => {
         userId: 'user_123',
         paymentStatus: 'pending',
         stripePaymentIntentId: 'pi_123',
+        distanceOneWayKm: 12.5,
+        distanceReturnKm: 0,
+        monthlyDistanceKm: 62.5,
+        selectedPlanPrice: expect.objectContaining({ planId: 'basic', totalBeforeTax: 300 }),
+        taxAmount: 0,
         totalAmount: 300,
         currency: 'cad',
       }),
@@ -417,6 +503,15 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       clientSecret: 'pi_123_secret',
       amount: 300,
       currency: 'cad',
+      quote: {
+        distanceOneWayKm: 12.5,
+        distanceReturnKm: 0,
+        monthlyDistanceKm: 62.5,
+        selectedPlanPrice: expect.objectContaining({ planId: 'basic', totalBeforeTax: 300 }),
+        taxAmount: 0,
+        totalAmount: 300,
+        currency: 'cad',
+      },
     });
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
     expect(mockStripe.paymentIntents.retrieve).toHaveBeenCalledWith('pi_123');

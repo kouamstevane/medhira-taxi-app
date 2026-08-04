@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
+import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import {
   cancelPersonalDriverTripByClient,
   getCurrentPersonalDriverSubscription,
@@ -299,6 +300,13 @@ export function PersonalDriverClientDashboard() {
         {renewalPayment && (
           <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
             <h3 className="mb-3 text-sm font-bold text-white">Paiement du renouvellement</h3>
+            <div className="mb-3 flex items-center justify-between gap-3 text-xs text-slate-400">
+              <span>Taxes non calculées</span>
+              <strong className="text-white">
+                {formatPersonalDriverCurrency(renewalPayment.quote.totalAmount, renewalPayment.quote.currency)}{' '}
+                {renewalPayment.quote.currency.toUpperCase()}
+              </strong>
+            </div>
             <StripePaymentElement
               clientSecret={renewalPayment.clientSecret}
               amount={renewalPayment.amount}
@@ -308,7 +316,7 @@ export function PersonalDriverClientDashboard() {
                 void reloadData();
               }}
               onError={setRenewalError}
-              submitLabel={`Payer ${renewalPayment.amount.toLocaleString('fr-CA', { minimumFractionDigits: 2 })} $`}
+              submitLabel={`Payer ${formatPersonalDriverCurrency(renewalPayment.quote.totalAmount, renewalPayment.quote.currency)}`}
             />
           </div>
         )}

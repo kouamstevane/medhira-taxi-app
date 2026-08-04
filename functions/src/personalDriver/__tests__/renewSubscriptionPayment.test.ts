@@ -169,6 +169,18 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
       clientSecret: 'pi_renew_1_secret',
       amount: 450,
       currency: 'cad',
+      quote: {
+        distanceOneWayKm: 10,
+        distanceReturnKm: 0,
+        monthlyDistanceKm: 50,
+        selectedPlanPrice: expect.objectContaining({
+          planId: 'classic',
+          totalBeforeTax: 450,
+        }),
+        taxAmount: 0,
+        totalAmount: 450,
+        currency: 'cad',
+      },
     });
     expect(second).toEqual(first);
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
@@ -185,6 +197,11 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
         paymentStatus: 'pending',
       }),
     );
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: first.quote.totalAmount * 100 }),
+      expect.any(Object),
+    );
+    expect(first.amount).toBe(first.quote.totalAmount);
   });
 
   it('starts an expired renewal on the current local service date', async () => {

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
+import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import {
   createPersonalDriverSubscriptionPayment,
   type CreatePersonalDriverSubscriptionPaymentResult,
@@ -100,10 +101,6 @@ function parseEstimate(value: unknown): PersonalDriverEstimateSession | null {
   return estimate as PersonalDriverEstimateSession;
 }
 
-function formatCad(amount: number): string {
-  return `${amount.toLocaleString('fr-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
-}
-
 function formatKm(distanceKm: number): string {
   return distanceKm.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 }
@@ -135,6 +132,14 @@ export function PersonalDriverConfirmation() {
   const selectedPlanId = checkout?.estimate.selectedPlanId;
   const plan = selectedPlanId ? PERSONAL_DRIVER_PLANS[selectedPlanId] : null;
   const selectedPrice = selectedPlanId ? checkout?.estimate.comparison.plans[selectedPlanId] : null;
+  const quote = payment?.quote;
+  const displayedPrice = quote?.selectedPlanPrice ?? selectedPrice;
+  const displayedCurrency = quote?.currency ?? 'CAD';
+  const displayedMonthlyDistanceKm = quote?.monthlyDistanceKm ?? checkout?.config.monthlyDistanceKm ?? 0;
+  const displayedTripDistanceKm = quote
+    ? quote.distanceOneWayKm + quote.distanceReturnKm
+    : (checkout?.config.distanceOneWayKm ?? 0) + (checkout?.config.distanceReturnKm ?? 0);
+  const displayedTotalAmount = quote?.totalAmount ?? selectedPrice?.totalBeforeTax ?? 0;
   const formattedDays = useMemo(
     () => checkout?.config.weekdays.map((day) => WEEKDAY_NAMES[day]).join(', ') ?? '',
     [checkout],
@@ -169,7 +174,7 @@ export function PersonalDriverConfirmation() {
     }
   };
 
-  if (!checkout || !plan || !selectedPrice) {
+  if (!checkout || !plan || !selectedPrice || !displayedPrice) {
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-2xl items-center px-4 text-center text-slate-100">
         <div className="w-full space-y-4 rounded-xl border border-white/10 bg-card p-6">
@@ -197,8 +202,8 @@ export function PersonalDriverConfirmation() {
             <p className="mt-1 text-sm text-slate-400">Période de 30 jours calendaires glissants</p>
           </div>
           <div className="text-right">
-            <p className="text-2xl font-black text-white">{formatCad(selectedPrice.totalBeforeTax)}</p>
-            <p className="text-xs text-slate-400">avant taxes</p>
+            <p className="text-2xl font-black text-white">{formatPersonalDriverCurrency(displayedTotalAmount, displayedCurrency)}</p>
+            <p className="text-xs text-slate-400">{quote ? quote.currency.toUpperCase() : 'Estimation indicative'}</p>
           </div>
         </div>
 
@@ -226,13 +231,14 @@ export function PersonalDriverConfirmation() {
           <div className="rounded-lg border border-white/10 bg-white/5 p-4">
             <h2 className="mb-3 text-base font-bold text-white">Calcul du tarif</h2>
             <div className="space-y-2 text-slate-300">
-              <div className="flex justify-between gap-4"><span>Kilométrage estimé</span><strong className="text-white">{formatKm(checkout.config.monthlyDistanceKm)} km</strong></div>
-              <div className="flex justify-between gap-4"><span>Formule</span><strong className="text-white">{formatKm(checkout.config.monthlyDistanceKm)} km x {selectedPrice.pricePerKm.toLocaleString('fr-FR')} $/km</strong></div>
-              {selectedPrice.minimumApplied && (
-                <div className="flex justify-between gap-4"><span>Minimum appliqué</span><strong className="text-white">{formatCad(selectedPrice.minimumAmount)}</strong></div>
+              <div className="flex justify-between gap-4"><span>Distance par trajet</span><strong className="text-white">{formatKm(displayedTripDistanceKm)} km</strong></div>
+              <div className="flex justify-between gap-4"><span>Kilométrage mensuel</span><strong className="text-white">{formatKm(displayedMonthlyDistanceKm)} km</strong></div>
+              <div className="flex justify-between gap-4"><span>Formule</span><strong className="text-white">{formatKm(displayedMonthlyDistanceKm)} km x {formatPersonalDriverCurrency(displayedPrice.pricePerKm, displayedCurrency)}/km</strong></div>
+              {displayedPrice.minimumApplied && (
+                <div className="flex justify-between gap-4"><span>Minimum appliqué</span><strong className="text-white">{formatPersonalDriverCurrency(displayedPrice.minimumAmount, displayedCurrency)}</strong></div>
               )}
-              <div className="flex justify-between gap-4 border-t border-white/10 pt-2"><span>Sous-total</span><strong className="text-white">{formatCad(selectedPrice.totalBeforeTax)}</strong></div>
-              <div className="flex justify-between gap-4"><span>Taxes</span><span className="text-slate-400">À confirmer — aucun taux appliqué</span></div>
+              <div className="flex justify-between gap-4 border-t border-white/10 pt-2"><span>Total</span><strong className="text-white">{formatPersonalDriverCurrency(displayedTotalAmount, displayedCurrency)}</strong></div>
+              <div className="flex justify-between gap-4"><span>Taxes</span><span className="text-slate-400">Taxes non calculées</span></div>
             </div>
           </div>
 
@@ -268,7 +274,7 @@ export function PersonalDriverConfirmation() {
             currency={payment.currency}
             onSuccess={() => router.push(`/personal-driver/dashboard?payment=success&subscriptionId=${payment.subscriptionId}`)}
             onError={setError}
-            submitLabel={`Payer ${formatCad(payment.amount)}`}
+            submitLabel={`Payer ${formatPersonalDriverCurrency(payment.amount, payment.currency)}`}
           />
         )}
       </section>
