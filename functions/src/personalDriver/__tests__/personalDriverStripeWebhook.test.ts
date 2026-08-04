@@ -97,9 +97,39 @@ describe('Personal Driver Stripe webhook', () => {
       userId,
       status: 'pending_payment',
       paymentStatus: 'pending',
+      periodStartDate: '2026-08-01',
+      periodEndDateExclusive: '2026-08-31',
+      periodStartAtUtc: new Date('2026-08-01T04:00:00.000Z'),
+      periodEndAtUtc: new Date('2026-08-31T04:00:00.000Z'),
+      serviceTimeZone: 'America/Toronto',
+      pickupLocation: { latitude: 45.5, longitude: -73.5 },
+      selectedWeekdays: [1],
+      tripType: 'one_way',
+      departureTime: '08:00',
+      pickupAddress: 'A',
+      destinationAddress: 'B',
+      distanceOneWayKm: 10,
+      distanceReturnKm: 0,
     });
     Object.keys(subscriptionData)
-      .filter((key) => !['userId', 'status', 'paymentStatus'].includes(key))
+      .filter((key) => ![
+        'userId',
+        'status',
+        'paymentStatus',
+        'periodStartDate',
+        'periodEndDateExclusive',
+        'periodStartAtUtc',
+        'periodEndAtUtc',
+        'serviceTimeZone',
+        'pickupLocation',
+        'selectedWeekdays',
+        'tripType',
+        'departureTime',
+        'pickupAddress',
+        'destinationAddress',
+        'distanceOneWayKm',
+        'distanceReturnKm',
+      ].includes(key))
       .forEach((key) => delete subscriptionData[key]);
 
     jest.clearAllMocks();

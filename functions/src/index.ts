@@ -2257,6 +2257,7 @@ export {
   driverUpdatePersonalDriverTrip,
   chargePersonalDriverWaitTimeOverage,
   clientManagePersonalDriver,
+  expirePersonalDriverSubscriptions,
 } from './personalDriver/index.js';
 
 // ============================================================================

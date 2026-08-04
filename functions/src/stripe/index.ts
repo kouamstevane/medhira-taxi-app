@@ -85,6 +85,27 @@ const PAYMENT_STATUS = {
   REQUIRES_ACTION: 'requires_action',
 } as const;
 
+function isPersonalDriverSubscriptionReadyForActivation(
+  subscription: FirebaseFirestore.DocumentData | undefined,
+): boolean {
+  if (!subscription) return false;
+  return [
+    'periodStartDate',
+    'periodEndDateExclusive',
+    'periodStartAtUtc',
+    'periodEndAtUtc',
+    'serviceTimeZone',
+    'pickupLocation',
+    'selectedWeekdays',
+    'tripType',
+    'departureTime',
+    'pickupAddress',
+    'destinationAddress',
+    'distanceOneWayKm',
+    'distanceReturnKm',
+  ].every((field) => subscription[field] !== undefined && subscription[field] !== null);
+}
+
 // =============================================================================
 // createSetupIntent — Callable Function (client → serveur)
 // =============================================================================
@@ -466,6 +487,10 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
         return;
       }
 
+      if (!isPersonalDriverSubscriptionReadyForActivation(subscription)) {
+        throw new Error(`Configuration personal_driver_subscription incomplète: ${metadata.subscriptionId}`);
+      }
+
       if (subscription?.status === 'active' && subscription.paymentStatus === 'succeeded') {
         console.warn(`[Webhook] personal_driver_subscription déjà traité: ${metadata.subscriptionId}`);
         subscriptionForTripGeneration = {
@@ -482,6 +507,7 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
       tx.update(subscriptionRef, {
         paymentStatus: 'succeeded',
         status: 'active',
+        stripePaymentIntentId: piId,
         stripeCustomerId: typeof pi.customer === 'string' ? pi.customer : subscription?.stripeCustomerId ?? null,
         defaultPaymentMethodId:
           typeof pi.payment_method === 'string'

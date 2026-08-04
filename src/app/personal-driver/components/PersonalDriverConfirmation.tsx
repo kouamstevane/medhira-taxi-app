@@ -232,7 +232,7 @@ export function PersonalDriverConfirmation() {
                 <div className="flex justify-between gap-4"><span>Minimum appliqué</span><strong className="text-white">{formatCad(selectedPrice.minimumAmount)}</strong></div>
               )}
               <div className="flex justify-between gap-4 border-t border-white/10 pt-2"><span>Sous-total</span><strong className="text-white">{formatCad(selectedPrice.totalBeforeTax)}</strong></div>
-              <div className="flex justify-between gap-4"><span>Taxes</span><span className="text-slate-400">Calculées au paiement</span></div>
+              <div className="flex justify-between gap-4"><span>Taxes</span><span className="text-slate-400">À confirmer — aucun taux appliqué</span></div>
             </div>
           </div>
 
