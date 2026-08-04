@@ -96,6 +96,7 @@ function isPersonalDriverSubscriptionReadyForActivation(
     'periodEndAtUtc',
     'serviceTimeZone',
     'pickupLocation',
+    'destinationLocation',
     'selectedWeekdays',
     'tripType',
     'departureTime',

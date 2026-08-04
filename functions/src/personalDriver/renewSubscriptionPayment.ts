@@ -11,7 +11,7 @@ import {
   calculateServerRoute,
 } from './routeDistance.js';
 import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js';
-import { getLocalCalendarDate, localDateTimeToUtc } from './locationTimeZone.js';
+import { getLocalCalendarDate, localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
 import { calculatePersonalDriverPrices } from './pricing.js';
 import type { PersonalDriverPlanId, PersonalDriverWeekday } from './pricing.js';
 
@@ -213,6 +213,7 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
     const returnRoute = tripType === 'round_trip'
       ? await calculateServerRoute({ origin: destinationAddress, destination: pickupAddress })
       : null;
+    const destinationLocation = await resolveAddressCoordinates(destinationAddress);
     const monthlyDistanceKm = calculateAuthoritativeMonthlyDistanceKm({
       outboundKm: outboundRoute.distanceKm,
       returnKm: returnRoute?.distanceKm ?? 0,
@@ -284,6 +285,7 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         periodEndAtUtc,
         serviceTimeZone,
         pickupLocation: source.pickupLocation,
+        destinationLocation,
         distanceOneWayKm: outboundRoute.distanceKm,
         distanceReturnKm: returnRoute?.distanceKm ?? 0,
         monthlyDistanceKm,

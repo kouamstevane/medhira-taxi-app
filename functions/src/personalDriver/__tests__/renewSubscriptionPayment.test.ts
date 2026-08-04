@@ -22,6 +22,7 @@ const mockStripe = {
   },
 };
 const mockCalculateServerRoute = jest.fn();
+const mockResolveAddressCoordinates = jest.fn();
 const mockCreateStripeClient = jest.fn(() => mockStripe);
 
 jest.mock('firebase-admin', () => ({
@@ -48,6 +49,12 @@ jest.mock('../routeDistance', () => ({
     tripType: 'one_way' | 'round_trip';
     occurrences: number;
   }) => Math.round((input.outboundKm + (input.tripType === 'round_trip' ? input.returnKm : 0)) * input.occurrences * 10) / 10,
+}));
+
+jest.mock('../locationTimeZone', () => ({
+  getLocalCalendarDate: (instant: Date) => instant.toISOString().slice(0, 10),
+  localDateTimeToUtc: (date: string, time: string) => new Date(`${date}T${time}:00.000Z`),
+  resolveAddressCoordinates: mockResolveAddressCoordinates,
 }));
 
 jest.mock('firebase-functions/v2/https', () => ({
@@ -77,6 +84,7 @@ const sourceSubscription = {
   periodEndAtUtc: new Date('2026-08-31T04:00:00.000Z'),
   serviceTimeZone: 'America/Toronto',
   pickupLocation: { latitude: 45.5, longitude: -73.5 },
+  destinationLocation: { latitude: 45.6, longitude: -73.6 },
   selectedPlanId: 'classic',
   pickupAddress: 'A',
   destinationAddress: 'B',
@@ -113,6 +121,7 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
       });
     });
     mockCalculateServerRoute.mockResolvedValue({ distanceKm: 10, durationMinutes: 20 });
+    mockResolveAddressCoordinates.mockResolvedValue({ latitude: 45.6, longitude: -73.6 });
     mockStripe.paymentIntents.create.mockResolvedValue({
       id: 'pi_renew_1',
       client_secret: 'pi_renew_1_secret',

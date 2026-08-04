@@ -13,7 +13,7 @@ import {
 } from './pricing.js';
 import { calculateAuthoritativeMonthlyDistanceKm, calculateServerRoute } from './routeDistance.js';
 import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js';
-import { localDateTimeToUtc, resolvePickupLocationAndTimeZone } from './locationTimeZone.js';
+import { localDateTimeToUtc, resolveAddressCoordinates, resolvePickupLocationAndTimeZone } from './locationTimeZone.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const CURRENCY = DEFAULT_CURRENCY;
@@ -178,11 +178,14 @@ export const createPersonalDriverSubscriptionPayment = onCall(
 
     const periodEndDateExclusive = getPeriodEndDateExclusive(input.startDate);
     const occurrences = countWeekdayOccurrences(input.startDate, periodEndDateExclusive, selectedWeekdays);
-    const pickupLocation = await resolvePickupLocationAndTimeZone(input.pickupAddress, new Date());
-    const outboundRoute = await calculateServerRoute({
-      origin: input.pickupAddress,
-      destination: input.destinationAddress,
-    });
+    const [pickupLocation, destinationLocation, outboundRoute] = await Promise.all([
+      resolvePickupLocationAndTimeZone(input.pickupAddress, new Date()),
+      resolveAddressCoordinates(input.destinationAddress),
+      calculateServerRoute({
+        origin: input.pickupAddress,
+        destination: input.destinationAddress,
+      }),
+    ]);
     const returnRoute = input.tripType === 'round_trip'
       ? await calculateServerRoute({
         origin: input.destinationAddress,
@@ -349,6 +352,7 @@ export const createPersonalDriverSubscriptionPayment = onCall(
         latitude: pickupLocation.latitude,
         longitude: pickupLocation.longitude,
       },
+      destinationLocation,
       distanceOneWayKm: outboundRoute.distanceKm,
       distanceReturnKm: returnRoute?.distanceKm ?? 0,
       monthlyDistanceKm: authoritativeMonthlyDistanceKm,

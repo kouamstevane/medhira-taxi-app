@@ -34,6 +34,7 @@ const mockCreateStripeClient = jest.fn(() => mockStripe);
 const mockCalculateServerRoute = jest.fn();
 const mockCalculateAuthoritativeMonthlyDistanceKm = jest.fn();
 const mockResolvePickupLocationAndTimeZone = jest.fn();
+const mockResolveAddressCoordinates = jest.fn();
 const mockLocalDateTimeToUtc = jest.fn((date: string, time: string) => new Date(`${date}T${time}:00.000Z`));
 
 jest.mock('firebase-admin', () => ({
@@ -69,6 +70,7 @@ jest.mock('../routeDistance', () => ({
 
 jest.mock('../locationTimeZone', () => ({
   resolvePickupLocationAndTimeZone: mockResolvePickupLocationAndTimeZone,
+  resolveAddressCoordinates: mockResolveAddressCoordinates,
   localDateTimeToUtc: mockLocalDateTimeToUtc,
 }));
 
@@ -111,6 +113,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     mockCalculateServerRoute.mockReset();
     mockCalculateAuthoritativeMonthlyDistanceKm.mockReset();
     mockResolvePickupLocationAndTimeZone.mockReset();
+    mockResolveAddressCoordinates.mockReset();
     mockCalculateServerRoute.mockResolvedValue({ distanceKm: 12.5, durationMinutes: 30 });
     mockCalculateAuthoritativeMonthlyDistanceKm.mockReturnValue(62.5);
     mockResolvePickupLocationAndTimeZone.mockResolvedValue({
@@ -118,6 +121,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       longitude: -73.5673,
       serviceTimeZone: 'America/Toronto',
     });
+    mockResolveAddressCoordinates.mockResolvedValue({ latitude: 45.6, longitude: -73.6 });
     mockSubscriptionRef.get.mockResolvedValue({ exists: false });
     mockUserRef.get.mockResolvedValue({ exists: false });
     mockTransaction.get.mockResolvedValue({ exists: false });

@@ -20,6 +20,7 @@ export interface PersonalDriverTripGenerationSubscription {
   pickupAddress: string;
   destinationAddress: string;
   pickupLocation: PersonalDriverCoordinate;
+  destinationLocation: PersonalDriverCoordinate;
   selectedPlanId?: PersonalDriverPlanId;
   planId?: PersonalDriverPlanId;
   distanceOneWayKm: number;
@@ -45,6 +46,7 @@ export async function generatePersonalDriverTrips(
     pickupAddress: subscription.pickupAddress,
     destinationAddress: subscription.destinationAddress,
     pickupLocation: subscription.pickupLocation,
+    destinationLocation: subscription.destinationLocation,
     planId: subscription.selectedPlanId ?? subscription.planId ?? 'basic',
     distanceOneWayKm: subscription.distanceOneWayKm,
     distanceReturnKm: subscription.distanceReturnKm,

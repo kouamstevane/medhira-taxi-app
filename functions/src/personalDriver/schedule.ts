@@ -12,6 +12,7 @@ export interface PersonalDriverTripDraft {
   pickupAddress: string;
   destinationAddress: string;
   pickupLocation: PersonalDriverCoordinate;
+  destinationLocation: PersonalDriverCoordinate;
   assignedDriverId: null;
   assignedVehicleId: null;
   distanceKm: number;
@@ -30,6 +31,7 @@ export function buildPersonalDriverTripDrafts(input: {
   pickupAddress: string;
   destinationAddress: string;
   pickupLocation: PersonalDriverCoordinate;
+  destinationLocation: PersonalDriverCoordinate;
   planId: PersonalDriverPlanId;
   distanceOneWayKm: number;
   distanceReturnKm: number;
@@ -66,6 +68,7 @@ export function buildPersonalDriverTripDrafts(input: {
       pickupAddress: input.pickupAddress,
       destinationAddress: input.destinationAddress,
       pickupLocation: input.pickupLocation,
+      destinationLocation: input.destinationLocation,
       assignedDriverId: null,
       assignedVehicleId: null,
       distanceKm: input.distanceOneWayKm,
@@ -81,7 +84,8 @@ export function buildPersonalDriverTripDrafts(input: {
         scheduledAtIso: localDateTimeToUtc(dateString, input.returnTime!, input.serviceTimeZone).toISOString(),
         pickupAddress: input.destinationAddress,
         destinationAddress: input.pickupAddress,
-        pickupLocation: input.pickupLocation,
+        pickupLocation: input.destinationLocation,
+        destinationLocation: input.pickupLocation,
         assignedDriverId: null,
         assignedVehicleId: null,
         distanceKm: input.distanceReturnKm,
