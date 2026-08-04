@@ -132,7 +132,11 @@ export function PersonalDriverClientDashboard() {
     const sourceSubscriptionId = pendingRenewal.sourceSubscriptionId ?? subscription.id;
     setRenewalLoading(true);
     setRenewalError(null);
-    renewPersonalDriverSubscriptionPayment(sourceSubscriptionId, `recover-${pendingRenewal.id}`)
+    renewPersonalDriverSubscriptionPayment(
+      sourceSubscriptionId,
+      `recover-${pendingRenewal.id}`,
+      pendingRenewal.id,
+    )
       .then(setRenewalPayment)
       .catch((err) => {
         setRenewalError(err instanceof Error ? err.message : 'Impossible de récupérer le renouvellement.');

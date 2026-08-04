@@ -66,12 +66,17 @@ export async function createPersonalDriverSubscriptionPayment(
 export async function renewPersonalDriverSubscriptionPayment(
   sourceSubscriptionId: string,
   requestId: string,
+  pendingSubscriptionId?: string,
 ): Promise<RenewPersonalDriverSubscriptionPaymentResult> {
   const callable = httpsCallable<
-    { sourceSubscriptionId: string; requestId: string },
+    { sourceSubscriptionId: string; requestId: string; pendingSubscriptionId?: string },
     RenewPersonalDriverSubscriptionPaymentResult
   >(functions, 'renewPersonalDriverSubscriptionPayment');
-  const response = await callable({ sourceSubscriptionId, requestId });
+  const response = await callable({
+    sourceSubscriptionId,
+    requestId,
+    ...(pendingSubscriptionId ? { pendingSubscriptionId } : {}),
+  });
   return response.data;
 }
 

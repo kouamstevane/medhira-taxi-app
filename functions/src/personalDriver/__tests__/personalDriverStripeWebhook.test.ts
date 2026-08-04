@@ -371,6 +371,55 @@ describe('Personal Driver Stripe webhook', () => {
     expect(mockGeneratePersonalDriverTrips).not.toHaveBeenCalled();
   });
 
+  it('ignores stale requires-action delivery after a new creating attempt owns the period', async () => {
+    const { stripeWebhookInstant } = require('../../stripe/index');
+    Object.assign(subscriptionData, {
+      paymentStatus: 'creating',
+      stripePaymentIntentId: 'pi_new_attempt',
+    });
+    Object.assign(lockData, {
+      state: 'creating',
+      ownerId: 'new_owner',
+      attempt: 2,
+      paymentIntentId: null,
+    });
+    mockConstructEvent.mockReturnValue(paymentIntentEvent('payment_intent.requires_action', userId, {
+      next_action: { type: 'use_stripe_sdk' },
+    }));
+    const request = {
+      method: 'POST',
+      headers: { 'stripe-signature': 'signature' },
+      rawBody: Buffer.from('{}'),
+    };
+
+    await stripeWebhookInstant(request, response());
+
+    expect(mockTransaction.update).not.toHaveBeenCalled();
+    expect(subscriptionData).toMatchObject({
+      paymentStatus: 'creating',
+      stripePaymentIntentId: 'pi_new_attempt',
+    });
+    expect(lockData).toMatchObject({ state: 'creating', ownerId: 'new_owner', attempt: 2 });
+  });
+
+  it('ignores requires-action delivery when the pending lock belongs to another subscription', async () => {
+    const { stripeWebhookInstant } = require('../../stripe/index');
+    lockData.subscriptionId = 'subscription_other';
+    mockConstructEvent.mockReturnValue(paymentIntentEvent('payment_intent.requires_action', userId, {
+      next_action: { type: 'use_stripe_sdk' },
+    }));
+    const request = {
+      method: 'POST',
+      headers: { 'stripe-signature': 'signature' },
+      rawBody: Buffer.from('{}'),
+    };
+
+    await stripeWebhookInstant(request, response());
+
+    expect(mockTransaction.update).not.toHaveBeenCalled();
+    expect(lockData).toMatchObject({ state: 'pending_payment', subscriptionId: 'subscription_other' });
+  });
+
   it('returns a retryable error when post-payment trip generation fails', async () => {
     const { stripeWebhookInstant } = require('../../stripe/index');
     mockGeneratePersonalDriverTrips

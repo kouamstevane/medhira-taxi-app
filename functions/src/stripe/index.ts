@@ -32,6 +32,7 @@ import {
 import {
   activateSubscriptionPeriodLock,
   createSubscriptionPeriodLockId,
+  isMatchingPendingSubscriptionPeriodLock,
   releaseSubscriptionPeriodLock,
 } from '../personalDriver/subscriptionPeriodLock.js';
 
@@ -678,6 +679,7 @@ async function onPaymentIntentCanceled(pi: Record<string, unknown>): Promise<voi
 }
 
 async function onPaymentIntentRequiresAction(pi: Record<string, unknown>): Promise<void> {
+  const piId        = pi.id as string;
   const metadata    = (pi.metadata ?? {}) as Record<string, string>;
   const nextAction  = pi.next_action as Record<string, unknown> | null;
   const actionType  = nextAction?.type as string | null;
@@ -698,7 +700,28 @@ async function onPaymentIntentRequiresAction(pi: Record<string, unknown>): Promi
       const snap = await tx.get(subscriptionRef);
       if (!snap.exists) return;
       const subscription = snap.data();
-      if (subscription?.userId !== metadata.userId || subscription.paymentStatus === 'succeeded') return;
+      if (
+        subscription?.userId !== metadata.userId
+        || subscription.status !== 'pending_payment'
+        || !['pending', 'requires_action'].includes(subscription.paymentStatus)
+        || subscription.stripePaymentIntentId !== piId
+        || typeof subscription.periodStartDate !== 'string'
+      ) return;
+      const lockRef = db.collection('personal_driver_subscription_locks').doc(
+        createSubscriptionPeriodLockId(metadata.userId, subscription.periodStartDate),
+      );
+      const matchesPendingLock = await isMatchingPendingSubscriptionPeriodLock(tx, lockRef, {
+        userId: metadata.userId,
+        periodStartDate: subscription.periodStartDate,
+        subscriptionId: metadata.subscriptionId,
+        paymentIntentId: piId,
+      });
+      if (!matchesPendingLock) return;
+      if (
+        subscription.paymentStatus === 'requires_action'
+        && subscription.paymentActionRequired === (actionType ?? 'unknown')
+        && subscription.paymentActionRedirectUrl === (redirectObj?.url ?? null)
+      ) return;
       tx.update(subscriptionRef, {
         status: 'pending_payment',
         paymentStatus: 'requires_action',

@@ -250,6 +250,52 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
     );
   });
 
+  it('recovers a saved pending renewal by its target period after the source-period boundary', async () => {
+    jest.setSystemTime(Date.parse('2026-09-05T05:00:00.000Z'));
+    transactionData = {
+      id: 'sub_new',
+      userId: 'user_1',
+      sourceSubscriptionId: 'sub_old',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      periodStartDate: '2026-08-31',
+      stripePaymentIntentId: 'pi_renew_1',
+      distanceOneWayKm: 10,
+      distanceReturnKm: 0,
+      monthlyDistanceKm: 50,
+      selectedPlanPrice: { planId: 'classic', totalBeforeTax: 450 },
+      taxAmount: 0,
+      totalAmount: 450,
+      currency: 'cad',
+    };
+    lockData = {
+      userId: 'user_1',
+      periodStartDate: '2026-08-31',
+      subscriptionId: 'sub_new',
+      state: 'pending_payment',
+      ownerId: 'owner_1',
+      attempt: 1,
+      paymentIntentId: 'pi_renew_1',
+    };
+    newRef.get.mockResolvedValue({ exists: true, data: () => transactionData });
+    mockCalculateServerRoute.mockClear();
+    const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
+
+    await expect(renewPersonalDriverSubscriptionPayment(makeRequest({
+      sourceSubscriptionId: 'sub_old',
+      requestId: 'recover-sub_new',
+      pendingSubscriptionId: 'sub_new',
+    }))).resolves.toEqual(expect.objectContaining({
+      subscriptionId: 'sub_new',
+      paymentIntentId: 'pi_renew_1',
+      clientSecret: 'pi_renew_1_secret',
+    }));
+
+    expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
+    expect(mockStripe.paymentIntents.retrieve).toHaveBeenCalledWith('pi_renew_1');
+    expect(mockCalculateServerRoute).not.toHaveBeenCalled();
+  });
+
   it('rejects an active source whose payment is not succeeded', async () => {
     const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
     mockStripe.paymentIntents.create.mockClear();
@@ -318,6 +364,7 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
   });
 
   it('keeps distinct renewal request IDs on one pending renewal PaymentIntent', async () => {
+    jest.useRealTimers();
     const pendingRenewals = new Map<string, Record<string, unknown>>();
     mockDb.collection.mockImplementation((name: string) => ({
       doc: (id: string) => name === 'personal_driver_subscriptions'
@@ -347,16 +394,29 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
       return callback(mockTransaction);
     });
     const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
+    let releasePayment: ((paymentIntent: { id: string; client_secret: string }) => void) | undefined;
+    const paymentCreationStarted = new Promise<void>((resolve) => {
+      mockStripe.paymentIntents.create.mockImplementationOnce(() => {
+        resolve();
+        return new Promise((paymentIntentResolve) => {
+          releasePayment = paymentIntentResolve;
+        });
+      });
+    });
 
-    await renewPersonalDriverSubscriptionPayment(makeRequest({
+    const firstRequest = renewPersonalDriverSubscriptionPayment(makeRequest({
       sourceSubscriptionId: 'sub_old',
       requestId: 'renew_first',
     }));
-    await renewPersonalDriverSubscriptionPayment(makeRequest({
+    await paymentCreationStarted;
+    const secondRequest = renewPersonalDriverSubscriptionPayment(makeRequest({
       sourceSubscriptionId: 'sub_old',
       requestId: 'renew_second',
     }));
+    releasePayment?.({ id: 'pi_renew_1', client_secret: 'pi_renew_1_secret' });
+    const [first, second] = await Promise.all([firstRequest, secondRequest]);
 
+    expect(second).toEqual(first);
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
   });
 });

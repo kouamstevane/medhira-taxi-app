@@ -130,10 +130,14 @@ async function getPersistedPaymentReplay(
   const snapshot = await subscriptionRef.get();
   if (!snapshot.exists) return null;
   const data = snapshot.data();
+  const hasReusablePaymentState = data?.status === 'active'
+    ? data.paymentStatus === 'succeeded'
+    : data?.status === 'pending_payment'
+      && (data.paymentStatus === 'pending' || data.paymentStatus === 'requires_action');
   if (
     !data
     || data.userId !== userId
-    || data.paymentStatus === 'creating'
+    || !hasReusablePaymentState
     || typeof data.stripePaymentIntentId !== 'string'
   ) {
     return null;
@@ -218,6 +222,36 @@ async function waitForSubscriptionPayment(
     await new Promise((resolve) => setTimeout(resolve, PAYMENT_RESULT_POLL_INTERVAL_MS));
   }
   throw new HttpsError('aborted', 'Création du paiement trop longue. Veuillez réessayer.');
+}
+
+async function auditPaymentFinalizationFailure(
+  db: FirebaseFirestore.Firestore,
+  subscriptionRef: FirebaseFirestore.DocumentReference,
+  lockRef: FirebaseFirestore.DocumentReference,
+  input: {
+    ownerId: string;
+    attempt: number;
+    paymentIntentId: string;
+  },
+): Promise<{ paymentPersisted: boolean; creatorStillOwnsAttempt: boolean }> {
+  return db.runTransaction(async (transaction) => {
+    const subscriptionSnapshot = await transaction.get(subscriptionRef);
+    const lockSnapshot = await transaction.get(lockRef);
+    const subscription = subscriptionSnapshot.exists ? subscriptionSnapshot.data() : undefined;
+    const lock = lockSnapshot.exists ? lockSnapshot.data() : undefined;
+    return {
+      paymentPersisted: subscription?.stripePaymentIntentId === input.paymentIntentId,
+      creatorStillOwnsAttempt: subscription?.paymentStatus === 'creating'
+        && subscription.paymentCreationOwnerId === input.ownerId
+        && subscription.paymentCreationAttempt === input.attempt
+        && typeof subscription.stripePaymentIntentId !== 'string'
+        && lock?.state === 'creating'
+        && lock.subscriptionId === subscriptionRef.id
+        && lock.ownerId === input.ownerId
+        && lock.attempt === input.attempt
+        && typeof lock.paymentIntentId !== 'string',
+    };
+  });
 }
 
 export const createPersonalDriverSubscriptionPayment = onCall(
@@ -491,19 +525,26 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       });
     } catch (error) {
       if (error instanceof HttpsError && error.code === 'aborted') throw error;
-      let paymentIntentIsOrphaned = false;
+      let finalizationAudit = { paymentPersisted: false, creatorStillOwnsAttempt: false };
       try {
-        const persistedSubscription = await subscriptionRef.get();
-        paymentIntentIsOrphaned = !persistedSubscription.exists
-          || persistedSubscription.data()?.stripePaymentIntentId !== paymentIntent.id;
+        finalizationAudit = await auditPaymentFinalizationFailure(
+          db,
+          subscriptionRef,
+          subscriptionClaim.lockRef,
+          {
+            ownerId: paymentCreationOwnerId,
+            attempt: subscriptionClaim.attempt,
+            paymentIntentId: paymentIntent.id,
+          },
+        );
       } catch (verificationError) {
-        console.error('[createPersonalDriverSubscriptionPayment] Failed to verify subscription after batch commit failure', {
+        console.error('[createPersonalDriverSubscriptionPayment] Failed to audit payment finalization ownership', {
           paymentIntentId: paymentIntent.id,
           error: verificationError instanceof Error ? verificationError.message : verificationError,
         });
       }
 
-      if (paymentIntentIsOrphaned) {
+      if (!finalizationAudit.paymentPersisted && finalizationAudit.creatorStillOwnsAttempt) {
         let paymentIntentWasCancelled = false;
         try {
           await getStripe().paymentIntents.cancel(paymentIntent.id, undefined, {

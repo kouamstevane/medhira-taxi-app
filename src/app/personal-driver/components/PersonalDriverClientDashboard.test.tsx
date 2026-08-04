@@ -188,6 +188,10 @@ describe('PersonalDriverClientDashboard Component', () => {
 
     expect(await screen.findByRole('button', { name: /Payer 450,00/ })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Renouveler' })).toBeDisabled();
-    expect(renewPersonalDriverSubscriptionPayment).toHaveBeenCalledWith('sub_active', 'recover-sub_pending');
+    expect(renewPersonalDriverSubscriptionPayment).toHaveBeenCalledWith(
+      'sub_active',
+      'recover-sub_pending',
+      'sub_pending',
+    );
   });
 });

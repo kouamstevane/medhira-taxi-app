@@ -54,6 +54,13 @@ interface ReleaseSubscriptionPeriodLockInput {
   ownerId?: string;
 }
 
+interface MatchingPendingSubscriptionPeriodLockInput {
+  userId: string;
+  periodStartDate: string;
+  subscriptionId: string;
+  paymentIntentId: string;
+}
+
 function toDate(value: unknown): Date | null {
   if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
@@ -281,6 +288,21 @@ export async function activateSubscriptionPeriodLock(
     updatedAt: input.now,
   });
   return true;
+}
+
+export async function isMatchingPendingSubscriptionPeriodLock(
+  transaction: FirebaseFirestore.Transaction,
+  lockRef: FirebaseFirestore.DocumentReference,
+  input: MatchingPendingSubscriptionPeriodLockInput,
+): Promise<boolean> {
+  const snapshot = await transaction.get(lockRef);
+  if (!snapshot.exists) return false;
+  const lock = snapshot.data();
+  return lock?.userId === input.userId
+    && lock.periodStartDate === input.periodStartDate
+    && lock.subscriptionId === input.subscriptionId
+    && lock.paymentIntentId === input.paymentIntentId
+    && lock.state === 'pending_payment';
 }
 
 export async function releaseSubscriptionPeriodLock(

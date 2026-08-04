@@ -461,6 +461,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       data: () => ({
         userId: 'user_123',
         status: 'pending_payment',
+        paymentStatus: 'pending',
         stripePaymentIntentId: 'pi_existing',
         distanceOneWayKm: 12.5,
         distanceReturnKm: 0,
@@ -498,6 +499,42 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     expect(mockBatch.commit).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['payment_failed', 'failed'],
+    ['cancelled', 'cancelled'],
+  ])('reclaims a same-request %s payment instead of replaying its terminal intent', async (status, paymentStatus) => {
+    const terminalData = {
+      id: subscriptionId,
+      userId: 'user_123',
+      status,
+      paymentStatus,
+      periodStartDate: validPayload.startDate,
+      paymentCreationAttempt: 1,
+      stripePaymentIntentId: 'pi_terminal',
+      distanceOneWayKm: 12.5,
+      distanceReturnKm: 0,
+      monthlyDistanceKm: 62.5,
+      selectedPlanPrice: { planId: 'basic', totalBeforeTax: 300 },
+      taxAmount: 0,
+      totalAmount: 300,
+      currency: 'cad',
+    };
+    transactionData = terminalData;
+    mockSubscriptionRef.get.mockResolvedValue({ exists: true, data: () => terminalData });
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).resolves.toEqual(
+      expect.objectContaining({ paymentIntentId: 'pi_123' }),
+    );
+
+    expect(mockStripe.paymentIntents.retrieve).not.toHaveBeenCalledWith('pi_terminal');
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
+      paymentCreationAttempt: 2,
+      paymentStatus: 'creating',
+    }));
+  });
+
   it('returns the persisted payment when an exact replay crosses pickup-zone midnight', async () => {
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     const midnightPayload = { ...validPayload, startDate: '2026-08-03' };
@@ -508,6 +545,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       exists: true,
       data: () => ({
         userId: 'user_123',
+        status: 'pending_payment',
         paymentStatus: 'pending',
         stripePaymentIntentId: 'pi_123',
         distanceOneWayKm: 12.5,
@@ -691,7 +729,12 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       code: 'internal',
     });
 
-    expect(mockSubscriptionRef.get).toHaveBeenCalledTimes(2);
+    expect(mockDb.runTransaction).toHaveBeenCalledTimes(3);
+    expect(transactionData).toMatchObject({
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      stripePaymentIntentId: 'pi_123',
+    });
     expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
   });
 
@@ -732,7 +775,32 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
   });
 
+  it('audits lock ownership before compensating a generic finalization failure', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+    const run = async (callback: (transaction: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction);
+    mockDb.runTransaction
+      .mockImplementationOnce(run)
+      .mockImplementationOnce(async () => {
+        const [lockId] = lockDocuments.keys();
+        lockDocuments.set(lockId, {
+          ...lockDocuments.get(lockId),
+          ownerId: 'new_owner',
+          attempt: 2,
+        });
+        throw new Error('Firestore unavailable');
+      })
+      .mockImplementation(run);
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).rejects.toMatchObject({
+      code: 'internal',
+    });
+
+    expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
+    expect(lockDocuments.values().next().value).toMatchObject({ ownerId: 'new_owner', attempt: 2 });
+  });
+
   it('keeps distinct initial request IDs on one user-period PaymentIntent', async () => {
+    jest.useRealTimers();
     const documents = new Map<string, Record<string, unknown>>();
     mockSubscriptionDoc.mockImplementation((id: string) => ({
       id,
@@ -755,17 +823,106 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       documents.set(ref.id, data);
     });
 
+    let releasePayment: ((paymentIntent: { id: string; client_secret: string }) => void) | undefined;
+    const paymentCreationStarted = new Promise<void>((resolve) => {
+      mockStripe.paymentIntents.create.mockImplementationOnce(() => {
+        resolve();
+        return new Promise((paymentIntentResolve) => {
+          releasePayment = paymentIntentResolve;
+        });
+      });
+    });
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
-    const first = await createPersonalDriverSubscriptionPayment(makeRequest({
+    const firstRequest = createPersonalDriverSubscriptionPayment(makeRequest({
       ...validPayload,
       requestId: 'request_first',
     }, 'user_123'));
-    const second = await createPersonalDriverSubscriptionPayment(makeRequest({
+    await paymentCreationStarted;
+    const secondRequest = createPersonalDriverSubscriptionPayment(makeRequest({
       ...validPayload,
       requestId: 'request_second',
     }, 'user_123'));
+    releasePayment?.({ id: 'pi_123', client_secret: 'pi_123_secret' });
+    const [first, second] = await Promise.all([firstRequest, secondRequest]);
 
     expect(second).toEqual(first);
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares one PaymentIntent between an initial purchase and renewal for the same user-period', async () => {
+    jest.useRealTimers();
+    const sourceSubscriptionId = 'source_subscription';
+    const documents = new Map<string, Record<string, unknown>>([
+      [sourceSubscriptionId, {
+        id: sourceSubscriptionId,
+        userId: 'user_123',
+        status: 'active',
+        paymentStatus: 'succeeded',
+        periodStartDate: '2026-07-05',
+        periodEndDateExclusive: '2026-08-04',
+        periodStartAtUtc: new Date('2026-07-05T04:00:00.000Z'),
+        periodEndAtUtc: new Date('2026-08-04T04:00:00.000Z'),
+        serviceTimeZone: 'America/Toronto',
+        pickupLocation: { latitude: 45.5017, longitude: -73.5673 },
+        destinationLocation: { latitude: 45.6, longitude: -73.6 },
+        selectedPlanId: 'basic',
+        pickupAddress: validPayload.pickupAddress,
+        destinationAddress: validPayload.destinationAddress,
+        tripType: validPayload.tripType,
+        selectedWeekdays: validPayload.selectedWeekdays,
+        departureTime: validPayload.departureTime,
+        returnTime: null,
+        passengerCount: validPayload.passengerCount,
+        notes: validPayload.notes,
+        stripeCustomerId: 'cus_123',
+      }],
+    ]);
+    mockSubscriptionDoc.mockImplementation((id: string) => ({
+      id,
+      get: jest.fn(async () => {
+        const data = documents.get(id);
+        return data ? { exists: true, data: () => data } : { exists: false };
+      }),
+    }));
+    mockTransaction.get.mockImplementation(async (ref: { id: string }) => {
+      const data = documents.get(ref.id);
+      return data ? { exists: true, data: () => data } : { exists: false, data: () => undefined };
+    });
+    mockTransaction.create.mockImplementation((ref: { id: string }, data: Record<string, unknown>) => {
+      documents.set(ref.id, data);
+    });
+    mockTransaction.update.mockImplementation((ref: { id: string }, data: Record<string, unknown>) => {
+      documents.set(ref.id, { ...documents.get(ref.id), ...data });
+    });
+    mockStripe.paymentIntents.retrieve.mockImplementation(async (id: string) => ({
+      id,
+      client_secret: `${id}_secret`,
+    }));
+
+    let releasePayment: ((paymentIntent: { id: string; client_secret: string }) => void) | undefined;
+    const paymentCreationStarted = new Promise<void>((resolve) => {
+      mockStripe.paymentIntents.create.mockImplementationOnce(() => {
+        resolve();
+        return new Promise((paymentIntentResolve) => {
+          releasePayment = paymentIntentResolve;
+        });
+      });
+    });
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+    const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
+    const initialRequest = createPersonalDriverSubscriptionPayment(makeRequest({
+      ...validPayload,
+      requestId: 'request_initial',
+    }, 'user_123'));
+    await paymentCreationStarted;
+    const renewalRequest = renewPersonalDriverSubscriptionPayment(makeRequest({
+      sourceSubscriptionId,
+      requestId: 'request_renewal',
+    }, 'user_123'));
+    releasePayment?.({ id: 'pi_shared', client_secret: 'pi_shared_secret' });
+    const [initial, renewal] = await Promise.all([initialRequest, renewalRequest]);
+
+    expect(renewal).toEqual(initial);
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
   });
 });
