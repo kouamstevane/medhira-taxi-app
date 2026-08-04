@@ -24,6 +24,8 @@ import type {
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   pending_payment: { label: 'Paiement en attente', color: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
+  activating: { label: 'Activation en cours', color: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
+  activation_failed: { label: 'Activation à relancer', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
   payment_failed: { label: 'Paiement échoué', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
   active: { label: 'Abonnement Actif', color: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' },
   cancelled: { label: 'Annulé', color: 'bg-gray-500/15 text-gray-400 border border-gray-500/30' },
@@ -236,7 +238,12 @@ export function PersonalDriverClientDashboard() {
 
   const rawPlanId = subscription.planId || (subscription as unknown as { selectedPlanId: PersonalDriverPlanId }).selectedPlanId || 'classic';
   const planInfo = PERSONAL_DRIVER_PLANS[rawPlanId] || PERSONAL_DRIVER_PLANS.classic;
-  const statusInfo = STATUS_LABELS[subscription.status] || STATUS_LABELS.pending_payment;
+  const activationStatus = subscription.activationStatus
+    ?? (subscription.status === 'active' ? 'active' : 'pending_payment');
+  const displayedStatus = subscription.paymentStatus === 'succeeded'
+    ? activationStatus
+    : subscription.status;
+  const statusInfo = STATUS_LABELS[displayedStatus] || STATUS_LABELS.pending_payment;
   const includedSpecialTrips = planInfo.includedSpecialTrips;
   const specialTripsUsed = subscription.specialTripsUsed ?? 0;
   const specialTripsRemaining = Math.max(0, includedSpecialTrips - specialTripsUsed);
@@ -426,7 +433,16 @@ export function PersonalDriverClientDashboard() {
           </span>
         </div>
 
-        {trips.length === 0 ? (
+        {trips.length === 0 && activationStatus === 'activating' ? (
+          <p className="py-8 text-center text-sm font-medium text-amber-300" role="status">
+            Paiement confirmé — préparation de vos trajets…
+          </p>
+        ) : trips.length === 0 && activationStatus === 'activation_failed' ? (
+          <div className="py-8 text-center text-sm text-red-300" role="alert">
+            <p className="font-semibold">La préparation de vos trajets a échoué.</p>
+            <p className="mt-2">Actualisez cette page dans quelques instants pour vérifier la nouvelle tentative, puis contactez l’assistance si nécessaire.</p>
+          </div>
+        ) : trips.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-400">
             Votre calendrier est en préparation. Vos trajets apparaîtront ici dès validation.
           </p>

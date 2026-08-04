@@ -75,6 +75,68 @@ describe('PersonalDriverClientDashboard Component', () => {
     });
   });
 
+  it('keeps payment failure visible when activation has not started', async () => {
+    (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
+      id: 'sub_payment_failed',
+      userId: 'user_123',
+      selectedPlanId: 'classic',
+      status: 'payment_failed',
+      paymentStatus: 'failed',
+      activationStatus: 'pending_payment',
+      monthlyDistanceKm: 440,
+      pickupAddress: '100 rue Principale',
+      destinationAddress: '500 rue Universite',
+    });
+    (getPersonalDriverTripsForSubscription as jest.Mock).mockResolvedValue([]);
+
+    render(<PersonalDriverClientDashboard />);
+
+    expect((await screen.findAllByText('Paiement échoué')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Paiement en attente')).not.toBeInTheDocument();
+  });
+
+  it('renders paid activation in progress instead of an empty calendar message', async () => {
+    (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
+      id: 'sub_activating',
+      userId: 'user_123',
+      selectedPlanId: 'classic',
+      status: 'pending_payment',
+      paymentStatus: 'succeeded',
+      activationStatus: 'activating',
+      monthlyDistanceKm: 440,
+      pickupAddress: '100 rue Principale',
+      destinationAddress: '500 rue Universite',
+    });
+    (getPersonalDriverTripsForSubscription as jest.Mock).mockResolvedValue([]);
+
+    render(<PersonalDriverClientDashboard />);
+
+    expect(await screen.findByText('Paiement confirmé — préparation de vos trajets…')).toBeVisible();
+    expect(screen.queryByText(/Votre calendrier est en préparation/i)).not.toBeInTheDocument();
+  });
+
+  it('renders activation failure and refresh guidance instead of an empty calendar message', async () => {
+    (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
+      id: 'sub_failed',
+      userId: 'user_123',
+      selectedPlanId: 'classic',
+      status: 'pending_payment',
+      paymentStatus: 'succeeded',
+      activationStatus: 'activation_failed',
+      activationError: 'trip generation failed',
+      monthlyDistanceKm: 440,
+      pickupAddress: '100 rue Principale',
+      destinationAddress: '500 rue Universite',
+    });
+    (getPersonalDriverTripsForSubscription as jest.Mock).mockResolvedValue([]);
+
+    render(<PersonalDriverClientDashboard />);
+
+    expect(await screen.findByText(/La préparation de vos trajets a échoué/i)).toBeVisible();
+    expect(screen.getByText(/Actualisez cette page/i)).toBeVisible();
+    expect(screen.queryByText(/Votre calendrier est en préparation/i)).not.toBeInTheDocument();
+  });
+
   it('enables special trips only for an active paid package and shows exact persisted dates', async () => {
     (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
       id: 'sub_active',

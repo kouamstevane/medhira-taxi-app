@@ -13,7 +13,10 @@ describe('personal driver trip generation', () => {
   const existingIds = new Set<string>();
   const transaction = {
     get: jest.fn(async (ref: { id: string }) => ({ exists: existingIds.has(ref.id) })),
-    create: jest.fn((ref: { id: string }, _draft: Record<string, unknown>) => existingIds.add(ref.id)),
+    create: jest.fn((ref: { id: string }, draft: Record<string, unknown>) => {
+      void draft;
+      return existingIds.add(ref.id);
+    }),
   };
   const mockRunTransaction = jest.fn(async (callback: (tx: typeof transaction) => Promise<void>) => callback(transaction));
   const mockDb = {
@@ -65,6 +68,21 @@ describe('personal driver trip generation', () => {
         distanceKm: 12.5,
       }),
     );
+  });
+
+  it('generates idempotently while a paid subscription is activating', async () => {
+    const activatingSubscription = {
+      ...activeSubscription,
+      status: 'pending_payment',
+      paymentStatus: 'succeeded',
+      activationStatus: 'activating' as const,
+    };
+
+    await generatePersonalDriverTrips(mockDb, activatingSubscription);
+    await generatePersonalDriverTrips(mockDb, activatingSubscription);
+
+    expect(transaction.create).toHaveBeenCalledTimes(5);
+    expect(existingIds.size).toBe(5);
   });
 
   it('keeps future trip identities stable across deliveries straddling a scheduled time', async () => {

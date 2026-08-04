@@ -1,13 +1,14 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import {
   createPersonalDriverSubscriptionPayment,
+  getPersonalDriverSubscriptionById,
   type CreatePersonalDriverSubscriptionPaymentResult,
 } from '@/services/personal-driver/subscription.service';
 import type {
@@ -36,6 +37,11 @@ const WEEKDAY_NAMES: Record<PersonalDriverWeekday, string> = {
   5: 'Vendredi',
   6: 'Samedi',
 };
+
+const ACTIVATION_POLL_INTERVAL_MS = 2_000;
+const ACTIVATION_POLL_TIMEOUT_MS = 60_000;
+
+type ActivationProgress = 'idle' | 'preparing' | 'failed' | 'timeout';
 
 interface PersonalDriverEstimateSession {
   version: 1;
@@ -120,6 +126,8 @@ export function PersonalDriverConfirmation() {
   const [payment, setPayment] = useState<CreatePersonalDriverSubscriptionPaymentResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activationProgress, setActivationProgress] = useState<ActivationProgress>('idle');
+  const activationPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     try {
@@ -127,6 +135,10 @@ export function PersonalDriverConfirmation() {
     } catch {
       setCheckout(null);
     }
+  }, []);
+
+  useEffect(() => () => {
+    if (activationPollTimerRef.current) clearTimeout(activationPollTimerRef.current);
   }, []);
 
   const selectedPlanId = checkout?.estimate.selectedPlanId;
@@ -172,6 +184,35 @@ export function PersonalDriverConfirmation() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePaymentSuccess = () => {
+    if (!payment) return;
+    if (activationPollTimerRef.current) clearTimeout(activationPollTimerRef.current);
+    setActivationProgress('preparing');
+    setError(null);
+    const startedAt = Date.now();
+
+    const pollActivation = async () => {
+      if (Date.now() - startedAt >= ACTIVATION_POLL_TIMEOUT_MS) {
+        setActivationProgress('timeout');
+        return;
+      }
+      try {
+        const subscription = await getPersonalDriverSubscriptionById(payment.subscriptionId);
+        if (subscription?.activationStatus === 'active') {
+          router.push(`/personal-driver/dashboard?payment=success&subscriptionId=${payment.subscriptionId}`);
+          return;
+        }
+        if (subscription?.activationStatus === 'activation_failed') {
+          setActivationProgress('failed');
+          return;
+        }
+      } catch {}
+      activationPollTimerRef.current = setTimeout(pollActivation, ACTIVATION_POLL_INTERVAL_MS);
+    };
+
+    activationPollTimerRef.current = setTimeout(pollActivation, ACTIVATION_POLL_INTERVAL_MS);
   };
 
   if (!checkout || !plan || !selectedPrice || !displayedPrice) {
@@ -257,7 +298,20 @@ export function PersonalDriverConfirmation() {
       </section>
 
       <section className="rounded-xl border border-white/10 bg-card p-5 shadow-xl">
-        {!payment ? (
+        {activationProgress === 'preparing' ? (
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-center" role="status">
+            <p className="font-bold text-emerald-300">Paiement confirmé — préparation de vos trajets…</p>
+            <p className="mt-1 text-sm text-slate-300">Cette étape peut prendre quelques instants.</p>
+          </div>
+        ) : activationProgress === 'failed' ? (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200" role="alert">
+            La préparation de vos trajets a échoué après la confirmation du paiement. Actualisez cette page dans quelques instants pour vérifier la nouvelle tentative, puis contactez l’assistance si le problème persiste.
+          </div>
+        ) : activationProgress === 'timeout' ? (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200" role="alert">
+            La préparation prend plus de temps que prévu. Votre paiement est confirmé : actualisez cette page pour vérifier l’activation, puis contactez l’assistance si nécessaire.
+          </div>
+        ) : !payment ? (
           <button
             type="button"
             onClick={preparePayment}
@@ -272,7 +326,7 @@ export function PersonalDriverConfirmation() {
             clientSecret={payment.clientSecret}
             amount={payment.amount}
             currency={payment.currency}
-            onSuccess={() => router.push(`/personal-driver/dashboard?payment=success&subscriptionId=${payment.subscriptionId}`)}
+            onSuccess={handlePaymentSuccess}
             onError={setError}
             submitLabel={`Payer ${formatPersonalDriverCurrency(payment.amount, payment.currency)}`}
           />

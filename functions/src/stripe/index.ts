@@ -497,61 +497,99 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
           now: new Date(),
         });
         console.warn(`[Webhook] personal_driver_subscription déjà traité: ${metadata.subscriptionId}`);
-        subscriptionForTripGeneration = {
-          ...subscription,
-          id: metadata.subscriptionId,
-        } as unknown as Parameters<typeof generatePersonalDriverTrips>[1];
         return;
       }
 
-      const canConfirmPayment = isPersonalDriverSubscriptionReadyForPaymentConfirmation(subscription);
-      if (!canConfirmPayment) return;
-      const lockActivated = await activateSubscriptionPeriodLock(tx, lockRef, {
-        subscriptionId: metadata.subscriptionId,
-        paymentIntentId: piId,
-        now: new Date(),
-      });
-      if (!lockActivated) return;
+      const resumesPaidActivation = subscription.paymentStatus === 'succeeded'
+        && subscription.status === 'pending_payment';
+      if (!resumesPaidActivation) {
+        const canConfirmPayment = isPersonalDriverSubscriptionReadyForPaymentConfirmation(subscription);
+        if (!canConfirmPayment) return;
+        const lockActivated = await activateSubscriptionPeriodLock(tx, lockRef, {
+          subscriptionId: metadata.subscriptionId,
+          paymentIntentId: piId,
+          now: new Date(),
+        });
+        if (!lockActivated) return;
+      }
 
-      tx.update(subscriptionRef, {
+      const activationUpdate = {
         paymentStatus: 'succeeded',
-        status: 'active',
+        status: 'pending_payment',
+        activationStatus: 'activating',
+        activationError: null,
         stripePaymentIntentId: piId,
         stripeCustomerId: typeof pi.customer === 'string' ? pi.customer : subscription?.stripeCustomerId ?? null,
         defaultPaymentMethodId:
           typeof pi.payment_method === 'string'
             ? pi.payment_method
             : subscription?.defaultPaymentMethodId ?? null,
-        paidAt: serverTS(),
+      };
+      tx.update(subscriptionRef, {
+        ...activationUpdate,
+        ...(subscription.paymentStatus === 'succeeded' ? {} : { paidAt: serverTS() }),
       });
       subscriptionForTripGeneration = {
         ...subscription,
         id: metadata.subscriptionId,
-        paymentStatus: 'succeeded',
-        status: 'active',
-        stripeCustomerId: typeof pi.customer === 'string' ? pi.customer : subscription?.stripeCustomerId ?? null,
-        defaultPaymentMethodId:
-          typeof pi.payment_method === 'string'
-            ? pi.payment_method
-            : subscription?.defaultPaymentMethodId ?? null,
+        ...activationUpdate,
       } as unknown as Parameters<typeof generatePersonalDriverTrips>[1];
-      tx.set(notificationRef, {
-        notificationId: notificationRef.id,
-        userId: metadata.userId,
-        title: 'Paiement Personal Driver confirme',
-        body: 'Votre abonnement Personal Driver est actif.',
-        type: 'payment_received',
-        metadata: {
-          subscriptionId: metadata.subscriptionId,
-          stripePaymentIntentId: piId,
-        },
-        read: false,
-        createdAt: serverTS(),
-      });
     });
 
     if (subscriptionForTripGeneration) {
-      await generatePersonalDriverTrips(db, subscriptionForTripGeneration);
+      try {
+        await generatePersonalDriverTrips(db, subscriptionForTripGeneration);
+        await db.runTransaction(async (tx) => {
+          const subscriptionSnap = await tx.get(subscriptionRef);
+          if (!subscriptionSnap.exists) return;
+          const subscription = subscriptionSnap.data();
+          if (
+            subscription?.userId !== metadata.userId
+            || subscription.stripePaymentIntentId !== piId
+            || subscription.paymentStatus !== 'succeeded'
+            || subscription.status === 'active'
+            || subscription.activationStatus !== 'activating'
+          ) return;
+          tx.update(subscriptionRef, {
+            status: 'active',
+            activationStatus: 'active',
+            activationError: null,
+          });
+          tx.set(notificationRef, {
+            notificationId: notificationRef.id,
+            userId: metadata.userId,
+            title: 'Paiement Personal Driver confirme',
+            body: 'Votre abonnement Personal Driver est actif.',
+            type: 'payment_received',
+            metadata: {
+              subscriptionId: metadata.subscriptionId,
+              stripePaymentIntentId: piId,
+            },
+            read: false,
+            createdAt: serverTS(),
+          });
+        });
+      } catch (error) {
+        const activationError = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+        await db.runTransaction(async (tx) => {
+          const subscriptionSnap = await tx.get(subscriptionRef);
+          if (!subscriptionSnap.exists) return;
+          const subscription = subscriptionSnap.data();
+          if (
+            subscription?.userId !== metadata.userId
+            || subscription.stripePaymentIntentId !== piId
+            || subscription.paymentStatus !== 'succeeded'
+            || subscription.status === 'active'
+            || subscription.activationStatus !== 'activating'
+          ) return;
+          tx.update(subscriptionRef, {
+            status: 'pending_payment',
+            activationStatus: 'activation_failed',
+            activationError,
+          });
+        });
+        throw error;
+      }
     }
   }
 }

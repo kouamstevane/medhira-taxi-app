@@ -10,6 +10,7 @@ export interface PersonalDriverTripGenerationSubscription {
   userId: string;
   status: string;
   paymentStatus: string;
+  activationStatus?: 'pending_payment' | 'activating' | 'active' | 'activation_failed';
   periodStartDate: string;
   periodEndDateExclusive: string;
   serviceTimeZone: string;
@@ -31,7 +32,12 @@ export async function generatePersonalDriverTrips(
   db: FirebaseFirestore.Firestore,
   subscription: PersonalDriverTripGenerationSubscription,
 ): Promise<void> {
-  if (subscription.status !== 'active' || subscription.paymentStatus !== 'succeeded') return;
+  const activationAllowsGeneration = subscription.activationStatus === 'activating'
+    || (
+      subscription.status === 'active'
+      && (subscription.activationStatus === undefined || subscription.activationStatus === 'active')
+    );
+  if (subscription.paymentStatus !== 'succeeded' || !activationAllowsGeneration) return;
 
   const drafts = buildPersonalDriverTripDrafts({
     subscriptionId: subscription.id,

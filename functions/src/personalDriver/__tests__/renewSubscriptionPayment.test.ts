@@ -213,6 +213,8 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
         specialTripsDistanceUsedKm: 0,
         taxStatus: 'pending_confirmation',
         paymentStatus: 'pending',
+        activationStatus: 'pending_payment',
+        activationError: null,
       }),
     );
     expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(

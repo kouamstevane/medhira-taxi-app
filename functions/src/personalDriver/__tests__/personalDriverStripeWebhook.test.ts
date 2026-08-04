@@ -204,8 +204,15 @@ describe('Personal Driver Stripe webhook', () => {
     expect(mockTransaction.get).toHaveBeenCalledWith(mockSubscriptionRef);
     expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
       paymentStatus: 'succeeded',
-      status: 'active',
+      status: 'pending_payment',
+      activationStatus: 'activating',
+      activationError: null,
       paidAt: serverTimestamp,
+    }));
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
+      status: 'active',
+      activationStatus: 'active',
+      activationError: null,
     }));
     expect(mockTransaction.update).toHaveBeenCalledWith(mockLockRef, expect.objectContaining({
       state: 'active',
@@ -223,13 +230,21 @@ describe('Personal Driver Stripe webhook', () => {
     );
     expect(mockCreateNotification).not.toHaveBeenCalled();
     expect(mockGeneratePersonalDriverTrips).toHaveBeenCalledTimes(1);
+    expect(mockGeneratePersonalDriverTrips).toHaveBeenCalledWith(mockDb, expect.objectContaining({
+      status: 'pending_payment',
+      paymentStatus: 'succeeded',
+      activationStatus: 'activating',
+    }));
+    expect(mockGeneratePersonalDriverTrips.mock.invocationCallOrder[0]).toBeLessThan(
+      mockTransaction.set.mock.invocationCallOrder[0],
+    );
 
     await stripeWebhookInstant(request, response());
 
-    expect(mockTransaction.update).toHaveBeenCalledTimes(2);
+    expect(mockTransaction.update).toHaveBeenCalledTimes(3);
     expect(mockTransaction.set).toHaveBeenCalledTimes(1);
     expect(mockCreateNotification).not.toHaveBeenCalled();
-    expect(mockGeneratePersonalDriverTrips).toHaveBeenCalledTimes(2);
+    expect(mockGeneratePersonalDriverTrips).toHaveBeenCalledTimes(1);
   });
 
   it('does not regress or notify an active subscription on duplicate delivery', async () => {
@@ -420,10 +435,11 @@ describe('Personal Driver Stripe webhook', () => {
     expect(lockData).toMatchObject({ state: 'pending_payment', subscriptionId: 'subscription_other' });
   });
 
-  it('returns a retryable error when post-payment trip generation fails', async () => {
+  it('records a bounded activation failure after payment and reaches active on retry', async () => {
     const { stripeWebhookInstant } = require('../../stripe/index');
+    const generationError = `trip generation failed ${'x'.repeat(600)}`;
     mockGeneratePersonalDriverTrips
-      .mockRejectedValueOnce(new Error('trip generation failed'))
+      .mockRejectedValueOnce(new Error(generationError))
       .mockResolvedValueOnce(undefined);
     const request = {
       method: 'POST',
@@ -438,16 +454,22 @@ describe('Personal Driver Stripe webhook', () => {
     await stripeWebhookInstant(request, retryResponse);
 
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ received: false, error: 'trip generation failed' });
+    expect(res.json).toHaveBeenCalledWith({ received: false, error: generationError });
     expect(stateAfterFailure).toMatchObject({
-      status: 'active',
+      status: 'pending_payment',
       paymentStatus: 'succeeded',
+      activationStatus: 'activation_failed',
+      activationError: generationError.slice(0, 500),
+      paidAt: serverTimestamp,
     });
     expect(mockGeneratePersonalDriverTrips).toHaveBeenCalledTimes(2);
     expect(retryResponse.json).toHaveBeenCalledWith({ received: true });
     expect(subscriptionData).toMatchObject({
       status: 'active',
       paymentStatus: 'succeeded',
+      activationStatus: 'active',
+      activationError: null,
     });
+    expect(mockTransaction.set).toHaveBeenCalledTimes(1);
   });
 });

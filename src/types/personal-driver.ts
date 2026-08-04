@@ -14,6 +14,11 @@ export type PersonalDriverPaymentStatus =
   | 'succeeded'
   | 'failed'
   | 'cancelled';
+export type PersonalDriverActivationStatus =
+  | 'pending_payment'
+  | 'activating'
+  | 'active'
+  | 'activation_failed';
 export type PersonalDriverTaxStatus = 'pending_confirmation';
 export type PersonalDriverTripStatus =
   | 'scheduled'
@@ -81,6 +86,8 @@ export interface PersonalDriverSubscription {
   selectedPlanId: PersonalDriverPlanId;
   status: PersonalDriverSubscriptionStatus;
   paymentStatus?: PersonalDriverPaymentStatus;
+  activationStatus?: PersonalDriverActivationStatus;
+  activationError?: string | null;
   startDate: string;
   endDate: string;
   periodStartDate?: string;

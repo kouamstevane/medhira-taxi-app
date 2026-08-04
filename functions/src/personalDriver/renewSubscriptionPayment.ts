@@ -224,6 +224,8 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
             periodStartDate: pendingPeriodStartDate,
             status: 'pending_payment',
             paymentStatus: 'creating',
+            activationStatus: 'pending_payment',
+            activationError: null,
             paymentCreationOwnerId,
             paymentCreationClaimedAt: now,
             paymentCreationAttempt: periodClaim.attempt,
@@ -307,6 +309,8 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         periodStartDate,
         status: 'pending_payment',
         paymentStatus: 'creating',
+        activationStatus: 'pending_payment',
+        activationError: null,
         paymentCreationOwnerId,
         paymentCreationClaimedAt: now,
         paymentCreationAttempt: periodClaim.attempt,
@@ -494,6 +498,8 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         stripeCustomerId: typeof source.stripeCustomerId === 'string' ? source.stripeCustomerId : null,
         defaultPaymentMethodId: source.defaultPaymentMethodId ?? null,
         paymentStatus: 'pending',
+        activationStatus: 'pending_payment',
+        activationError: null,
         paymentCreationError: null,
       });
     });

@@ -1,10 +1,14 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PersonalDriverConfirmation } from './PersonalDriverConfirmation';
-import { createPersonalDriverSubscriptionPayment } from '@/services/personal-driver/subscription.service';
+import {
+  createPersonalDriverSubscriptionPayment,
+  getPersonalDriverSubscriptionById,
+} from '@/services/personal-driver/subscription.service';
 
 jest.mock('@/services/personal-driver/subscription.service', () => ({
   createPersonalDriverSubscriptionPayment: jest.fn(),
+  getPersonalDriverSubscriptionById: jest.fn(),
 }));
 
 jest.mock('next/dynamic', () => () => {
@@ -138,6 +142,10 @@ describe('PersonalDriverConfirmation Component', () => {
     sessionStorage.setItem('medjira.personalDriver.estimate.v1', JSON.stringify(sampleEstimate));
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('renders summary information correctly', () => {
     render(<PersonalDriverConfirmation />);
 
@@ -179,15 +187,76 @@ describe('PersonalDriverConfirmation Component', () => {
     expect(screen.getByRole('button', { name: /Payer 723,45/i })).toBeInTheDocument();
   });
 
-  it('redirects to dashboard only after Stripe confirms the payment', async () => {
+  it('polls every two seconds and redirects only after server activation', async () => {
     (createPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue(authoritativePayment);
+    (getPersonalDriverSubscriptionById as jest.Mock)
+      .mockResolvedValueOnce({ id: 'sub_123', activationStatus: 'activating' })
+      .mockResolvedValueOnce({ id: 'sub_123', activationStatus: 'active' });
 
     render(<PersonalDriverConfirmation />);
 
     fireEvent.click(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i }));
     expect(mockPush).not.toHaveBeenCalled();
+    jest.useFakeTimers();
     fireEvent.click(await screen.findByRole('button', { name: /Payer 723,45/i }));
 
+    expect(screen.getByText('Paiement confirmé — préparation de vos trajets…')).toBeVisible();
+    expect(getPersonalDriverSubscriptionById).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2_000);
+    });
+    expect(getPersonalDriverSubscriptionById).toHaveBeenCalledTimes(1);
+    expect(mockPush).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2_000);
+    });
+
     expect(mockPush).toHaveBeenCalledWith('/personal-driver/dashboard?payment=success&subscriptionId=sub_123');
+  });
+
+  it('shows retry guidance when server activation fails', async () => {
+    (createPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue(authoritativePayment);
+    (getPersonalDriverSubscriptionById as jest.Mock).mockResolvedValue({
+      id: 'sub_123',
+      activationStatus: 'activation_failed',
+      activationError: 'trip generation failed',
+    });
+
+    render(<PersonalDriverConfirmation />);
+    fireEvent.click(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i }));
+    jest.useFakeTimers();
+    fireEvent.click(await screen.findByRole('button', { name: /Payer 723,45/i }));
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/préparation de vos trajets a échoué/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/actualisez/i);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('shows refresh guidance when activation still has not completed after sixty seconds', async () => {
+    (createPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue(authoritativePayment);
+    (getPersonalDriverSubscriptionById as jest.Mock).mockResolvedValue({
+      id: 'sub_123',
+      activationStatus: 'activating',
+    });
+
+    render(<PersonalDriverConfirmation />);
+    fireEvent.click(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i }));
+    jest.useFakeTimers();
+    fireEvent.click(await screen.findByRole('button', { name: /Payer 723,45/i }));
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/plus de temps que prévu/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/actualisez/i);
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

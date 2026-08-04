@@ -353,6 +353,8 @@ describe('createPersonalDriverSubscriptionPayment', () => {
         id: subscriptionId,
         userId: 'user_123',
         status: 'pending_payment',
+        activationStatus: 'pending_payment',
+        activationError: null,
         selectedPlanId: 'basic',
         selectedPlanPrice: expect.objectContaining({ totalBeforeTax: 300 }),
         priceComparison: expect.objectContaining({ monthlyDistanceKm: 62.5 }),

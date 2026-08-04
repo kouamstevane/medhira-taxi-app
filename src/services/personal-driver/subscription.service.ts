@@ -1,6 +1,8 @@
 import { httpsCallable } from 'firebase/functions';
 import {
   collection,
+  doc,
+  getDoc,
   query,
   where,
   getDocs,
@@ -103,6 +105,15 @@ export async function getCurrentPersonalDriverSubscription(
     id: doc.id,
     ...doc.data(),
   } as PersonalDriverSubscription;
+}
+
+export async function getPersonalDriverSubscriptionById(
+  subscriptionId: string,
+): Promise<PersonalDriverSubscription | null> {
+  if (!subscriptionId) return null;
+  const snapshot = await getDoc(doc(db, 'personal_driver_subscriptions', subscriptionId));
+  if (!snapshot.exists()) return null;
+  return { id: snapshot.id, ...snapshot.data() } as PersonalDriverSubscription;
 }
 
 export async function getPendingPersonalDriverRenewal(
