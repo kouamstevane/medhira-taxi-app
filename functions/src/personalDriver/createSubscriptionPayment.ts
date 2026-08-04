@@ -94,6 +94,35 @@ interface SubscriptionPaymentClaim {
   paymentCreationAttempt?: number;
 }
 
+async function getPersistedPaymentReplay(
+  subscriptionRef: FirebaseFirestore.DocumentReference,
+  subscriptionId: string,
+  userId: string,
+): Promise<CreateSubscriptionPaymentResult | null> {
+  const snapshot = await subscriptionRef.get();
+  if (!snapshot.exists) return null;
+  const data = snapshot.data();
+  if (
+    !data
+    || data.userId !== userId
+    || data.paymentStatus === 'creating'
+    || typeof data.stripePaymentIntentId !== 'string'
+  ) {
+    return null;
+  }
+  const paymentIntent = await getStripe().paymentIntents.retrieve(data.stripePaymentIntentId);
+  if (!paymentIntent.client_secret) {
+    throw new HttpsError('internal', 'Impossible de récupérer le PaymentIntent existant.');
+  }
+  return {
+    subscriptionId,
+    paymentIntentId: paymentIntent.id,
+    clientSecret: paymentIntent.client_secret,
+    amount: data.totalAmount,
+    currency: data.currency,
+  };
+}
+
 function getPaymentCreationAttempt(data: FirebaseFirestore.DocumentData | undefined): number {
   const attempt = data?.paymentCreationAttempt;
   return typeof attempt === 'number' && Number.isSafeInteger(attempt) && attempt > 0 ? attempt : 1;
@@ -176,6 +205,13 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       throw new HttpsError('invalid-argument', 'Le forfait Basic est disponible du lundi au vendredi uniquement.');
     }
 
+    const db = getDb();
+    const subscriptionRef = db.collection('personal_driver_subscriptions')
+      .doc(createSubscriptionId(userId, input.requestId));
+    const subscriptionId = subscriptionRef.id;
+    const persistedReplay = await getPersistedPaymentReplay(subscriptionRef, subscriptionId, userId);
+    if (persistedReplay) return persistedReplay;
+
     const now = new Date();
     const periodEndDateExclusive = getPeriodEndDateExclusive(input.startDate);
     const occurrences = countWeekdayOccurrences(input.startDate, periodEndDateExclusive, selectedWeekdays);
@@ -228,10 +264,6 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     const periodStartAtUtc = localDateTimeToUtc(input.startDate, '00:00', pickupLocation.serviceTimeZone);
     const periodEndAtUtc = localDateTimeToUtc(periodEndDateExclusive, '00:00', pickupLocation.serviceTimeZone);
 
-    const db = getDb();
-    const subscriptionRef = db.collection('personal_driver_subscriptions')
-      .doc(createSubscriptionId(request.auth.uid, input.requestId));
-    const subscriptionId = subscriptionRef.id;
     const paymentCreationClaimId = randomUUID();
     const paymentCreationClaimedAt = new Date();
     const subscriptionClaim = await db.runTransaction<SubscriptionPaymentClaim>(async (transaction) => {

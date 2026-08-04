@@ -7,6 +7,7 @@ export interface PersonalDriverTripDraft {
   userId: string;
   planId: PersonalDriverPlanId;
   direction: 'outbound' | 'return';
+  scheduleSlotKey: string;
   status: 'scheduled';
   scheduledAtIso: string;
   pickupAddress: string;
@@ -66,6 +67,7 @@ export function buildPersonalDriverTripDrafts(input: {
         userId: input.userId,
         planId: input.planId,
         direction: 'outbound',
+        scheduleSlotKey: `outbound_${departureAtUtc.toISOString()}`,
         status: 'scheduled',
         scheduledAtIso: departureAtUtc.toISOString(),
         pickupAddress: input.pickupAddress,
@@ -86,6 +88,7 @@ export function buildPersonalDriverTripDrafts(input: {
           userId: input.userId,
           planId: input.planId,
           direction: 'return',
+          scheduleSlotKey: `return_${returnAtUtc.toISOString()}`,
           status: 'scheduled',
           scheduledAtIso: returnAtUtc.toISOString(),
           pickupAddress: input.destinationAddress,

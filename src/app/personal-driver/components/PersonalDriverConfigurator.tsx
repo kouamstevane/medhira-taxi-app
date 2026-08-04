@@ -147,7 +147,11 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
   const [distanceError, setDistanceError] = useState('');
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  const minimumStartDate = getLocalCalendarDate(new Date());
+  const [minimumStartDate, setMinimumStartDate] = useState('');
+
+  useEffect(() => {
+    setMinimumStartDate(getLocalCalendarDate(new Date()));
+  }, []);
 
   if (!requestIdRef.current) {
     requestIdRef.current = getSessionRequestId();
@@ -364,7 +368,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           Date de debut
           <input
             type="date"
-            min={minimumStartDate}
+            min={minimumStartDate || undefined}
             value={startDate}
             onChange={(event) => setStartDate(event.target.value)}
             aria-invalid={Boolean(errors.startDate)}

@@ -13,7 +13,7 @@ describe('personal driver trip generation', () => {
   const existingIds = new Set<string>();
   const transaction = {
     get: jest.fn(async (ref: { id: string }) => ({ exists: existingIds.has(ref.id) })),
-    create: jest.fn((ref: { id: string }) => existingIds.add(ref.id)),
+    create: jest.fn((ref: { id: string }, _draft: Record<string, unknown>) => existingIds.add(ref.id)),
   };
   const mockRunTransaction = jest.fn(async (callback: (tx: typeof transaction) => Promise<void>) => callback(transaction));
   const mockDb = {
@@ -56,13 +56,36 @@ describe('personal driver trip generation', () => {
 
     expect(transaction.create).toHaveBeenCalledTimes(5);
     expect(transaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sub_1_0' }),
+      expect.objectContaining({ id: 'sub_1_outbound_2026-07-27T12:00:00.000Z' }),
       expect.objectContaining({
         subscriptionId: 'sub_1',
+        scheduleSlotKey: 'outbound_2026-07-27T12:00:00.000Z',
         scheduledAtIso: '2026-07-27T12:00:00.000Z',
         distanceKm: 12.5,
       }),
     );
+  });
+
+  it('keeps future trip identities stable across deliveries straddling a scheduled time', async () => {
+    jest.setSystemTime(Date.parse('2026-07-27T11:59:00.000Z'));
+    await generatePersonalDriverTrips(mockDb, activeSubscription);
+    const originalIdsByInstant = new Map(
+      transaction.create.mock.calls.map(([ref, draft]) => [
+        (draft as { scheduledAtIso: string }).scheduledAtIso,
+        (ref as { id: string }).id,
+      ]),
+    );
+    const futureIds = [...originalIdsByInstant.entries()]
+      .filter(([scheduledAtIso]) => scheduledAtIso !== '2026-07-27T12:00:00.000Z')
+      .map(([, id]) => id);
+
+    transaction.get.mockClear();
+    jest.setSystemTime(Date.parse('2026-07-27T12:01:00.000Z'));
+    await generatePersonalDriverTrips(mockDb, activeSubscription);
+
+    expect(transaction.get.mock.calls.map(([ref]) => (ref as { id: string }).id)).toEqual(futureIds);
+    expect(new Set(originalIdsByInstant.values()).size).toBe(originalIdsByInstant.size);
+    expect(transaction.create).toHaveBeenCalledTimes(originalIdsByInstant.size);
   });
 
   it('does not generate drafts before confirmed payment and activation', async () => {

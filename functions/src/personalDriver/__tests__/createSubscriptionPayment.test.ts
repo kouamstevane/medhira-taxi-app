@@ -76,7 +76,16 @@ jest.mock('../locationTimeZone', () => ({
   resolvePickupLocationAndTimeZone: mockResolvePickupLocationAndTimeZone,
   resolveAddressCoordinates: mockResolveAddressCoordinates,
   localDateTimeToUtc: mockLocalDateTimeToUtc,
-  getLocalCalendarDate: (instant: Date) => instant.toISOString().slice(0, 10),
+  getLocalCalendarDate: (instant: Date, serviceTimeZone: string) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: serviceTimeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(instant);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  },
 }));
 
 const validPayload = {
@@ -374,6 +383,46 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     expect(mockBatch.commit).not.toHaveBeenCalled();
   });
 
+  it('returns the persisted payment when an exact replay crosses pickup-zone midnight', async () => {
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+    const midnightPayload = { ...validPayload, startDate: '2026-08-03' };
+    jest.setSystemTime(Date.parse('2026-08-04T03:59:00.000Z'));
+
+    await createPersonalDriverSubscriptionPayment(makeRequest(midnightPayload, 'user_123'));
+    mockSubscriptionRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        userId: 'user_123',
+        paymentStatus: 'pending',
+        stripePaymentIntentId: 'pi_123',
+        totalAmount: 300,
+        currency: 'cad',
+      }),
+    });
+    mockTransaction.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        userId: 'user_123',
+        paymentStatus: 'pending',
+        stripePaymentIntentId: 'pi_123',
+        totalAmount: 300,
+        currency: 'cad',
+      }),
+    });
+    jest.setSystemTime(Date.parse('2026-08-04T04:01:00.000Z'));
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest(midnightPayload, 'user_123'))).resolves.toEqual({
+      subscriptionId,
+      paymentIntentId: 'pi_123',
+      clientSecret: 'pi_123_secret',
+      amount: 300,
+      currency: 'cad',
+    });
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
+    expect(mockStripe.paymentIntents.retrieve).toHaveBeenCalledWith('pi_123');
+    expect(mockResolvePickupLocationAndTimeZone).toHaveBeenCalledTimes(1);
+  });
+
   it('does not create another PaymentIntent while the same request is claimed', async () => {
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     let claimedData: Record<string, unknown> | undefined;
@@ -523,20 +572,22 @@ describe('createPersonalDriverSubscriptionPayment', () => {
 
   it('does not cancel a PaymentIntent when the failed commit persisted its subscription', async () => {
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
-    mockSubscriptionRef.get.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        userId: 'user_123',
-        stripePaymentIntentId: 'pi_123',
-      }),
-    });
+    mockSubscriptionRef.get
+      .mockResolvedValueOnce({ exists: false })
+      .mockResolvedValue({
+        exists: true,
+        data: () => ({
+          userId: 'user_123',
+          stripePaymentIntentId: 'pi_123',
+        }),
+      });
     mockBatch.commit.mockRejectedValue(new Error('Firestore unavailable'));
 
     await expect(createPersonalDriverSubscriptionPayment(makeRequest(validPayload, 'user_123'))).rejects.toMatchObject({
       code: 'internal',
     });
 
-    expect(mockSubscriptionRef.get).toHaveBeenCalledTimes(1);
+    expect(mockSubscriptionRef.get).toHaveBeenCalledTimes(2);
     expect(mockStripe.paymentIntents.cancel).not.toHaveBeenCalled();
   });
 

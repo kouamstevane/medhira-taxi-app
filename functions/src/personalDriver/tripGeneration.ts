@@ -51,7 +51,9 @@ export async function generatePersonalDriverTrips(
     distanceOneWayKm: subscription.distanceOneWayKm,
     distanceReturnKm: subscription.distanceReturnKm,
   });
-  const tripRefs = drafts.map((_, index) => db.collection('personal_driver_trips').doc(`${subscription.id}_${index}`));
+  const tripRefs = drafts.map((draft) => (
+    db.collection('personal_driver_trips').doc(`${subscription.id}_${draft.scheduleSlotKey}`)
+  ));
 
   await db.runTransaction(async (transaction) => {
     const snapshots = await Promise.all(tripRefs.map((tripRef) => transaction.get(tripRef)));

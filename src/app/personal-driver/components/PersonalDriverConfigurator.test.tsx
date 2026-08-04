@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { renderToString } from 'react-dom/server';
 import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import { PersonalDriverConfigurator } from './PersonalDriverConfigurator';
 import { estimateRoadDistanceKm } from '@/services/personal-driver/distance.service';
@@ -59,6 +60,14 @@ describe('PersonalDriverConfigurator', () => {
     render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
 
     expect(screen.getByLabelText('Date de debut')).toHaveAttribute('min', '2026-08-03');
+  });
+
+  it('omits the browser-local date minimum from the initial server HTML', () => {
+    jest.useFakeTimers().setSystemTime(new Date(2026, 7, 3, 12));
+
+    const html = renderToString(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    expect(html).not.toContain('min="2026-08-03"');
   });
 
   it('disables Saturday and Sunday for the Basic plan', () => {
