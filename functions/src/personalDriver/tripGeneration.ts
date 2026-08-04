@@ -52,7 +52,7 @@ export async function generatePersonalDriverTrips(
     distanceReturnKm: subscription.distanceReturnKm,
   });
   const tripRefs = drafts.map((draft) => (
-    db.collection('personal_driver_trips').doc(`${subscription.id}_${draft.scheduleSlotKey}`)
+    db.collection('personal_driver_trips').doc(`${subscription.id}_${draft.scheduleOrdinal}`)
   ));
 
   await db.runTransaction(async (transaction) => {

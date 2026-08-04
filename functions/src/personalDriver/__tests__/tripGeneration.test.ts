@@ -56,9 +56,10 @@ describe('personal driver trip generation', () => {
 
     expect(transaction.create).toHaveBeenCalledTimes(5);
     expect(transaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sub_1_outbound_2026-07-27T12:00:00.000Z' }),
+      expect.objectContaining({ id: 'sub_1_0' }),
       expect.objectContaining({
         subscriptionId: 'sub_1',
+        scheduleOrdinal: 0,
         scheduleSlotKey: 'outbound_2026-07-27T12:00:00.000Z',
         scheduledAtIso: '2026-07-27T12:00:00.000Z',
         distanceKm: 12.5,
@@ -86,6 +87,22 @@ describe('personal driver trip generation', () => {
     expect(transaction.get.mock.calls.map(([ref]) => (ref as { id: string }).id)).toEqual(futureIds);
     expect(new Set(originalIdsByInstant.values()).size).toBe(originalIdsByInstant.size);
     expect(transaction.create).toHaveBeenCalledTimes(originalIdsByInstant.size);
+  });
+
+  it('reuses existing legacy ordinal trip IDs after past-slot filtering', async () => {
+    for (let index = 0; index < 5; index += 1) {
+      existingIds.add(`sub_1_${index}`);
+    }
+
+    jest.setSystemTime(Date.parse('2026-07-27T12:01:00.000Z'));
+
+    await generatePersonalDriverTrips(mockDb, activeSubscription);
+
+    expect(
+      transaction.get.mock.calls.map(([ref]) => (ref as { id: string }).id),
+    ).toEqual(['sub_1_1', 'sub_1_2', 'sub_1_3', 'sub_1_4']);
+    expect(transaction.create).not.toHaveBeenCalled();
+    expect(existingIds.size).toBe(5);
   });
 
   it('does not generate drafts before confirmed payment and activation', async () => {

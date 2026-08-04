@@ -7,6 +7,7 @@ export interface PersonalDriverTripDraft {
   userId: string;
   planId: PersonalDriverPlanId;
   direction: 'outbound' | 'return';
+  scheduleOrdinal: number;
   scheduleSlotKey: string;
   status: 'scheduled';
   scheduledAtIso: string;
@@ -51,6 +52,7 @@ export function buildPersonalDriverTripDrafts(input: {
   const selectedWeekdays = new Set(input.selectedWeekdays);
   const trips: PersonalDriverTripDraft[] = [];
   const now = new Date();
+  let scheduleOrdinal = 0;
 
   for (const date = new Date(startDate); date < endDate; date.setUTCDate(date.getUTCDate() + 1)) {
     if (!selectedWeekdays.has(date.getUTCDay() as PersonalDriverWeekday)) continue;
@@ -61,12 +63,15 @@ export function buildPersonalDriverTripDrafts(input: {
       String(date.getUTCDate()).padStart(2, '0'),
     ].join('-');
     const departureAtUtc = localDateTimeToUtc(dateString, input.departureTime, input.serviceTimeZone);
+    const departureScheduleOrdinal = scheduleOrdinal;
+    scheduleOrdinal += 1;
     if (departureAtUtc >= now) {
       trips.push({
         subscriptionId: input.subscriptionId,
         userId: input.userId,
         planId: input.planId,
         direction: 'outbound',
+        scheduleOrdinal: departureScheduleOrdinal,
         scheduleSlotKey: `outbound_${departureAtUtc.toISOString()}`,
         status: 'scheduled',
         scheduledAtIso: departureAtUtc.toISOString(),
@@ -82,12 +87,15 @@ export function buildPersonalDriverTripDrafts(input: {
 
     if (input.tripType === 'round_trip') {
       const returnAtUtc = localDateTimeToUtc(dateString, input.returnTime!, input.serviceTimeZone);
+      const returnScheduleOrdinal = scheduleOrdinal;
+      scheduleOrdinal += 1;
       if (returnAtUtc >= now) {
         trips.push({
           subscriptionId: input.subscriptionId,
           userId: input.userId,
           planId: input.planId,
           direction: 'return',
+          scheduleOrdinal: returnScheduleOrdinal,
           scheduleSlotKey: `return_${returnAtUtc.toISOString()}`,
           status: 'scheduled',
           scheduledAtIso: returnAtUtc.toISOString(),
