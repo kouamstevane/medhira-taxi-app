@@ -16,6 +16,7 @@ import {
 import { calculateAuthoritativeMonthlyDistanceKm, calculateServerRoute } from './routeDistance.js';
 import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js';
 import { localDateTimeToUtc, resolveAddressCoordinates, resolvePickupLocationAndTimeZone } from './locationTimeZone.js';
+import { assertValidSubscriptionSchedule } from './subscriptionSchedule.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const CURRENCY = DEFAULT_CURRENCY;
@@ -66,9 +67,6 @@ const inputSchema = z.object({
   departureTime: z.string().trim().regex(TIME_PATTERN, 'Heure de départ invalide'),
   returnTime: z.string().trim().regex(TIME_PATTERN, 'Heure de retour invalide').optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isCalendarDate, 'Date de début invalide'),
-  distanceOneWayKm: z.number().finite().positive().max(1000).optional(),
-  distanceReturnKm: z.number().finite().nonnegative().max(1000).optional(),
-  monthlyDistanceKm: z.number().finite().positive().max(100000).optional(),
   passengerCount: z.number().int().min(1).max(8),
   notes: z.string().trim().max(1000).optional(),
 }).superRefine((data, context) => {
@@ -178,16 +176,29 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       throw new HttpsError('invalid-argument', 'Le forfait Basic est disponible du lundi au vendredi uniquement.');
     }
 
+    const now = new Date();
     const periodEndDateExclusive = getPeriodEndDateExclusive(input.startDate);
     const occurrences = countWeekdayOccurrences(input.startDate, periodEndDateExclusive, selectedWeekdays);
     const [pickupLocation, destinationLocation, outboundRoute] = await Promise.all([
-      resolvePickupLocationAndTimeZone(input.pickupAddress, new Date()),
+      resolvePickupLocationAndTimeZone(input.pickupAddress, now),
       resolveAddressCoordinates(input.destinationAddress),
       calculateServerRoute({
         origin: input.pickupAddress,
         destination: input.destinationAddress,
       }),
     ]);
+    try {
+      assertValidSubscriptionSchedule({
+        startDate: input.startDate,
+        departureTime: input.departureTime,
+        returnTime: input.returnTime,
+        tripType: input.tripType,
+        serviceTimeZone: pickupLocation.serviceTimeZone,
+        now,
+      });
+    } catch {
+      throw new HttpsError('invalid-argument', 'La date ou les horaires du forfait sont invalides.');
+    }
     const returnRoute = input.tripType === 'round_trip'
       ? await calculateServerRoute({
         origin: input.destinationAddress,

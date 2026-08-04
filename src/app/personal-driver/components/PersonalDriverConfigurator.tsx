@@ -122,6 +122,14 @@ function getSessionRequestId(): string {
   return createRequestId();
 }
 
+function getLocalCalendarDate(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
 export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorProps) {
   const router = useRouter();
   const { autocompleteService } = useGoogleMaps();
@@ -139,6 +147,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
   const [distanceError, setDistanceError] = useState('');
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+  const minimumStartDate = getLocalCalendarDate(new Date());
 
   if (!requestIdRef.current) {
     requestIdRef.current = getSessionRequestId();
@@ -182,6 +191,8 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
     if (!departureTime) nextErrors.departureTime = "L'heure de depart est requise.";
     if (tripType === 'round_trip' && !returnTime) {
       nextErrors.returnTime = "L'heure de retour est requise pour un aller-retour.";
+    } else if (tripType === 'round_trip' && returnTime <= departureTime) {
+      nextErrors.returnTime = "L'heure de retour doit etre posterieure a l'heure de depart.";
     }
     if (!startDate) nextErrors.startDate = 'La date de debut est requise.';
     if (!distanceKm || distanceKm <= 0) {
@@ -353,6 +364,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           Date de debut
           <input
             type="date"
+            min={minimumStartDate}
             value={startDate}
             onChange={(event) => setStartDate(event.target.value)}
             aria-invalid={Boolean(errors.startDate)}

@@ -49,6 +49,18 @@ describe('PersonalDriverConfigurator', () => {
     sessionStorage.clear();
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('uses the browser local date as the earliest selectable start date', () => {
+    jest.useFakeTimers().setSystemTime(new Date(2026, 7, 3, 12));
+
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    expect(screen.getByLabelText('Date de debut')).toHaveAttribute('min', '2026-08-03');
+  });
+
   it('disables Saturday and Sunday for the Basic plan', () => {
     render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.basic} />);
 
@@ -67,6 +79,22 @@ describe('PersonalDriverConfigurator', () => {
     await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
 
     expect(screen.getByText("L'heure de retour est requise pour un aller-retour.")).toBeVisible();
+  });
+
+  it('shows inline feedback when the return time is not after departure', async () => {
+    const user = userEvent.setup();
+    estimateRoadDistanceKmMock.mockResolvedValue(12.4);
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await fillRequiredFields(user);
+    await user.click(screen.getByLabelText('Aller-retour'));
+    fireEvent.change(screen.getByLabelText('Heure de retour'), { target: { value: '08:00' } });
+    await user.click(screen.getByRole('button', { name: 'Calculer la distance' }));
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+
+    expect(screen.getByText("L'heure de retour doit etre posterieure a l'heure de depart.")).toBeVisible();
+    expect(document.querySelector('input[aria-describedby="return-time-error"]')).toHaveAttribute('aria-invalid', 'true');
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('requires all mandatory trip details and a positive distance', async () => {
@@ -116,7 +144,7 @@ describe('PersonalDriverConfigurator', () => {
     await user.type(screen.getByLabelText('Destination'), 'Bastos, Yaounde');
     await user.click(screen.getByLabelText('Lundi'));
     fireEvent.change(screen.getByLabelText('Heure de depart'), { target: { value: '08:00' } });
-    fireEvent.change(screen.getByLabelText('Date de debut'), { target: { value: '2026-08-03' } });
+    fireEvent.change(screen.getByLabelText('Date de debut'), { target: { value: '2099-08-03' } });
     await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
     expect(screen.getByText('Calculez une distance positive avant de continuer.')).toBeVisible();
 
@@ -146,7 +174,7 @@ describe('PersonalDriverConfigurator', () => {
       tripType: 'one_way',
       weekdays: [1],
       departureTime: '08:00',
-      startDate: '2026-08-03',
+      startDate: '2099-08-03',
       passengerCount: 2,
       distanceKm: 12.4,
       distanceOneWayKm: 12.4,
@@ -182,6 +210,6 @@ async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Destination'), 'Bastos, Yaounde');
   await user.click(screen.getByLabelText('Lundi'));
   fireEvent.change(screen.getByLabelText('Heure de depart'), { target: { value: '08:00' } });
-  fireEvent.change(screen.getByLabelText('Date de debut'), { target: { value: '2026-08-03' } });
+  fireEvent.change(screen.getByLabelText('Date de debut'), { target: { value: '2099-08-03' } });
   fireEvent.change(screen.getByLabelText('Nombre de passagers'), { target: { value: '2' } });
 }

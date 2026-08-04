@@ -230,6 +230,24 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
     expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
   });
 
+  it('rejects a renewal whose recurring return time is not after departure', async () => {
+    const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
+    sourceRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        ...sourceSubscription,
+        tripType: 'round_trip',
+        returnTime: '07:30',
+      }),
+    });
+
+    await expect(renewPersonalDriverSubscriptionPayment(makeRequest({
+      sourceSubscriptionId: 'sub_old',
+      requestId: 'renew_invalid_schedule',
+    }))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
+  });
+
   it('returns the same payment when the same request is already being created', async () => {
     jest.useRealTimers();
     mockStripe.paymentIntents.retrieve.mockImplementation(async (paymentIntentId: string) => ({

@@ -76,6 +76,7 @@ jest.mock('../locationTimeZone', () => ({
   resolvePickupLocationAndTimeZone: mockResolvePickupLocationAndTimeZone,
   resolveAddressCoordinates: mockResolveAddressCoordinates,
   localDateTimeToUtc: mockLocalDateTimeToUtc,
+  getLocalCalendarDate: (instant: Date) => instant.toISOString().slice(0, 10),
 }));
 
 const validPayload = {
@@ -103,7 +104,7 @@ function makeRequest(data: unknown, uid?: string) {
 
 describe('createPersonalDriverSubscriptionPayment', () => {
   beforeEach(() => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-08-03T12:00:00.000Z'));
+    jest.useFakeTimers().setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
     jest.clearAllMocks();
     mockCallableOptions.length = 0;
     mockSubscriptionRef.get.mockReset();

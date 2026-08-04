@@ -41,8 +41,13 @@ describe('personal driver trip generation', () => {
   };
 
   beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(Date.parse('2026-07-26T12:00:00.000Z'));
     jest.clearAllMocks();
     existingIds.clear();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('creates deterministic UTC drafts and does not duplicate them on replay', async () => {

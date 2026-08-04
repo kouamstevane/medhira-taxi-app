@@ -15,6 +15,7 @@ import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js'
 import { getLocalCalendarDate, localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
 import { calculatePersonalDriverPrices, SPECIAL_TRIP_LIMITS } from './pricing.js';
 import type { PersonalDriverPlanId, PersonalDriverWeekday } from './pricing.js';
+import { assertValidSubscriptionSchedule } from './subscriptionSchedule.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const CURRENCY = DEFAULT_CURRENCY;
@@ -156,9 +157,28 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
       throw new HttpsError('failed-precondition', 'Ce forfait ne peut pas encore être renouvelé.');
     }
 
+    const now = new Date();
+    const periodStartDate = sourceStatus === 'active' && now < sourcePeriodEndAtUtc
+      ? sourcePeriodEndDate
+      : getLocalCalendarDate(now, serviceTimeZone);
+    const tripType = source.tripType === 'round_trip' ? 'round_trip' : 'one_way';
+    const departureTime = getSourceString(source, 'departureTime');
+    const returnTime = tripType === 'round_trip' ? getSourceString(source, 'returnTime') : null;
+    try {
+      assertValidSubscriptionSchedule({
+        startDate: periodStartDate,
+        departureTime,
+        returnTime,
+        tripType,
+        serviceTimeZone,
+        now,
+      });
+    } catch {
+      throw new HttpsError('failed-precondition', 'La date ou les horaires du forfait source sont invalides.');
+    }
+
     const renewalId = createRenewalId(userId, sourceSubscriptionId, requestId);
     const renewalRef = db.collection('personal_driver_subscriptions').doc(renewalId);
-    const now = new Date();
     const claim = await db.runTransaction<RenewalClaim>(async (transaction) => {
       const existingSnapshot = await transaction.get(renewalRef);
       if (existingSnapshot.exists) {
@@ -226,14 +246,10 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
     }
     const selectedWeekdays = rawSelectedWeekdays as PersonalDriverWeekday[];
 
-    const periodStartDate = sourceStatus === 'active' && now < sourcePeriodEndAtUtc
-      ? sourcePeriodEndDate
-      : getLocalCalendarDate(now, serviceTimeZone);
     const periodEndDateExclusive = getPeriodEndDateExclusive(periodStartDate);
     const occurrences = countWeekdayOccurrences(periodStartDate, periodEndDateExclusive, selectedWeekdays);
     const pickupAddress = getSourceString(source, 'pickupAddress');
     const destinationAddress = getSourceString(source, 'destinationAddress');
-    const tripType = source.tripType === 'round_trip' ? 'round_trip' : 'one_way';
     const outboundRoute = await calculateServerRoute({ origin: pickupAddress, destination: destinationAddress });
     const returnRoute = tripType === 'round_trip'
       ? await calculateServerRoute({ origin: destinationAddress, destination: pickupAddress })
@@ -301,8 +317,8 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         destinationAddress,
         tripType,
         selectedWeekdays,
-        departureTime: getSourceString(source, 'departureTime'),
-        returnTime: source.returnTime ?? null,
+        departureTime,
+        returnTime,
         startDate: periodStartDate,
         periodStartDate,
         periodEndDateExclusive,

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { calculateServerRoute } from './routeDistance.js';
 import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './entitlement.js';
 import { localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
+import { assertFutureSpecialTrip } from './subscriptionSchedule.js';
 
 type PersonalDriverPlanId = 'basic' | 'classic' | 'premium';
 
@@ -47,6 +48,26 @@ function toDate(value: unknown): Date | null {
     return Number.isFinite(date.getTime()) ? date : null;
   }
   return null;
+}
+
+function parseSpecialTripScheduledAt(scheduledAtIso: string, serviceTimeZone: unknown): Date {
+  const match = /^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/.exec(scheduledAtIso);
+  if (!match || typeof serviceTimeZone !== 'string') {
+    throw new HttpsError('invalid-argument', 'Date ou fuseau du trajet spécial invalide.');
+  }
+  try {
+    return localDateTimeToUtc(match[1], `${match[2]}:${match[3]}`, serviceTimeZone);
+  } catch {
+    throw new HttpsError('invalid-argument', 'L’horaire local du trajet spécial est invalide.');
+  }
+}
+
+function assertSpecialTripIsFuture(scheduledAtUtc: Date, now: Date): void {
+  try {
+    assertFutureSpecialTrip(scheduledAtUtc, now);
+  } catch {
+    throw new HttpsError('invalid-argument', 'Le trajet spécial doit être planifié dans le futur.');
+  }
 }
 
 const clientActionSchema = z.discriminatedUnion('action', [
@@ -107,6 +128,23 @@ export const clientManagePersonalDriver = onCall(
     }
 
     const subscriptionRef = db.collection('personal_driver_subscriptions').doc(payload.subscriptionId);
+    const subscriptionSnapshot = await subscriptionRef.get();
+    if (!subscriptionSnapshot.exists) {
+      throw new HttpsError('not-found', 'Abonnement introuvable.');
+    }
+    const initialSubscription = subscriptionSnapshot.data();
+    if (initialSubscription?.userId !== uid) {
+      throw new HttpsError('permission-denied', 'Cet abonnement ne vous appartient pas.');
+    }
+    const initialNow = new Date();
+    if (isSubscriptionEntitled(initialSubscription, initialNow)) {
+      const initialScheduledAtUtc = parseSpecialTripScheduledAt(
+        payload.scheduledAtIso,
+        initialSubscription.serviceTimeZone,
+      );
+      assertSpecialTripIsFuture(initialScheduledAtUtc, initialNow);
+    }
+
     const tripRef = db.collection('personal_driver_trips').doc();
     const [authoritativeRoute, pickupLocation] = await Promise.all([
       calculateServerRoute({
@@ -125,28 +163,16 @@ export const clientManagePersonalDriver = onCall(
       if (subscription?.userId !== uid) {
         throw new HttpsError('permission-denied', 'Cet abonnement ne vous appartient pas.');
       }
-      const now = new Date();
-      if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, now)) {
+      const transactionNow = new Date();
+      if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, transactionNow)) {
         return { kind: 'expired' as const };
       }
-      if (!isSubscriptionEntitled(subscription, now)) {
+      if (!isSubscriptionEntitled(subscription, transactionNow)) {
         throw new HttpsError('failed-precondition', 'Les trajets spéciaux sont disponibles après activation de l’abonnement.');
       }
 
-      const scheduledAtMatch = /^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/.exec(payload.scheduledAtIso);
-      if (!scheduledAtMatch || typeof subscription.serviceTimeZone !== 'string') {
-        throw new HttpsError('invalid-argument', 'Date ou fuseau du trajet spécial invalide.');
-      }
-      let scheduledAtUtc: Date;
-      try {
-        scheduledAtUtc = localDateTimeToUtc(
-          scheduledAtMatch[1],
-          `${scheduledAtMatch[2]}:${scheduledAtMatch[3]}`,
-          subscription.serviceTimeZone,
-        );
-      } catch {
-        throw new HttpsError('invalid-argument', 'L’horaire local du trajet spécial est invalide.');
-      }
+      const scheduledAtUtc = parseSpecialTripScheduledAt(payload.scheduledAtIso, subscription.serviceTimeZone);
+      assertSpecialTripIsFuture(scheduledAtUtc, transactionNow);
       const periodStartAtUtc = toDate(subscription.periodStartAtUtc);
       const periodEndAtUtc = toDate(subscription.periodEndAtUtc);
       if (!periodStartAtUtc || !periodEndAtUtc || scheduledAtUtc < periodStartAtUtc || scheduledAtUtc >= periodEndAtUtc) {

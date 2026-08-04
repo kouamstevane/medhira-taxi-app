@@ -1,13 +1,13 @@
 export {};
 
 const mockTripRef = { id: 'trip_1' };
-const mockSubscriptionRef = { id: 'sub_1' };
 const mockNewTripRef = { id: 'special_1' };
 const mockTransaction = {
   get: jest.fn(),
   update: jest.fn(),
   set: jest.fn(),
 };
+const mockSubscriptionRef = { id: 'sub_1', get: jest.fn(() => mockTransaction.get()) };
 const mockDb = {
   collection: jest.fn((name: string) => ({
     doc: jest.fn((id?: string) => {
@@ -125,7 +125,7 @@ describe('clientManagePersonalDriver', () => {
   });
 
   it('creates a special trip only when quota remains', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-08-03T12:00:00.000Z'));
+    jest.useFakeTimers().setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
     const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
     mockCalculateServerRoute.mockResolvedValue({ distanceKm: 8.2, durationMinutes: 30 });
     mockTransaction.get.mockResolvedValue({
@@ -177,7 +177,7 @@ describe('clientManagePersonalDriver', () => {
   });
 
   it('rejects a special trip that is already in the past on the fixed service clock', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-08-03T12:00:00.000Z'));
+    jest.useFakeTimers().setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
     const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
     mockTransaction.get.mockResolvedValue({
       exists: true,
@@ -206,6 +206,7 @@ describe('clientManagePersonalDriver', () => {
       distanceKm: 8.2,
     }, 'client_1'))).rejects.toMatchObject({ code: 'invalid-argument' });
 
+    expect(mockDb.runTransaction).not.toHaveBeenCalled();
     expect(mockTransaction.set).not.toHaveBeenCalled();
   });
 

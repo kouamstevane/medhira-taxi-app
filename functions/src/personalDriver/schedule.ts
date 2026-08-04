@@ -49,6 +49,7 @@ export function buildPersonalDriverTripDrafts(input: {
   }
   const selectedWeekdays = new Set(input.selectedWeekdays);
   const trips: PersonalDriverTripDraft[] = [];
+  const now = new Date();
 
   for (const date = new Date(startDate); date < endDate; date.setUTCDate(date.getUTCDate() + 1)) {
     if (!selectedWeekdays.has(date.getUTCDay() as PersonalDriverWeekday)) continue;
@@ -58,38 +59,44 @@ export function buildPersonalDriverTripDrafts(input: {
       String(date.getUTCMonth() + 1).padStart(2, '0'),
       String(date.getUTCDate()).padStart(2, '0'),
     ].join('-');
-    trips.push({
-      subscriptionId: input.subscriptionId,
-      userId: input.userId,
-      planId: input.planId,
-      direction: 'outbound',
-      status: 'scheduled',
-      scheduledAtIso: localDateTimeToUtc(dateString, input.departureTime, input.serviceTimeZone).toISOString(),
-      pickupAddress: input.pickupAddress,
-      destinationAddress: input.destinationAddress,
-      pickupLocation: input.pickupLocation,
-      destinationLocation: input.destinationLocation,
-      assignedDriverId: null,
-      assignedVehicleId: null,
-      distanceKm: input.distanceOneWayKm,
-    });
-
-    if (input.tripType === 'round_trip') {
+    const departureAtUtc = localDateTimeToUtc(dateString, input.departureTime, input.serviceTimeZone);
+    if (departureAtUtc >= now) {
       trips.push({
         subscriptionId: input.subscriptionId,
         userId: input.userId,
         planId: input.planId,
-        direction: 'return',
+        direction: 'outbound',
         status: 'scheduled',
-        scheduledAtIso: localDateTimeToUtc(dateString, input.returnTime!, input.serviceTimeZone).toISOString(),
-        pickupAddress: input.destinationAddress,
-        destinationAddress: input.pickupAddress,
-        pickupLocation: input.destinationLocation,
-        destinationLocation: input.pickupLocation,
+        scheduledAtIso: departureAtUtc.toISOString(),
+        pickupAddress: input.pickupAddress,
+        destinationAddress: input.destinationAddress,
+        pickupLocation: input.pickupLocation,
+        destinationLocation: input.destinationLocation,
         assignedDriverId: null,
         assignedVehicleId: null,
-        distanceKm: input.distanceReturnKm,
+        distanceKm: input.distanceOneWayKm,
       });
+    }
+
+    if (input.tripType === 'round_trip') {
+      const returnAtUtc = localDateTimeToUtc(dateString, input.returnTime!, input.serviceTimeZone);
+      if (returnAtUtc >= now) {
+        trips.push({
+          subscriptionId: input.subscriptionId,
+          userId: input.userId,
+          planId: input.planId,
+          direction: 'return',
+          status: 'scheduled',
+          scheduledAtIso: returnAtUtc.toISOString(),
+          pickupAddress: input.destinationAddress,
+          destinationAddress: input.pickupAddress,
+          pickupLocation: input.destinationLocation,
+          destinationLocation: input.pickupLocation,
+          assignedDriverId: null,
+          assignedVehicleId: null,
+          distanceKm: input.distanceReturnKm,
+        });
+      }
     }
   }
 
