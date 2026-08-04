@@ -16,13 +16,11 @@ async function assertAdminUser(uid: string): Promise<void> {
   }
 }
 
-async function assertAssignableDriver(driverId: string): Promise<void> {
-  const driverSnap = await getDb().collection('drivers').doc(driverId).get();
-  if (!driverSnap.exists) {
+function assertAssignableDriver(driverId: string, driver: FirebaseFirestore.DocumentData | undefined): void {
+  if (!driver) {
     throw new HttpsError('not-found', 'Chauffeur introuvable.');
   }
 
-  const driver = driverSnap.data();
   const approved =
     driver?.status === 'approved' ||
     driver?.driverStatus === 'approved' ||
@@ -36,13 +34,15 @@ async function assertAssignableDriver(driverId: string): Promise<void> {
   }
 }
 
-async function assertTripSubscriptionEntitled(trip: FirebaseFirestore.DocumentData | undefined): Promise<void> {
+function assertTripSubscriptionEntitled(
+  trip: FirebaseFirestore.DocumentData | undefined,
+  subscription: FirebaseFirestore.DocumentData | undefined,
+): void {
   const subscriptionId = trip?.subscriptionId;
   if (typeof subscriptionId !== 'string' || !subscriptionId) {
     throw new HttpsError('failed-precondition', 'Le forfait du trajet est introuvable.');
   }
-  const subscriptionSnap = await getDb().collection('personal_driver_subscriptions').doc(subscriptionId).get();
-  if (!subscriptionSnap.exists || !isSubscriptionEntitled(subscriptionSnap.data(), new Date())) {
+  if (!isSubscriptionEntitled(subscription, new Date())) {
     throw new HttpsError('failed-precondition', 'Le forfait doit être payé et actif avant affectation.');
   }
 }
@@ -75,6 +75,7 @@ export const adminManagePersonalDriver = onCall(
     }
 
     await assertAdminUser(request.auth.uid);
+    const adminUid = request.auth.uid;
 
     const parsed = adminActionSchema.safeParse(request.data);
     if (!parsed.success) {
@@ -96,88 +97,106 @@ export const adminManagePersonalDriver = onCall(
     }
 
     if (payload.action === 'assignTrip') {
-      await assertAssignableDriver(payload.driverId);
+      const driverRef = db.collection('drivers').doc(payload.driverId);
       const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
-      const tripSnap = await tripRef.get();
-      if (!tripSnap.exists) {
-        throw new HttpsError('not-found', 'Trajet introuvable.');
-      }
-      const trip = tripSnap.data();
-      if (trip?.status && !['scheduled', 'driver_assigned'].includes(trip.status)) {
-        throw new HttpsError('failed-precondition', 'Ce trajet ne peut pas être affecté dans son statut actuel.');
-      }
-      await assertTripSubscriptionEntitled(trip);
-      const batch = db.batch();
-      batch.update(tripRef, {
-        assignedDriverId: payload.driverId,
-        assignedVehicleId: payload.vehicleId,
-        status: 'driver_assigned',
-        assignedAt: admin.firestore.FieldValue.serverTimestamp(),
-        assignedBy: request.auth.uid,
-      });
-      if (trip?.userId) {
-        batch.set(db.collection('notifications').doc(), {
-          userId: trip.userId,
-          type: 'personal_driver_trip_assigned',
-          title: 'Chauffeur affecté',
-          message: 'Un chauffeur et un véhicule ont été affectés à votre trajet Personal Driver.',
+      await db.runTransaction(async (transaction) => {
+        const tripSnap = await transaction.get(tripRef);
+        if (!tripSnap.exists) throw new HttpsError('not-found', 'Trajet introuvable.');
+        const trip = tripSnap.data();
+        if (trip?.status && !['scheduled', 'driver_assigned'].includes(trip.status)) {
+          throw new HttpsError('failed-precondition', 'Ce trajet ne peut pas être affecté dans son statut actuel.');
+        }
+        if (typeof trip?.subscriptionId !== 'string' || !trip.subscriptionId) {
+          throw new HttpsError('failed-precondition', 'Le forfait du trajet est introuvable.');
+        }
+        const subscriptionSnap = await transaction.get(
+          db.collection('personal_driver_subscriptions').doc(trip.subscriptionId),
+        );
+        const driverSnap = await transaction.get(driverRef);
+        if (!subscriptionSnap.exists) throw new HttpsError('not-found', 'Abonnement introuvable.');
+        if (!driverSnap.exists) throw new HttpsError('not-found', 'Chauffeur introuvable.');
+        assertTripSubscriptionEntitled(trip, subscriptionSnap.data());
+        assertAssignableDriver(payload.driverId, driverSnap.data());
+
+        transaction.update(tripRef, {
+          assignedDriverId: payload.driverId,
+          assignedVehicleId: payload.vehicleId,
+          status: 'driver_assigned',
+          assignedAt: admin.firestore.FieldValue.serverTimestamp(),
+          assignedBy: adminUid,
+        });
+        if (trip?.userId) {
+          transaction.set(db.collection('notifications').doc(), {
+            userId: trip.userId,
+            type: 'personal_driver_trip_assigned',
+            title: 'Chauffeur affecté',
+            message: 'Un chauffeur et un véhicule ont été affectés à votre trajet Personal Driver.',
+            tripId: payload.tripId,
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        transaction.set(db.collection('notifications').doc(), {
+          userId: payload.driverId,
+          type: 'personal_driver_trip_assigned_driver',
+          title: 'Nouvelle mission Personal Driver',
+          message: 'Une mission Personal Driver vous a été affectée.',
           tripId: payload.tripId,
           read: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-      }
-      batch.set(db.collection('notifications').doc(), {
-        userId: payload.driverId,
-        type: 'personal_driver_trip_assigned_driver',
-        title: 'Nouvelle mission Personal Driver',
-        message: 'Une mission Personal Driver vous a été affectée.',
-        tripId: payload.tripId,
-        read: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      await batch.commit();
       return { success: true };
     }
 
     if (payload.action === 'reassignDriverEmergency') {
-      await assertAssignableDriver(payload.newDriverId);
+      const driverRef = db.collection('drivers').doc(payload.newDriverId);
       const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
-      const tripSnap = await tripRef.get();
-      if (!tripSnap.exists) {
-        throw new HttpsError('not-found', 'Trajet introuvable.');
-      }
-      const trip = tripSnap.data();
-      await assertTripSubscriptionEntitled(trip);
-      const batch = db.batch();
-      batch.update(tripRef, {
-        assignedDriverId: payload.newDriverId,
-        assignedVehicleId: payload.newVehicleId,
-        status: 'driver_assigned',
-        driverAlertFlagged: false,
-        emergencyReassignedAt: admin.firestore.FieldValue.serverTimestamp(),
-        emergencyReassignedBy: request.auth.uid,
-      });
-      if (trip?.userId) {
-        batch.set(db.collection('notifications').doc(), {
-          userId: trip.userId,
-          type: 'personal_driver_emergency_reassignment',
-          title: 'Chauffeur remplacé',
-          message: 'Un chauffeur de remplacement a été affecté à votre trajet Personal Driver.',
+      await db.runTransaction(async (transaction) => {
+        const tripSnap = await transaction.get(tripRef);
+        if (!tripSnap.exists) throw new HttpsError('not-found', 'Trajet introuvable.');
+        const trip = tripSnap.data();
+        if (typeof trip?.subscriptionId !== 'string' || !trip.subscriptionId) {
+          throw new HttpsError('failed-precondition', 'Le forfait du trajet est introuvable.');
+        }
+        const subscriptionSnap = await transaction.get(
+          db.collection('personal_driver_subscriptions').doc(trip.subscriptionId),
+        );
+        const driverSnap = await transaction.get(driverRef);
+        if (!subscriptionSnap.exists) throw new HttpsError('not-found', 'Abonnement introuvable.');
+        if (!driverSnap.exists) throw new HttpsError('not-found', 'Chauffeur introuvable.');
+        assertTripSubscriptionEntitled(trip, subscriptionSnap.data());
+        assertAssignableDriver(payload.newDriverId, driverSnap.data());
+
+        transaction.update(tripRef, {
+          assignedDriverId: payload.newDriverId,
+          assignedVehicleId: payload.newVehicleId,
+          status: 'driver_assigned',
+          driverAlertFlagged: false,
+          emergencyReassignedAt: admin.firestore.FieldValue.serverTimestamp(),
+          emergencyReassignedBy: adminUid,
+        });
+        if (trip?.userId) {
+          transaction.set(db.collection('notifications').doc(), {
+            userId: trip.userId,
+            type: 'personal_driver_emergency_reassignment',
+            title: 'Chauffeur remplacé',
+            message: 'Un chauffeur de remplacement a été affecté à votre trajet Personal Driver.',
+            tripId: payload.tripId,
+            read: false,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        transaction.set(db.collection('notifications').doc(), {
+          userId: payload.newDriverId,
+          type: 'personal_driver_emergency_reassignment_driver',
+          title: 'Mission de remplacement',
+          message: 'Une mission Personal Driver de remplacement vous a été affectée.',
           tripId: payload.tripId,
           read: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-      }
-      batch.set(db.collection('notifications').doc(), {
-        userId: payload.newDriverId,
-        type: 'personal_driver_emergency_reassignment_driver',
-        title: 'Mission de remplacement',
-        message: 'Une mission Personal Driver de remplacement vous a été affectée.',
-        tripId: payload.tripId,
-        read: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      await batch.commit();
       return { success: true };
     }
 

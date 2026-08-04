@@ -25,6 +25,10 @@ import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { createStripeClient } from './stripe-client.js';
 import { buildDriverIndividualPrefill } from './driver-prefill.js';
 import { generatePersonalDriverTrips } from '../personalDriver/tripGeneration.js';
+import {
+  isPersonalDriverSubscriptionReadyForActivation,
+  isPersonalDriverSubscriptionReadyForPaymentConfirmation,
+} from '../personalDriver/subscriptionActivationValidation.js';
 
 // Type alias pour les événements Stripe (compatible Stripe v22 / NodeNext)
 type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;
@@ -84,28 +88,6 @@ const PAYMENT_STATUS = {
   CANCELLED:       'cancelled',
   REQUIRES_ACTION: 'requires_action',
 } as const;
-
-function isPersonalDriverSubscriptionReadyForActivation(
-  subscription: FirebaseFirestore.DocumentData | undefined,
-): boolean {
-  if (!subscription) return false;
-  return [
-    'periodStartDate',
-    'periodEndDateExclusive',
-    'periodStartAtUtc',
-    'periodEndAtUtc',
-    'serviceTimeZone',
-    'pickupLocation',
-    'destinationLocation',
-    'selectedWeekdays',
-    'tripType',
-    'departureTime',
-    'pickupAddress',
-    'destinationAddress',
-    'distanceOneWayKm',
-    'distanceReturnKm',
-  ].every((field) => subscription[field] !== undefined && subscription[field] !== null);
-}
 
 // =============================================================================
 // createSetupIntent — Callable Function (client → serveur)
@@ -501,8 +483,7 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
         return;
       }
 
-      const canConfirmPayment = subscription?.status === 'pending_payment' &&
-        ['creating', 'pending', 'requires_action'].includes(subscription.paymentStatus);
+      const canConfirmPayment = isPersonalDriverSubscriptionReadyForPaymentConfirmation(subscription);
       if (!canConfirmPayment) return;
 
       tx.update(subscriptionRef, {

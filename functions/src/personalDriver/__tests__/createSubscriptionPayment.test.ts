@@ -248,6 +248,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
         selectedPlanId: 'basic',
         selectedPlanPrice: expect.objectContaining({ totalBeforeTax: 300 }),
         priceComparison: expect.objectContaining({ monthlyDistanceKm: 62.5 }),
+        includedSpecialTrips: 0,
         taxAmount: 0,
         totalAmount: 300,
         stripePaymentIntentId: 'pi_123',
@@ -284,6 +285,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
       expect.objectContaining({
         monthlyDistanceKm: 62.5,
         monthlyDistanceKmRemaining: 62.5,
+        includedSpecialTrips: 2,
         periodStartDate: '2026-07-27',
         periodEndDateExclusive: '2026-08-26',
         serviceTimeZone: 'America/Toronto',

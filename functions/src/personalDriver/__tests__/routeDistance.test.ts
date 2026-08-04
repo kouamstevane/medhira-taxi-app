@@ -49,13 +49,13 @@ describe('personal driver server route distance', () => {
       returnKm: 12.34,
       tripType: 'round_trip',
       occurrences: 22,
-    })).toBe(543);
+    })).toBe(543.4);
 
     expect(calculateAuthoritativeMonthlyDistanceKm({
       outboundKm: 12.34,
       returnKm: 0,
       tripType: 'one_way',
       occurrences: 22,
-    })).toBe(271.5);
+    })).toBe(270.6);
   });
 });

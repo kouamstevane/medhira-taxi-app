@@ -28,6 +28,12 @@ export interface PersonalDriverPriceComparison {
 
 const PLAN_ORDER: PersonalDriverPlanId[] = ['basic', 'classic', 'premium'];
 
+export const SPECIAL_TRIP_LIMITS: Record<PersonalDriverPlanId, number> = {
+  basic: 0,
+  classic: 2,
+  premium: 4,
+};
+
 const PLANS: Record<PersonalDriverPlanId, PersonalDriverPlan> = {
   basic: {
     pricePerKm: 1.5,

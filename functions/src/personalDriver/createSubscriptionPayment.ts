@@ -8,6 +8,7 @@ import { DEFAULT_CURRENCY } from '../config/stripe.js';
 import { createStripeClient } from '../stripe/stripe-client.js';
 import {
   calculatePersonalDriverPrices,
+  SPECIAL_TRIP_LIMITS,
   type PersonalDriverPlanId,
   type PersonalDriverWeekday,
 } from './pricing.js';
@@ -357,6 +358,7 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       distanceReturnKm: returnRoute?.distanceKm ?? 0,
       monthlyDistanceKm: authoritativeMonthlyDistanceKm,
       monthlyDistanceKmRemaining: authoritativeMonthlyDistanceKm,
+      includedSpecialTrips: SPECIAL_TRIP_LIMITS[selectedPlanId],
       specialTripsUsed: 0,
       specialTripsDistanceUsedKm: 0,
       passengerCount: input.passengerCount,

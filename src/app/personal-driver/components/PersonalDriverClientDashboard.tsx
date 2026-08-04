@@ -44,6 +44,30 @@ const StripePaymentElement = dynamic(
   { ssr: false, loading: () => <div className="h-52 rounded-xl border border-white/10 bg-white/5" /> },
 );
 
+function toDate(value: unknown): Date | null {
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return date instanceof Date && Number.isFinite(date.getTime()) ? date : null;
+  }
+  if (typeof value !== 'string') return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function isSubscriptionUsable(subscription: PersonalDriverSubscription): boolean {
+  const periodStartAtUtc = toDate(subscription.periodStartAtUtc);
+  const periodEndAtUtc = toDate(subscription.periodEndAtUtc);
+  const now = new Date();
+  return subscription.status === 'active'
+    && subscription.paymentStatus === 'succeeded'
+    && !!periodStartAtUtc
+    && !!periodEndAtUtc
+    && periodEndAtUtc > periodStartAtUtc
+    && now >= periodStartAtUtc
+    && now < periodEndAtUtc;
+}
+
 export function PersonalDriverClientDashboard() {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -104,7 +128,7 @@ export function PersonalDriverClientDashboard() {
 
   const handleCreateSpecialTrip = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subscription || !specialPickup || !specialDestination || !specialDate || !specialTime) return;
+    if (!subscription || !isSubscriptionUsable(subscription) || !specialPickup || !specialDestination || !specialDate || !specialTime) return;
 
     setActionLoading(true);
     try {
@@ -184,6 +208,16 @@ export function PersonalDriverClientDashboard() {
   const includedSpecialTrips = planInfo.includedSpecialTrips;
   const specialTripsUsed = subscription.specialTripsUsed ?? 0;
   const specialTripsRemaining = Math.max(0, includedSpecialTrips - specialTripsUsed);
+  const subscriptionUsable = isSubscriptionUsable(subscription);
+  const paymentStatusLabel = subscription.paymentStatus === 'succeeded'
+    ? 'Paiement confirmé'
+    : subscription.paymentStatus === 'requires_action'
+      ? 'Action de paiement requise'
+      : subscription.paymentStatus === 'failed'
+        ? 'Paiement échoué'
+        : subscription.paymentStatus === 'cancelled'
+          ? 'Paiement annulé'
+          : 'Paiement non confirmé';
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12 text-slate-100">
@@ -252,6 +286,11 @@ export function PersonalDriverClientDashboard() {
             {renewalLoading ? 'Préparation...' : 'Renouveler'}
           </button>
         </div>
+        <div className="mt-4 space-y-1 text-xs text-slate-400">
+          <p>Période : {subscription.periodStartDate ?? 'inconnue'} → {subscription.periodEndDateExclusive ?? 'inconnue'}</p>
+          <p>{paymentStatusLabel}</p>
+          {!subscriptionUsable && <p className="text-amber-300">Les trajets spéciaux sont indisponibles tant que le forfait n’est pas payé et actif.</p>}
+        </div>
         {renewalError && (
           <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300" role="alert">
             {renewalError}
@@ -307,7 +346,7 @@ export function PersonalDriverClientDashboard() {
             <button
               type="button"
               onClick={() => setShowSpecialTripModal(true)}
-              disabled={specialTripsRemaining <= 0}
+              disabled={!subscriptionUsable || specialTripsRemaining <= 0}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <MaterialIcon name="add" size="sm" />

@@ -179,7 +179,9 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
       data: () => ({
         ...sourceSubscription,
         status: 'expired',
+        periodStartDate: '2026-07-01',
         periodEndDateExclusive: '2026-07-31',
+        periodStartAtUtc: new Date('2026-07-01T04:00:00.000Z'),
         periodEndAtUtc: new Date('2026-07-31T04:00:00.000Z'),
       }),
     });
@@ -196,6 +198,21 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
         periodEndDateExclusive: '2026-09-02',
       }),
     );
+  });
+
+  it('rejects an active source whose payment is not succeeded', async () => {
+    const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
+    mockStripe.paymentIntents.create.mockClear();
+    sourceRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({ ...sourceSubscription, paymentStatus: 'pending' }),
+    });
+
+    await expect(renewPersonalDriverSubscriptionPayment(makeRequest({
+      sourceSubscriptionId: 'sub_old',
+      requestId: 'renew_invalid_payment',
+    }))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockStripe.paymentIntents.create).not.toHaveBeenCalled();
   });
 
   it('returns the same payment when the same request is already being created', async () => {

@@ -12,7 +12,7 @@ import {
 } from './routeDistance.js';
 import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js';
 import { getLocalCalendarDate, localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
-import { calculatePersonalDriverPrices } from './pricing.js';
+import { calculatePersonalDriverPrices, SPECIAL_TRIP_LIMITS } from './pricing.js';
 import type { PersonalDriverPlanId, PersonalDriverWeekday } from './pricing.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
@@ -54,7 +54,15 @@ function toDate(value: unknown): Date | null {
     const date = value.toDate();
     return date instanceof Date && Number.isFinite(date.getTime()) ? date : null;
   }
-  return typeof value === 'string' ? new Date(value) : null;
+  if (typeof value !== 'string') return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function isCalendarDate(value: string): boolean {
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
 function isClaimStale(data: FirebaseFirestore.DocumentData, now: Date): boolean {
@@ -123,11 +131,27 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
     if (!source || source.userId !== userId) throw new HttpsError('permission-denied', 'Cet abonnement ne vous appartient pas.');
 
     const serviceTimeZone = getSourceString(source, 'serviceTimeZone');
+    const sourcePeriodStartDate = getSourceString(source, 'periodStartDate');
     const sourcePeriodEndDate = getSourceString(source, 'periodEndDateExclusive');
+    if (!isCalendarDate(sourcePeriodStartDate) || !isCalendarDate(sourcePeriodEndDate)) {
+      throw new HttpsError('failed-precondition', 'Les dates locales de la période source sont invalides.');
+    }
+    if (getPeriodEndDateExclusive(sourcePeriodStartDate) !== sourcePeriodEndDate) {
+      throw new HttpsError('failed-precondition', 'La période source ne couvre pas exactement 30 jours.');
+    }
+    const sourcePeriodStartAtUtc = toDate(source.periodStartAtUtc);
     const sourcePeriodEndAtUtc = toDate(source.periodEndAtUtc);
-    if (!sourcePeriodEndAtUtc) throw new HttpsError('failed-precondition', 'La période source est incomplète.');
+    if (!sourcePeriodStartAtUtc || !sourcePeriodEndAtUtc || sourcePeriodEndAtUtc <= sourcePeriodStartAtUtc) {
+      throw new HttpsError('failed-precondition', 'Les bornes UTC de la période source sont invalides.');
+    }
     const sourceStatus = source.status;
-    if (!['active', 'payment_failed', 'cancelled', 'expired'].includes(sourceStatus)) {
+    const expectedPaymentStatus: Record<string, string> = {
+      active: 'succeeded',
+      payment_failed: 'failed',
+      cancelled: 'cancelled',
+      expired: 'succeeded',
+    };
+    if (!Object.hasOwn(expectedPaymentStatus, sourceStatus) || source.paymentStatus !== expectedPaymentStatus[sourceStatus]) {
       throw new HttpsError('failed-precondition', 'Ce forfait ne peut pas encore être renouvelé.');
     }
 
@@ -290,7 +314,7 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         distanceReturnKm: returnRoute?.distanceKm ?? 0,
         monthlyDistanceKm,
         monthlyDistanceKmRemaining: monthlyDistanceKm,
-        includedSpecialTrips: selectedPlanPrice.planId === 'premium' ? 4 : selectedPlanPrice.planId === 'classic' ? 2 : 0,
+        includedSpecialTrips: SPECIAL_TRIP_LIMITS[selectedPlanPrice.planId],
         specialTripsUsed: 0,
         specialTripsDistanceUsedKm: 0,
         passengerCount: Number(source.passengerCount ?? 1),

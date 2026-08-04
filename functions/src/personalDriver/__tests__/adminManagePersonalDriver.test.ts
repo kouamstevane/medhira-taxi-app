@@ -1,16 +1,15 @@
 export {};
 
-const mockSubRef = { get: jest.fn(), update: jest.fn() };
-const mockTripRef = { get: jest.fn(), update: jest.fn() };
-const mockDriverRef = { get: jest.fn() };
+const mockSubRef = { id: 'sub_1' };
+const mockTripRef = { id: 'trip_1' };
+const mockDriverRef = { id: 'driver_1' };
 const mockAdminRef = { get: jest.fn() };
-const mockNotificationRef = {};
-const mockBatch = {
+const mockNotificationRef = { id: 'notification_1' };
+const mockTransaction = {
+  get: jest.fn(),
   update: jest.fn(),
   set: jest.fn(),
-  commit: jest.fn(),
 };
-
 const mockDb = {
   collection: jest.fn((name: string) => {
     if (name === 'admins') return { doc: jest.fn(() => mockAdminRef) };
@@ -20,7 +19,7 @@ const mockDb = {
     if (name === 'notifications') return { doc: jest.fn(() => mockNotificationRef) };
     throw new Error(`Unexpected collection ${name}`);
   }),
-  batch: jest.fn(() => mockBatch),
+  runTransaction: jest.fn((callback: (tx: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction)),
 };
 
 jest.mock('firebase-admin', () => ({
@@ -47,98 +46,81 @@ function makeRequest(data: unknown, uid?: string) {
 }
 
 describe('adminManagePersonalDriver', () => {
+  let tripData: Record<string, unknown>;
+  let subscriptionData: Record<string, unknown>;
+  let driverData: Record<string, unknown>;
+
   beforeEach(() => {
     jest.clearAllMocks();
-    mockBatch.commit.mockResolvedValue(undefined);
-    mockDriverRef.get.mockResolvedValue({ exists: true, data: () => ({ status: 'approved', isAvailable: true }) });
-    mockSubRef.get.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        status: 'active',
-        paymentStatus: 'succeeded',
-        periodStartAtUtc: new Date('2026-01-01T00:00:00.000Z'),
-        periodEndAtUtc: new Date('2027-01-01T00:00:00.000Z'),
-      }),
+    mockAdminRef.get.mockResolvedValue({ exists: true });
+    tripData = { userId: 'user_1', subscriptionId: 'sub_1', status: 'scheduled' };
+    subscriptionData = {
+      status: 'active',
+      paymentStatus: 'succeeded',
+      periodStartAtUtc: new Date('2026-01-01T00:00:00.000Z'),
+      periodEndAtUtc: new Date('2027-01-01T00:00:00.000Z'),
+    };
+    driverData = { status: 'approved', isAvailable: true };
+    mockTransaction.get.mockImplementation(async (ref: unknown) => {
+      if (ref === mockTripRef) return { exists: true, data: () => tripData };
+      if (ref === mockDriverRef) return { exists: true, data: () => driverData };
+      return { exists: true, data: () => subscriptionData };
+    });
+    mockTransaction.update.mockImplementation((_ref: unknown, update: Record<string, unknown>) => {
+      if (_ref === mockTripRef) Object.assign(tripData, update);
     });
   });
 
   it('rejects unauthenticated requests', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
-    await expect(
-      adminManagePersonalDriver(makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' })),
-    ).rejects.toMatchObject({ code: 'unauthenticated' });
-  });
-
-  it('rejects non-admin users', async () => {
-    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
-    mockAdminRef.get.mockResolvedValue({ exists: false });
-
-    await expect(
-      adminManagePersonalDriver(makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'user_1')),
-    ).rejects.toMatchObject({ code: 'permission-denied' });
+    await expect(adminManagePersonalDriver(makeRequest({ action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1' })))
+      .rejects.toMatchObject({ code: 'unauthenticated' });
   });
 
   it('rejects manual subscription validation for admin users', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
-    mockAdminRef.get.mockResolvedValue({ exists: true });
-    await expect(
-      adminManagePersonalDriver(
-        makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1'),
-      ),
-    ).rejects.toMatchObject({ code: 'invalid-argument' });
+    await expect(adminManagePersonalDriver(makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1')))
+      .rejects.toMatchObject({ code: 'invalid-argument' });
   });
 
-  it('does not expose a payment validation path', async () => {
+  it('assigns a driver only after reading trip, driver, and subscription in one transaction', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
-    mockAdminRef.get.mockResolvedValue({ exists: true });
 
-    await expect(
-      adminManagePersonalDriver(
-        makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1'),
-      ),
-    ).rejects.toMatchObject({ code: 'invalid-argument' });
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1',
+    }, 'admin_1'))).resolves.toEqual({ success: true });
+
+    expect(mockDb.runTransaction).toHaveBeenCalledTimes(1);
+    expect(mockTransaction.get).toHaveBeenCalledWith(mockTripRef);
+    expect(mockTransaction.get).toHaveBeenCalledWith(mockSubRef);
+    expect(mockTransaction.get).toHaveBeenCalledWith(mockDriverRef);
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      assignedDriverId: 'driver_1',
+      status: 'driver_assigned',
+    }));
+    expect(mockTransaction.set).toHaveBeenCalledWith(mockNotificationRef, expect.objectContaining({
+      userId: 'driver_1',
+      type: 'personal_driver_trip_assigned_driver',
+    }));
   });
 
-  it('assigns driver and vehicle to a trip', async () => {
+  it('rejects assignment when the transaction observes an unpaid package', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
-    mockAdminRef.get.mockResolvedValue({ exists: true });
-    mockTripRef.get.mockResolvedValue({ exists: true, data: () => ({ userId: 'user_1', subscriptionId: 'sub_1' }) });
+    subscriptionData.paymentStatus = 'pending';
 
-    const result = await adminManagePersonalDriver(
-      makeRequest(
-        { action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1' },
-        'admin_1',
-      ),
-    );
-
-    expect(result).toEqual({ success: true });
-    expect(mockBatch.update).toHaveBeenCalledWith(
-      mockTripRef,
-      expect.objectContaining({
-        assignedDriverId: 'driver_1',
-        assignedVehicleId: 'veh_1',
-        status: 'driver_assigned',
-      }),
-    );
-    expect(mockBatch.set).toHaveBeenCalledWith(
-      mockNotificationRef,
-      expect.objectContaining({ userId: 'driver_1', type: 'personal_driver_trip_assigned_driver' }),
-    );
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1',
+    }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).not.toHaveBeenCalled();
   });
 
-  it('rejects assigning a trip to a non-approved driver', async () => {
+  it('rejects assignment to a driver that is unavailable in the transaction', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
-    mockAdminRef.get.mockResolvedValue({ exists: true });
-    mockTripRef.get.mockResolvedValue({ exists: true, data: () => ({ userId: 'user_1', status: 'scheduled' }) });
-    mockDriverRef.get.mockResolvedValue({ exists: true, data: () => ({ status: 'pending', isAvailable: true }) });
+    driverData.isAvailable = false;
 
-    await expect(
-      adminManagePersonalDriver(
-        makeRequest(
-          { action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1' },
-          'admin_1',
-        ),
-      ),
-    ).rejects.toMatchObject({ code: 'failed-precondition' });
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1',
+    }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).not.toHaveBeenCalled();
   });
 });

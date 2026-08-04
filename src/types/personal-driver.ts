@@ -132,6 +132,10 @@ export interface PersonalDriverTrip {
   overageWaitFeeAmount?: number;
   overageWaitBilled?: boolean;
   overageChargeStatus?: 'processing' | 'not_required' | 'billed' | 'failed' | 'review_required';
+  overageChargeClaimedAt?: string | Date | { toDate: () => Date };
+  overageChargeIdempotencyKey?: string;
+  overagePaymentIntentId?: string;
+  overagePaymentError?: string;
   cancelledBy?: 'client' | 'driver' | 'admin';
   clientCancelledLostKm?: boolean;
   driverAlertFlagged?: boolean;

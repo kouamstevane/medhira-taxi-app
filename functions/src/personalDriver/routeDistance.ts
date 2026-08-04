@@ -70,8 +70,9 @@ export function calculateAuthoritativeMonthlyDistanceKm(input: {
   if (input.tripType === 'round_trip') assertPositiveFinite(input.returnKm, 'Round-trip return distance is required');
   if (!Number.isInteger(input.occurrences) || input.occurrences <= 0) throw new Error('Invalid weekday occurrence count');
 
-  const perOccurrenceKm = input.tripType === 'round_trip'
+  const rawPerOccurrenceKm = input.tripType === 'round_trip'
     ? input.outboundKm + input.returnKm
     : input.outboundKm;
-  return Math.round(perOccurrenceKm * input.occurrences * 10) / 10;
+  const perOccurrenceKm = Math.round(rawPerOccurrenceKm * 10) / 10;
+  return perOccurrenceKm * input.occurrences;
 }

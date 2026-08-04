@@ -109,6 +109,10 @@ export const driverUpdatePersonalDriverTrip = onCall(
         }
       }
 
+      if (newStatus === 'passenger_picked_up' && !tripData?.waitStartedAt) {
+        throw new HttpsError('failed-precondition', 'Le début serveur de l’attente est introuvable.');
+      }
+
       const statusHistory = tripData?.statusHistory || [];
       statusHistory.push({
         status: newStatus,
@@ -124,8 +128,18 @@ export const driverUpdatePersonalDriverTrip = onCall(
         statusHistory,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         ...(newStatus === 'driver_arrived'
-          ? { driverArrivedAt: admin.firestore.FieldValue.serverTimestamp() }
-          : {}),
+          ? {
+              waitStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+              waitEndedAt: admin.firestore.FieldValue.delete(),
+              overageChargeStatus: admin.firestore.FieldValue.delete(),
+              overageChargeClaimedAt: admin.firestore.FieldValue.delete(),
+              overageChargeIdempotencyKey: admin.firestore.FieldValue.delete(),
+              overagePaymentIntentId: admin.firestore.FieldValue.delete(),
+              overageWaitBilled: admin.firestore.FieldValue.delete(),
+            }
+          : newStatus === 'passenger_picked_up'
+            ? { waitEndedAt: admin.firestore.FieldValue.serverTimestamp() }
+            : {}),
       });
 
       const driverAvailabilityUpdate =

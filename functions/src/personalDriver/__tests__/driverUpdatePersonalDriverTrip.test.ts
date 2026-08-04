@@ -25,7 +25,10 @@ jest.mock('firebase-admin', () => ({
   apps: [{}],
   initializeApp: jest.fn(),
   firestore: Object.assign(jest.fn(() => mockDb), {
-    FieldValue: { serverTimestamp: jest.fn(() => ({ __ts: true })) },
+    FieldValue: {
+      serverTimestamp: jest.fn(() => ({ __ts: true })),
+      delete: jest.fn(() => ({ __delete: true })),
+    },
   }),
 }));
 
@@ -145,7 +148,30 @@ describe('driverUpdatePersonalDriverTrip', () => {
     expect(result).toEqual({ success: true, status: 'driver_arrived' });
     expect(mockTransaction.update).toHaveBeenCalledWith(
       mockTripRef,
-      expect.objectContaining({ status: 'driver_arrived' }),
+      expect.objectContaining({
+        status: 'driver_arrived',
+        waitStartedAt: expect.anything(),
+      }),
+    );
+  });
+
+  it('writes the server wait end timestamp when the passenger is picked up', async () => {
+    Object.assign(mockTripData, {
+      status: 'driver_arrived',
+      waitStartedAt: { __ts: true },
+    });
+    const { driverUpdatePersonalDriverTrip } = require('../driverUpdatePersonalDriverTrip');
+
+    await expect(driverUpdatePersonalDriverTrip(makeRequest({
+      tripId: 'trip_1',
+      status: 'passenger_picked_up',
+    }, 'driver_1'))).resolves.toEqual({ success: true, status: 'passenger_picked_up' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(
+      mockTripRef,
+      expect.objectContaining({
+        status: 'passenger_picked_up',
+        waitEndedAt: expect.anything(),
+      }),
     );
   });
 

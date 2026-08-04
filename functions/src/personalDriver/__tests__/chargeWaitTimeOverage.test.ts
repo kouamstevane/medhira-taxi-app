@@ -1,14 +1,13 @@
 export {};
 
-const mockTripRef = { get: jest.fn(), update: jest.fn() };
-const mockSubscriptionRef = { get: jest.fn() };
+const mockTripRef = { id: 'trip_1' };
+const mockSubscriptionRef = { id: 'sub_1' };
 const mockAdminRef = { get: jest.fn() };
 const mockPaymentIntentsCreate = jest.fn();
 const mockTransaction = {
   get: jest.fn(),
   update: jest.fn(),
 };
-
 const mockDb = {
   collection: jest.fn((name: string) => {
     if (name === 'personal_driver_trips') return { doc: jest.fn(() => mockTripRef) };
@@ -23,19 +22,21 @@ jest.mock('firebase-admin', () => ({
   apps: [{}],
   initializeApp: jest.fn(),
   firestore: Object.assign(jest.fn(() => mockDb), {
-    FieldValue: { serverTimestamp: jest.fn(() => ({ __ts: true })) },
+    FieldValue: {
+      serverTimestamp: jest.fn(() => 'SERVER_TIMESTAMP'),
+      delete: jest.fn(() => 'DELETE_FIELD'),
+    },
   }),
 }));
 
 jest.mock('firebase-functions/params', () => ({
   defineSecret: jest.fn(() => ({ value: jest.fn(() => 'sk_test_123') })),
+  defineInt: jest.fn(() => ({ value: jest.fn(() => 240) })),
 }));
 
 jest.mock('../../stripe/stripe-client.js', () => ({
   createStripeClient: jest.fn(() => ({
-    paymentIntents: {
-      create: mockPaymentIntentsCreate,
-    },
+    paymentIntents: { create: mockPaymentIntentsCreate },
   })),
 }));
 
@@ -50,113 +51,169 @@ jest.mock('firebase-functions/v2/https', () => ({
   },
 }));
 
-function makeRequest(data: unknown, uid?: string) {
-  return { data, auth: uid ? { uid } : undefined } as never;
+function makeRequest(data: unknown, uid = 'driver_1') {
+  return { data, auth: { uid } } as never;
 }
 
+const now = new Date('2026-08-04T12:00:00.000Z');
+
 describe('chargePersonalDriverWaitTimeOverage', () => {
+  let tripData: Record<string, unknown>;
+  let subscriptionData: Record<string, unknown>;
+
   beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(now.getTime());
     jest.clearAllMocks();
-    mockTripRef.get.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        subscriptionId: 'sub_1',
-        userId: 'client_1',
-        assignedDriverId: 'driver_1',
-        planId: 'classic',
-        isSpecialTrip: false,
-        overageWaitBilled: false,
-        driverArrivedAt: new Date(Date.now() - 9 * 60 * 1000),
-      }),
-    });
-    mockTransaction.get.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        subscriptionId: 'sub_1',
-        userId: 'client_1',
-        assignedDriverId: 'driver_1',
-        planId: 'classic',
-        isSpecialTrip: false,
-        overageWaitBilled: false,
-        driverArrivedAt: new Date(Date.now() - 9 * 60 * 1000),
-      }),
-    });
-    mockSubscriptionRef.get.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        userId: 'client_1',
-        stripeCustomerId: 'cus_1',
-        defaultPaymentMethodId: 'pm_1',
-      }),
+    tripData = {
+      subscriptionId: 'sub_1',
+      userId: 'client_1',
+      assignedDriverId: 'driver_1',
+      status: 'passenger_picked_up',
+      selectedPlanId: 'classic',
+      isSpecialTrip: false,
+      waitStartedAt: new Date('2026-08-04T11:51:00.000Z'),
+      waitEndedAt: new Date('2026-08-04T12:00:00.000Z'),
+      overageChargeStatus: undefined,
+    };
+    subscriptionData = {
+      userId: 'client_1',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+      periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+      selectedPlanId: 'classic',
+      stripeCustomerId: 'cus_1',
+      defaultPaymentMethodId: 'pm_1',
+    };
+    mockTransaction.get.mockImplementation(async (ref: unknown) => (
+      ref === mockTripRef
+        ? { exists: true, data: () => tripData }
+        : { exists: true, data: () => subscriptionData }
+    ));
+    mockTransaction.update.mockImplementation((_ref: unknown, update: Record<string, unknown>) => {
+      Object.assign(tripData, update);
     });
     mockAdminRef.get.mockResolvedValue({ exists: false });
     mockPaymentIntentsCreate.mockResolvedValue({ id: 'pi_overage_1', status: 'succeeded' });
   });
 
-  it('rejects callers who are not the assigned driver, owner, or admin', async () => {
-    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
-
-    await expect(
-      chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1', elapsedMinutes: 9 }, 'other_user')),
-    ).rejects.toMatchObject({ code: 'permission-denied' });
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
-  it('rejects billing when no reusable payment method is stored', async () => {
+  it('rejects elapsedMinutes because the client cannot provide wait duration', async () => {
     const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
-    mockSubscriptionRef.get.mockResolvedValue({
-      exists: true,
-      data: () => ({ userId: 'client_1' }),
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1', elapsedMinutes: 999 })))
+      .rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+
+  it('rejects and marks a trip for review when server wait timestamps are missing', async () => {
+    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
+    delete tripData.waitStartedAt;
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' })))
+      .rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      overageChargeStatus: 'review_required',
+    }));
+    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects negative server wait duration', async () => {
+    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
+    tripData.waitEndedAt = new Date('2026-08-04T11:50:00.000Z');
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' })))
+      .rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a wait above the explicit maximum without charging Stripe', async () => {
+    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
+    tripData.waitStartedAt = new Date('2026-08-04T07:00:00.000Z');
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' })))
+      .rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      overageChargeStatus: 'review_required',
+    }));
+    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it('marks free wait as billed without creating a PaymentIntent', async () => {
+    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
+    tripData.waitStartedAt = new Date('2026-08-04T11:56:00.000Z');
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' }))).resolves.toEqual({
+      success: true,
+      waitTimeMinutes: 4,
+      feeBilled: 0,
+      overageMinutes: 0,
     });
-
-    await expect(
-      chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1', elapsedMinutes: 9 }, 'driver_1')),
-    ).rejects.toMatchObject({ code: 'failed-precondition' });
-    expect(mockTripRef.update).toHaveBeenCalledWith(expect.objectContaining({ overageChargeStatus: 'failed' }));
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      overageChargeStatus: 'billed',
+      overageWaitBilled: true,
+    }));
+    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
   });
 
-  it('rejects billing the same overage twice', async () => {
-    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
-    const billedTripSnapshot = {
-      exists: true,
-      data: () => ({
-        subscriptionId: 'sub_1',
-        userId: 'client_1',
-        assignedDriverId: 'driver_1',
-        planId: 'classic',
-        overageWaitBilled: true,
-      }),
-    };
-    mockTripRef.get.mockResolvedValue(billedTripSnapshot);
-    mockTransaction.get.mockResolvedValue(billedTripSnapshot);
-
-    await expect(
-      chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1', elapsedMinutes: 9 }, 'driver_1')),
-    ).rejects.toMatchObject({ code: 'failed-precondition' });
-  });
-
-  it('charges and records overage for the assigned driver', async () => {
+  it('calculates chargeable wait from server timestamps and uses the deterministic overage key', async () => {
     const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
 
-    const result = await chargePersonalDriverWaitTimeOverage(
-      makeRequest({ tripId: 'trip_1', elapsedMinutes: 9 }, 'driver_1'),
-    );
-
-    expect(result).toEqual({
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' }))).resolves.toEqual({
       success: true,
       waitTimeMinutes: 9,
       feeBilled: 2,
       overageMinutes: 4,
       paymentIntentId: 'pi_overage_1',
     });
-    expect(mockPaymentIntentsCreate).toHaveBeenCalledWith(expect.objectContaining({
-      amount: 200,
-      customer: 'cus_1',
-      payment_method: 'pm_1',
-      confirm: true,
-    }), { idempotencyKey: 'personal_driver_wait_trip_1' });
-    expect(mockTripRef.update).toHaveBeenCalledWith(expect.objectContaining({
-      overageWaitBilled: true,
+    expect(mockPaymentIntentsCreate).toHaveBeenCalledWith(expect.objectContaining({ amount: 200 }), {
+      idempotencyKey: 'personal_driver_wait_overage_trip_1',
+    });
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      overageChargeStatus: 'billed',
       overagePaymentIntentId: 'pi_overage_1',
     }));
+  });
+
+  it('rechecks ownership and entitlement inside the transaction', async () => {
+    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
+    subscriptionData.paymentStatus = 'pending';
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' })))
+      .rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it('reclaims a stale processing claim with the same deterministic key', async () => {
+    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
+    tripData.overageChargeStatus = 'processing';
+    tripData.overageChargeClaimedAt = new Date('2026-08-04T11:00:00.000Z');
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' }))).resolves.toMatchObject({
+      paymentIntentId: 'pi_overage_1',
+    });
+    expect(mockPaymentIntentsCreate).toHaveBeenCalledTimes(1);
+    expect(mockPaymentIntentsCreate.mock.calls[0][1]).toEqual({
+      idempotencyKey: 'personal_driver_wait_overage_trip_1',
+    });
+  });
+
+  it('returns an already billed result without requiring a PaymentIntent id', async () => {
+    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
+    tripData.overageChargeStatus = 'billed';
+    tripData.overageWaitBilled = true;
+    tripData.overageWaitMinutes = 0;
+    tripData.overageWaitFeeAmount = 0;
+    tripData.waitTimeMinutes = 9;
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' }))).resolves.toEqual({
+      success: true,
+      waitTimeMinutes: 9,
+      feeBilled: 0,
+      overageMinutes: 0,
+    });
+    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
@@ -37,7 +37,7 @@ export function PersonalDriverDriverPageClient() {
     return () => clearInterval(interval);
   }, [isWaiting, waitStartTime]);
 
-  const loadAssignedTrips = async () => {
+  const loadAssignedTrips = useCallback(async () => {
     if (!currentUser?.uid) return;
     setLoadingTrips(true);
     try {
@@ -55,11 +55,11 @@ export function PersonalDriverDriverPageClient() {
     } finally {
       setLoadingTrips(false);
     }
-  };
+  }, [currentUser?.uid]);
 
   useEffect(() => {
     void loadAssignedTrips();
-  }, [currentUser?.uid]);
+  }, [loadAssignedTrips]);
 
   const handleUpdateStatus = async (status: string) => {
     if (!tripId.trim()) return;

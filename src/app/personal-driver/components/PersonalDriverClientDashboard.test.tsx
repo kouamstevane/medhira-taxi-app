@@ -60,6 +60,32 @@ describe('PersonalDriverClientDashboard Component', () => {
       expect(screen.getByText(/Paiement en attente/i)).toBeInTheDocument();
       expect(screen.getByText(/440 km/i)).toBeInTheDocument();
       expect(screen.getAllByText(/100 rue Principale/i).length).toBeGreaterThan(0);
+      expect(screen.getByRole('button', { name: /Demander un trajet spécial/i })).toBeDisabled();
+    });
+  });
+
+  it('enables special trips only for an active paid package and shows exact persisted dates', async () => {
+    (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
+      id: 'sub_active',
+      userId: 'user_123',
+      selectedPlanId: 'classic',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      monthlyDistanceKm: 440,
+      periodStartDate: '2026-08-01',
+      periodEndDateExclusive: '2026-08-31',
+      periodStartAtUtc: '2026-08-01T04:00:00.000Z',
+      periodEndAtUtc: '2026-08-31T04:00:00.000Z',
+      pickupAddress: '100 rue Principale',
+      destinationAddress: '500 rue Universite',
+    });
+    (getPersonalDriverTripsForSubscription as jest.Mock).mockResolvedValue([]);
+
+    render(<PersonalDriverClientDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Période : 2026-08-01 → 2026-08-31/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Demander un trajet spécial/i })).toBeEnabled();
     });
   });
 });

@@ -102,6 +102,7 @@ describe('Personal Driver Stripe webhook', () => {
       periodStartAtUtc: new Date('2026-08-01T04:00:00.000Z'),
       periodEndAtUtc: new Date('2026-08-31T04:00:00.000Z'),
       serviceTimeZone: 'America/Toronto',
+      selectedPlanId: 'classic',
       pickupLocation: { latitude: 45.5, longitude: -73.5 },
       destinationLocation: { latitude: 45.6, longitude: -73.6 },
       selectedWeekdays: [1],
@@ -111,6 +112,16 @@ describe('Personal Driver Stripe webhook', () => {
       destinationAddress: 'B',
       distanceOneWayKm: 10,
       distanceReturnKm: 0,
+      monthlyDistanceKm: 220,
+      monthlyDistanceKmRemaining: 220,
+      includedSpecialTrips: 2,
+      specialTripsUsed: 0,
+      specialTripsDistanceUsedKm: 0,
+      taxStatus: 'pending_confirmation',
+      taxAmount: 0,
+      totalAmount: 450,
+      currency: 'cad',
+      selectedPlanPrice: { planId: 'classic', totalBeforeTax: 450 },
     });
     Object.keys(subscriptionData)
       .filter((key) => ![
@@ -122,6 +133,7 @@ describe('Personal Driver Stripe webhook', () => {
         'periodStartAtUtc',
         'periodEndAtUtc',
         'serviceTimeZone',
+        'selectedPlanId',
         'pickupLocation',
         'destinationLocation',
         'selectedWeekdays',
@@ -131,6 +143,16 @@ describe('Personal Driver Stripe webhook', () => {
         'destinationAddress',
         'distanceOneWayKm',
         'distanceReturnKm',
+        'monthlyDistanceKm',
+        'monthlyDistanceKmRemaining',
+        'includedSpecialTrips',
+        'specialTripsUsed',
+        'specialTripsDistanceUsedKm',
+        'taxStatus',
+        'taxAmount',
+        'totalAmount',
+        'currency',
+        'selectedPlanPrice',
       ].includes(key))
       .forEach((key) => delete subscriptionData[key]);
 
@@ -220,6 +242,41 @@ describe('Personal Driver Stripe webhook', () => {
     expect(mockTransaction.update).not.toHaveBeenCalled();
     expect(mockTransaction.set).not.toHaveBeenCalled();
     expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+
+  it('keeps payment successful data inactive when authoritative quota or tax fields are missing', async () => {
+    const { stripeWebhookInstant } = require('../../stripe/index');
+    delete subscriptionData.includedSpecialTrips;
+    const request = {
+      method: 'POST',
+      headers: { 'stripe-signature': 'signature' },
+      rawBody: Buffer.from('{}'),
+    };
+    const res = response();
+
+    await stripeWebhookInstant(request, res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(mockTransaction.update).not.toHaveBeenCalled();
+    expect(subscriptionData.status).toBe('pending_payment');
+    expect(mockGeneratePersonalDriverTrips).not.toHaveBeenCalled();
+  });
+
+  it('does not activate a pending package whose initial quota was already consumed', async () => {
+    const { stripeWebhookInstant } = require('../../stripe/index');
+    subscriptionData.monthlyDistanceKmRemaining = 0;
+    const request = {
+      method: 'POST',
+      headers: { 'stripe-signature': 'signature' },
+      rawBody: Buffer.from('{}'),
+    };
+    const res = response();
+
+    await stripeWebhookInstant(request, res);
+
+    expect(res.json).toHaveBeenCalledWith({ received: true });
+    expect(mockTransaction.update).not.toHaveBeenCalled();
+    expect(subscriptionData.status).toBe('pending_payment');
   });
 
   it.each([
