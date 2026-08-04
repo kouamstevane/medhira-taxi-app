@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,6 +10,7 @@ import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing
 import {
   cancelPersonalDriverTripByClient,
   getCurrentPersonalDriverSubscription,
+  getPendingPersonalDriverRenewal,
   getPersonalDriverTripsForSubscription,
   requestSpecialTrip,
   renewPersonalDriverSubscriptionPayment,
@@ -73,6 +74,7 @@ export function PersonalDriverClientDashboard() {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<PersonalDriverSubscription | null>(null);
+  const [pendingRenewal, setPendingRenewal] = useState<PersonalDriverSubscription | null>(null);
   const [trips, setTrips] = useState<PersonalDriverTrip[]>([]);
   const [selectedTripToCancel, setSelectedTripToCancel] = useState<PersonalDriverTrip | null>(null);
   const [showSpecialTripModal, setShowSpecialTripModal] = useState(false);
@@ -87,12 +89,17 @@ export function PersonalDriverClientDashboard() {
   const [renewalLoading, setRenewalLoading] = useState(false);
   const [renewalPayment, setRenewalPayment] = useState<RenewPersonalDriverSubscriptionPaymentResult | null>(null);
   const [renewalError, setRenewalError] = useState<string | null>(null);
+  const renewalRecoveryAttemptRef = useRef<string | null>(null);
 
   const reloadData = useCallback(async () => {
     if (!currentUser?.uid) return;
     try {
-      const sub = await getCurrentPersonalDriverSubscription(currentUser.uid);
+      const [sub, pending] = await Promise.all([
+        getCurrentPersonalDriverSubscription(currentUser.uid),
+        getPendingPersonalDriverRenewal(currentUser.uid),
+      ]);
       setSubscription(sub);
+      setPendingRenewal(pending);
       if (sub?.id) {
         const tripList = await getPersonalDriverTripsForSubscription(sub.id);
         setTrips(tripList);
@@ -112,6 +119,26 @@ export function PersonalDriverClientDashboard() {
     }
     loadData();
   }, [currentUser?.uid, reloadData]);
+
+  useEffect(() => {
+    if (
+      !subscription
+      || !pendingRenewal
+      || renewalPayment
+      || renewalLoading
+      || renewalRecoveryAttemptRef.current === pendingRenewal.id
+    ) return;
+    renewalRecoveryAttemptRef.current = pendingRenewal.id;
+    const sourceSubscriptionId = pendingRenewal.sourceSubscriptionId ?? subscription.id;
+    setRenewalLoading(true);
+    setRenewalError(null);
+    renewPersonalDriverSubscriptionPayment(sourceSubscriptionId, `recover-${pendingRenewal.id}`)
+      .then(setRenewalPayment)
+      .catch((err) => {
+        setRenewalError(err instanceof Error ? err.message : 'Impossible de récupérer le renouvellement.');
+      })
+      .finally(() => setRenewalLoading(false));
+  }, [pendingRenewal, renewalLoading, renewalPayment, subscription]);
 
   const handleCancelTrip = async () => {
     if (!selectedTripToCancel) return;
@@ -158,7 +185,7 @@ export function PersonalDriverClientDashboard() {
   };
 
   const handleRenewal = async () => {
-    if (!subscription || renewalLoading) return;
+    if (!subscription || renewalLoading || renewalPayment || pendingRenewal) return;
     setRenewalLoading(true);
     setRenewalError(null);
     try {
@@ -281,7 +308,7 @@ export function PersonalDriverClientDashboard() {
           <button
             type="button"
             onClick={handleRenewal}
-            disabled={renewalLoading}
+            disabled={renewalLoading || !!renewalPayment || !!pendingRenewal}
             className="min-h-10 rounded-lg bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
           >
             {renewalLoading ? 'Préparation...' : 'Renouveler'}

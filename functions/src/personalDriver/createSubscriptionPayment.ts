@@ -18,12 +18,20 @@ import { calculateAuthoritativeMonthlyDistanceKm, calculateServerRoute } from '.
 import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js';
 import { localDateTimeToUtc, resolveAddressCoordinates, resolvePickupLocationAndTimeZone } from './locationTimeZone.js';
 import { assertValidSubscriptionSchedule } from './subscriptionSchedule.js';
+import {
+  claimSubscriptionPeriodLock,
+  createSubscriptionPeriodLockStripeIdempotencyKey,
+  markSubscriptionPeriodLockPendingPayment,
+  releaseSubscriptionPeriodLock,
+  type ClaimSubscriptionPeriodLockResult,
+} from './subscriptionPeriodLock.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const CURRENCY = DEFAULT_CURRENCY;
 const MAX_AMOUNT = 10000;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-const PAYMENT_CREATION_CLAIM_TIMEOUT_MS = 15 * 60 * 1000;
+const PAYMENT_RESULT_WAIT_TIMEOUT_MS = 30 * 1000;
+const PAYMENT_RESULT_POLL_INTERVAL_MS = 100;
 
 let stripe: InstanceType<typeof Stripe> | null = null;
 
@@ -100,12 +108,6 @@ interface UserPaymentProfile {
   defaultPaymentMethodId?: string;
 }
 
-interface SubscriptionPaymentClaim {
-  isCreator: boolean;
-  data?: FirebaseFirestore.DocumentData;
-  paymentCreationAttempt?: number;
-}
-
 function getPersistedAuthoritativeQuote(
   data: FirebaseFirestore.DocumentData,
 ): PersonalDriverAuthoritativeQuote {
@@ -150,21 +152,6 @@ async function getPersistedPaymentReplay(
   };
 }
 
-function getPaymentCreationAttempt(data: FirebaseFirestore.DocumentData | undefined): number {
-  const attempt = data?.paymentCreationAttempt;
-  return typeof attempt === 'number' && Number.isSafeInteger(attempt) && attempt > 0 ? attempt : 1;
-}
-
-function isPaymentCreationClaimStale(data: FirebaseFirestore.DocumentData, now: Date): boolean {
-  const claimedAt = data.paymentCreationClaimedAt;
-  const claimedAtDate = claimedAt instanceof Date
-    ? claimedAt
-    : claimedAt && typeof claimedAt.toDate === 'function'
-      ? claimedAt.toDate()
-      : null;
-  return !claimedAtDate || now.getTime() - claimedAtDate.getTime() >= PAYMENT_CREATION_CLAIM_TIMEOUT_MS;
-}
-
 function getPaymentCreationError(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 500) : 'Erreur inconnue lors de la création du paiement.';
 }
@@ -186,30 +173,51 @@ async function getUserPaymentProfile(
 async function markPaymentCreationFailed(
   db: FirebaseFirestore.Firestore,
   subscriptionRef: FirebaseFirestore.DocumentReference,
-  paymentCreationClaimId: string,
+  lockRef: FirebaseFirestore.DocumentReference,
+  paymentCreationOwnerId: string,
   error: unknown,
-  advancePaymentCreationAttempt: boolean,
 ): Promise<void> {
   await db.runTransaction(async (transaction) => {
     const subscription = await transaction.get(subscriptionRef);
-    if (!subscription.exists) return;
-
     const data = subscription.data();
     if (
-      !data
+      !subscription.exists
+      || !data
       || data.paymentStatus !== 'creating'
-      || data.paymentCreationClaimId !== paymentCreationClaimId
+      || data.paymentCreationOwnerId !== paymentCreationOwnerId
     ) {
       return;
     }
 
+    const released = await releaseSubscriptionPeriodLock(transaction, lockRef, {
+      subscriptionId: subscriptionRef.id,
+      ownerId: paymentCreationOwnerId,
+    });
+    if (!released) return;
+
     transaction.update(subscriptionRef, {
-      paymentStatus: 'creating',
+      status: 'payment_failed',
+      paymentStatus: 'failed',
       paymentCreationFailedAt: new Date(),
       paymentCreationError: getPaymentCreationError(error),
-      paymentCreationAttempt: getPaymentCreationAttempt(data) + (advancePaymentCreationAttempt ? 1 : 0),
     });
   });
+}
+
+async function waitForSubscriptionPayment(
+  subscriptionRef: FirebaseFirestore.DocumentReference,
+  timeoutMs = PAYMENT_RESULT_WAIT_TIMEOUT_MS,
+): Promise<FirebaseFirestore.DocumentData> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const snapshot = await subscriptionRef.get();
+    if (snapshot.exists) {
+      const data = snapshot.data();
+      if (data?.paymentStatus !== 'creating') return data ?? {};
+    }
+    await new Promise((resolve) => setTimeout(resolve, PAYMENT_RESULT_POLL_INTERVAL_MS));
+  }
+  throw new HttpsError('aborted', 'Création du paiement trop longue. Veuillez réessayer.');
 }
 
 export const createPersonalDriverSubscriptionPayment = onCall(
@@ -233,10 +241,14 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     }
 
     const db = getDb();
-    const subscriptionRef = db.collection('personal_driver_subscriptions')
+    const requestedSubscriptionRef = db.collection('personal_driver_subscriptions')
       .doc(createSubscriptionId(userId, input.requestId));
-    const subscriptionId = subscriptionRef.id;
-    const persistedReplay = await getPersistedPaymentReplay(subscriptionRef, subscriptionId, userId);
+    const requestedSubscriptionId = requestedSubscriptionRef.id;
+    const persistedReplay = await getPersistedPaymentReplay(
+      requestedSubscriptionRef,
+      requestedSubscriptionId,
+      userId,
+    );
     if (persistedReplay) return persistedReplay;
 
     const now = new Date();
@@ -300,56 +312,46 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     const periodStartAtUtc = localDateTimeToUtc(input.startDate, '00:00', pickupLocation.serviceTimeZone);
     const periodEndAtUtc = localDateTimeToUtc(periodEndDateExclusive, '00:00', pickupLocation.serviceTimeZone);
 
-    const paymentCreationClaimId = randomUUID();
+    const paymentCreationOwnerId = randomUUID();
     const paymentCreationClaimedAt = new Date();
-    const subscriptionClaim = await db.runTransaction<SubscriptionPaymentClaim>(async (transaction) => {
-      const existingSubscription = await transaction.get(subscriptionRef);
-      if (existingSubscription.exists) {
-        const existingData = existingSubscription.data();
-        if (!existingData) {
-          return { isCreator: false };
-        }
-
-        const canReclaim = existingData.paymentStatus === 'creating'
-          && (
-            Boolean(existingData.paymentCreationError)
-            || isPaymentCreationClaimStale(existingData, paymentCreationClaimedAt)
-          );
-        if (!canReclaim) {
-          return { isCreator: false, data: existingData };
-        }
-
-        const paymentCreationAttempt = getPaymentCreationAttempt(existingData);
-        transaction.update(subscriptionRef, {
-          paymentStatus: 'creating',
-          paymentCreationClaimId,
-          paymentCreationClaimedAt,
-          paymentCreationError: null,
-        });
-        return { isCreator: true, paymentCreationAttempt };
-      }
-
-      transaction.create(subscriptionRef, {
-        id: subscriptionId,
+    const subscriptionClaim = await db.runTransaction<ClaimSubscriptionPeriodLockResult>(async (transaction) => {
+      const periodClaim = await claimSubscriptionPeriodLock(transaction, db, {
         userId,
+        periodStartDate: input.startDate,
+        requestedSubscriptionId,
+        ownerId: paymentCreationOwnerId,
+        now: paymentCreationClaimedAt,
+      });
+      if (periodClaim.kind === 'existing') return periodClaim;
+
+      const claimedSubscriptionRef = db.collection('personal_driver_subscriptions').doc(periodClaim.subscriptionId);
+      const creatingData = {
+        id: periodClaim.subscriptionId,
+        userId,
+        periodStartDate: input.startDate,
         status: 'pending_payment',
         paymentStatus: 'creating',
-        paymentCreationClaimId,
+        paymentCreationOwnerId,
         paymentCreationClaimedAt,
-        paymentCreationAttempt: 1,
-        createdAt: new Date(),
-      });
-      return { isCreator: true, paymentCreationAttempt: 1 };
+        paymentCreationAttempt: periodClaim.attempt,
+        paymentCreationError: null,
+      };
+      if (periodClaim.subscriptionExists) {
+        transaction.update(claimedSubscriptionRef, creatingData);
+      } else {
+        transaction.create(claimedSubscriptionRef, { ...creatingData, createdAt: paymentCreationClaimedAt });
+      }
+      return periodClaim;
     });
+    const subscriptionId = subscriptionClaim.subscriptionId;
+    const subscriptionRef = db.collection('personal_driver_subscriptions').doc(subscriptionId);
 
-    if (!subscriptionClaim.isCreator) {
-      const existingData = subscriptionClaim.data;
+    if (subscriptionClaim.kind === 'existing') {
+      const existingData = subscriptionClaim.state === 'creating'
+        ? await waitForSubscriptionPayment(subscriptionRef)
+        : (await subscriptionRef.get()).data();
       if (!existingData || existingData.userId !== request.auth.uid) {
         throw new HttpsError('internal', 'Impossible de récupérer le paiement existant.');
-      }
-
-      if (existingData.paymentStatus === 'creating') {
-        throw new HttpsError('aborted', 'Création du paiement en cours. Veuillez réessayer.');
       }
 
       if (!existingData.stripePaymentIntentId) {
@@ -372,7 +374,6 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     }
 
     const amountInSmallestUnit = Math.round(quote.totalAmount * 100);
-    const paymentCreationAttempt = subscriptionClaim.paymentCreationAttempt ?? 1;
     const userPaymentProfile = await getUserPaymentProfile(db, request.auth.uid);
     const paymentIntent = await getStripe().paymentIntents.create(
       {
@@ -389,10 +390,22 @@ export const createPersonalDriverSubscriptionPayment = onCall(
         description: `Abonnement chauffeur personnel #${subscriptionId}`,
         automatic_payment_methods: { enabled: true },
       },
-      { idempotencyKey: `personal_driver_subscription_${subscriptionId}_${paymentCreationAttempt}` },
+      {
+        idempotencyKey: createSubscriptionPeriodLockStripeIdempotencyKey(
+          subscriptionClaim.lockId,
+          subscriptionId,
+          subscriptionClaim.attempt,
+        ),
+      },
     ).catch(async (error) => {
       try {
-        await markPaymentCreationFailed(db, subscriptionRef, paymentCreationClaimId, error, false);
+        await markPaymentCreationFailed(
+          db,
+          subscriptionRef,
+          subscriptionClaim.lockRef,
+          paymentCreationOwnerId,
+          error,
+        );
       } catch (markError) {
         console.error('[createPersonalDriverSubscriptionPayment] Failed to mark PaymentIntent creation failure', {
           subscriptionId,
@@ -405,60 +418,79 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       await markPaymentCreationFailed(
         db,
         subscriptionRef,
-        paymentCreationClaimId,
+        subscriptionClaim.lockRef,
+        paymentCreationOwnerId,
         new Error('PaymentIntent client_secret missing'),
-        false,
       );
       throw new HttpsError('internal', 'Impossible de créer le PaymentIntent : client_secret manquant.');
     }
 
-    const batch = db.batch();
-    batch.set(subscriptionRef, {
-      id: subscriptionId,
-      userId: request.auth.uid,
-      status: 'pending_payment',
-      selectedPlanId,
-      pickupAddress: input.pickupAddress,
-      destinationAddress: input.destinationAddress,
-      tripType: input.tripType,
-      selectedWeekdays,
-      departureTime: input.departureTime,
-      returnTime: input.returnTime ?? null,
-      startDate: input.startDate,
-      periodStartDate: input.startDate,
-      periodEndDateExclusive,
-      periodStartAtUtc,
-      periodEndAtUtc,
-      serviceTimeZone: pickupLocation.serviceTimeZone,
-      pickupLocation: {
-        latitude: pickupLocation.latitude,
-        longitude: pickupLocation.longitude,
-      },
-      destinationLocation,
-      distanceOneWayKm: quote.distanceOneWayKm,
-      distanceReturnKm: quote.distanceReturnKm,
-      monthlyDistanceKm: quote.monthlyDistanceKm,
-      monthlyDistanceKmRemaining: quote.monthlyDistanceKm,
-      includedSpecialTrips: SPECIAL_TRIP_LIMITS[selectedPlanId],
-      specialTripsUsed: 0,
-      specialTripsDistanceUsedKm: 0,
-      passengerCount: input.passengerCount,
-      notes: input.notes ?? null,
-      selectedPlanPrice: quote.selectedPlanPrice,
-      priceComparison,
-      taxAmount: quote.taxAmount,
-      taxStatus: 'pending_confirmation',
-      totalAmount: quote.totalAmount,
-      currency: quote.currency,
-      stripePaymentIntentId: paymentIntent.id,
-      stripeCustomerId: userPaymentProfile.stripeCustomerId ?? null,
-      defaultPaymentMethodId: userPaymentProfile.defaultPaymentMethodId ?? null,
-      paymentStatus: 'pending',
-      createdAt: new Date(),
-    });
     try {
-      await batch.commit();
+      await db.runTransaction(async (transaction) => {
+        const subscriptionSnapshot = await transaction.get(subscriptionRef);
+        const lockFinalized = await markSubscriptionPeriodLockPendingPayment(
+          transaction,
+          subscriptionClaim.lockRef,
+          {
+            subscriptionId,
+            ownerId: paymentCreationOwnerId,
+            paymentIntentId: paymentIntent.id,
+            now: new Date(),
+          },
+        );
+        if (
+          !lockFinalized
+          || !subscriptionSnapshot.exists
+          || subscriptionSnapshot.data()?.paymentStatus !== 'creating'
+          || subscriptionSnapshot.data()?.paymentCreationOwnerId !== paymentCreationOwnerId
+        ) {
+          throw new HttpsError('aborted', 'La création du paiement a déjà été traitée.');
+        }
+        transaction.update(subscriptionRef, {
+          id: subscriptionId,
+          userId,
+          status: 'pending_payment',
+          selectedPlanId,
+          pickupAddress: input.pickupAddress,
+          destinationAddress: input.destinationAddress,
+          tripType: input.tripType,
+          selectedWeekdays,
+          departureTime: input.departureTime,
+          returnTime: input.returnTime ?? null,
+          startDate: input.startDate,
+          periodStartDate: input.startDate,
+          periodEndDateExclusive,
+          periodStartAtUtc,
+          periodEndAtUtc,
+          serviceTimeZone: pickupLocation.serviceTimeZone,
+          pickupLocation: {
+            latitude: pickupLocation.latitude,
+            longitude: pickupLocation.longitude,
+          },
+          destinationLocation,
+          distanceOneWayKm: quote.distanceOneWayKm,
+          distanceReturnKm: quote.distanceReturnKm,
+          monthlyDistanceKm: quote.monthlyDistanceKm,
+          monthlyDistanceKmRemaining: quote.monthlyDistanceKm,
+          includedSpecialTrips: SPECIAL_TRIP_LIMITS[selectedPlanId],
+          specialTripsUsed: 0,
+          specialTripsDistanceUsedKm: 0,
+          passengerCount: input.passengerCount,
+          notes: input.notes ?? null,
+          selectedPlanPrice: quote.selectedPlanPrice,
+          priceComparison,
+          taxAmount: quote.taxAmount,
+          taxStatus: 'pending_confirmation',
+          totalAmount: quote.totalAmount,
+          currency: quote.currency,
+          stripePaymentIntentId: paymentIntent.id,
+          stripeCustomerId: userPaymentProfile.stripeCustomerId ?? null,
+          defaultPaymentMethodId: userPaymentProfile.defaultPaymentMethodId ?? null,
+          paymentStatus: 'pending',
+        });
+      });
     } catch (error) {
+      if (error instanceof HttpsError && error.code === 'aborted') throw error;
       let paymentIntentIsOrphaned = false;
       try {
         const persistedSubscription = await subscriptionRef.get();
@@ -484,19 +516,21 @@ export const createPersonalDriverSubscriptionPayment = onCall(
             error: cancelError instanceof Error ? cancelError.message : cancelError,
           });
         }
-        try {
-          await markPaymentCreationFailed(
-            db,
-            subscriptionRef,
-            paymentCreationClaimId,
-            error,
-            paymentIntentWasCancelled,
-          );
-        } catch (markError) {
-          console.error('[createPersonalDriverSubscriptionPayment] Failed to mark subscription persistence failure', {
-            subscriptionId,
-            error: markError instanceof Error ? markError.message : markError,
-          });
+        if (paymentIntentWasCancelled) {
+          try {
+            await markPaymentCreationFailed(
+              db,
+              subscriptionRef,
+              subscriptionClaim.lockRef,
+              paymentCreationOwnerId,
+              error,
+            );
+          } catch (markError) {
+            console.error('[createPersonalDriverSubscriptionPayment] Failed to mark subscription persistence failure', {
+              subscriptionId,
+              error: markError instanceof Error ? markError.message : markError,
+            });
+          }
         }
       }
       throw new HttpsError('internal', 'Impossible d’enregistrer l’abonnement.');

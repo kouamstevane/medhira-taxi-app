@@ -1,17 +1,21 @@
 const sourceRef = { id: 'sub_old', get: jest.fn() };
 const newRef = { id: 'sub_new', get: jest.fn() };
+const lockRef = { id: 'period_lock' };
 export {};
 
 const mockTransaction = {
   get: jest.fn(),
   create: jest.fn(),
   update: jest.fn(),
+  delete: jest.fn(),
 };
 const mockDb = {
   collection: jest.fn((name: string) => ({
     doc: (id: string) => name === 'personal_driver_subscriptions'
       ? (id === 'sub_old' ? sourceRef : newRef)
-      : { id },
+      : name === 'personal_driver_subscription_locks'
+        ? lockRef
+        : { id },
   })),
   runTransaction: jest.fn(async (callback: (transaction: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction)),
 };
@@ -103,6 +107,7 @@ const sourceSubscription = {
 
 describe('renewPersonalDriverSubscriptionPayment', () => {
   let transactionData: Record<string, unknown> | undefined;
+  let lockData: Record<string, unknown> | undefined;
 
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
@@ -111,19 +116,32 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
     sourceRef.get.mockResolvedValue({ exists: true, data: () => sourceSubscription });
     newRef.get.mockResolvedValue({ exists: false });
     transactionData = undefined;
-    mockTransaction.get.mockImplementation(async () => (
-      transactionData ? { exists: true, data: () => transactionData } : { exists: false }
-    ));
-    mockTransaction.create.mockImplementation((_ref, data) => {
-      transactionData = data;
-      newRef.get.mockResolvedValue({ exists: true, data: () => data });
+    lockData = undefined;
+    mockTransaction.get.mockImplementation(async (ref) => {
+      const data = ref === lockRef ? lockData : transactionData;
+      return data ? { exists: true, data: () => data } : { exists: false };
     });
-    mockTransaction.update.mockImplementation((_ref, data) => {
-      transactionData = { ...transactionData, ...data };
-      newRef.get.mockResolvedValue({
-        exists: true,
-        data: () => ({ ...sourceSubscription, ...transactionData }),
-      });
+    mockTransaction.create.mockImplementation((ref, data) => {
+      if (ref === lockRef) {
+        lockData = data;
+      } else {
+        transactionData = data;
+        newRef.get.mockResolvedValue({ exists: true, data: () => transactionData });
+      }
+    });
+    mockTransaction.update.mockImplementation((ref, data) => {
+      if (ref === lockRef) {
+        lockData = { ...lockData, ...data };
+      } else {
+        transactionData = { ...transactionData, ...data };
+        newRef.get.mockResolvedValue({
+          exists: true,
+          data: () => ({ ...sourceSubscription, ...transactionData }),
+        });
+      }
+    });
+    mockTransaction.delete.mockImplementation((ref) => {
+      if (ref === lockRef) lockData = undefined;
     });
     mockCalculateServerRoute.mockResolvedValue({ distanceKm: 10, durationMinutes: 20 });
     mockResolveAddressCoordinates.mockResolvedValue({ latitude: 45.6, longitude: -73.6 });
@@ -303,7 +321,13 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
     const pendingRenewals = new Map<string, Record<string, unknown>>();
     mockDb.collection.mockImplementation((name: string) => ({
       doc: (id: string) => name === 'personal_driver_subscriptions'
-        ? (id === 'sub_old' ? sourceRef : { id })
+        ? (id === 'sub_old' ? sourceRef : {
+          id,
+          get: async () => {
+            const data = pendingRenewals.get(id);
+            return data ? { exists: true, data: () => data } : { exists: false };
+          },
+        })
         : { id },
     }));
     mockDb.runTransaction.mockImplementation(async (callback: (transaction: typeof mockTransaction) => Promise<unknown>) => {
@@ -316,6 +340,9 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
       });
       mockTransaction.update.mockImplementation((ref: { id: string }, data: Record<string, unknown>) => {
         pendingRenewals.set(ref.id, { ...pendingRenewals.get(ref.id), ...data });
+      });
+      mockTransaction.delete.mockImplementation((ref: { id: string }) => {
+        pendingRenewals.delete(ref.id);
       });
       return callback(mockTransaction);
     });

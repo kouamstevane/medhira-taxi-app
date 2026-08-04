@@ -84,17 +84,43 @@ export async function getCurrentPersonalDriverSubscription(
     collection(db, 'personal_driver_subscriptions'),
     where('userId', '==', userId),
     orderBy('createdAt', 'desc'),
-    limit(1),
+    limit(10),
   );
 
   const snapshot = await getDocs(q);
   if (snapshot.empty) return null;
 
-  const doc = snapshot.docs[0];
+  const doc = snapshot.docs.find((candidate) => {
+    const data = candidate.data();
+    return data.status === 'active' && data.paymentStatus === 'succeeded';
+  }) ?? snapshot.docs[0];
   return {
     id: doc.id,
     ...doc.data(),
   } as PersonalDriverSubscription;
+}
+
+export async function getPendingPersonalDriverRenewal(
+  userId: string,
+): Promise<PersonalDriverSubscription | null> {
+  if (!userId) return null;
+
+  const q = query(
+    collection(db, 'personal_driver_subscriptions'),
+    where('userId', '==', userId),
+    orderBy('createdAt', 'desc'),
+    limit(10),
+  );
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs.find((candidate) => {
+    const data = candidate.data();
+    return typeof data.sourceSubscriptionId === 'string'
+      && data.status === 'pending_payment'
+      && ['creating', 'pending', 'requires_action'].includes(data.paymentStatus);
+  });
+  if (!doc) return null;
+  return { id: doc.id, ...doc.data() } as PersonalDriverSubscription;
 }
 
 export async function getPersonalDriverTripsForSubscription(

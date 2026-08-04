@@ -2,7 +2,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import type Stripe from 'stripe';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { DEFAULT_CURRENCY } from '../config/stripe.js';
 import { googleMapsApiKey } from '../config/googleMaps.js';
@@ -16,11 +16,17 @@ import { getLocalCalendarDate, localDateTimeToUtc, resolveAddressCoordinates } f
 import { calculatePersonalDriverPrices, SPECIAL_TRIP_LIMITS } from './pricing.js';
 import type { PersonalDriverPlanId, PersonalDriverPlanPrice, PersonalDriverWeekday } from './pricing.js';
 import { assertValidSubscriptionSchedule } from './subscriptionSchedule.js';
+import {
+  claimSubscriptionPeriodLock,
+  createSubscriptionPeriodLockStripeIdempotencyKey,
+  markSubscriptionPeriodLockPendingPayment,
+  releaseSubscriptionPeriodLock,
+  type ClaimSubscriptionPeriodLockResult,
+} from './subscriptionPeriodLock.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const CURRENCY = DEFAULT_CURRENCY;
 const MAX_AMOUNT = 10000;
-const PAYMENT_CREATION_CLAIM_TIMEOUT_MS = 15 * 60 * 1000;
 const PAYMENT_RESULT_WAIT_TIMEOUT_MS = 30 * 1000;
 const PAYMENT_RESULT_POLL_INTERVAL_MS = 100;
 
@@ -67,11 +73,6 @@ function isCalendarDate(value: string): boolean {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
-function isClaimStale(data: FirebaseFirestore.DocumentData, now: Date): boolean {
-  const claimedAt = toDate(data.paymentCreationClaimedAt);
-  return !claimedAt || now.getTime() - claimedAt.getTime() >= PAYMENT_CREATION_CLAIM_TIMEOUT_MS;
-}
-
 function getPaymentCreationError(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 500) : 'Erreur inconnue lors de la création du paiement.';
 }
@@ -102,11 +103,6 @@ const inputSchema = z.object({
   sourceSubscriptionId: z.string().trim().min(1),
   requestId: z.string().trim().min(1).max(128),
 });
-
-interface RenewalClaim {
-  isCreator: boolean;
-  data?: FirebaseFirestore.DocumentData;
-}
 
 export interface PersonalDriverAuthoritativeQuote {
   distanceOneWayKm: number;
@@ -202,43 +198,45 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
       throw new HttpsError('failed-precondition', 'La date ou les horaires du forfait source sont invalides.');
     }
 
-    const renewalId = createRenewalId(userId, sourceSubscriptionId, requestId);
-    const renewalRef = db.collection('personal_driver_subscriptions').doc(renewalId);
-    const claim = await db.runTransaction<RenewalClaim>(async (transaction) => {
-      const existingSnapshot = await transaction.get(renewalRef);
-      if (existingSnapshot.exists) {
-        const existingData = existingSnapshot.data();
-        if (!existingData || existingData.userId !== userId || existingData.sourceSubscriptionId !== sourceSubscriptionId) {
-          throw new HttpsError('internal', 'Demande de renouvellement incohérente.');
-        }
-        const canReclaim = existingData.paymentStatus === 'failed'
-          || (existingData.paymentStatus === 'creating' && isClaimStale(existingData, now));
-        if (!canReclaim) return { isCreator: false, data: existingData };
-        transaction.update(renewalRef, {
-          status: 'pending_payment',
-          paymentStatus: 'creating',
-          paymentCreationClaimedAt: now,
-          paymentCreationError: null,
-        });
-        return { isCreator: true };
-      }
+    const requestedRenewalId = createRenewalId(userId, sourceSubscriptionId, requestId);
+    const paymentCreationOwnerId = randomUUID();
+    const claim = await db.runTransaction<ClaimSubscriptionPeriodLockResult>(async (transaction) => {
+      const periodClaim = await claimSubscriptionPeriodLock(transaction, db, {
+        userId,
+        periodStartDate,
+        requestedSubscriptionId: requestedRenewalId,
+        ownerId: paymentCreationOwnerId,
+        now,
+      });
+      if (periodClaim.kind === 'existing') return periodClaim;
 
-      transaction.create(renewalRef, {
-        id: renewalId,
+      const claimedRenewalRef = db.collection('personal_driver_subscriptions').doc(periodClaim.subscriptionId);
+      const creatingData = {
+        id: periodClaim.subscriptionId,
         userId,
         sourceSubscriptionId,
+        periodStartDate,
         status: 'pending_payment',
         paymentStatus: 'creating',
+        paymentCreationOwnerId,
         paymentCreationClaimedAt: now,
-        createdAt: now,
-      });
-      return { isCreator: true };
+        paymentCreationAttempt: periodClaim.attempt,
+        paymentCreationError: null,
+      };
+      if (periodClaim.subscriptionExists) {
+        transaction.update(claimedRenewalRef, creatingData);
+      } else {
+        transaction.create(claimedRenewalRef, { ...creatingData, createdAt: now });
+      }
+      return periodClaim;
     });
+    const renewalId = claim.subscriptionId;
+    const renewalRef = db.collection('personal_driver_subscriptions').doc(renewalId);
 
-    if (!claim.isCreator) {
-      const settledData = claim.data?.paymentStatus === 'creating'
+    if (claim.kind === 'existing') {
+      const settledData = claim.state === 'creating'
         ? await waitForRenewalPayment(renewalRef)
-        : claim.data;
+        : (await renewalRef.get()).data();
       if (settledData?.paymentStatus === 'failed') {
         throw new HttpsError('internal', 'Impossible de créer le paiement du renouvellement.');
       }
@@ -322,11 +320,26 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         description: `Renouvellement chauffeur personnel #${renewalId}`,
         automatic_payment_methods: { enabled: true },
       },
-      { idempotencyKey: `personal_driver_renewal_${renewalId}_1` },
+      {
+        idempotencyKey: createSubscriptionPeriodLockStripeIdempotencyKey(
+          claim.lockId,
+          renewalId,
+          claim.attempt,
+        ),
+      },
     ).catch(async (error) => {
       await db.runTransaction(async (transaction) => {
         const snapshot = await transaction.get(renewalRef);
-        if (snapshot.exists && snapshot.data()?.paymentStatus === 'creating') {
+        const released = await releaseSubscriptionPeriodLock(transaction, claim.lockRef, {
+          subscriptionId: renewalId,
+          ownerId: paymentCreationOwnerId,
+        });
+        if (
+          released
+          && snapshot.exists
+          && snapshot.data()?.paymentStatus === 'creating'
+          && snapshot.data()?.paymentCreationOwnerId === paymentCreationOwnerId
+        ) {
           transaction.update(renewalRef, {
             status: 'payment_failed',
             paymentStatus: 'failed',
@@ -340,7 +353,18 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
 
     await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(renewalRef);
-      if (!snapshot.exists || snapshot.data()?.paymentStatus !== 'creating') {
+      const lockFinalized = await markSubscriptionPeriodLockPendingPayment(transaction, claim.lockRef, {
+        subscriptionId: renewalId,
+        ownerId: paymentCreationOwnerId,
+        paymentIntentId: paymentIntent.id,
+        now: new Date(),
+      });
+      if (
+        !lockFinalized
+        || !snapshot.exists
+        || snapshot.data()?.paymentStatus !== 'creating'
+        || snapshot.data()?.paymentCreationOwnerId !== paymentCreationOwnerId
+      ) {
         throw new HttpsError('aborted', 'Le renouvellement a déjà été traité.');
       }
       transaction.update(renewalRef, {

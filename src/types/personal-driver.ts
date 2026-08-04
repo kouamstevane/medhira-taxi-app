@@ -76,6 +76,7 @@ export interface PersonalDriverPriceComparison {
 export interface PersonalDriverSubscription {
   id: string;
   userId: string;
+  sourceSubscriptionId?: string;
   planId?: PersonalDriverPlanId;
   selectedPlanId: PersonalDriverPlanId;
   status: PersonalDriverSubscriptionStatus;

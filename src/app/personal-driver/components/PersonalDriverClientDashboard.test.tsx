@@ -3,12 +3,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PersonalDriverClientDashboard } from './PersonalDriverClientDashboard';
 import {
   getCurrentPersonalDriverSubscription,
+  getPendingPersonalDriverRenewal,
   getPersonalDriverTripsForSubscription,
   renewPersonalDriverSubscriptionPayment,
 } from '@/services/personal-driver/subscription.service';
 
 jest.mock('@/services/personal-driver/subscription.service', () => ({
   getCurrentPersonalDriverSubscription: jest.fn(),
+  getPendingPersonalDriverRenewal: jest.fn(),
   getPersonalDriverTripsForSubscription: jest.fn(),
   renewPersonalDriverSubscriptionPayment: jest.fn(),
 }));
@@ -26,6 +28,7 @@ jest.mock('@/hooks/useAuth', () => ({
 describe('PersonalDriverClientDashboard Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (getPendingPersonalDriverRenewal as jest.Mock).mockResolvedValue(null);
   });
 
   it('renders no subscription message when user has no active subscription', async () => {
@@ -144,5 +147,47 @@ describe('PersonalDriverClientDashboard Component', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Renouveler' }));
 
     expect(await screen.findByRole('button', { name: /Payer 451,25.*US/ })).toBeVisible();
+  });
+
+  it('recovers a pending renewal payment after reload and disables another checkout', async () => {
+    (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
+      id: 'sub_active',
+      userId: 'user_123',
+      selectedPlanId: 'classic',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      monthlyDistanceKm: 440,
+      periodStartDate: '2026-08-01',
+      periodEndDateExclusive: '2026-08-31',
+      periodStartAtUtc: '2026-08-01T04:00:00.000Z',
+      periodEndAtUtc: '2026-08-31T04:00:00.000Z',
+      pickupAddress: '100 rue Principale',
+      destinationAddress: '500 rue Universite',
+    });
+    (getPendingPersonalDriverRenewal as jest.Mock).mockResolvedValue({
+      id: 'sub_pending',
+      userId: 'user_123',
+      sourceSubscriptionId: 'sub_active',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+    });
+    (getPersonalDriverTripsForSubscription as jest.Mock).mockResolvedValue([]);
+    (renewPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue({
+      subscriptionId: 'sub_pending',
+      paymentIntentId: 'pi_pending',
+      clientSecret: 'secret_pending',
+      amount: 450,
+      currency: 'cad',
+      quote: {
+        totalAmount: 450,
+        currency: 'cad',
+      },
+    });
+
+    render(<PersonalDriverClientDashboard />);
+
+    expect(await screen.findByRole('button', { name: /Payer 450,00/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Renouveler' })).toBeDisabled();
+    expect(renewPersonalDriverSubscriptionPayment).toHaveBeenCalledWith('sub_active', 'recover-sub_pending');
   });
 });

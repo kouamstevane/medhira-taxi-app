@@ -29,6 +29,11 @@ import {
   isPersonalDriverSubscriptionReadyForActivation,
   isPersonalDriverSubscriptionReadyForPaymentConfirmation,
 } from '../personalDriver/subscriptionActivationValidation.js';
+import {
+  activateSubscriptionPeriodLock,
+  createSubscriptionPeriodLockId,
+  releaseSubscriptionPeriodLock,
+} from '../personalDriver/subscriptionPeriodLock.js';
 
 // Type alias pour les événements Stripe (compatible Stripe v22 / NodeNext)
 type StripeEvent = ReturnType<InstanceType<typeof Stripe>['webhooks']['constructEvent']>;
@@ -469,12 +474,27 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
         console.warn(`[Webhook] personal_driver_subscription userId invalide: ${metadata.subscriptionId}`);
         return;
       }
+      if (
+        typeof subscription.stripePaymentIntentId === 'string'
+        && subscription.stripePaymentIntentId !== piId
+      ) {
+        return;
+      }
 
       if (!isPersonalDriverSubscriptionReadyForActivation(subscription)) {
         throw new Error(`Configuration personal_driver_subscription incomplète: ${metadata.subscriptionId}`);
       }
 
+      const lockRef = db.collection('personal_driver_subscription_locks').doc(
+        createSubscriptionPeriodLockId(metadata.userId, subscription.periodStartDate),
+      );
+
       if (subscription?.status === 'active' && subscription.paymentStatus === 'succeeded') {
+        await activateSubscriptionPeriodLock(tx, lockRef, {
+          subscriptionId: metadata.subscriptionId,
+          paymentIntentId: piId,
+          now: new Date(),
+        });
         console.warn(`[Webhook] personal_driver_subscription déjà traité: ${metadata.subscriptionId}`);
         subscriptionForTripGeneration = {
           ...subscription,
@@ -485,6 +505,12 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
 
       const canConfirmPayment = isPersonalDriverSubscriptionReadyForPaymentConfirmation(subscription);
       if (!canConfirmPayment) return;
+      const lockActivated = await activateSubscriptionPeriodLock(tx, lockRef, {
+        subscriptionId: metadata.subscriptionId,
+        paymentIntentId: piId,
+        now: new Date(),
+      });
+      if (!lockActivated) return;
 
       tx.update(subscriptionRef, {
         paymentStatus: 'succeeded',
@@ -566,7 +592,20 @@ async function onPaymentIntentFailed(pi: Record<string, unknown>): Promise<void>
       if (!snap.exists) return;
       const subscription = snap.data();
       if (subscription?.userId !== metadata.userId) return;
-      if (subscription.paymentStatus === 'succeeded') return;
+      if (
+        subscription.paymentStatus === 'succeeded'
+        || subscription.paymentStatus === 'failed'
+        || subscription.stripePaymentIntentId !== piId
+        || typeof subscription.periodStartDate !== 'string'
+      ) return;
+      const lockRef = db.collection('personal_driver_subscription_locks').doc(
+        createSubscriptionPeriodLockId(metadata.userId, subscription.periodStartDate),
+      );
+      const released = await releaseSubscriptionPeriodLock(tx, lockRef, {
+        subscriptionId: metadata.subscriptionId,
+        paymentIntentId: piId,
+      });
+      if (!released) return;
       tx.update(subscriptionRef, {
         status: 'payment_failed',
         paymentStatus: 'failed',
@@ -615,7 +654,21 @@ async function onPaymentIntentCanceled(pi: Record<string, unknown>): Promise<voi
       const snap = await tx.get(subscriptionRef);
       if (!snap.exists) return;
       const subscription = snap.data();
-      if (subscription?.userId !== metadata.userId || subscription.paymentStatus === 'succeeded') return;
+      if (
+        subscription?.userId !== metadata.userId
+        || subscription.paymentStatus === 'succeeded'
+        || subscription.paymentStatus === 'cancelled'
+        || subscription.stripePaymentIntentId !== (pi.id as string)
+        || typeof subscription.periodStartDate !== 'string'
+      ) return;
+      const lockRef = db.collection('personal_driver_subscription_locks').doc(
+        createSubscriptionPeriodLockId(metadata.userId, subscription.periodStartDate),
+      );
+      const released = await releaseSubscriptionPeriodLock(tx, lockRef, {
+        subscriptionId: metadata.subscriptionId,
+        paymentIntentId: pi.id as string,
+      });
+      if (!released) return;
       tx.update(subscriptionRef, {
         status: 'cancelled',
         paymentStatus: 'cancelled',
