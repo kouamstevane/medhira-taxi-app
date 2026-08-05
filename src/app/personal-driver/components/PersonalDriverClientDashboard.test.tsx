@@ -17,6 +17,7 @@ jest.mock('@/services/personal-driver/subscription.service', () => ({
   getPersonalDriverSubscriptionView: jest.fn(),
   getPersonalDriverSubscriptionById: jest.fn(),
   getPersonalDriverTripsForSubscription: jest.fn(),
+  cancelPersonalDriverTripByClient: jest.fn(),
   requestSpecialTrip: jest.fn(),
   renewPersonalDriverSubscriptionPayment: jest.fn(),
 }));
@@ -93,6 +94,18 @@ describe('PersonalDriverClientDashboard Component', () => {
       expect(screen.getAllByText(/100 rue Principale/i).length).toBeGreaterThan(0);
       expect(screen.getByRole('button', { name: /Demander un trajet spécial/i })).toBeDisabled();
     });
+  });
+
+  it('shows a French alert and retries a failed subscription reload', async () => {
+    (getPersonalDriverSubscriptionView as jest.Mock)
+      .mockRejectedValueOnce({ code: 'functions/unavailable' })
+      .mockResolvedValueOnce({ active: null, pending: null });
+
+    render(<PersonalDriverClientDashboard />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/service est momentanément indisponible/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByText(/Aucun abonnement Personal Driver actif/i)).toBeInTheDocument();
   });
 
   it('keeps payment failure visible when activation has not started', async () => {

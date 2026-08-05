@@ -6,6 +6,7 @@ const mockHttpsCallable = jest.fn();
 jest.mock('firebase/firestore', () => ({
   collection: jest.fn(() => ({})),
   getDocs: mockGetDocs,
+  orderBy: jest.fn(() => ({})),
   query: jest.fn(() => ({})),
   where: jest.fn(() => ({})),
 }));
@@ -78,6 +79,19 @@ describe('PersonalDriverDriverPageClient', () => {
     fireEvent.click(await screen.findByText('trip_selected'));
     fireEvent.click(screen.getByRole('button', { name: 'Actualiser' }));
 
-    expect(await screen.findByDisplayValue('trip_selected')).toBeInTheDocument();
+    expect((await screen.findByText('trip_selected')).closest('button')).toHaveClass('border-primary');
+  });
+
+  it('shows a French alert and lets the driver retry a failed refresh', async () => {
+    mockGetDocs
+      .mockRejectedValueOnce({ code: 'functions/unavailable' })
+      .mockResolvedValueOnce({ docs: [] });
+    const { PersonalDriverDriverPageClient } = require('../PersonalDriverDriverPageClient');
+
+    render(<PersonalDriverDriverPageClient />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/service est momentanément indisponible/i);
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByText('Aucune mission active attribuée pour le moment.')).toBeInTheDocument();
   });
 });

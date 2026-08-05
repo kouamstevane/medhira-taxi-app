@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
+import { getUserFacingCallableError } from '@/utils/callable-error';
 import {
   cancelPersonalDriverTripByClient,
   getPersonalDriverSubscriptionView,
@@ -87,6 +88,8 @@ export function PersonalDriverClientDashboard() {
   const [selectedTripToCancel, setSelectedTripToCancel] = useState<PersonalDriverTrip | null>(null);
   const [showSpecialTripModal, setShowSpecialTripModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [reloadError, setReloadError] = useState<string | null>(null);
   const [specialTripResult, setSpecialTripResult] = useState<RequestSpecialTripResult | null>(null);
 
   // Form state for special trip
@@ -107,6 +110,7 @@ export function PersonalDriverClientDashboard() {
 
   const reloadData = useCallback(async () => {
     if (!currentUser?.uid) return;
+    setReloadError(null);
     try {
       const { active, pending } = await getPersonalDriverSubscriptionView(currentUser.uid);
       const paidRenewal = pending?.paymentStatus === 'succeeded'
@@ -127,7 +131,7 @@ export function PersonalDriverClientDashboard() {
         setTrips([]);
       }
     } catch (err) {
-      console.error('Erreur chargement abonnement:', err);
+      setReloadError(getUserFacingCallableError(err));
     }
   }, [currentUser?.uid]);
 
@@ -224,7 +228,7 @@ export function PersonalDriverClientDashboard() {
     )
       .then(setRenewalPayment)
       .catch((err) => {
-        setRenewalError(err instanceof Error ? err.message : 'Impossible de récupérer le renouvellement.');
+        setRenewalError(getUserFacingCallableError(err));
       })
       .finally(() => setRenewalLoading(false));
   }, [pendingRenewal, renewalLoading, renewalPayment, subscription]);
@@ -233,12 +237,13 @@ export function PersonalDriverClientDashboard() {
     if (!selectedTripToCancel) return;
     setActionLoading(true);
     setSpecialTripResult(null);
+    setActionError(null);
     try {
       await cancelPersonalDriverTripByClient(selectedTripToCancel.id);
       await reloadData();
       setSelectedTripToCancel(null);
     } catch (err) {
-      console.error("Erreur d'annulation:", err);
+      setActionError(getUserFacingCallableError(err));
     } finally {
       setActionLoading(false);
     }
@@ -250,6 +255,7 @@ export function PersonalDriverClientDashboard() {
 
     setActionLoading(true);
     setSpecialTripResult(null);
+    setActionError(null);
     try {
       const scheduledIso = `${specialDate}T${specialTime}:00`;
       const planId = (subscription.planId || (subscription as unknown as { selectedPlanId: PersonalDriverPlanId }).selectedPlanId) ?? 'classic';
@@ -270,7 +276,7 @@ export function PersonalDriverClientDashboard() {
       setSpecialDate('');
       setSpecialTime('');
     } catch (err) {
-      console.error('Erreur réservation trajet spécial:', err);
+      setActionError(getUserFacingCallableError(err));
     } finally {
       setActionLoading(false);
     }
@@ -285,7 +291,7 @@ export function PersonalDriverClientDashboard() {
       const payment = await renewPersonalDriverSubscriptionPayment(subscription.id, requestId);
       setRenewalPayment(payment);
     } catch (err) {
-      setRenewalError(err instanceof Error ? err.message : 'Impossible de préparer le renouvellement.');
+      setRenewalError(getUserFacingCallableError(err));
     } finally {
       setRenewalLoading(false);
     }
@@ -312,6 +318,12 @@ export function PersonalDriverClientDashboard() {
         <p className="mb-6 text-sm leading-relaxed text-slate-400">
           Planifiez vos déplacements récurrents du mois et profitez d&apos;un chauffeur dédié au meilleur tarif.
         </p>
+        {reloadError && (
+          <div role="alert" className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+            {reloadError}
+            <button type="button" onClick={() => void reloadData()} className="ml-3 underline">Réessayer</button>
+          </div>
+        )}
         <Link
           href="/personal-driver"
           className="inline-flex min-h-12 items-center justify-center rounded-xl bg-primary px-6 text-sm font-bold text-white transition hover:bg-primary/90 active:scale-95"
@@ -475,6 +487,12 @@ export function PersonalDriverClientDashboard() {
           {' '}Trajets spéciaux restants : {specialTripResult.specialTripsRemaining}.
           {' '}Kilométrage restant : {distanceFormatter.format(specialTripResult.monthlyDistanceKmRemaining)} km.
         </p>
+      )}
+      {(actionError || reloadError) && (
+        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs font-semibold text-red-200">
+          {actionError || reloadError}
+          <button type="button" onClick={() => void reloadData()} className="ml-3 underline">Réessayer</button>
+        </div>
       )}
 
       {/* VOS AVANTAGES FORFAIT */}

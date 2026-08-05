@@ -1,18 +1,15 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useAuth } from '@/hooks/useAuth';
+import { getUserFacingCallableError } from '@/utils/callable-error';
 import type { PersonalDriverTrip } from '@/types/personal-driver';
 
 type TripRow = Partial<PersonalDriverTrip> & { id: string };
-
-function getErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : 'Erreur inconnue';
-}
 
 function toMillis(value: unknown): number | null {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
@@ -31,6 +28,7 @@ export function PersonalDriverDriverPageClient() {
   const [loading, setLoading] = useState(false);
   const [loadingTrips, setLoadingTrips] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [assignedTrips, setAssignedTrips] = useState<TripRow[]>([]);
 
   // Timer state for wait time
@@ -41,12 +39,15 @@ export function PersonalDriverDriverPageClient() {
     setLoadingTrips(true);
     try {
       const snap = await getDocs(
-        query(collection(db, 'personal_driver_trips'), where('assignedDriverId', '==', currentUser.uid)),
+        query(
+          collection(db, 'personal_driver_trips'),
+          where('assignedDriverId', '==', currentUser.uid),
+          orderBy('scheduledAtIso', 'asc'),
+        ),
       );
       const trips = snap.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }) as TripRow)
-          .filter((trip) => !['completed', 'cancelled'].includes(trip.status || ''))
-          .sort((left, right) => String(left.scheduledAtIso || '').localeCompare(String(right.scheduledAtIso || '')));
+        .map((doc) => ({ id: doc.id, ...doc.data() }) as TripRow)
+        .filter((trip) => !['completed', 'cancelled'].includes(trip.status || ''));
       setAssignedTrips(trips);
       setTripId((selectedId) => {
         if (selectedId) return selectedId;
@@ -58,7 +59,7 @@ export function PersonalDriverDriverPageClient() {
       });
       return trips;
     } catch (err: unknown) {
-      setMessage(`Impossible de charger vos missions: ${getErrorMessage(err)}`);
+      setError(`Impossible de charger vos missions : ${getUserFacingCallableError(err)}`);
       return [];
     } finally {
       setLoadingTrips(false);
@@ -89,6 +90,7 @@ export function PersonalDriverDriverPageClient() {
     if (!tripId.trim()) return;
     setLoading(true);
     setMessage(null);
+    setError(null);
     try {
       const callable = httpsCallable(functions, 'driverUpdatePersonalDriverTrip');
       let location: { lat: number; lng: number; accuracy: number } | undefined;
@@ -125,7 +127,7 @@ export function PersonalDriverDriverPageClient() {
         setMessage(`Statut du trajet ${tripId} mis à jour : ${status}`);
       }
     } catch (err: unknown) {
-      setMessage(`Erreur: ${getErrorMessage(err)}`);
+      setError(getUserFacingCallableError(err));
     } finally {
       setLoading(false);
     }
@@ -215,6 +217,12 @@ export function PersonalDriverDriverPageClient() {
           </p>
         </div>
       )}
+      {error && (
+        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs font-semibold text-red-200">
+          {error}
+          <button type="button" onClick={() => void loadAssignedTrips()} className="ml-3 underline">Réessayer</button>
+        </div>
+      )}
 
       {selectedTrip?.overageChargeStatus === 'failed' && (
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs font-semibold text-rose-200">
@@ -228,24 +236,12 @@ export function PersonalDriverDriverPageClient() {
       )}
 
       <div className="space-y-4">
-        <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-            Identifiant du trajet attribué
-          </label>
-          <input
-            type="text"
-            placeholder="Ex: sub-123_0"
-            value={tripId}
-            onChange={(e) => setTripId(e.target.value)}
-            className="min-h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none focus:border-primary"
-          />
-        </div>
-
+        {!selectedTrip && <p className="text-xs text-slate-400">Sélectionnez une mission ci-dessus pour mettre son statut à jour.</p>}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
           <button
             type="button"
             onClick={() => handleUpdateStatus('driver_en_route')}
-            disabled={loading || !tripId.trim()}
+            disabled={loading || !selectedTrip}
             className="min-h-12 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-500 active:scale-95 disabled:opacity-50 text-xs transition"
           >
             En route
@@ -254,7 +250,7 @@ export function PersonalDriverDriverPageClient() {
           <button
             type="button"
             onClick={() => handleUpdateStatus('driver_arrived')}
-            disabled={loading || !tripId.trim()}
+            disabled={loading || !selectedTrip}
             className="min-h-12 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-50 text-xs transition"
           >
             Arrivé sur place
@@ -263,7 +259,7 @@ export function PersonalDriverDriverPageClient() {
           <button
             type="button"
             onClick={() => handleUpdateStatus('passenger_picked_up')}
-            disabled={loading || !tripId.trim()}
+            disabled={loading || !selectedTrip}
             className="min-h-12 rounded-xl font-bold text-white bg-purple-600 hover:bg-purple-500 active:scale-95 disabled:opacity-50 text-xs transition"
           >
             Passager récupéré
@@ -272,7 +268,7 @@ export function PersonalDriverDriverPageClient() {
           <button
             type="button"
             onClick={() => handleUpdateStatus('in_progress')}
-            disabled={loading || !tripId.trim()}
+            disabled={loading || !selectedTrip}
             className="min-h-12 rounded-xl font-bold text-white bg-amber-600 hover:bg-amber-500 active:scale-95 disabled:opacity-50 text-xs transition"
           >
             Trajet en cours
@@ -281,7 +277,7 @@ export function PersonalDriverDriverPageClient() {
           <button
             type="button"
             onClick={() => handleUpdateStatus('completed')}
-            disabled={loading || !tripId.trim()}
+            disabled={loading || !selectedTrip}
             className="min-h-12 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-500 active:scale-95 disabled:opacity-50 text-xs transition"
           >
             Trajet terminé
