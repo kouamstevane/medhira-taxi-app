@@ -249,15 +249,15 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
     expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
   });
 
-  it('marks an expired subscription before rejecting wait-time billing', async () => {
+  it('marks an expired subscription in Firestore while settling wait-time billing for an ongoing trip', async () => {
     const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
     subscriptionData.periodEndAtUtc = new Date('2026-08-01T00:00:00.000Z');
 
-    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' })))
-      .rejects.toMatchObject({ code: 'failed-precondition' });
+    const result = await chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' }));
+    expect(result).toMatchObject({ success: true, paymentIntentId: 'pi_overage_1' });
     expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
       status: 'expired',
     }));
-    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+    expect(mockPaymentIntentsCreate).toHaveBeenCalled();
   });
 });

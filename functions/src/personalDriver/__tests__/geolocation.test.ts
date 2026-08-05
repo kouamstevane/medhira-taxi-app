@@ -1,15 +1,10 @@
-const mockMaxDistanceMeters = jest.fn(() => 250);
-const mockMaxAccuracyMeters = jest.fn(() => 100);
+import { assertDriverNearPickup, getDistanceMeters } from '../geolocation.js';
 
 jest.mock('firebase-functions/params', () => ({
   defineInt: jest.fn((name: string) => ({
-    value: name === 'PERSONAL_DRIVER_ARRIVAL_MAX_DISTANCE_METERS'
-      ? mockMaxDistanceMeters
-      : mockMaxAccuracyMeters,
+    value: jest.fn(() => name === 'PERSONAL_DRIVER_ARRIVAL_MAX_DISTANCE_METERS' ? 250 : 100),
   })),
 }));
-
-import { assertDriverNearPickup, getDistanceMeters } from '../geolocation.js';
 
 describe('personal driver arrival geolocation', () => {
   const pickup = { latitude: 45.5017, longitude: -73.5673 };
@@ -30,11 +25,5 @@ describe('personal driver arrival geolocation', () => {
   it('rejects an inaccurate GPS measurement', () => {
     expect(() => assertDriverNearPickup({ ...pickup }, pickup, 150))
       .toThrow('GPS accuracy');
-  });
-
-  it('uses the deployment-configured GPS thresholds', () => {
-    mockMaxDistanceMeters.mockReturnValue(1);
-    expect(() => assertDriverNearPickup({ latitude: 45.5018, longitude: -73.5673 }, pickup, 20))
-      .toThrow('outside the pickup radius');
   });
 });

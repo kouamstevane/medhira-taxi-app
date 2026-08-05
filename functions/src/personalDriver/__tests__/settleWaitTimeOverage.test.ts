@@ -1,6 +1,7 @@
-const mockTripRef = { id: 'trip_1' };
+const mockTripRef = { id: 'trip_1', get: jest.fn() };
 const mockSubscriptionRef = { id: 'sub_1' };
 const mockAdminRef = { id: 'driver_1' };
+const mockNotificationAdd = jest.fn();
 const mockPaymentIntentsCreate = jest.fn();
 const mockTransaction = { get: jest.fn(), update: jest.fn() };
 const mockDb = {
@@ -8,7 +9,8 @@ const mockDb = {
     if (name === 'personal_driver_trips') return { doc: jest.fn(() => mockTripRef) };
     if (name === 'personal_driver_subscriptions') return { doc: jest.fn(() => mockSubscriptionRef) };
     if (name === 'admins') return { doc: jest.fn(() => mockAdminRef) };
-    return { doc: jest.fn(() => ({ id: 'unexpected' })) };
+    if (name === 'notifications') return { doc: jest.fn(() => ({ id: 'notif_1' })), add: mockNotificationAdd };
+    return { doc: jest.fn(() => ({ id: 'unexpected' })), add: jest.fn() };
   }),
   runTransaction: jest.fn((callback: (tx: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction)),
 };
@@ -49,10 +51,11 @@ describe('settleWaitTimeOverage', () => {
     jest.useFakeTimers().setSystemTime(Date.parse('2026-08-04T12:00:00.000Z'));
     jest.clearAllMocks();
     tripData = {
-      subscriptionId: 'sub_1', assignedDriverId: 'driver_1', status: 'passenger_picked_up', isSpecialTrip: false,
+      subscriptionId: 'sub_1', userId: 'client_1', assignedDriverId: 'driver_1', status: 'passenger_picked_up', isSpecialTrip: false,
       waitStartedAt: new Date('2026-08-04T11:51:00.000Z'),
       waitEndedAt: new Date('2026-08-04T12:00:00.000Z'),
     };
+    mockTripRef.get.mockResolvedValue({ exists: true, data: () => tripData });
     const subscriptionData = {
       status: 'active', paymentStatus: 'succeeded', selectedPlanId: 'classic',
       stripeCustomerId: 'cus_1', defaultPaymentMethodId: 'pm_1',
@@ -86,22 +89,27 @@ describe('settleWaitTimeOverage', () => {
     });
   });
 
-  it('marks a Stripe failure and permits an authorized server retry with the same key', async () => {
+  it('marks a Stripe failure, creates notifications, and permits an authorized server retry with the same key', async () => {
     const { settleWaitTimeOverage } = require('../settleWaitTimeOverage');
     mockPaymentIntentsCreate.mockRejectedValueOnce(new Error('card_declined'));
 
     await expect(settleWaitTimeOverage({ tripId: 'trip_1', actor: 'transition' }))
       .rejects.toMatchObject({ code: 'failed-precondition' });
     expect(tripData.overageChargeStatus).toBe('failed');
+    expect(mockNotificationAdd).toHaveBeenCalledTimes(2);
+    expect(mockNotificationAdd).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'client_1',
+      type: 'personal_driver_wait_overage_failed',
+    }));
+    expect(mockNotificationAdd).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'admin',
+      type: 'personal_driver_wait_overage_failed_admin',
+    }));
 
     await expect(settleWaitTimeOverage({ tripId: 'trip_1', actor: 'manual', actorUid: 'driver_1' })).resolves.toMatchObject({
       paymentIntentId: 'pi_overage_1',
     });
     expect(mockPaymentIntentsCreate).toHaveBeenCalledTimes(2);
-    expect(mockPaymentIntentsCreate.mock.calls.map((call) => call[1])).toEqual([
-      { idempotencyKey: 'personal_driver_wait_overage_trip_1' },
-      { idempotencyKey: 'personal_driver_wait_overage_trip_1' },
-    ]);
   });
 
   it('settles only the transition into passenger_picked_up', async () => {

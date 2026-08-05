@@ -240,7 +240,7 @@ describe('driverUpdatePersonalDriverTrip', () => {
     }));
   });
 
-  it('marks an expired subscription before rejecting a status update', async () => {
+  it('marks an expired subscription in Firestore while allowing an ongoing trip status update to proceed', async () => {
     Object.assign(mockTripData, { status: 'driver_assigned' });
     mockTransaction.get.mockImplementation((ref: unknown) => Promise.resolve(
       ref === mockSubscriptionRef
@@ -257,13 +257,48 @@ describe('driverUpdatePersonalDriverTrip', () => {
     ));
 
     const { driverUpdatePersonalDriverTrip } = require('../driverUpdatePersonalDriverTrip');
-    await expect(driverUpdatePersonalDriverTrip(
+    const result = await driverUpdatePersonalDriverTrip(
       makeRequest({ tripId: 'trip_1', status: 'driver_en_route' }, 'driver_1'),
-    )).rejects.toMatchObject({ code: 'failed-precondition' });
+    );
+    expect(result).toEqual({ success: true, status: 'driver_en_route' });
     expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
       status: 'expired',
     }));
-    expect(mockTransaction.update.mock.calls.some(([ref]) => ref === mockTripRef)).toBe(false);
+    expect(mockTransaction.update).toHaveBeenCalledWith(
+      mockTripRef,
+      expect.objectContaining({ status: 'driver_en_route' }),
+    );
+  });
+
+  it('allows completing an ongoing trip even if the subscription expired during the trip', async () => {
+    Object.assign(mockTripData, { status: 'in_progress' });
+    mockTransaction.get.mockImplementation((ref: unknown) => Promise.resolve(
+      ref === mockSubscriptionRef
+        ? {
+            exists: true,
+            data: () => ({
+              status: 'expired',
+              paymentStatus: 'succeeded',
+              periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+              periodEndAtUtc: new Date('2026-08-02T00:00:00.000Z'),
+            }),
+          }
+        : { exists: true, data: () => mockTripData },
+    ));
+
+    const { driverUpdatePersonalDriverTrip } = require('../driverUpdatePersonalDriverTrip');
+    const result = await driverUpdatePersonalDriverTrip(
+      makeRequest({ tripId: 'trip_1', status: 'completed' }, 'driver_1'),
+    );
+    expect(result).toEqual({ success: true, status: 'completed' });
+    expect(mockTransaction.update).toHaveBeenCalledWith(
+      mockDriverRef,
+      expect.objectContaining({
+        isAvailable: true,
+        availabilityStatus: 'available',
+        activePersonalDriverTripId: null,
+      }),
+    );
   });
 
   it('rejects invalid status transition driver_assigned -> completed', async () => {

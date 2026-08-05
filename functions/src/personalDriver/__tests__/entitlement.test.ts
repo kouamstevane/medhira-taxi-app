@@ -78,8 +78,15 @@ describe('personal driver entitlement', () => {
       update: jest.fn(),
       commit: jest.fn().mockResolvedValue(undefined),
     };
+    const tripsQueryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      get: jest.fn().mockResolvedValue({ docs: [] }),
+    };
     const db = {
-      collection: jest.fn(() => queryBuilder),
+      collection: jest.fn((name: string) => {
+        if (name === 'personal_driver_trips') return tripsQueryBuilder;
+        return queryBuilder;
+      }),
       batch: jest.fn(() => batch),
     } as unknown as FirebaseFirestore.Firestore;
 

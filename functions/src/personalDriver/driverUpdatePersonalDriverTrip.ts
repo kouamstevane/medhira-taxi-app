@@ -2,7 +2,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { assertDriverNearPickup, getPersonalDriverArrivalGpsConfig } from './geolocation.js';
-import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './entitlement.js';
+import { markExpiredSubscriptionInTransaction } from './entitlement.js';
 export type PersonalDriverTripStatus =
   | 'scheduled'
   | 'driver_assigned'
@@ -78,10 +78,8 @@ export const driverUpdatePersonalDriverTrip = onCall(
       }
       const now = new Date();
       const subscription = subscriptionSnap.data();
-      if (markExpiredSubscriptionInTransaction(transaction, entitlementRef, subscription, now)) {
-        return { kind: 'expired' as const };
-      }
-      if (!isSubscriptionEntitled(subscription, now)) {
+      markExpiredSubscriptionInTransaction(transaction, entitlementRef, subscription, now);
+      if (subscription?.paymentStatus !== 'succeeded') {
         throw new HttpsError('failed-precondition', 'Le forfait doit être payé et actif pour poursuivre ce trajet.');
       }
 
@@ -223,9 +221,6 @@ export const driverUpdatePersonalDriverTrip = onCall(
       return { kind: 'updated' as const };
     });
 
-    if (result.kind === 'expired') {
-      throw new HttpsError('failed-precondition', 'Le forfait a expiré.');
-    }
     if (result.kind === 'gps_review_required') {
       throw new HttpsError(result.errorCode, result.errorMessage);
     }

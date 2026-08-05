@@ -51,29 +51,86 @@ export async function cancelPersonalDriverTrip(
     let driverRef: FirebaseFirestore.DocumentReference | null = null;
     let driver: FirebaseFirestore.DocumentData | undefined;
 
+    const subscriptionId = typeof trip?.subscriptionId === 'string' && trip.subscriptionId
+      ? trip.subscriptionId
+      : null;
+    const isSpecialTrip = trip?.isSpecialTrip === true;
+    const isClientCancel = input.actor.kind === 'client';
+    const isScheduledStatus = trip?.status === 'scheduled';
+
+    const shouldRefundSpecialTrip = isSpecialTrip && (
+      !isClientCancel || isScheduledStatus
+    );
+
+    let subscriptionRef: FirebaseFirestore.DocumentReference | null = null;
+    let subscriptionSnap: FirebaseFirestore.DocumentSnapshot | null = null;
+
+    if (subscriptionId && shouldRefundSpecialTrip) {
+      subscriptionRef = db.collection('personal_driver_subscriptions').doc(subscriptionId);
+    }
+
     if (assignedDriverId) {
       driverRef = db.collection('drivers').doc(assignedDriverId);
       const assignedTripsQuery = db.collection('personal_driver_trips')
         .where('assignedDriverId', '==', assignedDriverId)
         .where('status', 'in', NONTERMINAL_TRIP_STATUSES);
-      const [driverSnapshot, assignedTripsSnapshot] = await Promise.all([
+      const [driverSnapshot, assignedTripsSnapshot, subSnap] = await Promise.all([
         transaction.get(driverRef),
         transaction.get(assignedTripsQuery),
+        subscriptionRef ? transaction.get(subscriptionRef) : Promise.resolve(null),
       ]);
       driver = driverSnapshot.exists ? driverSnapshot.data() : undefined;
       hasOtherNonterminalAssignment = assignedTripsSnapshot.docs.some(
         (assignedTrip) => assignedTrip.id !== tripRef.id,
       );
+      subscriptionSnap = subSnap;
+    } else if (subscriptionRef) {
+      subscriptionSnap = await transaction.get(subscriptionRef);
     }
 
     const timestamp = admin.firestore.FieldValue.serverTimestamp();
+
+    if (subscriptionRef && subscriptionSnap && subscriptionSnap.exists) {
+      const subscription = subscriptionSnap.data();
+      const tripDistance = typeof trip?.distanceKm === 'number' && trip.distanceKm > 0
+        ? trip.distanceKm
+        : 0;
+      const currentUsed = typeof subscription?.specialTripsUsed === 'number'
+        ? subscription.specialTripsUsed
+        : 0;
+      const currentDistUsed = typeof subscription?.specialTripsDistanceUsedKm === 'number'
+        ? subscription.specialTripsDistanceUsedKm
+        : 0;
+      const currentRemaining = typeof subscription?.monthlyDistanceKmRemaining === 'number'
+        ? subscription.monthlyDistanceKmRemaining
+        : 0;
+      const maxDistance = typeof subscription?.monthlyDistanceKm === 'number'
+        ? subscription.monthlyDistanceKm
+        : currentRemaining + tripDistance;
+
+      const nextSpecialTripsUsed = Math.max(0, currentUsed - 1);
+      const nextSpecialTripsDist = Math.max(0, currentDistUsed - tripDistance);
+      const nextRemaining = Math.min(
+        maxDistance,
+        Math.round((currentRemaining + tripDistance) * 10) / 10,
+      );
+
+      transaction.update(subscriptionRef, {
+        specialTripsUsed: nextSpecialTripsUsed,
+        specialTripsDistanceUsedKm: nextSpecialTripsDist,
+        monthlyDistanceKmRemaining: nextRemaining,
+        updatedAt: timestamp,
+      });
+    }
+
     transaction.update(tripRef, {
       status: 'cancelled',
       assignedDriverId: null,
       assignedVehicleId: null,
       cancelledBy: input.actor.kind,
       cancelledByUid: input.actor.uid,
-      ...(input.actor.kind === 'client' ? { clientCancelledLostKm: true } : {}),
+      ...(isClientCancel && !shouldRefundSpecialTrip ? { clientCancelledLostKm: true } : {}),
+      ...(shouldRefundSpecialTrip ? { specialTripRefunded: true } : {}),
       ...(input.actor.kind === 'admin' ? { cancelReason: input.actor.reason ?? null } : {}),
       cancelledAt: timestamp,
       updatedAt: timestamp,

@@ -438,4 +438,25 @@ describe('adminManagePersonalDriver', () => {
     }));
     expect(mockTransaction.update).not.toHaveBeenCalledWith(mockTripRef, expect.anything());
   });
+
+  it('rejects assignment when the driver already has another trip scheduled within 60 minutes', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    tripData.scheduledAtIso = '2026-08-12T10:00:00.000Z';
+    const collidingTripDoc = {
+      id: 'trip_colliding',
+      data: () => ({ scheduledAtIso: '2026-08-12T10:30:00.000Z', status: 'driver_assigned' }),
+    };
+    mockTransaction.get.mockImplementation(async (ref: unknown) => {
+      if (ref === mockTripRef) return { exists: true, data: () => tripData };
+      if (ref === mockDriverRef) return { exists: true, data: () => driverData };
+      if (ref === mockVehicleRef) return { exists: true, data: () => vehicleData };
+      if (ref === mockAssignedTripsQuery) return { docs: [collidingTripDoc] };
+      return { exists: true, data: () => subscriptionData };
+    });
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1',
+    }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockTripRef, expect.anything());
+  });
 });

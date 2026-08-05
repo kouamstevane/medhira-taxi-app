@@ -83,6 +83,7 @@ const clientActionSchema = z.discriminatedUnion('action', [
     destinationAddress: z.string().trim().min(3).max(500),
     scheduledAtIso: z.string().trim().min(10).max(40),
     distanceKm: z.number().finite().positive().max(1000).optional(),
+    idempotencyKey: z.string().trim().min(8).max(128).optional(),
   }),
 ]);
 
@@ -128,7 +129,10 @@ export const clientManagePersonalDriver = onCall(
       assertSpecialTripIsFuture(initialScheduledAtUtc, initialNow);
     }
 
-    const tripRef = db.collection('personal_driver_trips').doc();
+    const tripRef = payload.idempotencyKey
+      ? db.collection('personal_driver_trips').doc(`pd_trip_${payload.idempotencyKey.replace(/[^a-zA-Z0-9_-]/g, '_')}`)
+      : db.collection('personal_driver_trips').doc();
+
     const [authoritativeRoute, pickupLocation] = await Promise.all([
       calculateServerRoute({
         origin: payload.pickupAddress,
@@ -136,8 +140,13 @@ export const clientManagePersonalDriver = onCall(
       }),
       resolveAddressCoordinates(payload.pickupAddress),
     ]);
+
     const result = await db.runTransaction(async (transaction) => {
-      const subscriptionSnap = await transaction.get(subscriptionRef);
+      const [subscriptionSnap, existingTripSnap] = await Promise.all([
+        transaction.get(subscriptionRef),
+        payload.idempotencyKey ? transaction.get(tripRef) : Promise.resolve(null),
+      ]);
+
       if (!subscriptionSnap.exists) {
         throw new HttpsError('not-found', 'Abonnement introuvable.');
       }
@@ -146,6 +155,27 @@ export const clientManagePersonalDriver = onCall(
       if (subscription?.userId !== uid) {
         throw new HttpsError('permission-denied', 'Cet abonnement ne vous appartient pas.');
       }
+
+      if (payload.idempotencyKey && existingTripSnap && existingTripSnap.exists) {
+        const existingTrip = existingTripSnap.data();
+        if (existingTrip?.userId !== uid) {
+          throw new HttpsError('permission-denied', 'Ce trajet ne vous appartient pas.');
+        }
+        const planId = getPlanId(subscription || {});
+        const includedSpecialTrips = planId ? SPECIAL_TRIP_LIMITS[planId] : 0;
+        const specialTripsUsed = subscription?.specialTripsUsed ?? 0;
+        const remainingDistance = subscription?.monthlyDistanceKmRemaining ?? 0;
+
+        return {
+          kind: 'created' as const,
+          success: true,
+          tripId: tripRef.id,
+          officialDistanceKm: existingTrip?.distanceKm ?? 0,
+          specialTripsRemaining: Math.max(0, includedSpecialTrips - specialTripsUsed),
+          monthlyDistanceKmRemaining: remainingDistance,
+        };
+      }
+
       const transactionNow = new Date();
       if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, transactionNow)) {
         return { kind: 'expired' as const };
@@ -188,7 +218,7 @@ export const clientManagePersonalDriver = onCall(
         throw new HttpsError('failed-precondition', 'Les quotas autoritatifs du forfait sont incomplets ou invalides.');
       }
       if (specialTripsUsed >= persistedIncludedSpecialTrips) {
-        throw new HttpsError('failed-precondition', 'Votre quota de trajets spéciaux est épuisé pour cette période.');
+        throw new HttpsError('failed-precondition', 'Votre quota de trajets spéciaux me est épuisé pour cette période.');
       }
 
       const distanceKm = authoritativeRoute.distanceKm;
@@ -203,6 +233,7 @@ export const clientManagePersonalDriver = onCall(
         planId,
         direction: 'special',
         isSpecialTrip: true,
+        ...(payload.idempotencyKey ? { idempotencyKey: payload.idempotencyKey } : {}),
         pickupAddress: payload.pickupAddress,
         destinationAddress: payload.destinationAddress,
         pickupLocation,

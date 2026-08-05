@@ -4,7 +4,7 @@ import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
 import { DEFAULT_CURRENCY } from '../config/stripe.js';
 import { createStripeClient } from '../stripe/stripe-client.js';
-import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './entitlement.js';
+import { markExpiredSubscriptionInTransaction } from './entitlement.js';
 
 export const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
 const maximumWaitMinutesParam = defineInt('PERSONAL_DRIVER_MAX_WAIT_MINUTES');
@@ -77,6 +77,38 @@ function updateClaim(
   });
 }
 
+async function sendOverageFailureNotifications(
+  db: FirebaseFirestore.Firestore,
+  tripId: string,
+  reason: string,
+): Promise<void> {
+  const tripSnap = await db.collection('personal_driver_trips').doc(tripId).get();
+  const tripData = tripSnap.data();
+  const userId = typeof tripData?.userId === 'string' && tripData.userId.trim() ? tripData.userId : null;
+
+  if (userId) {
+    await db.collection('notifications').add({
+      userId,
+      type: 'personal_driver_wait_overage_failed',
+      title: 'Échec du prélèvement d’attente',
+      message: 'Le prélèvement automatique de vos frais de dépassement d’attente a échoué. Veuillez mettre à jour votre carte bancaire.',
+      tripId,
+      read: false,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  await db.collection('notifications').add({
+    userId: 'admin',
+    type: 'personal_driver_wait_overage_failed_admin',
+    title: 'Frais d’attente impayés',
+    message: `Le prélèvement des frais d’attente a échoué pour le trajet #${tripId}. Motif : ${reason}`,
+    tripId,
+    read: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
 export type WaitOverageActor = 'transition' | 'manual';
 
 export async function settleWaitTimeOverage({
@@ -113,8 +145,8 @@ export async function settleWaitTimeOverage({
     if (!subscriptionSnap.exists) throw new HttpsError('not-found', 'Abonnement introuvable.');
     const subscription = subscriptionSnap.data();
     if (!subscription) throw new HttpsError('not-found', 'Données d’abonnement manquantes.');
-    if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, now)) return { kind: 'expired' };
-    if (!isSubscriptionEntitled(subscription, now)) throw new HttpsError('failed-precondition', 'Le forfait doit être payé et actif pour facturer l’attente.');
+    markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, now);
+    if (subscription.paymentStatus !== 'succeeded') throw new HttpsError('failed-precondition', 'Le forfait doit être payé et actif pour facturer l’attente.');
     if (tripData.overageChargeStatus === 'billed' || tripData.overageWaitBilled === true) {
       return {
         kind: 'already_billed', feeBilled: Number(tripData.overageWaitFeeAmount ?? 0), overageMinutes: Number(tripData.overageWaitMinutes ?? 0), waitTimeMinutes: Number(tripData.waitTimeMinutes ?? 0),
@@ -162,13 +194,16 @@ export async function settleWaitTimeOverage({
       idempotencyKey,
     };
   });
+
   if (claim.kind === 'already_billed') return { success: true, waitTimeMinutes: claim.waitTimeMinutes, feeBilled: claim.feeBilled, overageMinutes: claim.overageMinutes, ...(claim.paymentIntentId ? { paymentIntentId: claim.paymentIntentId } : {}) };
   if (claim.kind === 'expired') throw new HttpsError('failed-precondition', 'Le forfait a expiré.');
   if (claim.kind === 'review_required') throw new HttpsError('failed-precondition', claim.message);
   if (claim.kind === 'free') return { success: true, waitTimeMinutes: claim.waitTimeMinutes, feeBilled: 0, overageMinutes: 0 };
   if (!claim.customerId || !claim.paymentMethodId) {
-    await updateClaim(db, tripRef, claim.idempotencyKey, { overageChargeStatus: 'failed', overagePaymentError: 'Aucune carte enregistrée ne permet de facturer le dépassement.' });
-    throw new HttpsError('failed-precondition', 'Aucune carte enregistrée ne permet de facturer le dépassement.');
+    const errorMsg = 'Aucune carte enregistrée ne permet de facturer le dépassement.';
+    await updateClaim(db, tripRef, claim.idempotencyKey, { overageChargeStatus: 'failed', overagePaymentError: errorMsg });
+    await sendOverageFailureNotifications(db, tripId, errorMsg);
+    throw new HttpsError('failed-precondition', errorMsg);
   }
   let paymentIntent: { id: string; status: string };
   try {
@@ -178,11 +213,15 @@ export async function settleWaitTimeOverage({
       metadata: { purpose: 'personal_driver_wait_overage', tripId },
     }, { idempotencyKey: claim.idempotencyKey });
   } catch (error) {
-    await updateClaim(db, tripRef, claim.idempotencyKey, { overageChargeStatus: 'failed', overagePaymentError: error instanceof Error ? error.message.slice(0, 500) : 'Paiement refusé' });
+    const errorMsg = error instanceof Error ? error.message.slice(0, 500) : 'Paiement refusé';
+    await updateClaim(db, tripRef, claim.idempotencyKey, { overageChargeStatus: 'failed', overagePaymentError: errorMsg });
+    await sendOverageFailureNotifications(db, tripId, errorMsg);
     throw new HttpsError('failed-precondition', 'Le prélèvement des frais d’attente a échoué.');
   }
   if (paymentIntent.status !== 'succeeded') {
-    await updateClaim(db, tripRef, claim.idempotencyKey, { overageChargeStatus: 'review_required', overagePaymentIntentId: paymentIntent.id, overagePaymentError: 'Le paiement nécessite une action supplémentaire.' });
+    const errorMsg = 'Le paiement nécessite une action supplémentaire.';
+    await updateClaim(db, tripRef, claim.idempotencyKey, { overageChargeStatus: 'review_required', overagePaymentIntentId: paymentIntent.id, overagePaymentError: errorMsg });
+    await sendOverageFailureNotifications(db, tripId, errorMsg);
     throw new HttpsError('failed-precondition', 'Le paiement des frais d’attente nécessite une action supplémentaire.');
   }
   const finalized = await updateClaim(db, tripRef, claim.idempotencyKey, { overageWaitBilled: true, overagePaymentIntentId: paymentIntent.id, overageChargeStatus: 'billed' });
