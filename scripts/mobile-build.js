@@ -87,6 +87,8 @@ async function runBuild() {
             moveToStaging(path.join(componentsDir, comp), `components/${comp}/`);
         }
 
+        // Note: Next.js middleware is intentionally removed during static mobile builds (Capacitor export).
+        // Client-side authentication guards (e.g. RequireAuthenticatedPersonalDriver) are mandatory on protected routes.
         if (fs.existsSync(middlewareFile)) {
             console.log('Masquage temporaire du middleware...');
             moveToStaging(middlewareFile, 'middleware.ts');
