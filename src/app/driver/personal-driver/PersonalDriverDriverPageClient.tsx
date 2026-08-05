@@ -48,6 +48,14 @@ export function PersonalDriverDriverPageClient() {
           .filter((trip) => !['completed', 'cancelled'].includes(trip.status || ''))
           .sort((left, right) => String(left.scheduledAtIso || '').localeCompare(String(right.scheduledAtIso || '')));
       setAssignedTrips(trips);
+      setTripId((selectedId) => {
+        if (selectedId) return selectedId;
+        return trips.find((trip) => (
+          trip.status === 'driver_arrived'
+          && toMillis(trip.waitStartedAt) !== null
+          && toMillis(trip.waitEndedAt) === null
+        ))?.id ?? selectedId;
+      });
       return trips;
     } catch (err: unknown) {
       setMessage(`Impossible de charger vos missions: ${getErrorMessage(err)}`);
