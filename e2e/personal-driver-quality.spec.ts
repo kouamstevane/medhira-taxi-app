@@ -83,15 +83,13 @@ test.describe('Personal Driver quality gate', () => {
     await expect(page.getByRole('button', { name: /Préparer le paiement sécurisé/i })).toBeVisible();
   });
 
-  test('keeps admin and driver operational surfaces reachable', async ({ page }) => {
+  test('protects admin and driver operational surfaces for unauthenticated visitors', async ({ page }) => {
     test.setTimeout(70_000);
 
     await page.goto('/admin/personal-driver', { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await expect(page.getByRole('heading', { name: /Administration/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Réaffecter un chauffeur/i })).toBeVisible();
+    await expect(page).toHaveURL(/\/login\/?\?next=%2Fadmin%2Fpersonal-driver/);
 
     await page.goto('/driver/personal-driver', { waitUntil: 'domcontentloaded', timeout: 60_000 });
-    await expect(page.getByRole('heading', { name: /Espace Chauffeur/i })).toBeVisible();
-    await expect(page.getByText(/Mes missions/i)).toBeVisible();
+    await expect(page).toHaveURL(/\/login\/?\?next=%2Fdriver%2Fpersonal-driver/);
   });
 });
