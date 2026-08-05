@@ -240,6 +240,42 @@ describe('adminManagePersonalDriver', () => {
     }));
   });
 
+  it('preserves the first admin audit when the matching cancelled subscription is retried', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    subscriptionData = {
+      userId: 'user_1',
+      periodStartDate: '2026-08-01',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      stripePaymentIntentId: 'pi_pending',
+    };
+    let transactionCall = 0;
+    mockDb.runTransaction.mockImplementation(async (callback: (tx: typeof mockTransaction) => Promise<unknown>) => {
+      transactionCall += 1;
+      if (transactionCall === 2) {
+        subscriptionData = {
+          userId: 'user_1',
+          periodStartDate: '2026-08-01',
+          status: 'cancelled',
+          paymentStatus: 'cancelled',
+          stripePaymentIntentId: 'pi_pending',
+          cancelledAt: 'FIRST_CANCELLED_AT',
+          cancelledBy: 'admin_original',
+          cancelReason: 'Première raison',
+          updatedAt: 'FIRST_UPDATED_AT',
+        };
+      }
+      return callback(mockTransaction);
+    });
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'cancelSubscription', subscriptionId: 'sub_1', reason: 'Nouvelle raison',
+    }, 'admin_retry'))).resolves.toEqual({ success: true });
+
+    expect(mockTransaction.delete).not.toHaveBeenCalled();
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockSubRef, expect.anything());
+  });
+
   it('rejects a webhook-wins cancellation whose payment identity changed', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
     subscriptionData = {

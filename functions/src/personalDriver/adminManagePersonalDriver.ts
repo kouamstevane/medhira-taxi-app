@@ -194,6 +194,7 @@ export const adminManagePersonalDriver = onCall(
           if (!matchesCancellationIdentity) {
             throw new HttpsError('failed-precondition', 'L’identité du paiement annulé ne correspond plus.');
           }
+          if (typeof subscription.cancelledBy === 'string' && subscription.cancelledBy.trim()) return;
           transaction.update(subRef, adminCancellationUpdate);
           return;
         }
