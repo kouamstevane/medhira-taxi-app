@@ -1,6 +1,6 @@
 export {};
 
-const mockTripRef = { id: 'trip_1' };
+const mockTripRef = { id: 'trip_1', get: jest.fn() };
 const mockSubscriptionRef = { id: 'sub_1' };
 const mockAdminRef = { get: jest.fn() };
 const mockPaymentIntentsCreate = jest.fn();
@@ -109,8 +109,11 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
     mockTransaction.get.mockImplementation(async (ref: unknown) => (
       ref === mockTripRef
         ? { exists: true, data: () => tripData }
-        : { exists: true, data: () => subscriptionData }
+        : ref === mockAdminRef
+          ? { exists: false, data: () => undefined }
+          : { exists: true, data: () => subscriptionData }
     ));
+    mockTripRef.get.mockResolvedValue({ exists: true, data: () => tripData });
     mockTransaction.update.mockImplementation((_ref: unknown, update: Record<string, unknown>) => {
       Object.assign(tripData, update);
     });
@@ -204,6 +207,14 @@ describe('chargePersonalDriverWaitTimeOverage', () => {
 
     await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' })))
       .rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a manual retry from an unrelated user inside the transaction', async () => {
+    const { chargePersonalDriverWaitTimeOverage } = require('../chargeWaitTimeOverage');
+
+    await expect(chargePersonalDriverWaitTimeOverage(makeRequest({ tripId: 'trip_1' }, 'other_user')))
+      .rejects.toMatchObject({ code: 'permission-denied' });
     expect(mockPaymentIntentsCreate).not.toHaveBeenCalled();
   });
 

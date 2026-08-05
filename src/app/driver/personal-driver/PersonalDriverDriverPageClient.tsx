@@ -14,6 +14,17 @@ function getErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : 'Erreur inconnue';
 }
 
+function toMillis(value: unknown): number | null {
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return date instanceof Date && Number.isFinite(date.getTime()) ? date.getTime() : null;
+  }
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
+  if (typeof value !== 'string') return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.getTime() : null;
+}
+
 export function PersonalDriverDriverPageClient() {
   const { currentUser } = useAuth();
   const [tripId, setTripId] = useState('');
@@ -23,35 +34,24 @@ export function PersonalDriverDriverPageClient() {
   const [assignedTrips, setAssignedTrips] = useState<TripRow[]>([]);
 
   // Timer state for wait time
-  const [isWaiting, setIsWaiting] = useState(false);
-  const [waitStartTime, setWaitStartTime] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isWaiting && waitStartTime) {
-      interval = setInterval(() => {
-        setElapsedSeconds(Math.floor((Date.now() - waitStartTime) / 1000));
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isWaiting, waitStartTime]);
-
-  const loadAssignedTrips = useCallback(async () => {
-    if (!currentUser?.uid) return;
+  const loadAssignedTrips = useCallback(async (): Promise<TripRow[]> => {
+    if (!currentUser?.uid) return [];
     setLoadingTrips(true);
     try {
       const snap = await getDocs(
         query(collection(db, 'personal_driver_trips'), where('assignedDriverId', '==', currentUser.uid)),
       );
-      setAssignedTrips(
-        snap.docs
+      const trips = snap.docs
           .map((doc) => ({ id: doc.id, ...doc.data() }) as TripRow)
           .filter((trip) => !['completed', 'cancelled'].includes(trip.status || ''))
-          .sort((left, right) => String(left.scheduledAtIso || '').localeCompare(String(right.scheduledAtIso || ''))),
-      );
+          .sort((left, right) => String(left.scheduledAtIso || '').localeCompare(String(right.scheduledAtIso || '')));
+      setAssignedTrips(trips);
+      return trips;
     } catch (err: unknown) {
       setMessage(`Impossible de charger vos missions: ${getErrorMessage(err)}`);
+      return [];
     } finally {
       setLoadingTrips(false);
     }
@@ -60,6 +60,22 @@ export function PersonalDriverDriverPageClient() {
   useEffect(() => {
     void loadAssignedTrips();
   }, [loadAssignedTrips]);
+
+  const selectedTrip = assignedTrips.find((trip) => trip.id === tripId) ?? null;
+  const waitStartedAt = toMillis(selectedTrip?.waitStartedAt);
+  const waitEndedAt = toMillis(selectedTrip?.waitEndedAt);
+  const isWaiting = selectedTrip?.status === 'driver_arrived' && waitStartedAt !== null && waitEndedAt === null;
+
+  useEffect(() => {
+    if (!isWaiting || waitStartedAt === null) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const tick = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - waitStartedAt) / 1000)));
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [isWaiting, waitStartedAt, waitEndedAt]);
 
   const handleUpdateStatus = async (status: string) => {
     if (!tripId.trim()) return;
@@ -85,30 +101,21 @@ export function PersonalDriverDriverPageClient() {
       }
       await callable({ tripId: tripId.trim(), status, ...location });
 
+      const refreshedTrips = await loadAssignedTrips();
+      const refreshedTrip = refreshedTrips.find((trip) => trip.id === tripId.trim());
       if (status === 'driver_arrived') {
-        setIsWaiting(true);
-        setWaitStartTime(Date.now());
-        setElapsedSeconds(0);
-        setMessage(`Chauffeur arrivé sur place pour le trajet ${tripId}. Chronomètre d'attente démarré.`);
+        setMessage(`Chauffeur arrivé sur place pour le trajet ${tripId}. Le chronomètre utilise l'heure serveur.`);
       } else if (status === 'passenger_picked_up') {
-        setIsWaiting(false);
-        const chargeCallable = httpsCallable(functions, 'chargePersonalDriverWaitTimeOverage');
-        const chargeRes = (await chargeCallable({
-          tripId: tripId.trim(),
-        })) as { data: { success: boolean; waitTimeMinutes: number; feeBilled: number; overageMinutes: number } };
-        const serverWaitTimeMinutes = chargeRes.data?.waitTimeMinutes ?? 0;
-
-        if (chargeRes.data?.overageMinutes > 0) {
-          setMessage(
-            `Passager à bord. Temps d'attente total : ${serverWaitTimeMinutes} min (${chargeRes.data.overageMinutes} min de dépassement). Prélèvement Stripe immédiat de ${chargeRes.data.feeBilled.toFixed(2)} $.`,
-          );
+        if (refreshedTrip?.overageChargeStatus === 'failed') {
+          setMessage('Passager à bord. Le prélèvement d’attente a échoué et nécessite une vérification opérationnelle.');
+        } else if (refreshedTrip?.overageChargeStatus === 'review_required') {
+          setMessage('Passager à bord. Les frais d’attente sont en revue opérationnelle.');
         } else {
-          setMessage(`Passager à bord. Attente de ${serverWaitTimeMinutes} min dans les limites gratuites du forfait.`);
+          setMessage('Passager à bord. Les frais d’attente éventuels sont calculés et traités côté serveur.');
         }
       } else {
         setMessage(`Statut du trajet ${tripId} mis à jour : ${status}`);
       }
-      void loadAssignedTrips();
     } catch (err: unknown) {
       setMessage(`Erreur: ${getErrorMessage(err)}`);
     } finally {
@@ -196,8 +203,19 @@ export function PersonalDriverDriverPageClient() {
             {formatTimer(elapsedSeconds)}
           </div>
           <p className="text-xs text-slate-400">
-            Le décompte a démarré à votre arrivée. Le dépassement sera prélevé automatiquement à la prise en charge du passager.
+            Le décompte utilise l'heure serveur. Les frais éventuels sont traités automatiquement à la prise en charge du passager.
           </p>
+        </div>
+      )}
+
+      {selectedTrip?.overageChargeStatus === 'failed' && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-xs font-semibold text-rose-200">
+          Le prélèvement d’attente a échoué. Une vérification opérationnelle est requise, sans bloquer la mission.
+        </div>
+      )}
+      {selectedTrip?.overageChargeStatus === 'review_required' && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs font-semibold text-amber-200">
+          Les frais d’attente sont en revue opérationnelle. Aucune action de facturation n’est effectuée depuis l’application.
         </div>
       )}
 

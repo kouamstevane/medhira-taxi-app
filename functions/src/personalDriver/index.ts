@@ -3,5 +3,6 @@ export { renewPersonalDriverSubscriptionPayment } from './renewSubscriptionPayme
 export { adminManagePersonalDriver } from './adminManagePersonalDriver.js';
 export { driverUpdatePersonalDriverTrip } from './driverUpdatePersonalDriverTrip.js';
 export { chargePersonalDriverWaitTimeOverage } from './chargeWaitTimeOverage.js';
+export { settlePersonalDriverWaitOverageOnPickup } from './settleWaitTimeOverage.js';
 export { clientManagePersonalDriver } from './clientManagePersonalDriver.js';
 export { expirePersonalDriverSubscriptions } from './expireSubscriptions.js';
