@@ -13,6 +13,7 @@ import { db, functions } from '@/config/firebase';
 import type {
   PersonalDriverPlanId,
   PersonalDriverAuthoritativeQuote,
+  RequestSpecialTripResult,
   PersonalDriverSubscription,
   PersonalDriverTrip,
   PersonalDriverTripType,
@@ -38,8 +39,6 @@ export interface CreatePersonalDriverSubscriptionPaymentInput {
 
 interface ClientManagePersonalDriverResult {
   success: boolean;
-  tripId?: string;
-  specialTripsRemaining?: number;
 }
 
 export interface CreatePersonalDriverSubscriptionPaymentResult {
@@ -252,7 +251,7 @@ export async function requestSpecialTrip(
   destinationAddress: string,
   scheduledAtIso: string,
   distanceKm: number,
-): Promise<void> {
+): Promise<RequestSpecialTripResult> {
   void userId;
   void planId;
   const callable = httpsCallable<
@@ -264,9 +263,9 @@ export async function requestSpecialTrip(
       scheduledAtIso: string;
       distanceKm: number;
     },
-    ClientManagePersonalDriverResult
+    RequestSpecialTripResult
   >(functions, 'clientManagePersonalDriver');
-  await callable({
+  const response = await callable({
     action: 'requestSpecialTrip',
     subscriptionId,
     pickupAddress,
@@ -274,4 +273,5 @@ export async function requestSpecialTrip(
     scheduledAtIso,
     distanceKm,
   });
+  return response.data;
 }

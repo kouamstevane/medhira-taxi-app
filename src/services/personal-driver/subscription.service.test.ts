@@ -36,7 +36,15 @@ describe('Personal Driver subscription client actions', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers().setSystemTime(new Date('2026-08-04T12:00:00.000Z'));
-    mockCallable.mockResolvedValue({ data: { success: true, tripId: 'trip_special', specialTripsRemaining: 1 } });
+    mockCallable.mockResolvedValue({
+      data: {
+        success: true,
+        tripId: 'trip_special',
+        officialDistanceKm: 18.4,
+        specialTripsRemaining: 1,
+        monthlyDistanceKmRemaining: 81.6,
+      },
+    });
   });
 
   afterEach(() => {
@@ -225,7 +233,7 @@ describe('Personal Driver subscription client actions', () => {
   });
 
   it('requests special trips through the secure callable', async () => {
-    await requestSpecialTrip(
+    const result = await requestSpecialTrip(
       'sub_1',
       'client_1',
       'classic',
@@ -242,6 +250,13 @@ describe('Personal Driver subscription client actions', () => {
       destinationAddress: 'Aeroport',
       scheduledAtIso: '2026-08-12T09:30:00',
       distanceKm: 18,
+    });
+    expect(result).toEqual({
+      success: true,
+      tripId: 'trip_special',
+      officialDistanceKm: 18.4,
+      specialTripsRemaining: 1,
+      monthlyDistanceKmRemaining: 81.6,
     });
   });
 

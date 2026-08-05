@@ -71,6 +71,14 @@ export interface PersonalDriverAuthoritativeQuote {
   currency: string;
 }
 
+export interface RequestSpecialTripResult {
+  success: true;
+  tripId: string;
+  officialDistanceKm: number;
+  specialTripsRemaining: number;
+  monthlyDistanceKmRemaining: number;
+}
+
 export interface PersonalDriverPriceComparison {
   monthlyDistanceKm: number;
   plans: Record<PersonalDriverPlanId, PersonalDriverPlanPrice>;
@@ -131,6 +139,12 @@ export interface PersonalDriverTrip {
   direction: 'outbound' | 'return' | 'special';
   isSpecialTrip?: boolean;
   distanceKm?: number;
+  specialTripDistanceUsage?: {
+    policy: 'monthly_distance_allowance';
+    officialDistanceKm: number;
+    monthlyDistanceKmRemainingBefore: number;
+    monthlyDistanceKmRemainingAfter: number;
+  };
   status: PersonalDriverTripStatus;
   scheduledAtIso: string;
   pickupAddress: string;

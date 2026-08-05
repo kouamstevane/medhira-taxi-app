@@ -7,6 +7,7 @@ import {
   getPersonalDriverSubscriptionView,
   getPersonalDriverSubscriptionById,
   getPersonalDriverTripsForSubscription,
+  requestSpecialTrip,
   renewPersonalDriverSubscriptionPayment,
 } from '@/services/personal-driver/subscription.service';
 
@@ -16,6 +17,7 @@ jest.mock('@/services/personal-driver/subscription.service', () => ({
   getPersonalDriverSubscriptionView: jest.fn(),
   getPersonalDriverSubscriptionById: jest.fn(),
   getPersonalDriverTripsForSubscription: jest.fn(),
+  requestSpecialTrip: jest.fn(),
   renewPersonalDriverSubscriptionPayment: jest.fn(),
 }));
 
@@ -267,6 +269,59 @@ describe('PersonalDriverClientDashboard Component', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Renouveler' }));
 
     expect(await screen.findByRole('button', { name: /Payer 451,25.*US/ })).toBeVisible();
+  });
+
+  it('shows authoritative special-trip quotas and clears them before a later request', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-04T12:00:00.000Z'));
+    (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
+      id: 'sub_active',
+      userId: 'user_123',
+      selectedPlanId: 'classic',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      monthlyDistanceKm: 50,
+      monthlyDistanceKmRemaining: 50,
+      specialTripsUsed: 0,
+      periodStartDate: '2026-08-01',
+      periodEndDateExclusive: '2026-09-01',
+      periodStartAtUtc: '2026-08-01T00:00:00.000Z',
+      periodEndAtUtc: '2026-09-01T00:00:00.000Z',
+      pickupAddress: '100 rue Principale',
+      destinationAddress: '500 rue Universite',
+    });
+    (getPersonalDriverTripsForSubscription as jest.Mock).mockResolvedValue([]);
+    (requestSpecialTrip as jest.Mock).mockResolvedValue({
+      success: true,
+      tripId: 'special_1',
+      officialDistanceKm: 8.2,
+      specialTripsRemaining: 1,
+      monthlyDistanceKmRemaining: 41.8,
+    });
+
+    render(<PersonalDriverClientDashboard />);
+    fireEvent.click(await screen.findByRole('button', { name: /Demander un trajet spécial/i }));
+    expect(screen.getByText(/déduit du kilométrage restant affiché/i)).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Lieu de prise en charge'), { target: { value: 'Clinique' } });
+    fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'Aéroport' } });
+    fireEvent.change(screen.getByLabelText('Date du trajet'), { target: { value: '2026-08-12' } });
+    fireEvent.change(screen.getByLabelText('Heure du trajet'), { target: { value: '09:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer le trajet spécial' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Distance officielle : 8,2 km. Trajets spéciaux restants : 1. Kilométrage restant : 41,8 km.',
+    );
+
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    (requestSpecialTrip as jest.Mock).mockRejectedValueOnce(new Error('Route indisponible'));
+    fireEvent.click(screen.getByRole('button', { name: /Demander un trajet spécial/i }));
+    fireEvent.change(screen.getByLabelText('Lieu de prise en charge'), { target: { value: 'Clinique' } });
+    fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'Aéroport' } });
+    fireEvent.change(screen.getByLabelText('Date du trajet'), { target: { value: '2026-08-13' } });
+    fireEvent.change(screen.getByLabelText('Heure du trajet'), { target: { value: '10:30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer le trajet spécial' }));
+
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    consoleErrorSpy.mockRestore();
   });
 
   it('polls the known paid renewal every two seconds after confirmation and exposes failure guidance', async () => {

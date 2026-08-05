@@ -1,7 +1,24 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { defineSecret } from 'firebase-functions/params';
+import type Stripe from 'stripe';
 import { z } from 'zod';
+import { createStripeClient } from '../stripe/stripe-client.js';
 import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './entitlement.js';
+import { cancelPersonalDriverTrip } from './cancelPersonalDriverTrip.js';
+import {
+  createSubscriptionPeriodLockId,
+  releaseSubscriptionPeriodLock,
+} from './subscriptionPeriodLock.js';
+
+const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
+
+let stripe: InstanceType<typeof Stripe> | null = null;
+
+function getStripe(): InstanceType<typeof Stripe> {
+  if (!stripe) stripe = createStripeClient(stripeSecretKey.value().trim());
+  return stripe;
+}
 
 function getDb(): FirebaseFirestore.Firestore {
   if (!admin.apps.length) admin.initializeApp();
@@ -54,6 +71,11 @@ const adminActionSchema = z.discriminatedUnion('action', [
     reason: z.string().optional(),
   }),
   z.object({
+    action: z.literal('cancelTrip'),
+    tripId: z.string().min(1),
+    reason: z.string().optional(),
+  }),
+  z.object({
     action: z.literal('assignTrip'),
     tripId: z.string().min(1),
     driverId: z.string().min(1),
@@ -68,7 +90,7 @@ const adminActionSchema = z.discriminatedUnion('action', [
 ]);
 
 export const adminManagePersonalDriver = onCall(
-  { region: 'europe-west1' },
+  { region: 'europe-west1', secrets: [stripeSecretKey] },
   async (request: CallableRequest<unknown>) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
@@ -87,11 +109,113 @@ export const adminManagePersonalDriver = onCall(
 
     if (payload.action === 'cancelSubscription') {
       const subRef = db.collection('personal_driver_subscriptions').doc(payload.subscriptionId);
-      await subRef.update({
-        status: 'cancelled',
-        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-        cancelledBy: request.auth.uid,
-        cancelReason: payload.reason || null,
+      const cancellation = await db.runTransaction(async (transaction) => {
+        const subscriptionSnapshot = await transaction.get(subRef);
+        if (!subscriptionSnapshot.exists) {
+          throw new HttpsError('not-found', 'Abonnement introuvable.');
+        }
+
+        const subscription = subscriptionSnapshot.data();
+        const unpaidPending = subscription?.status === 'pending_payment'
+          && ['pending', 'requires_action'].includes(subscription.paymentStatus);
+        if (!unpaidPending) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Seul un abonnement en attente et non payé peut être annulé sans décision de remboursement.',
+          );
+        }
+        if (
+          typeof subscription?.userId !== 'string'
+          || typeof subscription?.periodStartDate !== 'string'
+          || typeof subscription?.stripePaymentIntentId !== 'string'
+        ) {
+          throw new HttpsError('failed-precondition', 'Le paiement en attente de cet abonnement est invalide.');
+        }
+        return {
+          userId: subscription.userId,
+          periodStartDate: subscription.periodStartDate,
+          paymentIntentId: subscription.stripePaymentIntentId,
+        };
+      });
+
+      const paymentIntent = await getStripe().paymentIntents.retrieve(cancellation.paymentIntentId);
+      if (
+        paymentIntent.metadata.purpose !== 'personal_driver_subscription'
+        || paymentIntent.metadata.subscriptionId !== payload.subscriptionId
+        || paymentIntent.metadata.userId !== cancellation.userId
+      ) {
+        throw new HttpsError('failed-precondition', 'Le PaymentIntent ne correspond pas à cet abonnement.');
+      }
+      if (paymentIntent.status === 'succeeded') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Le paiement est confirmé. Une décision de remboursement est requise avant toute annulation.',
+        );
+      }
+      if (paymentIntent.status !== 'canceled') {
+        try {
+          const cancelledPaymentIntent = await getStripe().paymentIntents.cancel(cancellation.paymentIntentId);
+          if (cancelledPaymentIntent.status !== 'canceled') {
+            throw new HttpsError('failed-precondition', 'Le paiement en attente ne peut pas être annulé.');
+          }
+        } catch (error) {
+          if (error instanceof HttpsError) throw error;
+          const latestPaymentIntent = await getStripe().paymentIntents.retrieve(cancellation.paymentIntentId);
+          if (latestPaymentIntent.status === 'succeeded') {
+            throw new HttpsError(
+              'failed-precondition',
+              'Le paiement est confirmé. Une décision de remboursement est requise avant toute annulation.',
+            );
+          }
+          if (latestPaymentIntent.status !== 'canceled') {
+            throw new HttpsError('failed-precondition', 'Le paiement en attente ne peut pas être annulé.');
+          }
+        }
+      }
+
+      await db.runTransaction(async (transaction) => {
+        const subscriptionSnapshot = await transaction.get(subRef);
+        if (!subscriptionSnapshot.exists) {
+          throw new HttpsError('not-found', 'Abonnement introuvable.');
+        }
+        const subscription = subscriptionSnapshot.data();
+        if (subscription?.status === 'cancelled' && subscription.paymentStatus === 'cancelled') return;
+        if (
+          subscription?.userId !== cancellation.userId
+          || subscription.periodStartDate !== cancellation.periodStartDate
+          || subscription.stripePaymentIntentId !== cancellation.paymentIntentId
+          || subscription.status !== 'pending_payment'
+          || !['pending', 'requires_action'].includes(subscription.paymentStatus)
+        ) {
+          throw new HttpsError('failed-precondition', 'L’état du paiement a changé pendant l’annulation.');
+        }
+
+        const lockId = createSubscriptionPeriodLockId(cancellation.userId, cancellation.periodStartDate);
+        const lockRef = db.collection('personal_driver_subscription_locks').doc(lockId);
+        const released = await releaseSubscriptionPeriodLock(transaction, lockRef, {
+          subscriptionId: payload.subscriptionId,
+          paymentIntentId: cancellation.paymentIntentId,
+        });
+        if (!released) {
+          throw new HttpsError('failed-precondition', 'Le verrou de période de cet abonnement ne peut pas être libéré.');
+        }
+
+        transaction.update(subRef, {
+          status: 'cancelled',
+          paymentStatus: 'cancelled',
+          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          cancelledBy: adminUid,
+          cancelReason: payload.reason || null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      return { success: true };
+    }
+
+    if (payload.action === 'cancelTrip') {
+      await cancelPersonalDriverTrip(db, {
+        tripId: payload.tripId,
+        actor: { kind: 'admin', uid: adminUid, reason: payload.reason },
       });
       return { success: true };
     }

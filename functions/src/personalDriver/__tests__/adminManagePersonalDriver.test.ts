@@ -1,10 +1,21 @@
 export {};
 
-const mockSubRef = { id: 'sub_1' };
+const mockSubRef = { id: 'sub_1', update: jest.fn() };
 const mockTripRef = { id: 'trip_1' };
 const mockDriverRef = { id: 'driver_1' };
+const mockLockRef = { id: 'period_lock_1' };
 const mockAdminRef = { get: jest.fn() };
 const mockNotificationRef = { id: 'notification_1' };
+const mockStripeRetrieve = jest.fn();
+const mockStripeCancel = jest.fn();
+const mockStripe = {
+  paymentIntents: {
+    retrieve: mockStripeRetrieve,
+    cancel: mockStripeCancel,
+  },
+};
+const mockAssignedTripsQuery: { where: jest.Mock } = { where: jest.fn() };
+mockAssignedTripsQuery.where.mockReturnValue(mockAssignedTripsQuery);
 const mockIsSubscriptionEntitled = jest.fn((subscription: Record<string, unknown>) => (
   subscription?.status === 'active' && subscription?.paymentStatus === 'succeeded'
 ));
@@ -25,14 +36,21 @@ const mockTransaction = {
   get: jest.fn(),
   update: jest.fn(),
   set: jest.fn(),
+  delete: jest.fn(),
 };
 const mockDb = {
   collection: jest.fn((name: string) => {
     if (name === 'admins') return { doc: jest.fn(() => mockAdminRef) };
     if (name === 'drivers') return { doc: jest.fn(() => mockDriverRef) };
     if (name === 'personal_driver_subscriptions') return { doc: jest.fn(() => mockSubRef) };
-    if (name === 'personal_driver_trips') return { doc: jest.fn(() => mockTripRef) };
-    if (name === 'notifications') return { doc: jest.fn(() => mockNotificationRef) };
+    if (name === 'personal_driver_subscription_locks') return { doc: jest.fn(() => mockLockRef) };
+    if (name === 'personal_driver_trips') {
+      return {
+        doc: jest.fn(() => mockTripRef),
+        where: jest.fn(() => mockAssignedTripsQuery),
+      };
+    }
+    if (name === 'notifications') return { doc: jest.fn((id?: string) => id ? { id } : mockNotificationRef) };
     throw new Error(`Unexpected collection ${name}`);
   }),
   runTransaction: jest.fn((callback: (tx: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction)),
@@ -57,6 +75,14 @@ jest.mock('firebase-functions/v2/https', () => ({
   },
 }));
 
+jest.mock('firebase-functions/params', () => ({
+  defineSecret: jest.fn(() => ({ value: jest.fn(() => 'sk_test_123') })),
+}));
+
+jest.mock('../../stripe/stripe-client', () => ({
+  createStripeClient: jest.fn(() => mockStripe),
+}));
+
 jest.mock('../entitlement', () => ({
   isSubscriptionEntitled: mockIsSubscriptionEntitled,
   markExpiredSubscriptionInTransaction: mockMarkExpiredSubscriptionInTransaction,
@@ -70,6 +96,7 @@ describe('adminManagePersonalDriver', () => {
   let tripData: Record<string, unknown>;
   let subscriptionData: Record<string, unknown>;
   let driverData: Record<string, unknown>;
+  let lockData: Record<string, unknown>;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -82,9 +109,18 @@ describe('adminManagePersonalDriver', () => {
       periodEndAtUtc: new Date('2027-01-01T00:00:00.000Z'),
     };
     driverData = { status: 'approved', isAvailable: true };
+    lockData = { subscriptionId: 'sub_1', state: 'pending_payment', paymentIntentId: 'pi_pending' };
+    mockStripeRetrieve.mockResolvedValue({
+      id: 'pi_pending',
+      status: 'requires_action',
+      metadata: { purpose: 'personal_driver_subscription', subscriptionId: 'sub_1', userId: 'user_1' },
+    });
+    mockStripeCancel.mockResolvedValue({ id: 'pi_pending', status: 'canceled' });
     mockTransaction.get.mockImplementation(async (ref: unknown) => {
       if (ref === mockTripRef) return { exists: true, data: () => tripData };
       if (ref === mockDriverRef) return { exists: true, data: () => driverData };
+      if (ref === mockLockRef) return { exists: true, data: () => lockData };
+      if (ref === mockAssignedTripsQuery) return { docs: [{ id: 'trip_1' }] };
       return { exists: true, data: () => subscriptionData };
     });
     mockTransaction.update.mockImplementation((_ref: unknown, update: Record<string, unknown>) => {
@@ -102,6 +138,126 @@ describe('adminManagePersonalDriver', () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
     await expect(adminManagePersonalDriver(makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1')))
       .rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+
+  it('cancels a trip through the shared operational cancellation path', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    tripData.status = 'driver_assigned';
+    tripData.assignedDriverId = 'driver_1';
+    tripData.assignedVehicleId = 'vehicle_1';
+    driverData.isAvailable = false;
+    driverData.availabilityStatus = 'busy_personal_driver';
+    driverData.activePersonalDriverTripId = 'trip_1';
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'cancelTrip', tripId: 'trip_1', reason: 'Incident opérationnel',
+    }, 'admin_1'))).resolves.toEqual({ success: true });
+
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      status: 'cancelled',
+      cancelledBy: 'admin',
+      assignedDriverId: null,
+      assignedVehicleId: null,
+    }));
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockDriverRef, expect.objectContaining({
+      isAvailable: true,
+      availabilityStatus: 'available',
+    }));
+  });
+
+  it('rejects cancellation of a paid active subscription without inventing a refund path', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'cancelSubscription', subscriptionId: 'sub_1', reason: 'Demande client',
+    }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+
+    expect(mockTransaction.update).not.toHaveBeenCalled();
+    expect(mockTransaction.delete).not.toHaveBeenCalled();
+  });
+
+  it('cancels an unpaid pending subscription and releases its matching period lock', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    subscriptionData = {
+      userId: 'user_1',
+      periodStartDate: '2026-08-01',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      stripePaymentIntentId: 'pi_pending',
+    };
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'cancelSubscription', subscriptionId: 'sub_1', reason: 'Abandon avant paiement',
+    }, 'admin_1'))).resolves.toEqual({ success: true });
+
+    expect(mockDb.runTransaction).toHaveBeenCalledTimes(2);
+    expect(mockStripeRetrieve).toHaveBeenCalledWith('pi_pending');
+    expect(mockStripeCancel).toHaveBeenCalledWith('pi_pending');
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubRef, expect.objectContaining({
+      status: 'cancelled',
+      paymentStatus: 'cancelled',
+      cancelledBy: 'admin_1',
+    }));
+    expect(mockTransaction.delete).toHaveBeenCalledWith(mockLockRef);
+  });
+
+  it('does not release a pending subscription whose payment settled before cancellation', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    subscriptionData = {
+      userId: 'user_1',
+      periodStartDate: '2026-08-01',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      stripePaymentIntentId: 'pi_pending',
+    };
+    mockStripeRetrieve.mockResolvedValue({
+      id: 'pi_pending',
+      status: 'succeeded',
+      metadata: { purpose: 'personal_driver_subscription', subscriptionId: 'sub_1', userId: 'user_1' },
+    });
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'cancelSubscription', subscriptionId: 'sub_1', reason: 'Trop tard',
+    }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+
+    expect(mockStripeCancel).not.toHaveBeenCalled();
+    expect(mockTransaction.delete).not.toHaveBeenCalled();
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockSubRef, expect.objectContaining({
+      status: 'cancelled',
+    }));
+  });
+
+  it('does not release the lock when payment succeeds during Stripe cancellation', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    subscriptionData = {
+      userId: 'user_1',
+      periodStartDate: '2026-08-01',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      stripePaymentIntentId: 'pi_pending',
+    };
+    mockStripeRetrieve
+      .mockResolvedValueOnce({
+        id: 'pi_pending',
+        status: 'requires_action',
+        metadata: { purpose: 'personal_driver_subscription', subscriptionId: 'sub_1', userId: 'user_1' },
+      })
+      .mockResolvedValueOnce({
+        id: 'pi_pending',
+        status: 'succeeded',
+        metadata: { purpose: 'personal_driver_subscription', subscriptionId: 'sub_1', userId: 'user_1' },
+      });
+    mockStripeCancel.mockRejectedValue(new Error('PaymentIntent already succeeded'));
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'cancelSubscription', subscriptionId: 'sub_1', reason: 'Course Stripe',
+    }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+
+    expect(mockStripeRetrieve).toHaveBeenCalledTimes(2);
+    expect(mockTransaction.delete).not.toHaveBeenCalled();
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockSubRef, expect.objectContaining({
+      status: 'cancelled',
+    }));
   });
 
   it('assigns a driver only after reading trip, driver, and subscription in one transaction', async () => {

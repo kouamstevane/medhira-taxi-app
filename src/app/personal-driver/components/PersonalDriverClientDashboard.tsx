@@ -18,6 +18,7 @@ import {
 } from '@/services/personal-driver/subscription.service';
 import type {
   PersonalDriverPlanId,
+  RequestSpecialTripResult,
   PersonalDriverSubscription,
   PersonalDriverTrip,
 } from '@/types/personal-driver';
@@ -86,6 +87,7 @@ export function PersonalDriverClientDashboard() {
   const [selectedTripToCancel, setSelectedTripToCancel] = useState<PersonalDriverTrip | null>(null);
   const [showSpecialTripModal, setShowSpecialTripModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [specialTripResult, setSpecialTripResult] = useState<RequestSpecialTripResult | null>(null);
 
   // Form state for special trip
   const [specialPickup, setSpecialPickup] = useState('');
@@ -230,6 +232,7 @@ export function PersonalDriverClientDashboard() {
   const handleCancelTrip = async () => {
     if (!selectedTripToCancel) return;
     setActionLoading(true);
+    setSpecialTripResult(null);
     try {
       await cancelPersonalDriverTripByClient(selectedTripToCancel.id);
       await reloadData();
@@ -246,10 +249,11 @@ export function PersonalDriverClientDashboard() {
     if (!subscription || !isSubscriptionUsable(subscription) || !specialPickup || !specialDestination || !specialDate || !specialTime) return;
 
     setActionLoading(true);
+    setSpecialTripResult(null);
     try {
       const scheduledIso = `${specialDate}T${specialTime}:00`;
       const planId = (subscription.planId || (subscription as unknown as { selectedPlanId: PersonalDriverPlanId }).selectedPlanId) ?? 'classic';
-      await requestSpecialTrip(
+      const result = await requestSpecialTrip(
         subscription.id,
         subscription.userId,
         planId,
@@ -258,6 +262,7 @@ export function PersonalDriverClientDashboard() {
         scheduledIso,
         Number(specialDistance) || 10,
       );
+      setSpecialTripResult(result);
       await reloadData();
       setShowSpecialTripModal(false);
       setSpecialPickup('');
@@ -329,6 +334,7 @@ export function PersonalDriverClientDashboard() {
   const specialTripsUsed = subscription.specialTripsUsed ?? 0;
   const specialTripsRemaining = Math.max(0, includedSpecialTrips - specialTripsUsed);
   const subscriptionUsable = isSubscriptionUsable(subscription);
+  const distanceFormatter = new Intl.NumberFormat('fr-CA', { maximumFractionDigits: 1 });
   const paymentStatusLabel = subscription.paymentStatus === 'succeeded'
     ? 'Paiement confirmé'
     : subscription.paymentStatus === 'requires_action'
@@ -459,6 +465,17 @@ export function PersonalDriverClientDashboard() {
           </div>
         )}
       </section>
+
+      {specialTripResult && (
+        <p
+          className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-300"
+          role="status"
+        >
+          Distance officielle : {distanceFormatter.format(specialTripResult.officialDistanceKm)} km.
+          {' '}Trajets spéciaux restants : {specialTripResult.specialTripsRemaining}.
+          {' '}Kilométrage restant : {distanceFormatter.format(specialTripResult.monthlyDistanceKmRemaining)} km.
+        </p>
+      )}
 
       {/* VOS AVANTAGES FORFAIT */}
       <div className="rounded-2xl border border-white/10 bg-card p-6 shadow-xl">
@@ -680,7 +697,7 @@ export function PersonalDriverClientDashboard() {
             </div>
 
             <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs text-primary">
-              ℹ️ Le kilométrage de ce trajet spécial sera automatiquement déduit du forfait global de votre période.
+              ℹ️ Le kilométrage officiel de ce trajet spécial sera déduit du kilométrage restant affiché pour votre période.
             </div>
 
             <div className="space-y-3">

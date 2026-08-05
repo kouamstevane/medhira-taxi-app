@@ -2,6 +2,16 @@ export {};
 
 const mockTripRef = { id: 'trip_1' };
 const mockNewTripRef = { id: 'special_1' };
+const mockDriverRef = { id: 'driver_1' };
+const mockAssignedTripsQuery: { where: jest.Mock } = { where: jest.fn() };
+mockAssignedTripsQuery.where.mockReturnValue(mockAssignedTripsQuery);
+const mockCustomerCancellationNotificationRef = { id: 'personal_driver_trip_cancelled_trip_1_customer' };
+const mockDriverCancellationNotificationRef = { id: 'personal_driver_trip_cancelled_trip_1_driver' };
+const mockNotificationDoc = jest.fn((id?: string) => {
+  if (id === mockCustomerCancellationNotificationRef.id) return mockCustomerCancellationNotificationRef;
+  if (id === mockDriverCancellationNotificationRef.id) return mockDriverCancellationNotificationRef;
+  return { id: id ?? 'notification_1' };
+});
 const mockTransaction = {
   get: jest.fn(),
   update: jest.fn(),
@@ -9,13 +19,18 @@ const mockTransaction = {
 };
 const mockSubscriptionRef = { id: 'sub_1', get: jest.fn(() => mockTransaction.get()) };
 const mockDb = {
-  collection: jest.fn((name: string) => ({
-    doc: jest.fn((id?: string) => {
-      if (name === 'personal_driver_subscriptions') return mockSubscriptionRef;
-      if (id === 'trip_1') return mockTripRef;
-      return mockNewTripRef;
-    }),
-  })),
+  collection: jest.fn((name: string) => {
+    if (name === 'personal_driver_subscriptions') return { doc: jest.fn(() => mockSubscriptionRef) };
+    if (name === 'personal_driver_trips') {
+      return {
+        doc: jest.fn((id?: string) => id === 'trip_1' ? mockTripRef : mockNewTripRef),
+        where: jest.fn(() => mockAssignedTripsQuery),
+      };
+    }
+    if (name === 'drivers') return { doc: jest.fn(() => mockDriverRef) };
+    if (name === 'notifications') return { doc: mockNotificationDoc };
+    throw new Error(`Unexpected collection ${name}`);
+  }),
   runTransaction: jest.fn((callback: (tx: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction)),
 };
 const mockCalculateServerRoute = jest.fn();
@@ -93,14 +108,83 @@ describe('clientManagePersonalDriver', () => {
 
   it('clears an assigned trip before completing the client cancellation reconciliation', async () => {
     const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
-    mockTransaction.get.mockResolvedValue({
-      exists: true,
-      data: () => ({
+    const trip = {
+      userId: 'client_1',
+      status: 'driver_assigned',
+      assignedDriverId: 'driver_1',
+      assignedVehicleId: 'vehicle_1',
+    };
+    const driver = {
+      isAvailable: false,
+      availabilityStatus: 'busy_personal_driver',
+      activePersonalDriverTripId: 'trip_1',
+    };
+    mockTransaction.get.mockImplementation(async (ref: unknown) => {
+      if (ref === mockTripRef) return { exists: true, data: () => trip };
+      if (ref === mockDriverRef) return { exists: true, data: () => driver };
+      if (ref === mockAssignedTripsQuery) return { docs: [{ id: 'trip_1' }] };
+      throw new Error('Unexpected transaction read');
+    });
+    mockTransaction.update.mockImplementation((ref: unknown, update: Record<string, unknown>) => {
+      if (ref === mockTripRef) Object.assign(trip, update);
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({ action: 'cancelTrip', tripId: 'trip_1' }, 'client_1')))
+      .resolves.toEqual({ success: true });
+    await expect(clientManagePersonalDriver(makeRequest({ action: 'cancelTrip', tripId: 'trip_1' }, 'client_1')))
+      .resolves.toEqual({ success: true });
+
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      status: 'cancelled',
+      assignedDriverId: null,
+      assignedVehicleId: null,
+    }));
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockDriverRef, expect.objectContaining({
+      isAvailable: true,
+      availabilityStatus: 'available',
+      activePersonalDriverTripId: null,
+    }));
+    expect(mockTransaction.set).toHaveBeenCalledTimes(2);
+    expect(mockTransaction.set).toHaveBeenCalledWith(
+      mockCustomerCancellationNotificationRef,
+      expect.objectContaining({
         userId: 'client_1',
-        status: 'assigned',
-        assignedDriverId: 'driver_1',
-        assignedVehicleId: 'vehicle_1',
+        type: 'personal_driver_trip_cancelled',
+        idempotencyKey: 'personal_driver_trip_cancelled_trip_1_customer',
       }),
+    );
+    expect(mockTransaction.set).toHaveBeenCalledWith(
+      mockDriverCancellationNotificationRef,
+      expect.objectContaining({
+        userId: 'driver_1',
+        type: 'personal_driver_trip_cancelled_driver',
+        idempotencyKey: 'personal_driver_trip_cancelled_trip_1_driver',
+      }),
+    );
+  });
+
+  it('keeps the driver unavailable when another nonterminal trip remains assigned', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    const trip = {
+      userId: 'client_1',
+      status: 'driver_en_route',
+      assignedDriverId: 'driver_1',
+      assignedVehicleId: 'vehicle_1',
+    };
+    mockTransaction.get.mockImplementation(async (ref: unknown) => {
+      if (ref === mockTripRef) return { exists: true, data: () => trip };
+      if (ref === mockDriverRef) {
+        return {
+          exists: true,
+          data: () => ({
+            isAvailable: false,
+            availabilityStatus: 'busy_personal_driver',
+            activePersonalDriverTripId: 'trip_1',
+          }),
+        };
+      }
+      if (ref === mockAssignedTripsQuery) return { docs: [{ id: 'trip_1' }, { id: 'trip_2' }] };
+      throw new Error('Unexpected transaction read');
     });
 
     await expect(clientManagePersonalDriver(makeRequest({ action: 'cancelTrip', tripId: 'trip_1' }, 'client_1')))
@@ -111,6 +195,62 @@ describe('clientManagePersonalDriver', () => {
       assignedDriverId: null,
       assignedVehicleId: null,
     }));
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockDriverRef, expect.anything());
+  });
+
+  it('still cancels the trip when its assigned driver document no longer exists', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    const trip = {
+      userId: 'client_1',
+      status: 'driver_assigned',
+      assignedDriverId: 'driver_1',
+      assignedVehicleId: 'vehicle_1',
+    };
+    mockTransaction.get.mockImplementation(async (ref: unknown) => {
+      if (ref === mockTripRef) return { exists: true, data: () => trip };
+      if (ref === mockDriverRef) return { exists: false, data: () => undefined };
+      if (ref === mockAssignedTripsQuery) return { docs: [{ id: 'trip_1' }] };
+      throw new Error('Unexpected transaction read');
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({ action: 'cancelTrip', tripId: 'trip_1' }, 'client_1')))
+      .resolves.toEqual({ success: true });
+
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
+      status: 'cancelled',
+    }));
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockDriverRef, expect.anything());
+  });
+
+  it('does not expose a driver whose availability belongs to another service', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    const trip = {
+      userId: 'client_1',
+      status: 'driver_assigned',
+      assignedDriverId: 'driver_1',
+      assignedVehicleId: 'vehicle_1',
+    };
+    mockTransaction.get.mockImplementation(async (ref: unknown) => {
+      if (ref === mockTripRef) return { exists: true, data: () => trip };
+      if (ref === mockDriverRef) {
+        return {
+          exists: true,
+          data: () => ({
+            isAvailable: false,
+            availabilityStatus: 'busy_taxi',
+            activePersonalDriverTripId: 'trip_1',
+            activeBookingId: 'booking_1',
+          }),
+        };
+      }
+      if (ref === mockAssignedTripsQuery) return { docs: [{ id: 'trip_1' }] };
+      throw new Error('Unexpected transaction read');
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({ action: 'cancelTrip', tripId: 'trip_1' }, 'client_1')))
+      .resolves.toEqual({ success: true });
+
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockDriverRef, expect.anything());
   });
 
   it('rejects cancellation by a different client', async () => {
@@ -168,6 +308,12 @@ describe('clientManagePersonalDriver', () => {
       userId: 'client_1',
       planId: 'classic',
       status: 'scheduled',
+      specialTripDistanceUsage: {
+        policy: 'monthly_distance_allowance',
+        officialDistanceKm: 8.2,
+        monthlyDistanceKmRemainingBefore: 50,
+        monthlyDistanceKmRemainingAfter: 41.8,
+      },
     }));
     expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
       specialTripsUsed: { __increment: 1 },

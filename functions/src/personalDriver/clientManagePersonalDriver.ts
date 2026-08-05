@@ -5,6 +5,7 @@ import { calculateServerRoute } from './routeDistance.js';
 import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './entitlement.js';
 import { localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
 import { assertFutureSpecialTrip } from './subscriptionSchedule.js';
+import { cancelPersonalDriverTrip } from './cancelPersonalDriverTrip.js';
 
 type PersonalDriverPlanId = 'basic' | 'classic' | 'premium';
 
@@ -102,27 +103,9 @@ export const clientManagePersonalDriver = onCall(
     const payload = parsed.data;
 
     if (payload.action === 'cancelTrip') {
-      const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
-      await db.runTransaction(async (transaction) => {
-        const tripSnap = await transaction.get(tripRef);
-        if (!tripSnap.exists) {
-          throw new HttpsError('not-found', 'Trajet introuvable.');
-        }
-        const trip = tripSnap.data();
-        if (trip?.userId !== uid) {
-          throw new HttpsError('permission-denied', 'Ce trajet ne vous appartient pas.');
-        }
-        if (trip.status === 'completed' || trip.status === 'cancelled') {
-          throw new HttpsError('failed-precondition', 'Ce trajet ne peut plus être annulé.');
-        }
-
-        transaction.update(tripRef, {
-          status: 'cancelled',
-          cancelledBy: 'client',
-          clientCancelledLostKm: true,
-          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      await cancelPersonalDriverTrip(db, {
+        tripId: payload.tripId,
+        actor: { kind: 'client', uid },
       });
       return { success: true };
     }
@@ -226,6 +209,12 @@ export const clientManagePersonalDriver = onCall(
         scheduledAtIso: scheduledAtUtc.toISOString(),
         status: 'scheduled',
         distanceKm,
+        specialTripDistanceUsage: {
+          policy: 'monthly_distance_allowance',
+          officialDistanceKm: distanceKm,
+          monthlyDistanceKmRemainingBefore: monthlyDistanceKmRemaining,
+          monthlyDistanceKmRemainingAfter: nextRemainingDistanceKm,
+        },
         assignedDriverId: null,
         assignedVehicleId: null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -243,7 +232,9 @@ export const clientManagePersonalDriver = onCall(
         kind: 'created' as const,
         success: true,
         tripId: tripRef.id,
+        officialDistanceKm: distanceKm,
         specialTripsRemaining: Math.max(0, persistedIncludedSpecialTrips - specialTripsUsed - 1),
+        monthlyDistanceKmRemaining: nextRemainingDistanceKm,
       };
     });
     if (result.kind === 'expired') {
@@ -252,7 +243,9 @@ export const clientManagePersonalDriver = onCall(
     return {
       success: result.success,
       tripId: result.tripId,
+      officialDistanceKm: result.officialDistanceKm,
       specialTripsRemaining: result.specialTripsRemaining,
+      monthlyDistanceKmRemaining: result.monthlyDistanceKmRemaining,
     };
   },
 );
