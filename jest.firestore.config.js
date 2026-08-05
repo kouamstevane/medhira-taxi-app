@@ -45,7 +45,6 @@ const jestFirestoreConfig = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
-    '/.worktrees/',
     '/out/',
     '/android/',
     '/ios/',

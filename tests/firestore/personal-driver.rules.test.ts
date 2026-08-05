@@ -144,6 +144,12 @@ describe('Personal driver Firestore rules', () => {
     await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
       scheduledAt: '2026-07-26T10:00:00.000Z',
     }));
+    await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
+      waitChargeAmount: 50,
+    }));
+    await assertFails(updateDoc(doc(db, 'personal_driver_trips', tripId), {
+      waitChargeStatus: 'billed',
+    }));
   });
 
   test('unassigned driver cannot read or update the trip', async () => {

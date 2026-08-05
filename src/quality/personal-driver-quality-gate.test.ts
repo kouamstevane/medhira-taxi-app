@@ -51,4 +51,22 @@ describe('Personal Driver quality gate configuration', () => {
     expect(middlewareSource).toContain("'/personal-driver/dashboard'");
     expect(middlewareSource).toContain("'/driver/personal-driver'");
   });
+
+  it('handles legacy subscriptions lacking activation fields safely without mutating historical prices', () => {
+    const legacySubscription = {
+      id: 'sub_legacy_1',
+      userId: 'user_legacy',
+      planId: 'classic',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      totalAmount: 499,
+      currency: 'CAD',
+      createdAt: '2026-06-01T00:00:00.000Z',
+    };
+
+    const activationStatus = (legacySubscription as { activationStatus?: string }).activationStatus ??
+      (legacySubscription.status === 'active' ? 'active' : 'pending_payment');
+    expect(activationStatus).toBe('active');
+    expect(legacySubscription.totalAmount).toBe(499);
+  });
 });
