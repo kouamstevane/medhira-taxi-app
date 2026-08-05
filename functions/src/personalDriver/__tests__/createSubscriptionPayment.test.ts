@@ -583,7 +583,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('does not create another PaymentIntent while the same request is claimed', async () => {
-    jest.useRealTimers();
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] }).setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
     const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
     let releasePaymentIntent: ((paymentIntent: { id: string; client_secret: string }) => void) | undefined;
     const paymentIntentCreated = new Promise<void>((resolve) => {
@@ -791,7 +791,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('keeps distinct initial request IDs on one user-period PaymentIntent', async () => {
-    jest.useRealTimers();
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] }).setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
     const documents = new Map<string, Record<string, unknown>>();
     mockSubscriptionDoc.mockImplementation((id: string) => ({
       id,
@@ -841,7 +841,7 @@ describe('createPersonalDriverSubscriptionPayment', () => {
   });
 
   it('shares one PaymentIntent between an initial purchase and renewal for the same user-period', async () => {
-    jest.useRealTimers();
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] }).setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
     const sourceSubscriptionId = 'source_subscription';
     const documents = new Map<string, Record<string, unknown>>([
       [sourceSubscriptionId, {
