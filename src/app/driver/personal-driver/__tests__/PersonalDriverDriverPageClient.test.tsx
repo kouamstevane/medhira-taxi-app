@@ -2,13 +2,14 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 const mockGetDocs = jest.fn();
 const mockHttpsCallable = jest.fn();
+const mockWhere = jest.fn(() => ({}));
 
 jest.mock('firebase/firestore', () => ({
   collection: jest.fn(() => ({})),
   getDocs: mockGetDocs,
   orderBy: jest.fn(() => ({})),
   query: jest.fn(() => ({})),
-  where: jest.fn(() => ({})),
+  where: mockWhere,
 }));
 
 jest.mock('firebase/functions', () => ({
@@ -49,6 +50,10 @@ describe('PersonalDriverDriverPageClient', () => {
     expect(await screen.findByText("Chronomètre d'attente en cours")).toBeInTheDocument();
     expect(screen.getByText('02:00')).toBeInTheDocument();
     expect(mockHttpsCallable).not.toHaveBeenCalledWith(expect.anything(), 'chargePersonalDriverWaitTimeOverage');
+    expect(mockWhere).toHaveBeenCalledWith('assignedDriverId', '==', 'driver_1');
+    expect(mockWhere).toHaveBeenCalledWith('status', 'in', [
+      'scheduled', 'driver_assigned', 'driver_en_route', 'driver_arrived', 'passenger_picked_up', 'in_progress',
+    ]);
   });
 
   it('does not resume a timer when the server has recorded waitEndedAt', async () => {

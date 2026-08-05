@@ -10,6 +10,8 @@ import { getUserFacingCallableError } from '@/utils/callable-error';
 import type { PersonalDriverTrip } from '@/types/personal-driver';
 
 type TripRow = Partial<PersonalDriverTrip> & { id: string };
+const ACTIVE_TRIP_STATUSES = ['scheduled', 'driver_assigned', 'driver_en_route', 'driver_arrived', 'passenger_picked_up', 'in_progress'];
+const TRIP_PAGE_SIZE = 12;
 
 function toMillis(value: unknown): number | null {
   if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
@@ -30,6 +32,8 @@ export function PersonalDriverDriverPageClient() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [assignedTrips, setAssignedTrips] = useState<TripRow[]>([]);
+  const [tripFilter, setTripFilter] = useState('');
+  const [tripPage, setTripPage] = useState(0);
 
   // Timer state for wait time
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -42,13 +46,14 @@ export function PersonalDriverDriverPageClient() {
         query(
           collection(db, 'personal_driver_trips'),
           where('assignedDriverId', '==', currentUser.uid),
+          where('status', 'in', ACTIVE_TRIP_STATUSES),
           orderBy('scheduledAtIso', 'asc'),
         ),
       );
       const trips = snap.docs
-        .map((doc) => ({ id: doc.id, ...doc.data() }) as TripRow)
-        .filter((trip) => !['completed', 'cancelled'].includes(trip.status || ''));
+        .map((doc) => ({ id: doc.id, ...doc.data() }) as TripRow);
       setAssignedTrips(trips);
+      setTripPage(0);
       setTripId((selectedId) => {
         if (selectedId) return selectedId;
         return trips.find((trip) => (
@@ -71,6 +76,12 @@ export function PersonalDriverDriverPageClient() {
   }, [loadAssignedTrips]);
 
   const selectedTrip = assignedTrips.find((trip) => trip.id === tripId) ?? null;
+  const filteredTrips = assignedTrips.filter((trip) => {
+    const term = tripFilter.trim().toLocaleLowerCase('fr-FR');
+    return !term || [trip.id, trip.pickupAddress, trip.destinationAddress, trip.status]
+      .some((value) => String(value || '').toLocaleLowerCase('fr-FR').includes(term));
+  });
+  const visibleTrips = filteredTrips.slice(tripPage * TRIP_PAGE_SIZE, (tripPage + 1) * TRIP_PAGE_SIZE);
   const waitStartedAt = toMillis(selectedTrip?.waitStartedAt);
   const waitEndedAt = toMillis(selectedTrip?.waitEndedAt);
   const isWaiting = selectedTrip?.status === 'driver_arrived' && waitStartedAt !== null && waitEndedAt === null;
@@ -175,13 +186,20 @@ export function PersonalDriverDriverPageClient() {
             Actualiser
           </button>
         </div>
+        <input
+          aria-label="Filtrer mes missions"
+          value={tripFilter}
+          onChange={(event) => { setTripFilter(event.target.value); setTripPage(0); }}
+          placeholder="Filtrer une mission"
+          className="mb-3 min-h-9 w-full rounded-lg border border-white/10 bg-black/10 px-3 text-xs text-white"
+        />
         <div className="space-y-2">
           {assignedTrips.length === 0 ? (
             <p className="rounded-lg border border-white/5 bg-black/10 p-3 text-xs text-slate-400">
               Aucune mission active attribuée pour le moment.
             </p>
           ) : (
-            assignedTrips.map((trip) => (
+            visibleTrips.map((trip) => (
               <button
                 key={trip.id}
                 type="button"
@@ -201,6 +219,13 @@ export function PersonalDriverDriverPageClient() {
             ))
           )}
         </div>
+        {assignedTrips.length > TRIP_PAGE_SIZE && (
+          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400">
+            <button type="button" disabled={tripPage === 0} onClick={() => setTripPage((page) => page - 1)} className="disabled:opacity-50">Précédent</button>
+            <span>Page {tripPage + 1}</span>
+            <button type="button" disabled={(tripPage + 1) * TRIP_PAGE_SIZE >= filteredTrips.length} onClick={() => setTripPage((page) => page + 1)} className="disabled:opacity-50">Suivant</button>
+          </div>
+        )}
       </section>
 
       {isWaiting && (

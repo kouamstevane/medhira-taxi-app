@@ -3,6 +3,7 @@ export {};
 const mockSubRef = { id: 'sub_1', update: jest.fn() };
 const mockTripRef = { id: 'trip_1' };
 const mockDriverRef = { id: 'driver_1' };
+const mockVehicleRef = { id: 'veh_1' };
 const mockLockRef = { id: 'period_lock_1' };
 const mockAdminRef = { get: jest.fn() };
 const mockNotificationRef = { id: 'notification_1' };
@@ -42,6 +43,7 @@ const mockDb = {
   collection: jest.fn((name: string) => {
     if (name === 'admins') return { doc: jest.fn(() => mockAdminRef) };
     if (name === 'drivers') return { doc: jest.fn(() => mockDriverRef) };
+    if (name === 'vehicles') return { doc: jest.fn(() => mockVehicleRef) };
     if (name === 'personal_driver_subscriptions') return { doc: jest.fn(() => mockSubRef) };
     if (name === 'personal_driver_subscription_locks') return { doc: jest.fn(() => mockLockRef) };
     if (name === 'personal_driver_trips') {
@@ -96,6 +98,7 @@ describe('adminManagePersonalDriver', () => {
   let tripData: Record<string, unknown>;
   let subscriptionData: Record<string, unknown>;
   let driverData: Record<string, unknown>;
+  let vehicleData: Record<string, unknown>;
   let lockData: Record<string, unknown>;
 
   beforeEach(() => {
@@ -109,6 +112,7 @@ describe('adminManagePersonalDriver', () => {
       periodEndAtUtc: new Date('2027-01-01T00:00:00.000Z'),
     };
     driverData = { status: 'approved', isAvailable: true };
+    vehicleData = { status: 'available', isAvailable: true };
     lockData = { subscriptionId: 'sub_1', state: 'pending_payment', paymentIntentId: 'pi_pending' };
     mockStripeRetrieve.mockResolvedValue({
       id: 'pi_pending',
@@ -119,6 +123,7 @@ describe('adminManagePersonalDriver', () => {
     mockTransaction.get.mockImplementation(async (ref: unknown) => {
       if (ref === mockTripRef) return { exists: true, data: () => tripData };
       if (ref === mockDriverRef) return { exists: true, data: () => driverData };
+      if (ref === mockVehicleRef) return { exists: true, data: () => vehicleData };
       if (ref === mockLockRef) return { exists: true, data: () => lockData };
       if (ref === mockAssignedTripsQuery) return { docs: [{ id: 'trip_1' }] };
       return { exists: true, data: () => subscriptionData };
@@ -380,6 +385,7 @@ describe('adminManagePersonalDriver', () => {
     expect(mockTransaction.get).toHaveBeenCalledWith(mockTripRef);
     expect(mockTransaction.get).toHaveBeenCalledWith(mockSubRef);
     expect(mockTransaction.get).toHaveBeenCalledWith(mockDriverRef);
+    expect(mockTransaction.get).toHaveBeenCalledWith(mockVehicleRef);
     expect(mockTransaction.update).toHaveBeenCalledWith(mockTripRef, expect.objectContaining({
       assignedDriverId: 'driver_1',
       status: 'driver_assigned',
@@ -408,6 +414,16 @@ describe('adminManagePersonalDriver', () => {
       action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1',
     }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
     expect(mockTransaction.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects assignment to an unavailable vehicle in the transaction', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    vehicleData.status = 'maintenance';
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'assignTrip', tripId: 'trip_1', driverId: 'driver_1', vehicleId: 'veh_1',
+    }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockTripRef, expect.anything());
   });
 
   it('marks an expired subscription before rejecting assignment', async () => {

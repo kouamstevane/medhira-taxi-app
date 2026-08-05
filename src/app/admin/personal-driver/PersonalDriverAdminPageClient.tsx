@@ -34,9 +34,6 @@ export function PersonalDriverAdminPageClient() {
   const [tripFilter, setTripFilter] = useState('');
 
   // Urgent Replacement Modal State (Rule #5)
-  const [urgentTripId, setUrgentTripId] = useState('');
-  const [newDriverId, setNewDriverId] = useState('');
-  const [newVehicleId, setNewVehicleId] = useState('');
   const [showUrgentModal, setShowUrgentModal] = useState(false);
 
   const loadOperations = async () => {
@@ -119,7 +116,7 @@ export function PersonalDriverAdminPageClient() {
 
   const handleEmergencyReassign = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!urgentTripId.trim() || !newDriverId.trim()) return;
+    if (!tripId.trim() || !driverId.trim() || !vehicleId.trim()) return;
     setLoading(true);
     setMessage(null);
     setError(null);
@@ -127,15 +124,12 @@ export function PersonalDriverAdminPageClient() {
       const callable = httpsCallable(functions, 'adminManagePersonalDriver');
       await callable({
         action: 'reassignDriverEmergency',
-        tripId: urgentTripId.trim(),
-        newDriverId: newDriverId.trim(),
-        newVehicleId: newVehicleId.trim() || 'VEH-SUR-DISPO',
+        tripId: tripId.trim(),
+        newDriverId: driverId.trim(),
+        newVehicleId: vehicleId.trim(),
       });
-      setMessage(`Chauffeur de remplacement ${newDriverId} affecté d'urgence au trajet ${urgentTripId}. Réaffectation enregistrée.`);
+      setMessage(`Chauffeur de remplacement ${driverId} affecté d'urgence au trajet ${tripId}. Réaffectation enregistrée.`);
       setShowUrgentModal(false);
-      setUrgentTripId('');
-      setNewDriverId('');
-      setNewVehicleId('');
       void loadOperations();
     } catch (err: unknown) {
       setError(getUserFacingCallableError(err));
@@ -188,7 +182,8 @@ export function PersonalDriverAdminPageClient() {
         <button
           type="button"
           onClick={() => setShowUrgentModal(true)}
-          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-red-600 px-4 text-xs font-bold text-white hover:bg-red-500 transition active:scale-95"
+          disabled={!tripId || !driverId || !vehicleId}
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-red-600 px-4 text-xs font-bold text-white hover:bg-red-500 transition active:scale-95 disabled:opacity-50"
         >
           <MaterialIcon name="swap_horiz" size="sm" />
           Réaffecter un chauffeur d'urgence
@@ -261,7 +256,6 @@ export function PersonalDriverAdminPageClient() {
                   type="button"
                   onClick={() => {
                     setTripId(trip.id);
-                    setUrgentTripId(trip.id);
                     if (trip.assignedDriverId) setDriverId(trip.assignedDriverId);
                     if (trip.assignedVehicleId) setVehicleId(trip.assignedVehicleId);
                   }}
@@ -345,41 +339,11 @@ export function PersonalDriverAdminPageClient() {
               </button>
             </div>
 
-            <div className="space-y-3">
-              <label className="block text-xs font-semibold text-slate-300">
-                ID du trajet impacté
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: sub-123_0"
-                  value={urgentTripId}
-                  onChange={(e) => setUrgentTripId(e.target.value)}
-                  className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white outline-none focus:border-red-500"
-                />
-              </label>
-
-              <label className="block text-xs font-semibold text-slate-300">
-                Nouveau Chauffeur de Remplacement (Driver ID)
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: driver-sub-007"
-                  value={newDriverId}
-                  onChange={(e) => setNewDriverId(e.target.value)}
-                  className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white outline-none focus:border-red-500"
-                />
-              </label>
-
-              <label className="block text-xs font-semibold text-slate-300">
-                Véhicule de remplacement
-                <input
-                  type="text"
-                  placeholder="Ex: VEH-REMPLACEMENT-01"
-                  value={newVehicleId}
-                  onChange={(e) => setNewVehicleId(e.target.value)}
-                  className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white outline-none focus:border-red-500"
-                />
-              </label>
+            <div className="space-y-3 rounded-lg border border-red-500/20 bg-black/10 p-3 text-xs text-slate-300">
+              <p>Trajet sélectionné : <strong className="text-white">{tripId || 'aucun'}</strong></p>
+              <p>Chauffeur sélectionné : <strong className="text-white">{driverId || 'aucun'}</strong></p>
+              <p>Véhicule sélectionné : <strong className="text-white">{vehicleId || 'aucun'}</strong></p>
+              <p>Sélectionnez un trajet, un chauffeur approuvé et un véhicule disponible dans le panneau d’affectation avant de confirmer.</p>
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -392,7 +356,7 @@ export function PersonalDriverAdminPageClient() {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !tripId || !driverId || !vehicleId}
                 className="min-h-11 rounded-xl bg-red-600 px-5 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-50"
               >
                 {loading ? 'Réaffectation...' : 'Valider le remplacement d\'urgence'}

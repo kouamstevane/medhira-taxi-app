@@ -51,6 +51,19 @@ function assertAssignableDriver(driverId: string, driver: FirebaseFirestore.Docu
   }
 }
 
+function assertAssignableVehicle(vehicle: FirebaseFirestore.DocumentData | undefined): void {
+  if (!vehicle) {
+    throw new HttpsError('not-found', 'Véhicule introuvable.');
+  }
+  if (
+    vehicle.status !== 'available'
+    || vehicle.isAvailable === false
+    || vehicle.availabilityStatus === 'unavailable'
+  ) {
+    throw new HttpsError('failed-precondition', 'Le véhicule sélectionné n’est pas disponible.');
+  }
+}
+
 function assertTripSubscriptionEntitled(
   trip: FirebaseFirestore.DocumentData | undefined,
   subscription: FirebaseFirestore.DocumentData | undefined,
@@ -231,6 +244,7 @@ export const adminManagePersonalDriver = onCall(
 
     if (payload.action === 'assignTrip') {
       const driverRef = db.collection('drivers').doc(payload.driverId);
+      const vehicleRef = db.collection('vehicles').doc(payload.vehicleId);
       const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
       const result = await db.runTransaction(async (transaction) => {
         const tripSnap = await transaction.get(tripRef);
@@ -246,8 +260,10 @@ export const adminManagePersonalDriver = onCall(
           db.collection('personal_driver_subscriptions').doc(trip.subscriptionId),
         );
         const driverSnap = await transaction.get(driverRef);
+        const vehicleSnap = await transaction.get(vehicleRef);
         if (!subscriptionSnap.exists) throw new HttpsError('not-found', 'Abonnement introuvable.');
         if (!driverSnap.exists) throw new HttpsError('not-found', 'Chauffeur introuvable.');
+        if (!vehicleSnap.exists) throw new HttpsError('not-found', 'Véhicule introuvable.');
         const subscriptionRef = db.collection('personal_driver_subscriptions').doc(trip.subscriptionId);
         const subscription = subscriptionSnap.data();
         if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, new Date())) {
@@ -255,6 +271,7 @@ export const adminManagePersonalDriver = onCall(
         }
         assertTripSubscriptionEntitled(trip, subscription);
         assertAssignableDriver(payload.driverId, driverSnap.data());
+        assertAssignableVehicle(vehicleSnap.data());
 
         transaction.update(tripRef, {
           assignedDriverId: payload.driverId,
@@ -293,6 +310,7 @@ export const adminManagePersonalDriver = onCall(
 
     if (payload.action === 'reassignDriverEmergency') {
       const driverRef = db.collection('drivers').doc(payload.newDriverId);
+      const vehicleRef = db.collection('vehicles').doc(payload.newVehicleId);
       const tripRef = db.collection('personal_driver_trips').doc(payload.tripId);
       const result = await db.runTransaction(async (transaction) => {
         const tripSnap = await transaction.get(tripRef);
@@ -305,8 +323,10 @@ export const adminManagePersonalDriver = onCall(
           db.collection('personal_driver_subscriptions').doc(trip.subscriptionId),
         );
         const driverSnap = await transaction.get(driverRef);
+        const vehicleSnap = await transaction.get(vehicleRef);
         if (!subscriptionSnap.exists) throw new HttpsError('not-found', 'Abonnement introuvable.');
         if (!driverSnap.exists) throw new HttpsError('not-found', 'Chauffeur introuvable.');
+        if (!vehicleSnap.exists) throw new HttpsError('not-found', 'Véhicule introuvable.');
         const subscriptionRef = db.collection('personal_driver_subscriptions').doc(trip.subscriptionId);
         const subscription = subscriptionSnap.data();
         if (markExpiredSubscriptionInTransaction(transaction, subscriptionRef, subscription, new Date())) {
@@ -314,6 +334,7 @@ export const adminManagePersonalDriver = onCall(
         }
         assertTripSubscriptionEntitled(trip, subscription);
         assertAssignableDriver(payload.newDriverId, driverSnap.data());
+        assertAssignableVehicle(vehicleSnap.data());
 
         transaction.update(tripRef, {
           assignedDriverId: payload.newDriverId,
