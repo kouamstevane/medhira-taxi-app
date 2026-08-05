@@ -201,6 +201,79 @@ describe('adminManagePersonalDriver', () => {
     expect(mockTransaction.delete).toHaveBeenCalledWith(mockLockRef);
   });
 
+  it('completes admin audit fields when the matching cancellation webhook wins the race', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    subscriptionData = {
+      userId: 'user_1',
+      periodStartDate: '2026-08-01',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      stripePaymentIntentId: 'pi_pending',
+    };
+    let transactionCall = 0;
+    mockDb.runTransaction.mockImplementation(async (callback: (tx: typeof mockTransaction) => Promise<unknown>) => {
+      transactionCall += 1;
+      if (transactionCall === 2) {
+        subscriptionData = {
+          userId: 'user_1',
+          periodStartDate: '2026-08-01',
+          status: 'cancelled',
+          paymentStatus: 'cancelled',
+          stripePaymentIntentId: 'pi_pending',
+        };
+      }
+      return callback(mockTransaction);
+    });
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'cancelSubscription', subscriptionId: 'sub_1', reason: 'Abandon avant paiement',
+    }, 'admin_1'))).resolves.toEqual({ success: true });
+
+    expect(mockTransaction.delete).not.toHaveBeenCalled();
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubRef, expect.objectContaining({
+      status: 'cancelled',
+      paymentStatus: 'cancelled',
+      cancelledAt: { __ts: true },
+      cancelledBy: 'admin_1',
+      cancelReason: 'Abandon avant paiement',
+      updatedAt: { __ts: true },
+    }));
+  });
+
+  it('rejects a webhook-wins cancellation whose payment identity changed', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    subscriptionData = {
+      userId: 'user_1',
+      periodStartDate: '2026-08-01',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      stripePaymentIntentId: 'pi_pending',
+    };
+    let transactionCall = 0;
+    mockDb.runTransaction.mockImplementation(async (callback: (tx: typeof mockTransaction) => Promise<unknown>) => {
+      transactionCall += 1;
+      if (transactionCall === 2) {
+        subscriptionData = {
+          userId: 'user_1',
+          periodStartDate: '2026-08-01',
+          status: 'cancelled',
+          paymentStatus: 'cancelled',
+          stripePaymentIntentId: 'pi_other',
+        };
+      }
+      return callback(mockTransaction);
+    });
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'cancelSubscription', subscriptionId: 'sub_1', reason: 'Abandon avant paiement',
+    }, 'admin_1'))).rejects.toMatchObject({ code: 'failed-precondition' });
+
+    expect(mockTransaction.delete).not.toHaveBeenCalled();
+    expect(mockTransaction.update).not.toHaveBeenCalledWith(mockSubRef, expect.objectContaining({
+      cancelledBy: 'admin_1',
+    }));
+  });
+
   it('does not release a pending subscription whose payment settled before cancellation', async () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
     subscriptionData = {

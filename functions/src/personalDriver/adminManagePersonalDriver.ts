@@ -179,11 +179,26 @@ export const adminManagePersonalDriver = onCall(
           throw new HttpsError('not-found', 'Abonnement introuvable.');
         }
         const subscription = subscriptionSnapshot.data();
-        if (subscription?.status === 'cancelled' && subscription.paymentStatus === 'cancelled') return;
+        const matchesCancellationIdentity = subscription?.userId === cancellation.userId
+          && subscription.periodStartDate === cancellation.periodStartDate
+          && subscription.stripePaymentIntentId === cancellation.paymentIntentId;
+        const adminCancellationUpdate = {
+          status: 'cancelled',
+          paymentStatus: 'cancelled',
+          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+          cancelledBy: adminUid,
+          cancelReason: payload.reason || null,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        if (subscription?.status === 'cancelled' && subscription.paymentStatus === 'cancelled') {
+          if (!matchesCancellationIdentity) {
+            throw new HttpsError('failed-precondition', 'L’identité du paiement annulé ne correspond plus.');
+          }
+          transaction.update(subRef, adminCancellationUpdate);
+          return;
+        }
         if (
-          subscription?.userId !== cancellation.userId
-          || subscription.periodStartDate !== cancellation.periodStartDate
-          || subscription.stripePaymentIntentId !== cancellation.paymentIntentId
+          !matchesCancellationIdentity
           || subscription.status !== 'pending_payment'
           || !['pending', 'requires_action'].includes(subscription.paymentStatus)
         ) {
@@ -200,14 +215,7 @@ export const adminManagePersonalDriver = onCall(
           throw new HttpsError('failed-precondition', 'Le verrou de période de cet abonnement ne peut pas être libéré.');
         }
 
-        transaction.update(subRef, {
-          status: 'cancelled',
-          paymentStatus: 'cancelled',
-          cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
-          cancelledBy: adminUid,
-          cancelReason: payload.reason || null,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        transaction.update(subRef, adminCancellationUpdate);
       });
       return { success: true };
     }
