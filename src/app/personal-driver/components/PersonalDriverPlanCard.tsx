@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { PersonalDriverPlan } from '@/types/personal-driver';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 interface PersonalDriverPlanCardProps {
   readonly plan: PersonalDriverPlan;
@@ -44,7 +45,7 @@ export function PersonalDriverPlanCard({ plan }: PersonalDriverPlanCardProps) {
       <ul className="mt-5 space-y-3 text-sm text-slate-300">
         {benefits.map((benefit) => (
           <li key={benefit} className="flex items-start gap-2">
-            <span className="mt-0.5 text-primary" aria-hidden="true">check_circle</span>
+            <MaterialIcon name="check_circle" size="sm" className="mt-0.5 text-primary shrink-0" />
             <span>{benefit}</span>
           </li>
         ))}

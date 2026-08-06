@@ -2,9 +2,9 @@ ext {
     minSdkVersion = 26
     compileSdkVersion = 36
     targetSdkVersion = 36
-    stripeAndroidVersion = '23.1.+'
-    playServicesWalletVersion = '19.2.+'
-    gsonVersion = '2.10.+'
+    stripeAndroidVersion = '23.1.0'
+    playServicesWalletVersion = '19.3.0'
+    gsonVersion = '2.10.1'
     androidxActivityVersion = '1.9.2'
     androidxAppCompatVersion = '1.7.0'
     androidxCoordinatorLayoutVersion = '1.2.0'

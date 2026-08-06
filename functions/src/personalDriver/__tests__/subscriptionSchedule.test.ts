@@ -35,8 +35,9 @@ describe('personal driver subscription schedule validation', () => {
   it.each([
     new Date('2026-08-04T01:59:59.999Z'),
     new Date('2026-08-04T02:00:00.000Z'),
-  ])('rejects a special trip at or before now: %s', (scheduledAtUtc) => {
-    expect(() => assertFutureSpecialTrip(scheduledAtUtc, now)).toThrow('future');
+    new Date('2026-08-04T03:59:59.999Z'),
+  ])('rejects a special trip scheduled less than 2 hours in advance: %s', (scheduledAtUtc) => {
+    expect(() => assertFutureSpecialTrip(scheduledAtUtc, now)).toThrow('2 hours');
   });
 
   it('accepts valid future subscription and special-trip schedules', () => {
@@ -49,7 +50,7 @@ describe('personal driver subscription schedule validation', () => {
       now,
     })).not.toThrow();
     expect(() => assertFutureSpecialTrip(
-      new Date('2026-08-04T02:00:00.001Z'),
+      new Date('2026-08-04T04:00:00.000Z'),
       now,
     )).not.toThrow();
   });

@@ -43,12 +43,15 @@ export function assertValidSubscriptionSchedule(input: {
   }
 }
 
+export const MIN_SPECIAL_TRIP_NOTICE_MS = 2 * 60 * 60 * 1000;
+
 export function assertFutureSpecialTrip(scheduledAtUtc: Date, now: Date): void {
   if (
     !Number.isFinite(scheduledAtUtc.getTime())
     || !Number.isFinite(now.getTime())
-    || scheduledAtUtc <= now
+    || scheduledAtUtc.getTime() - now.getTime() < MIN_SPECIAL_TRIP_NOTICE_MS
   ) {
-    throw new Error('Special trip must be scheduled in the future');
+    throw new Error('Special trip must be scheduled at least 2 hours in advance');
   }
 }
+

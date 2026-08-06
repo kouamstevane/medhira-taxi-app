@@ -343,4 +343,42 @@ describe('subscriptionPeriodLock', () => {
     });
     expect(documents.has(lockPath)).toBe(false);
   });
+
+  it('reclaims an abandoned pending_payment lock if older than 2 hours', async () => {
+    const lockId = createSubscriptionPeriodLockId(userId, periodStartDate);
+    const oldDate = new Date('2026-08-03T09:00:00.000Z'); // 3h before now
+    const { db, transaction } = createFirestore({
+      [`personal_driver_subscription_locks/${lockId}`]: {
+        userId,
+        periodStartDate,
+        subscriptionId: 'subscription_old',
+        state: 'pending_payment',
+        ownerId: 'owner_old',
+        attempt: 1,
+        updatedAt: oldDate,
+      },
+      [`personal_driver_subscriptions/subscription_old`]: {
+        userId,
+        periodStartDate,
+        status: 'pending_payment',
+        paymentStatus: 'pending',
+        createdAt: oldDate,
+      },
+    });
+
+    const result = await claimSubscriptionPeriodLock(transaction as never, db as never, {
+      userId,
+      periodStartDate,
+      requestedSubscriptionId: 'subscription_new',
+      ownerId: 'owner_new',
+      now,
+    });
+
+    expect(result).toMatchObject({
+      kind: 'claimed',
+      subscriptionId: 'subscription_new',
+      ownerId: 'owner_new',
+      attempt: 2,
+    });
+  });
 });

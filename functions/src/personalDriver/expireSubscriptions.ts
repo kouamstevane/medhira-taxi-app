@@ -1,7 +1,9 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
+import { createSubscriptionPeriodLockId } from './subscriptionPeriodLock.js';
 
 const EXPIRY_PAGE_SIZE = 500;
+export const PENDING_PAYMENT_ABANDONED_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 heures
 
 export async function expireSingleSubscriptionAndCleanupTrips(
   db: FirebaseFirestore.Firestore,
@@ -89,10 +91,72 @@ export async function expirePersonalDriverSubscriptionsUntilExhausted(
   }
 }
 
+export async function cleanupAbandonedPendingPayments(
+  db: FirebaseFirestore.Firestore,
+  nowUtc: Date,
+): Promise<number> {
+  const cutoffTime = new Date(nowUtc.getTime() - PENDING_PAYMENT_ABANDONED_TIMEOUT_MS);
+
+  const pendingSnap = await db
+    .collection('personal_driver_subscriptions')
+    .where('status', '==', 'pending_payment')
+    .limit(EXPIRY_PAGE_SIZE)
+    .get();
+
+  if (pendingSnap.empty) return 0;
+
+  let cleanedUpCount = 0;
+
+  for (const docSnap of pendingSnap.docs) {
+    const data = docSnap.data();
+    if (data.status !== 'pending_payment') continue;
+
+    const createdDate =
+      data.createdAt?.toDate?.() ||
+      data.paymentCreationClaimedAt?.toDate?.() ||
+      data.updatedAt?.toDate?.();
+
+    if (createdDate && createdDate > cutoffTime) {
+      continue;
+    }
+
+    const subscriptionId = docSnap.id;
+    const userId = data.userId;
+    const periodStartDate = data.periodStartDate;
+
+    await db.runTransaction(async (tx) => {
+      const currentSnap = await tx.get(docSnap.ref);
+      if (!currentSnap.exists || currentSnap.data()?.status !== 'pending_payment') return;
+
+      tx.update(docSnap.ref, {
+        status: 'payment_failed',
+        paymentStatus: 'failed',
+        paymentCreationError: 'abandoned_session_timeout',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      if (userId && periodStartDate) {
+        const lockId = createSubscriptionPeriodLockId(userId, periodStartDate);
+        const lockRef = db.collection('personal_driver_subscription_locks').doc(lockId);
+        const lockSnap = await tx.get(lockRef);
+        if (lockSnap.exists && lockSnap.data()?.subscriptionId === subscriptionId) {
+          tx.delete(lockRef);
+        }
+      }
+    });
+
+    cleanedUpCount += 1;
+  }
+
+  return cleanedUpCount;
+}
+
 export const expirePersonalDriverSubscriptions = onSchedule(
-  { schedule: 'every 15 minutes', region: 'europe-west1' },
+  { schedule: 'every 5 minutes', region: 'europe-west1' },
   async () => {
     if (!admin.apps.length) admin.initializeApp();
-    await expirePersonalDriverSubscriptionsUntilExhausted(admin.firestore(), new Date());
+    const now = new Date();
+    await expirePersonalDriverSubscriptionsUntilExhausted(admin.firestore(), now);
+    await cleanupAbandonedPendingPayments(admin.firestore(), now);
   },
 );

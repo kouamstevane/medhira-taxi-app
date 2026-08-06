@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { requireAdmin } from './_shared.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { unassignDriverFuturePersonalTrips } from './unassignDriverTrips.js';
 
 const ManageUserSchema = z.object({
   userId: z.string().min(1),
@@ -66,6 +67,7 @@ export const adminManageUser = onCall(
       };
 
       if (role === 'driver') {
+        await unassignDriverFuturePersonalTrips(admin.firestore(), userId, uid, 'driver_role_removed');
         update['roles.driver'] = admin.firestore.FieldValue.delete();
         if (userData.activeRole === 'driver') {
           update.activeRole = 'client';

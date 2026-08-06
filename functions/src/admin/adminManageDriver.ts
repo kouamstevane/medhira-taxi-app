@@ -9,6 +9,8 @@ import { sendDriverStatusEmail } from '../email-service.js';
 import { getDriverRejectionReason } from './adminDriverRejection.js';
 import { syncDriverApplicationStatus } from './driverApplicationSync.js';
 
+import { unassignDriverFuturePersonalTrips } from './unassignDriverTrips.js';
+
 const resendApiKey = defineSecret('RESEND_API_KEY');
 const CANONICAL_DRIVER_DOCUMENT_KEYS = [
   'biometricPhoto',
@@ -166,6 +168,7 @@ export const adminManageDriver = onCall(
             rejectedBy: uid,
             updatedAt: now,
           });
+          await unassignDriverFuturePersonalTrips(admin.firestore(), driverId, uid, driverRejectionReason);
           await syncApplicationReview('rejected', driverRejectionReason);
           await notifyDriver('rejection', driverRejectionReason);
           return { success: true, message: 'Chauffeur refusé' };
@@ -183,6 +186,7 @@ export const adminManageDriver = onCall(
           isAvailable: false,
           updatedAt: now,
         });
+        await unassignDriverFuturePersonalTrips(admin.firestore(), driverId, uid, reason);
         await notifyDriver('suspension', reason);
         return { success: true, message: 'Chauffeur suspendu' };
 
@@ -212,6 +216,7 @@ export const adminManageDriver = onCall(
           isAvailable: false,
           updatedAt: now,
         });
+        await unassignDriverFuturePersonalTrips(admin.firestore(), driverId, uid, reason);
         await notifyDriver('deactivation', reason);
         return { success: true, message: 'Chauffeur désactivé' };
 

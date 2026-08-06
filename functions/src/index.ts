@@ -2259,6 +2259,8 @@ export {
   settlePersonalDriverWaitOverageOnPickup,
   clientManagePersonalDriver,
   expirePersonalDriverSubscriptions,
+  checkPersonalDriverTripsDelay,
+  onSpecialTripCreated,
 } from './personalDriver/index.js';
 
 // ============================================================================

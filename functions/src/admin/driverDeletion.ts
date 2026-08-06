@@ -10,6 +10,7 @@
 
 import * as admin from 'firebase-admin';
 import { Bucket, File } from '@google-cloud/storage';
+import { unassignDriverFuturePersonalTrips } from './unassignDriverTrips.js';
 
 const COMPLETED_STATUSES = [
   'completed',
@@ -261,6 +262,7 @@ export async function deleteDriverCompletely(
   };
 
   try {
+    await unassignDriverFuturePersonalTrips(db(), driverId, adminId, 'driver_deleted');
     await deleteDocument('drivers', driverId, stats);
     await deleteDocument('users', driverId, stats);
     await deleteDocument('wallets', driverId, stats);

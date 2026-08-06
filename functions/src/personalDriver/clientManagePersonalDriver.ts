@@ -67,7 +67,7 @@ function assertSpecialTripIsFuture(scheduledAtUtc: Date, now: Date): void {
   try {
     assertFutureSpecialTrip(scheduledAtUtc, now);
   } catch {
-    throw new HttpsError('invalid-argument', 'Le trajet spécial doit être planifié dans le futur.');
+    throw new HttpsError('invalid-argument', 'Le trajet spécial doit être planifié au moins 2 heures à l’avance.');
   }
 }
 

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const SUBSCRIPTION_PERIOD_LOCK_LEASE_MS = 10 * 60 * 1000;
+export const SUBSCRIPTION_PENDING_PAYMENT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
 export type SubscriptionPeriodLockState = 'creating' | 'pending_payment' | 'active';
 
@@ -207,7 +208,13 @@ export async function claimSubscriptionPeriodLock(
     && matchingCreatingSubscription
     && (!toDate(lock.leaseExpiresAt) || (toDate(lock.leaseExpiresAt)?.getTime() ?? 0) <= input.now.getTime());
 
-  if (!matchingTerminalSubscription && !expiredCreating) {
+  const lockRefTime = toDate(lock.updatedAt) || toDate(existingSubscription?.createdAt) || toDate(existingSubscription?.paymentCreationClaimedAt);
+  const expiredPendingPayment = lock.state === 'pending_payment'
+    && existingSubscription?.status !== 'active'
+    && lockRefTime !== null
+    && (input.now.getTime() - lockRefTime.getTime() >= SUBSCRIPTION_PENDING_PAYMENT_TIMEOUT_MS);
+
+  if (!matchingTerminalSubscription && !expiredCreating && !expiredPendingPayment) {
     return {
       kind: 'existing',
       lockId,
@@ -218,10 +225,10 @@ export async function claimSubscriptionPeriodLock(
     };
   }
 
-  const subscriptionId = matchingTerminalSubscription
+  const subscriptionId = (matchingTerminalSubscription || expiredPendingPayment)
     ? input.requestedSubscriptionId
     : lock.subscriptionId;
-  const attempt = matchingTerminalSubscription ? getAttempt(lock) + 1 : getAttempt(lock);
+  const attempt = (matchingTerminalSubscription || expiredPendingPayment) ? getAttempt(lock) + 1 : getAttempt(lock);
   transaction.update(lockRef, {
     userId: input.userId,
     periodStartDate: input.periodStartDate,
