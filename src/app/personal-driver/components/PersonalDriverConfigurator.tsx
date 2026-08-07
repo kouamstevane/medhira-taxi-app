@@ -145,6 +145,13 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
   const [returnTime, setReturnTime] = useState('');
   const [startDate, setStartDate] = useState('');
   const [passengerCount, setPassengerCount] = useState(1);
+  const [passengerInput, setPassengerInput] = useState('1');
+
+  const handlePassengerCountChange = (newValue: number) => {
+    const clamped = Math.max(1, Math.min(8, newValue));
+    setPassengerCount(clamped);
+    setPassengerInput(String(clamped));
+  };
   const [notes, setNotes] = useState('');
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [distanceError, setDistanceError] = useState('');
@@ -229,6 +236,8 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       }
     }
 
+    const validPassengerCount = Math.max(1, Math.min(8, parseInt(passengerInput, 10) || passengerCount));
+
     const configuration: PersonalDriverConfiguration = {
       version: 1,
       requestId: requestIdRef.current ?? createRequestId(),
@@ -240,7 +249,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       departureTime,
       ...(tripType === 'round_trip' ? { returnTime } : {}),
       startDate,
-      passengerCount,
+      passengerCount: validPassengerCount,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       distanceKm,
       distanceOneWayKm: distanceKm,
@@ -390,16 +399,57 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           />
           {errors.startDate && <span id="start-date-error" role="alert" className={fieldErrorClassName}>{errors.startDate}</span>}
         </label>
-        <label className="text-sm font-semibold text-white">
-          Nombre de passagers
-          <input
-            type="number"
-            min="1"
-            value={passengerCount}
-            onChange={(event) => setPassengerCount(Math.max(1, Number(event.target.value) || 1))}
-            className={`mt-2 ${fieldClassName}`}
-          />
-        </label>
+        <div className="flex flex-col">
+          <label htmlFor="passenger-count-input" className="text-sm font-semibold text-white">
+            Nombre de passagers
+          </label>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Diminuer le nombre de passagers"
+              onClick={() => handlePassengerCountChange(passengerCount - 1)}
+              disabled={passengerCount <= 1}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-lg font-bold text-white transition hover:bg-white/10 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+            >
+              -
+            </button>
+            <input
+              id="passenger-count-input"
+              type="number"
+              min="1"
+              max="8"
+              value={passengerInput}
+              onChange={(event) => {
+                const val = event.target.value;
+                setPassengerInput(val);
+                if (val !== '') {
+                  const parsed = parseInt(val, 10);
+                  if (!isNaN(parsed) && parsed >= 1) {
+                    setPassengerCount(Math.min(8, parsed));
+                  }
+                }
+              }}
+              onBlur={() => {
+                const parsed = parseInt(passengerInput, 10);
+                if (isNaN(parsed) || parsed < 1) {
+                  handlePassengerCountChange(1);
+                } else {
+                  handlePassengerCountChange(parsed);
+                }
+              }}
+              className={`h-11 text-center ${fieldClassName}`}
+            />
+            <button
+              type="button"
+              aria-label="Augmenter le nombre de passagers"
+              onClick={() => handlePassengerCountChange(passengerCount + 1)}
+              disabled={passengerCount >= 8}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-lg font-bold text-white transition hover:bg-white/10 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+            >
+              +
+            </button>
+          </div>
+        </div>
       </div>
 
       <label className="block text-sm font-semibold text-white">

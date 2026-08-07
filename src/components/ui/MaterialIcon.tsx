@@ -19,7 +19,7 @@ const sizeMap = {
 export function MaterialIcon({ name, className, filled = false, size = 'lg' }: MaterialIconProps) {
   return (
     <span
-      className={cn('material-symbols-outlined select-none', sizeMap[size], className)}
+      className={cn('material-symbols-outlined select-none inline-flex items-center justify-center leading-none shrink-0 align-middle', sizeMap[size], className)}
       style={filled ? { fontVariationSettings: "'FILL' 1" } : undefined}
     >
       {name}

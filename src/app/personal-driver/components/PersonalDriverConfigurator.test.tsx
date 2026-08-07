@@ -212,6 +212,37 @@ describe('PersonalDriverConfigurator', () => {
       monthlyDistanceKm: 124,
     });
   });
+
+  it('allows increasing and decreasing passenger count with stepper buttons', async () => {
+    const user = userEvent.setup();
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    const input = screen.getByLabelText('Nombre de passagers') as HTMLInputElement;
+    const plusBtn = screen.getByRole('button', { name: 'Augmenter le nombre de passagers' });
+    const minusBtn = screen.getByRole('button', { name: 'Diminuer le nombre de passagers' });
+
+    expect(input.value).toBe('1');
+    expect(minusBtn).toBeDisabled();
+
+    await user.click(plusBtn);
+    expect(input.value).toBe('2');
+    expect(minusBtn).not.toBeDisabled();
+
+    await user.click(minusBtn);
+    expect(input.value).toBe('1');
+  });
+
+  it('allows clearing the passenger count input field temporarily on mobile', async () => {
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    const input = screen.getByLabelText('Nombre de passagers') as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input.value).toBe('');
+
+    fireEvent.blur(input);
+    expect(input.value).toBe('1');
+  });
 });
 
 async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {

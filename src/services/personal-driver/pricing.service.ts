@@ -4,7 +4,7 @@ import type {
   PersonalDriverPriceComparison,
   PersonalDriverPriceInput,
 } from '@/types/personal-driver';
-import { CURRENCY_CODE } from '@/utils/constants';
+import { CURRENCY_CODE, CURRENCY_MAP, DEFAULT_LOCALE } from '@/utils/constants';
 import { PERSONAL_DRIVER_PLANS } from './plans';
 
 const PLAN_ORDER: PersonalDriverPlanId[] = ['basic', 'classic', 'premium'];
@@ -13,9 +13,10 @@ export function formatPersonalDriverCurrency(
   amount: number,
   currency = CURRENCY_CODE,
 ): string {
-  return new Intl.NumberFormat('fr-CA', {
+  const isoCurrency = CURRENCY_MAP[currency.toUpperCase()] || currency.toUpperCase();
+  return new Intl.NumberFormat(DEFAULT_LOCALE, {
     style: 'currency',
-    currency: currency.toUpperCase(),
+    currency: isoCurrency,
   }).format(amount);
 }
 
