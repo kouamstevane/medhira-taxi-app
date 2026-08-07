@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useAuth } from '@/hooks/useAuth';
+import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 import { getUserFacingCallableError } from '@/utils/callable-error';
 import type { PersonalDriverTrip } from '@/types/personal-driver';
 
@@ -26,6 +27,7 @@ function toMillis(value: unknown): number | null {
 
 export function PersonalDriverDriverPageClient() {
   const { currentUser } = useAuth();
+  const { getCurrentPosition } = useCapacitorGeolocation();
   const [tripId, setTripId] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingTrips, setLoadingTrips] = useState(false);
@@ -48,19 +50,20 @@ export function PersonalDriverDriverPageClient() {
           where('assignedDriverId', '==', currentUser.uid),
           where('status', 'in', ACTIVE_TRIP_STATUSES),
           orderBy('scheduledAtIso', 'asc'),
+          limit(24),
         ),
       );
       const trips = snap.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }) as TripRow);
       setAssignedTrips(trips);
-      setTripPage(0);
+      setTripPage((prevPage) => (prevPage * TRIP_PAGE_SIZE >= trips.length ? 0 : prevPage));
       setTripId((selectedId) => {
-        if (selectedId) return selectedId;
+        if (selectedId && trips.some((trip) => trip.id === selectedId)) return selectedId;
         return trips.find((trip) => (
           trip.status === 'driver_arrived'
           && toMillis(trip.waitStartedAt) !== null
           && toMillis(trip.waitEndedAt) === null
-        ))?.id ?? selectedId;
+        ))?.id ?? trips[0]?.id ?? '';
       });
       return trips;
     } catch (err: unknown) {
@@ -106,18 +109,15 @@ export function PersonalDriverDriverPageClient() {
       const callable = httpsCallable(functions, 'driverUpdatePersonalDriverTrip');
       let location: { lat: number; lng: number; accuracy: number } | undefined;
       if (status === 'driver_arrived') {
-        if (!navigator.geolocation) throw new Error('La géolocalisation est indisponible sur cet appareil.');
-        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: 10000,
-          });
-        });
+        setMessage('Acquisition de votre position GPS en cours...');
+        const precisePos = await getCurrentPosition('tracking', true);
+        if (!precisePos) {
+          throw new Error("Impossible d'obtenir une position GPS valide à l'arrivée.");
+        }
         location = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: position.coords.accuracy,
+          lat: precisePos.lat,
+          lng: precisePos.lng,
+          accuracy: precisePos.accuracy,
         };
       }
       await callable({ tripId: tripId.trim(), status, ...location });
@@ -138,6 +138,7 @@ export function PersonalDriverDriverPageClient() {
         setMessage(`Statut du trajet ${tripId} mis à jour : ${status}`);
       }
     } catch (err: unknown) {
+      setMessage(null);
       setError(getUserFacingCallableError(err));
     } finally {
       setLoading(false);
@@ -180,7 +181,7 @@ export function PersonalDriverDriverPageClient() {
             type="button"
             onClick={loadAssignedTrips}
             disabled={loadingTrips || !currentUser?.uid}
-            className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
           >
             <MaterialIcon name="refresh" size="sm" />
             Actualiser
@@ -191,7 +192,7 @@ export function PersonalDriverDriverPageClient() {
           value={tripFilter}
           onChange={(event) => { setTripFilter(event.target.value); setTripPage(0); }}
           placeholder="Filtrer une mission"
-          className="mb-3 min-h-9 w-full rounded-lg border border-white/10 bg-black/10 px-3 text-xs text-white"
+          className="mb-3 min-h-[44px] w-full rounded-lg border border-white/10 bg-black/10 px-3 text-xs text-white"
         />
         <div className="space-y-2">
           {assignedTrips.length === 0 ? (
@@ -221,9 +222,23 @@ export function PersonalDriverDriverPageClient() {
         </div>
         {assignedTrips.length > TRIP_PAGE_SIZE && (
           <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400">
-            <button type="button" disabled={tripPage === 0} onClick={() => setTripPage((page) => page - 1)} className="disabled:opacity-50">Précédent</button>
+            <button
+              type="button"
+              disabled={tripPage === 0}
+              onClick={() => setTripPage((page) => page - 1)}
+              className="inline-flex min-h-[44px] items-center rounded-lg border border-white/10 px-3 font-semibold text-slate-300 disabled:opacity-50"
+            >
+              Précédent
+            </button>
             <span>Page {tripPage + 1}</span>
-            <button type="button" disabled={(tripPage + 1) * TRIP_PAGE_SIZE >= filteredTrips.length} onClick={() => setTripPage((page) => page + 1)} className="disabled:opacity-50">Suivant</button>
+            <button
+              type="button"
+              disabled={(tripPage + 1) * TRIP_PAGE_SIZE >= filteredTrips.length}
+              onClick={() => setTripPage((page) => page + 1)}
+              className="inline-flex min-h-[44px] items-center rounded-lg border border-white/10 px-3 font-semibold text-slate-300 disabled:opacity-50"
+            >
+              Suivant
+            </button>
           </div>
         )}
       </section>
@@ -243,9 +258,15 @@ export function PersonalDriverDriverPageClient() {
         </div>
       )}
       {error && (
-        <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs font-semibold text-red-200">
-          {error}
-          <button type="button" onClick={() => void loadAssignedTrips()} className="ml-3 underline">Réessayer</button>
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs font-semibold text-red-200">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => void loadAssignedTrips()}
+            className="inline-flex min-h-[44px] items-center rounded-lg border border-red-500/30 px-3 font-semibold text-red-100 hover:bg-red-500/20"
+          >
+            Réessayer
+          </button>
         </div>
       )}
 
