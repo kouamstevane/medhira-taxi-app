@@ -99,9 +99,14 @@ async function runBuild() {
             '..',
             getNextBuildDirectory({ isMobile: true }),
         );
+        const defaultNextCacheDir = path.join(__dirname, '..', '.next');
+
+        console.log('Nettoyage du cache Next.js (.next & .next-mobile)...');
         if (fs.existsSync(nextCacheDir)) {
-            console.log('Nettoyage du cache Next.js...');
             fs.rmSync(nextCacheDir, { recursive: true, force: true });
+        }
+        if (fs.existsSync(defaultNextCacheDir)) {
+            fs.rmSync(defaultNextCacheDir, { recursive: true, force: true });
         }
 
         const staticOutputDir = path.join(__dirname, '../out');

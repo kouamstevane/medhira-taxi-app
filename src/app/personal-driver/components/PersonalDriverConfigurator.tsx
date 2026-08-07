@@ -59,6 +59,9 @@ interface AccessibleAddressInputProps {
   onSelect: (suggestion: Parameters<NonNullable<React.ComponentProps<typeof AddressInput>['onSelect']>>[0]) => void;
   autocompleteService: google.maps.places.AutocompleteService | null;
   required?: boolean;
+  enableLocationButton?: boolean;
+  onLocationResolved?: (location: { lat: number; lng: number; accuracy?: number }, address: string) => void;
+  locationButtonLabel?: string;
 }
 
 function AccessibleAddressInput({ error, errorId, ...props }: AccessibleAddressInputProps) {
@@ -90,7 +93,7 @@ function AccessibleAddressInput({ error, errorId, ...props }: AccessibleAddressI
 
   return (
     <div ref={fieldRef}>
-      <AddressInput {...props} error={error} />
+      <AddressInput error={error} errorId={errorId} {...props} />
     </div>
   );
 }
@@ -273,6 +276,11 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           error={errors.pickupAddress}
           errorId="pickup-address-error"
           required
+          enableLocationButton
+          onLocationResolved={(_loc, address) => {
+            setPickupAddress(address);
+            setDistanceKm(null);
+          }}
         />
         <AccessibleAddressInput
           label="Destination"
@@ -286,6 +294,11 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           error={errors.destinationAddress}
           errorId="destination-address-error"
           required
+          enableLocationButton
+          onLocationResolved={(_loc, address) => {
+            setDestinationAddress(address);
+            setDistanceKm(null);
+          }}
         />
         <button
           type="button"

@@ -1,14 +1,12 @@
-/**
- * Composant AddressInput
- * 
- * Champ de saisie avec autocomplétion d'adresses Google Places
- */
-
 'use client';
 
-import { useState, useRef, useEffect, useId } from 'react';
+import { useState, useRef, useEffect, useId, useCallback } from 'react';
 import { PlaceSuggestion } from '@/types';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
+import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { reverseGeocodeAddress } from '@/services/reverseGeocode.service';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Capacitor } from '@capacitor/core';
 import {
   driverFieldClassName,
   driverFieldErrorClassName,
@@ -16,7 +14,7 @@ import {
 } from '@/app/driver/register/components/driverOnboardingStyles';
 import { cn } from '@/lib/utils';
 
-interface AddressInputProps {
+export interface AddressInputProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -27,8 +25,13 @@ interface AddressInputProps {
   disabled?: boolean;
   required?: boolean;
   error?: string;
+  errorId?: string;
+  helperText?: string;
   externalLoading?: boolean;
   countryRestriction?: string[];
+  enableLocationButton?: boolean;
+  onLocationResolved?: (location: { lat: number; lng: number; accuracy?: number }, address: string) => void;
+  locationButtonLabel?: string;
 }
 
 export const AddressInput = ({
@@ -42,10 +45,19 @@ export const AddressInput = ({
   disabled = false,
   required = false,
   error,
+  errorId,
+  helperText,
   externalLoading = false,
   countryRestriction,
+  enableLocationButton = false,
+  onLocationResolved,
+  locationButtonLabel,
 }: AddressInputProps) => {
   const [isFocused, setIsFocused] = useState(false);
+  const [internalGeoLoading, setInternalGeoLoading] = useState(false);
+  const [geoErrorMessage, setGeoErrorMessage] = useState<string | null>(null);
+  const [userDismissedGeoError, setUserDismissedGeoError] = useState(false);
+  const { getCurrentPosition, loading: geoLoading, error: geoError } = useCapacitorGeolocation();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -55,6 +67,67 @@ export const AddressInput = ({
     location,
     countryRestriction,
   });
+
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
+  const handleUseCurrentLocation = useCallback(async () => {
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Haptics.impact({ style: ImpactStyle.Light });
+      } catch (err) {
+        console.warn('Haptic feedback non disponible:', err);
+      }
+    }
+
+    if (!isMounted.current) return;
+    setInternalGeoLoading(true);
+    setGeoErrorMessage(null);
+    setUserDismissedGeoError(false);
+
+    try {
+      const position = await getCurrentPosition('booking');
+      if (!isMounted.current) return;
+
+      if (position) {
+        const locationObj = { lat: position.lat, lng: position.lng, accuracy: position.accuracy };
+        let finalAddress = `${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`;
+
+        try {
+          const address = await reverseGeocodeAddress(position.lat, position.lng);
+          if (address) {
+            finalAddress = address;
+          }
+        } catch (e) {
+          console.warn('Reverse geocoding failed', e);
+        }
+
+        if (!isMounted.current) return;
+
+        onSelect({
+          place_id: '',
+          description: finalAddress,
+        });
+        onChange(finalAddress);
+        if (onLocationResolved) {
+          onLocationResolved(locationObj, finalAddress);
+        }
+      }
+    } catch (err: unknown) {
+      if (!isMounted.current) return;
+      const msg = err instanceof Error ? err.message : 'Impossible de récupérer votre position';
+      setGeoErrorMessage(msg);
+    } finally {
+      if (isMounted.current) {
+        setInternalGeoLoading(false);
+      }
+    }
+  }, [getCurrentPosition, onChange, onSelect, onLocationResolved]);
 
   // Réessayer l'autocomplétion si le service devient disponible et qu'il y a déjà du texte
   useEffect(() => {
@@ -82,6 +155,8 @@ export const AddressInput = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newValue = e.target.value;
+    setGeoErrorMessage(null);
+    setUserDismissedGeoError(true);
     onChange(newValue);
     // Toujours appeler getSuggestions - le hook gère lui-même la vérification du service
     if (newValue.length >= 3) {
@@ -109,6 +184,9 @@ export const AddressInput = ({
     }
   };
 
+  const isLocationLoading = geoLoading || internalGeoLoading || externalLoading;
+  const activeGeoError = !userDismissedGeoError && (geoErrorMessage || geoError);
+
   return (
     <div ref={containerRef} className="relative w-full">
       <label htmlFor={inputId} className={driverFieldLabelClassName}>
@@ -128,6 +206,7 @@ export const AddressInput = ({
           disabled={disabled}
           required={required}
           autoComplete="off"
+          aria-describedby={error && errorId ? errorId : undefined}
           className={cn(
             driverFieldClassName,
             error ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-white/[0.08]'
@@ -142,12 +221,63 @@ export const AddressInput = ({
         )}
       </div>
 
-      {error && <p className={driverFieldErrorClassName}>{error}</p>}
+      {error ? (
+        <p id={errorId} className={driverFieldErrorClassName}>{error}</p>
+      ) : helperText ? (
+        <p className="mt-1 text-xs text-slate-400">{helperText}</p>
+      ) : null}
+
+      {/* Bouton Utiliser ma position */}
+      {enableLocationButton && (
+        <div className="mt-2 flex flex-col gap-2">
+          <div className="flex justify-start">
+            <button
+              type="button"
+              onClick={handleUseCurrentLocation}
+              disabled={disabled || isLocationLoading}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-xs font-medium text-slate-200 transition-colors hover:bg-white/[0.08] active:scale-95 touch-manipulation disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLocationLoading ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                  Détection en cours
+                </>
+              ) : (
+                <>
+                  <svg className="h-3.5 w-3.5 text-[#f29200]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 21s6-4.35 6-10a6 6 0 10-12 0c0 5.65 6 10 6 10z" />
+                    <circle cx="12" cy="11" r="2.25" />
+                  </svg>
+                  {locationButtonLabel || 'Utiliser ma position'}
+                </>
+              )}
+            </button>
+          </div>
+
+          {activeGeoError && (
+            <div role="alert" aria-live="polite" className="bg-[#f29200]/10 border-l-4 border-orange-400 p-3 rounded-lg text-xs">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 text-[#f29200]">
+                  <p className="font-medium">Impossible de détecter votre position</p>
+                  <p className="mt-0.5 text-slate-400">Vérifiez que le GPS est activé et réessayez.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-3 py-1 rounded bg-[#f29200]/20 hover:bg-[#f29200]/30 text-[#f29200] font-medium transition-colors touch-manipulation"
+                >
+                  Réessayer
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Liste des suggestions */}
       {isFocused && suggestions.length > 0 && (
         <ul className="absolute z-50 w-full mt-1 bg-[#1A1A1A] border border-white/[0.08] rounded-lg shadow-lg max-h-60 overflow-auto overscroll-contain">
-          {suggestions.map((suggestion, index) => (
+          {suggestions.map((suggestion) => (
             <li
               key={suggestion.place_id}
               onClick={() => handleSelectSuggestion(suggestion)}
@@ -170,4 +300,5 @@ export const AddressInput = ({
     </div>
   );
 };
+
 
