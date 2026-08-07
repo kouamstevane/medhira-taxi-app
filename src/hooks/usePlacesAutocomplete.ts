@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { PlaceSuggestion } from '@/types';
+import { getDefaultCountryRestriction } from '@/utils/constants';
 
 interface UsePlacesAutocompleteProps {
   autocompleteService: google.maps.places.AutocompleteService | null;
@@ -76,8 +77,12 @@ export const usePlacesAutocomplete = ({
         return;
       }
 
+      const activeCountryRestriction = countryRestriction?.length
+        ? countryRestriction
+        : getDefaultCountryRestriction();
+
       // Cache mémoire : évite de refacturer les requêtes identiques dans la session
-      const cacheKey = `${input.trim().toLowerCase()}|${countryRestriction?.join(',') ?? ''}|${location ? `${location.lat.toFixed(3)},${location.lng.toFixed(3)}` : ''}`;
+      const cacheKey = `${input.trim().toLowerCase()}|${activeCountryRestriction.join(',')}|${location ? `${location.lat.toFixed(3)},${location.lng.toFixed(3)}` : ''}`;
       const cached = predictionCacheRef.current.get(cacheKey);
       if (cached) {
         setSuggestions(cached);
@@ -90,10 +95,9 @@ export const usePlacesAutocomplete = ({
         const request: google.maps.places.AutocompletionRequest = {
           input,
           sessionToken: getOrCreateSessionToken(),
-          componentRestrictions: countryRestriction?.length
-            ? { country: countryRestriction }
-            : undefined,
+          componentRestrictions: { country: activeCountryRestriction },
         };
+
 
         if (location) {
           request.locationBias = new google.maps.Circle({

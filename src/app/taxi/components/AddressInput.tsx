@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect, useId, useCallback } from 'react';
+import { useState, useRef, useEffect, useId, useCallback, useMemo } from 'react';
 import { PlaceSuggestion } from '@/types';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
+import { useCountryDetection } from '@/hooks/useCountryDetection';
+import { getDefaultCountryRestriction } from '@/utils/constants';
 import { reverseGeocodeAddress } from '@/services/reverseGeocode.service';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
@@ -61,12 +63,27 @@ export const AddressInput = ({
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [internalLocation, setInternalLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  const effectiveLocation = location ?? internalLocation;
+
+  const { country: detectedCountry } = useCountryDetection({
+    location: effectiveLocation,
+    enabled: !countryRestriction,
+  });
+
+  const effectiveCountryRestriction = useMemo(() => {
+    return countryRestriction?.length
+      ? countryRestriction
+      : getDefaultCountryRestriction(detectedCountry);
+  }, [countryRestriction, detectedCountry]);
 
   const { suggestions, loading, getSuggestions, clearSuggestions, resetSession } = usePlacesAutocomplete({
     autocompleteService,
-    location,
-    countryRestriction,
+    location: effectiveLocation,
+    countryRestriction: effectiveCountryRestriction,
   });
+
 
   const isMounted = useRef(true);
   useEffect(() => {
@@ -95,6 +112,7 @@ export const AddressInput = ({
       if (!isMounted.current) return;
 
       if (position) {
+        setInternalLocation({ lat: position.lat, lng: position.lng });
         const locationObj = { lat: position.lat, lng: position.lng, accuracy: position.accuracy };
         let finalAddress = `${position.lat.toFixed(5)}, ${position.lng.toFixed(5)}`;
 

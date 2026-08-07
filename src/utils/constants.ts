@@ -211,9 +211,9 @@ export const MARKET_CONFIGS: Record<MarketCode, MarketConfig> = {
     locale: 'fr-CA',
     driverCountryCode: 'CA',
     pricing: {
-      BASE_PRICE: 0.00, // 4.00,
-      PRICE_PER_KM: 0.00, // 1.25,
-      PRICE_PER_MINUTE: 1.00, // 0.35,
+      BASE_PRICE: 3.50,
+      PRICE_PER_KM: 1.75,
+      PRICE_PER_MINUTE: 0.45,
       PEAK_HOUR_MULTIPLIER: 1.25,
       TRAFFIC_MULTIPLIER: 1.15,
       DISCOUNT_RATE: 0.10,
@@ -479,6 +479,15 @@ export function getSupportedCountryNames(detectedCountry?: MarketCode | null): s
     : SUPPORTED_COUNTRIES;
   return sorted.map((c) => c!.name).join(', ');
 }
+
+export function getDefaultCountryRestriction(detectedCountry?: MarketCode | null): string[] {
+  if (detectedCountry) {
+    return [detectedCountry.toLowerCase()];
+  }
+  return SUPPORTED_COUNTRIES.map((c) => c.code.toLowerCase()).slice(0, 5);
+}
+
+
 
 export function applyRounding(rawPrice: number, strategy: RoundingStrategy): number {
   if (strategy.mode === 'nearest') {

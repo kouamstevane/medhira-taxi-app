@@ -75,10 +75,31 @@ export function useCountryDetection({
   const isDetectingRef = useRef(false);
 
   useEffect(() => {
-    if (!memoizedLocation || !enabled) {
+    if (!enabled) {
       setCountry(null);
       setLoading(false);
       return;
+    }
+
+    if (!memoizedLocation) {
+      let cancelled = false;
+      (async () => {
+        try {
+          let cached: CachedCountry | null = memCacheRef.current;
+          if (!cached) {
+            cached = await secureStorage.getItem<CachedCountry>('detected_country');
+            if (cached) memCacheRef.current = cached;
+          }
+          if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+            if (!cancelled) setCountry(cached.country);
+          }
+        } catch {
+        }
+      })();
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (isDetectingRef.current) return;

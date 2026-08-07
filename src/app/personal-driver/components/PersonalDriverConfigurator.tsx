@@ -58,6 +58,7 @@ interface AccessibleAddressInputProps {
   onChange: (value: string) => void;
   onSelect: (suggestion: Parameters<NonNullable<React.ComponentProps<typeof AddressInput>['onSelect']>>[0]) => void;
   autocompleteService: google.maps.places.AutocompleteService | null;
+  location?: { lat: number; lng: number } | null;
   required?: boolean;
   enableLocationButton?: boolean;
   onLocationResolved?: (location: { lat: number; lng: number; accuracy?: number }, address: string) => void;
@@ -146,6 +147,8 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
   const [startDate, setStartDate] = useState('');
   const [passengerCount, setPassengerCount] = useState(1);
   const [passengerInput, setPassengerInput] = useState('1');
+
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const handlePassengerCountChange = (newValue: number) => {
     const clamped = Math.max(1, Math.min(8, newValue));
@@ -282,11 +285,13 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           }}
           onSelect={(suggestion) => setPickupAddress(suggestion.description)}
           autocompleteService={autocompleteService}
+          location={userLocation}
           error={errors.pickupAddress}
           errorId="pickup-address-error"
           required
           enableLocationButton
-          onLocationResolved={(_loc, address) => {
+          onLocationResolved={(loc, address) => {
+            setUserLocation({ lat: loc.lat, lng: loc.lng });
             setPickupAddress(address);
             setDistanceKm(null);
           }}
@@ -300,11 +305,13 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           }}
           onSelect={(suggestion) => setDestinationAddress(suggestion.description)}
           autocompleteService={autocompleteService}
+          location={userLocation}
           error={errors.destinationAddress}
           errorId="destination-address-error"
           required
           enableLocationButton
-          onLocationResolved={(_loc, address) => {
+          onLocationResolved={(loc, address) => {
+            setUserLocation({ lat: loc.lat, lng: loc.lng });
             setDestinationAddress(address);
             setDistanceKm(null);
           }}
