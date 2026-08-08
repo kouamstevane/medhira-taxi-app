@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
 import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import { PersonalDriverConfigurator } from './PersonalDriverConfigurator';
-import { estimateRoadDistanceKm } from '@/services/personal-driver/distance.service';
+import {
+  DISTANCE_ESTIMATE_ERROR_MESSAGE,
+  estimateRoadDistanceKm,
+} from '@/services/personal-driver/distance.service';
 
 const mockPush = jest.fn();
 
@@ -39,6 +42,7 @@ jest.mock('@/hooks/useGoogleMaps', () => ({
 }));
 
 jest.mock('@/services/personal-driver/distance.service', () => ({
+  ...jest.requireActual('@/services/personal-driver/distance.service'),
   estimateRoadDistanceKm: jest.fn(),
 }));
 
@@ -146,7 +150,9 @@ describe('PersonalDriverConfigurator', () => {
 
   it('clears the stale distance error after a successful calculation', async () => {
     const user = userEvent.setup();
-    estimateRoadDistanceKmMock.mockResolvedValue(12.4);
+    estimateRoadDistanceKmMock
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce(12.4);
     render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
 
     await user.type(screen.getByLabelText('Adresse de depart'), 'Aeroport de Yaounde');
@@ -155,12 +161,26 @@ describe('PersonalDriverConfigurator', () => {
     fireEvent.change(screen.getByLabelText('Heure de depart'), { target: { value: '08:00' } });
     fireEvent.change(screen.getByLabelText('Date de debut'), { target: { value: '2099-08-03' } });
     await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
-    expect(screen.getByText('Calculez une distance positive avant de continuer.')).toBeVisible();
+    await waitFor(() => expect(screen.getByText(DISTANCE_ESTIMATE_ERROR_MESSAGE)).toBeVisible());
 
     await user.click(screen.getByRole('button', { name: 'Calculer la distance' }));
 
     await waitFor(() => expect(screen.getByText('12,4 km')).toBeVisible());
-    expect(screen.queryByText('Calculez une distance positive avant de continuer.')).not.toBeInTheDocument();
+    expect(screen.queryByText(DISTANCE_ESTIMATE_ERROR_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('automatically calculates distance when clicking continue to estimate if not calculated yet', async () => {
+    const user = userEvent.setup();
+    estimateRoadDistanceKmMock.mockResolvedValue(12.4);
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await fillRequiredFields(user);
+    // User does NOT click "Calculer la distance", but clicks "Continuer vers l estimation" directly
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/personal-driver/estimation'));
+    const stored = JSON.parse(sessionStorage.getItem('medjira.personalDriver.config.v1') ?? '{}');
+    expect(stored.distanceKm).toBe(12.4);
   });
 
   it('stores a valid configuration and proceeds to the estimate', async () => {
@@ -242,6 +262,132 @@ describe('PersonalDriverConfigurator', () => {
 
     fireEvent.blur(input);
     expect(input.value).toBe('1');
+  });
+
+  it('disables submit button and displays loading text while calculating distance', async () => {
+    let resolveDistancePromise: (val: number) => void = () => {};
+    const distancePromise = new Promise<number>((resolve) => {
+      resolveDistancePromise = resolve;
+    });
+    estimateRoadDistanceKmMock.mockReturnValue(distancePromise);
+
+    const user = userEvent.setup();
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+
+    const submitBtn = screen.getByRole('button', { name: "Calcul de l'itinéraire..." });
+    expect(submitBtn).toBeDisabled();
+
+    resolveDistancePromise(12.4);
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/personal-driver/estimation'));
+  });
+
+  it('deduplicates distance error display when calculation fails', async () => {
+    const user = userEvent.setup();
+    estimateRoadDistanceKmMock.mockRejectedValue(new Error('API error'));
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+
+    await waitFor(() => expect(screen.getByText(DISTANCE_ESTIMATE_ERROR_MESSAGE)).toBeInTheDocument());
+    expect(screen.queryByText('Calculez une distance positive avant de continuer.')).not.toBeInTheDocument();
+  });
+
+  it('navigates even if sessionStorage.setItem throws an error', async () => {
+    const user = userEvent.setup();
+    estimateRoadDistanceKmMock.mockResolvedValue(12.4);
+    const setItemSpy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: 'Calculer la distance' }));
+    await waitFor(() => expect(screen.getByText('12,4 km')).toBeVisible());
+
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+
+    expect(mockPush).toHaveBeenCalledWith('/personal-driver/estimation');
+    setItemSpy.mockRestore();
+  });
+
+  it('clears address field error when user modifies pickup or destination address', async () => {
+    const user = userEvent.setup();
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    // Trigger validation with empty inputs
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+    expect(screen.getByText("L'adresse de depart est requise.")).toBeInTheDocument();
+    expect(screen.getByText('La destination est requise.')).toBeInTheDocument();
+
+    // Type into pickup address
+    await user.type(screen.getByLabelText('Adresse de depart'), 'Paris');
+    expect(screen.queryByText("L'adresse de depart est requise.")).not.toBeInTheDocument();
+
+    // Type into destination address
+    await user.type(screen.getByLabelText('Destination'), 'Lyon');
+    expect(screen.queryByText('La destination est requise.')).not.toBeInTheDocument();
+  });
+
+  it('clears distance estimate error message when user modifies address inputs', async () => {
+    const user = userEvent.setup();
+    estimateRoadDistanceKmMock.mockRejectedValue(new Error('Calculation failed'));
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: 'Calculer la distance' }));
+
+    await waitFor(() => expect(screen.getByText(DISTANCE_ESTIMATE_ERROR_MESSAGE)).toBeInTheDocument());
+
+    // Modifying pickup address should invalidate distance and clear the distance error message
+    await user.type(screen.getByLabelText('Adresse de depart'), ' Nouveau');
+    expect(screen.queryByText(DISTANCE_ESTIMATE_ERROR_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('shows error feedback when start date is in the past or invalid', async () => {
+    const user = userEvent.setup();
+    estimateRoadDistanceKmMock.mockResolvedValue(12.4);
+
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: 'Calculer la distance' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continuer vers l estimation' })).not.toBeDisabled());
+
+    const dateInput = screen.getByLabelText('Date de debut');
+    fireEvent.change(dateInput, { target: { value: '2000-01-01' } });
+
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('La date de debut ne peut pas etre dans le passe.')).toBeVisible();
+    });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('synchronizes visual input value when submitting an out-of-range passenger count', async () => {
+    const user = userEvent.setup();
+    estimateRoadDistanceKmMock.mockResolvedValue(12.4);
+
+    render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.classic} />);
+
+    await fillRequiredFields(user);
+    await user.click(screen.getByRole('button', { name: 'Calculer la distance' }));
+    await waitFor(() => expect(screen.getByText('12,4 km')).toBeVisible());
+
+    const passengerInput = screen.getByLabelText('Nombre de passagers') as HTMLInputElement;
+
+    fireEvent.change(passengerInput, { target: { value: '12' } });
+    fireEvent.blur(passengerInput);
+    expect(passengerInput.value).toBe('8');
+
+    await user.click(screen.getByRole('button', { name: 'Continuer vers l estimation' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/personal-driver/estimation'));
   });
 });
 

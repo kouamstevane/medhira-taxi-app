@@ -70,7 +70,6 @@ function AccessibleAddressInput({ error, errorId, ...props }: AccessibleAddressI
 
   useEffect(() => {
     const input = fieldRef.current?.querySelector('input');
-    const errorNode = fieldRef.current?.querySelector('p');
 
     if (input) {
       input.setAttribute('aria-invalid', String(Boolean(error)));
@@ -81,13 +80,16 @@ function AccessibleAddressInput({ error, errorId, ...props }: AccessibleAddressI
       }
     }
 
-    if (errorNode) {
-      if (error) {
-        errorNode.id = errorId;
+    if (error) {
+      const errorNode =
+        (errorId ? fieldRef.current?.querySelector<HTMLParagraphElement>(`p[id="${CSS.escape(errorId)}"]`) : null) ??
+        fieldRef.current?.querySelector('p');
+
+      if (errorNode) {
+        if (errorId && !errorNode.id) {
+          errorNode.id = errorId;
+        }
         errorNode.setAttribute('role', 'alert');
-      } else {
-        errorNode.removeAttribute('id');
-        errorNode.removeAttribute('role');
       }
     }
   }, [error, errorId]);
@@ -138,6 +140,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
   const router = useRouter();
   const { autocompleteService } = useGoogleMaps();
   const requestIdRef = useRef<string | null>(null);
+  const latestCalculationIdRef = useRef(0);
   const [pickupAddress, setPickupAddress] = useState('');
   const [destinationAddress, setDestinationAddress] = useState('');
   const [tripType, setTripType] = useState<PersonalDriverTripType>('one_way');
@@ -159,6 +162,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [distanceError, setDistanceError] = useState('');
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [minimumStartDate, setMinimumStartDate] = useState('');
 
@@ -170,18 +174,49 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
     requestIdRef.current = getSessionRequestId();
   }
 
-  const calculateDistance = async () => {
+  const clearFieldError = (field: keyof FormErrors) => {
+    setErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const invalidateCalculation = (field?: keyof FormErrors) => {
+    latestCalculationIdRef.current += 1;
+    setDistanceKm(null);
+    setDistanceError('');
+    setIsCalculatingDistance(false);
+    clearFieldError('distance');
+    if (field) {
+      clearFieldError(field);
+    }
+  };
+
+  const calculateDistance = async (
+    pickup: string = pickupAddress,
+    destination: string = destinationAddress
+  ): Promise<number | null> => {
+    const p = typeof pickup === 'string' ? pickup : pickupAddress;
+    const d = typeof destination === 'string' ? destination : destinationAddress;
+
+    const calcId = ++latestCalculationIdRef.current;
+
     setDistanceError('');
     setDistanceKm(null);
 
-    if (!pickupAddress.trim() || !destinationAddress.trim()) {
+    if (!p.trim() || !d.trim()) {
       setDistanceError(DISTANCE_ESTIMATE_ERROR_MESSAGE);
-      return;
+      return null;
     }
 
     setIsCalculatingDistance(true);
     try {
-      const estimatedDistance = await estimateRoadDistanceKm(pickupAddress, destinationAddress);
+      const estimatedDistance = await estimateRoadDistanceKm(p, d);
+      if (calcId !== latestCalculationIdRef.current) {
+        return null;
+      }
       if (estimatedDistance <= 0) {
         throw new Error('Distance must be positive');
       }
@@ -192,14 +227,20 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
         delete remainingErrors.distance;
         return remainingErrors;
       });
+      return estimatedDistance;
     } catch {
-      setDistanceError(DISTANCE_ESTIMATE_ERROR_MESSAGE);
+      if (calcId === latestCalculationIdRef.current) {
+        setDistanceError(DISTANCE_ESTIMATE_ERROR_MESSAGE);
+      }
+      return null;
     } finally {
-      setIsCalculatingDistance(false);
+      if (calcId === latestCalculationIdRef.current) {
+        setIsCalculatingDistance(false);
+      }
     }
   };
 
-  const validate = (): FormErrors => {
+  const validate = (targetDistance: number | null = distanceKm): FormErrors => {
     const nextErrors: FormErrors = {};
 
     if (!pickupAddress.trim()) nextErrors.pickupAddress = "L'adresse de depart est requise.";
@@ -211,21 +252,36 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
     } else if (tripType === 'round_trip' && returnTime <= departureTime) {
       nextErrors.returnTime = "L'heure de retour doit etre posterieure a l'heure de depart.";
     }
-    if (!startDate) nextErrors.startDate = 'La date de debut est requise.';
-    if (!distanceKm || distanceKm <= 0) {
+    const minDateStr = minimumStartDate || getLocalCalendarDate(new Date());
+    if (!startDate) {
+      nextErrors.startDate = 'La date de debut est requise.';
+    } else if (startDate < minDateStr) {
+      nextErrors.startDate = 'La date de debut ne peut pas etre dans le passe.';
+    }
+    if (!targetDistance || targetDistance <= 0) {
       nextErrors.distance = 'Calculez une distance positive avant de continuer.';
     }
 
     return nextErrors;
   };
 
-  const continueToEstimate = () => {
-    const nextErrors = validate();
+  const continueToEstimate = async () => {
+    if (isCalculatingDistance || isSubmitting) return;
+
+    let currentDistance = distanceKm;
+
+    if ((currentDistance === null || currentDistance <= 0) && pickupAddress.trim() && destinationAddress.trim()) {
+      currentDistance = await calculateDistance();
+    }
+
+    const nextErrors = validate(currentDistance);
     setErrors(nextErrors);
 
-    if (Object.keys(nextErrors).length > 0 || !distanceKm) {
+    if (Object.keys(nextErrors).length > 0 || !currentDistance || currentDistance <= 0) {
       return;
     }
+
+    setIsSubmitting(true);
 
     const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
     const startObj = new Date(startYear, startMonth - 1, startDay);
@@ -240,6 +296,8 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
     }
 
     const validPassengerCount = Math.max(1, Math.min(8, parseInt(passengerInput, 10) || passengerCount));
+    setPassengerCount(validPassengerCount);
+    setPassengerInput(String(validPassengerCount));
 
     const configuration: PersonalDriverConfiguration = {
       version: 1,
@@ -254,13 +312,17 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       startDate,
       passengerCount: validPassengerCount,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
-      distanceKm,
-      distanceOneWayKm: distanceKm,
-      ...(tripType === 'round_trip' ? { distanceReturnKm: distanceKm } : {}),
-      monthlyDistanceKm: distanceKm * (tripType === 'round_trip' ? 2 : 1) * totalMatchingDays,
+      distanceKm: currentDistance,
+      distanceOneWayKm: currentDistance,
+      ...(tripType === 'round_trip' ? { distanceReturnKm: currentDistance } : {}),
+      monthlyDistanceKm: currentDistance * (tripType === 'round_trip' ? 2 : 1) * totalMatchingDays,
     };
 
-    sessionStorage.setItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY, JSON.stringify(configuration));
+    try {
+      sessionStorage.setItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY, JSON.stringify(configuration));
+    } catch (err) {
+      console.warn('Failed to store personal driver configuration in sessionStorage:', err);
+    }
     router.push('/personal-driver/estimation');
   };
 
@@ -270,9 +332,10 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
   return (
     <form
       className="space-y-6"
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        continueToEstimate();
+        void continueToEstimate();
       }}
     >
       <section className="space-y-4" aria-label="Itineraire">
@@ -281,9 +344,12 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           value={pickupAddress}
           onChange={(value) => {
             setPickupAddress(value);
-            setDistanceKm(null);
+            invalidateCalculation('pickupAddress');
           }}
-          onSelect={(suggestion) => setPickupAddress(suggestion.description)}
+          onSelect={(suggestion) => {
+            setPickupAddress(suggestion.description);
+            invalidateCalculation('pickupAddress');
+          }}
           autocompleteService={autocompleteService}
           location={userLocation}
           error={errors.pickupAddress}
@@ -293,7 +359,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           onLocationResolved={(loc, address) => {
             setUserLocation({ lat: loc.lat, lng: loc.lng });
             setPickupAddress(address);
-            setDistanceKm(null);
+            invalidateCalculation('pickupAddress');
           }}
         />
         <AccessibleAddressInput
@@ -301,9 +367,12 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           value={destinationAddress}
           onChange={(value) => {
             setDestinationAddress(value);
-            setDistanceKm(null);
+            invalidateCalculation('destinationAddress');
           }}
-          onSelect={(suggestion) => setDestinationAddress(suggestion.description)}
+          onSelect={(suggestion) => {
+            setDestinationAddress(suggestion.description);
+            invalidateCalculation('destinationAddress');
+          }}
           autocompleteService={autocompleteService}
           location={userLocation}
           error={errors.destinationAddress}
@@ -313,12 +382,12 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           onLocationResolved={(loc, address) => {
             setUserLocation({ lat: loc.lat, lng: loc.lng });
             setDestinationAddress(address);
-            setDistanceKm(null);
+            invalidateCalculation('destinationAddress');
           }}
         />
         <button
           type="button"
-          onClick={calculateDistance}
+          onClick={() => { void calculateDistance(); }}
           disabled={isCalculatingDistance}
           className="min-h-11 rounded-lg border border-primary/50 px-4 text-sm font-semibold text-primary transition hover:bg-primary/10 disabled:cursor-wait disabled:opacity-60"
         >
@@ -327,8 +396,8 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
         {distanceKm !== null && !distanceError && (
           <p className="text-sm font-semibold text-emerald-400">{distanceKm.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km</p>
         )}
-        {distanceError && <p role="alert" className={fieldErrorClassName}>{distanceError}</p>}
-        {errors.distance && <p id="distance-error" role="alert" className={fieldErrorClassName}>{errors.distance}</p>}
+        {distanceError && <p id="distance-error" role="alert" className={fieldErrorClassName}>{distanceError}</p>}
+        {!distanceError && errors.distance && <p id="distance-error" role="alert" className={fieldErrorClassName}>{errors.distance}</p>}
       </section>
 
       <fieldset className="grid grid-cols-2 gap-3">
@@ -338,7 +407,10 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
             type="radio"
             name="tripType"
             checked={tripType === 'one_way'}
-            onChange={() => setTripType('one_way')}
+            onChange={() => {
+              setTripType('one_way');
+              clearFieldError('returnTime');
+            }}
             className="accent-primary"
           />
           Aller simple
@@ -359,7 +431,10 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
         <WeekdaySelector
           allowedWeekdays={plan.allowedWeekdays}
           selectedWeekdays={weekdays}
-          onChange={setWeekdays}
+          onChange={(newWeekdays) => {
+            setWeekdays(newWeekdays);
+            clearFieldError('weekdays');
+          }}
           errorId="weekdays-error"
           hasError={Boolean(errors.weekdays)}
         />
@@ -372,7 +447,10 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           <input
             type="time"
             value={departureTime}
-            onChange={(event) => setDepartureTime(event.target.value)}
+            onChange={(event) => {
+              setDepartureTime(event.target.value);
+              clearFieldError('departureTime');
+            }}
             aria-invalid={Boolean(errors.departureTime)}
             aria-describedby={errors.departureTime ? 'departure-time-error' : undefined}
             className={`mt-2 ${fieldClassName}`}
@@ -385,7 +463,10 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
             <input
               type="time"
               value={returnTime}
-              onChange={(event) => setReturnTime(event.target.value)}
+              onChange={(event) => {
+                setReturnTime(event.target.value);
+                clearFieldError('returnTime');
+              }}
               aria-invalid={Boolean(errors.returnTime)}
               aria-describedby={errors.returnTime ? 'return-time-error' : undefined}
               className={`mt-2 ${fieldClassName}`}
@@ -399,7 +480,10 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
             type="date"
             min={minimumStartDate || undefined}
             value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
+            onChange={(event) => {
+              setStartDate(event.target.value);
+              clearFieldError('startDate');
+            }}
             aria-invalid={Boolean(errors.startDate)}
             aria-describedby={errors.startDate ? 'start-date-error' : undefined}
             className={`mt-2 ${fieldClassName}`}
@@ -471,9 +555,10 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
 
       <button
         type="submit"
-        className="min-h-12 w-full rounded-lg bg-primary px-4 text-sm font-bold text-white transition active:scale-[0.98]"
+        disabled={isCalculatingDistance || isSubmitting}
+        className="min-h-12 w-full rounded-lg bg-primary px-4 text-sm font-bold text-white transition active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
       >
-        Continuer vers l estimation
+        {isCalculatingDistance ? "Calcul de l'itinéraire..." : "Continuer vers l estimation"}
       </button>
     </form>
   );
