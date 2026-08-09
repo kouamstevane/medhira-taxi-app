@@ -35,6 +35,7 @@ const mockDb = {
 };
 const mockCalculateServerRoute = jest.fn();
 const mockResolveAddressCoordinates = jest.fn();
+const mockGeneratePersonalDriverTrips = jest.fn();
 
 jest.mock('firebase-admin', () => ({
   apps: [{}],
@@ -67,6 +68,10 @@ jest.mock('../locationTimeZone', () => ({
   localDateTimeToUtc: (date: string, time: string) => new Date(`${date}T${time}:00.000Z`),
 }));
 
+jest.mock('../tripGeneration', () => ({
+  generatePersonalDriverTrips: mockGeneratePersonalDriverTrips,
+}));
+
 function makeRequest(data: unknown, uid?: string) {
   return { data, auth: uid ? { uid } : undefined } as never;
 }
@@ -74,8 +79,12 @@ function makeRequest(data: unknown, uid?: string) {
 describe('clientManagePersonalDriver', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockTransaction.get.mockReset();
+    mockTransaction.update.mockReset();
+    mockTransaction.set.mockReset();
     mockCalculateServerRoute.mockResolvedValue({ distanceKm: 18, durationMinutes: 30 });
     mockResolveAddressCoordinates.mockResolvedValue({ latitude: 45.5, longitude: -73.5 });
+    mockGeneratePersonalDriverTrips.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -87,6 +96,63 @@ describe('clientManagePersonalDriver', () => {
 
     await expect(clientManagePersonalDriver(makeRequest({ action: 'cancelTrip', tripId: 'trip_1' })))
       .rejects.toMatchObject({ code: 'unauthenticated' });
+  });
+
+  it('retries activation for a paid subscription with a stale activation marker', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    const subscription = {
+      userId: 'client_1',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      activationStatus: 'pending_payment',
+      selectedPlanId: 'classic',
+      periodStartDate: '2026-08-01',
+      periodEndDateExclusive: '2026-08-31',
+      periodStartAtUtc: new Date('2026-08-01T04:00:00.000Z'),
+      periodEndAtUtc: new Date('2026-08-31T04:00:00.000Z'),
+      serviceTimeZone: 'America/Toronto',
+      selectedWeekdays: [1],
+      tripType: 'one_way',
+      departureTime: '08:00',
+      pickupAddress: 'A',
+      destinationAddress: 'B',
+      pickupLocation: { latitude: 45.5, longitude: -73.5 },
+      destinationLocation: { latitude: 45.6, longitude: -73.6 },
+      distanceOneWayKm: 10,
+      distanceReturnKm: 0,
+      monthlyDistanceKm: 220,
+      monthlyDistanceKmRemaining: 220,
+      includedSpecialTrips: 2,
+      specialTripsUsed: 0,
+      specialTripsDistanceUsedKm: 0,
+      taxStatus: 'pending_confirmation',
+      taxAmount: 0,
+      totalAmount: 450,
+      currency: 'cad',
+      selectedPlanPrice: { planId: 'classic', totalBeforeTax: 450 },
+    };
+    mockTransaction.get.mockResolvedValue({ exists: true, data: () => subscription });
+    mockTransaction.update.mockImplementation((_ref: unknown, update: Record<string, unknown>) => {
+      Object.assign(subscription, update);
+    });
+
+    await expect(clientManagePersonalDriver(makeRequest({
+      action: 'retryActivation',
+      subscriptionId: 'sub_1',
+    }, 'client_1'))).resolves.toEqual({ success: true, status: 'active' });
+
+    expect(mockGeneratePersonalDriverTrips).toHaveBeenCalledWith(
+      mockDb,
+      expect.objectContaining({
+        status: 'pending_payment',
+        paymentStatus: 'succeeded',
+        activationStatus: 'activating',
+      }),
+    );
+    expect(mockTransaction.update).toHaveBeenCalledWith(mockSubscriptionRef, expect.objectContaining({
+      status: 'active',
+      activationStatus: 'active',
+    }));
   });
 
   it('lets the owner cancel a scheduled trip through Admin SDK', async () => {

@@ -10,6 +10,7 @@ import {
   createPersonalDriverSubscriptionPayment,
   getPersonalDriverSubscriptionById,
   type CreatePersonalDriverSubscriptionPaymentResult,
+  type CreatePersonalDriverSubscriptionPaymentInput,
 } from '@/services/personal-driver/subscription.service';
 import type {
   PersonalDriverPlanId,
@@ -126,6 +127,40 @@ function getSubmittedSubscriptionId(searchParams: URLSearchParams): string | nul
   return subscriptionId && /^[A-Za-z0-9_-]{1,128}$/.test(subscriptionId) ? subscriptionId : null;
 }
 
+function buildPaymentInput(
+  checkout: { config: PersonalDriverConfiguration },
+  selectedPlanId: PersonalDriverPlanId,
+): CreatePersonalDriverSubscriptionPaymentInput {
+  const { config } = checkout;
+  return {
+    selectedPlanId,
+    requestId: config.requestId,
+    pickupAddress: config.pickupAddress,
+    destinationAddress: config.destinationAddress,
+    tripType: config.tripType,
+    selectedWeekdays: config.weekdays,
+    departureTime: config.departureTime,
+    startDate: config.startDate,
+    distanceOneWayKm: config.distanceOneWayKm,
+    distanceReturnKm: config.distanceReturnKm ?? 0,
+    monthlyDistanceKm: config.monthlyDistanceKm,
+    passengerCount: config.passengerCount,
+    ...(config.returnTime?.trim() ? { returnTime: config.returnTime.trim() } : {}),
+    ...(config.notes?.trim() ? { notes: config.notes.trim() } : {}),
+  };
+}
+
+function getPaymentPreparationErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  if (/expected string|received null|invalid input/i.test(message)) {
+    return 'Certaines informations du trajet sont incomplètes. Revenez à la configuration et vérifiez les horaires.';
+  }
+  if (/internal|distance matrix|request_denied|google maps/i.test(message)) {
+    return 'Le calcul de la distance est temporairement indisponible. Réessayez dans quelques instants.';
+  }
+  return message || 'Impossible de préparer le paiement. Veuillez réessayer.';
+}
+
 export function PersonalDriverConfirmation() {
   const { push, replace } = useRouter();
   const searchParams = useSearchParams();
@@ -180,7 +215,8 @@ export function PersonalDriverConfirmation() {
       try {
         const subscription = await getPersonalDriverSubscriptionById(subscriptionId);
         if (activationPollRunRef.current !== runId) return;
-        if (subscription?.activationStatus === 'active') {
+        const isPaidAndActive = subscription?.status === 'active' && subscription.paymentStatus === 'succeeded';
+        if (subscription?.activationStatus === 'active' || isPaidAndActive) {
           push(`/personal-driver/dashboard?payment=success&subscriptionId=${encodeURIComponent(subscriptionId)}`);
           return;
         }
@@ -213,25 +249,10 @@ export function PersonalDriverConfirmation() {
     setLoading(true);
     setError(null);
     try {
-      const result = await createPersonalDriverSubscriptionPayment({
-        selectedPlanId,
-        requestId: checkout.config.requestId,
-        pickupAddress: checkout.config.pickupAddress,
-        destinationAddress: checkout.config.destinationAddress,
-        tripType: checkout.config.tripType,
-        selectedWeekdays: checkout.config.weekdays,
-        departureTime: checkout.config.departureTime,
-        returnTime: checkout.config.returnTime,
-        startDate: checkout.config.startDate,
-        distanceOneWayKm: checkout.config.distanceOneWayKm,
-        distanceReturnKm: checkout.config.distanceReturnKm ?? 0,
-        monthlyDistanceKm: checkout.config.monthlyDistanceKm,
-        passengerCount: checkout.config.passengerCount,
-        notes: checkout.config.notes,
-      });
+      const result = await createPersonalDriverSubscriptionPayment(buildPaymentInput(checkout, selectedPlanId));
       setPayment(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossible de préparer le paiement.');
+      setError(getPaymentPreparationErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -304,80 +325,96 @@ export function PersonalDriverConfirmation() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 p-4 text-slate-100 sm:p-6">
-      <section className="rounded-xl border border-white/10 bg-card p-5 shadow-xl">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-primary">Résumé de votre abonnement</p>
-            <h1 className="mt-1 text-2xl font-black text-white">{plan.name.toUpperCase()}</h1>
+    <section className="mx-auto max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-card text-slate-100 shadow-xl">
+      <div className="bg-gradient-to-br from-card to-primary/5 p-4 sm:p-6">
+        <div className="flex items-start justify-between gap-4 border-l-2 border-primary/70 pl-3">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Résumé de votre abonnement</p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">{plan.name.toUpperCase()}</h1>
             <p className="mt-1 text-sm text-slate-400">Période de 30 jours calendaires glissants</p>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-black text-white">{formatPersonalDriverCurrency(displayedTotalAmount, displayedCurrency)}</p>
+          <div className="shrink-0 text-right">
+            <p className="text-2xl font-black tracking-tight text-white sm:text-3xl">{formatPersonalDriverCurrency(displayedTotalAmount, displayedCurrency)}</p>
             <p className="text-xs text-slate-400">{quote ? quote.currency.toUpperCase() : 'Estimation indicative'}</p>
           </div>
         </div>
 
         {error && (
-          <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300" role="alert">
+          <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm leading-5 text-red-200" role="alert" aria-live="polite">
             {error}
           </div>
         )}
+      </div>
 
-        <div className="space-y-5 text-sm">
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h2 className="mb-3 text-base font-bold text-white">Trajet planifié</h2>
-            <dl className="space-y-2 text-slate-300">
-              <div className="flex gap-3"><dt className="w-24 shrink-0 text-slate-400">Départ</dt><dd>{checkout.config.pickupAddress}</dd></div>
-              <div className="flex gap-3"><dt className="w-24 shrink-0 text-slate-400">Destination</dt><dd>{checkout.config.destinationAddress}</dd></div>
-              <div className="flex gap-3"><dt className="w-24 shrink-0 text-slate-400">Type</dt><dd>{checkout.config.tripType === 'round_trip' ? 'Aller-retour' : 'Aller simple'}</dd></div>
-              <div className="flex gap-3"><dt className="w-24 shrink-0 text-slate-400">Jours</dt><dd>{formattedDays}</dd></div>
-              <div className="flex gap-3">
-                <dt className="w-24 shrink-0 text-slate-400">Heures</dt>
-                <dd>{checkout.config.departureTime}{checkout.config.returnTime ? ` et ${checkout.config.returnTime}` : ''}</dd>
-              </div>
-            </dl>
+      <div className="border-t border-white/10 px-4 py-4 sm:px-6">
+        <h2 className="mb-3 text-base font-bold text-white">Trajet planifié</h2>
+        <dl className="space-y-1.5 text-sm">
+          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
+            <dt className="text-slate-400">Départ</dt>
+            <dd className="min-w-0 break-words text-slate-200">{checkout.config.pickupAddress}</dd>
           </div>
+          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
+            <dt className="text-slate-400">Destination</dt>
+            <dd className="min-w-0 break-words text-slate-200">{checkout.config.destinationAddress}</dd>
+          </div>
+          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
+            <dt className="text-slate-400">Type</dt>
+            <dd className="min-w-0 text-slate-200">{checkout.config.tripType === 'round_trip' ? 'Aller-retour' : 'Aller simple'}</dd>
+          </div>
+          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
+            <dt className="text-slate-400">Jours</dt>
+            <dd className="min-w-0 break-words text-slate-200">{formattedDays}</dd>
+          </div>
+          <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
+            <dt className="text-slate-400">Heures</dt>
+            <dd className="min-w-0 text-slate-200">{checkout.config.departureTime}{checkout.config.returnTime ? ` et ${checkout.config.returnTime}` : ''}</dd>
+          </div>
+        </dl>
+      </div>
 
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h2 className="mb-3 text-base font-bold text-white">Calcul du tarif</h2>
-            <div className="space-y-2 text-slate-300">
-              <div className="flex justify-between gap-4"><span>Distance par trajet</span><strong className="text-white">{formatKm(displayedTripDistanceKm)} km</strong></div>
-              <div className="flex justify-between gap-4"><span>Kilométrage mensuel</span><strong className="text-white">{formatKm(displayedMonthlyDistanceKm)} km</strong></div>
-              <div className="flex justify-between gap-4"><span>Formule</span><strong className="text-white">{formatKm(displayedMonthlyDistanceKm)} km x {formatPersonalDriverCurrency(displayedPrice.pricePerKm, displayedCurrency)}/km</strong></div>
-              {displayedPrice.minimumApplied && (
-                <div className="flex justify-between gap-4"><span>Minimum appliqué</span><strong className="text-white">{formatPersonalDriverCurrency(displayedPrice.minimumAmount, displayedCurrency)}</strong></div>
-              )}
-              <div className="flex justify-between gap-4 border-t border-white/10 pt-2"><span>Total</span><strong className="text-white">{formatPersonalDriverCurrency(displayedTotalAmount, displayedCurrency)}</strong></div>
-              <div className="flex justify-between gap-4"><span>Taxes</span><span className="text-slate-400">Taxes non calculées</span></div>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-            <h2 className="mb-3 text-base font-bold text-white">Inclus dans votre formule</h2>
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {plan.benefits.map((benefit) => (
-                <li key={benefit} className="flex items-center gap-2 text-slate-300">
-                  <MaterialIcon name="check_circle" size="sm" className="text-emerald-400" />
-                  <span>{benefit}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+      <div className="border-t border-white/10 px-4 py-4 sm:px-6">
+        <h2 className="mb-3 text-base font-bold text-white">Calcul du tarif</h2>
+        <div className="grid gap-2 text-sm text-slate-300">
+          <div className="flex items-start justify-between gap-4"><span>Distance par trajet</span><strong className="text-right text-white">{formatKm(displayedTripDistanceKm)} km</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>Kilométrage mensuel</span><strong className="text-right text-white">{formatKm(displayedMonthlyDistanceKm)} km</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>Formule</span><strong className="max-w-[62%] text-right text-white">{formatKm(displayedMonthlyDistanceKm)} km x {formatPersonalDriverCurrency(displayedPrice.pricePerKm, displayedCurrency)}/km</strong></div>
+          {displayedPrice.minimumApplied && (
+            <div className="flex items-start justify-between gap-4"><span>Minimum appliqué</span><strong className="text-right text-white">{formatPersonalDriverCurrency(displayedPrice.minimumAmount, displayedCurrency)}</strong></div>
+          )}
+          <div className="mt-1 flex items-center justify-between gap-4 border-t border-white/10 pt-3"><span className="font-bold text-white">Total</span><strong className="text-lg font-black text-white">{formatPersonalDriverCurrency(displayedTotalAmount, displayedCurrency)}</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>Taxes</span><span className="text-right text-slate-400">Taxes non calculées</span></div>
         </div>
-      </section>
+      </div>
 
-      <section className="rounded-xl border border-white/10 bg-card p-5 shadow-xl">
+      <div className="border-t border-white/10 px-4 py-4 sm:px-6">
+        <h2 className="mb-3 text-base font-bold text-white">Inclus dans votre formule</h2>
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {plan.benefits.map((benefit) => (
+            <li key={benefit} className="flex min-h-8 items-center gap-2 text-sm text-slate-300">
+              <MaterialIcon name="check_circle" size="sm" className="text-emerald-400" />
+              <span>{benefit}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="border-t border-white/10 bg-black/10 p-4 sm:p-6">
         {activationPanel ?? (!payment ? (
-          <button
-            type="button"
-            onClick={preparePayment}
-            disabled={loading}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white transition active:scale-[0.98] disabled:opacity-60"
-          >
-            <MaterialIcon name="lock" size="sm" />
-            {loading ? 'Préparation...' : 'Préparer le paiement sécurisé'}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={preparePayment}
+              disabled={loading}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
+            >
+              <MaterialIcon name="lock" size="sm" />
+              {loading ? 'Préparation...' : 'Préparer le paiement sécurisé'}
+            </button>
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
+              <MaterialIcon name="verified_user" size="sm" />
+              Paiement sécurisé par Stripe
+            </p>
+          </>
         ) : (
           <StripePaymentElement
             clientSecret={payment.clientSecret}
@@ -388,7 +425,7 @@ export function PersonalDriverConfirmation() {
             submitLabel={`Payer ${formatPersonalDriverCurrency(payment.amount, payment.currency)}`}
           />
         ))}
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }

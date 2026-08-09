@@ -252,6 +252,7 @@ describe('Personal Driver Stripe webhook', () => {
     Object.assign(subscriptionData, {
       status: 'active',
       paymentStatus: 'succeeded',
+      activationStatus: 'active',
     });
     const request = {
       method: 'POST',
@@ -269,6 +270,33 @@ describe('Personal Driver Stripe webhook', () => {
     expect(mockTransaction.update).not.toHaveBeenCalledWith(mockSubscriptionRef, expect.anything());
     expect(mockTransaction.set).not.toHaveBeenCalled();
     expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+
+  it('recovers an active paid subscription whose activation marker stayed pending', async () => {
+    const { stripeWebhookInstant } = require('../../stripe/index');
+    Object.assign(subscriptionData, {
+      status: 'active',
+      paymentStatus: 'succeeded',
+      activationStatus: 'pending_payment',
+    });
+    const request = {
+      method: 'POST',
+      headers: { 'stripe-signature': 'signature' },
+      rawBody: Buffer.from('{}'),
+    };
+
+    await stripeWebhookInstant(request, response());
+
+    expect(mockGeneratePersonalDriverTrips).toHaveBeenCalledWith(mockDb, expect.objectContaining({
+      status: 'pending_payment',
+      paymentStatus: 'succeeded',
+      activationStatus: 'activating',
+    }));
+    expect(subscriptionData).toMatchObject({
+      status: 'active',
+      paymentStatus: 'succeeded',
+      activationStatus: 'active',
+    });
   });
 
   it('does not transition a subscription when metadata belongs to another user', async () => {

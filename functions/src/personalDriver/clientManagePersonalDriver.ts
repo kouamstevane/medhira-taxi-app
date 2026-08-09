@@ -6,6 +6,8 @@ import { isSubscriptionEntitled, markExpiredSubscriptionInTransaction } from './
 import { localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
 import { assertFutureSpecialTrip } from './subscriptionSchedule.js';
 import { cancelPersonalDriverTrip } from './cancelPersonalDriverTrip.js';
+import { generatePersonalDriverTrips } from './tripGeneration.js';
+import { isPersonalDriverSubscriptionReadyForActivation } from './subscriptionActivationValidation.js';
 
 type PersonalDriverPlanId = 'basic' | 'classic' | 'premium';
 
@@ -85,6 +87,10 @@ const clientActionSchema = z.discriminatedUnion('action', [
     distanceKm: z.number().finite().positive().max(1000).optional(),
     idempotencyKey: z.string().trim().min(8).max(128).optional(),
   }),
+  z.object({
+    action: z.literal('retryActivation'),
+    subscriptionId: z.string().trim().min(1).max(128),
+  }),
 ]);
 
 export const clientManagePersonalDriver = onCall(
@@ -120,6 +126,91 @@ export const clientManagePersonalDriver = onCall(
     if (initialSubscription?.userId !== uid) {
       throw new HttpsError('permission-denied', 'Cet abonnement ne vous appartient pas.');
     }
+
+    if (payload.action === 'retryActivation') {
+      if (initialSubscription.paymentStatus !== 'succeeded') {
+        throw new HttpsError('failed-precondition', 'Le paiement de cet abonnement n’est pas confirmé.');
+      }
+      if (initialSubscription.status === 'active' && initialSubscription.activationStatus === 'active') {
+        return { success: true, status: 'active' };
+      }
+      if (!isPersonalDriverSubscriptionReadyForActivation(initialSubscription)) {
+        throw new HttpsError('failed-precondition', 'Les informations nécessaires à l’activation sont incomplètes.');
+      }
+
+      const activationSubscription = await db.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(subscriptionRef);
+        if (!snapshot.exists) {
+          throw new HttpsError('not-found', 'Abonnement introuvable.');
+        }
+        const subscription = snapshot.data();
+        if (subscription?.userId !== uid || subscription.paymentStatus !== 'succeeded') {
+          throw new HttpsError('failed-precondition', 'L’état du paiement a changé.');
+        }
+        if (subscription.status === 'active' && subscription.activationStatus === 'active') {
+          return null;
+        }
+        if (!isPersonalDriverSubscriptionReadyForActivation(subscription)) {
+          throw new HttpsError('failed-precondition', 'Les informations nécessaires à l’activation sont incomplètes.');
+        }
+        transaction.update(subscriptionRef, {
+          status: 'pending_payment',
+          activationStatus: 'activating',
+          activationError: null,
+        });
+        return {
+          ...subscription,
+          id: payload.subscriptionId,
+          status: 'pending_payment',
+          paymentStatus: 'succeeded',
+          activationStatus: 'activating',
+        };
+      });
+
+      if (!activationSubscription) return { success: true, status: 'active' };
+
+      try {
+        await generatePersonalDriverTrips(
+          db,
+          activationSubscription as Parameters<typeof generatePersonalDriverTrips>[1],
+        );
+        await db.runTransaction(async (transaction) => {
+          const snapshot = await transaction.get(subscriptionRef);
+          if (!snapshot.exists) return;
+          const subscription = snapshot.data();
+          if (
+            subscription?.userId !== uid
+            || subscription.paymentStatus !== 'succeeded'
+            || subscription.activationStatus !== 'activating'
+          ) return;
+          transaction.update(subscriptionRef, {
+            status: 'active',
+            activationStatus: 'active',
+            activationError: null,
+          });
+        });
+        return { success: true, status: 'active' };
+      } catch (error) {
+        const activationError = (error instanceof Error ? error.message : String(error)).slice(0, 500);
+        await db.runTransaction(async (transaction) => {
+          const snapshot = await transaction.get(subscriptionRef);
+          if (!snapshot.exists) return;
+          const subscription = snapshot.data();
+          if (
+            subscription?.userId !== uid
+            || subscription.paymentStatus !== 'succeeded'
+            || subscription.activationStatus !== 'activating'
+          ) return;
+          transaction.update(subscriptionRef, {
+            status: 'pending_payment',
+            activationStatus: 'activation_failed',
+            activationError,
+          });
+        });
+        throw new HttpsError('internal', 'La préparation des trajets a échoué. Réessayez dans quelques instants.');
+      }
+    }
+
     const initialNow = new Date();
     if (isSubscriptionEntitled(initialSubscription, initialNow)) {
       const initialScheduledAtUtc = parseSpecialTripScheduledAt(

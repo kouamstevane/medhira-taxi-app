@@ -191,6 +191,60 @@ describe('PersonalDriverConfirmation Component', () => {
     expect(screen.getByRole('button', { name: /Payer 723,45/i })).toBeInTheDocument();
   });
 
+  it('omits empty optional fields for a one-way checkout', async () => {
+    const oneWayConfig = {
+      ...sampleConfig,
+      tripType: 'one_way' as const,
+      returnTime: undefined,
+      notes: undefined,
+      distanceReturnKm: undefined,
+    };
+    sessionStorage.setItem(
+      'medjira.personalDriver.config.v1',
+      JSON.stringify(oneWayConfig),
+    );
+    sessionStorage.setItem(
+      'medjira.personalDriver.estimate.v1',
+      JSON.stringify({ ...sampleEstimate, configuration: oneWayConfig }),
+    );
+    (createPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue(authoritativePayment);
+
+    render(<PersonalDriverConfirmation />);
+    fireEvent.click(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i }));
+
+    await waitFor(() => expect(createPersonalDriverSubscriptionPayment).toHaveBeenCalled());
+    const payload = (createPersonalDriverSubscriptionPayment as jest.Mock).mock.calls[0][0];
+    expect(payload).not.toHaveProperty('returnTime');
+    expect(payload).not.toHaveProperty('notes');
+  });
+
+  it('shows guidance when payment preparation rejects malformed optional input', async () => {
+    (createPersonalDriverSubscriptionPayment as jest.Mock).mockRejectedValue(
+      new Error('Invalid input: expected string, received null'),
+    );
+
+    render(<PersonalDriverConfirmation />);
+    fireEvent.click(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/informations du trajet/i);
+    });
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/expected string/i);
+    expect(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i })).toBeEnabled();
+  });
+
+  it('shows retry guidance when the distance service is unavailable', async () => {
+    (createPersonalDriverSubscriptionPayment as jest.Mock).mockRejectedValue(new Error('INTERNAL'));
+
+    render(<PersonalDriverConfirmation />);
+    fireEvent.click(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/calcul de la distance/i);
+    });
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/^INTERNAL$/i);
+  });
+
   it('polls every two seconds and redirects only after server activation', async () => {
     (createPersonalDriverSubscriptionPayment as jest.Mock).mockResolvedValue(authoritativePayment);
     (getPersonalDriverSubscriptionById as jest.Mock)
@@ -223,6 +277,25 @@ describe('PersonalDriverConfirmation Component', () => {
     });
 
     expect(mockPush).toHaveBeenCalledWith('/personal-driver/dashboard?payment=success&subscriptionId=sub_123');
+  });
+
+  it('redirects when payment and subscription status confirm activation', async () => {
+    mockSearchParams = new URLSearchParams('payment=submitted&subscriptionId=sub_123');
+    (getPersonalDriverSubscriptionById as jest.Mock).mockResolvedValue({
+      id: 'sub_123',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      activationStatus: 'pending_payment',
+    });
+    jest.useFakeTimers();
+
+    render(<PersonalDriverConfirmation />);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/personal-driver/dashboard?payment=success&subscriptionId=sub_123');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('shows retry guidance when server activation fails', async () => {

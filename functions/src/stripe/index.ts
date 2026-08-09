@@ -490,7 +490,11 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
         createSubscriptionPeriodLockId(metadata.userId, subscription.periodStartDate),
       );
 
-      if (subscription?.status === 'active' && subscription.paymentStatus === 'succeeded') {
+      if (
+        subscription?.status === 'active'
+        && subscription.paymentStatus === 'succeeded'
+        && subscription.activationStatus === 'active'
+      ) {
         await activateSubscriptionPeriodLock(tx, lockRef, {
           subscriptionId: metadata.subscriptionId,
           paymentIntentId: piId,
@@ -501,7 +505,10 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
       }
 
       const resumesPaidActivation = subscription.paymentStatus === 'succeeded'
-        && subscription.status === 'pending_payment';
+        && (
+          subscription.status === 'pending_payment'
+          || (subscription.status === 'active' && subscription.activationStatus !== 'active')
+        );
       if (!resumesPaidActivation) {
         const canConfirmPayment = isPersonalDriverSubscriptionReadyForPaymentConfirmation(subscription);
         if (!canConfirmPayment) return;

@@ -182,3 +182,4 @@ opencode.json
 
 # Stripe — fichier de bascule des clés (contient sk_live/whsec)
 STRIPE_KEYS_SWAP.md
+next-env.d.ts

@@ -13,6 +13,7 @@ import {
   getPersonalDriverSubscriptionView,
   getPersonalDriverSubscriptionById,
   getPersonalDriverTripsForSubscription,
+  retryPersonalDriverSubscriptionActivation,
   requestSpecialTrip,
   renewPersonalDriverSubscriptionPayment,
   type RenewPersonalDriverSubscriptionPaymentResult,
@@ -107,6 +108,7 @@ export function PersonalDriverClientDashboard() {
   const renewalActivationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const renewalActivationRunRef = useRef(0);
   const renewalActivationPollingIdRef = useRef<string | null>(null);
+  const activationRecoveryAttemptRef = useRef<string | null>(null);
 
   const reloadData = useCallback(async () => {
     if (!currentUser?.uid) return;
@@ -207,6 +209,24 @@ export function PersonalDriverClientDashboard() {
       beginRenewalActivationPolling(pendingRenewal.id);
     }
   }, [beginRenewalActivationPolling, pendingRenewal]);
+
+  useEffect(() => {
+    if (
+      !pendingRenewal
+      || pendingRenewal.paymentStatus !== 'succeeded'
+      || pendingRenewal.activationStatus === 'active'
+      || pendingRenewal.activationStatus !== 'pending_payment'
+      || activationRecoveryAttemptRef.current === pendingRenewal.id
+    ) return;
+    activationRecoveryAttemptRef.current = pendingRenewal.id;
+    setRenewalActivationSubscriptionId(pendingRenewal.id);
+    setRenewalActivationProgress('preparing');
+    void retryPersonalDriverSubscriptionActivation(pendingRenewal.id)
+      .then(() => reloadData())
+      .catch(() => {
+        setRenewalActivationProgress('failed');
+      });
+  }, [pendingRenewal, reloadData]);
 
   useEffect(() => {
     if (
@@ -339,7 +359,11 @@ export function PersonalDriverClientDashboard() {
   const activationStatus = subscription.activationStatus
     ?? (subscription.status === 'active' ? 'active' : 'pending_payment');
   const displayedStatus = subscription.paymentStatus === 'succeeded'
-    ? activationStatus
+    ? activationStatus === 'activation_failed'
+      ? 'activation_failed'
+      : activationStatus === 'active'
+        ? 'active'
+        : 'activating'
     : subscription.status;
   const statusInfo = STATUS_LABELS[displayedStatus] || STATUS_LABELS.pending_payment;
   const includedSpecialTrips = planInfo.includedSpecialTrips;

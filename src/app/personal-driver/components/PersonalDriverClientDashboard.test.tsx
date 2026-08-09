@@ -7,6 +7,7 @@ import {
   getPersonalDriverSubscriptionView,
   getPersonalDriverSubscriptionById,
   getPersonalDriverTripsForSubscription,
+  retryPersonalDriverSubscriptionActivation,
   requestSpecialTrip,
   renewPersonalDriverSubscriptionPayment,
 } from '@/services/personal-driver/subscription.service';
@@ -17,6 +18,7 @@ jest.mock('@/services/personal-driver/subscription.service', () => ({
   getPersonalDriverSubscriptionView: jest.fn(),
   getPersonalDriverSubscriptionById: jest.fn(),
   getPersonalDriverTripsForSubscription: jest.fn(),
+  retryPersonalDriverSubscriptionActivation: jest.fn(),
   cancelPersonalDriverTripByClient: jest.fn(),
   requestSpecialTrip: jest.fn(),
   renewPersonalDriverSubscriptionPayment: jest.fn(),
@@ -148,6 +150,36 @@ describe('PersonalDriverClientDashboard Component', () => {
     expect(screen.queryByText(/Votre calendrier est en préparation/i)).not.toBeInTheDocument();
     expect(getPersonalDriverSubscriptionView).toHaveBeenCalledWith('user_123');
     expect(getPersonalDriverTripsForSubscription).not.toHaveBeenCalled();
+  });
+
+  it('recovers a paid subscription whose activation marker is still pending', async () => {
+    const staleSubscription = {
+      id: 'sub_stale_activation',
+      userId: 'user_123',
+      selectedPlanId: 'classic',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      activationStatus: 'pending_payment',
+      monthlyDistanceKm: 440,
+      pickupAddress: '100 rue Principale',
+      destinationAddress: '500 rue Universite',
+    };
+    const activeSubscription = { ...staleSubscription, activationStatus: 'active' };
+    (getPersonalDriverSubscriptionView as jest.Mock)
+      .mockResolvedValueOnce({ active: null, pending: staleSubscription })
+      .mockResolvedValueOnce({ active: activeSubscription, pending: null });
+    (retryPersonalDriverSubscriptionActivation as jest.Mock).mockResolvedValue({
+      success: true,
+      status: 'active',
+    });
+    (getPersonalDriverTripsForSubscription as jest.Mock).mockResolvedValue([]);
+
+    render(<PersonalDriverClientDashboard />);
+
+    await waitFor(() => {
+      expect(retryPersonalDriverSubscriptionActivation).toHaveBeenCalledWith('sub_stale_activation');
+      expect(screen.getByText(/Abonnement Actif/i)).toBeInTheDocument();
+    });
   });
 
   it('renders activation failure and refresh guidance instead of an empty calendar message', async () => {

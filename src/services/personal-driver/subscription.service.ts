@@ -39,6 +39,7 @@ export interface CreatePersonalDriverSubscriptionPaymentInput {
 
 interface ClientManagePersonalDriverResult {
   success: boolean;
+  status?: 'active';
 }
 
 export interface CreatePersonalDriverSubscriptionPaymentResult {
@@ -241,6 +242,17 @@ export async function cancelPersonalDriverTripByClient(tripId: string): Promise<
     ClientManagePersonalDriverResult
   >(functions, 'clientManagePersonalDriver');
   await callable({ action: 'cancelTrip', tripId });
+}
+
+export async function retryPersonalDriverSubscriptionActivation(
+  subscriptionId: string,
+): Promise<{ success: boolean; status?: 'active' }> {
+  const callable = httpsCallable<
+    { action: 'retryActivation'; subscriptionId: string },
+    ClientManagePersonalDriverResult
+  >(functions, 'clientManagePersonalDriver');
+  const response = await callable({ action: 'retryActivation', subscriptionId });
+  return response.data;
 }
 
 export async function requestSpecialTrip(
