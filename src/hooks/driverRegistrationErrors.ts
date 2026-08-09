@@ -8,7 +8,7 @@ export function getDriverSubmissionErrorMessage(error: DriverSubmissionErrorLike
     return 'Trop de tentatives de soumission. Veuillez réessayer dans 10 minutes.';
   }
 
-  if (error.code === 'permission-denied') {
+  if (error.code === 'permission-denied' || error.code === 'functions/permission-denied') {
     return 'Session expirée. Veuillez vous reconnecter puis reprendre votre inscription.';
   }
 

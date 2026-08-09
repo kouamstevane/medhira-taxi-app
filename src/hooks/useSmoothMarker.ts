@@ -59,7 +59,7 @@ export function useSmoothMarker(
                 cancelAnimationFrame(rafRef.current);
                 rafRef.current = null;
             }
-            queueMicrotask(() => setDisplayed(null));
+            setDisplayed(null);
             fromRef.current = null;
             toRef.current = null;
             return;
@@ -78,7 +78,7 @@ export function useSmoothMarker(
             }
             fromRef.current = target;
             toRef.current = target;
-            queueMicrotask(() => setDisplayed(target));
+            setDisplayed(target);
             return;
         }
 

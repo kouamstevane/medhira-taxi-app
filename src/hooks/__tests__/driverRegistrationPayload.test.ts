@@ -1,6 +1,10 @@
-import { buildDriverApplicationPublicData } from '../driverRegistrationPayload';
+import { buildDriverApplicationPublicData, getDriverApplicationEmail } from '../driverRegistrationPayload';
 
 describe('driver registration payload', () => {
+  it('prefers the authenticated email over a stale draft email', () => {
+    expect(getDriverApplicationEmail(' AUTH@EXAMPLE.COM ', 'old@example.com')).toBe('AUTH@EXAMPLE.COM');
+  });
+
   it('omits private and empty optional fields from the public driver payload', () => {
     const payload = buildDriverApplicationPublicData({
       userId: 'driver-123',

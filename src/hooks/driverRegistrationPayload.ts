@@ -18,6 +18,13 @@ function optionalNonEmpty(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+export function getDriverApplicationEmail(
+  authenticatedEmail: string | null | undefined,
+  draftEmail: string | null | undefined,
+): string {
+  return optionalNonEmpty(authenticatedEmail) || optionalNonEmpty(draftEmail) || '';
+}
+
 export function buildDriverApplicationPublicData({
   userId,
   email,

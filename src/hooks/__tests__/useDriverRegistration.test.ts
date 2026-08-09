@@ -1,6 +1,3 @@
-import { act, renderHook } from '@testing-library/react';
-import { useDriverRegistration } from '@/hooks/useDriverRegistration';
-
 const mockPush = jest.fn();
 const mockRedirectWithFallback = jest.fn();
 const mockSubmitApplication = jest.fn();
@@ -18,7 +15,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/config/firebase', () => ({
-  auth: { currentUser: mockUser },
+  auth: { get currentUser() { return mockUser; } },
   db: {},
   app: {},
   getFirebaseStorage: jest.fn(() => ({})),
@@ -99,6 +96,9 @@ jest.mock('@/hooks/useConnectivityMonitor', () => ({
   useConnectivityMonitor: jest.fn(() => true),
   checkConnectivity: jest.fn(() => true),
 }));
+
+import { act, renderHook } from '@testing-library/react';
+import { useDriverRegistration } from '@/hooks/useDriverRegistration';
 
 describe('useDriverRegistration', () => {
   beforeEach(() => {

@@ -14,7 +14,7 @@ import { StructuredLogger } from '@/utils/logger';
 import { retryWithBackoff } from '@/utils/retry';
 import { redirectWithFallback } from '@/utils/navigation';
 import { useConnectivityMonitor, checkConnectivity } from '@/hooks/useConnectivityMonitor';
-import { buildDriverApplicationPublicData } from '@/hooks/driverRegistrationPayload';
+import { buildDriverApplicationPublicData, getDriverApplicationEmail } from '@/hooks/driverRegistrationPayload';
 import { getDriverSubmissionErrorMessage } from '@/hooks/driverRegistrationErrors';
 import type { Step1FormData } from '@/app/driver/register/components/Step1Intent';
 import type { Step2FormData } from '@/app/driver/register/components/Step2Identity';
@@ -156,7 +156,11 @@ export function useDriverRegistration() {
           hasRestoredProgressRef.current = true;
           const saved = await restoreProgress();
           if (saved?.step1Data) {
-            setStep1Data(prev => ({ ...prev, ...saved.step1Data }));
+            setStep1Data(prev => ({
+              ...prev,
+              ...saved.step1Data,
+              email: user.email || saved.step1Data.email || '',
+            }));
             setStep2Data(saved.step2Data || {});
             setStep3Data(saved.step3Data || {});
             // Les objets File ne sont pas sérialisables — impossible de restaurer au-delà de l'étape 2
@@ -473,7 +477,7 @@ export function useDriverRegistration() {
       // Champs publics — doc racine `drivers/{uid}` (lisible par utilisateurs auth)
       const publicData = buildDriverApplicationPublicData({
         userId,
-        email: step1Data.email || auth.currentUser?.email || '',
+        email: getDriverApplicationEmail(auth.currentUser?.email, step1Data.email),
         driverType,
         vehicleType,
         defaultCityId: process.env.NEXT_PUBLIC_DEFAULT_CITY_ID || 'edmonton',

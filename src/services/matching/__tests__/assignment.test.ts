@@ -112,11 +112,13 @@ describe('Service de Matching - Assignment', () => {
     };
 
     it('devrait retourner success:true lors d\'une assignation réussie', async () => {
-      // La transaction appelle transaction.get deux fois :
+      // La transaction appelle transaction.get trois fois :
       //   1. rideRef  → booking en attente
-      //   2. candidateRef → candidature pending
+      //   2. driverRef → driver disponible
+      //   3. candidateRef → candidature pending
       mockTransactionGet
         .mockResolvedValueOnce(makeSnap(true, { status: 'pending', candidates: [] }))
+        .mockResolvedValueOnce(makeSnap(true, { isAvailable: true, firstName: 'Jean', lastName: 'Dupont' }))
         .mockResolvedValueOnce(makeSnap(true, { status: 'pending' }));
 
       mockGetDriverById.mockResolvedValue(mockDriver);
@@ -165,9 +167,9 @@ describe('Service de Matching - Assignment', () => {
     });
 
     it('devrait retourner success:false si le chauffeur n\'existe pas', async () => {
-      mockTransactionGet.mockResolvedValueOnce(
-        makeSnap(true, { status: 'pending', candidates: [] })
-      );
+      mockTransactionGet
+        .mockResolvedValueOnce(makeSnap(true, { status: 'pending', candidates: [] }))
+        .mockResolvedValueOnce(makeSnap(false)); // pas de chauffeur
 
       mockGetDriverById.mockResolvedValue(null);
 
@@ -184,6 +186,7 @@ describe('Service de Matching - Assignment', () => {
     it('devrait retourner success:false si la candidature n\'existe pas', async () => {
       mockTransactionGet
         .mockResolvedValueOnce(makeSnap(true, { status: 'pending', candidates: [] }))
+        .mockResolvedValueOnce(makeSnap(true, { isAvailable: true, firstName: 'Jean', lastName: 'Dupont' }))
         .mockResolvedValueOnce(makeSnap(false)); // pas de candidature
 
       mockGetDriverById.mockResolvedValue(mockDriver);
@@ -208,13 +211,17 @@ describe('Service de Matching - Assignment', () => {
     const driverId = 'driver-456';
 
     it('devrait annuler l\'assignation avec succès', async () => {
-      mockGetDoc.mockResolvedValue(
-        makeSnap(true, { status: 'accepted', driverId })
+      mockTransactionGet
+        .mockResolvedValueOnce(makeSnap(true, { status: 'accepted', driverId }))
+        .mockResolvedValueOnce(makeSnap(true, { isAvailable: false }));
+
+      mockRunTransaction.mockImplementation(async (_db: unknown, callback: Function) =>
+        callback(mockTransaction)
       );
 
       await cancelAssignment(bookingId);
 
-      expect(mockUpdateDoc).toHaveBeenCalledWith(
+      expect(mockTransactionUpdate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
           status: 'pending',
@@ -224,15 +231,18 @@ describe('Service de Matching - Assignment', () => {
     });
 
     it('devrait libérer le chauffeur précédemment assigné', async () => {
-      mockGetDoc.mockResolvedValue(
-        makeSnap(true, { status: 'accepted', driverId })
+      mockTransactionGet
+        .mockResolvedValueOnce(makeSnap(true, { status: 'accepted', driverId }))
+        .mockResolvedValueOnce(makeSnap(true, { isAvailable: false }));
+
+      mockRunTransaction.mockImplementation(async (_db: unknown, callback: Function) =>
+        callback(mockTransaction)
       );
 
       await cancelAssignment(bookingId);
 
-      // Premier appel updateDoc → booking ; deuxième → driver
-      expect(mockUpdateDoc).toHaveBeenCalledTimes(2);
-      const secondCall = mockUpdateDoc.mock.calls[1][1];
+      expect(mockTransactionUpdate).toHaveBeenCalledTimes(2);
+      const secondCall = mockTransactionUpdate.mock.calls[1][1];
       expect(secondCall).toMatchObject({
         isAvailable: true,
         status: 'available',
@@ -240,19 +250,27 @@ describe('Service de Matching - Assignment', () => {
     });
 
     it('devrait lancer une erreur si la booking n\'existe pas', async () => {
-      mockGetDoc.mockResolvedValue(makeSnap(false));
+      mockTransactionGet.mockResolvedValueOnce(makeSnap(false));
+
+      mockRunTransaction.mockImplementation(async (_db: unknown, callback: Function) =>
+        callback(mockTransaction)
+      );
 
       await expect(cancelAssignment(bookingId)).rejects.toThrow('Course non trouvée');
     });
 
     it('devrait accepter une raison en paramètre optionnel', async () => {
-      mockGetDoc.mockResolvedValue(
-        makeSnap(true, { status: 'accepted', driverId })
+      mockTransactionGet
+        .mockResolvedValueOnce(makeSnap(true, { status: 'accepted', driverId }))
+        .mockResolvedValueOnce(makeSnap(true, { isAvailable: false }));
+
+      mockRunTransaction.mockImplementation(async (_db: unknown, callback: Function) =>
+        callback(mockTransaction)
       );
 
       await cancelAssignment(bookingId, 'Annulation client');
 
-      expect(mockUpdateDoc).toHaveBeenCalledWith(
+      expect(mockTransactionUpdate).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({ cancellationReason: 'Annulation client' })
       );

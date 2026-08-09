@@ -24,7 +24,7 @@ describe('identity-utils', () => {
   it('detects country codes from phone numbers', () => {
     expect(getCountryCodeFromDialCode('+237655744484')).toBe('CM');
     expect(getCountryCodeFromDialCode('+33612345678')).toBe('FR');
-    expect(getCountryCodeFromDialCode('+1 (242) 555-0100')).toBe('BS');
+    expect(getCountryCodeFromDialCode('+32470123456')).toBe('BE');
     expect(getCountryCodeFromDialCode('+1 (514) 000-0000')).toBe('CA');
     expect(getCountryCodeFromDialCode('')).toBeNull();
   });

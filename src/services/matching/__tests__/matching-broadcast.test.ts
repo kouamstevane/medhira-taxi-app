@@ -25,6 +25,11 @@ const mockOrderBy = jest.fn();
 const mockLimit = jest.fn();
 const mockOnSnapshot = jest.fn(() => jest.fn());
 const mockWriteBatch = jest.fn();
+const mockTxGet = jest.fn();
+const mockTxUpdate = jest.fn();
+const mockRunTransaction = jest.fn(async (_db: unknown, fn: (tx: { get: typeof mockTxGet; update: typeof mockTxUpdate }) => unknown) => {
+  return fn({ get: mockTxGet, update: mockTxUpdate });
+});
 
 jest.mock('firebase/firestore', () => ({
   collection: (...args: unknown[]) => mockCollection(...args),
@@ -45,7 +50,7 @@ jest.mock('firebase/firestore', () => ({
     })),
   },
   writeBatch: (...args: unknown[]) => mockWriteBatch(...args),
-  runTransaction: jest.fn(),
+  runTransaction: (...args: unknown[]) => (mockRunTransaction as Function)(...args),
   setDoc: jest.fn(),
 }));
 
@@ -120,8 +125,8 @@ describe('FindAvailableDrivers', () => {
       ],
       empty: false,
     });
-    const result = await findAvailableDrivers({ location: { lat: 43.65, lng: -79.38 }, rangeKm: 50, maxTravelMinutes: 30 });
-    expect(result.length).toBeGreaterThan(0);
+    const result = await findAvailableDrivers({ location: { lat: 43.65, lng: -79.38 }, rangeKm: 20, maxTravelMinutes: 30 });
+    expect(result.length).toBe(2);
   });
 
   it('respecte maxResults', async () => {
@@ -140,13 +145,13 @@ describe('FindAvailableDrivers', () => {
   });
 });
 
-describe('Broadcast - broadcastRideRequest', () => {
+describe('BroadcastRideRequest', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     setupMocks();
   });
 
-  it('retourne [] si aucun chauffeur via Firestore', async () => {
+  it('retourne [] si aucun chauffeur', async () => {
     mockGetDocs.mockResolvedValue({ docs: [], empty: true });
     mockWriteBatch.mockReturnValue({ set: jest.fn(), commit: jest.fn().mockResolvedValue(undefined) });
     const result = await broadcastRideRequest({
@@ -179,26 +184,32 @@ describe('Broadcast - markCandidateAccepted', () => {
   });
 
   it('retourne false si candidature inexistante', async () => {
-    mockGetDoc.mockResolvedValue({ exists: false });
+    mockTxGet
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ status: 'pending' }) })
+      .mockResolvedValueOnce({ exists: () => false });
     expect(await markCandidateAccepted('r1', 'd1')).toBe(false);
   });
 
   it('retourne false si deja traitee', async () => {
-    mockGetDoc.mockResolvedValue({ exists: true, data: () => ({ status: 'accepted' }) });
+    mockTxGet
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ status: 'pending' }) })
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ status: 'accepted' }) });
     expect(await markCandidateAccepted('r1', 'd1')).toBe(false);
   });
 
   it('retourne false si expiree', async () => {
-    mockGetDoc.mockResolvedValue({
-      exists: true,
-      data: () => ({ status: 'pending', expiresAt: { toDate: () => new Date(Date.now() - 60000) } }),
-    });
-    mockUpdateDoc.mockResolvedValue(undefined);
+    mockTxGet
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ status: 'pending' }) })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ status: 'pending', expiresAt: { toDate: () => new Date(Date.now() - 60000) } }),
+      });
     expect(await markCandidateAccepted('r1', 'd1')).toBe(false);
+    expect(mockTxUpdate).toHaveBeenCalledWith('mock-doc', { status: 'expired' });
   });
 
   it('retourne false en cas d erreur', async () => {
-    mockGetDoc.mockRejectedValue(new Error('fail'));
+    mockTxGet.mockRejectedValue(new Error('fail'));
     expect(await markCandidateAccepted('r1', 'd1')).toBe(false);
   });
 });
@@ -210,13 +221,13 @@ describe('Broadcast - markCandidateDeclined', () => {
   });
 
   it('ne fait rien si inexistante', async () => {
-    mockGetDoc.mockResolvedValue({ exists: false });
+    mockTxGet.mockResolvedValue({ exists: () => false });
     await markCandidateDeclined('r1', 'd1');
-    expect(mockUpdateDoc).not.toHaveBeenCalled();
+    expect(mockTxUpdate).not.toHaveBeenCalled();
   });
 
   it('gere les erreurs', async () => {
-    mockGetDoc.mockRejectedValue(new Error('fail'));
+    mockTxGet.mockRejectedValue(new Error('fail'));
     await expect(markCandidateDeclined('r1', 'd1')).resolves.toBeUndefined();
   });
 });
@@ -225,16 +236,16 @@ describe('Broadcast - expireAllPendingCandidates', () => {
   beforeEach(() => { jest.clearAllMocks(); setupMocks(); });
 
   it('met a jour les pending', async () => {
-    mockGetDocs.mockResolvedValue({ docs: [{ ref: 'r1' }, { ref: 'r2' }], size: 2 });
-    mockUpdateDoc.mockResolvedValue(undefined);
+    mockGetDocs.mockResolvedValue({ docs: [{ ref: 'r1' }, { ref: 'r2' }], empty: false });
+    mockTxGet.mockResolvedValue({ exists: () => true, data: () => ({ status: 'pending' }) });
     await expireAllPendingCandidates('ride-1');
-    expect(mockUpdateDoc).toHaveBeenCalledTimes(2);
+    expect(mockTxUpdate).toHaveBeenCalledTimes(2);
   });
 
   it('gere liste vide', async () => {
-    mockGetDocs.mockResolvedValue({ docs: [], size: 0 });
+    mockGetDocs.mockResolvedValue({ docs: [], empty: true });
     await expireAllPendingCandidates('ride-1');
-    expect(mockUpdateDoc).not.toHaveBeenCalled();
+    expect(mockTxUpdate).not.toHaveBeenCalled();
   });
 
   it('gere les erreurs', async () => {

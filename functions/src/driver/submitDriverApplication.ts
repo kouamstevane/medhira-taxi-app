@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { SubmitDriverApplicationRequestSchema } from '../validators/schemas.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { emailsMatch, normalizeEmail } from './email.js';
 
 function hasRequiredFields(data: Record<string, unknown>, fields: string[]): boolean {
   return fields.every((f) => data[f] != null && data[f] !== '');
@@ -51,9 +52,11 @@ export const submitDriverApplication = onCall(
     const authEmail = request.auth.token.email as string | undefined;
     const driverData = payload.driverData;
 
-    if (authEmail && driverData.email !== authEmail) {
+    if (authEmail && !emailsMatch(driverData.email, authEmail)) {
       throw new HttpsError('permission-denied', 'Email mismatch.');
     }
+
+    const canonicalEmail = normalizeEmail(authEmail || driverData.email);
 
     if (driverData.phoneNumber != null) {
       throw new HttpsError('failed-precondition', 'phoneNumber doit être null.');
@@ -100,7 +103,7 @@ export const submitDriverApplication = onCall(
         const sanitizedData = {
           ...driverData,
           uid: payload.driverId,
-          email: driverData.email,
+          email: canonicalEmail,
           phoneNumber: null,
           status: 'pending',
           updatedAt: now,

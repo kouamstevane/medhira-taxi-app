@@ -1,4 +1,5 @@
 import { SubmitDriverApplicationRequestSchema } from '../../validators/schemas';
+import { emailsMatch, normalizeEmail } from '../email';
 
 describe('SubmitDriverApplicationRequestSchema', () => {
   const validPayload = {
@@ -43,6 +44,17 @@ describe('SubmitDriverApplicationRequestSchema', () => {
     const { driverId, ...noId } = validPayload;
     const result = SubmitDriverApplicationRequestSchema.safeParse(noId);
     expect(result.success).toBe(false);
+  });
+});
+
+describe('driver application email security', () => {
+  test('normalizes email casing and surrounding whitespace', () => {
+    expect(normalizeEmail('  Driver@Example.COM ')).toBe('driver@example.com');
+    expect(emailsMatch('  Driver@Example.COM ', 'driver@example.com')).toBe(true);
+  });
+
+  test('rejects a genuinely different email', () => {
+    expect(emailsMatch('driver@example.com', 'other@example.com')).toBe(false);
   });
 });
 
