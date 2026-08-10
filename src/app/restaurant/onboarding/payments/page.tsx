@@ -38,6 +38,16 @@ function PaymentsOnboardingContent() {
     });
   }, [authLoading, currentUser, userData, router]);
 
+  useEffect(() => {
+    const onboardingParam = params.get('onboarding');
+    if (onboardingParam === 'success') {
+      toast.success('Configuration Stripe enregistrée avec succès !');
+      router.replace('/restaurant/dashboard');
+    } else if (onboardingParam === 'refresh') {
+      toast.error('La configuration Stripe a été interrompue. Veuillez réessayer.');
+    }
+  }, [params, router]);
+
   async function handleClick() {
     const restaurantId = userData?.roles?.restaurant?.restaurantId;
     if (!restaurantId) return;

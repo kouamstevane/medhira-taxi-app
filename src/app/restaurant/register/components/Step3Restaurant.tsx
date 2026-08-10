@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useCallback } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CUISINE_TYPES } from '@/utils/restaurant-constants';
 import type { Step3Data } from '@/hooks/useRestaurantRegistration';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import { AddressInput } from '@/app/taxi/components/AddressInput';
+import { PlaceSuggestion } from '@/types';
 
 interface Step3RestaurantProps {
   onNext: (data: Step3Data) => void;
@@ -14,6 +17,7 @@ interface Step3RestaurantProps {
 }
 
 export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3RestaurantProps) {
+  const { autocompleteService } = useGoogleMaps();
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [cuisineType, setCuisineType] = useState<string[]>(initialData?.cuisineType || []);
@@ -29,6 +33,25 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
       prev.includes(cuisine) ? prev.filter((c) => c !== cuisine) : [...prev, cuisine]
     );
   };
+
+  const handleAddressSelect = useCallback((suggestion: PlaceSuggestion) => {
+    setAddress(suggestion.description);
+    const googleApi = typeof window !== 'undefined' ? window.google : undefined;
+    if (googleApi?.maps?.Geocoder && suggestion.place_id) {
+      const geocoder = new googleApi.maps.Geocoder();
+      geocoder.geocode({ placeId: suggestion.place_id }, (results, status) => {
+        if (status === 'OK' && results && results[0]?.geometry?.location) {
+          const loc = results[0].geometry.location;
+          setLocation({ lat: loc.lat(), lng: loc.lng() });
+        }
+      });
+    }
+  }, []);
+
+  const handleLocationResolved = useCallback((locObj: { lat: number; lng: number }, resolvedAddress: string) => {
+    setLocation({ lat: locObj.lat, lng: locObj.lng });
+    setAddress(resolvedAddress);
+  }, []);
 
   const geocodeAddress = async (value: string): Promise<{ lat: number; lng: number } | null> => {
     if (location && value.trim() === address.trim()) return location;
@@ -117,8 +140,21 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
           </div>
 
           <div>
-            <label htmlFor="restAddress" className="block text-sm font-medium text-gray-300 mb-1">Adresse</label>
-            <input id="restAddress" type="text" value={address} onChange={(e) => { setAddress(e.target.value); setLocation(undefined); }} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="12 Rue de la Paix, 75002 Paris" required aria-required="true" />
+            <AddressInput
+              label="Adresse du restaurant"
+              value={address}
+              onChange={(val) => {
+                setAddress(val);
+                setLocation(undefined);
+              }}
+              onSelect={handleAddressSelect}
+              autocompleteService={autocompleteService}
+              location={location}
+              enableLocationButton={true}
+              onLocationResolved={handleLocationResolved}
+              placeholder="12 Rue de la Paix, 75002 Paris"
+              required
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">

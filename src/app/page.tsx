@@ -7,14 +7,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { getRouteForAuthenticatedProfile } from '@/services/roles.service';
 import { redirectWithFallback } from '@/utils/navigation';
+import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 
 export default function HomePage() {
   const router = useRouter();
   const { currentUser, loading, userData } = useAuth();
   const redirectedRef = useRef(false);
   const fallbackRef = useRef<NodeJS.Timeout | null>(null);
+  const isDriverOnboarding = Boolean(
+    userData?.accountState === 'driver_onboarding' || userData?.activeRole === 'driver_onboarding',
+  );
 
   useEffect(() => {
+    if (isDriverOnboarding) return;
+
     const route = getRouteForAuthenticatedProfile(userData, {});
 
     if (!loading && currentUser && route && !redirectedRef.current) {
@@ -27,7 +33,11 @@ export default function HomePage() {
         clearTimeout(fallbackRef.current);
       }
     };
-  }, [currentUser, loading, router, userData]);
+  }, [currentUser, isDriverOnboarding, loading, router, userData]);
+
+  if (!loading && currentUser && userData && isDriverOnboarding) {
+    return <DriverOnboardingDecisionGate />;
+  }
 
   if (loading || (currentUser && userData)) {
     return (

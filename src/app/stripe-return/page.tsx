@@ -15,7 +15,7 @@ function StripeReturnContent() {
     if (role === 'driver') {
       router.replace(`/driver/payments/setup?onboarding=${status}`);
     } else if (role === 'restaurant') {
-      router.replace(`/restaurant/payments/setup?onboarding=${status}`);
+      router.replace(`/restaurant/onboarding/payments?onboarding=${status}`);
     } else {
       router.replace('/dashboard');
     }
