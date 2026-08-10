@@ -25,7 +25,7 @@ describe('Step3Restaurant', () => {
     if (originalGoogleDescriptor) {
       Object.defineProperty(window, 'google', originalGoogleDescriptor);
     } else {
-      delete (window as typeof window & { google?: unknown }).google;
+      Reflect.deleteProperty(window, 'google');
     }
   });
 
