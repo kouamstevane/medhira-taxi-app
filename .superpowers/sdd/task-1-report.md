@@ -1,66 +1,77 @@
-# Task 1 Report: Personal Driver Types, Plans, and Pricing
+# Task 1 Report: Align the shared TextAreaField component
 
-## Status
+## Result
 
-DONE
+Implemented and committed Task 1 in the requested worktree.
 
-## Implementation
+## Changes
 
-- Added personal driver domain types and public type re-exports.
-- Added `PERSONAL_DRIVER_PLANS` with the exact PDF tariffs:
-  - Basic: 1.50 CAD/km, 200 km minimum billable, 300 CAD minimum.
-  - Classic: 1.25 CAD/km, 360 km minimum billable, 450 CAD minimum.
-  - Premium: 1.10 CAD/km, 591 km minimum billable, explicit 650 CAD minimum.
-- Added weekday eligibility, minimum pricing, savings comparison, recommendation reasons, and recommendation lookup.
-- Recommendations exclude ineligible plans, choose the lowest total before tax, and prefer the higher service level on ties. The result only recommends a plan; it does not restrict later client plan selection.
-- Added the four required focused pricing tests.
+- Updated `src/components/forms/TextAreaField.tsx` to:
+  - import `cn` and the shared driver onboarding label, error, and helper classes;
+  - generate a fallback textarea id with `React.useId()`;
+  - associate the label with the textarea using `htmlFor`;
+  - apply the shared dark field chrome, including `glass-input`, `autofill-dark`, multiline sizing, rounded borders, and orange focus states;
+  - preserve controlled `value`, `maxLength`, `showCharCount`, error rendering, helper rendering, disabled state, and custom classes.
+- Added `src/components/forms/__tests__/TextAreaField.test.tsx` covering the shared field chrome, label association, and helper text styling.
 
 ## TDD Evidence
 
-1. Wrote `src/services/personal-driver/pricing.service.test.ts` first.
-2. Ran the required command:
-   `npm test -- src/services/personal-driver/pricing.service.test.ts --runInBand`
-   The command timed out because the repository `test` script is watch-mode (`jest --watch`) and does not terminate in this environment.
-3. Ran the equivalent bounded command before implementation:
-   `npx jest src/services/personal-driver/pricing.service.test.ts --runInBand`
-   It also timed out while resolving the incomplete local Jest installation.
-4. Implemented the types, plans, and pricing service.
-5. Ran the focused Jest entrypoint after implementation:
-   `node node_modules\\jest\\bin\\jest.js src/services/personal-driver/pricing.service.test.ts --runInBand`
-   Result: **1 suite passed, 4 tests passed, 0 failed**.
+### RED
 
-## Additional Verification
+Command:
 
-- `git diff --cached --check`: passed.
-- Full TypeScript check via `node node_modules\\typescript\\bin\\tsc --noEmit --pretty false`: timed out after 60 seconds without diagnostics.
+```
+npx jest src/components/forms/__tests__/TextAreaField.test.tsx --runInBand
+```
+
+The test failed as expected because the existing label had no `htmlFor` association and the textarea did not include the shared `glass-input` and `autofill-dark` classes. Result: 1 failed test.
+
+### GREEN
+
+Command:
+
+```
+npx jest src/components/forms/__tests__/TextAreaField.test.tsx --runInBand
+```
+
+Result: 1 suite passed, 1 test passed.
+
+### Regression
+
+Command:
+
+```
+npx jest src/components/forms/__tests__/InputField.test.tsx src/components/forms/__tests__/TextAreaField.test.tsx --runInBand
+```
+
+Result: 2 suites passed, 2 tests passed.
+
+Additional verification:
+
+- `git diff --check`: passed with no whitespace errors.
+- Self-review confirmed the implementation was limited to the requested component and test before commit.
 
 ## Commit
 
-- Commit: `275d828`
-- Message: `feat: add personal driver pricing model`
+`3a06940 refactor: align shared textarea field styling`
 
-## Files Changed
+## Review Fix
 
-- `src/types/personal-driver.ts`
-- `src/types/index.ts`
-- `src/services/personal-driver/plans.ts`
-- `src/services/personal-driver/pricing.service.ts`
-- `src/services/personal-driver/pricing.service.test.ts`
+- Updated `src/components/forms/TextAreaField.tsx` to combine `driverFieldLabelClassName` with the `block` class, matching `InputField` so the shared `mb-2` label spacing applies.
+- Updated `src/components/forms/__tests__/TextAreaField.test.tsx` to assert the label has the `block` class.
 
-## Review Fix: Pricing Threshold Boundaries
+Command:
 
-- Added focused boundary coverage for Premium at 590 km and 591 km, Classic at 360 km, and Basic at 200 km.
-- Confirmed no implementation adjustment was required: the existing explicit minimum logic returns Premium `650` below 591 km and distance pricing returns `650.1` at 591 km.
-- Ran:
-  `node node_modules\\jest\\bin\\jest.js src/services/personal-driver/pricing.service.test.ts --runInBand`
-- Result: **1 suite passed, 5 tests passed, 0 failed**.
+```
+npx jest src/components/forms/__tests__/TextAreaField.test.tsx src/components/forms/__tests__/InputField.test.tsx --runInBand
+```
 
-## Re-review Fix: Minimum Billable Distance Thresholds
+Actual output:
 
-- Updated `pricing.service.ts` to apply `plan.minimumAmount` whenever monthly distance is below `plan.minimumBillableKm`.
-- At or above the threshold, pricing now explicitly uses `Math.max(distanceAmount, plan.minimumAmount)`.
-- `minimumApplied` now reflects the threshold minimum or explicit minimum floor, including equality at the floor.
-- Preserved the required Premium boundary expectations: 590 km returns 650 CAD and 591 km returns 650.1 CAD.
-- Focused verification:
-  `node node_modules\\jest\\bin\\jest.js src/services/personal-driver/pricing.service.test.ts --runInBand`
-  Result: **1 suite passed, 5 tests passed, 0 failed**.
+```
+Test Suites: 2 passed, 2 total
+Tests:       2 passed, 2 total
+Snapshots:   0 total
+Time:        6.168 s
+Ran all test suites matching src/components/forms/__tests__/TextAreaField.test.tsx|src/components/forms/__tests__/InputField.test.tsx.
+```

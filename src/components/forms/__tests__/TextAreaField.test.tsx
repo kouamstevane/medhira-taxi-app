@@ -13,6 +13,7 @@ describe('TextAreaField', () => {
     );
 
     expect(screen.getByLabelText('Description')).toBe(screen.getByTestId('description-field'));
+    expect(screen.getByText('Description')).toHaveClass('block');
     expect(screen.getByTestId('description-field')).toHaveClass('glass-input');
     expect(screen.getByTestId('description-field')).toHaveClass('autofill-dark');
     expect(screen.getByTestId('description-field')).toHaveClass('focus:ring-2');

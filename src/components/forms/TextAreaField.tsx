@@ -59,7 +59,7 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
       <div className={`w-full ${containerClassName}`}>
         {/* Label */}
         {label && (
-          <label htmlFor={textareaId} className={driverFieldLabelClassName}>
+          <label htmlFor={textareaId} className={cn(driverFieldLabelClassName, 'block')}>
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>
