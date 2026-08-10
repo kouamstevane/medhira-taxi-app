@@ -4,7 +4,8 @@ import {
   PersonalDriverEstimate,
   PERSONAL_DRIVER_ESTIMATE_SESSION_KEY,
 } from './PersonalDriverEstimate';
-import PersonalDriverEstimationPage, { parsePersonalDriverConfiguration } from '../estimation/page';
+import PersonalDriverEstimationPage from '../estimation/page';
+import { parsePersonalDriverConfiguration } from '../estimation/parsePersonalDriverConfiguration';
 import type { PersonalDriverConfiguration } from './PersonalDriverConfigurator';
 
 const configuration: PersonalDriverConfiguration = {

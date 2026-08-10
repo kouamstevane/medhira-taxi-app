@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import PersonalDriverPage from '../page';
-import { DashboardServiceGrid } from '@/app/dashboard/page';
+import { DashboardServiceGrid } from '@/app/dashboard/components/DashboardServiceGrid';
 
 describe('Personal Driver client entry', () => {
   it('adds the Personal Driver dashboard entry with the monthly transport CTA', () => {
