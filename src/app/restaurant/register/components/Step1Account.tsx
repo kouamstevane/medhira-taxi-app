@@ -2,6 +2,9 @@
 
 import { useState, FormEvent } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { InputField } from '@/components/forms/InputField';
+import { cn } from '@/lib/utils';
+import { driverPrimaryButtonClassName, driverSecondaryButtonClassName } from '@/app/driver/register/components/driverOnboardingStyles';
 import type { Step1Data } from '@/hooks/useRestaurantRegistration';
 
 interface Step1AccountProps {
@@ -64,7 +67,7 @@ export function Step1Account({ onSubmit, onGoogleSignIn, loading, error: externa
               onClick={onGoogleSignIn}
               disabled={loading}
               aria-label="Continuer avec Google"
-              className="glass-card w-full h-14 flex items-center justify-center gap-3 rounded-xl border border-white/10 text-white font-semibold hover:bg-white/5 active:scale-[0.98] transition-all disabled:opacity-50"
+              className={cn(driverSecondaryButtonClassName, 'gap-3 rounded-2xl border-white/10 bg-white/[0.03] px-5 text-[15px] hover:bg-white/[0.06]')}
             >
               <svg fill="none" height="20" viewBox="0 0 24 24" width="20">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -86,31 +89,26 @@ export function Step1Account({ onSubmit, onGoogleSignIn, loading, error: externa
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="firstName" className="block text-sm font-medium text-gray-300 mb-1">Prénom</label>
-              <input id="firstName" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="Marc" required aria-required="true" />
+              <InputField id="firstName" type="text" label="Prénom" aria-label="Prénom" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Marc" required aria-required="true" containerClassName="min-w-0" />
             </div>
             <div>
-              <label htmlFor="lastName" className="block text-sm font-medium text-gray-300 mb-1">Nom</label>
-              <input id="lastName" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="Lefèvre" required aria-required="true" />
+              <InputField id="lastName" type="text" label="Nom" aria-label="Nom" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Lefèvre" required aria-required="true" containerClassName="min-w-0" />
             </div>
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email</label>
-            <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="marc@bistro.fr" required aria-required="true" autoComplete="email" />
+            <InputField id="email" type="email" label="Email" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="marc@bistro.fr" required aria-required="true" autoComplete="email" />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">Mot de passe</label>
-            <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="Minimum 8 caractères" required aria-required="true" autoComplete="new-password" minLength={8} />
+            <InputField id="password" type="password" label="Mot de passe" aria-label="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimum 8 caractères" required aria-required="true" autoComplete="new-password" minLength={8} />
           </div>
 
           <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-1">Téléphone (optionnel)</label>
-            <input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="+33 6 12 34 56 78" autoComplete="tel" />
+            <InputField id="phone" type="tel" label="Téléphone (optionnel)" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+33 6 12 34 56 78" autoComplete="tel" />
           </div>
 
-          <button type="submit" disabled={loading} className="h-[56px] w-full glass-card border-2 border-primary/60 text-primary font-bold text-lg rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2" aria-label="Créer le compte et continuer">
+          <button type="submit" disabled={loading} className={cn(driverPrimaryButtonClassName, 'mt-6')} aria-label="Créer le compte et continuer">
             {loading ? <span className="animate-spin">⏳</span> : <MaterialIcon name="arrow_forward" />}
             {loading ? 'Création...' : 'Continuer'}
           </button>
