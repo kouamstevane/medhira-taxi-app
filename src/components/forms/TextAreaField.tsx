@@ -9,6 +9,12 @@
 'use client';
 
 import React, { TextareaHTMLAttributes } from 'react';
+import { cn } from '@/lib/utils';
+import {
+  driverFieldErrorClassName,
+  driverFieldHelperClassName,
+  driverFieldLabelClassName,
+} from '@/app/driver/register/components/driverOnboardingStyles';
 
 export interface TextAreaFieldProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
@@ -29,6 +35,7 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
       containerClassName = '',
       required,
       disabled,
+      id,
       showCharCount,
       maxLength,
       value,
@@ -36,13 +43,11 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
     },
     ref
   ) => {
-    const baseTextAreaClasses = `
-      w-full px-4 py-3 border rounded-xl outline-none transition-all duration-200
-      bg-[#1A1A1A] text-white placeholder-[#4B5563] resize-y
-      focus:ring-2 focus:ring-[#f29200] focus:border-[#f29200]
-      disabled:bg-white/5 disabled:cursor-not-allowed disabled:text-[#4B5563]
-      shadow-sm
-    `;
+    const generatedId = React.useId();
+    const textareaId = id ?? generatedId;
+
+    const baseTextAreaClasses =
+      'glass-input autofill-dark w-full min-h-28 rounded-xl border border-white/[0.08] bg-[#1A1A1A] px-4 py-3 font-sans text-base text-white placeholder:text-[#4B5563] outline-none resize-y shadow-sm transition-all duration-200 focus:border-[#f29200] focus:ring-2 focus:ring-[#f29200] disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-[#4B5563]';
 
     const errorClasses = error
       ? 'border-[#EF4444] focus:ring-[#EF4444] focus:border-[#EF4444]'
@@ -54,7 +59,7 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
       <div className={`w-full ${containerClassName}`}>
         {/* Label */}
         {label && (
-          <label className="block text-sm font-medium text-[#9CA3AF] mb-2">
+          <label htmlFor={textareaId} className={driverFieldLabelClassName}>
             {label}
             {required && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -63,7 +68,8 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
         {/* TextArea */}
         <textarea
           ref={ref}
-          className={`${baseTextAreaClasses} ${errorClasses} ${className}`}
+          id={textareaId}
+          className={cn(baseTextAreaClasses, errorClasses, className)}
           disabled={disabled}
           maxLength={maxLength}
           value={value}
@@ -75,7 +81,7 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
           {/* Error or Helper Text */}
           <div className="flex-1">
             {error && (
-              <p className="text-sm text-red-600 flex items-center">
+              <p className={driverFieldErrorClassName}>
                 <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                   <path
                     fillRule="evenodd"
@@ -88,7 +94,7 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
             )}
 
             {!error && helperText && (
-              <p className="text-sm text-gray-500">{helperText}</p>
+              <p className={driverFieldHelperClassName}>{helperText}</p>
             )}
           </div>
 
