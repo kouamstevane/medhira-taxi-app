@@ -89,6 +89,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
               className,
               errorClasses,
             )}
+            required={required}
             disabled={disabled}
             {...props}
           />

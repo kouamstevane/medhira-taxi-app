@@ -8,11 +8,12 @@ describe('TextAreaField', () => {
         id="description"
         label="Description"
         helperText="Helper copy"
+        required
         data-testid="description-field"
       />
     );
 
-    expect(screen.getByLabelText('Description')).toBe(screen.getByTestId('description-field'));
+    expect(screen.getByLabelText(/Description/)).toBe(screen.getByTestId('description-field'));
     expect(screen.getByText('Description')).toHaveClass('block');
     expect(screen.getByTestId('description-field')).toHaveClass('glass-input');
     expect(screen.getByTestId('description-field')).toHaveClass('autofill-dark');
@@ -20,6 +21,7 @@ describe('TextAreaField', () => {
     expect(screen.getByTestId('description-field')).toHaveClass('focus:ring-[#f29200]');
     expect(screen.getByTestId('description-field')).toHaveClass('focus:border-[#f29200]');
     expect(screen.getByTestId('description-field')).toHaveClass('rounded-xl');
+    expect(screen.getByTestId('description-field')).toBeRequired();
     expect(screen.getByText('Helper copy')).toHaveClass('text-slate-400');
   });
 });

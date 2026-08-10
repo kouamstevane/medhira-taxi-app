@@ -70,6 +70,7 @@ export const TextAreaField = React.forwardRef<HTMLTextAreaElement, TextAreaField
           ref={ref}
           id={textareaId}
           className={cn(baseTextAreaClasses, errorClasses, className)}
+          required={required}
           disabled={disabled}
           maxLength={maxLength}
           value={value}

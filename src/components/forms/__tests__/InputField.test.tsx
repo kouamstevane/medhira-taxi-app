@@ -7,6 +7,7 @@ describe('InputField', () => {
       <InputField
         label="Email"
         helperText="Helper copy"
+        required
         data-testid="driver-field"
       />
     )
@@ -19,6 +20,7 @@ describe('InputField', () => {
     expect(screen.getByTestId('driver-field')).toHaveClass('focus:border-[#f29200]')
     expect(screen.getByTestId('driver-field')).toHaveClass('rounded-xl')
     expect(screen.getByTestId('driver-field')).toHaveClass('border-white/[0.08]')
+    expect(screen.getByTestId('driver-field')).toBeRequired()
     expect(screen.getByTestId('driver-field')).not.toHaveClass('focus:border-primary')
     expect(screen.getByText('Helper copy')).toHaveClass('text-slate-400')
   })
