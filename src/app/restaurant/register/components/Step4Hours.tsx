@@ -2,6 +2,8 @@
 
 import { useState, FormEvent } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { cn } from '@/lib/utils';
+import { driverFieldClassName, driverPrimaryButtonClassName, driverSecondaryButtonClassName } from '@/app/driver/register/components/driverOnboardingStyles';
 import { RESTAURANT_DAYS } from '@/utils/restaurant-constants';
 import type { Step4Data } from '@/hooks/useRestaurantRegistration';
 
@@ -78,7 +80,7 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading }: Step4Hour
                       type="time"
                       value={day.open}
                       onChange={(e) => updateDay(key, 'open', e.target.value)}
-                      className="glass-input flex-1 text-sm text-white placeholder:text-slate-500"
+                      className={cn(driverFieldClassName, 'min-w-0 text-sm')}
                       aria-label={`${label} ouverture`}
                     />
                     <span className="text-gray-400 self-center">—</span>
@@ -86,7 +88,7 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading }: Step4Hour
                       type="time"
                       value={day.close}
                       onChange={(e) => updateDay(key, 'close', e.target.value)}
-                      className="glass-input flex-1 text-sm text-white placeholder:text-slate-500"
+                      className={cn(driverFieldClassName, 'min-w-0 text-sm')}
                       aria-label={`${label} fermeture`}
                     />
                   </div>
@@ -96,10 +98,10 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading }: Step4Hour
           })}
 
           <div className="flex gap-3 pt-4">
-            <button type="button" onClick={onBack} className="h-[48px] flex-1 glass-card border border-gray-300 text-gray-600 font-semibold rounded-xl" aria-label="Retour">
+            <button type="button" onClick={onBack} className={cn(driverSecondaryButtonClassName, 'flex-1')} aria-label="Retour">
               Retour
             </button>
-            <button type="submit" disabled={loading} className="h-[56px] flex-[2] glass-card border-2 border-green-500/60 bg-green-500 text-white font-bold text-lg rounded-xl disabled:opacity-50 flex items-center justify-center gap-2" aria-label="Soumettre votre dossier">
+            <button type="submit" disabled={loading} className={cn(driverPrimaryButtonClassName, 'flex-[2] gap-2')} aria-label="Soumettre votre dossier">
               {loading ? <span className="animate-spin">⏳</span> : <MaterialIcon name="send" />}
               {loading ? 'Soumission...' : 'Soumettre mon dossier'}
             </button>
