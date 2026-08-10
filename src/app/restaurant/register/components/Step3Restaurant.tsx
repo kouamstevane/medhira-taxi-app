@@ -2,6 +2,10 @@
 
 import { useState, FormEvent, useCallback } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { InputField } from '@/components/forms/InputField';
+import { TextAreaField } from '@/components/forms/TextAreaField';
+import { cn } from '@/lib/utils';
+import { driverPrimaryButtonClassName, driverSecondaryButtonClassName } from '@/app/driver/register/components/driverOnboardingStyles';
 import { CUISINE_TYPES } from '@/utils/restaurant-constants';
 import type { Step3Data } from '@/hooks/useRestaurantRegistration';
 import { CURRENCY_CODE } from '@/utils/constants';
@@ -108,15 +112,9 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <div>
-            <label htmlFor="restName" className="block text-sm font-medium text-gray-300 mb-1">Nom du restaurant</label>
-            <input id="restName" type="text" value={name} onChange={(e) => setName(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="Le Bistrot Parisien" required aria-required="true" />
-          </div>
+          <InputField id="restName" type="text" label="Nom du restaurant" aria-label="Nom du restaurant" value={name} onChange={(e) => setName(e.target.value)} placeholder="Le Bistrot Parisien" required aria-required="true" />
 
-          <div>
-            <label htmlFor="restDesc" className="block text-sm font-medium text-gray-300 mb-1">Description</label>
-            <textarea id="restDesc" value={description} onChange={(e) => setDescription(e.target.value)} className="glass-input w-full min-h-[100px] text-white placeholder:text-slate-500" placeholder="Décrivez votre restaurant en quelques phrases..." required aria-required="true" />
-          </div>
+          <TextAreaField id="restDesc" label="Description" aria-label="Description" value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-[100px]" placeholder="Décrivez votre restaurant en quelques phrases..." required aria-required="true" />
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Types de cuisine</label>
@@ -158,26 +156,17 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="restPhone" className="block text-sm font-medium text-gray-300 mb-1">Téléphone</label>
-              <input id="restPhone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="+33 1 42 86 00 88" required aria-required="true" />
-            </div>
-            <div>
-              <label htmlFor="restEmail" className="block text-sm font-medium text-gray-300 mb-1">Email</label>
-              <input id="restEmail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="contact@bistro.fr" required aria-required="true" />
-            </div>
+            <InputField id="restPhone" type="tel" label="Téléphone" aria-label="Téléphone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+33 1 42 86 00 88" required aria-required="true" containerClassName="min-w-0" />
+            <InputField id="restEmail" type="email" label="Email" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contact@bistro.fr" required aria-required="true" containerClassName="min-w-0" />
           </div>
 
-          <div>
-            <label htmlFor="avgPrice" className="block text-sm font-medium text-gray-300 mb-1">Prix moyen par personne ({CURRENCY_CODE}, optionnel)</label>
-            <input id="avgPrice" type="number" value={avgPrice} onChange={(e) => setAvgPrice(e.target.value)} className="glass-input w-full text-white placeholder:text-slate-500" placeholder="25" min="0" step="1" />
-          </div>
+          <InputField id="avgPrice" type="number" label={`Prix moyen par personne (${CURRENCY_CODE}, optionnel)`} value={avgPrice} onChange={(e) => setAvgPrice(e.target.value)} placeholder="25" min="0" step="1" />
 
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onBack} className="h-[48px] flex-1 glass-card border border-gray-300 text-gray-600 font-semibold rounded-xl" aria-label="Retour à l'étape précédente">
+            <button type="button" onClick={onBack} className={cn(driverSecondaryButtonClassName, 'flex-1')} aria-label="Retour à l'étape précédente">
               Retour
             </button>
-            <button type="submit" disabled={loading} className="h-[48px] flex-[2] glass-card border-2 border-primary/60 text-primary font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2" aria-label="Continuer aux horaires">
+            <button type="submit" disabled={loading} className={cn(driverPrimaryButtonClassName, 'flex-[2] gap-2')} aria-label="Continuer aux horaires">
               {loading ? <span className="animate-spin">⏳</span> : <MaterialIcon name="arrow_forward" />}
                Continuer
             </button>
