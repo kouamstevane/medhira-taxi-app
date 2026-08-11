@@ -92,12 +92,11 @@ export default function AdminRestaurantsPage() {
       const action = approve ? 'approve' : 'reject';
 
       const adminManageRestaurant = httpsCallable(functions, 'adminManageRestaurant');
-      const result = await adminManageRestaurant({
+      await adminManageRestaurant({
         action,
         restaurantId,
-        reason: !approve ? rejectionReason : undefined,
+        ...(approve ? {} : { reason: rejectionReason.trim() }),
       });
-      const data = result.data as { success: boolean; message: string };
 
       toast.success(approve ? 'Restaurant approuvé !' : 'Restaurant refusé.');
 
