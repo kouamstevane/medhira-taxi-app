@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -15,22 +15,22 @@ function RestaurantPendingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const idFromParams = searchParams.get('id');
-  const { currentUser, userData, loading: authLoading } = useAuth();
+  const { currentUser, userData, loading: authLoading, authStatus } = useAuth();
   const restaurantId = idFromParams || userData?.roles?.restaurant?.restaurantId;
   const [status, setStatus] = useState<RestaurantStatus | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!currentUser || !userData) {
+    if (authLoading || authStatus === 'loading') return;
+    if (!currentUser || authStatus === 'unauthenticated') {
       router.replace('/login');
       return;
     }
-  }, [currentUser, userData, authLoading, router]);
+  }, [currentUser, authLoading, authStatus, router]);
 
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || authStatus === 'loading') return;
     if (!restaurantId) return;
     const unsub = onSnapshot(doc(db, 'restaurants', restaurantId), (snap) => {
       if (snap.exists()) {
@@ -51,23 +51,9 @@ function RestaurantPendingContent() {
       setLoading(false);
     });
     return () => unsub();
-  }, [restaurantId, authLoading, router]);
+  }, [restaurantId, authLoading, authStatus, router]);
 
-  const handleBackToClient = useCallback(async () => {
-    if (currentUser) {
-      try {
-        await updateDoc(doc(db, 'users', currentUser.uid), {
-          activeRole: 'client',
-          updatedAt: serverTimestamp(),
-        });
-      } catch {
-        // non-blocking — redirect anyway
-      }
-    }
-    router.replace('/dashboard');
-  }, [currentUser, router]);
-
-  if (authLoading || (restaurantId ? loading : false)) {
+  if (authLoading || authStatus === 'loading' || (restaurantId ? loading : false)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner />
@@ -106,9 +92,12 @@ function RestaurantPendingContent() {
           </>
         )}
 
-        <button onClick={handleBackToClient} className="text-primary font-medium hover:underline text-sm bg-transparent border-none cursor-pointer">
-          Retour à mon espace client
-        </button>
+        <Link
+          href="/?from=restaurant-pending"
+          className="inline-flex h-[48px] items-center justify-center px-6 mt-8 glass-card border border-white/10 text-slate-300 font-semibold rounded-xl hover:bg-white/5"
+        >
+          Retour à l&apos;accueil
+        </Link>
       </div>
     </div>
   );

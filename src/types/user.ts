@@ -29,8 +29,8 @@ export interface UserRoles {
   restaurant?: RoleRestaurant;
 }
 
-export type ActiveRole = 'client' | 'driver' | 'restaurant' | 'driver_onboarding';
-export type AppAccountState = 'active' | 'driver_onboarding';
+export type ActiveRole = 'client' | 'driver' | 'restaurant' | 'driver_onboarding' | 'restaurant_onboarding';
+export type AppAccountState = 'active' | 'driver_onboarding' | 'restaurant_onboarding';
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 
 export interface RestaurantDraftData {
@@ -62,6 +62,12 @@ export interface UserData {
     driver?: {
       status: 'draft' | 'submitted';
       currentStep: number;
+      startedAt: Timestamp;
+      updatedAt: Timestamp;
+    };
+    restaurant?: {
+      status: 'draft' | 'submitted';
+      currentStep: 2 | 3 | 4;
       startedAt: Timestamp;
       updatedAt: Timestamp;
     };
@@ -114,7 +120,7 @@ export function isClientOnly(user: UserData): boolean {
   return user.roles.client != null && user.roles.driver == null && user.roles.restaurant == null;
 }
 
-export function hasRole<R extends Exclude<ActiveRole, 'driver_onboarding'>>(
+export function hasRole<R extends Exclude<ActiveRole, 'driver_onboarding' | 'restaurant_onboarding'>>(
   user: UserData,
   role: R,
 ): user is UserData & { roles: UserRoles & Required<Pick<UserRoles, R>> } {

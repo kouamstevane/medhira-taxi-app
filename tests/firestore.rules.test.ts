@@ -18,7 +18,7 @@ import {
   assertFails,
   assertSucceeds
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, addDoc, query, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc } from 'firebase/firestore';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -35,7 +35,6 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
   const charlieId = 'charlie-user-id';
   const adminId = 'admin-user-id';
   const driverId = 'driver-user-id';
-  const driverUnverifiedId = 'driver-unverified-id';
 
   beforeAll(async () => {
     // Initialiser l'environnement de test avec les règles Firestore
@@ -74,7 +73,6 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
    * Crée un utilisateur admin dans la collection admins
    */
   const setupAdmin = async () => {
-    const adminDb = testEnv.authenticatedContext(adminId, getAuthContext(adminId, true).token).firestore();
     await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
       const admin = context.firestore();
       await setDoc(doc(admin, 'admins', adminId), { 
@@ -205,14 +203,13 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       await assertSucceeds(getDoc(doc(aliceDb, 'users', aliceId)));
     });
 
-    test('Lecture par d\'autres utilisateurs authentifiés', async () => {
+    test('Lecture par d\'autres utilisateurs authentifiés doit échouer', async () => {
       await setupUser(aliceId, 'alice@example.com');
       await setupUser(bobId, 'bob@example.com');
       
       const bobDb = testEnv.authenticatedContext(bobId).firestore();
       
-      // Bob peut lire les données d'Alice (les chauffeurs doivent voir les clients)
-      await assertSucceeds(getDoc(doc(bobDb, 'users', aliceId)));
+      await assertFails(getDoc(doc(bobDb, 'users', aliceId)));
     });
 
     test('Mise à jour par le propriétaire', async () => {
@@ -275,10 +272,10 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       }));
     });
 
-    test('Création de compte chauffeur AVEC email vérifié doit réussir', async () => {
-      const driverDb = testEnv.authenticatedContext(driverId, getAuthContext(driverId, true)).firestore();
+    test('Création de compte chauffeur côté client doit échouer même avec email vérifié', async () => {
+      const driverDb = testEnv.authenticatedContext(driverId, getAuthContext(driverId, true).token).firestore();
       
-      await assertSucceeds(setDoc(doc(driverDb, 'drivers', driverId), {
+      await assertFails(setDoc(doc(driverDb, 'drivers', driverId), {
         uid: driverId,
         email: 'driver@example.com',
         phoneNumber: null,
@@ -331,7 +328,7 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
     test('Mise à jour par le propriétaire avec email vérifié', async () => {
       await setupDriver(driverId, 'driver@example.com', 'approved');
       
-      const driverDb = testEnv.authenticatedContext(driverId, getAuthContext(driverId, true)).firestore();
+      const driverDb = testEnv.authenticatedContext(driverId, getAuthContext(driverId, true).token).firestore();
       
       await assertSucceeds(updateDoc(doc(driverDb, 'drivers', driverId), {
         vehicleModel: 'Toyota Camry',
@@ -704,6 +701,7 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
     });
 
     test('Lecture de bookings en attente par chauffeurs', async () => {
+      await setupDriver(driverId, 'driver@example.com', 'approved');
       await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
         const db = context.firestore();
         await setDoc(doc(db, 'bookings', bookingId), {
@@ -719,7 +717,6 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       const driverDb = testEnv.authenticatedContext(driverId).firestore();
       
-      // Les chauffeurs peuvent voir les bookings en attente
       await assertSucceeds(getDoc(doc(driverDb, 'bookings', bookingId)));
     });
 
@@ -1007,7 +1004,7 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       await assertFails(getDoc(doc(bobDb, 'wallets', aliceId)));
     });
 
-    test('Mise à jour de wallet par propriétaire', async () => {
+    test('Mise à jour de wallet par propriétaire doit échouer', async () => {
       await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
         const db = context.firestore();
         await setDoc(doc(db, 'wallets', aliceId), {
@@ -1019,7 +1016,7 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
       
-      await assertSucceeds(updateDoc(doc(aliceDb, 'wallets', aliceId), {
+      await assertFails(updateDoc(doc(aliceDb, 'wallets', aliceId), {
         balance: 45000,
       }));
     });
@@ -1064,12 +1061,12 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
   describe('Collection transactions', () => {
     const transactionId = 'test-transaction-id';
 
-    test('Création de transaction par utilisateur', async () => {
+    test('Création de transaction par utilisateur doit échouer', async () => {
       await setupUser(aliceId, 'alice@example.com');
       
       const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
       
-      await assertSucceeds(addDoc(collection(aliceDb, 'transactions'), {
+      await assertFails(addDoc(collection(aliceDb, 'transactions'), {
         userId: aliceId,
         driverId: null,
         amount: 15000,
@@ -1419,7 +1416,7 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
       
       await assertSucceeds(updateDoc(doc(aliceDb, 'parcels', parcelId), {
-        deliveryAddress: 'Nouvelle adresse',
+        notes: 'Nouvelle instruction',
       }));
     });
 
@@ -1471,7 +1468,7 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
   // ============================================================================
 
   describe('Collection admins', () => {
-    test('Lecture de collection admins par utilisateur authentifié', async () => {
+    test('Lecture de collection admins par utilisateur authentifié doit échouer', async () => {
       await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
         const db = context.firestore();
         await setDoc(doc(db, 'admins', adminId), {
@@ -1483,7 +1480,7 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
       
-      await assertSucceeds(getDoc(doc(aliceDb, 'admins', adminId)));
+      await assertFails(getDoc(doc(aliceDb, 'admins', adminId)));
     });
 
     test('Écriture dans admins par utilisateur doit échouer', async () => {
@@ -1588,7 +1585,7 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       await assertFails(getDoc(doc(bobDb, 'active_bookings', activeBookingId)));
     });
 
-    test('Mise à jour d\'active_booking par client', async () => {
+    test('Mise à jour d\'active_booking par client doit échouer', async () => {
       await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
         const db = context.firestore();
         await setDoc(doc(db, 'active_bookings', activeBookingId), {
@@ -1603,12 +1600,12 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
       
-      await assertSucceeds(updateDoc(doc(aliceDb, 'active_bookings', activeBookingId), {
+      await assertFails(updateDoc(doc(aliceDb, 'active_bookings', activeBookingId), {
         status: 'completed',
       }));
     });
 
-    test('Suppression d\'active_booking par client', async () => {
+    test('Suppression d\'active_booking par client doit échouer', async () => {
       await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
         const db = context.firestore();
         await setDoc(doc(db, 'active_bookings', activeBookingId), {
@@ -1623,7 +1620,7 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
       
       const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
       
-      await assertSucceeds(deleteDoc(doc(aliceDb, 'active_bookings', activeBookingId)));
+      await assertFails(deleteDoc(doc(aliceDb, 'active_bookings', activeBookingId)));
     });
   });
 });

@@ -57,24 +57,12 @@ export async function isApprovedRestaurateur(user: UserData): Promise<boolean> {
 }
 
 /**
- * Auto-réparation du rôle client manquant (cas C2 — doc corrompu).
- * Autorisée par les rules §8.
- */
-export async function ensureClientRole(user: UserData): Promise<void> {
-  if (user.roles.client?.enabled === true) return;
-  await updateDoc(doc(db, 'users', user.uid), {
-    'roles.client': { enabled: true, joinedAt: serverTimestamp() },
-    updatedAt: serverTimestamp(),
-  });
-}
-
-/**
  * Bascule l'activeRole côté Firestore (le rôle doit déjà exister sur le user).
  * Pose lastActiveRole en même temps pour mémoriser le dernier choix.
  */
 export async function setActiveRole(user: UserData, role: ActiveRole): Promise<void> {
-  if (role === 'driver_onboarding') {
-    throw new Error('Cannot set activeRole to driver_onboarding manually');
+  if (role === 'driver_onboarding' || role === 'restaurant_onboarding') {
+    throw new Error(`Cannot set activeRole to ${role} manually`);
   }
   if (role !== 'client' && user.roles[role] == null) {
     throw new Error(`Cannot set activeRole to "${role}" — role not present on user`);
@@ -105,6 +93,34 @@ export function toRestaurantEffectiveStatus(
   };
 }
 
+export async function getEffectiveRoleStatuses(
+  user: UserData,
+): Promise<{ driver?: DriverStatus; restaurant?: RestaurantEffectiveStatus }> {
+  const driverPromise = user.roles?.driver
+    ? getDoc(doc(db, 'drivers', user.uid))
+    : Promise.resolve(null);
+  const restaurantId = user.roles?.restaurant?.restaurantId;
+  const restaurantPromise = restaurantId
+    ? getDoc(doc(db, 'restaurants', restaurantId))
+    : Promise.resolve(null);
+
+  const [driverSnap, restaurantSnap] = await Promise.all([driverPromise, restaurantPromise]);
+  const result: { driver?: DriverStatus; restaurant?: RestaurantEffectiveStatus } = {};
+
+  if (driverSnap?.exists()) {
+    result.driver = (driverSnap.data().status ?? 'pending') as DriverStatus;
+  }
+
+  if (restaurantSnap?.exists()) {
+    const data = restaurantSnap.data();
+    if (data.ownerId === user.uid) {
+      result.restaurant = toRestaurantEffectiveStatus(data);
+    }
+  }
+
+  return result;
+}
+
 export interface RouteContext {
   driverStatus?: DriverStatus;
   restaurantStatus?: RestaurantStatus;
@@ -119,6 +135,7 @@ export interface RouteContext {
  */
 export function getDashboardRouteFor(role: ActiveRole, ctx: RouteContext = {}): string {
   if (role === 'driver_onboarding') return '/driver/register';
+  if (role === 'restaurant_onboarding') return '/restaurant/register?from=become-pro';
   if (role === 'client') return '/dashboard';
 
   if (role === 'driver') {
@@ -156,6 +173,11 @@ export function getRouteForPostLogin(
 ): string {
   if (userData.accountState === 'driver_onboarding' || userData.activeRole === 'driver_onboarding') {
     return '/driver/register';
+  }
+  if (userData.accountState === 'restaurant_onboarding' || userData.activeRole === 'restaurant_onboarding') {
+    return userData.onboarding?.restaurant?.currentStep === 2
+      ? '/restaurant/register?resume=restaurant'
+      : '/restaurant/register?from=become-pro';
   }
 
   const ownedRoles: ActiveRole[] = [];

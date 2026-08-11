@@ -8,6 +8,7 @@ import {
   getRouteForAuthenticatedProfile,
   getRouteForPostLogin,
   toRestaurantEffectiveStatus,
+  getEffectiveRoleStatuses,
 } from '@/services/roles.service';
 
 jest.mock('firebase/firestore', () => {
@@ -148,6 +149,31 @@ describe('getDashboardRouteFor (matrice §4.4)', () => {
 
   test('driver_onboarding role -> /driver/register', () => {
     expect(getDashboardRouteFor('driver_onboarding' as any)).toBe('/driver/register');
+  });
+
+  test('restaurant_onboarding role -> restaurant registration', () => {
+    expect(getDashboardRouteFor('restaurant_onboarding')).toBe('/restaurant/register?from=become-pro');
+  });
+});
+
+describe('getEffectiveRoleStatuses', () => {
+  test('loads both professional statuses for post-login routing', async () => {
+    const user = {
+      ...baseUser,
+      roles: {
+        client: { enabled: true, joinedAt: Timestamp.now() },
+        driver: { joinedAt: Timestamp.now() },
+        restaurant: { restaurantId: 'r1', joinedAt: Timestamp.now() },
+      },
+    } as UserData;
+    mockGetDoc
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ status: 'approved' }) })
+      .mockResolvedValueOnce({ exists: () => true, data: () => ({ ownerId: 'u1', status: 'approved', stripeConnectStatus: 'active' }) });
+
+    await expect(getEffectiveRoleStatuses(user)).resolves.toEqual({
+      driver: 'approved',
+      restaurant: { status: 'approved', stripeConnectStatus: 'active' },
+    });
   });
 });
 

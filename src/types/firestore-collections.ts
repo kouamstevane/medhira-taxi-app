@@ -51,6 +51,12 @@ export interface UserCollection {
       startedAt: Timestamp;
       updatedAt: Timestamp;
     };
+    restaurant?: {
+      status: 'draft' | 'submitted';
+      currentStep: 2 | 3 | 4;
+      startedAt: Timestamp;
+      updatedAt: Timestamp;
+    };
   };
   draftRestaurant?: {
     currentStep: 3 | 4;

@@ -46,7 +46,10 @@ export function RequireAuthenticatedPersonalDriver({
         isAllowed = false;
       } else if (role === 'admin' && !hasAdminRole) {
         isAllowed = false;
-      } else if (role === 'client' && activeRole === 'driver_onboarding') {
+      } else if (
+        role === 'client'
+        && (activeRole === 'driver_onboarding' || activeRole === 'restaurant_onboarding')
+      ) {
         isAllowed = false;
       }
 
@@ -84,7 +87,10 @@ export function RequireAuthenticatedPersonalDriver({
 
     if (role === 'driver' && !hasDriverRole) return null;
     if (role === 'admin' && !hasAdminRole) return null;
-    if (role === 'client' && activeRole === 'driver_onboarding') return null;
+    if (
+      role === 'client'
+      && (activeRole === 'driver_onboarding' || activeRole === 'restaurant_onboarding')
+    ) return null;
   }
 
   return <>{children}</>;

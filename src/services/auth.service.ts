@@ -17,6 +17,7 @@ import {
   sendEmailVerification,
   reload,
   signInWithCustomToken,
+  deleteUser,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -24,6 +25,10 @@ import { auth, db, functions } from '@/config/firebase';
 import { UserData } from '@/types';
 import { Capacitor } from '@capacitor/core';
 import { SocialLogin } from '@capgo/capacitor-social-login';
+import {
+  buildProfessionalOnboardingUserData,
+  type ProfessionalOnboardingType,
+} from './professional-onboarding.service';
 
 /**
  * Connexion par email et mot de passe
@@ -46,49 +51,47 @@ export const createAuthAccount = async (
   password: string,
 ): Promise<User> => {
   const result = await createUserWithEmailAndPassword(auth, email, password);
-  await createUserDocument(result.user.uid, {
-    email,
-    firstName: '',
-    lastName: '',
-    emailVerified: false,
-  });
+  try {
+    await createUserDocument(result.user.uid, {
+      email,
+      firstName: '',
+      lastName: '',
+      emailVerified: false,
+    });
+  } catch (error) {
+    try { await deleteUser(result.user); } catch {}
+    throw error;
+  }
   return result.user;
 };
 
-const createDriverOnboardingUserDocument = async (
+const createProfessionalOnboardingUserDocument = async (
   userId: string,
   data: {
+    type: ProfessionalOnboardingType;
     email?: string | null;
     firstName?: string;
     lastName?: string;
     profileImageUrl?: string | null;
+    phoneNumber?: string | null;
     emailVerified?: boolean;
+    currentStep: number;
   },
 ): Promise<void> => {
   const now = serverTimestamp();
 
-  await setDoc(doc(db, 'users', userId), {
+  await setDoc(doc(db, 'users', userId), buildProfessionalOnboardingUserData({
     uid: userId,
-    email: data.email ?? null,
-    phoneNumber: null,
-    firstName: data.firstName ?? '',
-    lastName: data.lastName ?? '',
-    profileImageUrl: data.profileImageUrl ?? null,
-    emailVerified: data.emailVerified ?? false,
-    roles: {},
-    activeRole: 'driver_onboarding',
-    accountState: 'driver_onboarding',
-    onboarding: {
-      driver: {
-        status: 'draft',
-        currentStep: 1,
-        startedAt: now,
-        updatedAt: now,
-      },
-    },
-    createdAt: now,
-    updatedAt: now,
-  });
+    type: data.type,
+    email: data.email,
+    firstName: data.firstName,
+    lastName: data.lastName,
+    profileImageUrl: data.profileImageUrl,
+    phoneNumber: data.phoneNumber,
+    emailVerified: data.emailVerified,
+    currentStep: data.currentStep,
+    now,
+  }));
 };
 
 /**
@@ -102,11 +105,45 @@ export const createDriverOnboardingAccount = async (
   password: string,
 ): Promise<User> => {
   const result = await createUserWithEmailAndPassword(auth, email, password);
-  await createDriverOnboardingUserDocument(result.user.uid, {
-    email,
-    emailVerified: false,
-  });
+  try {
+    await createProfessionalOnboardingUserDocument(result.user.uid, {
+      type: 'driver',
+      email,
+      emailVerified: false,
+      currentStep: 1,
+    });
+  } catch (error) {
+    try { await deleteUser(result.user); } catch {}
+    throw error;
+  }
 
+  return result.user;
+};
+
+export const createRestaurantOnboardingAccount = async (
+  email: string,
+  password: string,
+  profileData: {
+    firstName: string;
+    lastName: string;
+    phoneNumber?: string | null;
+  },
+): Promise<User> => {
+  const result = await createUserWithEmailAndPassword(auth, email, password);
+  try {
+    await createProfessionalOnboardingUserDocument(result.user.uid, {
+      type: 'restaurant',
+      email,
+      firstName: profileData.firstName,
+      lastName: profileData.lastName,
+      phoneNumber: profileData.phoneNumber,
+      emailVerified: false,
+      currentStep: 2,
+    });
+  } catch (error) {
+    try { await deleteUser(result.user); } catch {}
+    throw error;
+  }
   return result.user;
 };
 
@@ -125,14 +162,19 @@ export const signUpWithEmail = async (
   }
 ): Promise<User> => {
   const result = await createUserWithEmailAndPassword(auth, email, password);
-  await createUserDocument(result.user.uid, {
-    email,
-    firstName: profileData.firstName,
-    lastName: profileData.lastName,
-    phoneNumber: profileData.phoneNumber ?? null,
-    country: profileData.country,
-    emailVerified: false,
-  });
+  try {
+    await createUserDocument(result.user.uid, {
+      email,
+      firstName: profileData.firstName,
+      lastName: profileData.lastName,
+      phoneNumber: profileData.phoneNumber ?? null,
+      country: profileData.country,
+      emailVerified: false,
+    });
+  } catch (error) {
+    try { await deleteUser(result.user); } catch {}
+    throw error;
+  }
   return result.user;
 };
 
@@ -218,7 +260,7 @@ export const resendVerificationEmail = async (
  *  AJOUT LOGS : Capture détaillée pour diagnostic permission-denied
  */
 export const signInWithGoogle = async (
-  _intendedUserType?: 'driver'
+  intendedUserType?: ProfessionalOnboardingType
 ): Promise<User> => {
   console.log('[AuthService] signInWithGoogle appelé', {
     platform: Capacitor.isNativePlatform() ? 'native' : 'web',
@@ -307,13 +349,15 @@ export const signInWithGoogle = async (
 
   if (!userDoc.exists()) {
     try {
-      if (_intendedUserType === 'driver') {
-        await createDriverOnboardingUserDocument(user.uid, {
+      if (intendedUserType) {
+        await createProfessionalOnboardingUserDocument(user.uid, {
+          type: intendedUserType,
           email: user.email,
           firstName: user.displayName?.split(' ')[0] || '',
           lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
           profileImageUrl: user.photoURL || undefined,
           emailVerified: user.emailVerified,
+          currentStep: intendedUserType === 'driver' ? 1 : 2,
         });
       } else {
         await createUserDocument(user.uid, {
@@ -330,6 +374,7 @@ export const signInWithGoogle = async (
         uid: user.uid,
         docError
       });
+      try { await deleteUser(user); } catch {}
       try { await firebaseSignOut(auth); } catch {}
       throw new Error('Erreur lors de la création du profil. Veuillez réessayer.');
     }
@@ -364,9 +409,8 @@ export const signOut = async (): Promise<void> => {
  * Connexion avec Google côté parcours chauffeur.
  *
  * Avec le modèle multi-rôles, cette fonction est un alias sémantique de
- * `signInWithGoogle()`. Le document `users/{uid}` est créé avec `roles.client`
- * par défaut ; le rôle `chauffeur` et le doc `driverProfiles/{uid}` seront
- * ajoutés par la Cloud Function lors de la soumission du formulaire.
+ * `signInWithGoogle('driver')`. Le document `users/{uid}` est créé sans rôle
+ * client ; le rôle chauffeur est ajouté par la Cloud Function à la soumission.
  *
  * @returns {Promise<User>} L'utilisateur Firebase connecté avec le document utilisateur approprié
  *
@@ -447,6 +491,10 @@ export const createUserDocument = async (
   });
 };
 
+export const signInWithGoogleForRestaurant = async (): Promise<User> => {
+  return signInWithGoogle('restaurant');
+};
+
 export interface TwilioPhoneVerificationResult {
   success: true;
   phoneNumber: string;
@@ -515,7 +563,7 @@ export const updateUserProfile = async (
   userId: string,
   updates: Partial<UserData>
 ): Promise<void> => {
-  const { roles, activeRole: _ar, ...allowed } = updates as Partial<UserData> & {
+  const { roles, ...allowed } = updates as Partial<UserData> & {
     roles?: unknown;
   };
   if (roles !== undefined) {

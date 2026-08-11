@@ -73,4 +73,18 @@ describe('DriverOnboardingDecision', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Suppression impossible');
     expect(screen.getByRole('button', { name: 'Reprendre l’inscription' })).toBeInTheDocument();
   });
+
+  it('renders restaurant-specific copy and actions', () => {
+    render(
+      <DriverOnboardingDecision
+        registrationType="restaurant"
+        onResume={jest.fn()}
+        onLater={jest.fn()}
+        onAbandon={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Inscription restaurateur en cours' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(3);
+  });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
 import OTPInput from '@/components/ui/OTPInput';
@@ -17,6 +17,7 @@ interface Step2EmailVerificationProps {
 export function Step2EmailVerification({ email, onVerified, loading: externalLoading, error: externalError }: Step2EmailVerificationProps) {
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const initialRequestEmail = useRef<string | null>(null);
 
   const error = externalError || localError;
 
@@ -56,6 +57,12 @@ export function Step2EmailVerification({ email, onVerified, loading: externalLoa
     }
   }, []);
 
+  useEffect(() => {
+    if (!email || initialRequestEmail.current === email) return;
+    initialRequestEmail.current = email;
+    void sendCode();
+  }, [email, sendCode]);
+
   const handleVerified = useCallback(() => {
     onVerified();
   }, [onVerified]);
@@ -83,7 +90,7 @@ export function Step2EmailVerification({ email, onVerified, loading: externalLoa
           onVerify={verifyCode}
           onResend={sendCode}
           onSuccess={handleVerified}
-          loading={loading}
+          loading={externalLoading || loading}
         />
       </div>
     </div>

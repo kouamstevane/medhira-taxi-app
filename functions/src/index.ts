@@ -41,6 +41,10 @@ import { selectNearestDriver, type DriverCandidate } from './utils/matching.js';
 import { enforceRateLimit } from './utils/rateLimiter.js';
 import { createStripeClient } from './stripe/stripe-client.js';
 import {
+  reverseRestaurantFoodOrderTransfer,
+  settleRestaurantForFoodOrder,
+} from './stripe/foodOrderSettlement.js';
+import {
   buildAssignedFoodDeliveryOrderData,
   buildPickedUpClientAddress,
   canRetryDeliveryAssignment,
@@ -376,6 +380,7 @@ export { restaurantManageFoodOrderStatus } from './restaurant/manageFoodOrderSta
 export { createFoodOrder } from './food/createFoodOrder.js';
 export { activateClientRole } from './roles/activateClientRole.js';
 export { notifyAdminNewRestaurant } from './admin/notifyAdminNewRestaurant.js';
+export { cleanupExpiredOnboardingDrafts } from './admin/cleanupExpiredOnboardingDrafts.js';
 export { createStripeConnectAccount } from './stripe/createStripeConnectAccount.js';
 
 /**
@@ -499,7 +504,7 @@ export const cleanupOrphanedFiles = onSchedule(
     region: 'europe-west1',
     memory: '512MiB',
   },
-  async (_event) => {
+  async () => {
     console.log('Démarrage du nettoyage des fichiers orphelins...');
 
     const db = admin.firestore();
@@ -596,7 +601,7 @@ export { migrateCurrencyToCAD, migrateCurrencyToCADHTTP } from './migrateCurrenc
  * Le code de récupération est inclus dans la notification.
  */
 export const onFoodOrderPaymentValidated = onDocumentUpdated(
-  { document: 'food_orders/{orderId}', region: 'europe-west1' },
+  { document: 'food_orders/{orderId}', region: 'europe-west1', secrets: [stripeSecretKey] },
   async (event) => {
     if (!event.data) return
     const before = event.data.before.data()
@@ -653,6 +658,12 @@ export const onFoodOrderPaymentValidated = onDocumentUpdated(
     }
 
     await admin.firestore().collection('food_orders').doc(orderId).update(updates)
+
+    await settleRestaurantForFoodOrder(
+      orderId,
+      { ...after, ...updates },
+      createStripeClient(stripeSecretKey.value()),
+    )
   }
 )
 
@@ -1253,6 +1264,11 @@ async function refundFoodOrderPayment(orderId: string, order: FirebaseFirestore.
   const db = admin.firestore()
 
   if (order.paymentMethod === 'wallet') {
+    await reverseRestaurantFoodOrderTransfer(
+      orderId,
+      createStripeClient(stripeSecretKey.value()),
+    )
+
     const originalTransactionId = order.paymentTransactionId
     if (!originalTransactionId) return
 
@@ -1304,10 +1320,20 @@ async function refundFoodOrderPayment(orderId: string, order: FirebaseFirestore.
 
   if (order.paymentMethod === 'card' && order.stripePaymentIntentId) {
     const stripe = createStripeClient(stripeSecretKey.value())
+    const settlementSnap = await db.collection('food_order_settlements').doc(orderId).get()
+    const settlementVersion = settlementSnap.data()?.settlementVersion
+
+    if (settlementVersion === 'food_split_v1') {
+      await reverseRestaurantFoodOrderTransfer(orderId, stripe)
+    }
+
     const refund = await stripe.refunds.create(
       {
         payment_intent: order.stripePaymentIntentId,
         reason: 'requested_by_customer',
+        ...(settlementVersion === 'food_split_v1'
+          ? {}
+          : { reverse_transfer: true, refund_application_fee: true }),
         metadata: { purpose: 'food_order_refund', orderId },
       },
       { idempotencyKey: `food_refund_${orderId}_${order.stripePaymentIntentId}` },
@@ -1331,6 +1357,37 @@ export const onFoodOrderRefundRequired = onDocumentUpdated(
     if (!before || !after || before.status === after.status) return
     if (!['cancelled', 'cancelled_by_restaurant', 'no_driver_available'].includes(after.status)) return
     await refundFoodOrderPayment(event.params.orderId, after)
+  },
+)
+
+export const retryFailedFoodOrderSettlements = onSchedule(
+  { schedule: 'every 15 minutes', region: 'europe-west1', secrets: [stripeSecretKey] },
+  async () => {
+    const db = admin.firestore()
+    const failedSettlements = await db.collection('food_order_settlements')
+      .where('restaurantStatus', 'in', ['failed', 'processing'])
+      .limit(50)
+      .get()
+
+    for (const settlementDoc of failedSettlements.docs) {
+      const orderId = settlementDoc.id
+      const orderSnap = await db.collection('food_orders').doc(orderId).get()
+      const order = orderSnap.data()
+      if (!order || order.paymentValidated !== true || order.paymentRefunded === true) continue
+
+      try {
+        await settleRestaurantForFoodOrder(
+          orderId,
+          order,
+          createStripeClient(stripeSecretKey.value()),
+        )
+      } catch (error) {
+        console.error('[retryFailedFoodOrderSettlements] retry failed', {
+          orderId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
   },
 )
 
@@ -1387,6 +1444,10 @@ export const onDeliveryOrderCompleted = onDocumentUpdated(
     if (after.status === 'delivered') {
       driverUpdate.deliveriesCompleted = FieldValue.increment(1)
       driverUpdate.deliveryEarnings = FieldValue.increment(after.driverEarnings ?? 0)
+      driverUpdate.pendingBalanceCents = FieldValue.increment(
+        Math.max(0, Math.round(Number(after.driverEarnings ?? 0) * 100)),
+      )
+      driverUpdate.currency = 'cad'
     }
 
     await db.collection('drivers').doc(driverId).update(driverUpdate)
@@ -2240,6 +2301,14 @@ export const verifyCode = onCall(
       });
     } catch {
       // Document drivers not created yet — Firebase Auth is source of truth
+    }
+
+    try {
+      await db.collection('users').doc(uid).update({
+        emailVerified: true,
+        emailVerifiedAt: admin.firestore.Timestamp.now(),
+      });
+    } catch {
     }
 
     return { success: true };

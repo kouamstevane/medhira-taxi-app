@@ -25,10 +25,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { ERROR_MESSAGES, SUPPORTED_COUNTRIES } from '@/utils/constants';
 import { isValidPhoneNumber } from '@/lib/validation';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
-
-function isDriverOnboardingProfile(userData: Pick<UserData, 'accountState' | 'activeRole'>): boolean {
-  return userData.accountState === 'driver_onboarding' || userData.activeRole === 'driver_onboarding';
-}
+import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 
 export default function LoginPage() {
   const phoneInputId = useId();
@@ -43,7 +40,8 @@ export default function LoginPage() {
   const { authStatus, userData } = useAuth();
   const router = useRouter();
   const countryDropdownRef = useRef<HTMLDivElement>(null);
-  const isDriverOnboarding = Boolean(userData && isDriverOnboardingProfile(userData));
+  const accountSwitchRequestedRef = useRef(false);
+  const registrationType = userData ? getIncompleteRegistrationType(userData) : null;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -57,16 +55,19 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
-    if (authStatus !== 'authenticated' || !userData || isDriverOnboarding) return;
+    if (
+      authStatus !== 'authenticated'
+      || !userData
+      || registrationType
+      || accountSwitchRequestedRef.current
+    ) return;
 
-    const route = getRouteForAuthenticatedProfile(userData, {});
-    if (!route) {
-      void signOut(auth);
-      return;
-    }
-
-    router.replace(route);
-  }, [authStatus, isDriverOnboarding, router, userData]);
+    accountSwitchRequestedRef.current = true;
+    void AuthService.signOut().catch((err: unknown) => {
+      accountSwitchRequestedRef.current = false;
+      setError(err instanceof Error ? err.message : 'Impossible de changer de compte.');
+    });
+  }, [authStatus, registrationType, userData]);
 
   const routeAuthenticatedUser = async (uid: string) => {
     const userSnap = await getDoc(doc(db, 'users', uid));
@@ -88,7 +89,7 @@ export default function LoginPage() {
     const driverStatus = driverSnap?.data()?.status as DriverStatus | undefined;
     const restaurantStatus = toRestaurantEffectiveStatus(restaurantSnap?.data());
 
-    if (isDriverOnboardingProfile(userData)) return;
+    if (getIncompleteRegistrationType(userData)) return;
 
     const route = getRouteForAuthenticatedProfile(userData, {
       driver: driverStatus,
@@ -219,8 +220,15 @@ export default function LoginPage() {
     console.error("Erreur d'authentification:", error);
   };
 
-  if (authStatus === 'authenticated' && userData && isDriverOnboarding) {
-    return <DriverOnboardingDecisionGate />;
+  if (authStatus === 'authenticated' && userData && registrationType) {
+    return (
+      <DriverOnboardingDecisionGate
+        registrationType={registrationType}
+        resumePath={getRegistrationResumePath(userData)}
+        deleteAccountOnAbandon={Object.keys(userData.roles ?? {}).length === 0}
+        restoreActiveRole={getRegistrationRestoreRole(userData)}
+      />
+    );
   }
 
   return (

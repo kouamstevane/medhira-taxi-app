@@ -17,6 +17,7 @@ const eslintConfig = [
       ".kilo/**",
       ".kilocode/**",
       ".next/**",
+      ".next-mobile/**",
       ".opencode/**",
       ".planning/**",
       ".playwright-mcp/**",

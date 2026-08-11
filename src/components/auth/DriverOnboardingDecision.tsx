@@ -4,16 +4,21 @@ import { useState } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 interface DriverOnboardingDecisionProps {
+  registrationType?: 'driver' | 'restaurant';
   onResume: () => void;
   onLater: () => Promise<void>;
   onAbandon: () => Promise<void>;
+  deleteAccountOnAbandon?: boolean;
 }
 
 export function DriverOnboardingDecision({
+  registrationType = 'driver',
   onResume,
   onLater,
   onAbandon,
+  deleteAccountOnAbandon = true,
 }: DriverOnboardingDecisionProps) {
+  const isRestaurant = registrationType === 'restaurant';
   const [isConfirmingAbandonment, setIsConfirmingAbandonment] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,9 +41,11 @@ export function DriverOnboardingDecision({
         <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 border border-primary/30 mb-6">
           <MaterialIcon name="edit_note" className="text-primary text-[32px]" />
         </div>
-        <h1 className="text-2xl font-bold text-white mb-3">Inscription chauffeur en cours</h1>
+        <h1 className="text-2xl font-bold text-white mb-3">
+          {isRestaurant ? 'Inscription restaurateur en cours' : 'Inscription chauffeur en cours'}
+        </h1>
         <p className="text-slate-400 leading-6 mb-8">
-          Vous avez commencé une inscription chauffeur, mais elle n’est pas terminée. Que souhaitez-vous faire ?
+          Vous avez commencé une inscription {isRestaurant ? 'restaurateur' : 'chauffeur'}, mais elle n’est pas terminée. Que souhaitez-vous faire ?
         </p>
 
         {error && (
@@ -89,7 +96,9 @@ export function DriverOnboardingDecision({
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-950 p-6 shadow-2xl">
             <h2 id="abandon-driver-title" className="text-xl font-bold text-white">Supprimer cette inscription ?</h2>
             <p className="mt-3 text-sm leading-6 text-slate-400">
-              Cette action supprimera définitivement ce compte chauffeur incomplet et les informations saisies. Elle est irréversible.
+              {deleteAccountOnAbandon
+                ? 'Cette action supprimera définitivement ce compte professionnel incomplet et les informations saisies. Elle est irréversible.'
+                : 'Cette action supprimera uniquement cette inscription professionnelle. Votre compte existant sera conservé.'}
             </p>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row-reverse">
               <button

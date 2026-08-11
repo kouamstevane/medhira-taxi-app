@@ -3,6 +3,13 @@ import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { SubmitRestaurantApplicationRequestSchema } from '../validators/schemas.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { DEFAULT_RESTAURANT_COMMISSION_RATE } from '../config/stripe.js';
+
+export function isEmailVerifiedForSubmission(
+  request: Pick<CallableRequest, 'auth'>,
+): boolean {
+  return request.auth?.token.email_verified === true;
+}
 
 export const submitRestaurantApplication = onCall(
   { region: 'europe-west1' },
@@ -48,7 +55,7 @@ export const submitRestaurantApplication = onCall(
 
         const userData = userSnap.data()!;
 
-        if (userData.emailVerified !== true) {
+        if (!isEmailVerifiedForSubmission(request)) {
           throw new HttpsError('failed-precondition', 'Email non vérifié — passez par l\'étape 2 du wizard.');
         }
 
@@ -73,6 +80,7 @@ export const submitRestaurantApplication = onCall(
 
         const restaurantDoc: Record<string, unknown> = {
           ...restaurantData,
+          commissionRate: restaurantData.commissionRate ?? DEFAULT_RESTAURANT_COMMISSION_RATE,
           ownerId: uid,
           ownerEmail: userData.email || null,
           status: 'pending_approval',
@@ -99,7 +107,9 @@ export const submitRestaurantApplication = onCall(
           'roles.restaurant': { restaurantId, joinedAt: now },
           activeRole: 'restaurant',
           lastActiveRole: 'restaurant',
+          accountState: 'active',
           draftRestaurant: admin.firestore.FieldValue.delete(),
+          'onboarding.restaurant': admin.firestore.FieldValue.delete(),
           updatedAt: now,
         });
 

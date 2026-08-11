@@ -23,20 +23,23 @@ function RestaurantRegisterWizard() {
     step1Data,
     step3Data,
     step4Data,
+    setStepData,
     goToStep,
     handleStep1Submit,
     handleGoogleSignIn,
     handleStep2Verified,
     handleDraftSave,
+    saveDraftDebounced,
     handleSubmit,
   } = useRestaurantRegistration();
 
   const progress = (currentStep / 4) * 100;
 
   const handleStep3Next = useCallback((data: Step3Data) => {
+    setStepData(3, data as unknown as Record<string, unknown>);
     handleDraftSave(data, 3);
     goToStep(4);
-  }, [handleDraftSave, goToStep]);
+  }, [goToStep, handleDraftSave, setStepData]);
 
   const handleStep3Back = useCallback(() => {
     goToStep(2);
@@ -116,6 +119,10 @@ function RestaurantRegisterWizard() {
       {currentStep === 4 && (
         <Step4Hours
           onSubmit={handleSubmit}
+          onChange={(hours) => {
+            setStepData(4, { openingHours: hours });
+            saveDraftDebounced({ openingHours: hours }, 4);
+          }}
           onBack={() => goToStep(3)}
           initialData={step4Data as Partial<import('@/hooks/useRestaurantRegistration').Step4Data> | undefined}
           loading={loading || isSubmitting}

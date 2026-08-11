@@ -175,26 +175,16 @@ export const payFoodOrderWithCard = onCall(
         if (typeof stripeAccountId !== 'string' || !stripeAccountId.startsWith('acct_')) {
           throw new HttpsError('failed-precondition', 'Compte Stripe du restaurant indisponible.');
         }
-        const commissionRate =
-          typeof verifiedOrder.order.restaurant.commissionRate === 'number'
-            ? Math.min(Math.max(verifiedOrder.order.restaurant.commissionRate, 0), 100)
-            : 0;
-        const applicationFeeAmount = Math.min(
-          Math.round(amountCents * (commissionRate / 100)),
-          Math.max(amountCents - 1, 0),
-        );
         const paymentIntent = await getStripe().paymentIntents.create(
           {
             amount: amountCents,
             currency: CURRENCY,
             capture_method: 'automatic',
             automatic_payment_methods: { enabled: true },
-            ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
-            transfer_data: {
-              destination: stripeAccountId,
-            },
+            transfer_group: orderId,
             metadata: {
               purpose: 'food_order',
+              settlementVersion: 'food_split_v1',
               userId,
               orderId,
               restaurantId: verifiedOrder.order.restaurantId,
@@ -213,6 +203,7 @@ export const payFoodOrderWithCard = onCall(
           stripePaymentIntentId: paymentIntent.id,
           paymentCurrency: CURRENCY,
           paymentStatus: paymentIntent.status,
+          commissionRate: verifiedOrder.order.restaurant.commissionRate,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
@@ -244,6 +235,7 @@ export const payFoodOrderWithCard = onCall(
 
       const transactionRef = db.collection('transactions').doc();
       const transactionId = transactionRef.id;
+      let resolvedTransactionId = transactionId;
 
       await db.runTransaction(async (tx) => {
         const freshOrder = await tx.get(orderRef);
@@ -252,6 +244,7 @@ export const payFoodOrderWithCard = onCall(
         }
         const order = freshOrder.data()!;
         if (order.paymentValidated === true || order.status === 'confirmed') {
+          resolvedTransactionId = order.paymentTransactionId ?? transactionId;
           return;
         }
 
@@ -284,7 +277,7 @@ export const payFoodOrderWithCard = onCall(
         });
       });
 
-      return { transactionId };
+      return { transactionId: resolvedTransactionId };
     } catch (err) {
       if (err instanceof HttpsError) throw err;
       if (isStripeError(err)) {

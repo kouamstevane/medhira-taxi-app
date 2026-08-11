@@ -42,11 +42,12 @@ async function handleRestaurantUpdate(account: Record<string, unknown>): Promise
   }
 
   const chargesEnabled = !!account.charges_enabled;
+  const payoutsEnabled = !!account.payouts_enabled;
   const detailsSubmitted = !!account.details_submitted;
   const requirements = account.requirements as Record<string, unknown> | undefined;
   const disabledReason = (requirements?.disabled_reason as string | null) ?? null;
 
-  const newStatus: string = chargesEnabled && detailsSubmitted
+  const newStatus: string = chargesEnabled && payoutsEnabled && detailsSubmitted
     ? 'active'
     : disabledReason
       ? 'restricted'

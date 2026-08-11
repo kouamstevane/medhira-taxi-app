@@ -14,7 +14,7 @@ import {
 import type { ActiveRole } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
-type SelectableRole = Exclude<ActiveRole, 'driver_onboarding'>;
+type SelectableRole = Exclude<ActiveRole, 'driver_onboarding' | 'restaurant_onboarding'>;
 
 const ROLE_META: Record<SelectableRole, { label: string; icon: string; color: string }> = {
   client: { label: 'Espace Client', icon: 'person', color: 'bg-blue-500' },
@@ -79,6 +79,7 @@ export default function ContinueAsPage() {
         return userData.roles[r] != null;
       })
     : [];
+  const singleOwnedRole = ownedRoles.length === 1 ? ownedRoles[0] : null;
 
   useEffect(() => {
     if (loading) return;
@@ -90,13 +91,23 @@ export default function ContinueAsPage() {
       router.replace('/driver/register');
       return;
     }
-    if (ownedRoles.length <= 1) {
-      const role = ownedRoles[0] ?? 'client';
+    if (userData.accountState === 'restaurant_onboarding' || userData.activeRole === 'restaurant_onboarding') {
+      router.replace('/restaurant/register?from=become-pro');
+      return;
+    }
+    if (singleOwnedRole) {
+      const role = singleOwnedRole;
+      if (role === 'driver' && !effectiveStatuses.driver) return;
+      if (role === 'restaurant' && !effectiveStatuses.restaurant) return;
       setActiveRole(userData, role).then(() => {
-        router.replace(getDashboardRouteFor(role));
+        router.replace(getDashboardRouteFor(role, {
+          driverStatus: role === 'driver' ? effectiveStatuses.driver?.status : undefined,
+          restaurantStatus: role === 'restaurant' ? effectiveStatuses.restaurant?.status : undefined,
+          stripeConnectStatus: role === 'restaurant' ? effectiveStatuses.restaurant?.stripeConnectStatus : undefined,
+        }));
       });
     }
-  }, [currentUser, userData, loading, ownedRoles.length, router]);
+  }, [currentUser, userData, loading, singleOwnedRole, effectiveStatuses, router]);
 
   if (loading || !userData || ownedRoles.length <= 1) {
     return (

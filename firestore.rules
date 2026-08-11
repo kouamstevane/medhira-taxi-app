@@ -79,16 +79,51 @@ service cloud.firestore {
                         && request.resource.data.roles.keys().hasOnly([])
                         && request.resource.data.onboarding.driver.status == 'draft'
                       )
+                      || (
+                        request.resource.data.accountState == 'restaurant_onboarding'
+                        && request.resource.data.activeRole == 'restaurant_onboarding'
+                        && request.resource.data.roles.keys().hasOnly([])
+                        && request.resource.data.onboarding.restaurant.status == 'draft'
+                      )
                     );
 
       allow update: if isOwner(userId)
+                    && request.resource.data.get('roles', null) == resource.data.get('roles', null)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                      'firstName', 'lastName', 'email', 'emailVerified', 'phoneNumber',
+                      'address', 'city', 'country', 'bio', 'profileImageUrl', 'photoURL',
+                      'fcmToken', 'tokenUpdatedAt', 'fcmTokens', 'activeRole', 'lastActiveRole',
+                      'accountState', 'onboarding', 'draftRestaurant', 'updatedAt'
+                    ])
+                    && request.resource.data.get('accountState', 'active') in [
+                      'active', 'driver_onboarding', 'restaurant_onboarding'
+                    ]
+                    && request.resource.data.get('activeRole', 'client') in [
+                      'client', 'driver', 'restaurant',
+                      'driver_onboarding', 'restaurant_onboarding'
+                    ]
+                    && request.resource.data.get('lastActiveRole', 'client') in [
+                      'client', 'driver', 'restaurant'
+                    ]
+                    && request.resource.data.get('emailVerified', resource.data.get('emailVerified', false))
+                       == resource.data.get('emailVerified', false)
                     && (
-                      request.resource.data.roles == resource.data.roles
-                      || (
-                        !('client' in resource.data.roles)
-                        && request.resource.data.roles.client.enabled == true
-                        && request.resource.data.roles.diff(resource.data.roles).affectedKeys().hasOnly(['client'])
-                      )
+                      (request.resource.data.activeRole == 'client'
+                        && 'client' in resource.data.roles
+                        && resource.data.roles.client.enabled == true
+                        && request.resource.data.get('accountState', 'active') == 'active')
+                      || (request.resource.data.activeRole == 'driver'
+                        && 'driver' in resource.data.roles
+                        && request.resource.data.get('accountState', 'active') == 'active')
+                      || (request.resource.data.activeRole == 'restaurant'
+                        && 'restaurant' in resource.data.roles
+                        && request.resource.data.get('accountState', 'active') == 'active')
+                      || (request.resource.data.activeRole == 'driver_onboarding'
+                        && request.resource.data.accountState == 'driver_onboarding'
+                        && request.resource.data.onboarding.driver.status == 'draft')
+                      || (request.resource.data.activeRole == 'restaurant_onboarding'
+                        && request.resource.data.accountState == 'restaurant_onboarding'
+                        && request.resource.data.onboarding.restaurant.status == 'draft')
                     )
                     || isAdmin();
 
@@ -222,7 +257,7 @@ service cloud.firestore {
     // Seul un admin peut lister/lire les documents d'admins.
     match /admins/{adminId} {
       // Lecture : réservée aux admins (get + list)
-      allow get, list: if isAdmin();
+      allow read: if isAdmin();
 
       // Écriture : Non autorisée via client SDK (Admin SDK ou console Firebase uniquement)
       allow write: if false;
@@ -269,9 +304,6 @@ service cloud.firestore {
                      (resource.data.userId == request.auth.uid || 
                       resource.data.driverId == request.auth.uid);
       
-      // Création : INTERDITE via client SDK
-      // Les transactions ne peuvent être créées que par les Cloud Functions (Admin SDK)
-      // pour garantir l'intégrité financière (montant, type, parties impliquées)
       allow create: if false;
       
       // Mise à jour : Non autorisée
@@ -311,13 +343,11 @@ service cloud.firestore {
       // Lecture : Les utilisateurs authentifiés peuvent lire leurs propres réservations
       // Permet aux clients de lire leurs propres réservations
       // Permet aux chauffeurs de lire les réservations où ils sont assignés
-      allow read: if isAuthenticated() && 
-                     (resource.data.userId == request.auth.uid || 
-                      resource.data.driverId == request.auth.uid);
-      
-      // [INTENTIONNEL] Les deux règles allow read sont combinées avec OR logique (Firestore behavior).
-      // Cette seconde règle permet à tout chauffeur vérifié de lire les bookings en statut 'pending'
-      // pour le système de matching — les chauffeurs voient les courses disponibles à accepter.
+      allow read: if isAuthenticated() &&
+                     (resource.data.get('userId', null) == request.auth.uid ||
+                      resource.data.get('driverId', null) == request.auth.uid);
+
+      // Les chauffeurs voient les courses en attente uniquement pour le matching.
       allow read: if isAuthenticated() &&
                      resource.data.status == 'pending' &&
                      exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
@@ -331,34 +361,33 @@ service cloud.firestore {
                        request.resource.data.userId == request.auth.uid &&
                        request.resource.data.status == 'pending' &&
                        request.resource.data.price is number &&
-                       request.resource.data.price >= 1 &&
-                       !('driverId' in request.resource.data);
+      request.resource.data.price >= 1 &&
+      (!('driverId' in request.resource.data) || request.resource.data.driverId == null);
+
+      // FIX #C13 : WHITELIST stricte (au lieu d'une blocklist).
       
-      // FIX #C13 : WHITELIST stricte (au lieu d'une blocklist). Les champs financiers
-      // (stripePaymentIntentId, paymentStatus, finalPrice, refundAmount, cancellationFee,
-      //  price, commission) ne peuvent PAS être modifiés par driver/passager via ce chemin.
-      //
       // Whitelist driver assigné : champs opérationnels uniquement
       allow update: if isAuthenticated() &&
-                       resource.data.driverId == request.auth.uid &&
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['driverLocation', 'driverStatus', 'pickupTime',
-                                   'completionTime', 'notes', 'updatedAt', 'rating',
-                                   'driverRoute']);
+                        resource.data.get('driverId', null) == request.auth.uid &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['driverLocation', 'driverStatus', 'pickupTime',
+                                    'completionTime', 'notes', 'updatedAt', 'rating',
+                                    'driverRoute']);
 
       // Whitelist passager (propriétaire du booking) : rating, review, notes, annulation douce
       allow update: if isAuthenticated() &&
-                       resource.data.userId == request.auth.uid &&
-                       request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['rating', 'review', 'notes', 'updatedAt',
-                                   'cancellationReason']);
+                        resource.data.get('userId', null) == request.auth.uid &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['rating', 'review', 'notes', 'updatedAt',
+                                    'cancellationReason', 'pickupAddress', 'dropoffAddress',
+                                    'destination', 'pickup']);
 
       // Admin : accès complet
       allow update: if isAdmin();
 
       // Mise à jour : Le chauffeur assigné peut faire avancer le statut de la course
       allow update: if isAuthenticated() &&
-                        resource.data.driverId == request.auth.uid &&
+                        resource.data.get('driverId', null) == request.auth.uid &&
                         request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['status', 'updatedAt', 'startedAt', 'completedAt']) &&
                         request.resource.data.status == 'in_progress';
@@ -380,7 +409,7 @@ service cloud.firestore {
       // RESTRICTION : Seuls les champs liés à l'annulation peuvent être modifiés
       // NOTE: cancelledBy n'est pas toujours présent (certains flows ne l'incluent pas)
       allow update: if isAuthenticated() &&
-                       resource.data.userId == request.auth.uid &&
+                       resource.data.get('userId', null) == request.auth.uid &&
                        request.resource.data.status == 'cancelled' &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['status', 'cancelledBy', 'cancelledAt',
@@ -432,25 +461,24 @@ service cloud.firestore {
       // Sous-collection messages - Communications client-chauffeur
       match /messages/{messageId} {
         // Lecture : Les deux parties peuvent lire tous les messages
-        // Permet au client et au chauffeur de voir l'historique des messages
         allow read: if isAuthenticated() &&
-                     (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
-                      get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+                     exists(/databases/$(database)/documents/bookings/$(bookingId)) &&
+                     (get(/databases/$(database)/documents/bookings/$(bookingId)).data.get('userId', null) == request.auth.uid ||
+                      get(/databases/$(database)/documents/bookings/$(bookingId)).data.get('driverId', null) == request.auth.uid);
         
         // Création : Les deux parties peuvent créer des messages
-        // Permet au client et au chauffeur de s'envoyer des messages
         allow create: if isAuthenticated() &&
-                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
-                        get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+                       exists(/databases/$(database)/documents/bookings/$(bookingId)) &&
+                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.get('userId', null) == request.auth.uid ||
+                        get(/databases/$(database)/documents/bookings/$(bookingId)).data.get('driverId', null) == request.auth.uid);
         
         // Mise à jour : Les deux parties peuvent mettre à jour (pour marquer comme lu)
-        // Permet au client et au chauffeur de marquer les messages comme lus
         allow update: if isAuthenticated() &&
-                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.userId == request.auth.uid ||
-                        get(/databases/$(database)/documents/bookings/$(bookingId)).data.driverId == request.auth.uid);
+                       exists(/databases/$(database)/documents/bookings/$(bookingId)) &&
+                       (get(/databases/$(database)/documents/bookings/$(bookingId)).data.get('userId', null) == request.auth.uid ||
+                        get(/databases/$(database)/documents/bookings/$(bookingId)).data.get('driverId', null) == request.auth.uid);
         
         // Suppression : Non autorisée
-        // Les messages ne doivent pas être supprimés pour conserver l'historique
         allow delete: if false;
       }
     }
@@ -535,9 +563,9 @@ service cloud.firestore {
       // Le client n'a besoin que de lire les données de tracking, pas de les modifier
       // RESTRICTION : Les champs critiques (userId, driverId, bookingId) ne peuvent pas être modifiés
       allow update: if isAuthenticated() &&
-                       resource.data.driverId == request.auth.uid &&
-                       !request.resource.data.diff(resource.data).affectedKeys()
-                         .hasAny(['userId', 'driverId', 'bookingId']);
+                        resource.data.driverId == request.auth.uid &&
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['userId', 'driverId', 'bookingId']);
       
       // Suppression : Réservée aux admins ou Cloud Functions (Admin SDK)
       // Interdite côté client pour éviter la perte de données de tracking critiques
@@ -553,9 +581,10 @@ service cloud.firestore {
       // Lecture : Les utilisateurs authentifiés peuvent lire les colis où ils sont impliqués
       // Permet à l'expéditeur, au destinataire et au chauffeur de voir les informations du colis
       allow read: if isAuthenticated() && 
-                     (resource.data.senderId == request.auth.uid || 
-                      resource.data.receiverId == request.auth.uid ||
-                      resource.data.driverId == request.auth.uid);
+                     (resource == null ||
+                      resource.data.get('senderId', null) == request.auth.uid ||
+                      resource.data.get('receiverId', null) == request.auth.uid ||
+                      resource.data.get('driverId', null) == request.auth.uid);
       
       // Création : Les utilisateurs authentifiés peuvent créer des colis
       // Permet aux clients de créer des demandes de livraison de colis
@@ -568,7 +597,7 @@ service cloud.firestore {
       //
       // Whitelist driver assigné : progression de la livraison
       allow update: if isAuthenticated() &&
-                       resource.data.driverId == request.auth.uid &&
+                       resource.data.get('driverId', null) == request.auth.uid &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['status', 'driverLocation', 'pickedUpAt',
                                    'deliveredAt', 'notes', 'updatedAt',
@@ -576,7 +605,7 @@ service cloud.firestore {
 
       // Whitelist sender (expéditeur) : annulation douce (uniquement avant pickup) + notes
       allow update: if isAuthenticated() &&
-                       resource.data.senderId == request.auth.uid &&
+                       resource.data.get('senderId', null) == request.auth.uid &&
                        request.resource.data.diff(resource.data).affectedKeys()
                          .hasOnly(['notes', 'updatedAt', 'cancellationReason',
                                    'cancelledAt', 'status',
@@ -663,8 +692,9 @@ service cloud.firestore {
     match /calls/{callId} {
       // Lecture : Seuls les participants (caller ou callee) peuvent lire l'appel
       allow read: if isAuthenticated() &&
-        (resource.data.callerId == request.auth.uid ||
-         resource.data.calleeId == request.auth.uid);
+        (resource == null ||
+         resource.data.get('callerId', null) == request.auth.uid ||
+         resource.data.get('calleeId', null) == request.auth.uid);
       
       // Création : L'appelant peut créer un appel
       // Validation :
@@ -692,12 +722,10 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['status', 'answerTime', 'endTime', 'reason']) &&
         (
-          // Le callee peut accepter ou refuser
-          (request.auth.uid == resource.data.calleeId &&
+          (request.auth.uid == resource.data.get('calleeId', null) &&
            request.resource.data.status in ['accepted', 'declined']) ||
-          // L'un ou l'autre peut terminer ou signaler un échec
-          ((request.auth.uid == resource.data.callerId ||
-            request.auth.uid == resource.data.calleeId) &&
+          ((request.auth.uid == resource.data.get('callerId', null) ||
+            request.auth.uid == resource.data.get('calleeId', null)) &&
            request.resource.data.status in ['ended', 'failed'])
         );
       
@@ -1077,6 +1105,10 @@ service cloud.firestore {
     }
 
     match /driver_payouts/{docId} {
+      allow read, write: if false;
+    }
+
+    match /food_order_settlements/{docId} {
       allow read, write: if false;
     }
 

@@ -7,6 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import type { ActiveRole } from '@/types/user';
+import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
+import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 
 type ProRoleKey = 'driver' | 'restaurant';
 
@@ -30,6 +32,7 @@ const PRO_ROLE_META: Record<ProRoleKey, { label: string; description: string; ic
 export default function BecomeProPage() {
   const router = useRouter();
   const { currentUser, userData, loading } = useAuth();
+  const registrationType = userData ? getIncompleteRegistrationType(userData) : null;
 
   const missingRoles = useMemo<ProRoleKey[]>(() => {
     if (!userData?.roles) return [];
@@ -47,8 +50,14 @@ export default function BecomeProPage() {
       return;
     }
 
+    if (registrationType) return;
+
     if (userData?.accountState === 'driver_onboarding' || userData?.activeRole === 'driver_onboarding') {
       router.replace('/driver/register');
+      return;
+    }
+    if (userData?.accountState === 'restaurant_onboarding' || userData?.activeRole === 'restaurant_onboarding') {
+      router.replace('/restaurant/register?from=become-pro');
       return;
     }
 
@@ -56,7 +65,18 @@ export default function BecomeProPage() {
       const role = (userData.lastActiveRole || userData.activeRole || 'client') as ActiveRole;
       router.replace(`/dashboard?role=${role}`);
     }
-  }, [currentUser, userData, loading, missingRoles, router]);
+  }, [currentUser, userData, loading, missingRoles, registrationType, router]);
+
+  if (currentUser && userData && registrationType) {
+    return (
+      <DriverOnboardingDecisionGate
+        registrationType={registrationType}
+        resumePath={getRegistrationResumePath(userData)}
+        deleteAccountOnAbandon={Object.keys(userData.roles ?? {}).length === 0}
+        restoreActiveRole={getRegistrationRestoreRole(userData)}
+      />
+    );
+  }
 
   if (loading || !currentUser || !userData || missingRoles.length === 0) {
     return (

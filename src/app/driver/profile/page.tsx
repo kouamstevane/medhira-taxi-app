@@ -87,7 +87,9 @@ export default function DriverProfilePage() {
   const [clientActivationMessage, setClientActivationMessage] = useState<string | null>(null);
   const [clientActivationError, setClientActivationError] = useState<string | null>(null);
 
-  const canActivateClientRole = userData?.roles?.client == null && userData?.activeRole !== 'driver_onboarding';
+  const canActivateClientRole = userData?.roles?.client == null
+    && userData?.activeRole !== 'driver_onboarding'
+    && userData?.activeRole !== 'restaurant_onboarding';
 
   async function handleSignOut() {
     setSignOutLoading(true);

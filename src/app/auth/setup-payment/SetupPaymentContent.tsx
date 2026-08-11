@@ -139,6 +139,10 @@ export default function SetupPaymentContent() {
         router.push('/driver/register');
         return;
       }
+      if (userData?.accountState === 'restaurant_onboarding' || userData?.activeRole === 'restaurant_onboarding') {
+        router.push('/restaurant/register?from=become-pro');
+        return;
+      }
 
       const callable = httpsCallable<unknown, CreateSetupIntentResult>(
         functions,

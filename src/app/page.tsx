@@ -1,45 +1,59 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { getRouteForAuthenticatedProfile } from '@/services/roles.service';
+import { getEffectiveRoleStatuses, getRouteForAuthenticatedProfile } from '@/services/roles.service';
+import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 import { redirectWithFallback } from '@/utils/navigation';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 
 export default function HomePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { currentUser, loading, userData } = useAuth();
+  const returnFromPending = ['restaurant-pending', 'driver-pending'].includes(searchParams.get('from') ?? '');
   const redirectedRef = useRef(false);
   const fallbackRef = useRef<NodeJS.Timeout | null>(null);
-  const isDriverOnboarding = Boolean(
-    userData?.accountState === 'driver_onboarding' || userData?.activeRole === 'driver_onboarding',
-  );
+  const registrationType = userData ? getIncompleteRegistrationType(userData) : null;
 
   useEffect(() => {
-    if (isDriverOnboarding) return;
+    if (returnFromPending || registrationType) return;
 
-    const route = getRouteForAuthenticatedProfile(userData, {});
+    if (loading || !currentUser || !userData || redirectedRef.current) return;
 
-    if (!loading && currentUser && route && !redirectedRef.current) {
-      redirectedRef.current = true;
-      fallbackRef.current = redirectWithFallback(router, route);
-    }
+    let cancelled = false;
+    void getEffectiveRoleStatuses(userData).then((statuses) => {
+      if (cancelled || redirectedRef.current) return;
+      const route = getRouteForAuthenticatedProfile(userData, statuses);
+      if (route) {
+        redirectedRef.current = true;
+        fallbackRef.current = redirectWithFallback(router, route);
+      }
+    });
 
     return () => {
+      cancelled = true;
       if (fallbackRef.current) {
         clearTimeout(fallbackRef.current);
       }
     };
-  }, [currentUser, isDriverOnboarding, loading, router, userData]);
+  }, [currentUser, loading, registrationType, returnFromPending, router, userData]);
 
-  if (!loading && currentUser && userData && isDriverOnboarding) {
-    return <DriverOnboardingDecisionGate />;
+  if (!returnFromPending && !loading && currentUser && userData && registrationType) {
+    return (
+      <DriverOnboardingDecisionGate
+        registrationType={registrationType}
+        resumePath={getRegistrationResumePath(userData)}
+        deleteAccountOnAbandon={Object.keys(userData.roles ?? {}).length === 0}
+        restoreActiveRole={getRegistrationRestoreRole(userData)}
+      />
+    );
   }
 
-  if (loading || (currentUser && userData)) {
+  if (loading || (currentUser && userData && !returnFromPending)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">

@@ -194,10 +194,10 @@ export const RestaurantApplicationDataSchema = z.object({
   phone: z.string().min(8).max(32),
   email: z.string().email().max(254),
   cuisineType: z.array(z.string().min(1)).min(1).max(10),
-  avgPricePerPerson: z.number().positive().optional(),
+  avgPricePerPerson: z.number().nonnegative().nullish(),
   commissionRate: z.number().min(0).max(100).optional(),
-  imageUrl: z.string().max(1024).optional(),
-  coverImageUrl: z.string().max(1024).optional(),
+  imageUrl: z.string().max(1024).nullish(),
+  coverImageUrl: z.string().max(1024).nullish(),
   openingHours: z.record(
     z.string(),
     z.object({

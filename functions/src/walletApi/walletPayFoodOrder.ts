@@ -57,6 +57,7 @@ export const walletPayFoodOrder = onCall(
       const orderRef = db.collection('food_orders').doc(orderId);
       const transactionRef = db.collection('transactions').doc();
       const transactionId = transactionRef.id;
+      let resolvedTransactionId = transactionId;
 
       await db.runTransaction(async (tx) => {
         // 1. Lire la commande et vérifier l'appartenance
@@ -74,6 +75,7 @@ export const walletPayFoodOrder = onCall(
         }
 
         if (order.paymentValidated === true || order.status === 'confirmed') {
+          resolvedTransactionId = order.paymentTransactionId ?? transactionId;
           return; // Déjà payée
         }
 
@@ -163,7 +165,7 @@ export const walletPayFoodOrder = onCall(
         });
       });
 
-      return { transactionId };
+      return { transactionId: resolvedTransactionId };
     } catch (err) {
       if (err instanceof HttpsError) throw err;
       console.error('[walletPayFoodOrder] Erreur:', err);

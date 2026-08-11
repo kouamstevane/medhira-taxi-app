@@ -15,7 +15,7 @@ import {
 import type { ActiveRole } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
-type SwitchableRole = Exclude<ActiveRole, 'driver_onboarding'>;
+type SwitchableRole = Exclude<ActiveRole, 'driver_onboarding' | 'restaurant_onboarding'>;
 
 const ROLE_META: Record<SwitchableRole, { label: string; icon: string }> = {
   client: { label: 'Client', icon: 'person' },
@@ -70,7 +70,12 @@ export function RoleSwitcher() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [open]);
 
-  if (!userData || userData.activeRole === 'driver_onboarding' || ownedRoles.length <= 1) return null;
+  if (
+    !userData
+    || userData.activeRole === 'driver_onboarding'
+    || userData.activeRole === 'restaurant_onboarding'
+    || ownedRoles.length <= 1
+  ) return null;
 
   const activeRole = userData.activeRole as SwitchableRole;
 

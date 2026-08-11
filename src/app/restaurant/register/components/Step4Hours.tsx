@@ -12,23 +12,26 @@ interface Step4HoursProps {
   onBack: () => void;
   initialData?: Partial<Step4Data>;
   loading: boolean;
+  onChange?: (hours: Step4Data['openingHours']) => void;
 }
 
 const DEFAULT_HOURS: Step4Data['openingHours'] = Object.fromEntries(
   RESTAURANT_DAYS.map(({ key }) => [key, { open: '09:00', close: '22:00', closed: key === 'sunday' }])
 ) as Step4Data['openingHours'];
 
-export function Step4Hours({ onSubmit, onBack, initialData, loading }: Step4HoursProps) {
+export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange }: Step4HoursProps) {
   const [hours, setHours] = useState<Step4Data['openingHours']>(
     initialData?.openingHours || DEFAULT_HOURS
   );
   const [error, setError] = useState<string | null>(null);
 
   const updateDay = (key: string, field: string, value: string | boolean) => {
-    setHours((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], [field]: value },
-    }));
+    const next = {
+      ...hours,
+      [key]: { ...hours[key], [field]: value },
+    };
+    setHours(next);
+    onChange?.(next);
   };
 
   const handleSubmit = async (e: FormEvent) => {

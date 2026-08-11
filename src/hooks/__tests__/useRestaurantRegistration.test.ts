@@ -1,4 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
+import React from 'react';
+import { AuthContext } from '@/context/AuthContext';
+import type { AuthContextType } from '@/types';
 
 const mockReplace = jest.fn();
 jest.mock('next/navigation', () => ({
@@ -286,6 +289,52 @@ describe('useRestaurantRegistration — restaurant submission contract', () => {
     expect(mockReplace).toHaveBeenCalledWith('/restaurant/pending?id=rest_123');
   });
 
+  test('refreshes the authenticated profile before redirecting after submission', async () => {
+    const { httpsCallable } = require('firebase/functions');
+    const submitApplication = jest.fn().mockResolvedValue({ data: { restaurantId: 'rest_456' } });
+    const reloadUser = jest.fn().mockResolvedValue(undefined);
+    httpsCallable.mockReturnValueOnce(submitApplication);
+
+    const contextValue: AuthContextType = {
+      currentUser: null,
+      loading: false,
+      authStatus: 'authenticated',
+      userData: null,
+      error: null,
+      isEmailVerified: true,
+      reloadUser,
+    };
+
+    const { result } = renderHook(() => useRestaurantRegistration(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        React.createElement(AuthContext.Provider, { value: contextValue }, children)
+      ),
+    });
+
+    act(() => {
+      result.current.setStepData(3, {
+        name: 'Le Bistrot',
+        description: 'Restaurant français traditionnel',
+        cuisineType: ['Française'],
+        address: '12 Rue de Paris',
+        phone: '+33123456789',
+        email: 'bistrot@test.fr',
+        location: { lat: 48.8566, lng: 2.3522 },
+      });
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit({
+        openingHours: {
+          monday: { open: '09:00', close: '22:00', closed: false },
+        },
+      });
+    });
+
+    expect(reloadUser).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith('/restaurant/pending?id=rest_456');
+  });
+
   test('handleSubmit refuses to call backend when restaurant coordinates are missing', async () => {
     const { httpsCallable } = require('firebase/functions');
     const submitApplication = jest.fn();
@@ -314,5 +363,50 @@ describe('useRestaurantRegistration — restaurant submission contract', () => {
 
     expect(submitApplication).not.toHaveBeenCalled();
     expect(result.current.error).toContain('coordonnées');
+  });
+});
+
+describe('useRestaurantRegistration — verified restaurant state', () => {
+  test('reloads Firebase Auth after email verification', async () => {
+    const firebaseConfig = require('@/config/firebase');
+    const reload = jest.fn().mockResolvedValue(undefined);
+    firebaseConfig.auth.currentUser = { uid: 'restaurant-owner', email: 'owner@test.fr', reload };
+
+    const { result } = renderHook(() => useRestaurantRegistration());
+
+    await act(async () => {
+      await result.current.handleStep2Verified();
+    });
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(result.current.currentStep).toBe(3);
+  });
+
+  test('refreshes AuthContext email verification state after email verification', async () => {
+    const firebaseConfig = require('@/config/firebase');
+    const reload = jest.fn().mockResolvedValue(undefined);
+    const refreshAuthContext = jest.fn().mockResolvedValue(undefined);
+    firebaseConfig.auth.currentUser = { uid: 'restaurant-owner', email: 'owner@test.fr', reload };
+    const contextValue: AuthContextType = {
+      currentUser: null,
+      loading: false,
+      authStatus: 'authenticated',
+      userData: null,
+      error: null,
+      isEmailVerified: false,
+      reloadUser: refreshAuthContext,
+    };
+
+    const { result } = renderHook(() => useRestaurantRegistration(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        React.createElement(AuthContext.Provider, { value: contextValue }, children)
+      ),
+    });
+
+    await act(async () => {
+      await result.current.handleStep2Verified();
+    });
+
+    expect(refreshAuthContext).toHaveBeenCalledTimes(1);
   });
 });

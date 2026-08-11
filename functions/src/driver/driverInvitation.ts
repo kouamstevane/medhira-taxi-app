@@ -139,8 +139,16 @@ export const completeDriverInvitation = onCall(
       if (hashCode(parsed.data.code.toUpperCase(), invitation.codeSalt) !== invitation.codeHash) {
         throw new HttpsError('permission-denied', 'Code d’invitation invalide.');
       }
-      if (userSnap.exists && userSnap.data()?.accountState && userSnap.data()?.accountState !== 'driver_onboarding') {
-        throw new HttpsError('already-exists', 'Ce compte existe déjà.');
+      if (userSnap.exists) {
+        const existingData = userSnap.data() ?? {};
+        const existingRoles = existingData.roles ?? {};
+        const isIncompleteRolelessAccount =
+          Object.keys(existingRoles).length === 0
+          && (existingData.accountState == null || existingData.accountState === 'driver_onboarding');
+
+        if (!isIncompleteRolelessAccount) {
+          throw new HttpsError('already-exists', 'Ce compte existe déjà.');
+        }
       }
       const now = admin.firestore.FieldValue.serverTimestamp();
       tx.set(userRef, { uid, email, phoneNumber: null, roles: {}, activeRole: 'driver_onboarding', accountState: 'driver_onboarding', onboarding: { driver: { status: 'draft', currentStep: 1, invitationId: invitationRef.id, driverType: invitation.role, startedAt: now, updatedAt: now } }, updatedAt: now, createdAt: userSnap.exists ? userSnap.data()?.createdAt : now }, { merge: true });

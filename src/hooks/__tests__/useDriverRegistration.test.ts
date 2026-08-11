@@ -1,4 +1,5 @@
 const mockPush = jest.fn();
+const mockRouter = { push: mockPush };
 const mockRedirectWithFallback = jest.fn();
 const mockSubmitApplication = jest.fn();
 const mockCommit = jest.fn();
@@ -11,7 +12,7 @@ const mockUser = {
 };
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => mockRouter,
 }));
 
 jest.mock('@/config/firebase', () => ({
@@ -109,7 +110,7 @@ describe('useDriverRegistration', () => {
   });
 
   it('uses the shared fallback redirect after a successful final submission', async () => {
-    const { result } = renderHook(() => useDriverRegistration());
+    const { result, unmount } = renderHook(() => useDriverRegistration());
 
     await act(async () => {
       result.current.handleStep0Next('livreur');
@@ -136,7 +137,9 @@ describe('useDriverRegistration', () => {
     expect(mockCommit).toHaveBeenCalled();
     expect(mockRedirectWithFallback).toHaveBeenCalledWith(
       expect.objectContaining({ push: mockPush }),
-      '/driver/payments/setup?onboarding=fresh'
+      '/driver/pending'
     );
+
+    unmount();
   });
 });

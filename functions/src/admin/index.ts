@@ -4,3 +4,4 @@ export { adminManageDriver } from './adminManageDriver.js';
 export { adminManageRestaurant } from './adminManageRestaurant.js';
 export { adminManageUser } from './adminManageUser.js';
 export { adminSendEmail } from './adminSendEmail.js';
+export { cleanupExpiredOnboardingDrafts } from './cleanupExpiredOnboardingDrafts.js';

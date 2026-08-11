@@ -37,7 +37,7 @@ export function useDriverRegistration() {
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
+  const [warning] = useState<string | null>(null);
   const [isExistingUser, setIsExistingUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -67,17 +67,22 @@ export function useDriverRegistration() {
 
   // Cleanup on unmount
   useEffect(() => {
+    const emailRetryTimer = emailRetryTimerRef.current;
+    const redirectTimeout = redirectTimeoutRef.current;
+    const saveTimeout = saveTimeoutRef.current;
     return () => {
       isMountedRef.current = false;
-      if (emailRetryTimerRef.current) clearTimeout(emailRetryTimerRef.current);
-      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (emailRetryTimer) clearTimeout(emailRetryTimer);
+      if (redirectTimeout) clearTimeout(redirectTimeout);
+      if (saveTimeout) clearTimeout(saveTimeout);
     };
   }, []);
 
   // Auto-save with debounce
   const saveProgress = useCallback(async () => {
     try {
+      const user = auth.currentUser;
+      if (!user) return;
       const progress: RegistrationProgress = {
         step1Data: { ...step1Data, password: undefined },
         step2Data,
@@ -85,7 +90,8 @@ export function useDriverRegistration() {
         currentStep,
         timestamp: new Date().toISOString(),
       };
-      await secureStorage.setItem('driver_registration_progress', progress);
+      const key = `driver_registration_progress_${user.uid}` as const;
+      await secureStorage.setItem(key, progress);
     } catch (err) {
       loggerRef.current.logError('SAVE_PROGRESS', err as Error, { step: currentStep });
     }
@@ -93,7 +99,18 @@ export function useDriverRegistration() {
 
   const restoreProgress = useCallback(async (): Promise<RegistrationProgress | null> => {
     try {
-      const saved = await secureStorage.getItem<RegistrationProgress>('driver_registration_progress');
+      const user = auth.currentUser;
+      if (!user) return null;
+      const key = `driver_registration_progress_${user.uid}` as const;
+      const saved = await secureStorage.getItem<RegistrationProgress>(key);
+      if (saved?.timestamp) {
+        const age = Date.now() - new Date(saved.timestamp).getTime();
+        if (age > 30 * 60 * 1000) {
+          await secureStorage.removeItem(key);
+          await secureStorage.clearLegacyDriverProgress();
+          return null;
+        }
+      }
       if (saved && typeof saved === 'object' && 'currentStep' in saved) return saved;
     } catch (err) {
       loggerRef.current.logError('RESTORE_PROGRESS', err as Error);
@@ -103,7 +120,11 @@ export function useDriverRegistration() {
 
   const clearProgress = useCallback(async () => {
     try {
-      await secureStorage.removeItem('driver_registration_progress');
+      const user = auth.currentUser;
+      if (user) {
+        await secureStorage.removeItem(`driver_registration_progress_${user.uid}`);
+      }
+      await secureStorage.clearLegacyDriverProgress();
     } catch (err) {
       loggerRef.current.logError('CLEAR_PROGRESS', err as Error);
     }
@@ -152,6 +173,29 @@ export function useDriverRegistration() {
         setIsExistingUser(true);
         setStep1Data(prev => ({ ...prev, email: user.email || '' }));
 
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const uData = userSnap.data();
+            if (uData.accountState === 'active' || !uData.accountState) {
+              const previousRole = uData.lastActiveRole ?? uData.activeRole ?? 'client';
+              await updateDoc(userRef, {
+                accountState: 'driver_onboarding',
+                activeRole: 'driver_onboarding',
+                lastActiveRole: previousRole,
+                'onboarding.driver.status': 'draft',
+                'onboarding.driver.currentStep': 1,
+                'onboarding.driver.updatedAt': firestoreServerTimestamp(),
+                updatedAt: firestoreServerTimestamp(),
+              });
+            }
+          }
+        } catch (e) {
+          loggerRef.current.logWarning('INIT_ONBOARDING_STATE', 'Initialisation accountState driver_onboarding échouée', {
+            error: (e as Error).message,
+          });
+        }
         if (!hasRestoredProgressRef.current) {
           hasRestoredProgressRef.current = true;
           const saved = await restoreProgress();
@@ -163,8 +207,6 @@ export function useDriverRegistration() {
             }));
             setStep2Data(saved.step2Data || {});
             setStep3Data(saved.step3Data || {});
-            // Les objets File ne sont pas sérialisables — impossible de restaurer au-delà de l'étape 2
-            // Les étapes 3+ (véhicule, documents) nécessitent de re-uploader les fichiers
             const maxRestorableStep = 2;
             setCurrentStep(Math.min(Math.max(saved.currentStep || 1, 1), maxRestorableStep));
           } else {
@@ -178,9 +220,6 @@ export function useDriverRegistration() {
         }
 
         try {
-          // Forcer le refresh du token avant la lecture Firestore
-          // Évite les erreurs permission-denied sur mobile où le token
-          // peut ne pas être propagé quand onAuthStateChanged se déclenche.
           await user.getIdToken(true);
           const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
           if (driverDoc.exists()) {
@@ -188,8 +227,6 @@ export function useDriverRegistration() {
             if (data.status === 'action_required' || data.status === 'rejected') {
               setRejectionCode(data.rejectionCode || 'R000');
               setRejectionReason(data.rejectionReason || data.rejectionMessage || 'Votre dossier nécessite une action.');
-              // RGPD #C2 : les PII (dob/nationality/address) vivent dans la
-              // sous-collection `drivers/{uid}/private/personal`.
               let privateData: Record<string, unknown> = {};
               try {
                 const privateDoc = await getDoc(doc(db, 'drivers', user.uid, 'private', 'personal'));
@@ -209,7 +246,6 @@ export function useDriverRegistration() {
                 country: (privateData.country as string) || '',
               }));
             } else if (['pending', 'approved', 'active'].includes(data.status)) {
-              // Synchroniser le document user s'il est resté en driver_onboarding
               try {
                 const userDocRef = doc(db, 'users', user.uid);
                 const userSnap = await getDoc(userDocRef);
@@ -231,7 +267,6 @@ export function useDriverRegistration() {
                 });
               }
 
-              // Redirection immédiate sans délai d'erreur
               redirectTimeoutRef.current = redirectWithFallback(router, '/driver/dashboard');
             }
           }
@@ -253,7 +288,8 @@ export function useDriverRegistration() {
   const uploadFileWithRetry = async (
     file: File | null,
     fileCategory: string,
-    userId: string
+    userId: string,
+    isDraft = false
   ): Promise<string | null> => {
     if (!file) return null;
     return retryWithBackoff(
@@ -261,7 +297,8 @@ export function useDriverRegistration() {
         const user = auth.currentUser;
         if (!user || user.uid !== userId) throw new Error('Utilisateur non authentifié');
         const ext = file.name.split('.').pop() || 'tmp';
-        const storageRef = ref(getFirebaseStorage(), `drivers/${userId}/${fileCategory}/${Date.now()}.${ext}`);
+        const folder = isDraft ? `drivers/${userId}/drafts/${fileCategory}` : `drivers/${userId}/${fileCategory}`;
+        const storageRef = ref(getFirebaseStorage(), `${folder}/${Date.now()}.${ext}`);
         const snapshot = await uploadBytes(storageRef, file);
         return getDownloadURL(snapshot.ref);
       },
@@ -276,8 +313,8 @@ export function useDriverRegistration() {
     );
   };
 
-  const handleStep0Next = (selectedDriverType: DriverType) => {
-    setDriverType(selectedDriverType);
+  const handleStep0Next = (type: DriverType) => {
+    setDriverType(type);
     setCurrentStep(1);
   };
 
@@ -304,9 +341,6 @@ export function useDriverRegistration() {
   const handleStep1Next = async (data: Step1FormData) => {
     setLoading(true);
     setError(null);
-    // Référence capturée immédiatement après la création — protège contre
-    // les race conditions où auth.currentUser pourrait changer entre la
-    // création du compte et l'entrée dans le bloc catch (onAuthStateChanged async).
     let newlyCreatedUser: User | null = null;
     try {
       if (!isExistingUser) {
@@ -317,17 +351,11 @@ export function useDriverRegistration() {
         newlyCreatedUser = await createDriverOnboardingAccount(data.email, data.password);
       }
       setStep1Data(data);
-      // Envoyer le code OTP — Step1 reste visible en Phase B
-      // Le passage à Step2 est déclenché par Step1Intent après vérification réussie
       const sendResult = await handleSendVerificationCode(data.email);
       if (!sendResult.success) {
         throw new Error(sendResult.error ?? 'Erreur lors de l\'envoi du code de vérification.');
       }
-      // Ne PAS appeler setCurrentStep(2) ici
     } catch (err: unknown) {
-      // Nettoyer le compte Auth si créé dans cette session mais étape suivante échouée.
-      // On utilise newlyCreatedUser (capturé juste après la création) plutôt que
-      // auth.currentUser pour éviter les race conditions avec onAuthStateChanged.
       if (newlyCreatedUser) {
         try {
           await deleteUser(newlyCreatedUser);
@@ -430,20 +458,20 @@ export function useDriverRegistration() {
         if (!file || file.size === 0) {
           return Promise.resolve(null) as Promise<string | null>;
         }
-        return uploadFileWithRetry(file, category, userId);
+        return uploadFileWithRetry(file, category, userId, true);
       };
 
       // Lance uploads
       const uploadsPromise = Promise.allSettled([
-        uploadFileWithRetry(biometricsPhoto, 'biometrics', userId),
+         uploadFileWithRetry(biometricsPhoto, 'biometrics', userId, true),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.registration, 'documents') : Promise.resolve(null),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.insurance, 'documents') : Promise.resolve(null),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.techControl, 'documents') : Promise.resolve(null),
         requiresVehicleDocs ? uploadIfValid(vehicleFiles.exteriorPhoto, 'vehicle_photos') : Promise.resolve(null),
-        uploadFileWithRetry(complianceFiles.workEligibility!, 'compliance', userId),
-        (vehicleType !== 'velo') ? uploadFileWithRetry(complianceFiles.driversAbstract!, 'compliance', userId) : Promise.resolve(null),
-        (vehicleType !== 'velo') ? uploadFileWithRetry(complianceFiles.licenseFront!, 'compliance', userId) : Promise.resolve(null),
-        (vehicleType !== 'velo') ? uploadFileWithRetry(complianceFiles.licenseBack!, 'compliance', userId) : Promise.resolve(null),
+         uploadFileWithRetry(complianceFiles.workEligibility!, 'compliance', userId, true),
+         (vehicleType !== 'velo') ? uploadFileWithRetry(complianceFiles.driversAbstract!, 'compliance', userId, true) : Promise.resolve(null),
+         (vehicleType !== 'velo') ? uploadFileWithRetry(complianceFiles.licenseFront!, 'compliance', userId, true) : Promise.resolve(null),
+         (vehicleType !== 'velo') ? uploadFileWithRetry(complianceFiles.licenseBack!, 'compliance', userId, true) : Promise.resolve(null),
       ]);
 
       const uploadResultsValue = await uploadsPromise;
@@ -451,8 +479,7 @@ export function useDriverRegistration() {
 
       const failedUploads = uploadResults.filter(r => r.status === 'rejected');
       if (failedUploads.length > 0) {
-        setError("Erreur lors de l'upload de certains fichiers. Veuillez réessayer.");
-        return;
+        throw new Error("Erreur lors de l'upload de certains fichiers. Veuillez réessayer.");
       }
 
       const getValue = (r: PromiseSettledResult<string | null>) =>
@@ -517,19 +544,8 @@ export function useDriverRegistration() {
 
       await clearProgress();
       setSubmissionSuccess(true);
-
-      // === OPTIM : Stripe est délégué à /driver/payments/setup ===
-      // Avant : on appelait createConnectAccount + createConnectOnboardLink + Browser.open
-      // ici, bloquant l'utilisateur 3-5s sur le bouton "Soumettre ma candidature"
-      // après que les uploads + createDriverProfile soient déjà finis.
-      // Maintenant : redirection immédiate vers /driver/payments/setup qui :
-      //   - lit l'état Stripe (getStripeAccountStatus) — rapide, sync Firestore
-      //   - propose le bouton "Reprendre la configuration Stripe" qui ouvre le Browser
-      //   - gère seul les cas d'erreur Stripe avec UX retry
-      console.log('[Registration] profile created — redirecting to /driver/payments/setup');
-      redirectTimeoutRef.current = redirectWithFallback(router, '/driver/payments/setup?onboarding=fresh');
+      redirectTimeoutRef.current = redirectWithFallback(router, '/driver/pending');
     } catch (err: unknown) {
-      // Cleanup des fichiers Storage orphelins uploadés avant l'échec de createDriverProfile
       const uploadedUrls = uploadResults
         .filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled' && typeof r.value === 'string')
         .map(r => r.value);

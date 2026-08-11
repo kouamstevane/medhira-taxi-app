@@ -383,6 +383,59 @@ async function onPaymentIntentSucceeded(pi: Record<string, unknown>): Promise<vo
 
   console.log(`[onPaymentIntentSucceeded] piId=${piId} purpose=${metadata.purpose ?? 'none'} userId=${metadata.userId ?? 'none'} amountReceived=${amountReceived} currency=${currency}`);
 
+  if (metadata.purpose === 'food_order' && metadata.orderId && metadata.userId) {
+    const db = getDb();
+    const orderRef = db.collection('food_orders').doc(metadata.orderId);
+    const transactionRef = db.collection('transactions').doc(`food_card_${piId}`);
+
+    await db.runTransaction(async (tx) => {
+      const [orderSnap, transactionSnap] = await Promise.all([
+        tx.get(orderRef),
+        tx.get(transactionRef),
+      ]);
+      if (!orderSnap.exists || transactionSnap.exists) return;
+
+      const order = orderSnap.data()!;
+      if (order.userId !== metadata.userId || order.paymentValidated === true) return;
+      const expectedAmount = Math.round(Number(order.totalOrderPrice ?? 0) * 100);
+      if (!Number.isFinite(expectedAmount) || expectedAmount <= 0 || expectedAmount !== amountReceived || currency !== 'cad') {
+        console.error('[onPaymentIntentSucceeded] food order amount mismatch', {
+          orderId: metadata.orderId,
+          expectedAmount,
+          amountReceived,
+          currency,
+        });
+        return;
+      }
+
+      tx.create(transactionRef, {
+        id: transactionRef.id,
+        userId: metadata.userId,
+        type: 'payment',
+        paymentMethod: 'card',
+        amount: -expectedAmount / 100,
+        currency: 'CAD',
+        description: `Paiement par carte commande repas ${metadata.orderId}`,
+        foodOrderId: metadata.orderId,
+        stripePaymentIntentId: piId,
+        status: 'completed',
+        createdAt: serverTS(),
+        updatedAt: serverTS(),
+      });
+      tx.update(orderRef, {
+        paymentValidated: true,
+        paymentMethod: 'card',
+        status: 'confirmed',
+        paymentTransactionId: transactionRef.id,
+        stripePaymentIntentId: piId,
+        paymentStatus: 'succeeded',
+        paymentCurrency: 'cad',
+        confirmedAt: serverTS(),
+        updatedAt: serverTS(),
+      });
+    });
+  }
+
   if (metadata.purpose === 'wallet_recharge' && metadata.userId) {
     const db        = getDb();
     const walletRef = db.collection('wallets').doc(metadata.userId);
@@ -845,9 +898,10 @@ async function onAccountUpdated(account: Record<string, unknown>): Promise<void>
 
   if (accountType === 'restaurant' && metadata.restaurantId) {
     const chargesEnabled = !!(account.charges_enabled);
+    const payoutsEnabled = !!(account.payouts_enabled);
     const detailsSubmitted = !!(account.details_submitted);
     const disabledReason = (account.requirements as Record<string, unknown> | undefined)?.disabled_reason as string | null;
-    const newStatus = chargesEnabled && detailsSubmitted ? 'active' : disabledReason ? 'restricted' : 'in_progress';
+    const newStatus = chargesEnabled && payoutsEnabled && detailsSubmitted ? 'active' : disabledReason ? 'restricted' : 'in_progress';
     const ref = getDb().collection('restaurants').doc(metadata.restaurantId);
     const cur = (await ref.get()).data();
     if (cur?.stripeConnectStatus !== newStatus) {

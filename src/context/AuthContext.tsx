@@ -14,7 +14,7 @@ import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { AuthContextType, UserData } from '@/types';
-import type { AuthStatus, UserRoles } from '@/types/user';
+import type { AuthStatus } from '@/types/user';
 
 /**
  * Contexte d'authentification — valeur null par défaut pour détecter l'usage hors AuthProvider
@@ -64,30 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (userDoc) {
         const data = userDoc.data() as UserData;
 
-        // Cas C2 (spec §8) : doc utilisateur sans `roles` (legacy/corruption).
-        // Auto-réparation fire-and-forget via ensureClientRole + fallback local
-        // pour ne pas bloquer le rendu.
-        let safeRoles: UserRoles;
-        if (!data.roles && data.accountState !== 'driver_onboarding') {
-          console.warn('[AuthContext] User without roles, auto-repairing roles.client', {
-            uid: user.uid,
-          });
-          safeRoles = {
-            client: { enabled: true as const, joinedAt: data.createdAt },
-          };
-          // fire-and-forget — ne pas await pour éviter de bloquer le rendu
-          import('@/services/roles.service')
-            .then((m) =>
-              m.ensureClientRole(data).catch((e) =>
-                console.error('[AuthContext] ensureClientRole failed', e),
-              ),
-            )
-            .catch((e) =>
-              console.error('[AuthContext] roles.service import failed', e),
-            );
-        } else {
-          safeRoles = data.roles ?? {};
-        }
+        const safeRoles = data.roles ?? {};
 
         console.log('[AuthContext] Données utilisateur chargées avec succès', {
           uid: user.uid,
@@ -108,6 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lastActiveRole: data.lastActiveRole,
           accountState: data.accountState,
           onboarding: data.onboarding,
+          draftRestaurant: data.draftRestaurant,
           country: data.country,
           address: data.address,
           stripeCustomerId: data.stripeCustomerId,

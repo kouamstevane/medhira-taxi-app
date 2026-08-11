@@ -2,6 +2,7 @@ import {
   CreateFoodOrderRequestSchema,
   SubmitRestaurantApplicationRequestSchema,
 } from '../../validators/schemas';
+import { isEmailVerifiedForSubmission } from '../submitRestaurantApplication';
 
 describe('SubmitRestaurantApplicationRequestSchema', () => {
   const validPayload = {
@@ -35,8 +36,47 @@ describe('SubmitRestaurantApplicationRequestSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  test('accepts omitted optional image fields serialized as null by the callable transport', () => {
+    const result = SubmitRestaurantApplicationRequestSchema.safeParse({
+      ...validPayload,
+      data: {
+        ...validPayload.data,
+        imageUrl: null,
+        coverImageUrl: null,
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  test('accepts an empty optional average price serialized as null by the callable transport', () => {
+    const result = SubmitRestaurantApplicationRequestSchema.safeParse({
+      ...validPayload,
+      data: {
+        ...validPayload.data,
+        avgPricePerPerson: null,
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  test('accepts zero for the optional average price because the form allows zero', () => {
+    const result = SubmitRestaurantApplicationRequestSchema.safeParse({
+      ...validPayload,
+      data: {
+        ...validPayload.data,
+        avgPricePerPerson: 0,
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   test('rejects missing required fields', () => {
-    const { name, ...noName } = validPayload.data;
+    const noName = Object.fromEntries(
+      Object.entries(validPayload.data).filter(([key]) => key !== 'name'),
+    );
     const result = SubmitRestaurantApplicationRequestSchema.safeParse({ data: noName });
     expect(result.success).toBe(false);
   });
@@ -49,7 +89,9 @@ describe('SubmitRestaurantApplicationRequestSchema', () => {
   });
 
   test('rejects submissions without restaurant coordinates', () => {
-    const { location, ...withoutLocation } = validPayload.data;
+    const withoutLocation = Object.fromEntries(
+      Object.entries(validPayload.data).filter(([key]) => key !== 'location'),
+    );
     const result = SubmitRestaurantApplicationRequestSchema.safeParse({ data: withoutLocation });
 
     expect(result.success).toBe(false);
@@ -92,5 +134,12 @@ describe('CreateFoodOrderRequestSchema', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+});
+
+describe('isEmailVerifiedForSubmission', () => {
+  test('uses the Firebase Auth token rather than client profile data', () => {
+    expect(isEmailVerifiedForSubmission({ auth: { token: { email_verified: true } } } as never)).toBe(true);
+    expect(isEmailVerifiedForSubmission({ auth: { token: { email_verified: false } } } as never)).toBe(false);
   });
 });

@@ -40,8 +40,6 @@ export const NOTIFICATION_TOPICS = {
     ACTIVE_TRIPS: 'active_trips',
 } as const;
 
-
-
 class PushNotificationService {
     private isInitialized = false;
     private nonNativeWarningShown = false;
@@ -66,21 +64,13 @@ class PushNotificationService {
         }
 
         try {
-            // Demander la permission de recevoir des notifications
             const permissionStatus = await PushNotifications.requestPermissions();
             
             if (permissionStatus.receive === 'granted') {
                 console.log('[PushNotifications] Permission accordée');
-                
-                // Enregistrer le plugin
                 await PushNotifications.register();
-                
-                // Écouter l'enregistrement
                 await this.setupRegistrationListeners();
-                
-                // Écouter les notifications
                 await this.setupNotificationListeners();
-                
                 this.isInitialized = true;
                 console.log('[PushNotifications] Service initialisé avec succès');
             } else {
@@ -96,16 +86,12 @@ class PushNotificationService {
      * Configure les écouteurs d'enregistrement
      */
     private async setupRegistrationListeners(): Promise<void> {
-        // Écouter l'enregistrement réussi
         await PushNotifications.addListener('registration', async (token: Token) => {
             console.log('[PushNotifications] Token reçu:', token.value);
             this.token = token.value;
-            
-            // Sauvegarder le token dans Firestore
             await this.saveTokenToFirestore(token.value);
         });
 
-        // Écouter les erreurs d'enregistrement
         await PushNotifications.addListener('registrationError', (error) => {
             console.error('[PushNotifications] Erreur enregistrement:', error);
         });
@@ -115,11 +101,8 @@ class PushNotificationService {
      * Configure les écouteurs de notifications
      */
     private async setupNotificationListeners(): Promise<void> {
-        // Notification reçue quand l'app est en premier plan
         await PushNotifications.addListener('pushNotificationReceived', (notification) => {
             console.log('[PushNotifications] Notification reçue en premier plan:', notification);
-            
-            // Valider les données avec Zod (§8.2)
             try {
                 const data = NotificationDataSchema.parse(notification.data);
                 this.handleNotificationReceived(data);
@@ -128,11 +111,8 @@ class PushNotificationService {
             }
         });
 
-        // Notification cliquée (actionPerformed)
         await PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
             console.log('[PushNotifications] Notification cliquée:', notification);
-            
-            // Valider les données avec Zod (§8.2)
             try {
                 NotificationDataSchema.parse(notification.notification.data);
                 this.handleNotificationActionPerformed(notification);
@@ -144,7 +124,6 @@ class PushNotificationService {
 
     /**
      * Sauvegarde le token FCM dans Firestore
-     * 🔒 CORRECTION CRITIQUE (Problème #3) : Gestion d'erreur si doc n'existe pas
      */
     private async saveTokenToFirestore(token: string): Promise<void> {
         const auth = getAuth();
@@ -156,7 +135,6 @@ class PushNotificationService {
         }
 
         try {
-            // Importer Firestore dynamiquement pour éviter les erreurs SSR
             const { getFirestore, doc, getDoc, setDoc, serverTimestamp } = await import('firebase/firestore');
             const db = getFirestore();
             
@@ -165,22 +143,18 @@ class PushNotificationService {
                 getDoc(doc(db, 'users', user.uid)),
             ]);
 
-            // V1 (spec §3) : routage par CAPACITÉ — un user multi-rôle reçoit toutes ses notifs.
-            // Source de vérité : users/{uid}.roles. Fallback à drivers/{uid} pour compat.
             const userData = userDoc.exists() ? userDoc.data() : null;
-            const roles = (userData?.roles as { client?: unknown; driver?: unknown; restaurant?: unknown } | undefined) ?? undefined;
+            const roles = (userData?.roles as { client?: { enabled?: boolean }; driver?: unknown; restaurant?: unknown } | undefined) ?? undefined;
 
+            const hasClientRole = roles?.client?.enabled === true;
             const hasDriverRole = roles?.driver != null || driverDoc.exists();
             const hasRestaurantRole = roles?.restaurant != null;
 
             if (!userDoc.exists() && !driverDoc.exists()) {
-                // Utilisateur inconnu — ni driver ni client existant
-                // Ne PAS créer de document fantôme (ex: chauffeur en attente de Cloud Function)
                 console.warn('[PushNotifications] Document utilisateur non trouvé pour uid:', user.uid);
                 return;
             }
 
-            // Sauvegarder le token dans drivers/{uid} si user a la capacité driver.
             if (hasDriverRole) {
                 await setDoc(doc(db, 'drivers', user.uid), {
                     fcmToken: token,
@@ -188,7 +162,6 @@ class PushNotificationService {
                 }, { merge: true });
             }
 
-            // Sauvegarder dans users/ pour les notifs client (tout user a roles.client).
             if (userDoc.exists()) {
                 await setDoc(doc(db, 'users', user.uid), {
                     fcmToken: token,
@@ -196,8 +169,7 @@ class PushNotificationService {
                 }, { merge: true });
             }
 
-            // S'abonner aux topics par capacité (multi-rôle = tous les topics applicables).
-            await this.subscribeToTopicsByRoles({ hasDriverRole, hasRestaurantRole });
+            await this.subscribeToTopicsByRoles({ hasClientRole, hasDriverRole, hasRestaurantRole });
             
             console.log('[PushNotifications] Token sauvegardé et topics configurés');
         } catch (error) {
@@ -206,25 +178,28 @@ class PushNotificationService {
     }
 
     /**
-     * S'abonne aux topics Firebase par capacité (V1 §3 — multi-rôle).
-     * Tout user a roles.client → ALL_PASSENGERS. roles.driver != null → ALL_DRIVERS aussi.
+     * S'abonne aux topics Firebase par capacité.
      */
     private async subscribeToTopicsByRoles(roles: {
+        hasClientRole: boolean;
         hasDriverRole: boolean;
         hasRestaurantRole: boolean;
     }): Promise<void> {
         try {
-            // Tout user (a au minimum roles.client) reçoit les notifs passagers.
-            await this.subscribeToTopic(NOTIFICATION_TOPICS.ALL_PASSENGERS);
-            console.log(`[PushNotifications] Abonné au topic: ${NOTIFICATION_TOPICS.ALL_PASSENGERS}`);
+            if (roles.hasClientRole) {
+                await this.subscribeToTopic(NOTIFICATION_TOPICS.ALL_PASSENGERS);
+                console.log(`[PushNotifications] Abonné au topic: ${NOTIFICATION_TOPICS.ALL_PASSENGERS}`);
+            } else {
+                await this.unsubscribeFromTopic(NOTIFICATION_TOPICS.ALL_PASSENGERS);
+                console.log(`[PushNotifications] Désabonné du topic: ${NOTIFICATION_TOPICS.ALL_PASSENGERS}`);
+            }
 
             if (roles.hasDriverRole) {
                 await this.subscribeToTopic(NOTIFICATION_TOPICS.ALL_DRIVERS);
                 console.log(`[PushNotifications] Abonné au topic: ${NOTIFICATION_TOPICS.ALL_DRIVERS}`);
-                // L'abonnement à AVAILABLE_DRIVERS se fait via updateDriverStatus quand le chauffeur passe en ligne.
+            } else {
+                await this.unsubscribeFromTopic(NOTIFICATION_TOPICS.ALL_DRIVERS);
             }
-
-            // roles.hasRestaurantRole : pas de topic dédié en V1 (les notifs resto passent par doc orders/listeners).
         } catch (error) {
             console.error('[PushNotifications] Erreur abonnement topics:', error);
         }
@@ -248,7 +223,6 @@ class PushNotificationService {
                 return;
             }
 
-            // Appeler une Cloud Function pour s'abonner au topic
             const { getFunctions, httpsCallable } = await import('firebase/functions');
             const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
             const functions = getFunctions(app, functionsRegion);
@@ -284,7 +258,6 @@ class PushNotificationService {
                 return;
             }
 
-            // Appeler une Cloud Function pour se désabonner du topic
             const { getFunctions, httpsCallable } = await import('firebase/functions');
             const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
             const functions = getFunctions(app, functionsRegion);
@@ -308,7 +281,6 @@ class PushNotificationService {
     private handleNotificationReceived(data: NotificationData): void {
         console.log('[PushNotifications] Notification reçue:', data);
         
-        // Émettre un événement pour les composants écoutants
         this.listeners.forEach(listener => {
             listener({
                 notification: {
@@ -325,31 +297,25 @@ class PushNotificationService {
     private handleNotificationActionPerformed(notification: ActionPerformed): void {
         console.log('[PushNotifications] Notification cliquée:', notification);
         
-        // Naviguer vers la page appropriée selon le type de notification
         const data = notification.notification.data as NotificationData;
         
         switch (data.type) {
             case 'booking_request':
-                // Naviguer vers la page de booking
                 this.navigateTo('/taxi');
                 break;
             case 'trip_started':
             case 'driver_arrived':
-                // Naviguer vers la page de suivi de course
                 this.navigateTo(`/taxi/confirmation?bookingId=${data.tripId}`);
                 break;
             case 'trip_completed':
             case 'payment_received':
-                // Naviguer vers l'historique
                 this.navigateTo('/historique');
                 break;
             case 'alert':
-                // Afficher une alerte
                 this.showAlert(notification.notification.title || 'Alerte', notification.notification.body || '');
                 break;
         }
         
-        // Émettre un événement pour les composants écoutants
         this.listeners.forEach(listener => {
             listener(notification);
         });
@@ -361,7 +327,6 @@ class PushNotificationService {
     addListener(listener: (data: ActionPerformed) => void): () => void {
         this.listeners.add(listener);
         
-        // Retourner une fonction de nettoyage
         return () => {
             this.listeners.delete(listener);
         };
@@ -408,10 +373,6 @@ class PushNotificationService {
      */
     private navigateTo(path: string): void {
         if (typeof window === 'undefined') return;
-        // Émet un événement que le router Next.js (côté layout/provider) peut
-        // intercepter pour faire un client-side navigation. Si personne ne le
-        // gère (ex. listener pas encore monté), on retombe sur window.location
-        // pour garantir la navigation, au prix d'un reload.
         const event = new CustomEvent<{ path: string }>('app:navigate', {
             detail: { path },
             cancelable: true,
@@ -433,7 +394,6 @@ class PushNotificationService {
 
     /**
      * Met à jour le statut du conducteur (disponible/indisponible)
-     * Pour s'abonner/désabonner du topic AVAILABLE_DRIVERS
      */
     async updateDriverStatus(isAvailable: boolean): Promise<void> {
         if (isAvailable) {

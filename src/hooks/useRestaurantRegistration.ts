@@ -1,18 +1,15 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useContext, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  createUserWithEmailAndPassword,
-  deleteUser,
   getAuth,
   onAuthStateChanged,
-  type UserCredential,
 } from 'firebase/auth';
 import {
   doc,
   getDoc,
-  setDoc,
+  runTransaction,
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
@@ -20,7 +17,8 @@ import { httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
 import { db, auth, functions } from '@/config/firebase';
 import { mapHttpsError } from '@/services/cloud-functions.helpers';
-import { AuthService } from '@/services';
+import { createRestaurantOnboardingAccount, signInWithGoogleForRestaurant } from '@/services/auth.service';
+import { AuthContext } from '@/context/AuthContext';
 
 export interface Step1Data {
   firstName: string;
@@ -57,10 +55,12 @@ type Step = 1 | 2 | 3 | 4;
 export function useRestaurantRegistration() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const authContext = useContext(AuthContext);
   const fromBecomePro = searchParams.get('from') === 'become-pro';
+  const resumeRestaurant = searchParams.get('resume') === 'restaurant';
   const resubmitRestaurantId = searchParams.get('resubmit');
 
-  const [currentStep, setCurrentStep] = useState<Step>(fromBecomePro ? 3 : 1);
+  const [currentStep, setCurrentStep] = useState<Step>(resumeRestaurant ? 2 : fromBecomePro ? 3 : 1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -102,6 +102,18 @@ export function useRestaurantRegistration() {
 
   const clearError = useCallback(() => setError(null), []);
 
+  const markRestaurantOnboarding = useCallback(async (userId: string, currentStep: 2 | 3 | 4) => {
+    const now = serverTimestamp();
+    await updateDoc(doc(db, 'users', userId), {
+      'onboarding.restaurant.status': 'draft',
+      'onboarding.restaurant.currentStep': currentStep,
+      'onboarding.restaurant.updatedAt': now,
+      activeRole: 'restaurant_onboarding',
+      accountState: 'restaurant_onboarding',
+      updatedAt: now,
+    });
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(getAuth(), async (user) => {
       if (!user) return;
@@ -117,27 +129,15 @@ export function useRestaurantRegistration() {
   const handleStep1Submit = useCallback(async (data: Step1Data) => {
     setLoading(true);
     setError(null);
-    let cred: UserCredential | null = null;
     try {
       setStep1DataState(data);
-      cred = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      await setDoc(doc(db, 'users', cred.user.uid), {
-        uid: cred.user.uid,
-        email: data.email,
-        phoneNumber: data.phoneNumber ?? null,
-        emailVerified: false,
+      await createRestaurantOnboardingAccount(data.email, data.password, {
         firstName: data.firstName,
         lastName: data.lastName,
-        roles: { client: { enabled: true, joinedAt: serverTimestamp() } },
-        activeRole: 'client',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        phoneNumber: data.phoneNumber ?? null,
       });
       setCurrentStep(2);
     } catch (err: unknown) {
-      if (cred) {
-        try { await deleteUser(cred.user); } catch { /* silent */ }
-      }
       const mapped = mapHttpsError(err);
       if (
         err instanceof Error &&
@@ -160,7 +160,8 @@ export function useRestaurantRegistration() {
     setLoading(true);
     setError(null);
     try {
-      await AuthService.signInWithGoogle();
+      const user = await signInWithGoogleForRestaurant();
+      await markRestaurantOnboarding(user.uid, 3);
       skipToStep3();
     } catch (err: unknown) {
       const mapped = mapHttpsError(err);
@@ -169,7 +170,7 @@ export function useRestaurantRegistration() {
     } finally {
       setLoading(false);
     }
-  }, [skipToStep3]);
+  }, [markRestaurantOnboarding, skipToStep3]);
 
   const handleStep2Verified = useCallback(async () => {
     setStep2DataState({ emailVerified: true });
@@ -177,11 +178,23 @@ export function useRestaurantRegistration() {
     if (user) {
       try {
         await updateDoc(doc(db, 'users', user.uid), {
-          emailVerified: true,
+          'onboarding.restaurant.status': 'draft',
+          'onboarding.restaurant.currentStep': 3,
+          'onboarding.restaurant.updatedAt': serverTimestamp(),
+          activeRole: 'restaurant_onboarding',
+          accountState: 'restaurant_onboarding',
           updatedAt: serverTimestamp(),
         });
-      } catch {
-        // non-blocking
+        if (authContext) {
+          await authContext.reloadUser();
+        } else {
+          await user.reload();
+        }
+      } catch (err: unknown) {
+        const mapped = mapHttpsError(err);
+        setError(mapped.message);
+        toast.error(mapped.message);
+        return;
       }
     }
     setStep3DataState((prev) => ({
@@ -189,24 +202,38 @@ export function useRestaurantRegistration() {
       email: prev.email || step1Data.email || user?.email || '',
     }));
     setCurrentStep(3);
-  }, [step1Data.email]);
+  }, [authContext, step1Data.email]);
 
-  const handleDraftSave = useCallback(async (data: Partial<Step3Data>, step: 3 | 4) => {
+  const handleDraftSave = useCallback(async (data: Record<string, unknown> | Partial<Step3Data> | Partial<Step4Data>, step: 3 | 4) => {
     const user = auth.currentUser;
     if (!user) return;
     try {
-      const draftData = { ...data } as Record<string, unknown>;
-      if ('cuisineType' in draftData) {
-        draftData.cuisineTypes = draftData.cuisineType;
-        delete draftData.cuisineType;
+      const newFields = { ...data } as Record<string, unknown>;
+      if ('cuisineType' in newFields) {
+        newFields.cuisineTypes = newFields.cuisineType;
+        delete newFields.cuisineType;
       }
-      await updateDoc(doc(db, 'users', user.uid), {
-        draftRestaurant: {
-          currentStep: step,
-          data: draftData,
-          updatedAt: serverTimestamp(),
-        },
-        updatedAt: serverTimestamp(),
+
+      const userRef = doc(db, 'users', user.uid);
+      await runTransaction(db, async (transaction) => {
+        const userSnap = await transaction.get(userRef);
+        const existingDraftData = (userSnap.data()?.draftRestaurant?.data ?? {}) as Record<string, unknown>;
+        const mergedDraftData = { ...existingDraftData, ...newFields };
+        const now = serverTimestamp();
+
+        transaction.update(userRef, {
+          draftRestaurant: {
+            currentStep: step,
+            data: mergedDraftData,
+            updatedAt: now,
+          },
+          'onboarding.restaurant.status': 'draft',
+          'onboarding.restaurant.currentStep': step,
+          'onboarding.restaurant.updatedAt': now,
+          activeRole: 'restaurant_onboarding',
+          accountState: 'restaurant_onboarding',
+          updatedAt: now,
+        });
       });
     } catch {
       // silent — draft is best-effort
@@ -215,7 +242,7 @@ export function useRestaurantRegistration() {
 
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const saveDraftDebounced = useCallback((data: Partial<Step3Data>, step: 3 | 4) => {
+  const saveDraftDebounced = useCallback((data: Record<string, unknown> | Partial<Step3Data> | Partial<Step4Data>, step: 3 | 4) => {
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(() => {
       handleDraftSave(data, step);
@@ -264,6 +291,9 @@ export function useRestaurantRegistration() {
 
       const result = await submit(requestPayload);
       const resultData = result.data as { restaurantId: string };
+      if (authContext) {
+        await authContext.reloadUser();
+      }
       setRestaurantId(resultData.restaurantId);
       setSubmissionSuccess(true);
       router.replace(`/restaurant/pending?id=${resultData.restaurantId}`);
@@ -275,14 +305,43 @@ export function useRestaurantRegistration() {
       setLoading(false);
       setIsSubmitting(false);
     }
-  }, [step3Data, resubmitRestaurantId, router]);
+  }, [authContext, step3Data, resubmitRestaurantId, router]);
+
+  useEffect(() => {
+    if (!resumeRestaurant) return;
+    setRestoringDraft(true);
+    const unsubscribe = onAuthStateChanged(getAuth(), async (user) => {
+      if (!user) {
+        router.replace('/auth/role');
+        return;
+      }
+      try {
+        setStep1DataState((prev) => ({
+          ...prev,
+          email: user.email || prev.email || '',
+        }));
+        await markRestaurantOnboarding(user.uid, 2);
+      } catch {
+        setError('Impossible de reprendre cette inscription. Réessayez.');
+      } finally {
+        setRestoringDraft(false);
+      }
+    });
+    return () => unsubscribe();
+  }, [markRestaurantOnboarding, resumeRestaurant, router]);
 
   useEffect(() => {
     if (!fromBecomePro) return;
-    const unsubscribe = onAuthStateChanged(getAuth(), (user) => {
+    const unsubscribe = onAuthStateChanged(getAuth(), async (user) => {
       if (!user) {
         router.replace('/auth/role');
       } else {
+        try {
+          await markRestaurantOnboarding(user.uid, 3);
+        } catch {
+          setError('Impossible de reprendre cette inscription. Réessayez.');
+          return;
+        }
         setStep1DataState((prev) => ({
           ...prev,
           email: user.email || prev.email || '',
@@ -292,10 +351,10 @@ export function useRestaurantRegistration() {
       }
     });
     return () => unsubscribe();
-  }, [fromBecomePro, router]);
+  }, [fromBecomePro, markRestaurantOnboarding, router]);
 
   useEffect(() => {
-    if (currentStep !== 1 && !fromBecomePro) return;
+    if (currentStep !== 1 && !fromBecomePro && !resumeRestaurant) return;
     setRestoringDraft(true);
     const unsubscribe = onAuthStateChanged(getAuth(), async (user) => {
       if (!user) {
@@ -332,7 +391,7 @@ export function useRestaurantRegistration() {
     });
     return () => unsubscribe();
 // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fromBecomePro]);
+  }, [fromBecomePro, resumeRestaurant]);
 
   useEffect(() => {
     if (!resubmitRestaurantId) return;

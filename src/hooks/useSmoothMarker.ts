@@ -59,7 +59,7 @@ export function useSmoothMarker(
                 cancelAnimationFrame(rafRef.current);
                 rafRef.current = null;
             }
-            setDisplayed(null);
+            queueMicrotask(() => setDisplayed(null));
             fromRef.current = null;
             toRef.current = null;
             return;
@@ -78,7 +78,7 @@ export function useSmoothMarker(
             }
             fromRef.current = target;
             toRef.current = target;
-            setDisplayed(target);
+            queueMicrotask(() => setDisplayed(target));
             return;
         }
 
@@ -119,7 +119,7 @@ export function useSmoothMarker(
                 rafRef.current = null;
             }
         };
-    }, [target?.lat, target?.lng, expectedTickMs, snapThresholdDeg]);
+    }, [target, expectedTickMs, snapThresholdDeg]);
 
     return displayed;
 }

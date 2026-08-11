@@ -2,7 +2,7 @@
  * Integration Tests - Users/Roles Firestore Rules
  *
  * Validates the anti-self-promotion rules on users/{uid}:
- *   CREATE: client profile OR locked driver onboarding draft
+ *   CREATE: client profile OR locked professional onboarding draft
  *   UPDATE: isOwner(userId) && request.resource.data.roles == resource.data.roles
  *
  * Run via: firebase emulators:exec "npx jest src/__tests__/integration/users-roles.firestore.test.ts"
@@ -15,7 +15,7 @@ import {
   assertFails,
   assertSucceeds,
 } from '@firebase/rules-unit-testing';
-import { doc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc, deleteDoc, Timestamp } from 'firebase/firestore';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -97,6 +97,51 @@ describe('Users/Roles Firestore Rules', () => {
         createdAt: new Date().toISOString(),
       }),
     );
+  });
+
+  test('AUTHORIZED: Create users/{uid} as locked restaurant onboarding draft', async () => {
+    const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
+    const now = Timestamp.fromDate(new Date());
+
+    await assertSucceeds(
+      setDoc(doc(aliceDb, 'users', aliceId), {
+        uid: aliceId,
+        roles: {},
+        activeRole: 'restaurant_onboarding',
+        accountState: 'restaurant_onboarding',
+        onboarding: {
+          restaurant: {
+            status: 'draft',
+            currentStep: 2,
+            startedAt: now,
+            updatedAt: now,
+          },
+        },
+        emailVerified: false,
+        email: 'alice@example.com',
+        createdAt: new Date().toISOString(),
+      }),
+    );
+  });
+
+  test('REJECTED: Owner cannot promote emailVerified from a restaurant onboarding draft', async () => {
+    const aliceDb = testEnv.authenticatedContext(aliceId, {
+      email_verified: false,
+    }).firestore();
+    const now = Timestamp.fromDate(new Date());
+
+    await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+      await setDoc(doc(context.firestore(), 'users', aliceId), {
+        uid: aliceId,
+        roles: {},
+        activeRole: 'restaurant_onboarding',
+        accountState: 'restaurant_onboarding',
+        onboarding: { restaurant: { status: 'draft', currentStep: 2, updatedAt: now } },
+        emailVerified: false,
+      });
+    });
+
+    await assertFails(updateDoc(doc(aliceDb, 'users', aliceId), { emailVerified: true }));
   });
 
   test('REJECTED: Create users/{uid} with roles.driver at init (anti self-promotion)', async () => {
@@ -240,7 +285,7 @@ describe('Users/Roles Firestore Rules', () => {
       }));
     });
 
-    test('AUTHORIZED: auto-réparation C2 — add missing roles.client', async () => {
+    test('REJECTED: client SDK cannot add missing roles.client automatically', async () => {
       const ctx = testEnv.authenticatedContext('grace');
       const db = ctx.firestore();
 
@@ -258,7 +303,7 @@ describe('Users/Roles Firestore Rules', () => {
         });
       });
 
-      await assertSucceeds(updateDoc(doc(db, 'users', 'grace'), {
+      await assertFails(updateDoc(doc(db, 'users', 'grace'), {
         roles: { client: { enabled: true, joinedAt: Timestamp.now() } },
       }));
     });
@@ -423,6 +468,95 @@ describe('Users/Roles Firestore Rules', () => {
 
       await assertFails(updateDoc(doc(db, 'drivers', 'bob'), {
         status: 'approved',
+      }));
+    });
+  });
+
+  describe('Regression coverage for sensitive collections', () => {
+    test('REJECTED: an authenticated user cannot read another user document', async () => {
+      await setupUser(bobId, { client: { enabled: true, joinedAt: Timestamp.now() } });
+
+      const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
+
+      await assertFails(getDoc(doc(aliceDb, 'users', bobId)));
+    });
+
+    test('AUTHORIZED: a client can refresh its own FCM token', async () => {
+      await setupUser(aliceId, { client: { enabled: true, joinedAt: Timestamp.now() } });
+
+      const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
+
+      await assertSucceeds(updateDoc(doc(aliceDb, 'users', aliceId), {
+        fcmToken: 'token-for-tests',
+        tokenUpdatedAt: Timestamp.now(),
+      }));
+    });
+
+    test('REJECTED: a pending booking is not readable by a non-driver', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+        await setDoc(doc(context.firestore(), 'bookings', 'pending-booking'), {
+          userId: bobId,
+          status: 'pending',
+          price: 10,
+        });
+      });
+
+      const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
+
+      await assertFails(getDoc(doc(aliceDb, 'bookings', 'pending-booking')));
+    });
+
+    test('REJECTED: a client cannot update a wallet balance', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+        await setDoc(doc(context.firestore(), 'wallets', aliceId), {
+          balance: 100,
+          currency: 'EUR',
+        });
+      });
+
+      const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
+
+      await assertFails(updateDoc(doc(aliceDb, 'wallets', aliceId), { balance: 99999 }));
+    });
+
+    test('REJECTED: a client cannot create a financial transaction directly', async () => {
+      const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
+
+      await assertFails(setDoc(doc(aliceDb, 'transactions', 'fake-transaction'), {
+        userId: aliceId,
+        amount: 99999,
+        type: 'credit',
+      }));
+    });
+
+    test('REJECTED: a booking participant cannot delete active tracking data', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+        await setDoc(doc(context.firestore(), 'active_bookings', 'active-booking'), {
+          userId: aliceId,
+          driverId: bobId,
+          bookingId: 'booking-1',
+        });
+      });
+
+      const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
+
+      await assertFails(deleteDoc(doc(aliceDb, 'active_bookings', 'active-booking')));
+    });
+
+    test('REJECTED: the client cannot update driver-only active tracking data', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+        await setDoc(doc(context.firestore(), 'active_bookings', 'active-booking'), {
+          userId: aliceId,
+          driverId: bobId,
+          bookingId: 'booking-1',
+          driverLocation: { lat: 1, lng: 1 },
+        });
+      });
+
+      const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
+
+      await assertFails(updateDoc(doc(aliceDb, 'active_bookings', 'active-booking'), {
+        driverLocation: { lat: 99, lng: 99 },
       }));
     });
   });

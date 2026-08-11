@@ -44,6 +44,9 @@ function PaymentMethodConsumer() {
           <span data-testid="default-payment-method">
             {value?.userData?.defaultPaymentMethodId ?? 'missing'}
           </span>
+          <span data-testid="roles">
+            {Object.keys(value?.userData?.roles ?? {}).join(',')}
+          </span>
         </div>
       )}
     </AuthContext.Consumer>
@@ -80,5 +83,28 @@ describe('AuthProvider', () => {
     });
 
     expect(screen.getByTestId('default-payment-method')).toHaveTextContent('pm_saved_123');
+  });
+
+  it('does not create a client role for a professional document without roles', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        firstName: 'Pro',
+        lastName: 'User',
+        activeRole: 'restaurant_onboarding',
+        accountState: 'restaurant_onboarding',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      }),
+    });
+
+    render(
+      <AuthProvider>
+        <PaymentMethodConsumer />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('authenticated')).toBeInTheDocument());
+    expect(screen.getByTestId('roles')).not.toHaveTextContent('client');
   });
 });

@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import { auth } from '@/config/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/useToast';
@@ -13,6 +14,7 @@ import type { Restaurant, FoodOrder } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import Link from 'next/link';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
+import { RestaurantClientActivation } from '@/components/restaurant/RestaurantClientActivation';
 
 export default function PortalClient() {
   const params = useParams()
@@ -22,6 +24,7 @@ export default function PortalClient() {
   const [loading, setLoading] = useState(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [orders, setOrders] = useState<FoodOrder[]>([]);
+  const [hasClientRole, setHasClientRole] = useState(false);
   const [stats, setStats] = useState({
     todayOrders: 0,
     pendingOrders: 0,
@@ -38,6 +41,11 @@ export default function PortalClient() {
       }
 
       try {
+        const userSnap = await getDoc(doc(db, 'users', user.uid));
+        if (userSnap.exists()) {
+          setHasClientRole(userSnap.data().roles?.client?.enabled === true);
+        }
+
         const res = await FoodDeliveryService.getRestaurantById(id);
         if (!res) {
           showError("Restaurant introuvable");
@@ -118,12 +126,15 @@ export default function PortalClient() {
             <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Tableau de bord gérant</p>
           </div>
         </div>
-        <button
-          onClick={() => router.push('/dashboard')}
-          className="text-sm font-bold text-slate-400 hover:text-white transition"
-        >
-          Quitter le portail
-        </button>
+        <div className="flex items-center gap-3">
+          <RestaurantClientActivation hasClientRole={hasClientRole} />
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="text-sm font-bold text-slate-400 hover:text-white transition cursor-pointer"
+          >
+            Quitter le portail
+          </button>
+        </div>
       </div>
 
       <main className="max-w-6xl mx-auto p-4 sm:p-8">
@@ -271,7 +282,7 @@ export default function PortalClient() {
                       try {
                         await FoodDeliveryService.updateRestaurantStatus(id, restaurant.status, { isOpen: !restaurant.isOpen });
                         setRestaurant(prev => prev ? { ...prev, isOpen: !prev.isOpen } : null);
-                      } catch (err) {
+                      } catch {
                         showError("Erreur lors de la mise à jour");
                       }
                     }}

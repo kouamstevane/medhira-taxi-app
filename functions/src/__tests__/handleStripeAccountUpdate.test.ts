@@ -23,6 +23,7 @@ function makeAccount(overrides: Record<string, unknown> = {}): Record<string, un
     id: 'acct_123',
     metadata: {},
     charges_enabled: false,
+    payouts_enabled: false,
     details_submitted: false,
     requirements: { disabled_reason: null },
     ...overrides,
@@ -34,7 +35,7 @@ describe('handleStripeAccountUpdate — onAccountUpdated', () => {
     jest.clearAllMocks();
   });
 
-  it('sets status to active when restaurant + charges_enabled + details_submitted', async () => {
+  it('sets status to active when restaurant + charges + payouts + details are enabled', async () => {
     const updateFn = jest.fn().mockResolvedValue(undefined);
     const getFn = jest.fn().mockResolvedValue({ data: () => ({ stripeConnectStatus: 'in_progress' }) });
     mockFirestore.doc.mockReturnValue({ get: getFn, update: updateFn });
@@ -43,6 +44,7 @@ describe('handleStripeAccountUpdate — onAccountUpdated', () => {
     await onAccountUpdated(makeAccount({
       metadata: { accountType: 'restaurant', restaurantId: 'rest1' },
       charges_enabled: true,
+      payouts_enabled: true,
       details_submitted: true,
     }));
 
@@ -99,6 +101,7 @@ describe('handleStripeAccountUpdate — onAccountUpdated', () => {
     await onAccountUpdated(makeAccount({
       metadata: { accountType: 'restaurant', restaurantId: 'rest1' },
       charges_enabled: true,
+      payouts_enabled: true,
       details_submitted: true,
     }));
 

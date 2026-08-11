@@ -239,6 +239,7 @@ export type StorageKey =
     | 'driver_settings'
     | 'booking_cache'
     | 'driver_registration_progress'
+    | `driver_registration_progress_${string}`
     | 'detected_country';
 
 interface SecureStorageOptions {
@@ -565,6 +566,17 @@ class SecureStorageService {
             }
         } catch (error) {
             console.error('[SecureStorage] Error during cleanup:', error);
+        }
+    }
+
+    /**
+     * Nettoie la clé legacy de progression chauffeur
+     */
+    async clearLegacyDriverProgress(): Promise<void> {
+        try {
+            await this.removeItem('driver_registration_progress');
+        } catch (error) {
+            console.error('[SecureStorage] Error clearing legacy driver progress:', error);
         }
     }
 }

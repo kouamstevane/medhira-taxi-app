@@ -20,7 +20,7 @@ describe('Storage rules', () => {
 
   beforeAll(async () => {
     testEnv = await initializeTestEnvironment({
-      projectId: 'medjira-taxi-test',
+      projectId: 'medjira-service',
       firestore: {
         rules: readFileSync(join(__dirname, '../firestore.rules'), 'utf8'),
         host: '127.0.0.1',

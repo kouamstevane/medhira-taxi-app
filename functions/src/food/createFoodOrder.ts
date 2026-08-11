@@ -9,6 +9,8 @@ import {
   calculateVerifiedFoodOrderTotals,
   type VerifiedMenuItem,
 } from './foodOrderPricing.js';
+import { resolveRestaurantCommissionRate } from './foodSettlement.js';
+import { DEFAULT_RESTAURANT_COMMISSION_RATE } from '../config/stripe.js';
 
 const googleMapsApiKey = defineSecret('GOOGLE_MAPS_API_KEY');
 
@@ -168,6 +170,11 @@ export const createFoodOrder = onCall(
       paymentValidated: false,
       paymentMethod: payload.paymentMethod ?? 'wallet',
       restaurantName: restaurant.name,
+      commissionRate: resolveRestaurantCommissionRate(
+        typeof restaurant.commissionRate === 'number'
+          ? restaurant.commissionRate
+          : DEFAULT_RESTAURANT_COMMISSION_RATE,
+      ),
       restaurantPhone: restaurant.phone || '',
       restaurantAddress: {
         address: restaurant.address || '',

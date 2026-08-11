@@ -6,8 +6,10 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { getDashboardRouteFor } from '@/services/roles.service';
+import { getDashboardRouteFor, getEffectiveRoleStatuses } from '@/services/roles.service';
 import type { ActiveRole } from '@/types/user';
+import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
+import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 
 /*
  * ANCIEN PARCOURS CHAUFFEUR/LIVREUR — À CONSERVER
@@ -46,18 +48,36 @@ const ROLES = [
 export default function RoleSelectionPage() {
   const router = useRouter();
   const { currentUser, userData, loading } = useAuth();
+  const registrationType = userData ? getIncompleteRegistrationType(userData) : null;
 
   useEffect(() => {
     if (loading) return;
+    if (currentUser && userData && registrationType) return;
     if (currentUser && userData) {
       if (userData.accountState === 'driver_onboarding' || userData.activeRole === 'driver_onboarding') {
         router.replace('/driver/register');
         return;
       }
+      if (userData.accountState === 'restaurant_onboarding' || userData.activeRole === 'restaurant_onboarding') {
+        router.replace('/restaurant/register?from=become-pro');
+        return;
+      }
       const role = (userData.lastActiveRole || userData.activeRole || 'client') as ActiveRole;
-      router.replace(getDashboardRouteFor(role));
+      let cancelled = false;
+      void getEffectiveRoleStatuses(userData).then((statuses) => {
+        if (!cancelled) {
+          router.replace(getDashboardRouteFor(role, {
+            driverStatus: statuses.driver,
+            restaurantStatus: statuses.restaurant?.status,
+            stripeConnectStatus: statuses.restaurant?.stripeConnectStatus,
+          }));
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [currentUser, userData, loading, router]);
+  }, [currentUser, userData, loading, registrationType, router]);
 
   if (loading) {
     return (
@@ -68,6 +88,16 @@ export default function RoleSelectionPage() {
   }
 
   if (currentUser && userData) {
+    if (registrationType) {
+      return (
+        <DriverOnboardingDecisionGate
+          registrationType={registrationType}
+          resumePath={getRegistrationResumePath(userData)}
+          deleteAccountOnAbandon={Object.keys(userData.roles ?? {}).length === 0}
+          restoreActiveRole={getRegistrationRestoreRole(userData)}
+        />
+      );
+    }
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner />

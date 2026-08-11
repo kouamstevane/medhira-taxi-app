@@ -43,6 +43,7 @@ if (typeof window !== 'undefined') {
   try {
     const isNative = Capacitor.isNativePlatform();
     initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
       localCache: persistentLocalCache({
         tabManager: isNative ? persistentSingleTabManager(undefined) : persistentMultipleTabManager()
       })

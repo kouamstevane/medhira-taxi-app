@@ -13,8 +13,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { auth, db } from "@/config/firebase";
-import { signOut } from "firebase/auth";
+import { db } from "@/config/firebase";
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 import { notificationService } from '@/services/notification.service';
@@ -28,6 +27,7 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { ProtectedPageGuard } from '@/components/auth/ProtectedPageGuard';
 import { redirectWithFallback } from '@/utils/navigation';
 import { getDashboardRouteFor } from '@/services/roles.service';
+import { useEffectiveRoleStatus } from '@/hooks/useEffectiveRoleStatus';
 import type { ActiveRole, UserRoles, UserData } from '@/types/user';
 import { RegistrationDraftBanner } from '@/components/restaurant/RegistrationDraftBanner';
 import { RoleSwitcher } from '@/components/role/RoleSwitcher';
@@ -37,6 +37,7 @@ import { DashboardServiceGrid } from './components/DashboardServiceGrid';
 export default function Dashboard() {
   const router = useRouter();
   const { authStatus, currentUser, userData: authUserData } = useAuth();
+  const effectiveStatuses = useEffectiveRoleStatus();
   const routerRef = useRef(router);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [notifCount, setNotifCount] = useState(0);
@@ -71,7 +72,6 @@ export default function Dashboard() {
     roles: {},
   });
   const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
-  const [isRestaurantLoading, setIsRestaurantLoading] = useState(false);
   const unsubscribeNotifsRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -170,12 +170,23 @@ export default function Dashboard() {
       redirectTimeoutRef.current = redirectWithFallback(routerRef.current, '/driver/register');
       return;
     }
+    if (userDataFromDB.accountState === 'restaurant_onboarding' || activeRole === 'restaurant_onboarding') {
+      queueMicrotask(() => setPageStatus('redirecting'));
+      redirectTimeoutRef.current = redirectWithFallback(routerRef.current, '/restaurant/register?from=become-pro');
+      return;
+    }
 
     if (activeRole !== 'client') {
+      if (activeRole === 'driver' && !effectiveStatuses.driver) return;
+      if (activeRole === 'restaurant' && !effectiveStatuses.restaurant) return;
       queueMicrotask(() => setPageStatus('redirecting'));
       redirectTimeoutRef.current = redirectWithFallback(
         routerRef.current,
-        getDashboardRouteFor(activeRole),
+        getDashboardRouteFor(activeRole, {
+          driverStatus: activeRole === 'driver' ? effectiveStatuses.driver?.status : undefined,
+          restaurantStatus: activeRole === 'restaurant' ? effectiveStatuses.restaurant?.status : undefined,
+          stripeConnectStatus: activeRole === 'restaurant' ? effectiveStatuses.restaurant?.stripeConnectStatus : undefined,
+        }),
       );
       return;
     }
@@ -198,11 +209,9 @@ export default function Dashboard() {
       void fetchHistory(currentUser.uid);
 
       if (roles.restaurant != null) {
-        setIsRestaurantLoading(true);
         FoodDeliveryService.getRestaurantByOwner(currentUser.uid)
           .then(setRestaurantData)
-          .catch((error) => console.error("Erreur chargement restaurant:", error))
-          .finally(() => setIsRestaurantLoading(false));
+          .catch((error) => console.error("Erreur chargement restaurant:", error));
       } else {
         setRestaurantData(null);
       }
@@ -220,17 +229,7 @@ export default function Dashboard() {
       unsubscribeNotifsRef.current = null;
       if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
     };
-  }, [authStatus, authUserData, currentUser]);
-
-  const logout = async () => {
-    try {
-      await signOut(auth);
-      redirectTimeoutRef.current = redirectWithFallback(router, '/login', { timeoutMs: 2000 });
-    } catch (error) {
-      console.error("Erreur de déconnexion :", error);
-      window.location.replace('/login');
-    }
-  };
+  }, [authStatus, authUserData, currentUser, effectiveStatuses]);
 
   const handleNotifications = () => {
     router.push("/notifications");

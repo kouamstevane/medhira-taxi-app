@@ -27,8 +27,13 @@ export const activateClientRole = onCall(
       }
 
       const data = snap.data() ?? {};
-      if (data.accountState === 'driver_onboarding' || data.activeRole === 'driver_onboarding') {
-        throw new HttpsError('failed-precondition', 'Terminez votre inscription chauffeur avant d’activer l’espace client.');
+      if (
+        data.accountState === 'driver_onboarding'
+        || data.activeRole === 'driver_onboarding'
+        || data.accountState === 'restaurant_onboarding'
+        || data.activeRole === 'restaurant_onboarding'
+      ) {
+        throw new HttpsError('failed-precondition', 'Terminez votre inscription professionnelle en cours avant d’activer l’espace client.');
       }
 
       if (data.roles?.client?.enabled === true) {

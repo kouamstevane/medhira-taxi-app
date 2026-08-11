@@ -1,14 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { signOut } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { secureStorage } from '@/services/secureStorage.service';
 import LoginPage from '@/app/login/page';
 
 const replace = jest.fn();
 const mockCallable = jest.fn();
-const mockSignOut = signOut as jest.Mock;
 const mockHttpsCallable = httpsCallable as jest.Mock;
-const mockRemoveItem = secureStorage.removeItem as jest.Mock;
+const mockClearLegacyDriverProgress = secureStorage.clearLegacyDriverProgress as jest.Mock;
 let authState: { authStatus: string; userData: Record<string, unknown> | null } = {
   authStatus: 'unauthenticated',
   userData: null,
@@ -46,17 +44,24 @@ jest.mock('firebase/functions', () => ({
 }));
 
 jest.mock('@/services/secureStorage.service', () => ({
-  secureStorage: { removeItem: jest.fn() },
+  secureStorage: {
+    removeItem: jest.fn(),
+    clearLegacyDriverProgress: jest.fn(),
+  },
 }));
 
 jest.mock('firebase/firestore', () => ({
   doc: jest.fn(),
   getDoc: jest.fn(),
+  updateDoc: jest.fn(),
+  deleteField: jest.fn(() => 'DELETE_FIELD'),
+  serverTimestamp: jest.fn(() => 'TIMESTAMP'),
 }));
 
 jest.mock('@/services', () => ({
   AuthService: {
     signInWithGoogle: jest.fn(),
+    signOut: jest.fn(),
   },
 }));
 
@@ -65,11 +70,18 @@ jest.mock('@/services/auth.service', () => ({
   verifyTwilioPhoneCodeAndSignIn: jest.fn(),
 }));
 
+const mockUpdateDoc = require('firebase/firestore').updateDoc as jest.Mock;
+const mockGetDoc = require('firebase/firestore').getDoc as jest.Mock;
+const mockAuthServiceSignOut = require('@/services').AuthService.signOut as jest.Mock;
+const mockRemoveItem = secureStorage.removeItem as jest.Mock;
+
 describe('LoginPage phone authentication', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuthServiceSignOut.mockResolvedValue(undefined);
     mockHttpsCallable.mockReturnValue(mockCallable);
     mockCallable.mockResolvedValue({ data: { success: true } });
+    mockGetDoc.mockResolvedValue({ exists: () => true, data: () => authState.userData });
     authState = { authStatus: 'unauthenticated', userData: null };
   });
 
@@ -113,7 +125,7 @@ describe('LoginPage phone authentication', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Reprendre l’inscription' }));
 
       expect(replace).toHaveBeenCalledWith('/driver/register');
-      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(mockAuthServiceSignOut).not.toHaveBeenCalled();
     });
 
     it('signs out and redirects to the landing page when postponed', async () => {
@@ -121,7 +133,7 @@ describe('LoginPage phone authentication', () => {
 
       fireEvent.click(await screen.findByRole('button', { name: 'Plus tard' }));
 
-      await waitFor(() => expect(mockSignOut).toHaveBeenCalled());
+      await waitFor(() => expect(mockAuthServiceSignOut).toHaveBeenCalled());
       expect(replace).toHaveBeenCalledWith('/');
       expect(mockCallable).not.toHaveBeenCalled();
     });
@@ -136,8 +148,8 @@ describe('LoginPage phone authentication', () => {
 
       await waitFor(() => expect(mockHttpsCallable).toHaveBeenCalledWith({}, 'requestAccountDeletion'));
       expect(mockCallable).toHaveBeenCalledWith({ confirm: 'DELETE_MY_ACCOUNT' });
-      expect(mockRemoveItem).toHaveBeenCalledWith('driver_registration_progress');
-      expect(mockSignOut).toHaveBeenCalled();
+      expect(mockClearLegacyDriverProgress).toHaveBeenCalled();
+      expect(mockAuthServiceSignOut).toHaveBeenCalled();
       expect(replace).toHaveBeenCalledWith('/');
     });
 
@@ -150,7 +162,7 @@ describe('LoginPage phone authentication', () => {
 
       expect(await screen.findByRole('alert')).toHaveTextContent('Erreur de suppression');
       expect(mockRemoveItem).not.toHaveBeenCalled();
-      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(mockAuthServiceSignOut).not.toHaveBeenCalled();
       expect(replace).not.toHaveBeenCalledWith('/');
     });
 
@@ -163,8 +175,97 @@ describe('LoginPage phone authentication', () => {
 
       expect(await screen.findByRole('alert')).toHaveTextContent('La suppression du compte n’a pas pu être terminée. Réessayez.');
       expect(mockRemoveItem).not.toHaveBeenCalled();
-      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(mockAuthServiceSignOut).not.toHaveBeenCalled();
       expect(replace).not.toHaveBeenCalledWith('/');
     });
+  });
+
+  describe('restaurant onboarding decision flow', () => {
+    beforeEach(() => {
+      authState = {
+        authStatus: 'authenticated',
+        userData: {
+          activeRole: 'client',
+          roles: { client: { enabled: true } },
+          onboarding: {
+            restaurant: {
+              status: 'draft',
+              currentStep: 2,
+            },
+          },
+        },
+      };
+    });
+
+    it('shows the three actions instead of routing to the client dashboard', async () => {
+      render(<LoginPage />);
+
+      expect(await screen.findByRole('heading', { name: 'Inscription restaurateur en cours' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Reprendre l’inscription' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Plus tard' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Abandonner cette inscription' })).toBeInTheDocument();
+      expect(replace).not.toHaveBeenCalled();
+    });
+
+    it('resumes the restaurant registration', async () => {
+      render(<LoginPage />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Reprendre l’inscription' }));
+
+      expect(replace).toHaveBeenCalledWith('/restaurant/register?resume=restaurant');
+    });
+
+    it('abandons the restaurant draft without requesting full account deletion', async () => {
+      render(<LoginPage />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Abandonner cette inscription' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’abandon' }));
+
+      await waitFor(() => expect(mockUpdateDoc).toHaveBeenCalled());
+      expect(mockCallable).not.toHaveBeenCalled();
+      expect(mockAuthServiceSignOut).toHaveBeenCalled();
+      expect(replace).toHaveBeenCalledWith('/');
+    });
+
+    it('deletes a roleless restaurant account and its data', async () => {
+      authState = {
+        authStatus: 'authenticated',
+        userData: {
+          activeRole: 'restaurant_onboarding',
+          accountState: 'restaurant_onboarding',
+          roles: {},
+          onboarding: {
+            restaurant: {
+              status: 'draft',
+              currentStep: 2,
+            },
+          },
+        },
+      };
+
+      render(<LoginPage />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Abandonner cette inscription' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirmer l’abandon' }));
+
+      await waitFor(() => expect(mockCallable).toHaveBeenCalled());
+      expect(mockUpdateDoc).not.toHaveBeenCalled();
+      expect(mockAuthServiceSignOut).toHaveBeenCalled();
+    });
+  });
+
+  it('signs out an authenticated user before allowing an account switch', async () => {
+    authState = {
+      authStatus: 'authenticated',
+      userData: {
+        activeRole: 'restaurant',
+        roles: { restaurant: { restaurantId: 'restaurant-1' } },
+      },
+    };
+
+    render(<LoginPage />);
+
+    expect(await screen.findByText('Connexion par téléphone')).toBeInTheDocument();
+    await waitFor(() => expect(mockAuthServiceSignOut).toHaveBeenCalled());
+    expect(replace).not.toHaveBeenCalled();
   });
 });
