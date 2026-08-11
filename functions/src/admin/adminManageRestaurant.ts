@@ -4,10 +4,10 @@ import { z } from 'zod';
 import { requireAdmin } from './_shared.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 
-const ManageRestaurantSchema = z.object({
+export const ManageRestaurantSchema = z.object({
   action: z.enum(['approve', 'reject', 'suspend', 'unsuspend']),
   restaurantId: z.string().min(1),
-  reason: z.string().optional(),
+  reason: z.string().optional().nullable(),
 });
 
 export const adminManageRestaurant = onCall(
