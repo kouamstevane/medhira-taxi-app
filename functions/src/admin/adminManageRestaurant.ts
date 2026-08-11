@@ -1,8 +1,12 @@
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { requireAdmin } from './_shared.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
+import { sendRestaurantStatusEmail } from '../email-service.js';
+
+const resendApiKey = defineSecret('RESEND_API_KEY');
 
 export const ManageRestaurantSchema = z.object({
   action: z.enum(['approve', 'reject', 'suspend', 'unsuspend']),
@@ -11,7 +15,7 @@ export const ManageRestaurantSchema = z.object({
 });
 
 export const adminManageRestaurant = onCall(
-  { region: 'europe-west1' },
+  { region: 'europe-west1', secrets: [resendApiKey] },
   async (request: CallableRequest<unknown>) => {
     const uid = await requireAdmin(request);
 
@@ -46,6 +50,8 @@ export const adminManageRestaurant = onCall(
     const now = admin.firestore.FieldValue.serverTimestamp();
     const restaurantData = restaurantDoc.data();
     const ownerId = restaurantData?.ownerId as string | undefined;
+    const ownerEmail = restaurantData?.ownerEmail as string | undefined;
+    const restaurantName = (restaurantData?.name as string | undefined) || 'Restaurant';
 
     switch (action) {
       case 'approve':
@@ -65,6 +71,22 @@ export const adminManageRestaurant = onCall(
             }, { merge: true });
           } catch (e) {
             console.warn('[adminManageRestaurant] Failed to write roles.restaurant on user', { ownerId, error: e });
+          }
+        }
+        if (ownerEmail) {
+          try {
+            await sendRestaurantStatusEmail({
+              to: ownerEmail,
+              restaurantName,
+              type: 'approval',
+              apiKey: resendApiKey.value(),
+            });
+          } catch (error) {
+            console.error('[adminManageRestaurant] Failed to send approval email', {
+              restaurantId,
+              ownerEmail,
+              error,
+            });
           }
         }
         return { success: true, message: 'Restaurant approuvé avec succès' };
