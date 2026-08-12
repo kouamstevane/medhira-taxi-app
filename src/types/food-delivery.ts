@@ -84,6 +84,7 @@ export interface MenuItem {
   price: number; // Prix unitaire
   category: string; // Ex: "Entrées", "Plats", "Desserts", "Boissons"
   imageUrl?: string;
+  imageStoragePath?: string;
   isAvailable: boolean; // Disponibilité en temps réel
   preparationTime?: number; // Temps de préparation estimé en minutes
   createdAt: Timestamp;

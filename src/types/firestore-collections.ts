@@ -392,7 +392,7 @@ export interface ParcelCollection {
   /** true si le destinataire n'a PAS de compte → notifié par SMS uniquement */
   recipientIsGuest: boolean;
   driverId: string | null;
-  status: 'pending' | 'accepted' | 'in_transit' | 'delivered' | 'cancelled';
+  status: 'pending' | 'accepted' | 'in_transit' | 'delivered' | 'cancelled' | 'completed';
   pickupLocation: {
     address: string;
     latitude: number;
@@ -415,11 +415,17 @@ export interface ParcelCollection {
   currency: string;
   distanceKm: number;
   durationMinutes: number;
+  paymentMethod?: 'wallet' | 'card';
+  paymentStatus?: 'reserved' | 'paid';
+  driverEarnings?: number;
+  platformFee?: number;
+  driverPaidOut?: boolean;
   createdAt: Date;
   updatedAt: Date;
   acceptedAt?: Date;
   pickedUpAt?: Date;
   deliveredAt?: Date;
+  confirmedAt?: Date;
   cancelledAt?: Date;
   cancellationReason?: string;
 }
@@ -599,6 +605,7 @@ export interface MenuItemSubCollection {
   price: number;
   category: string;
   imageUrl?: string;
+  imageStoragePath?: string;
   isAvailable: boolean;
   preparationTime?: number;
   createdAt: Date;
