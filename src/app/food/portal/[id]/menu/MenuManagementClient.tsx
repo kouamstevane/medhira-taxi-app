@@ -8,6 +8,7 @@ import {
   uploadMenuImage,
   deleteMenuImage,
   createMenuItemId,
+  getMenuImageStorageErrorMessage,
   type UploadMenuTask,
 } from '@/services/menu-image-storage.service';
 import { imageCompressionService, type CompressionResult } from '@/services/image-compression.service';
@@ -324,6 +325,7 @@ export default function MenuManagementClient() {
         currentUploadTaskRef.current = uploadTask;
         createdStoragePath = uploadTask.path;
 
+        await uploadTask.complete;
         const downloadUrl = await uploadTask.getDownloadURL();
 
         imageUpdate = {
@@ -370,7 +372,7 @@ export default function MenuManagementClient() {
         }
       }
 
-      showError("Erreur lors de l'enregistrement de l'article");
+      showError(getMenuImageStorageErrorMessage(error));
     } finally {
       setIsSaving(false);
       setIsUploading(false);

@@ -4,6 +4,7 @@ import {
   uploadMenuImage,
   deleteMenuImage,
   isStorageObjectNotFound,
+  getMenuImageStorageErrorMessage,
 } from '../menu-image-storage.service';
 
 jest.mock('../../config/firebase', () => ({
@@ -18,8 +19,9 @@ jest.mock('firebase/storage', () => {
     uploadBytesResumable: jest.fn(() => {
       const listeners: Record<string, (snapshot: any) => void> = {};
       return {
-        on: (event: string, next: (snap: any) => void, _error: any, _complete: any) => {
+        on: (event: string, next: (snap: any) => void, _error: any, complete: () => void) => {
           listeners[event] = next;
+          mockEmitUploadComplete = complete;
           next({ bytesTransferred: 50, totalBytes: 100 });
         },
         pause: jest.fn(() => true),
@@ -31,6 +33,8 @@ jest.mock('firebase/storage', () => {
     deleteObject: jest.fn(async () => {}),
   };
 });
+
+let mockEmitUploadComplete: (() => void) | undefined;
 
 describe('MenuImageStorageService', () => {
   it('generates item ID and correct path structure', () => {
@@ -65,6 +69,33 @@ describe('MenuImageStorageService', () => {
     expect(typeof uploadTask.resume).toBe('function');
     expect(typeof uploadTask.cancel).toBe('function');
     expect(progressFn).toHaveBeenCalledWith(50);
+  });
+
+  it('resolves its completion promise only after the upload finishes', async () => {
+    const file = new File(['data'], 'item.webp', { type: 'image/webp' });
+    const uploadTask = uploadMenuImage({
+      restaurantId: 'rest123',
+      itemId: 'item456',
+      file,
+    });
+
+    let completed = false;
+    const completion = uploadTask.complete.then(() => {
+      completed = true;
+    });
+
+    await Promise.resolve();
+    expect(completed).toBe(false);
+
+    mockEmitUploadComplete?.();
+    await expect(completion).resolves.toBeUndefined();
+    expect(completed).toBe(true);
+  });
+
+  it('maps unauthorized Storage errors to an actionable French message', () => {
+    expect(getMenuImageStorageErrorMessage({ code: 'storage/unauthorized' })).toBe(
+      'Vous n’avez pas les droits pour modifier les images de ce restaurant.',
+    );
   });
 
   it('tolerates object-not-found during deleteMenuImage', async () => {

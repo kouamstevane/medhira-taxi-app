@@ -27,6 +27,7 @@ export interface UploadMenuTask {
   uploadId: string;
   path: string;
   task: UploadTask;
+  complete: Promise<void>;
   getDownloadURL: () => Promise<string>;
   pause: () => boolean;
   resume: () => boolean;
@@ -63,6 +64,20 @@ export function isStorageObjectNotFound(error: unknown): boolean {
   return code === 'storage/object-not-found';
 }
 
+export function getMenuImageStorageErrorMessage(error: unknown): string {
+  const code = error && typeof error === 'object' && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : '';
+
+  if (code === 'storage/unauthorized' || code === 'storage/permission-denied') {
+    return 'Vous n’avez pas les droits pour modifier les images de ce restaurant.';
+  }
+  if (code === 'storage/canceled') {
+    return 'Le chargement de l’image a été annulé.';
+  }
+  return 'Impossible de charger l’image du menu. Vérifiez le fichier et réessayez.';
+}
+
 /**
  * Démarre un upload resumable d'image de menu dans Firebase Storage.
  */
@@ -79,31 +94,33 @@ export function uploadMenuImage(input: UploadMenuImageInput): UploadMenuTask {
 
   const task = uploadBytesResumable(storageRef, input.file, metadata);
 
-  if (input.onProgress) {
+  const complete = new Promise<void>((resolve, reject) => {
     task.on(
       'state_changed',
       (snapshot) => {
-        if (snapshot.totalBytes > 0) {
+        if (input.onProgress && snapshot.totalBytes > 0) {
           const progress = Math.round(
             (snapshot.bytesTransferred / snapshot.totalBytes) * 100
           );
-          input.onProgress?.(progress);
+          input.onProgress(progress);
         }
       },
       (error) => {
-        // Log Error in upload task listener
         console.error('[MenuImageStorage] Upload task error:', {
           path,
           error,
         });
-      }
+        reject(error);
+      },
+      resolve,
     );
-  }
+  });
 
   return {
     uploadId,
     path,
     task,
+    complete,
     getDownloadURL: async () => {
       return getDownloadURL(storageRef);
     },
