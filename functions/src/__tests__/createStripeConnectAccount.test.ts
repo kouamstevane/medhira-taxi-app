@@ -39,7 +39,9 @@ jest.mock('firebase-functions/v2/https', () => ({
 }));
 
 jest.mock('firebase-functions/params', () => ({
-  defineSecret: () => ({ value: () => 'test-secret' }),
+  defineSecret: (name: string) => ({
+    value: () => name === 'STRIPE_SECRET_KEY' ? 'sk_test_test' : '',
+  }),
 }));
 
 jest.mock('firebase-functions/v2', () => ({
@@ -175,6 +177,12 @@ describe('createStripeConnectAccount', () => {
         stripeConnectStatus: 'in_progress',
       })
     );
+    expect(mockStripeInstance.accountLinks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        refresh_url: 'https://medjira-service.web.app/stripe-return/?role=restaurant&status=refresh',
+        return_url: 'https://medjira-service.web.app/stripe-return/?role=restaurant&status=success',
+      })
+    );
   });
 
   it('returns onboarding URL for existing in_progress account (no new account created)', async () => {
@@ -204,7 +212,7 @@ describe('createStripeConnectAccount', () => {
     expect(mockStripeInstance.accounts.create).not.toHaveBeenCalled();
   });
 
-  it('returns update link on happy path (update mode)', async () => {
+  it('returns an onboarding link for an existing account in update mode', async () => {
     const snap = {
       exists: true,
       data: () => ({
@@ -229,7 +237,7 @@ describe('createStripeConnectAccount', () => {
     expect(result.onboardingUrl).toBe('https://update.stripe.com');
     expect(result.mode).toBe('update');
     expect(mockStripeInstance.accountLinks.create).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'account_update' })
+      expect.objectContaining({ type: 'account_onboarding' })
     );
   });
 });

@@ -4,16 +4,30 @@ import { logger } from 'firebase-functions/v2';
 import { z } from 'zod';
 import * as admin from 'firebase-admin';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
-import { createStripeClient } from './stripe-client.js';
+import { createStripeClient, isStripeError } from './stripe-client.js';
 import { getActiveMarketCountryCode } from '../config/market.js';
 
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
-const APP_BASE_URL = defineSecret('APP_BASE_URL');
+const DEFAULT_APP_BASE_URL = 'https://medjira-service.web.app';
 
 const Schema = z.object({
   restaurantId: z.string().min(1),
   mode: z.enum(['onboarding', 'update']).optional().default('onboarding'),
 });
+
+function getAppBaseUrl(): string {
+  const configuredUrl = process.env.APP_BASE_URL?.trim() || process.env.APP_URL?.trim() || DEFAULT_APP_BASE_URL;
+
+  try {
+    const parsedUrl = new URL(configuredUrl);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol) || !parsedUrl.hostname) {
+      throw new Error('unsupported protocol');
+    }
+    return parsedUrl.toString().replace(/\/$/, '');
+  } catch {
+    throw new HttpsError('failed-precondition', 'Configuration de l’application invalide.');
+  }
+}
 
 export async function handleCreateStripeConnectAccount(request: CallableRequest<unknown>) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
@@ -32,15 +46,17 @@ export async function handleCreateStripeConnectAccount(request: CallableRequest<
   if (r.ownerId !== uid) throw new HttpsError('permission-denied', 'Action non autorisée.');
   if (r.status !== 'approved') throw new HttpsError('failed-precondition', 'Le restaurant doit être approuvé.');
 
-  const stripe = createStripeClient(STRIPE_SECRET_KEY.value());
-  const baseUrl = APP_BASE_URL.value();
+  const stripeSecretKey = STRIPE_SECRET_KEY.value().trim();
+  if (!stripeSecretKey) {
+    throw new HttpsError('failed-precondition', 'Le service Stripe est momentanément indisponible.');
+  }
+  const stripe = createStripeClient(stripeSecretKey);
+  const baseUrl = getAppBaseUrl();
 
   let accountId: string | undefined = r.stripeAccountId;
-  let linkType: 'account_onboarding' | 'account_update';
 
   if (mode === 'update') {
     if (!accountId) throw new HttpsError('failed-precondition', 'Aucun compte Stripe existant à réparer.');
-    linkType = 'account_update';
   } else {
     if (accountId && r.stripeConnectStatus === 'active') throw new HttpsError('already-exists', 'Compte Stripe déjà actif.');
     if (!accountId) {
@@ -54,21 +70,35 @@ export async function handleCreateStripeConnectAccount(request: CallableRequest<
       accountId = account.id;
       await restRef.update({ stripeAccountId: accountId, stripeConnectStatus: 'in_progress', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     }
-    linkType = 'account_onboarding';
   }
 
-  const link = await stripe.accountLinks.create({
-    account: accountId!,
-    refresh_url: `${baseUrl}/stripe-return/?role=restaurant&status=refresh`,
-    return_url: `${baseUrl}/stripe-return/?role=restaurant&status=success`,
-    type: linkType,
-  });
+  let link;
+  try {
+    link = await stripe.accountLinks.create({
+      account: accountId!,
+      refresh_url: `${baseUrl}/stripe-return/?role=restaurant&status=refresh`,
+      return_url: `${baseUrl}/stripe-return/?role=restaurant&status=success`,
+      type: 'account_onboarding',
+    });
+  } catch (error) {
+    if (isStripeError(error)) {
+      logger.error('[createStripeConnectAccount] Stripe rejected account link', {
+        code: error.code,
+        requestId: error.requestId,
+        message: error.message,
+        restaurantId,
+        accountId,
+      });
+      throw new HttpsError('failed-precondition', 'Stripe ne peut pas générer le lien de configuration. Vérifiez le compte puis réessayez.');
+    }
+    throw error;
+  }
 
   logger.info('[createStripeConnectAccount] link issued', { uid, restaurantId, mode, accountId });
   return { onboardingUrl: link.url, mode };
 }
 
 export const createStripeConnectAccount = onCall(
-  { region: 'europe-west1', secrets: [STRIPE_SECRET_KEY, APP_BASE_URL] },
+  { region: 'europe-west1', secrets: [STRIPE_SECRET_KEY] },
   handleCreateStripeConnectAccount,
 );
