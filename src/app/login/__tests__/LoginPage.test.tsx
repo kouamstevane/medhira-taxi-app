@@ -23,7 +23,10 @@ jest.mock('@/hooks/useAuth', () => ({
 }));
 
 jest.mock('@/config/firebase', () => ({
-  auth: { currentUser: { uid: 'draft-uid' } },
+  auth: {
+    currentUser: { uid: 'draft-uid', getIdToken: jest.fn() },
+    authStateReady: jest.fn(),
+  },
   db: {},
   functions: {},
 }));
@@ -73,12 +76,20 @@ jest.mock('@/services/auth.service', () => ({
 const mockUpdateDoc = require('firebase/firestore').updateDoc as jest.Mock;
 const mockGetDoc = require('firebase/firestore').getDoc as jest.Mock;
 const mockAuthServiceSignOut = require('@/services').AuthService.signOut as jest.Mock;
+const mockAuthServiceSignInWithGoogle = require('@/services').AuthService.signInWithGoogle as jest.Mock;
+const mockAuth = require('@/config/firebase').auth as {
+  authStateReady: jest.Mock;
+  currentUser: { getIdToken: jest.Mock };
+};
 const mockRemoveItem = secureStorage.removeItem as jest.Mock;
 
 describe('LoginPage phone authentication', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuthServiceSignOut.mockResolvedValue(undefined);
+    mockAuthServiceSignInWithGoogle.mockReset();
+    mockAuth.authStateReady.mockResolvedValue(undefined);
+    mockAuth.currentUser.getIdToken.mockResolvedValue('token');
     mockHttpsCallable.mockReturnValue(mockCallable);
     mockCallable.mockResolvedValue({ data: { success: true } });
     mockGetDoc.mockResolvedValue({ exists: () => true, data: () => authState.userData });
@@ -267,5 +278,44 @@ describe('LoginPage phone authentication', () => {
     expect(await screen.findByText('Connexion par téléphone')).toBeInTheDocument();
     await waitFor(() => expect(mockAuthServiceSignOut).toHaveBeenCalled());
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('waits for the Firebase session before loading an approved restaurant profile', async () => {
+    const restaurantUser = {
+      uid: 'restaurant-user',
+      roles: { restaurant: { restaurantId: 'restaurant-1' } },
+      activeRole: 'restaurant',
+    };
+
+    mockAuthServiceSignInWithGoogle.mockResolvedValue({ uid: restaurantUser.uid });
+    mockGetDoc
+      .mockResolvedValueOnce({ exists: () => true, data: () => restaurantUser })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({ status: 'approved', stripeConnectStatus: 'not_started' }),
+      });
+
+    const { rerender } = render(<LoginPage />);
+    fireEvent.click(screen.getByRole('button', { name: /Continuer avec Google/i }));
+    authState = { authStatus: 'authenticated', userData: restaurantUser };
+    rerender(<LoginPage />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/restaurant/dashboard'));
+    expect(mockAuth.authStateReady).toHaveBeenCalled();
+    expect(mockAuth.currentUser.getIdToken).toHaveBeenCalledWith(true);
+    expect(mockAuthServiceSignOut).not.toHaveBeenCalled();
+  });
+
+  it('clears the login state when the authenticated profile document is missing', async () => {
+    mockAuthServiceSignInWithGoogle.mockResolvedValue({ uid: 'orphan-user' });
+    mockGetDoc.mockResolvedValue({ exists: () => false, data: () => undefined });
+
+    render(<LoginPage />);
+    const googleButton = screen.getByRole('button', { name: /Continuer avec Google/i });
+
+    fireEvent.click(googleButton);
+
+    await waitFor(() => expect(screen.getByText(/session est incomplète/i)).toBeInTheDocument());
+    expect(googleButton).not.toBeDisabled();
   });
 });

@@ -13,8 +13,14 @@ import { isNativeStripe } from '@/lib/stripe-adapters';
 import { NativeStripeSetup } from '@/components/stripe/NativeStripeSetup';
 import { auth, db, functions } from '@/config/firebase';
 import { httpsCallable } from 'firebase/functions';
+import type { User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import {
+  getAuthenticatedUser,
+  getStripeSetupReturn,
+  getStripeSetupReturnError,
+} from './setup-payment-flow';
 
 interface CreateSetupIntentResult {
   clientSecret: string;
@@ -123,13 +129,7 @@ export default function SetupPaymentContent() {
     };
   }, []);
 
-  const fetchSetupIntent = useCallback(async () => {
-    const user = auth.currentUser;
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-
+  const fetchSetupIntent = useCallback(async (user: User) => {
     try {
       setLoading(true);
 
@@ -161,17 +161,74 @@ export default function SetupPaymentContent() {
     }
   }, [router]);
 
-  useEffect(() => {
-    fetchSetupIntent();
-  }, [fetchSetupIntent]);
-
-  const handleSetupSuccess = () => {
+  const handleSetupSuccess = useCallback(() => {
     if (redirectTimeoutRef.current) return;
     setSuccess(true);
     redirectTimeoutRef.current = setTimeout(() => {
       router.push('/dashboard');
     }, 1500);
-  };
+  }, [router]);
+
+  const completeStripeReturn = useCallback(async (): Promise<boolean> => {
+    const stripeReturn = getStripeSetupReturn(window.location.search);
+    if (!stripeReturn) return false;
+
+    const returnError = getStripeSetupReturnError(stripeReturn.status);
+    if (returnError) throw new Error(returnError);
+
+    if (!stripeReturn.clientSecret) {
+      throw new Error('Retour Stripe incomplet. Réessayez.');
+    }
+
+    const stripe = await getStripe();
+    if (!stripe) throw new Error('Stripe est indisponible. Réessayez.');
+
+    const result = await stripe.retrieveSetupIntent(stripeReturn.clientSecret);
+    if (result.error) throw new Error(result.error.message);
+
+    if (result.setupIntent?.status === 'succeeded') {
+      handleSetupSuccess();
+      return true;
+    }
+
+    throw new Error('La configuration de votre carte n’est pas terminée. Réessayez.');
+  }, [handleSetupSuccess]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const initialize = async () => {
+      setLoading(true);
+      try {
+        const user = await getAuthenticatedUser(auth);
+        if (cancelled) return;
+
+        if (!user) {
+          router.replace('/login');
+          return;
+        }
+
+        const returnedSetupCompleted = await completeStripeReturn();
+        if (!cancelled && !returnedSetupCompleted) {
+          await fetchSetupIntent(user);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Erreur lors du chargement';
+          console.error('[SetupPayment] Erreur:', msg);
+          setError(msg);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void initialize();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [completeStripeReturn, fetchSetupIntent, router]);
 
   const handleSetupError = (message: string) => {
     setError(message);
@@ -184,7 +241,14 @@ export default function SetupPaymentContent() {
   const handleRetry = () => {
     setError(null);
     setClientSecret(null);
-    fetchSetupIntent();
+    void (async () => {
+      const user = await getAuthenticatedUser(auth);
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
+      await fetchSetupIntent(user);
+    })();
   };
 
   const resolvedLocale = typeof navigator !== 'undefined' && navigator.language?.startsWith('en') ? 'en' : 'fr';

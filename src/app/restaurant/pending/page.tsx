@@ -7,6 +7,7 @@ import { db } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { AuthService } from '@/services';
 import Link from 'next/link';
 
 type RestaurantStatus = 'pending_approval' | 'approved' | 'rejected' | 'suspended';
@@ -20,14 +21,15 @@ function RestaurantPendingContent() {
   const [status, setStatus] = useState<RestaurantStatus | null>(null);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   useEffect(() => {
-    if (authLoading || authStatus === 'loading') return;
+    if (isSigningOut || authLoading || authStatus === 'loading') return;
     if (!currentUser || authStatus === 'unauthenticated') {
       router.replace('/login');
       return;
     }
-  }, [currentUser, authLoading, authStatus, router]);
+  }, [currentUser, authLoading, authStatus, isSigningOut, router]);
 
   useEffect(() => {
     if (authLoading || authStatus === 'loading') return;
@@ -52,6 +54,16 @@ function RestaurantPendingContent() {
     });
     return () => unsub();
   }, [restaurantId, authLoading, authStatus, router]);
+
+  const handleReturnHome = async () => {
+    setIsSigningOut(true);
+    try {
+      await AuthService.signOut();
+      router.replace('/?from=restaurant-pending');
+    } catch {
+      setIsSigningOut(false);
+    }
+  };
 
   if (authLoading || authStatus === 'loading' || (restaurantId ? loading : false)) {
     return (
@@ -92,12 +104,14 @@ function RestaurantPendingContent() {
           </>
         )}
 
-        <Link
-          href="/?from=restaurant-pending"
+        <button
+          type="button"
+          onClick={handleReturnHome}
+          disabled={isSigningOut}
           className="inline-flex h-[48px] items-center justify-center px-6 mt-8 glass-card border border-white/10 text-slate-300 font-semibold rounded-xl hover:bg-white/5"
         >
-          Retour à l&apos;accueil
-        </Link>
+          {isSigningOut ? 'Déconnexion…' : "Retour à l'accueil"}
+        </button>
       </div>
     </div>
   );

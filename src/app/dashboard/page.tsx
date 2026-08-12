@@ -32,6 +32,7 @@ import type { ActiveRole, UserRoles, UserData } from '@/types/user';
 import { RegistrationDraftBanner } from '@/components/restaurant/RegistrationDraftBanner';
 import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { BecomeProCard } from '@/components/role/BecomeProCard';
+import { getRestaurantPortalPath } from '@/app/food/portal/restaurant-portal-paths';
 import { DashboardServiceGrid } from './components/DashboardServiceGrid';
 
 export default function Dashboard() {
@@ -365,7 +366,7 @@ export default function Dashboard() {
             <GlassCard
               variant="bordered"
               className="p-4 cursor-pointer"
-              onClick={() => router.push(`/food/portal/${restaurantData.id}`)}
+              onClick={() => router.push(getRestaurantPortalPath(restaurantData.id))}
             >
               <div className="flex items-center gap-3">
                 <div className="size-10 rounded-full bg-red-500/10 flex items-center justify-center">

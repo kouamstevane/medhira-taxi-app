@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { auth } from '@/config/firebase';
@@ -11,18 +11,19 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ERROR_MESSAGES } from '@/utils/constants';
-import type { Restaurant, MenuItem } from '@/types';
+import type { MenuItem } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
+import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
 
 export default function MenuManagementClient() {
-  const params = useParams()
-  const id = params.id as string
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get('restaurantId')?.trim() || null;
+  const restaurantId = id ?? '';
   const { showError, showSuccess, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
@@ -43,6 +44,13 @@ export default function MenuManagementClient() {
   const categories = ["Entrées", "Plats", "Desserts", "Boissons", "Accompagnements", "Snacks"];
 
   useEffect(() => {
+    if (!id) {
+      router.replace('/restaurant/dashboard');
+    }
+  }, [id, router]);
+
+  useEffect(() => {
+    if (!id) return;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.push('/login');
@@ -55,8 +63,6 @@ export default function MenuManagementClient() {
           router.push('/dashboard');
           return;
         }
-        setRestaurant(res);
-
         const items = await FoodDeliveryService.getRestaurantMenuFull(id);
         setMenuItems(items);
       } catch (error) {
@@ -109,15 +115,15 @@ export default function MenuManagementClient() {
         description: form.description.trim(),
         imageUrl: form.imageUrl.trim() || undefined,
         price: parseFloat(form.price),
-        restaurantId: id,
+        restaurantId,
         id: editingItem?.id
       };
 
-      await FoodDeliveryService.upsertMenuItem(id, itemData);
+      await FoodDeliveryService.upsertMenuItem(restaurantId, itemData);
       showSuccess(editingItem ? "Article modifié" : "Article ajouté");
 
       // Refresh menu
-      const items = await FoodDeliveryService.getRestaurantMenuFull(id);
+      const items = await FoodDeliveryService.getRestaurantMenuFull(restaurantId);
       setMenuItems(items);
       setIsModalOpen(false);
     } catch (error) {
@@ -130,9 +136,9 @@ export default function MenuManagementClient() {
 
   const toggleAvailability = async (item: MenuItem) => {
     try {
-      await FoodDeliveryService.upsertMenuItem(id, { ...item, isAvailable: !item.isAvailable });
+      await FoodDeliveryService.upsertMenuItem(restaurantId, { ...item, isAvailable: !item.isAvailable });
       setMenuItems(prev => prev.map(i => i.id === item.id ? { ...i, isAvailable: !i.isAvailable } : i));
-    } catch (error) {
+    } catch {
       showError("Erreur de mise à jour");
     }
   };
@@ -140,15 +146,15 @@ export default function MenuManagementClient() {
   const deleteItem = async (itemId: string) => {
     if (!confirm("Supprimer cet article ?")) return;
     try {
-      await FoodDeliveryService.deleteMenuItem(id, itemId);
+      await FoodDeliveryService.deleteMenuItem(restaurantId, itemId);
       setMenuItems(prev => prev.filter(i => i.id !== itemId));
       showSuccess("Article supprimé");
-    } catch (error) {
+    } catch {
       showError("Erreur de suppression");
     }
   };
 
-  if (loading) return (
+  if (loading || !id) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <LoadingSpinner />
     </div>
@@ -161,7 +167,7 @@ export default function MenuManagementClient() {
       {/* Header */}
       <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push(`/food/portal/${id}`)} className="p-2 hover:bg-white/10 rounded-full transition">
+          <button onClick={() => router.push(getRestaurantPortalPath(restaurantId))} className="p-2 hover:bg-white/10 rounded-full transition">
             <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
           </button>
           <div>
@@ -388,7 +394,7 @@ export default function MenuManagementClient() {
           </div>
         </div>
       )}
-      <BottomNav items={portalNavItems(id)} />
+      <BottomNav items={portalNavItems(restaurantId)} />
     </div>
   );
 }

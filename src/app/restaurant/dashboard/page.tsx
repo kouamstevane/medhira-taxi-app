@@ -10,6 +10,7 @@ import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import toast from 'react-hot-toast';
 import type { StripeConnectStatus, RestaurantStatus } from '@/services/roles.service';
+import { getRestaurantPortalPath } from '@/app/food/portal/restaurant-portal-paths';
 
 function RestaurantDashboardContent() {
   const router = useRouter();
@@ -64,7 +65,7 @@ function RestaurantDashboardContent() {
       
       // Auto-redirection vers le portail actif si le restaurant est approuvé
       if (status === 'approved') {
-        router.replace(`/food/portal/${snap.id}`);
+        router.replace(getRestaurantPortalPath(snap.id));
       }
     });
 
@@ -111,7 +112,7 @@ function RestaurantDashboardContent() {
 
             <div className="space-y-3 pt-2">
               <button
-                onClick={() => router.push(`/food/portal/${restaurantData.id}`)}
+                onClick={() => router.push(getRestaurantPortalPath(restaurantData.id))}
                 className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 primary-glow hover:opacity-90 transition"
               >
                 <MaterialIcon name="dashboard" size="md" />
@@ -120,7 +121,7 @@ function RestaurantDashboardContent() {
 
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => router.push(`/food/portal/${restaurantData.id}/orders`)}
+                onClick={() => router.push(getRestaurantPortalPath(restaurantData.id, 'orders'))}
                   className="glass-card p-3 rounded-xl border border-white/5 hover:bg-white/5 transition flex items-center justify-center gap-2 text-xs font-semibold text-white"
                 >
                   <MaterialIcon name="shopping_bag" size="sm" className="text-primary" />
@@ -128,7 +129,7 @@ function RestaurantDashboardContent() {
                 </button>
 
                 <button
-                  onClick={() => router.push(`/food/portal/${restaurantData.id}/menu`)}
+                onClick={() => router.push(getRestaurantPortalPath(restaurantData.id, 'menu'))}
                   className="glass-card p-3 rounded-xl border border-white/5 hover:bg-white/5 transition flex items-center justify-center gap-2 text-xs font-semibold text-white"
                 >
                   <MaterialIcon name="menu_book" size="sm" className="text-primary" />

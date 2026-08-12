@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { auth } from '@/config/firebase';
@@ -14,16 +14,18 @@ import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { ConversationLauncher } from '@/components/ConversationLauncher';
 import type { ConversationContext } from '@/types/conversation';
+import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
 import {
+  getRestaurantOrderFilterClassName,
   getRestaurantOrderStatusLabel,
   RESTAURANT_ORDER_FILTERS,
   RESTAURANT_REJECTABLE_STATUSES,
 } from './orderStatusUi';
 
 export default function OrdersManagementClient() {
-  const params = useParams()
-  const id = params.id as string
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get('restaurantId')?.trim() || null;
   const { showError, showSuccess, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -32,6 +34,13 @@ export default function OrdersManagementClient() {
   const [currentUserUid, setCurrentUserUid] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) {
+      router.replace('/restaurant/dashboard');
+    }
+  }, [id, router]);
+
+  useEffect(() => {
+    if (!id) return;
     let unsubscribeOrders: (() => void) | undefined;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       unsubscribeOrders?.();
@@ -87,7 +96,7 @@ export default function OrdersManagementClient() {
     ? orders
     : orders.filter(o => o.status === filter);
 
-  if (loading) return (
+  if (loading || !id) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <LoadingSpinner />
     </div>
@@ -127,7 +136,7 @@ export default function OrdersManagementClient() {
       {/* Header */}
       <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push(`/food/portal/${id}`)} className="p-2 hover:bg-white/10 rounded-full transition">
+          <button onClick={() => router.push(getRestaurantPortalPath(id))} className="p-2 hover:bg-white/10 rounded-full transition">
             <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
           </button>
           <div>
@@ -140,16 +149,18 @@ export default function OrdersManagementClient() {
       <main className="max-w-5xl mx-auto p-4 sm:p-8">
 
         {/* Filters */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+        <div
+          role="group"
+          aria-label="Filtrer les commandes par statut"
+          className="-mx-4 mb-8 flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide sm:mx-0 sm:px-0"
+        >
           {RESTAURANT_ORDER_FILTERS.map((s) => (
             <button
               key={s}
+              type="button"
+              aria-pressed={filter === s}
               onClick={() => setFilter(s as FoodOrder['status'] | 'all')}
-              className={`px-4 py-2 rounded-2xl text-sm font-bold whitespace-nowrap transition ${
-                filter === s
-                  ? 'bg-gradient-to-r from-primary to-[#ffae33] text-white'
-                  : 'glass-card border border-white/5 text-slate-400 hover:bg-white/10'
-              }`}
+              className={getRestaurantOrderFilterClassName(filter === s)}
             >
               {getRestaurantOrderStatusLabel(s)}
             </button>
@@ -318,7 +329,7 @@ export default function OrdersManagementClient() {
           )}
         </div>
       </main>
-      <BottomNav items={portalNavItems(id)} />
+      {id && <BottomNav items={portalNavItems(id)} />}
     </div>
   );
 }

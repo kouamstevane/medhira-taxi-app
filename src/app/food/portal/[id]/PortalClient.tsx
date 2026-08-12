@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { doc, getDoc } from 'firebase/firestore';
@@ -15,11 +15,12 @@ import { formatCurrencyWithCode } from '@/utils/format';
 import Link from 'next/link';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { RestaurantClientActivation } from '@/components/restaurant/RestaurantClientActivation';
+import { getRestaurantPortalPath } from '../restaurant-portal-paths';
 
 export default function PortalClient() {
-  const params = useParams()
-  const id = params.id as string
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const id = searchParams.get('restaurantId')?.trim() || null;
   const { showError, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
@@ -34,6 +35,13 @@ export default function PortalClient() {
   });
 
   useEffect(() => {
+    if (!id) {
+      router.replace('/restaurant/dashboard');
+    }
+  }, [id, router]);
+
+  useEffect(() => {
+    if (!id) return;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         router.push('/login');
@@ -109,7 +117,7 @@ export default function PortalClient() {
     );
   }
 
-  if (!restaurant) return null;
+  if (!restaurant || !id) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -190,7 +198,7 @@ export default function PortalClient() {
           <div className="lg:col-span-2 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div
-                onClick={() => router.push(`/food/portal/${id}/menu`)}
+                onClick={() => router.push(getRestaurantPortalPath(id, 'menu'))}
                 className="p-6 glass-card border border-white/5 rounded-3xl hover:scale-[1.02] transition cursor-pointer group"
               >
                 <div className="flex items-center justify-between mb-8">
@@ -204,7 +212,7 @@ export default function PortalClient() {
               </div>
 
               <div
-                onClick={() => router.push(`/food/portal/${id}/orders`)}
+                onClick={() => router.push(getRestaurantPortalPath(id, 'orders'))}
                 className="p-6 glass-card border border-white/5 rounded-3xl hover:scale-[1.02] transition cursor-pointer group"
               >
                 <div className="flex items-center justify-between mb-8">
@@ -222,7 +230,7 @@ export default function PortalClient() {
             <div className="glass-card rounded-3xl border border-white/5 overflow-hidden">
               <div className="p-6 border-b border-white/5 flex items-center justify-between">
                 <h3 className="font-bold text-white">Commandes Récentes</h3>
-                <Link href={`/food/portal/${id}/orders`} className="text-sm font-bold text-primary hover:underline">Voir tout</Link>
+                <Link href={getRestaurantPortalPath(id, 'orders')} className="text-sm font-bold text-primary hover:underline">Voir tout</Link>
               </div>
               <div className="divide-y divide-white/5">
                 {orders.slice(0, 5).map((order) => (

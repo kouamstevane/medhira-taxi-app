@@ -41,6 +41,7 @@ export default function LoginPage() {
   const router = useRouter();
   const countryDropdownRef = useRef<HTMLDivElement>(null);
   const accountSwitchRequestedRef = useRef(false);
+  const loginInProgressRef = useRef(false);
   const registrationType = userData ? getIncompleteRegistrationType(userData) : null;
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export default function LoginPage() {
       authStatus !== 'authenticated'
       || !userData
       || registrationType
+      || loginInProgressRef.current
       || accountSwitchRequestedRef.current
     ) return;
 
@@ -69,12 +71,15 @@ export default function LoginPage() {
     });
   }, [authStatus, registrationType, userData]);
 
-  const routeAuthenticatedUser = async (uid: string) => {
+  const routeAuthenticatedUser = async (uid: string): Promise<boolean> => {
+    await auth.authStateReady();
+    await auth.currentUser?.getIdToken(true);
+
     const userSnap = await getDoc(doc(db, 'users', uid));
     if (!userSnap.exists()) {
       await signOut(auth);
       setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
-      return;
+      return false;
     }
     const userData = userSnap.data() as UserData;
 
@@ -89,7 +94,7 @@ export default function LoginPage() {
     const driverStatus = driverSnap?.data()?.status as DriverStatus | undefined;
     const restaurantStatus = toRestaurantEffectiveStatus(restaurantSnap?.data());
 
-    if (getIncompleteRegistrationType(userData)) return;
+    if (getIncompleteRegistrationType(userData)) return false;
 
     const route = getRouteForAuthenticatedProfile(userData, {
       driver: driverStatus,
@@ -98,10 +103,11 @@ export default function LoginPage() {
     if (!route) {
       await signOut(auth);
       setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
-      return;
+      return false;
     }
 
     router.replace(route);
+    return true;
   };
 
   const buildPhoneNumber = () => {
@@ -152,16 +158,22 @@ export default function LoginPage() {
 
     setLoading(true);
     setError(null);
+    loginInProgressRef.current = true;
 
+    let navigationStarted = false;
     try {
       const result = await verifyTwilioPhoneCodeAndSignIn({
         phoneNumber: verificationPhone,
         code,
       });
-      await routeAuthenticatedUser(result.uid);
+      navigationStarted = await routeAuthenticatedUser(result.uid);
     } catch (err: unknown) {
       handleAuthError(err);
-      setLoading(false);
+    } finally {
+      if (!navigationStarted) {
+        loginInProgressRef.current = false;
+        setLoading(false);
+      }
     }
   };
 
@@ -175,12 +187,18 @@ export default function LoginPage() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
+    loginInProgressRef.current = true;
+    let navigationStarted = false;
     try {
       const user = await AuthService.signInWithGoogle();
-      await routeAuthenticatedUser(user.uid);
+      navigationStarted = await routeAuthenticatedUser(user.uid);
     } catch (err: unknown) {
       handleAuthError(err);
-      setLoading(false);
+    } finally {
+      if (!navigationStarted) {
+        loginInProgressRef.current = false;
+        setLoading(false);
+      }
     }
   };
 

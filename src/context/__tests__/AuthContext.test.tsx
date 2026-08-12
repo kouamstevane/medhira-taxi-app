@@ -107,4 +107,31 @@ describe('AuthProvider', () => {
     await waitFor(() => expect(screen.getByText('authenticated')).toBeInTheDocument());
     expect(screen.getByTestId('roles')).not.toHaveTextContent('client');
   });
+
+  it('retries a transient Firestore read before marking the session unauthenticated', async () => {
+    mockGetDoc
+      .mockRejectedValueOnce({ code: 'unavailable', message: 'temporary outage' })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        data: () => ({
+          firstName: 'Dome',
+          lastName: 'Client',
+          roles: { client: { enabled: true, joinedAt: Timestamp.now() } },
+          activeRole: 'client',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        }),
+      });
+
+    render(
+      <AuthProvider>
+        <PaymentMethodConsumer />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('authenticated')).toBeInTheDocument();
+    });
+    expect(mockUser.getIdToken).toHaveBeenCalledWith(true);
+  });
 });

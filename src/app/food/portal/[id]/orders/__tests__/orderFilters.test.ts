@@ -1,4 +1,5 @@
 import {
+  getRestaurantOrderFilterClassName,
   RESTAURANT_ORDER_FILTERS,
   RESTAURANT_ORDER_STATUS_LABELS,
   RESTAURANT_REJECTABLE_STATUSES,
@@ -41,5 +42,16 @@ describe('restaurant order status UI', () => {
     expect(RESTAURANT_ORDER_STATUS_LABELS.accepted).toBe('Acceptée');
     expect(RESTAURANT_ORDER_STATUS_LABELS.driver_heading_to_restaurant).toBe('Livreur en route');
     expect(RESTAURANT_ORDER_STATUS_LABELS.cancelled_by_restaurant).toBe('Refusée restaurant');
+  });
+
+  test('keeps filter buttons readable inside the horizontal scroller', () => {
+    const inactiveClassName = getRestaurantOrderFilterClassName(false);
+    const activeClassName = getRestaurantOrderFilterClassName(true);
+
+    expect(inactiveClassName).toContain('shrink-0');
+    expect(inactiveClassName).toContain('whitespace-nowrap');
+    expect(inactiveClassName).toContain('min-h-10');
+    expect(activeClassName).toContain('text-[#1a1305]');
+    expect(activeClassName).not.toContain('text-white');
   });
 });

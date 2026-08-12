@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { getRestaurantPortalPath } from '@/app/food/portal/restaurant-portal-paths';
 import { MaterialIcon } from './MaterialIcon';
 import { cn } from '@/lib/utils';
 
@@ -31,9 +32,9 @@ export const driverNavItems: NavItem[] = [
 ];
 
 export const portalNavItems = (restaurantId: string): NavItem[] => [
-  { href: `/food/portal/${restaurantId}`, icon: 'dashboard', label: 'Dashboard' },
-  { href: `/food/portal/${restaurantId}/orders`, icon: 'receipt_long', label: 'Commandes' },
-  { href: `/food/portal/${restaurantId}/menu`, icon: 'menu_book', label: 'Menu' },
+  { href: getRestaurantPortalPath(restaurantId), icon: 'dashboard', label: 'Dashboard' },
+  { href: getRestaurantPortalPath(restaurantId, 'orders'), icon: 'receipt_long', label: 'Commandes' },
+  { href: getRestaurantPortalPath(restaurantId, 'menu'), icon: 'menu_book', label: 'Menu' },
 ];
 
 export const adminNavItems: NavItem[] = [

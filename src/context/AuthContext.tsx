@@ -16,6 +16,22 @@ import { auth, db } from '@/config/firebase';
 import { AuthContextType, UserData } from '@/types';
 import type { AuthStatus } from '@/types/user';
 
+const AUTH_DATA_RETRY_LIMIT = 2;
+const AUTH_DATA_RETRY_DELAY_MS = 150;
+
+function isTransientAuthDataError(error: unknown): boolean {
+  const errorCode = (error as Record<string, unknown>)?.code as string | undefined;
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  return (
+    errorCode === 'unavailable'
+    || errorCode === 'deadline-exceeded'
+    || errorCode === 'permission-denied'
+    || errorMessage.includes('offline')
+    || errorMessage.includes('network')
+  );
+}
+
 /**
  * Contexte d'authentification — valeur null par défaut pour détecter l'usage hors AuthProvider
  */
@@ -40,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * Lecture exclusive de `users/{uid}` (modèle V1, spec §3.1). Le statut effectif
    * d'un rôle pro (driver, restaurant) est lu à la demande via roles.service.
    */
-  const fetchUserData = async (user: User): Promise<UserData | null> => {
+  const fetchUserData = async (user: User, attempt = 0): Promise<UserData | null> => {
     try {
       console.log('[AuthContext] Début chargement données utilisateur', {
         uid: user.uid,
@@ -51,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Forcer le refresh du token avant les lectures Firestore
       // Évite les erreurs permission-denied sur mobile (Capacitor) où le token
       // peut ne pas encore être propagé quand onAuthStateChanged se déclenche.
-      await user.getIdToken();
+      await user.getIdToken(attempt > 0);
 
       const usersSnap = await getDoc(doc(db, 'users', user.uid));
       const userDoc = usersSnap.exists() ? usersSnap : null;
@@ -107,6 +123,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return null;
       }
     } catch (err: unknown) {
+      if (isTransientAuthDataError(err) && attempt < AUTH_DATA_RETRY_LIMIT) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, AUTH_DATA_RETRY_DELAY_MS * (attempt + 1));
+        });
+        return fetchUserData(user, attempt + 1);
+      }
+
       const errorObj = err instanceof Error ? err : null;
       const errorCode = (err as Record<string, unknown>)?.code as string | undefined;
       const errorMessage = errorObj?.message ?? String(err);

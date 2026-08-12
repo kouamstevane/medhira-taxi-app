@@ -92,13 +92,20 @@ export default function AdminRestaurantsPage() {
       const action = approve ? 'approve' : 'reject';
 
       const adminManageRestaurant = httpsCallable(functions, 'adminManageRestaurant');
-      await adminManageRestaurant({
+      const result = await adminManageRestaurant({
         action,
         restaurantId,
         ...(approve ? {} : { reason: rejectionReason.trim() }),
       });
 
-      toast.success(approve ? 'Restaurant approuvé !' : 'Restaurant refusé.');
+      const response = result.data as { emailSent?: boolean };
+      toast.success(
+        approve && response.emailSent === false
+          ? 'Restaurant approuvé, mais l\'email de notification n\'a pas été envoyé.'
+          : approve
+            ? 'Restaurant approuvé !'
+            : 'Restaurant refusé.',
+      );
 
       // Mettre à jour l'état local pour retirer le restaurant traité de la liste
       setRestaurants(prev => prev.filter(r => r.id !== restaurantId));

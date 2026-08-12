@@ -51,3 +51,11 @@ export const RESTAURANT_ORDER_STATUS_LABELS: Record<FoodOrderStatus | 'all', str
 export function getRestaurantOrderStatusLabel(status: FoodOrderStatus | 'all'): string {
   return RESTAURANT_ORDER_STATUS_LABELS[status] ?? status;
 }
+
+export function getRestaurantOrderFilterClassName(isActive: boolean): string {
+  return `min-h-10 shrink-0 rounded-xl border px-4 py-2 text-sm font-semibold leading-5 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+    isActive
+      ? 'border-primary bg-primary text-[#1a1305] shadow-[0_8px_20px_rgba(242,146,0,0.18)]'
+      : 'glass-card border-white/10 text-slate-200 hover:border-primary/40 hover:bg-white/10 hover:text-white'
+  }`;
+}

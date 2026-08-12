@@ -37,8 +37,8 @@ export const adminManageRestaurant = onCall(
 
     const { action, restaurantId, reason } = parsed.data;
 
-    const restaurantRef = admin
-      .firestore()
+    const firestore = admin.firestore();
+    const restaurantRef = firestore
       .collection('restaurants')
       .doc(restaurantId);
     const restaurantDoc = await restaurantRef.get();
@@ -50,29 +50,57 @@ export const adminManageRestaurant = onCall(
     const now = admin.firestore.FieldValue.serverTimestamp();
     const restaurantData = restaurantDoc.data();
     const ownerId = restaurantData?.ownerId as string | undefined;
-    const ownerEmail = restaurantData?.ownerEmail as string | undefined;
+    let ownerEmail = restaurantData?.ownerEmail as string | undefined;
     const restaurantName = (restaurantData?.name as string | undefined) || 'Restaurant';
 
     switch (action) {
       case 'approve':
-        await restaurantRef.update({
-          status: 'approved',
-          approvedAt: now,
-          approvedBy: uid,
-          updatedAt: now,
-        });
-        if (ownerId) {
-          try {
-            await admin.firestore().collection('users').doc(ownerId).set({
-              roles: { restaurant: { restaurantId, joinedAt: now } },
-              activeRole: 'restaurant',
-              lastActiveRole: 'restaurant',
+        try {
+          await firestore.runTransaction(async (transaction) => {
+            transaction.update(restaurantRef, {
+              status: 'approved',
+              approvedAt: now,
+              approvedBy: uid,
               updatedAt: now,
-            }, { merge: true });
-          } catch (e) {
-            console.warn('[adminManageRestaurant] Failed to write roles.restaurant on user', { ownerId, error: e });
+            });
+
+            if (ownerId) {
+              transaction.update(firestore.collection('users').doc(ownerId), {
+                'roles.restaurant': { restaurantId, joinedAt: now },
+                activeRole: 'restaurant',
+                lastActiveRole: 'restaurant',
+                updatedAt: now,
+              });
+            }
+          });
+        } catch (error) {
+          console.error('[adminManageRestaurant] Failed to commit restaurant approval', {
+            restaurantId,
+            ownerId,
+            error,
+          });
+          throw new HttpsError(
+            'internal',
+            'L\'approbation du restaurant n\'a pas pu être finalisée',
+          );
+        }
+
+        if (!ownerEmail && ownerId) {
+          try {
+            const ownerDoc = await firestore.collection('users').doc(ownerId).get();
+            const fallbackEmail = ownerDoc.data()?.email;
+            if (typeof fallbackEmail === 'string' && fallbackEmail.trim()) {
+              ownerEmail = fallbackEmail.trim();
+            }
+          } catch (error) {
+            console.warn('[adminManageRestaurant] Failed to load owner email fallback', {
+              ownerId,
+              error,
+            });
           }
         }
+
+        let emailSent = false;
         if (ownerEmail) {
           try {
             await sendRestaurantStatusEmail({
@@ -81,6 +109,7 @@ export const adminManageRestaurant = onCall(
               type: 'approval',
               apiKey: resendApiKey.value(),
             });
+            emailSent = true;
           } catch (error) {
             console.error('[adminManageRestaurant] Failed to send approval email', {
               restaurantId,
@@ -89,7 +118,13 @@ export const adminManageRestaurant = onCall(
             });
           }
         }
-        return { success: true, message: 'Restaurant approuvé avec succès' };
+        return {
+          success: true,
+          emailSent,
+          message: emailSent
+            ? 'Restaurant approuvé avec succès'
+            : 'Restaurant approuvé, mais l\'email de notification n\'a pas pu être envoyé',
+        };
 
       case 'reject':
         if (!reason) {
