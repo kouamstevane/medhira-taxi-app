@@ -37,6 +37,8 @@ Le contrat de mise à jour du service exposera cette intention séparément des 
 - `upload` écrit l’URL et le chemin Storage;
 - `remove` utilise `deleteField()` pour `imageUrl` et `imageStoragePath`.
 
+Toutes les mises à jour d’article doivent déclarer leur intention. `toggleAvailability()` ne doit pas réutiliser la charge complète de l’article pour une simple disponibilité : il transmet uniquement `isAvailable` et `updatedAt` via une opération dédiée ou un payload sans état image. Cette mise à jour ne doit ni téléverser, ni supprimer, ni retransmettre les propriétés `imageUrl` ou `imageStoragePath`.
+
 ## Expérience utilisateur
 
 Le formulaire affiche un bloc `Source de l’image` avec un choix visible :
@@ -48,7 +50,8 @@ Le formulaire affiche un bloc `Source de l’image` avec un choix visible :
 
 Le choix `Lien externe` affiche l’URL directe. Le choix `Importer une image` affiche le sélecteur, l’aperçu, le nom du fichier et l’action `Remplacer`. Les modes non sélectionnés sont masqués ou désactivés, et un texte d’aide discret rappelle qu’une seule source est possible. Un tooltip n’est pas le seul moyen d’expliquer cette règle.
 
-- Les liens `share.google` et autres liens de partage indirects sont refusés avec un message indiquant qu’un lien direct vers le fichier image est requis.
+- Les domaines de partage explicitement connus (`share.google`, `photos.google.com`, et les domaines ajoutés ultérieurement à cette liste) sont refusés avec un message indiquant qu’un lien direct vers le fichier image est requis. Les autres cas non détectables restent soumis à l’échec de chargement de l’aperçu.
+- La validation de chargement d’une URL externe possède un timeout configurable. Une nouvelle saisie annule la validation précédente, son résultat obsolète est ignoré et le timeout affiche un message invitant à utiliser une URL directe accessible.
 - Le fichier sélectionné est validé puis compressé immédiatement en WebP; l’échec de compression bloque l’enregistrement et n’envoie jamais le fichier original.
 - L’import utilise `uploadBytesResumable()` et expose la progression, `Pause`, `Reprendre` et `Annuler l’import`. Une erreur définitive permet une nouvelle tentative depuis zéro avec le fichier compressé conservé en mémoire et un nouvel `uploadId`; une pause ou une reprise utilise la même tâche. La tâche n’est pas persistée après démontage ou rechargement de la page.
 - Pendant compression ou upload, les actions de fermeture sont bloquées; l’utilisateur doit d’abord annuler l’import. Le bouton `Annuler l’import` annule la tâche, supprime tout objet temporaire déjà créé si nécessaire et réactive la fermeture.
@@ -78,7 +81,7 @@ Flux d’un upload :
 2. Générer `itemId` puis `uploadId`.
 3. Téléverser le WebP avec `contentType: image/webp` et `cacheControl: public,max-age=31536000,immutable`.
 4. Récupérer `imageUrl` avec `getDownloadURL()` puis appeler `upsertMenuItem` avec `imageUrl` et `imageStoragePath`.
-5. Si l’upload échoue, si `getDownloadURL()` échoue ou si Firestore échoue, déclencher la suppression compensatoire du nouvel objet Storage et laisser le formulaire ouvert avec le fichier compressé pour permettre une reprise.
+5. Si l’upload échoue, si `getDownloadURL()` échoue ou si Firestore échoue, déclencher la suppression compensatoire du nouvel objet Storage uniquement si l’objet a effectivement été créé. Si l’upload échoue avant la création de l’objet, aucune suppression n’est nécessaire. Une erreur `object-not-found` pendant l’annulation ou le nettoyage est considérée comme un état déjà nettoyé. Dans les autres cas, laisser le formulaire ouvert avec le fichier compressé pour permettre une reprise.
 6. Si Firestore réussit et qu’une ancienne `imageStoragePath` gérée existe, la supprimer après la sauvegarde. Une erreur de suppression ne doit pas annuler l’article sauvegardé; elle doit être journalisée pour le nettoyage.
 7. Si la suppression compensatoire du nouvel objet après un échec échoue, journaliser l’erreur avec `restaurantId`, `itemId`, `uploadId` et `imageStoragePath`.
 
@@ -94,14 +97,15 @@ Les chemins Storage et l’URL doivent être enregistrés ensemble pour ne jamai
 
 ## Rendu des images et compatibilité Next.js
 
-Les deux emplacements d’affichage — `src/components/food/MenuItemCard.tsx` côté public et `src/app/food/portal/[id]/menu/MenuManagementClient.tsx` côté administration — choisiront le rendu selon la source :
+Les deux emplacements d’affichage — `src/components/food/MenuItemCard.tsx` côté public et `src/app/food/portal/[id]/menu/MenuManagementClient.tsx` côté administration — choisiront le rendu selon la source. La détection Firebase/externe, le fallback d’erreur et le placeholder doivent être centralisés dans un helper ou composant partagé afin d’éviter deux implémentations différentes.
 
 - une URL Firebase Storage identifiée par son domaine/format attendu utilisera `next/image`, avec `sizes="96px"`, afin de bénéficier de l’optimisation Next.js;
 - une URL externe utilisera un `<img>` natif avec `loading="lazy"`, `decoding="async"`, dimensions explicites et gestion d’erreur; elle ne sera pas passée à `next/image` par défaut;
+- dans les deux écrans, supprimer `unoptimized` pour les images Firebase en mode web; ne le conserver qu’en build mobile lorsque `images.unoptimized: true` est activé via `next.config.ts`;
 - aucun `remotePatterns` générique tel que `hostname: '**'` ne sera ajouté. Un domaine externe ne pourra utiliser `next/image` que s’il est explicitement autorisé et validé dans la configuration;
 - le build mobile conserve `images.unoptimized: true` via `next.config.ts` lorsque `MOBILE_BUILD=true`; les tests couvriront ce mode et le rendu natif/optimisé attendu dans les deux emplacements.
 
-Une URL externe valide syntaxiquement doit être chargée dans l’aperçu avant l’enregistrement. Si le navigateur ne peut pas décoder sa réponse comme image, l’aperçu passe en erreur et l’enregistrement est bloqué avec un message demandant une URL directe vers un fichier image. La vérification client ne remplace pas les validations de sécurité Firestore.
+Une URL externe valide syntaxiquement doit être chargée dans l’aperçu, avec le timeout et l’annulation décrits plus haut, avant l’enregistrement. Si le navigateur ne peut pas décoder sa réponse comme image, l’aperçu passe en erreur et l’enregistrement est bloqué avec un message demandant une URL directe vers un fichier image. Les anciennes URLs déjà enregistrées suivent le même fallback dans les deux écrans : placeholder ou icône d’image cassée, sans erreur React visible. La vérification client ne remplace pas les validations de sécurité Firestore.
 
 Le durcissement obligatoire de `https` pour les URLs externes est hors périmètre immédiat dans le contexte actuel de développement mono-utilisateur. La validation conserve les URLs `http` et `https` selon le comportement existant; une règle HTTPS stricte pourra être ajoutée avant la mise en production.
 
@@ -111,6 +115,7 @@ Le service de compression doit appliquer les garde-fous suivants avant Canvas :
 
 - liste blanche MIME : `image/jpeg`, `image/png`, `image/webp`;
 - taille d’entrée maximale : 10 Mo;
+- limite absolue de sortie : `MENU_IMAGE_MAX_BYTES = 500 * 1024` octets; cette constante unique est utilisée par le compresseur, les règles Storage et les tests;
 - vérifier le MIME et la taille avant décodage, puis refuser l’image avant l’allocation du Canvas si son plus grand côté dépasse 6000 px ou si sa résolution dépasse 16 mégapixels;
 - nettoyage de chaque `ObjectURL` dans tous les chemins de sortie;
 - résultat strictement WebP; aucun fallback silencieux vers le fichier original;
@@ -146,7 +151,7 @@ Les règles Firestore valident uniquement la forme et la longueur de `imageStora
 Ajouter une règle dédiée à `menu-images/{restaurantId}/{itemId}/{uploadId}.webp` :
 
 - lecture pour tout utilisateur authentifié, alignée sur la règle Firestore actuelle de lecture des `menu_items`;
-- `create` seulement si l’utilisateur authentifié est le propriétaire Firestore du restaurant, que le chemin est valide, que `contentType == 'image/webp'` et que la taille est inférieure ou égale à 500 Ko;
+- `create` seulement si l’utilisateur authentifié est le propriétaire Firestore du restaurant, que le chemin est valide, que `contentType == 'image/webp'` et que la taille est inférieure ou égale à `500 * 1024` octets;
 - `update` explicitement refusé, car chaque remplacement crée un nouvel `uploadId`;
 - `delete` seulement pour le propriétaire du restaurant ou le mécanisme serveur de nettoyage autorisé.
 
@@ -173,14 +178,15 @@ Le bouton `Enregistrer` reste accessible au clavier et désactivé pendant les o
 
 - Tests unitaires de la validation URL : URL directe HTTP(S) acceptée, URL non HTTP(S), lien de partage et URL trop longue refusés.
 - Tests de la machine d’état : nouvel article sans image, conservation, URL externe, upload et suppression; vérifier que `image-none` et `image-unchanged` n’envoient aucun champ image et que `remove` utilise `deleteField()`.
+- Tests de mises à jour partielles : édition d’un article sans image conserve l’absence d’image, `image-unchanged` ne retransmet aucune ancienne propriété image, `toggleAvailability` ne modifie pas l’image et les anciennes URLs externes restent compatibles.
 - Test de génération anticipée de `itemId` et de chemin unique `uploadId`.
 - Test du flux upload : compression WebP, upload Storage, `getDownloadURL()`, URL/chemin sauvegardés et suppression de l’ancien fichier après réussite Firestore.
-- Tests de compensation : échec upload, échec `getDownloadURL()` et échec Firestore déclenchent le nettoyage du nouvel upload; si ce nettoyage échoue, l’erreur est journalisée avec `restaurantId`, `itemId`, `uploadId` et `imageStoragePath`; échec de suppression ancienne image ne fait pas échouer la sauvegarde.
-- Tests d’erreurs : entrée trop volumineuse, MIME non autorisé, pixels excessifs, compression impossible, upload resumable mis en pause puis repris, upload annulé, nouvelle tentative depuis zéro après échec définitif, sélection rapide de deux fichiers.
+- Tests de compensation : échec upload avant création de l’objet n’appelle pas `deleteObject`, échec `getDownloadURL()` et échec Firestore déclenchent le nettoyage du nouvel upload; `object-not-found` est ignoré pendant annulation/nettoyage; si un autre nettoyage échoue, l’erreur est journalisée avec `restaurantId`, `itemId`, `uploadId` et `imageStoragePath`; échec de suppression ancienne image ne fait pas échouer la sauvegarde.
+- Tests d’erreurs : entrée trop volumineuse, MIME non autorisé, pixels excessifs, compression impossible, expiration du timeout de compression, upload resumable mis en pause puis repris, upload annulé avec `object-not-found` ignoré, nouvelle tentative depuis zéro après échec définitif, sélection rapide de deux fichiers et validation d’URL externe lente annulée ou expirée.
 - Tests de règles Firestore : propriétaire, champs autorisés, URL/chemin valides, suppression réelle de `imageUrl` et `imageStoragePath`, conservation d’une image existante.
 - Tests de règles Storage : lecture authentifiée autorisée, lecture non authentifiée refusée, propriétaire autorisé à créer/supprimer, autre utilisateur refusé, mauvais type, taille excessive et update refusé.
 - Tests du modal : `role`, focus initial, piège clavier, restauration du focus, `Escape`, verrouillage du scroll, fermeture bloquée pendant upload, confirmation des modifications et footer accessible sur mobile.
-- Vérification de non-régression dans les deux écrans : URL Firebase via `next/image`, URL externe via `<img>`, erreur d’une URL valide mais non-image, article existant sans image, création sans image, changement URL → upload, changement upload → URL, resélection du même fichier après suppression, annulation d’un upload, comportement mobile avec `images.unoptimized: true` et optimisation/cache des images Firebase.
+- Vérification de non-régression dans les deux écrans : URL Firebase via `next/image` sans `unoptimized` sur web, URL externe via `<img>`, fallback placeholder pour URL ancienne invalide, erreur d’une URL valide mais non-image, article existant sans image, création sans image, changement URL → upload, changement upload → URL, resélection du même fichier après suppression, annulation d’un upload, comportement mobile avec `images.unoptimized: true` et optimisation/cache des images Firebase.
 
 ## Hors périmètre immédiat
 
