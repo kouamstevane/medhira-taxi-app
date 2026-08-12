@@ -97,10 +97,11 @@ Les chemins Storage et l’URL doivent être enregistrés ensemble pour ne jamai
 
 ## Rendu des images et compatibilité Next.js
 
-Les deux emplacements d’affichage — `src/components/food/MenuItemCard.tsx` côté public et `src/app/food/portal/[id]/menu/MenuManagementClient.tsx` côté administration — choisiront le rendu selon la source. La détection Firebase/externe, le fallback d’erreur et le placeholder doivent être centralisés dans un helper ou composant partagé afin d’éviter deux implémentations différentes.
+Les deux emplacements d’affichage — `src/components/food/MenuItemCard.tsx` côté public et `src/app/food/portal/[id]/menu/MenuManagementClient.tsx` côté administration — choisiront le rendu selon la source. La détection Firebase/externe, le fallback d’erreur et le placeholder doivent être centralisés dans un helper ou composant partagé afin d’éviter deux implémentations différentes. La détection doit utiliser prioritairement les données du modèle : lorsqu’un `imageStoragePath` existe, l’image est considérée comme gérée par Firebase, sans déduire cette information uniquement du domaine de `imageUrl`.
 
 - une URL Firebase Storage identifiée par son domaine/format attendu utilisera `next/image`, avec `sizes="96px"`, afin de bénéficier de l’optimisation Next.js;
 - une URL externe utilisera un `<img>` natif avec `loading="lazy"`, `decoding="async"`, dimensions explicites et gestion d’erreur; elle ne sera pas passée à `next/image` par défaut;
+- en environnement Firebase Emulator, si l’URL locale d’une image gérée par Firebase ne peut pas être optimisée par `next/image`, le composant partagé utilisera un `<img>` natif;
 - dans les deux écrans, supprimer `unoptimized` pour les images Firebase en mode web; ne le conserver qu’en build mobile lorsque `images.unoptimized: true` est activé via `next.config.ts`;
 - aucun `remotePatterns` générique tel que `hostname: '**'` ne sera ajouté. Un domaine externe ne pourra utiliser `next/image` que s’il est explicitement autorisé et validé dans la configuration;
 - le build mobile conserve `images.unoptimized: true` via `next.config.ts` lorsque `MOBILE_BUILD=true`; les tests couvriront ce mode et le rendu natif/optimisé attendu dans les deux emplacements.
@@ -122,6 +123,8 @@ Le service de compression doit appliquer les garde-fous suivants avant Canvas :
 - protection contre les sélections rapides : chaque sélection reçoit un identifiant de requête et un résultat obsolète est ignoré.
 
 Le timeout de compression est configurable et remplace le délai fixe actuel de 5 secondes. La valeur par défaut doit être adaptée aux appareils mobiles et aux images jusqu’à 16 mégapixels; son expiration annule la compression, libère les ressources et affiche un message clair invitant à choisir une image plus légère ou à réessayer.
+
+L’action `Annuler l’import` annule également la compression en cours via un `AbortController`; elle ne se limite pas à annuler la tâche Storage. Le signal d’annulation doit être propagé aux étapes de compression qui peuvent encore être interrompues, et tout résultat produit après l’annulation doit être ignoré.
 
 La compression WebP tentera au maximum trois niveaux de qualité prédéfinis, du plus élevé au plus compressé. Elle s’arrête dès que le résultat respecte la limite absolue de 500 Ko; si les trois tentatives restent au-dessus de 500 Ko, elle échoue avec un message clair et n’envoie aucun fichier original en fallback.
 
@@ -150,12 +153,12 @@ Les règles Firestore valident uniquement la forme et la longueur de `imageStora
 
 Ajouter une règle dédiée à `menu-images/{restaurantId}/{itemId}/{uploadId}.webp` :
 
-- lecture pour tout utilisateur authentifié, alignée sur la règle Firestore actuelle de lecture des `menu_items`;
+- lecture publique : les images de menu sont destinées à être affichées par les clients et `getDownloadURL()` produit une URL utilisable par toute personne qui la possède; cette propriété est assumée explicitement. La règle Storage autorise donc la lecture publique, y compris sans authentification, tandis que la création, la suppression et la validation du chemin restent protégées;
 - `create` seulement si l’utilisateur authentifié est le propriétaire Firestore du restaurant, que le chemin est valide, que `contentType == 'image/webp'` et que la taille est inférieure ou égale à `500 * 1024` octets;
 - `update` explicitement refusé, car chaque remplacement crée un nouvel `uploadId`;
 - `delete` seulement pour le propriétaire du restaurant ou le mécanisme serveur de nettoyage autorisé.
 
-Les tests Storage couvriront propriétaire, autre utilisateur, utilisateur non authentifié, mauvais type MIME et taille excessive. Le client vérifiera aussi que le fichier est réellement décodable comme image avant compression; cela rejette les fichiers dont le contenu ne correspond pas au type annoncé. Les règles Storage garantissent le type et la taille des métadonnées reçues, mais une validation complète des octets resterait une responsabilité d’un traitement serveur de confiance si elle devenait nécessaire. Les contrôles client ne sont jamais considérés comme une frontière de sécurité.
+Les tests Storage couvriront la lecture publique authentifiée et non authentifiée, ainsi que les écritures d’un propriétaire, d’un autre utilisateur et d’un utilisateur non authentifié, avec mauvais type MIME et taille excessive. Le client vérifiera aussi que le fichier est réellement décodable comme image avant compression; cela rejette les fichiers dont le contenu ne correspond pas au type annoncé. Les règles Storage garantissent le type et la taille des métadonnées reçues, mais une validation complète des octets resterait une responsabilité d’un traitement serveur de confiance si elle devenait nécessaire. Les contrôles client ne sont jamais considérés comme une frontière de sécurité.
 
 ## Modal accessible et comportement mobile
 
@@ -184,7 +187,7 @@ Le bouton `Enregistrer` reste accessible au clavier et désactivé pendant les o
 - Tests de compensation : échec upload avant création de l’objet n’appelle pas `deleteObject`, échec `getDownloadURL()` et échec Firestore déclenchent le nettoyage du nouvel upload; `object-not-found` est ignoré pendant annulation/nettoyage; si un autre nettoyage échoue, l’erreur est journalisée avec `restaurantId`, `itemId`, `uploadId` et `imageStoragePath`; échec de suppression ancienne image ne fait pas échouer la sauvegarde.
 - Tests d’erreurs : entrée trop volumineuse, MIME non autorisé, pixels excessifs, compression impossible, expiration du timeout de compression, upload resumable mis en pause puis repris, upload annulé avec `object-not-found` ignoré, nouvelle tentative depuis zéro après échec définitif, sélection rapide de deux fichiers et validation d’URL externe lente annulée ou expirée.
 - Tests de règles Firestore : propriétaire, champs autorisés, URL/chemin valides, suppression réelle de `imageUrl` et `imageStoragePath`, conservation d’une image existante.
-- Tests de règles Storage : lecture authentifiée autorisée, lecture non authentifiée refusée, propriétaire autorisé à créer/supprimer, autre utilisateur refusé, mauvais type, taille excessive et update refusé.
+- Tests de règles Storage : lecture publique authentifiée et non authentifiée autorisée, propriétaire autorisé à créer/supprimer, autre utilisateur refusé pour les écritures, mauvais type, taille excessive et update refusé.
 - Tests du modal : `role`, focus initial, piège clavier, restauration du focus, `Escape`, verrouillage du scroll, fermeture bloquée pendant upload, confirmation des modifications et footer accessible sur mobile.
 - Vérification de non-régression dans les deux écrans : URL Firebase via `next/image` sans `unoptimized` sur web, URL externe via `<img>`, fallback placeholder pour URL ancienne invalide, erreur d’une URL valide mais non-image, article existant sans image, création sans image, changement URL → upload, changement upload → URL, resélection du même fichier après suppression, annulation d’un upload, comportement mobile avec `images.unoptimized: true` et optimisation/cache des images Firebase.
 

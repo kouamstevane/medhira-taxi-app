@@ -15,10 +15,10 @@
 - Sortie WebP, dimension maximale 1200 px, cible 150–300 Ko.
 - Limite contractuelle : `500 * 1024` octets; définir la valeur en TypeScript/tests et la reproduire explicitement dans `storage.rules`.
 - Trois tentatives de qualité WebP maximum; échec au-dessus de `500 * 1024`.
-- Firebase Storage : `next/image` sans `unoptimized` sur web; `unoptimized` seulement dans le build mobile.
+- Firebase Storage : `next/image` sans `unoptimized` sur web; `unoptimized` seulement dans le build mobile. Si `imageStoragePath` existe, il est prioritaire pour identifier une image Firebase; avec l’émulateur, utiliser `<img>` natif lorsque l’URL locale ne peut pas être optimisée par `next/image`.
 - URL externe : `<img>` natif, sans `remotePatterns` générique.
 - Upload resumable avec progression, pause, reprise et annulation.
-- Lecture Storage pour tout utilisateur authentifié; création/suppression réservées au propriétaire; update refusé.
+- Lecture Storage publique, y compris sans authentification, puisque les URLs issues de `getDownloadURL()` sont utilisables par toute personne qui les possède; création/suppression réservées au propriétaire; update refusé.
 - Toute fermeture du modal est bloquée pendant compression/upload; toute fermeture avec modifications non sauvegardées demande confirmation.
 - Le code reste en anglais et l’interface en français.
 - Préserver les modifications locales existantes.
@@ -56,12 +56,13 @@
 - `MENU_IMAGE_MAX_OUTPUT_DIMENSION = 1200`.
 - `isKnownShareUrl(value): boolean`.
 - `validateMenuImageUrl(value): résultat valid/invalid avec message`.
-- `isFirebaseStorageImageUrl(value): boolean`.
+- `isFirebaseStorageImageUrl(value, imageStoragePath?): boolean`, avec `imageStoragePath` prioritaire sur l’inspection de `value`.
+- `shouldUseNativeImageForFirebaseUrl(value): boolean`, notamment pour les URLs locales de l’émulateur incompatibles avec l’optimiseur Next.js.
 - `validateExternalImageLoad(url, options): Promise<void>`, annulable et avec timeout.
 
-- [ ] Écrire d’abord les tests rouges pour les constantes, les cinq états, les URLs Firebase, HTTP/HTTPS, `share.google`, `photos.google.com`, URL trop longue, timeout et annulation.
+- [ ] Écrire d’abord les tests rouges pour les constantes, les cinq états, les URLs Firebase détectées par `imageStoragePath`, HTTP/HTTPS, URLs locales d’émulateur, `share.google`, `photos.google.com`, URL trop longue, timeout et annulation.
 - [ ] Lancer `npx jest src/utils/__tests__/menu-image.test.ts --runInBand`. Attendu : échec car le module n’existe pas.
-- [ ] Implémenter les exports sans dépendance React.
+- [ ] Implémenter les exports sans dépendance React; la détection accepte `imageStoragePath` comme signal prioritaire et prévoit le cas des URLs locales de l’émulateur.
 - [ ] Relancer le test ciblé puis `npm run typecheck`. Attendu : PASS.
 - [ ] Commit : `git add src/utils/menu-image.ts src/utils/__tests__/menu-image.test.ts src/types/food-delivery.ts src/types/firestore-collections.ts && git commit -m "feat: define menu image contract"`.
 
@@ -71,11 +72,12 @@
 - Modifier `src/services/image-compression.service.ts`
 - Créer `src/services/__tests__/image-compression.service.test.ts`
 
-**Contrat :** `CompressionOptions` ajoute `timeoutMs`, `maxOutputBytes`, `qualityAttempts`, `maxWidth` et `maxHeight`. La valeur par défaut de `maxOutputBytes` est `500 * 1024`; `qualityAttempts` est limité à trois.
+**Contrat :** `CompressionOptions` ajoute `timeoutMs`, `maxOutputBytes`, `qualityAttempts`, `maxWidth`, `maxHeight` et `signal?: AbortSignal`. La valeur par défaut de `maxOutputBytes` est `500 * 1024`; `qualityAttempts` est limité à trois. Un signal aborté interrompt la compression et aucun résultat obsolète ne peut être publié.
 
-- [ ] Tester en rouge MIME non autorisé, entrée >10 Mo, côté >6000 px, >16 MP, timeout configurable, trois qualités et sortie >500 * 1024.
+- [ ] Tester en rouge MIME non autorisé, entrée >10 Mo, côté >6000 px, >16 MP, timeout configurable, `AbortController`, trois qualités et sortie >500 * 1024.
 - [ ] Lancer `npx jest src/services/__tests__/image-compression.service.test.ts --runInBand`. Attendu : échec sur les nouveaux comportements.
 - [ ] Implémenter la validation avant décodage/Canvas, les essais WebP du plus élevé au plus compressé et l’échec sans fallback vers l’original.
+- [ ] Faire accepter un `AbortSignal` au compresseur et faire interrompre la compression par `Annuler l’import`, pas uniquement l’upload Storage.
 - [ ] Révoquer chaque ObjectURL dans les succès, erreurs, timeout, remplacement, suppression et démontage; ignorer les résultats obsolètes d’une sélection précédente.
 - [ ] Relancer le test ciblé, puis `npm run typecheck`.
 - [ ] Commit : `git add src/services/image-compression.service.ts src/services/__tests__/image-compression.service.test.ts && git commit -m "feat: harden menu image compression"`.
@@ -95,7 +97,7 @@
 - `isStorageObjectNotFound(error): boolean`.
 
 - [ ] Tester en rouge le chemin `menu-images/restaurant/item/upload.webp`, metadata `contentType: image/webp) et `cacheControl: public,max-age=31536000,immutable`.
-- [ ] Tester progression, pause, reprise, annulation, getDownloadURL et suppression.
+- [ ] Tester progression, pause, reprise, annulation, `getDownloadURL` et suppression; l’annulation doit tolérer `object-not-found`.
 - [ ] Implémenter avec `getFirebaseStorage`, `ref` et `uploadBytesResumable`.
 - [ ] Supprimer uniquement si l’objet a été créé; après cancel ou cleanup, ignorer `storage/object-not-found`; journaliser les autres erreurs avec `restaurantId`, `itemId`, `uploadId` et `imageStoragePath`.
 - [ ] Relancer `npx jest src/services/__tests__/menu-image-storage.service.test.ts --runInBand`.
@@ -131,10 +133,10 @@
 
 **Interface :** `MenuItemImageProps` contient `src?`, `alt`, `className?`, `sizes?`, `width?`, `height?` et `fill?`.
 
-- [ ] Tester Firebase Storage vers `next/image` sans `unoptimized` sur web.
+- [ ] Tester Firebase Storage vers `next/image` sans `unoptimized` sur web, avec priorité à `imageStoragePath`, et URL Firebase Emulator locale vers `<img>` natif si l’optimisation Next.js est impossible.
 - [ ] Tester URL externe vers `img` avec `loading="lazy"` et `decoding="async"`.
 - [ ] Tester URL absente et `onError` vers placeholder/icône, sans erreur React.
-- [ ] Implémenter la détection via `src/utils/menu-image.ts` et centraliser le fallback.
+- [ ] Implémenter la détection via `src/utils/menu-image.ts` et centraliser le fallback; le composant reçoit `imageStoragePath` afin de ne pas dépendre uniquement du domaine de l’URL.
 - [ ] Remplacer les deux implémentations locales dans `MenuItemCard.tsx` et `MenuManagementClient.tsx`.
 - [ ] Supprimer `unoptimized` de l’image Firebase dans l’administration; le build mobile reste gouverné par `next.config.ts`.
 - [ ] Relancer `npx jest src/components/food/__tests__/MenuItemImage.test.tsx --runInBand`.
@@ -151,7 +153,7 @@
 - [ ] Tester en rouge création `image-none`, modification `image-unchanged` avec et sans image, `remove`, changement URL vers upload, upload vers URL, URL externe non-image, URL lente annulée/expirée, sélection rapide et même fichier resélectionné après suppression.
 - [ ] Implémenter le hook de validation URL avec timeout configurable, annulation de l’ancien chargement et ignore des résultats obsolètes.
 - [ ] Ajouter le choix visible Conserver, Lien externe, Importer, Supprimer; afficher le tooltip secondaire sans en faire l’unique explication.
-- [ ] Compresser à la sélection; conserver le WebP compressé en mémoire; afficher aperçu, progression, Pause, Reprendre et Annuler l’import.
+- [ ] Compresser à la sélection avec un `AbortController`; conserver le WebP compressé en mémoire; afficher aperçu, progression, Pause, Reprendre et Annuler l’import. `Annuler l’import` doit interrompre la compression si elle est encore en cours et la tâche Storage si elle a déjà commencé.
 - [ ] À l’upload, générer itemId/uploadId, appeler getDownloadURL, puis Firestore; compenser sur échec upload/getDownloadURL/Firestore seulement si l’objet existe. Ignorer object-not-found; journaliser les autres échecs.
 - [ ] Après réussite Firestore, supprimer l’ancienne image pour upload, URL externe et remove; une erreur de suppression ne fait pas échouer la sauvegarde.
 - [ ] Ajouter fallback des anciennes URLs invalides via MenuItemImage.
@@ -179,7 +181,7 @@
 - Modifier `storage.rules`
 - Modifier `tests/storage.rules.test.ts`
 
-- [ ] Écrire les tests rouges : seed restaurant, create propriétaire WebP à `500 * 1024`, create au-dessus de la limite, mauvais MIME, lecture authentifiée autre utilisateur, lecture anonyme refusée, update refusé, delete propriétaire et delete autre utilisateur refusé.
+- [ ] Écrire les tests rouges : seed restaurant, create propriétaire WebP à `500 * 1024`, create au-dessus de la limite, mauvais MIME, lecture publique authentifiée et non authentifiée, update refusé, delete propriétaire et delete autre utilisateur refusé.
 - [ ] Implémenter `match /menu-images/{restaurantId}/{itemId}/{uploadId}.webp` avec lookup propriétaire, create/delete séparés et update explicitement refusé.
 - [ ] Reproduire littéralement `500 * 1024` dans `storage.rules` et vérifier cette valeur dans les tests TypeScript.
 - [ ] Relancer `firebase emulators:exec "npx jest --config jest.firestore.config.js tests/storage.rules.test.ts --runInBand"`.
