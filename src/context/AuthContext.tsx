@@ -190,9 +190,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsEmailVerified(refreshedUser.emailVerified || false);
         // Recharger aussi les données Firestore
         const resolvedUserData = await fetchUserData(refreshedUser);
+        if (!resolvedUserData) {
+          throw new Error('Impossible de recharger le profil utilisateur.');
+        }
         setAuthStatus(resolvedUserData ? 'authenticated' : 'unauthenticated');
       } catch (err) {
         console.error('Erreur lors du rechargement de l\'utilisateur:', err);
+        throw err;
       }
     } else {
       setAuthStatus('unauthenticated');

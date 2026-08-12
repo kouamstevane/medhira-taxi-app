@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { httpsCallable } from 'firebase/functions';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffectiveRoleStatus } from '@/hooks/useEffectiveRoleStatus';
 import { useActiveRideGuard } from '@/hooks/useActiveRideGuard';
@@ -14,6 +15,7 @@ import {
 } from '@/services/roles.service';
 import type { ActiveRole } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { functions } from '@/config/firebase';
 
 type SwitchableRole = Exclude<ActiveRole, 'driver_onboarding' | 'restaurant_onboarding'>;
 
@@ -23,68 +25,27 @@ const ROLE_META: Record<SwitchableRole, { label: string; icon: string }> = {
   restaurant: { label: 'Restaurateur', icon: 'restaurant' },
 };
 
-type BadgeInfo = { text: string; color: string } | null;
-
-function getDriverBadge(status: DriverStatus | undefined): BadgeInfo {
-  if (status === 'pending') return { text: 'En attente', color: 'bg-amber-500/20 text-amber-400' };
-  if (status === 'rejected') return { text: 'Refusé', color: 'bg-red-500/20 text-red-400' };
-  return null;
-}
-
-function getRestaurantBadge(
-  status: RestaurantStatus | undefined,
-  stripeConnectStatus: StripeConnectStatus | undefined,
-): BadgeInfo {
-  if (status === 'suspended') return { text: 'Suspendu', color: 'bg-red-500/20 text-red-400' };
-  if (stripeConnectStatus === 'restricted')
-    return { text: 'Action requise', color: 'bg-red-500/20 text-red-400' };
-  if (status === 'approved' && stripeConnectStatus === 'not_started')
-    return { text: 'Configurez vos paiements', color: 'bg-orange-500/20 text-orange-400' };
-  if (status === 'pending' || status === 'pending_approval')
-    return { text: 'En attente', color: 'bg-amber-500/20 text-amber-400' };
-  if (status === 'rejected') return { text: 'Refusé', color: 'bg-red-500/20 text-red-400' };
-  return null;
-}
-
-export function RoleSwitcher() {
-  const { userData } = useAuth();
+export function RoleSwitcher({ allowClientActivation = false }: { allowClientActivation?: boolean }) {
+  const { userData, reloadUser } = useAuth();
   const statuses = useEffectiveRoleStatus();
   const { hasActiveRide } = useActiveRideGuard();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const ownedRoles: SwitchableRole[] = [];
-  if (userData?.roles?.client) ownedRoles.push('client');
-  if (userData?.roles?.driver) ownedRoles.push('driver');
-  if (userData?.roles?.restaurant) ownedRoles.push('restaurant');
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
+  const [switching, setSwitching] = useState<SwitchableRole | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (
     !userData
     || userData.activeRole === 'driver_onboarding'
     || userData.activeRole === 'restaurant_onboarding'
-    || ownedRoles.length <= 1
   ) return null;
 
   const activeRole = userData.activeRole as SwitchableRole;
+  const visibleRoles: SwitchableRole[] = [];
+  if (userData.roles?.client || allowClientActivation) visibleRoles.push('client');
+  if (userData.roles?.driver) visibleRoles.push('driver');
+  if (userData.roles?.restaurant) visibleRoles.push('restaurant');
 
-  function getRoleBadge(role: SwitchableRole): BadgeInfo {
-    if (role === 'driver') return getDriverBadge(statuses.driver?.status);
-    if (role === 'restaurant')
-      return getRestaurantBadge(statuses.restaurant?.status, statuses.restaurant?.stripeConnectStatus);
-    return null;
-  }
+  if (visibleRoles.length <= 1) return null;
 
   function isRoleDisabled(role: SwitchableRole): boolean {
     if (role === 'restaurant' && statuses.restaurant?.status === 'suspended') return true;
@@ -92,77 +53,77 @@ export function RoleSwitcher() {
     return false;
   }
 
-  async function handleSelect(role: SwitchableRole) {
-    if (isRoleDisabled(role) || role === activeRole) return;
-    setOpen(false);
-    await setActiveRole(userData!, role);
-    router.replace(
-      getDashboardRouteFor(role, {
-        driverStatus: statuses.driver?.status,
-        restaurantStatus: statuses.restaurant?.status,
-        stripeConnectStatus: statuses.restaurant?.stripeConnectStatus,
-      }),
-    );
+  function getRoleLabel(role: SwitchableRole): string {
+    const action = role === 'client' && !userData.roles?.client ? 'Activer' : 'Passer à';
+    return `${action} l’espace ${ROLE_META[role].label.toLowerCase()}`;
   }
 
-  const meta = ROLE_META[activeRole];
+  async function handleSelect(role: SwitchableRole) {
+    if (switching || role === activeRole || isRoleDisabled(role)) return;
+    setSwitching(role);
+    setError(null);
+
+    try {
+      if (role === 'client' && !userData.roles?.client) {
+        const activateClientRole = httpsCallable<unknown, { success: boolean }>(functions, 'activateClientRole');
+        await activateClientRole();
+      }
+
+      await setActiveRole(userData, role);
+      await reloadUser();
+
+      router.replace(getDashboardRouteFor(role, {
+        driverStatus: statuses.driver?.status as DriverStatus | undefined,
+        restaurantStatus: statuses.restaurant?.status as RestaurantStatus | undefined,
+        stripeConnectStatus: statuses.restaurant?.stripeConnectStatus as StripeConnectStatus | undefined,
+      }));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Impossible de changer d’espace pour le moment.');
+    } finally {
+      setSwitching(null);
+    }
+  }
 
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="size-11 shrink-0 rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 hover:border-primary/50 transition-colors shadow-sm shadow-primary/10 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        aria-label={`Changer d'espace, espace actuel : ${meta.label}`}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        data-testid="role-switcher-btn"
+    <div className="flex flex-col items-end gap-2">
+      <div
+        role="group"
+        aria-label="Changer d’espace"
+        className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1 shadow-sm"
       >
-        <MaterialIcon name={meta.icon} size="sm" className="text-primary" />
-      </button>
+        {visibleRoles.map((role) => {
+          const isActive = role === activeRole;
+          const disabled = isRoleDisabled(role) || switching !== null;
 
-      {open && (
-        <div
-          className="absolute right-0 top-full mt-1 z-50 w-64 rounded-xl border border-white/10 bg-slate-900 py-1 shadow-xl"
-          role="listbox"
-          data-testid="role-dropdown"
-        >
-          {ownedRoles.map((role) => {
-            const roleMeta = ROLE_META[role];
-            const badge = getRoleBadge(role);
-            const disabled = isRoleDisabled(role);
-            const isActive = role === activeRole;
-
-            return (
-              <button
-                key={role}
-                type="button"
-                role="option"
-                aria-selected={isActive}
-                aria-disabled={disabled}
-                disabled={disabled}
-                onClick={() => handleSelect(role)}
-                className={[
-                  'flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors min-h-[44px]',
-                  isActive ? 'bg-primary/10 text-primary' : 'text-white',
-                  disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/5 cursor-pointer',
-                ].join(' ')}
-                data-testid={`role-item-${role}`}
-              >
-                <MaterialIcon name={roleMeta.icon} size="sm" />
-                <div className="flex-1">
-                  <span className="font-medium">{roleMeta.label}</span>
-                  {badge && (
-                    <span className={`ml-2 inline-block rounded-full px-2 py-0.5 text-xs ${badge.color}`}>
-                      {badge.text}
-                    </span>
-                  )}
-                </div>
-                {isActive && <MaterialIcon name="check" size="sm" className="text-primary" />}
-              </button>
-            );
-          })}
-        </div>
+          return (
+            <button
+              key={role}
+              type="button"
+              onClick={() => void handleSelect(role)}
+              disabled={disabled}
+              aria-label={isActive ? `${ROLE_META[role].label} actif` : getRoleLabel(role)}
+              aria-pressed={isActive}
+              title={isActive ? `${ROLE_META[role].label} actif` : getRoleLabel(role)}
+              data-testid={`role-toggle-${role}`}
+              className={[
+                'flex size-10 items-center justify-center rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                isActive ? 'bg-primary text-white shadow-md shadow-primary/30' : 'text-slate-400 hover:bg-white/10 hover:text-white',
+                disabled && !isActive ? 'cursor-not-allowed opacity-45' : '',
+              ].join(' ')}
+            >
+              {switching === role ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden="true" />
+              ) : (
+                <MaterialIcon name={ROLE_META[role].icon} size="sm" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {error && (
+        <p role="alert" className="max-w-56 rounded-md bg-red-500/10 px-3 py-1 text-right text-xs text-red-400">
+          {error}
+        </p>
       )}
     </div>
   );

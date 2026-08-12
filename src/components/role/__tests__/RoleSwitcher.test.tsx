@@ -1,7 +1,6 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { RoleSwitcher } from '../RoleSwitcher';
-import type { UserData } from '@/types/user';
-import type { ActiveRole } from '@/types/user';
+import type { ActiveRole, UserData } from '@/types/user';
 import type { EffectiveRoleStatuses } from '@/hooks/useEffectiveRoleStatus';
 
 jest.mock('@/components/ui/MaterialIcon', () => ({
@@ -20,37 +19,43 @@ jest.mock('next/navigation', () => ({
 const mockSetActiveRole = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/services/roles.service', () => ({
   setActiveRole: (...args: unknown[]) => mockSetActiveRole(...args),
-  getDashboardRouteFor: (role: string, _ctx?: unknown) => {
-    const routes: Record<string, string> = {
-      client: '/dashboard',
-      driver: '/driver/dashboard',
-      restaurant: '/restaurant/dashboard',
-    };
-    return routes[role] ?? '/dashboard';
-  },
+  getDashboardRouteFor: (role: string) => ({
+    client: '/dashboard',
+    driver: '/driver/dashboard',
+    restaurant: '/restaurant/dashboard',
+  }[role] ?? '/dashboard'),
 }));
 
-let mockUserData: UserData | null = null;
-let mockStatuses: EffectiveRoleStatuses = { driver: null, restaurant: null };
-let mockHasActiveRide = false;
+const mockActivateClientRole = jest.fn().mockResolvedValue({ data: { success: true } });
+const mockHttpsCallable = jest.fn(() => mockActivateClientRole);
+jest.mock('firebase/functions', () => ({
+  httpsCallable: (...args: unknown[]) => mockHttpsCallable(...args),
+}));
 
+const mockReloadUser = jest.fn().mockResolvedValue(undefined);
+let mockUserData: UserData | null = null;
 jest.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
     currentUser: { uid: 'uid1' },
     userData: mockUserData,
     loading: false,
+    reloadUser: mockReloadUser,
   }),
 }));
 
+let mockStatuses: EffectiveRoleStatuses = { driver: null, restaurant: null };
+let mockHasActiveRide = false;
 jest.mock('@/hooks/useEffectiveRoleStatus', () => ({
   useEffectiveRoleStatus: () => mockStatuses,
 }));
-
 jest.mock('@/hooks/useActiveRideGuard', () => ({
   useActiveRideGuard: () => ({ hasActiveRide: mockHasActiveRide, loading: false }),
 }));
 
-function makeUserData(roles: { driver?: boolean; restaurant?: boolean }, activeRole: ActiveRole): UserData {
+function makeUserData(
+  roles: { client?: boolean; driver?: boolean; restaurant?: boolean },
+  activeRole: ActiveRole,
+): UserData {
   return {
     uid: 'uid1',
     email: 'test@test.com',
@@ -58,7 +63,7 @@ function makeUserData(roles: { driver?: boolean; restaurant?: boolean }, activeR
     firstName: 'Test',
     lastName: 'User',
     roles: {
-      client: { enabled: true, joinedAt: {} as any },
+      client: roles.client === false ? undefined : { enabled: true, joinedAt: {} as any },
       driver: roles.driver ? { joinedAt: {} as any } : undefined,
       restaurant: roles.restaurant ? { restaurantId: 'rest1', joinedAt: {} as any } : undefined,
     },
@@ -69,91 +74,96 @@ function makeUserData(roles: { driver?: boolean; restaurant?: boolean }, activeR
 }
 
 beforeEach(() => {
+  mockUserData = null;
+  mockStatuses = { driver: null, restaurant: null };
+  mockHasActiveRide = false;
   mockReplace.mockClear();
   mockSetActiveRole.mockClear();
-  mockHasActiveRide = false;
-  mockStatuses = { driver: null, restaurant: null };
+  mockReloadUser.mockClear();
+  mockActivateClientRole.mockClear();
+  mockHttpsCallable.mockClear();
 });
 
 describe('RoleSwitcher', () => {
-  it('renders null when user has only one role (client only)', () => {
+  it('renders null when user has only one role', () => {
     mockUserData = makeUserData({}, 'client');
+
     const { container } = render(<RoleSwitcher />);
+
     expect(container.innerHTML).toBe('');
   });
 
-  it('renders null when userData is null', () => {
-    mockUserData = null;
-    const { container } = render(<RoleSwitcher />);
-    expect(container.innerHTML).toBe('');
-  });
-
-  it('shows a compact accessible icon for the active role', () => {
-    mockUserData = makeUserData({ driver: true }, 'driver');
+  it('renders one connected icon toggle for the available roles', () => {
+    mockUserData = makeUserData({ driver: true, restaurant: true }, 'restaurant');
     mockStatuses = {
       driver: { status: 'approved', loading: false },
-      restaurant: null,
-    };
-    render(<RoleSwitcher />);
-
-    const button = screen.getByRole('button', {
-      name: "Changer d'espace, espace actuel : Chauffeur",
-    });
-
-    expect(button).toHaveClass('size-11');
-    expect(screen.getByTestId('icon-local_taxi')).toBeInTheDocument();
-    expect(button).not.toHaveTextContent('Mode');
-    expect(button).not.toHaveTextContent('Chauffeur');
-  });
-
-  it('opens dropdown with role items on click', () => {
-    mockUserData = makeUserData({ driver: true }, 'driver');
-    mockStatuses = {
-      driver: { status: 'approved', loading: false },
-      restaurant: null,
-    };
-    render(<RoleSwitcher />);
-    expect(screen.queryByTestId('role-dropdown')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('role-switcher-btn'));
-    expect(screen.getByTestId('role-dropdown')).toBeInTheDocument();
-    expect(screen.getByTestId('role-item-client')).toBeInTheDocument();
-    expect(screen.getByTestId('role-item-driver')).toBeInTheDocument();
-  });
-
-  it('shows "Configurez vos paiements" badge for approved restaurant with not_started Stripe', () => {
-    mockUserData = makeUserData({ restaurant: true }, 'restaurant');
-    mockStatuses = {
-      driver: null,
       restaurant: {
         status: 'approved',
-        stripeConnectStatus: 'not_started',
-        restaurantId: 'rest1',
-        loading: false,
-      },
-    };
-    render(<RoleSwitcher />);
-    fireEvent.click(screen.getByTestId('role-switcher-btn'));
-    expect(screen.getByText('Configurez vos paiements')).toBeInTheDocument();
-  });
-
-  it('shows "Suspendu" badge for suspended restaurant', () => {
-    mockUserData = makeUserData({ restaurant: true }, 'restaurant');
-    mockStatuses = {
-      driver: null,
-      restaurant: {
-        status: 'suspended',
         stripeConnectStatus: 'active',
         restaurantId: 'rest1',
         loading: false,
       },
     };
+
     render(<RoleSwitcher />);
-    fireEvent.click(screen.getByTestId('role-switcher-btn'));
-    expect(screen.getByText('Suspendu')).toBeInTheDocument();
+
+    expect(screen.getByRole('group', { name: 'Changer d’espace' })).toBeInTheDocument();
+    expect(screen.getByTestId('role-toggle-client')).toBeInTheDocument();
+    expect(screen.getByTestId('role-toggle-driver')).toBeInTheDocument();
+    expect(screen.getByTestId('role-toggle-restaurant')).toBeInTheDocument();
+    expect(screen.queryByTestId('role-dropdown')).not.toBeInTheDocument();
+    expect(screen.getByTestId('role-toggle-restaurant')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('role-toggle-restaurant')).not.toHaveTextContent('Restaurateur');
   });
 
-  it('disables client and restaurant items when driver has active ride', () => {
+  it('persists a role, reloads the auth profile, then replaces the route', async () => {
+    mockUserData = makeUserData({ driver: true }, 'client');
+    mockStatuses = {
+      driver: { status: 'approved', loading: false },
+      restaurant: null,
+    };
+
+    render(<RoleSwitcher />);
+    fireEvent.click(screen.getByTestId('role-toggle-driver'));
+
+    await waitFor(() => expect(mockSetActiveRole).toHaveBeenCalledWith(mockUserData, 'driver'));
+    expect(mockReloadUser).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith('/driver/dashboard');
+    expect(mockReloadUser.mock.invocationCallOrder[0]).toBeLessThan(mockReplace.mock.invocationCallOrder[0]);
+  });
+
+  it('activates the client role from the toggle when it is missing', async () => {
+    mockUserData = makeUserData({ client: false, driver: true }, 'driver');
+    mockStatuses = {
+      driver: { status: 'approved', loading: false },
+      restaurant: null,
+    };
+
+    render(<RoleSwitcher allowClientActivation />);
+    fireEvent.click(screen.getByTestId('role-toggle-client'));
+
+    await waitFor(() => expect(mockActivateClientRole).toHaveBeenCalledTimes(1));
+    expect(mockSetActiveRole).toHaveBeenCalledWith(mockUserData, 'client');
+    expect(mockReloadUser).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('does not navigate when reloading the auth profile fails', async () => {
+    mockUserData = makeUserData({ driver: true }, 'client');
+    mockStatuses = {
+      driver: { status: 'approved', loading: false },
+      restaurant: null,
+    };
+    mockReloadUser.mockRejectedValueOnce(new Error('Profil indisponible'));
+
+    render(<RoleSwitcher />);
+    fireEvent.click(screen.getByTestId('role-toggle-driver'));
+
+    expect(await screen.findByText('Profil indisponible')).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('disables roles outside the driver space during an active ride', () => {
     mockUserData = makeUserData({ driver: true, restaurant: true }, 'driver');
     mockStatuses = {
       driver: { status: 'approved', loading: false },
@@ -165,43 +175,25 @@ describe('RoleSwitcher', () => {
       },
     };
     mockHasActiveRide = true;
+
     render(<RoleSwitcher />);
-    fireEvent.click(screen.getByTestId('role-switcher-btn'));
-    const clientItem = screen.getByTestId('role-item-client');
-    const restaurantItem = screen.getByTestId('role-item-restaurant');
-    expect(clientItem).toBeDisabled();
-    expect(restaurantItem).toBeDisabled();
+
+    expect(screen.getByTestId('role-toggle-client')).toBeDisabled();
+    expect(screen.getByTestId('role-toggle-restaurant')).toBeDisabled();
   });
 
-  it('switches role on item click and navigates', async () => {
-    mockUserData = makeUserData({ driver: true }, 'client');
+  it('shows Client as an activation segment for a professional account without it', () => {
+    mockUserData = makeUserData({ client: false, driver: true }, 'driver');
     mockStatuses = {
       driver: { status: 'approved', loading: false },
       restaurant: null,
     };
-    render(<RoleSwitcher />);
-    fireEvent.click(screen.getByTestId('role-switcher-btn'));
-    fireEvent.click(screen.getByTestId('role-item-driver'));
-    expect(mockSetActiveRole).toHaveBeenCalledWith(mockUserData, 'driver');
-    await screen.findByTestId('role-switcher-btn');
-    expect(mockReplace).toHaveBeenCalledWith('/driver/dashboard');
-  });
 
-  it('closes dropdown on outside click', () => {
-    mockUserData = makeUserData({ driver: true }, 'driver');
-    mockStatuses = {
-      driver: { status: 'approved', loading: false },
-      restaurant: null,
-    };
-    render(
-      <div>
-        <div data-testid="outside" />
-        <RoleSwitcher />
-      </div>,
+    render(<RoleSwitcher allowClientActivation />);
+
+    expect(screen.getByTestId('role-toggle-client')).toHaveAttribute(
+      'aria-label',
+      'Activer l’espace client',
     );
-    fireEvent.click(screen.getByTestId('role-switcher-btn'));
-    expect(screen.getByTestId('role-dropdown')).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByTestId('outside'));
-    expect(screen.queryByTestId('role-dropdown')).not.toBeInTheDocument();
   });
 });
