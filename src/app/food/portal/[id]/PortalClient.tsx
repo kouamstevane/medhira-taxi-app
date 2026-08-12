@@ -13,6 +13,7 @@ import type { Restaurant, FoodOrder } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import Link from 'next/link';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
+import { RestaurantPortalPayoutBanner } from '@/components/restaurant/RestaurantPortalPayoutBanner';
 import { RestaurantPortalHeader } from './RestaurantPortalHeader';
 import { getRestaurantPortalPath } from '../restaurant-portal-paths';
 
@@ -129,6 +130,11 @@ export default function PortalClient() {
             </p>
           </div>
         )}
+
+        <RestaurantPortalPayoutBanner
+          status={restaurant.status}
+          stripeConnectStatus={restaurant.stripeConnectStatus}
+        />
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
