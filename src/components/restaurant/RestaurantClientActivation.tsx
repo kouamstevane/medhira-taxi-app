@@ -6,6 +6,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, auth, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useAuth } from '@/hooks/useAuth';
 
 interface RestaurantClientActivationProps {
   hasClientRole?: boolean;
@@ -17,6 +18,7 @@ export function RestaurantClientActivation({
   className = '',
 }: RestaurantClientActivationProps) {
   const router = useRouter();
+  const { reloadUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +46,8 @@ export function RestaurantClientActivation({
           updatedAt: serverTimestamp(),
         });
       }
-      router.push('/dashboard');
+      await reloadUser();
+      router.replace('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur lors de l’activation de l’espace client.');
     } finally {
