@@ -90,6 +90,27 @@ service firebase.storage {
             || request.auth.token.get('admin', false) == true);
     }
 
+    // Images des articles du menu (restaurant)
+    match /menu-images/{restaurantId}/{itemId}/{uploadId} {
+      // Lecture publique (les URLs issues de getDownloadURL sont utilisables par quiconque les possède)
+      allow read: if true;
+
+      // Création : Propriétaire du restaurant uniquement, WebP, max 500 Ko (500 * 1024 octets)
+      allow create: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/restaurants/$(restaurantId))
+        && firestore.get(/databases/(default)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid
+        && request.resource.contentType == 'image/webp'
+        && request.resource.size <= 500 * 1024;
+
+      // Update : Refusé explicitement
+      allow update: if false;
+
+      // Suppression : Propriétaire du restaurant uniquement
+      allow delete: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/restaurants/$(restaurantId))
+        && firestore.get(/databases/(default)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
+    }
+
     // Bloquer tout le reste par défaut
     match /{allPaths=**} {
       allow read, write: if false;
