@@ -18,7 +18,7 @@ jest.mock('next/navigation', () => ({
 
 const mockSetActiveRole = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/services/roles.service', () => ({
-  setActiveRole: (...args: unknown[]) => mockSetActiveRole(...args),
+  setActiveRole: (userData: UserData, role: ActiveRole) => mockSetActiveRole(userData, role),
   getDashboardRouteFor: (role: string) => ({
     client: '/dashboard',
     driver: '/driver/dashboard',
@@ -29,7 +29,7 @@ jest.mock('@/services/roles.service', () => ({
 const mockActivateClientRole = jest.fn().mockResolvedValue({ data: { success: true } });
 const mockHttpsCallable = jest.fn(() => mockActivateClientRole);
 jest.mock('firebase/functions', () => ({
-  httpsCallable: (...args: unknown[]) => mockHttpsCallable(...args),
+  httpsCallable: () => mockHttpsCallable(),
 }));
 
 const mockReloadUser = jest.fn().mockResolvedValue(undefined);

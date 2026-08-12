@@ -39,11 +39,12 @@ export function RoleSwitcher({ allowClientActivation = false }: { allowClientAct
     || userData.activeRole === 'restaurant_onboarding'
   ) return null;
 
-  const activeRole = userData.activeRole as SwitchableRole;
+  const profile = userData;
+  const activeRole = profile.activeRole as SwitchableRole;
   const visibleRoles: SwitchableRole[] = [];
-  if (userData.roles?.client || allowClientActivation) visibleRoles.push('client');
-  if (userData.roles?.driver) visibleRoles.push('driver');
-  if (userData.roles?.restaurant) visibleRoles.push('restaurant');
+  if (profile.roles?.client || allowClientActivation) visibleRoles.push('client');
+  if (profile.roles?.driver) visibleRoles.push('driver');
+  if (profile.roles?.restaurant) visibleRoles.push('restaurant');
 
   if (visibleRoles.length <= 1) return null;
 
@@ -54,7 +55,7 @@ export function RoleSwitcher({ allowClientActivation = false }: { allowClientAct
   }
 
   function getRoleLabel(role: SwitchableRole): string {
-    const action = role === 'client' && !userData.roles?.client ? 'Activer' : 'Passer à';
+    const action = role === 'client' && !profile.roles?.client ? 'Activer' : 'Passer à';
     return `${action} l’espace ${ROLE_META[role].label.toLowerCase()}`;
   }
 
@@ -64,12 +65,12 @@ export function RoleSwitcher({ allowClientActivation = false }: { allowClientAct
     setError(null);
 
     try {
-      if (role === 'client' && !userData.roles?.client) {
+      if (role === 'client' && !profile.roles?.client) {
         const activateClientRole = httpsCallable<unknown, { success: boolean }>(functions, 'activateClientRole');
         await activateClientRole();
       }
 
-      await setActiveRole(userData, role);
+      await setActiveRole(profile, role);
       await reloadUser();
 
       router.replace(getDashboardRouteFor(role, {
