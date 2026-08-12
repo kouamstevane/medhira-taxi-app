@@ -1,8 +1,12 @@
 import { renderHook, act } from '@testing-library/react';
+import { StrictMode, createElement, type ReactNode } from 'react';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
 import { SUPPORTED_COUNTRIES } from '@/utils/constants';
 
 describe('usePlacesAutocomplete', () => {
+  const strictModeWrapper = ({ children }: { children: ReactNode }) =>
+    createElement(StrictMode, null, children);
+
   beforeEach(() => {
     jest.useFakeTimers();
   });
@@ -12,17 +16,26 @@ describe('usePlacesAutocomplete', () => {
     jest.clearAllMocks();
   });
 
-  it('applique la restriction pays par défaut sur tous les pays supportés si non fournie', () => {
-    const mockGetPlacePredictions = jest.fn();
+  it('applique la restriction pays par défaut sur tous les pays supportés si non fournie', async () => {
+    const mockFetchAutocompleteSuggestions = jest.fn().mockResolvedValue({
+      suggestions: [
+        {
+          placePrediction: {
+            placeId: 'place-1',
+            text: { toString: () => 'Marché central, Douala' },
+          },
+        },
+      ],
+    });
     const mockService = {
-      getPlacePredictions: mockGetPlacePredictions,
-    } as unknown as google.maps.places.AutocompleteService;
+      fetchAutocompleteSuggestions: mockFetchAutocompleteSuggestions,
+    };
 
     const { result } = renderHook(() =>
       usePlacesAutocomplete({
         autocompleteService: mockService,
       })
-    );
+    , { wrapper: strictModeWrapper });
 
     act(() => {
       result.current.getSuggestions('March');
@@ -32,23 +45,27 @@ describe('usePlacesAutocomplete', () => {
       jest.advanceTimersByTime(300);
     });
 
-    expect(mockGetPlacePredictions).toHaveBeenCalledTimes(1);
-    expect(mockGetPlacePredictions).toHaveBeenCalledWith(
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockFetchAutocompleteSuggestions).toHaveBeenCalledTimes(1);
+    expect(mockFetchAutocompleteSuggestions).toHaveBeenCalledWith(
       expect.objectContaining({
         input: 'March',
-        componentRestrictions: {
-          country: SUPPORTED_COUNTRIES.map((c) => c.code.toLowerCase()),
-        },
+        includedRegionCodes: SUPPORTED_COUNTRIES.map((c) => c.code.toLowerCase()),
       }),
-      expect.any(Function)
     );
+    expect(result.current.suggestions).toEqual([
+      { place_id: 'place-1', description: 'Marché central, Douala' },
+    ]);
   });
 
   it('respecte la restriction pays sur-mesure si fournie', () => {
-    const mockGetPlacePredictions = jest.fn();
+    const mockFetchAutocompleteSuggestions = jest.fn().mockResolvedValue({ suggestions: [] });
     const mockService = {
-      getPlacePredictions: mockGetPlacePredictions,
-    } as unknown as google.maps.places.AutocompleteService;
+      fetchAutocompleteSuggestions: mockFetchAutocompleteSuggestions,
+    };
 
     const { result } = renderHook(() =>
       usePlacesAutocomplete({
@@ -65,15 +82,37 @@ describe('usePlacesAutocomplete', () => {
       jest.advanceTimersByTime(300);
     });
 
-    expect(mockGetPlacePredictions).toHaveBeenCalledTimes(1);
-    expect(mockGetPlacePredictions).toHaveBeenCalledWith(
+    expect(mockFetchAutocompleteSuggestions).toHaveBeenCalledTimes(1);
+    expect(mockFetchAutocompleteSuggestions).toHaveBeenCalledWith(
       expect.objectContaining({
         input: 'Douala',
-        componentRestrictions: {
-          country: ['cm'],
-        },
+        includedRegionCodes: ['cm'],
       }),
-      expect.any(Function)
     );
+  });
+
+  it('arrête le chargement lorsque la requête Places échoue', async () => {
+    const mockFetchAutocompleteSuggestions = jest.fn().mockRejectedValue(new Error('Places indisponible'));
+    const mockService = {
+      fetchAutocompleteSuggestions: mockFetchAutocompleteSuggestions,
+    };
+
+    const { result } = renderHook(() =>
+      usePlacesAutocomplete({
+        autocompleteService: mockService,
+      })
+    );
+
+    act(() => {
+      result.current.getSuggestions('Douala');
+      jest.advanceTimersByTime(300);
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.suggestions).toEqual([]);
   });
 });

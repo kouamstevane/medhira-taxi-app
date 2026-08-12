@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import type { PlacesAutocompleteService } from '@/hooks/usePlacesAutocomplete';
 import {
   DISTANCE_ESTIMATE_ERROR_MESSAGE,
   estimateRoadDistanceKm,
@@ -57,7 +58,7 @@ interface AccessibleAddressInputProps {
   value: string;
   onChange: (value: string) => void;
   onSelect: (suggestion: Parameters<NonNullable<React.ComponentProps<typeof AddressInput>['onSelect']>>[0]) => void;
-  autocompleteService: google.maps.places.AutocompleteService | null;
+  autocompleteService: PlacesAutocompleteService | null;
   location?: { lat: number; lng: number } | null;
   required?: boolean;
   enableLocationButton?: boolean;

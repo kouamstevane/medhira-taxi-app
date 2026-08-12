@@ -5,8 +5,10 @@ import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import type Stripe from 'stripe';
 import { createStripeClient } from './stripe-client.js';
+import { resolvePayoutCurrency } from './payoutCurrency.js';
 
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
+const DEFAULT_CURRENCY = 'cad';
 
 let _stripe: InstanceType<typeof Stripe> | null = null;
 function getStripe(): InstanceType<typeof Stripe> {
@@ -20,8 +22,6 @@ function getDb(): FirebaseFirestore.Firestore {
   if (!admin.apps.length) admin.initializeApp();
   return admin.firestore();
 }
-
-const CURRENCY = 'cad';
 
 const ZERO_DECIMAL = ['bif', 'clp', 'gnf', 'mga', 'pyg', 'rwf', 'ugx', 'vnd', 'vuv', 'xaf', 'xof', 'xpf'];
 function fromStripeAmount(cents: number, cur: string): number {
@@ -71,6 +71,7 @@ async function triggerManualPayout(driverId: string, currency: string): Promise<
 
   let lockedBalance = 0;
   let stripeAccountId = '';
+  let payoutCurrency = resolvePayoutCurrency(currency);
 
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(driverRef);
@@ -82,6 +83,7 @@ async function triggerManualPayout(driverId: string, currency: string): Promise<
     if (data.payoutLockUntil && data.payoutLockUntil > Date.now()) throw new Error('Un virement est déjà en cours pour ce chauffeur');
     lockedBalance = data.pendingBalanceCents;
     stripeAccountId = data.stripeAccountId;
+    payoutCurrency = resolvePayoutCurrency(data.currency ?? currency);
     tx.update(driverRef, { payoutLockUntil: lockExpiration });
   });
 
@@ -91,7 +93,7 @@ async function triggerManualPayout(driverId: string, currency: string): Promise<
   try {
     transfer = await getStripe().transfers.create({
       amount: lockedBalance,
-      currency: currency.toLowerCase(),
+      currency: payoutCurrency,
       destination: stripeAccountId,
       description: `Virement manuel chauffeur ${driverId} — ${processedAt.toISOString().split('T')[0]}`,
       metadata: { driverId, type: 'manual', platform: 'medjira_taxi' },
@@ -110,8 +112,8 @@ async function triggerManualPayout(driverId: string, currency: string): Promise<
         driverId,
         stripeTransferId: transfer!.id,
         amountCents: lockedBalance,
-        amount: fromStripeAmount(lockedBalance, currency),
-        currency: currency.toLowerCase(),
+        amount: fromStripeAmount(lockedBalance, payoutCurrency),
+        currency: payoutCurrency,
         type: 'manual',
         status: 'succeeded',
         processedAt,
@@ -126,8 +128,8 @@ async function triggerManualPayout(driverId: string, currency: string): Promise<
   return {
     transferId: transfer.id,
     driverId,
-    amount: fromStripeAmount(lockedBalance, currency),
-    currency,
+    amount: fromStripeAmount(lockedBalance, payoutCurrency),
+    currency: payoutCurrency,
     status: 'succeeded',
   };
 }
@@ -170,6 +172,7 @@ async function processWeeklyPayouts(currency: string): Promise<{
       const driverId = doc.id;
       const data = doc.data();
       const { stripeAccountId, pendingBalanceCents, payoutLockUntil } = data;
+      const payoutCurrency = resolvePayoutCurrency(data.currency ?? currency);
 
       if (!stripeAccountId || pendingBalanceCents <= 0) continue;
       if (payoutLockUntil && payoutLockUntil > Date.now()) continue;
@@ -194,7 +197,7 @@ async function processWeeklyPayouts(currency: string): Promise<{
 
         const transfer = await getStripe().transfers.create({
           amount: lockedBalance,
-          currency: currency.toLowerCase(),
+          currency: payoutCurrency,
           destination: stripeAccountId,
           description: `Paiement hebdomadaire chauffeur ${driverId} — ${processedAt.toISOString().split('T')[0]}`,
           metadata: { driverId, week: getISOWeek(processedAt), platform: 'medjira_taxi' },
@@ -215,8 +218,8 @@ async function processWeeklyPayouts(currency: string): Promise<{
             driverId,
             stripeTransferId: transfer.id,
             amountCents: lockedBalance,
-            amount: fromStripeAmount(lockedBalance, currency),
-            currency: currency.toLowerCase(),
+            amount: fromStripeAmount(lockedBalance, payoutCurrency),
+            currency: payoutCurrency,
             status: 'succeeded',
             processedAt,
             week: getISOWeek(processedAt),
@@ -226,8 +229,8 @@ async function processWeeklyPayouts(currency: string): Promise<{
         results.push({
           transferId: transfer.id,
           driverId,
-          amount: fromStripeAmount(lockedBalance, currency),
-          currency,
+          amount: fromStripeAmount(lockedBalance, payoutCurrency),
+          currency: payoutCurrency,
           status: 'succeeded',
         });
       } catch (err) {
@@ -238,8 +241,8 @@ async function processWeeklyPayouts(currency: string): Promise<{
         await db.collection('driver_payouts').add({
           driverId,
           amountCents: pendingBalanceCents,
-          amount: fromStripeAmount(pendingBalanceCents, currency),
-          currency: currency.toLowerCase(),
+          amount: fromStripeAmount(pendingBalanceCents, payoutCurrency),
+          currency: payoutCurrency,
           status: 'failed',
           error: errorMsg,
           stripeTransferId: transferId ?? null,
@@ -250,8 +253,8 @@ async function processWeeklyPayouts(currency: string): Promise<{
         results.push({
           transferId: transferId ?? '',
           driverId,
-          amount: fromStripeAmount(pendingBalanceCents, currency),
-          currency,
+          amount: fromStripeAmount(pendingBalanceCents, payoutCurrency),
+          currency: payoutCurrency,
           status: 'failed',
           error: errorMsg,
         });
@@ -306,7 +309,7 @@ export const stripeConnectPayout = onCall(
         if (role === 'driver' && bodyDriverId && bodyDriverId !== uid) {
           throw new HttpsError('permission-denied', "Un chauffeur ne peut pas déclencher le virement d'un autre chauffeur");
         }
-        const result = await triggerManualPayout(targetDriverId, CURRENCY);
+        const result = await triggerManualPayout(targetDriverId, DEFAULT_CURRENCY);
         return result;
       }
 
@@ -314,7 +317,7 @@ export const stripeConnectPayout = onCall(
         if (role !== 'admin') {
           throw new HttpsError('permission-denied', 'Accès réservé aux administrateurs');
         }
-        const summary = await processWeeklyPayouts(CURRENCY);
+        const summary = await processWeeklyPayouts(DEFAULT_CURRENCY);
         return summary;
       }
 

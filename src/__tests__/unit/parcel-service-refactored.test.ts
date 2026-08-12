@@ -117,6 +117,36 @@ describe('estimateParcelPrice after refactor', () => {
   });
 
   describe('createParcelOrder & confirmParcelReceipt', () => {
+    it('n’envoie pas les champs optionnels absents sous forme de null', async () => {
+      const { createParcelOrder } = await import('@/services/parcel.service');
+      const { httpsCallable } = await import('firebase/functions');
+      const mockCallable = jest.fn().mockResolvedValue({
+        data: {
+          parcelId: 'server-parcel-id',
+          amount: 17.5,
+          currency: 'CAD',
+          paymentMethod: 'wallet',
+        },
+      });
+      (httpsCallable as jest.Mock).mockReturnValue(mockCallable);
+
+      await createParcelOrder({
+        senderId: 'user-123',
+        recipientName: 'Jean Dupont',
+        recipientPhone: '+15550123456',
+        pickupLocation: makeLocation('CA'),
+        dropoffLocation: { ...makeLocation('CA'), latitude: 45.60, longitude: -73.67 },
+        parcelType: 'food',
+        customType: undefined,
+        pickupInstructions: undefined,
+        paymentMethod: 'wallet',
+      });
+
+      const payload = mockCallable.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload).not.toHaveProperty('customType');
+      expect(payload).not.toHaveProperty('pickupInstructions');
+    });
+
     it('délègue la création wallet au serveur sans écrire directement dans Firestore', async () => {
       const { createParcelOrder } = await import('@/services/parcel.service');
       const { httpsCallable } = await import('firebase/functions');

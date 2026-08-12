@@ -1,6 +1,7 @@
 import {
   formatCurrencyWithCode,
   formatCurrency,
+  toIntlCurrencyCode,
   formatPhoneNumber,
   formatDistance,
   formatDuration,
@@ -8,6 +9,16 @@ import {
   formatDateTime,
   formatFirestoreDate,
 } from '@/utils/format';
+
+describe('toIntlCurrencyCode', () => {
+  it('convertit FCFA vers le code ISO XAF accepté par Intl', () => {
+    expect(toIntlCurrencyCode('FCFA')).toBe('XAF');
+  });
+
+  it('normalise les devises ISO sans les modifier', () => {
+    expect(toIntlCurrencyCode('cad')).toBe('CAD');
+  });
+});
 
 describe('formatCurrencyWithCode', () => {
   it('formate un montant normal avec le code de devise', () => {

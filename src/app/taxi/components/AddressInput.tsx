@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useId, useCallback, useMemo } from 'react';
 import { PlaceSuggestion } from '@/types';
 import { usePlacesAutocomplete } from '@/hooks/usePlacesAutocomplete';
+import type { PlacesAutocompleteService } from '@/hooks/usePlacesAutocomplete';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 import { useCountryDetection } from '@/hooks/useCountryDetection';
 import { getDefaultCountryRestriction } from '@/utils/constants';
@@ -22,7 +23,7 @@ export interface AddressInputProps {
   onChange: (value: string) => void;
   onSelect: (suggestion: PlaceSuggestion) => void;
   placeholder?: string;
-  autocompleteService: google.maps.places.AutocompleteService | null;
+  autocompleteService: PlacesAutocompleteService | null;
   location?: { lat: number; lng: number } | null;
   disabled?: boolean;
   required?: boolean;

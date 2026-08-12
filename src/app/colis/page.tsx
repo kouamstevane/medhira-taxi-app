@@ -27,6 +27,7 @@ import { getMarketByCountryCode, getSupportedCountryNames } from '@/utils/consta
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 import { useCountryDetection } from '@/hooks/useCountryDetection';
 import type { PlaceSuggestion } from '@/types';
+import { loadColisLocation } from './location';
 
 const StripePaymentElement = dynamic(
   () => import('@/components/stripe/StripePaymentElement').then((module) => ({ default: module.StripePaymentElement })),
@@ -96,7 +97,9 @@ export default function ColisPage() {
   });
 
   useEffect(() => {
-    if (isLoaded) getCurrentPosition();
+    if (isLoaded) {
+      void loadColisLocation(getCurrentPosition, () => undefined);
+    }
   }, [isLoaded, getCurrentPosition]);
 
   const [step, setStep] = useState<Step>('form');
@@ -388,8 +391,7 @@ export default function ColisPage() {
         <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2">
           <MaterialIcon name="info" size="sm" className="text-blue-400 mt-0.5" />
           <p className="text-xs text-blue-300/90">
-            Service de transport de colis <strong>urbain et national</strong> dans les pays supportés ({getSupportedCountryNames(detectedCountry)}).
-            Le transport à l&apos;international n&apos;est pas pris en charge.
+            Service de transport urbain
           </p>
         </div>
 

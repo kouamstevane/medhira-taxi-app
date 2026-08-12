@@ -141,9 +141,11 @@ export const createParcelOrder = async (data: CreateParcelInput): Promise<Parcel
     functions,
     'createParcelOrder',
   );
-  const request = { ...data } as Partial<CreateParcelInput>;
-  delete request.senderId;
-  const result = await createFn(request as Omit<CreateParcelInput, 'senderId'>);
+  const { senderId: _senderId, ...requestData } = data;
+  const request = Object.fromEntries(
+    Object.entries(requestData).filter(([, value]) => value !== undefined),
+  ) as Omit<CreateParcelInput, 'senderId'>;
+  const result = await createFn(request);
   return result.data;
 };
 

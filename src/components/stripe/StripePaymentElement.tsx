@@ -11,6 +11,7 @@ import { getStripe } from '@/lib/stripe-client';
 import { isNativeStripe } from '@/lib/stripe-adapters';
 import { NativeStripePayment } from '@/components/stripe/NativeStripePayment';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { toIntlCurrencyCode } from '@/utils/format';
 
 interface PaymentFormProps {
   amount: number;
@@ -107,7 +108,7 @@ function PaymentForm({
 
   const formattedAmount = new Intl.NumberFormat('fr-CA', {
     style: 'currency',
-    currency: currency.toUpperCase(),
+    currency: toIntlCurrencyCode(currency),
   }).format(amount);
 
   return (

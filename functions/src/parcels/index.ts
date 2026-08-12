@@ -2,7 +2,10 @@ import * as admin from 'firebase-admin';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onDocumentCreated, onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { defineSecret } from 'firebase-functions/params';
+import type Stripe from 'stripe';
 import { selectNearestDriver, type DriverCandidate } from '../utils/matching.js';
+import { createStripeClient } from '../stripe/stripe-client.js';
 import {
   sendSms,
   twilioAccountSid,
@@ -14,9 +17,21 @@ import {
   createParcelOrder,
   finalizeParcelCardPayment,
 } from './createParcelOrder.js';
+import {
+  buildParcelDriverTransfer,
+  calculateParcelSettlement,
+  type ParcelSettlement,
+} from './parcelSettlement.js';
 
 const TWILIO_SECRETS = [twilioAccountSid, twilioAuthToken, twilioFromNumber];
 const REGION = 'europe-west1';
+const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
+
+let stripeClient: InstanceType<typeof Stripe> | null = null;
+function getStripe(): InstanceType<typeof Stripe> {
+  if (!stripeClient) stripeClient = createStripeClient(stripeSecretKey.value());
+  return stripeClient;
+}
 
 async function setActiveDeliveryOrderClaim(uid: string | undefined | null, orderId: string | null): Promise<void> {
   if (!uid) return;
@@ -74,8 +89,13 @@ interface ParcelDoc {
   currency: string;
   distanceKm: number;
   paymentMethod?: 'wallet' | 'card';
+  stripePaymentIntentId?: string;
+  driverEarnings?: number;
+  platformFee?: number;
   paymentStatus?: 'pending' | 'reserved' | 'paid';
   driverPaidOut?: boolean;
+  driverPayoutStatus?: 'pending' | 'processing' | 'succeeded' | 'credited_to_balance' | 'failed';
+  stripeTransferId?: string | null;
   deliveredAt?: admin.firestore.Timestamp | Date;
   updatedAt?: admin.firestore.Timestamp | Date;
 }
@@ -248,41 +268,229 @@ export const onParcelStatusChanged = onDocumentUpdated(
   },
 );
 
-function calculateDriverEarnings(price: unknown): number {
-  const numericPrice = typeof price === 'number' && Number.isFinite(price) ? price : 0;
-  return Math.round(Math.max(0, numericPrice) * 0.7 * 100) / 100;
+interface PreparedParcelSettlement {
+  parcelRef: FirebaseFirestore.DocumentReference;
+  parcel: ParcelDoc;
+  driverRef: FirebaseFirestore.DocumentReference;
+  stripeAccountId: string | null;
+  settlementRef: FirebaseFirestore.DocumentReference;
+  settlement: ParcelSettlement;
+  existingTransferId: string | null;
+  alreadySettled: boolean;
 }
 
-async function settleParcelPayout(
-  tx: FirebaseFirestore.Transaction,
-  parcelRef: FirebaseFirestore.DocumentReference,
-  parcel: ParcelDoc,
-): Promise<void> {
-  const driverEarnings = calculateDriverEarnings(parcel.price);
-  const earningsCents = Math.round(driverEarnings * 100);
+async function prepareParcelSettlement(
+  parcelId: string,
+  actorUid?: string,
+): Promise<PreparedParcelSettlement> {
+  const db = admin.firestore();
+  const parcelRef = db.collection('parcels').doc(parcelId);
+  const settlementRef = db.collection('parcel_settlements').doc(parcelId);
 
-  tx.update(parcelRef, {
-    status: 'completed',
-    paymentStatus: 'paid',
-    driverPaidOut: true,
-    confirmedAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  return db.runTransaction(async (tx) => {
+    const parcelSnap = await tx.get(parcelRef);
+    if (!parcelSnap.exists) throw new HttpsError('not-found', 'Colis introuvable.');
+
+    const parcel = parcelSnap.data() as ParcelDoc;
+    if (actorUid && parcel.senderId !== actorUid && parcel.receiverId !== actorUid) {
+      throw new HttpsError('permission-denied', 'Vous ne participez pas à ce colis.');
+    }
+    if (parcel.status !== 'delivered' && parcel.status !== 'completed') {
+      throw new HttpsError('failed-precondition', 'Le colis doit être livré avant confirmation.');
+    }
+    if (!parcel.driverId) {
+      throw new HttpsError('failed-precondition', 'Aucun chauffeur n’est associé à ce colis.');
+    }
+
+    const driverRef = db.collection('drivers').doc(parcel.driverId);
+    const [driverSnap, settlementSnap] = await Promise.all([
+      tx.get(driverRef),
+      tx.get(settlementRef),
+    ]);
+    if (!driverSnap.exists) throw new HttpsError('failed-precondition', 'Profil chauffeur introuvable.');
+
+    const settlement = calculateParcelSettlement(parcel.price, parcel.currency);
+    const existingSettlement = settlementSnap.exists ? settlementSnap.data() : undefined;
+    const existingTransferId = typeof existingSettlement?.stripeTransferId === 'string'
+      ? existingSettlement.stripeTransferId
+      : null;
+
+    if (parcel.driverPaidOut === true) {
+      return {
+        parcelRef,
+        parcel,
+        driverRef,
+        stripeAccountId: typeof driverSnap.data()?.stripeAccountId === 'string'
+          ? driverSnap.data()?.stripeAccountId
+          : null,
+        settlementRef,
+        settlement,
+        existingTransferId,
+        alreadySettled: true,
+      };
+    }
+
+    if (parcel.paymentMethod === 'card') {
+      const driverData = driverSnap.data() ?? {};
+      if (typeof driverData.stripeAccountId !== 'string' || driverData.stripeAccountStatus !== 'active') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Le compte Stripe du chauffeur n’est pas prêt à recevoir son paiement.',
+        );
+      }
+      if (typeof parcel.stripePaymentIntentId !== 'string') {
+        throw new HttpsError('failed-precondition', 'Paiement Stripe introuvable pour ce colis.');
+      }
+    }
+
+    tx.set(settlementRef, {
+      parcelId,
+      driverId: parcel.driverId,
+      paymentMethod: parcel.paymentMethod ?? 'wallet',
+      settlementVersion: 'parcel_split_v1',
+      totalAmount: settlement.totalAmount,
+      driverEarnings: settlement.driverEarnings,
+      platformFee: settlement.platformFee,
+      currency: settlement.currency,
+      stripeCurrency: settlement.stripeCurrency,
+      totalAmountMinor: settlement.totalAmountMinor,
+      driverEarningsMinor: settlement.driverEarningsMinor,
+      platformFeeMinor: settlement.platformFeeMinor,
+      status: existingSettlement?.status === 'succeeded' ? 'succeeded' : 'processing',
+      stripeTransferId: existingTransferId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return {
+      parcelRef,
+      parcel,
+      driverRef,
+      stripeAccountId: typeof driverSnap.data()?.stripeAccountId === 'string'
+        ? driverSnap.data()?.stripeAccountId
+        : null,
+      settlementRef,
+      settlement,
+      existingTransferId,
+      alreadySettled: false,
+    };
   });
+}
 
-  if (parcel.driverId) {
-    const driverRef = admin.firestore().collection('drivers').doc(parcel.driverId);
-    tx.update(driverRef, {
+async function transferParcelDriverShare(
+  prepared: PreparedParcelSettlement,
+): Promise<string | null> {
+  if (prepared.alreadySettled || prepared.parcel.paymentMethod !== 'card') return null;
+  if (prepared.existingTransferId) return prepared.existingTransferId;
+  if (!prepared.stripeAccountId || !prepared.parcel.stripePaymentIntentId) {
+    throw new HttpsError('failed-precondition', 'Le transfert chauffeur ne peut pas être préparé.');
+  }
+
+  const stripe = getStripe();
+  const paymentIntent = await stripe.paymentIntents.retrieve(prepared.parcel.stripePaymentIntentId);
+  if (paymentIntent.status !== 'succeeded') {
+    throw new HttpsError('failed-precondition', 'Le paiement client n’est pas confirmé par Stripe.');
+  }
+  if (paymentIntent.currency !== prepared.settlement.stripeCurrency) {
+    throw new HttpsError('failed-precondition', 'La devise du paiement Stripe est incohérente.');
+  }
+
+  const latestCharge = typeof paymentIntent.latest_charge === 'string'
+    ? paymentIntent.latest_charge
+    : paymentIntent.latest_charge?.id;
+  const transfer = await stripe.transfers.create(
+    {
+      ...buildParcelDriverTransfer(
+        prepared.parcel.parcelId,
+        prepared.parcel.driverId!,
+        prepared.stripeAccountId,
+        prepared.settlement,
+      ),
+      ...(latestCharge ? { source_transaction: latestCharge } : {}),
+    },
+    { idempotencyKey: `parcel_driver_transfer_${prepared.parcel.parcelId}` },
+  );
+  return transfer.id;
+}
+
+async function markParcelSettlementFailed(
+  prepared: PreparedParcelSettlement,
+  error: unknown,
+): Promise<void> {
+  await prepared.settlementRef.set({
+    status: 'failed',
+    error: error instanceof Error ? error.message : String(error),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function finalizeParcelSettlement(
+  prepared: PreparedParcelSettlement,
+  stripeTransferId: string | null,
+): Promise<void> {
+  if (prepared.alreadySettled) return;
+
+  const db = admin.firestore();
+  await db.runTransaction(async (tx) => {
+    const [parcelSnap, driverSnap] = await Promise.all([
+      tx.get(prepared.parcelRef),
+      tx.get(prepared.driverRef),
+    ]);
+    if (!parcelSnap.exists || !driverSnap.exists) {
+      throw new HttpsError('not-found', 'Données de règlement introuvables.');
+    }
+    const parcel = parcelSnap.data() as ParcelDoc;
+    if (parcel.driverPaidOut === true) return;
+
+    const driverUpdate: Record<string, unknown> = {
       deliveriesCompleted: admin.firestore.FieldValue.increment(1),
-      deliveryEarnings: admin.firestore.FieldValue.increment(driverEarnings),
-      pendingBalanceCents: admin.firestore.FieldValue.increment(earningsCents),
-      currency: parcel.currency ? parcel.currency.toLowerCase() : 'cad',
+      deliveryEarnings: admin.firestore.FieldValue.increment(prepared.settlement.driverEarnings),
+      currency: prepared.settlement.stripeCurrency,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    if (prepared.parcel.paymentMethod !== 'card') {
+      driverUpdate.pendingBalanceCents = admin.firestore.FieldValue.increment(
+        prepared.settlement.driverEarningsMinor,
+      );
+    }
+
+    tx.update(prepared.parcelRef, {
+      status: 'completed',
+      paymentStatus: 'paid',
+      driverPaidOut: true,
+      driverEarnings: prepared.settlement.driverEarnings,
+      platformFee: prepared.settlement.platformFee,
+      driverPayoutStatus: prepared.parcel.paymentMethod === 'card' ? 'succeeded' : 'credited_to_balance',
+      stripeTransferId,
+      confirmedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    tx.update(prepared.driverRef, driverUpdate);
+    tx.set(prepared.settlementRef, {
+      status: prepared.parcel.paymentMethod === 'card' ? 'succeeded' : 'credited_to_balance',
+      stripeTransferId,
+      settledAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+}
+
+async function settleParcelPayout(parcelId: string, actorUid?: string): Promise<void> {
+  const prepared = await prepareParcelSettlement(parcelId, actorUid);
+  if (prepared.alreadySettled) return;
+
+  let stripeTransferId: string | null = prepared.existingTransferId;
+  try {
+    stripeTransferId = await transferParcelDriverShare(prepared);
+  } catch (error) {
+    await markParcelSettlementFailed(prepared, error);
+    throw error;
   }
+
+  await finalizeParcelSettlement(prepared, stripeTransferId);
 }
 
 export const confirmParcelReceipt = onCall(
-  { region: REGION },
+  { region: REGION, secrets: [stripeSecretKey] },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
     const uid = request.auth.uid;
@@ -291,28 +499,14 @@ export const confirmParcelReceipt = onCall(
       throw new HttpsError('invalid-argument', 'Identifiant de colis invalide.');
     }
 
-    const db = admin.firestore();
-    const parcelRef = db.collection('parcels').doc(parcelId);
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(parcelRef);
-      if (!snap.exists) throw new HttpsError('not-found', 'Colis introuvable.');
-      const parcel = snap.data() as ParcelDoc;
-      if (parcel.senderId !== uid && parcel.receiverId !== uid) {
-        throw new HttpsError('permission-denied', 'Vous ne participez pas à ce colis.');
-      }
-      if (parcel.status !== 'delivered' && parcel.status !== 'completed') {
-        throw new HttpsError('failed-precondition', 'Le colis doit être livré avant confirmation.');
-      }
-      if (parcel.driverPaidOut === true) return;
-      await settleParcelPayout(tx, parcelRef, parcel);
-    });
+    await settleParcelPayout(parcelId, uid);
 
     return { success: true, parcelId };
   },
 );
 
 export const autoConfirmDeliveredParcels = onSchedule(
-  { schedule: 'every 1 hours', region: REGION },
+  { schedule: 'every 1 hours', region: REGION, secrets: [stripeSecretKey] },
   async () => {
     const db = admin.firestore();
     const nowMs = Date.now();
@@ -339,13 +533,7 @@ export const autoConfirmDeliveredParcels = onSchedule(
       }, nowMs)) continue;
 
       try {
-        await db.runTransaction(async (tx) => {
-          const freshSnap = await tx.get(docSnap.ref);
-          if (!freshSnap.exists) return;
-          const parcel = freshSnap.data() as ParcelDoc;
-          if (parcel.status !== 'delivered' || parcel.driverPaidOut === true) return;
-          await settleParcelPayout(tx, docSnap.ref, parcel);
-        });
+        await settleParcelPayout(docSnap.id);
       } catch (err) {
         console.error(`[autoConfirmDeliveredParcels] failed ${docSnap.id}:`, err);
       }

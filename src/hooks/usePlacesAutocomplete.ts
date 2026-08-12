@@ -3,9 +3,15 @@ import { PlaceSuggestion } from '@/types';
 import { getDefaultCountryRestriction } from '@/utils/constants';
 
 interface UsePlacesAutocompleteProps {
-  autocompleteService: google.maps.places.AutocompleteService | null;
+  autocompleteService: PlacesAutocompleteService | null;
   location?: { lat: number; lng: number } | null;
   countryRestriction?: string[];
+}
+
+export interface PlacesAutocompleteService {
+  fetchAutocompleteSuggestions: (
+    request: google.maps.places.AutocompleteRequest,
+  ) => Promise<{ suggestions: google.maps.places.AutocompleteSuggestion[] }>;
 }
 
 interface UsePlacesAutocompleteReturn {
@@ -34,6 +40,7 @@ export const usePlacesAutocomplete = ({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
   const predictionCacheRef = useRef<Map<string, PlaceSuggestion[]>>(new Map());
+  const requestIdRef = useRef(0);
 
   // Crée/réutilise un session token. Un token = 1 session facturée Places à $2.83/1000
   // au lieu de $17/1000 par requête. Il est renouvelé après chaque sélection (via
@@ -49,6 +56,7 @@ export const usePlacesAutocomplete = ({
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -60,6 +68,8 @@ export const usePlacesAutocomplete = ({
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
+    requestIdRef.current += 1;
+    setLoading(false);
     setSuggestions([]);
     // NE PAS renouveler le token ici : l'utilisateur peut effacer / retaper sans
     // que ce soit une nouvelle session de recherche. Le token n'est renouvelé
@@ -85,17 +95,19 @@ export const usePlacesAutocomplete = ({
       const cacheKey = `${input.trim().toLowerCase()}|${activeCountryRestriction.join(',')}|${location ? `${location.lat.toFixed(3)},${location.lng.toFixed(3)}` : ''}`;
       const cached = predictionCacheRef.current.get(cacheKey);
       if (cached) {
+        setLoading(false);
         setSuggestions(cached);
         return;
       }
 
+      const requestId = ++requestIdRef.current;
       debounceRef.current = setTimeout(() => {
         setLoading(true);
 
-        const request: google.maps.places.AutocompletionRequest = {
-          input,
+        const request: google.maps.places.AutocompleteRequest = {
+          input: input.trim(),
           sessionToken: getOrCreateSessionToken(),
-          componentRestrictions: { country: activeCountryRestriction },
+          includedRegionCodes: activeCountryRestriction,
         };
 
 
@@ -106,26 +118,27 @@ export const usePlacesAutocomplete = ({
           });
         }
 
-        autocompleteService.getPlacePredictions(
-          request,
-          (predictions, status) => {
-            if (!mountedRef.current) return;
+        void autocompleteService.fetchAutocompleteSuggestions(request)
+          .then(({ suggestions: predictions }) => {
+            if (!mountedRef.current || requestIdRef.current !== requestId) return;
+            const mapped = predictions.flatMap((prediction) => {
+              const placePrediction = prediction.placePrediction;
+              if (!placePrediction) return [];
+              return [{
+                place_id: placePrediction.placeId,
+                description: placePrediction.text.toString(),
+              }];
+            });
+            predictionCacheRef.current.set(cacheKey, mapped);
             setLoading(false);
-            if (
-              status === google.maps.places.PlacesServiceStatus.OK &&
-              predictions
-            ) {
-              const mapped = predictions.map((prediction) => ({
-                place_id: prediction.place_id,
-                description: prediction.description,
-              }));
-              predictionCacheRef.current.set(cacheKey, mapped);
-              setSuggestions(mapped);
-            } else {
-              setSuggestions([]);
-            }
-          }
-        );
+            setSuggestions(mapped);
+          })
+          .catch((error: unknown) => {
+            if (!mountedRef.current || requestIdRef.current !== requestId) return;
+            setLoading(false);
+            setSuggestions([]);
+            console.warn('[PlacesAutocomplete] Requête échouée:', error);
+          });
       }, 250);
     },
     [autocompleteService, location, countryRestriction, getOrCreateSessionToken]

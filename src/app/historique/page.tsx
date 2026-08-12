@@ -14,6 +14,11 @@ import { Booking } from '@/types/booking';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import {
+  getHistoryAction,
+  getHistoryStatusPresentation,
+  getHistoryTypePresentation,
+} from './history-ui';
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'all';
 
@@ -131,30 +136,17 @@ export default function HistoriquePage() {
     }
   };
 
-  const getStatusLabel = (status: string) => {
-    const statusMap: Record<string, string> = {
-      'pending': 'En attente',
-      'accepted': 'Acceptée',
-      'in_progress': 'En cours',
-      'completed': 'Terminée',
-      'cancelled': 'Annulée',
-      'failed': 'Échouée',
-      'delivered': 'Livrée',
+  const getToneClasses = (tone: string) => {
+    const toneMap: Record<string, string> = {
+      warning: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
+      info: 'border-sky-400/30 bg-sky-400/10 text-sky-300',
+      active: 'border-indigo-400/30 bg-indigo-400/10 text-indigo-300',
+      success: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+      danger: 'border-red-400/30 bg-red-400/10 text-red-300',
+      neutral: 'border-slate-400/30 bg-slate-400/10 text-slate-300',
     };
-    return statusMap[status] || status;
-  };
 
-  const getStatusColor = (status: string) => {
-    const colorMap: Record<string, string> = {
-      'pending': 'bg-yellow-500/10 text-yellow-400',
-      'accepted': 'bg-blue-500/10 text-blue-400',
-      'in_progress': 'bg-indigo-500/10 text-indigo-400',
-      'completed': 'bg-green-500/10 text-green-400',
-      'cancelled': 'bg-red-500/10 text-red-400',
-      'failed': 'bg-red-500/10 text-red-400',
-      'delivered': 'bg-green-500/10 text-green-400',
-    };
-    return colorMap[status] || 'bg-slate-500/10 text-slate-400';
+    return toneMap[tone] || toneMap.neutral;
   };
 
   // Télécharger la facture d'une course
@@ -218,6 +210,17 @@ export default function HistoriquePage() {
             </div>
           </div>
 
+          <div className="relative grid grid-cols-2 gap-2 mb-4">
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-2xl font-bold text-white">{history.filter((item) => item.type === 'Taxi').length}</p>
+              <p className="text-xs text-slate-400">Courses taxi</p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <p className="text-2xl font-bold text-white">{history.filter((item) => item.type === 'Livraison').length}</p>
+              <p className="text-xs text-slate-400">Livraisons de colis</p>
+            </div>
+          </div>
+
           <div className="relative">
             <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">Période</p>
             <div className="flex flex-wrap gap-2">
@@ -256,62 +259,78 @@ export default function HistoriquePage() {
               const status = item.status as string | undefined;
               const type = item.type as string | undefined;
               const id = item.id as string | undefined;
+              const typePresentation = getHistoryTypePresentation(type);
+              const statusPresentation = getHistoryStatusPresentation(type, status || 'pending');
+              const action = getHistoryAction(type, status || 'pending');
+              const pickupLocation = item.pickupLocation as { address?: string } | undefined;
+              const dropoffLocation = item.dropoffLocation as { address?: string } | undefined;
+              const pickupAddress = pickupLocation?.address || pickup;
+              const dropoffAddress = dropoffLocation?.address || destination;
 
               return (
-                <GlassCard key={id} className="p-4 sm:p-5">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="px-3 py-1 text-xs font-semibold rounded-full bg-primary/10 text-primary">
-                          {type}
-                        </span>
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(status || 'pending')}`}>
-                          {getStatusLabel(status || 'pending')}
-                        </span>
+                <GlassCard key={id} className="border border-white/10 p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/20">
+                        <MaterialIcon name={typePresentation.icon} className="text-primary" />
                       </div>
-                      <p className="text-sm text-slate-400 mb-1">
-                        {new Date(timestamp).toLocaleDateString('fr-FR', {
-                          weekday: 'long',
-                          day: '2-digit',
-                          month: 'long',
-                          year: 'numeric'
-                        })} à {new Date(timestamp).toLocaleTimeString('fr-FR', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-bold text-white">{typePresentation.label}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {new Date(timestamp).toLocaleDateString('fr-FR', {
+                            weekday: 'long',
+                            day: '2-digit',
+                            month: 'long',
+                            year: 'numeric'
+                          })} à {new Date(timestamp).toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xl font-bold text-primary">{formatCurrencyWithCode(price || 0)}</p>
+                    <div className="shrink-0 text-right">
+                      <p className="text-lg font-bold text-primary">{formatCurrencyWithCode(price || 0)}</p>
                     </div>
                   </div>
 
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                      {type === 'Livraison' ? 'Colis' : 'Taxi'}
+                    </span>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getToneClasses(statusPresentation.tone)}`}>
+                      {statusPresentation.label}
+                    </span>
+                  </div>
+
+                  <p className="mt-3 text-sm leading-5 text-slate-300">{statusPresentation.description}</p>
+
                   {type === 'Taxi' && (
-                    <div className="space-y-2 border-t border-white/10 pt-3">
-                      <div className="flex items-start">
-                        <span className="text-green-400 mr-2 mt-1">●</span>
-                        <div>
+                    <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Itinéraire</p>
+                      <div className="flex items-start gap-3">
+                        <MaterialIcon name="location_on" size="sm" className="mt-0.5 text-emerald-400" />
+                        <div className="min-w-0">
                           <p className="text-xs text-slate-500">Départ</p>
                           <p className="font-medium text-white">{pickup || 'Non spécifié'}</p>
                         </div>
                       </div>
-                      <div className="flex items-start">
-                        <span className="text-red-400 mr-2 mt-1">●</span>
-                        <div>
+                      <div className="flex items-start gap-3">
+                        <MaterialIcon name="navigation" size="sm" className="mt-0.5 text-rose-400" />
+                        <div className="min-w-0">
                           <p className="text-xs text-slate-500">Arrivée</p>
                           <p className="font-medium text-white">{destination || 'Non spécifié'}</p>
                         </div>
                       </div>
 
-                      {/* Bouton télécharger facture - uniquement pour les courses terminées */}
-                      {status === 'completed' && (
+                      {action && status === 'completed' && (
                         <div className="mt-3 pt-3 border-t border-white/10">
                           <button
                             onClick={() => handleDownloadInvoice(item)}
                             className="flex items-center justify-center w-full px-4 py-2.5 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all hover:opacity-90 active:scale-[0.98]"
                           >
-                            <MaterialIcon name="download" size="sm" className="mr-2" />
-                            Télécharger la facture PDF
+                            <MaterialIcon name={action.icon} size="sm" className="mr-2" />
+                            {action.label}
                           </button>
                         </div>
                       )}
@@ -319,25 +338,40 @@ export default function HistoriquePage() {
                   )}
 
                   {type === 'Livraison' && (
-                    <div className="border-t border-white/10 pt-3">
-                      <p className="text-sm text-slate-400">{description || 'Aucune description'}</p>
-                      {(() => {
-                        const dropoff = item.dropoffLocation as { address?: string } | undefined;
-                        const dropoffAddr = dropoff?.address || destination;
-                        return dropoffAddr ? (
-                          <p className="text-sm text-slate-500 mt-1">
-                            <span className="font-medium text-slate-300">Destination :</span> {dropoffAddr}
-                          </p>
-                        ) : null;
-                      })()}
-                      {status && status !== 'delivered' && status !== 'cancelled' && id && (
+                    <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
+                      <div className="flex items-start gap-3">
+                        <MaterialIcon name="shopping_bag" size="sm" className="mt-0.5 text-primary" />
+                        <div className="min-w-0">
+                          <p className="text-xs text-slate-500">Type de colis</p>
+                          <p className="font-medium text-white">{description || 'Colis à livrer'}</p>
+                        </div>
+                      </div>
+                      {pickupAddress && (
+                        <div className="flex items-start gap-3">
+                          <MaterialIcon name="location_on" size="sm" className="mt-0.5 text-emerald-400" />
+                          <div className="min-w-0">
+                            <p className="text-xs text-slate-500">Lieu de retrait</p>
+                            <p className="font-medium text-white">{pickupAddress}</p>
+                          </div>
+                        </div>
+                      )}
+                      {dropoffAddress && (
+                        <div className="flex items-start gap-3">
+                          <MaterialIcon name="navigation" size="sm" className="mt-0.5 text-rose-400" />
+                          <div className="min-w-0">
+                            <p className="text-xs text-slate-500">Lieu de livraison</p>
+                            <p className="font-medium text-white">{dropoffAddress}</p>
+                          </div>
+                        </div>
+                      )}
+                      {action && id && (
                         <div className="mt-3 pt-3 border-t border-white/10">
                           <Link
                             href={`/client/parcel/${id}/tracking`}
                             className="flex items-center justify-center w-full px-4 py-2.5 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all hover:opacity-90 active:scale-[0.98]"
                           >
-                            <MaterialIcon name="my_location" size="sm" className="mr-2" />
-                            Suivre le colis
+                            <MaterialIcon name={action.icon} size="sm" className="mr-2" />
+                            {action.label}
                           </Link>
                         </div>
                       )}

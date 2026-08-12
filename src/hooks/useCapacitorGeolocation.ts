@@ -197,11 +197,12 @@ export const useCapacitorGeolocation = () => {
             try {
                 return await readBrowserPosition(mode);
             } catch (browserErr) {
-                if (!fallbackToCache) {
+                if (!fallbackToCache || !Capacitor.isNativePlatform()) {
+                    const errorMessage = browserErr instanceof Error ? browserErr.message : 'Impossible d\'obtenir la position';
                     setState({
                         location: null,
                         preciseLocation: null,
-                        error: browserErr instanceof Error ? browserErr.message : 'Impossible d\'obtenir la position',
+                        error: errorMessage,
                         loading: false,
                         accuracy: null,
                     });

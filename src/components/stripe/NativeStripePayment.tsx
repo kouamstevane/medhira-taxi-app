@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getStripeAdapter, type PaymentResult } from '@/lib/stripe-adapters';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { toIntlCurrencyCode } from '@/utils/format';
 
 interface NativeStripePaymentProps {
   clientSecret: string;
@@ -45,7 +46,7 @@ export function NativeStripePayment({
       const result: PaymentResult = await adapter.pay({
         clientSecret,
         amount,
-        currency,
+        currency: toIntlCurrencyCode(currency),
       });
 
       if (result.status === 'succeeded' || result.status === 'requires_capture') {
@@ -63,7 +64,7 @@ export function NativeStripePayment({
 
   const formattedAmount = new Intl.NumberFormat('fr-CA', {
     style: 'currency',
-    currency: currency.toUpperCase(),
+    currency: toIntlCurrencyCode(currency),
   }).format(amount);
 
   return (

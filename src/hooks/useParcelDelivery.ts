@@ -30,6 +30,8 @@ export interface ParcelDoc {
   driverEarnings?: number
   platformFee?: number
   driverPaidOut?: boolean
+  driverPayoutStatus?: 'pending' | 'processing' | 'succeeded' | 'credited_to_balance' | 'failed'
+  stripeTransferId?: string | null
   createdAt?: unknown
   acceptedAt?: unknown
   pickedUpAt?: unknown

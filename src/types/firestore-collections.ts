@@ -423,6 +423,8 @@ export interface ParcelCollection {
   driverEarnings?: number;
   platformFee?: number;
   driverPaidOut?: boolean;
+  driverPayoutStatus?: 'pending' | 'processing' | 'succeeded' | 'credited_to_balance' | 'failed';
+  stripeTransferId?: string | null;
   createdAt: Date;
   updatedAt: Date;
   acceptedAt?: Date;

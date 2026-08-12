@@ -8,6 +8,11 @@
 
 import { CURRENCY_CODE, CURRENCY_MAP, CURRENCY_LOCALE_MAP, DEFAULT_LOCALE } from './constants';
 
+export const toIntlCurrencyCode = (currency: string): string => {
+  const normalizedCurrency = currency.trim().toUpperCase();
+  return CURRENCY_MAP[normalizedCurrency] || normalizedCurrency;
+};
+
 /**
  * Formate un montant avec le code de devise global
  *
@@ -40,7 +45,7 @@ export const formatCurrencyWithCode = (amount: number): string => {
  * @see formatCurrencyWithCode pour les affichages financiers principaux
  */
 export const formatCurrency = (amount: number): string => {
-  const currency = CURRENCY_MAP[CURRENCY_CODE] || 'XAF';
+  const currency = toIntlCurrencyCode(CURRENCY_CODE);
   const locale = CURRENCY_LOCALE_MAP[currency] || 'fr-FR';
   
   // Pour FCFA, utiliser le code de devise au lieu du symbole (pas de symbole standard)

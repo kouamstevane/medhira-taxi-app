@@ -11,12 +11,13 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
+import type { PlacesAutocompleteService } from './usePlacesAutocomplete';
 
 interface UseGoogleMapsReturn {
   isLoaded: boolean;
   loadError: string | null;
   directionsService: google.maps.DirectionsService | null;
-  autocompleteService: google.maps.places.AutocompleteService | null;
+  autocompleteService: PlacesAutocompleteService | null;
 }
 
 /**
@@ -31,7 +32,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService | null>(null);
-  const [autocompleteService, setAutocompleteService] = useState<google.maps.places.AutocompleteService | null>(null);
+  const [autocompleteService, setAutocompleteService] = useState<PlacesAutocompleteService | null>(null);
 
   const mountedRef = useRef(true);
 
@@ -41,7 +42,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     };
   }, []);
 
-  const initializeServices = useCallback(() => {
+  const initializeServices = useCallback(async () => {
     if (window.google && window.google.maps) {
       try {
         // Vérifier que DirectionsService est disponible
@@ -52,12 +53,17 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
         // Vérifier que la bibliothèque places est disponible (peut prendre un peu de temps)
         if (!window.google.maps.places) {
           // Attendre un peu et réessayer
-          setTimeout(() => {
+          setTimeout(async () => {
             if (!mountedRef.current) return;
             if (window.google?.maps?.places) {
               try {
+                const placesLibrary = await window.google.maps.importLibrary('places') as google.maps.PlacesLibrary;
                 setDirectionsService(new window.google.maps.DirectionsService());
-                setAutocompleteService(new window.google.maps.places.AutocompleteService());
+                setAutocompleteService({
+                  fetchAutocompleteSuggestions: placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions.bind(
+                    placesLibrary.AutocompleteSuggestion,
+                  ),
+                });
                 setIsLoaded(true);
                 setLoadError(null);
               } catch (err: unknown) {
@@ -74,8 +80,13 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
 
         // Initialiser les services
         if (!mountedRef.current) return;
+        const placesLibrary = await window.google.maps.importLibrary('places') as google.maps.PlacesLibrary;
         setDirectionsService(new window.google.maps.DirectionsService());
-        setAutocompleteService(new window.google.maps.places.AutocompleteService());
+        setAutocompleteService({
+          fetchAutocompleteSuggestions: placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions.bind(
+            placesLibrary.AutocompleteSuggestion,
+          ),
+        });
         setIsLoaded(true);
         setLoadError(null);
       } catch (err: unknown) {
