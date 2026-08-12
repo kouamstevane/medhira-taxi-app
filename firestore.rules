@@ -807,9 +807,11 @@ service cloud.firestore {
           && request.resource.data.category.size() >= 1
           && request.resource.data.category.size() <= 80
           && request.resource.data.isAvailable is bool
+          && (!('imageUrl' in request.resource.data) || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2048))
+          && (!('imageStoragePath' in request.resource.data) || (request.resource.data.imageStoragePath is string && request.resource.data.imageStoragePath.size() <= 256))
           && request.resource.data.keys()
             .hasOnly(['id', 'restaurantId', 'name', 'description', 'price', 'category',
-                      'imageUrl', 'isAvailable', 'createdAt', 'updatedAt']);
+                      'imageUrl', 'imageStoragePath', 'isAvailable', 'createdAt', 'updatedAt']);
       }
 
       function isMenuAvailabilityOnlyUpdate() {

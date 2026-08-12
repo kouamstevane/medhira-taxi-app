@@ -261,6 +261,25 @@ describe('Food restoration Firestore rules', () => {
       category: 'plats',
       isAvailable: true,
     }));
+
+    await assertSucceeds(setDoc(doc(ownerDb, 'restaurants', restaurantId, 'menu_items', 'valid-item-storage'), {
+      name: 'Burger',
+      description: 'Burger maison',
+      price: 15.0,
+      category: 'plats',
+      isAvailable: true,
+      imageUrl: 'https://firebasestorage.googleapis.com/v0/b/app/o/burger.webp',
+      imageStoragePath: 'menu-images/food-restaurant/valid-item-storage/up1.webp',
+    }));
+
+    await assertFails(setDoc(doc(ownerDb, 'restaurants', restaurantId, 'menu_items', 'bad-storage-path'), {
+      name: 'Burger',
+      description: 'Burger maison',
+      price: 15.0,
+      category: 'plats',
+      isAvailable: true,
+      imageStoragePath: 12345,
+    }));
   });
 
   test('restaurant owner can toggle legacy menu item availability without rewriting the full item', async () => {
