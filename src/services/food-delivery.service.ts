@@ -31,6 +31,7 @@ import {
   orderBy, 
   updateDoc,
   serverTimestamp,
+  deleteField,
   limit,
   startAfter,
   onSnapshot,
@@ -42,6 +43,13 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApps, getApp } from 'firebase/app';
 import { db } from '@/config/firebase';
+
+export type MenuImageUpdate =
+  | { state: 'image-none' }
+  | { state: 'image-unchanged' }
+  | { state: 'external-url'; imageUrl: string }
+  | { state: 'upload'; imageUrl: string; imageStoragePath: string }
+  | { state: 'remove' };
 import type {
   FoodOrder,
   FoodOrderStatus,
@@ -874,32 +882,87 @@ export const FoodDeliveryService = {
   /**
    * Ajouter ou modifier un article du menu
    */
-  upsertMenuItem: async (restaurantId: string, itemData: Partial<MenuItem>): Promise<string> => {
+  upsertMenuItem: async (
+    restaurantId: string,
+    itemData: Partial<MenuItem>,
+    imageUpdate?: MenuImageUpdate
+  ): Promise<string> => {
     try {
-    const menuRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS);
-    const itemId = itemData.id || doc(menuRef).id;
-    const itemDocRef = doc(menuRef, itemId);
+      const menuRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS);
+      const itemId = itemData.id || doc(menuRef).id;
+      const itemDocRef = doc(menuRef, itemId);
 
-    const data = {
-      ...itemData,
-      id: itemId,
-      restaurantId,
-      name: itemData.name ?? '',
-      description: itemData.description ?? '',
-      price: itemData.price ?? 0,
-      category: itemData.category ?? 'Plats',
-      isAvailable: itemData.isAvailable ?? true,
-      updatedAt: serverTimestamp(),
-    };
+      const data: Record<string, unknown> = {
+        ...itemData,
+        id: itemId,
+        restaurantId,
+        name: itemData.name ?? '',
+        description: itemData.description ?? '',
+        price: itemData.price ?? 0,
+        category: itemData.category ?? 'Plats',
+        isAvailable: itemData.isAvailable ?? true,
+        updatedAt: serverTimestamp(),
+      };
 
-    if (!itemData.id) {
-      (data as Record<string, unknown>).createdAt = serverTimestamp();
-    }
+      // Supprimer les clés images éventuelles de itemData pour que imageUpdate gouverne totalement le comportement
+      delete data.imageUrl;
+      delete data.imageStoragePath;
 
-    await setDoc(itemDocRef, data, { merge: true });
-    return itemId;
+      if (imageUpdate) {
+        switch (imageUpdate.state) {
+          case 'external-url':
+            data.imageUrl = imageUpdate.imageUrl;
+            data.imageStoragePath = deleteField();
+            break;
+          case 'upload':
+            data.imageUrl = imageUpdate.imageUrl;
+            data.imageStoragePath = imageUpdate.imageStoragePath;
+            break;
+          case 'remove':
+            data.imageUrl = deleteField();
+            data.imageStoragePath = deleteField();
+            break;
+          case 'image-none':
+          case 'image-unchanged':
+            // Omettre les clés pour préserver le document sans modifier les images
+            break;
+        }
+      }
+
+      if (!itemData.id) {
+        data.createdAt = serverTimestamp();
+      }
+
+      await setDoc(itemDocRef, data, { merge: true });
+      return itemId;
     } catch (error) {
       console.error('[food-delivery.service] upsertMenuItem failed:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Mettre à jour la disponibilité d'un article sans toucher aux données d'image
+   */
+  updateMenuItemAvailability: async (
+    restaurantId: string,
+    itemId: string,
+    isAvailable: boolean
+  ): Promise<void> => {
+    try {
+      const itemDocRef = doc(
+        db,
+        FIRESTORE_COLLECTIONS.RESTAURANTS,
+        restaurantId,
+        FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+        itemId
+      );
+      await updateDoc(itemDocRef, {
+        isAvailable,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('[food-delivery.service] updateMenuItemAvailability failed:', error);
       throw error;
     }
   },
@@ -955,3 +1018,5 @@ export const FoodDeliveryService = {
     }
   },
 };
+
+export const foodDeliveryService = FoodDeliveryService;
