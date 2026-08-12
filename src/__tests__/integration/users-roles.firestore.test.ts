@@ -333,6 +333,64 @@ describe('Users/Roles Firestore Rules', () => {
         },
       }));
     });
+
+    test('REJECTED: suspended driver cannot be selected as activeRole', async () => {
+      const uid = 'suspended-driver';
+      await setupUser(uid, {
+        client: { enabled: true, joinedAt: Timestamp.now() },
+        driver: { joinedAt: Timestamp.now() },
+      });
+
+      await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+        await setDoc(doc(context.firestore(), 'drivers', uid), { status: 'suspended' });
+      });
+
+      const db = testEnv.authenticatedContext(uid).firestore();
+      await assertFails(updateDoc(doc(db, 'users', uid), {
+        activeRole: 'driver',
+        lastActiveRole: 'driver',
+      }));
+    });
+
+    test('AUTHORIZED: non-suspended driver can be selected as activeRole', async () => {
+      const uid = 'pending-driver';
+      await setupUser(uid, {
+        client: { enabled: true, joinedAt: Timestamp.now() },
+        driver: { joinedAt: Timestamp.now() },
+      });
+
+      await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+        await setDoc(doc(context.firestore(), 'drivers', uid), { status: 'pending' });
+      });
+
+      const db = testEnv.authenticatedContext(uid).firestore();
+      await assertSucceeds(updateDoc(doc(db, 'users', uid), {
+        activeRole: 'driver',
+        lastActiveRole: 'driver',
+      }));
+    });
+
+    test('REJECTED: suspended restaurant cannot be selected as activeRole', async () => {
+      const uid = 'suspended-restaurant';
+      const restaurantId = 'restaurant-suspended';
+      await setupUser(uid, {
+        client: { enabled: true, joinedAt: Timestamp.now() },
+        restaurant: { restaurantId, joinedAt: Timestamp.now() },
+      });
+
+      await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+        await setDoc(doc(context.firestore(), 'restaurants', restaurantId), {
+          ownerId: uid,
+          status: 'suspended',
+        });
+      });
+
+      const db = testEnv.authenticatedContext(uid).firestore();
+      await assertFails(updateDoc(doc(db, 'users', uid), {
+        activeRole: 'restaurant',
+        lastActiveRole: 'restaurant',
+      }));
+    });
   });
 
   describe('Restaurants security §10.2', () => {

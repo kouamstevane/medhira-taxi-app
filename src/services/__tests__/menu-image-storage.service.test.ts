@@ -19,8 +19,9 @@ jest.mock('firebase/storage', () => {
     uploadBytesResumable: jest.fn(() => {
       const listeners: Record<string, (snapshot: any) => void> = {};
       return {
-        on: (event: string, next: (snap: any) => void, _error: any, complete: () => void) => {
+        on: (event: string, next: (snap: any) => void, error: (reason: unknown) => void, complete: () => void) => {
           listeners[event] = next;
+          mockEmitUploadError = error;
           mockEmitUploadComplete = complete;
           next({ bytesTransferred: 50, totalBytes: 100 });
         },
@@ -35,6 +36,7 @@ jest.mock('firebase/storage', () => {
 });
 
 let mockEmitUploadComplete: (() => void) | undefined;
+let mockEmitUploadError: ((reason: unknown) => void) | undefined;
 
 describe('MenuImageStorageService', () => {
   it('generates item ID and correct path structure', () => {
@@ -98,6 +100,31 @@ describe('MenuImageStorageService', () => {
     );
   });
 
+  it('maps unauthenticated Storage errors to a reconnect message', () => {
+    expect(getMenuImageStorageErrorMessage({ code: 'storage/unauthenticated' })).toBe(
+      'Votre session Firebase a expiré. Reconnectez-vous avant de modifier les images du menu.',
+    );
+  });
+
+  it('does not treat a Firestore permission error as a Storage error', () => {
+    expect(getMenuImageStorageErrorMessage({ code: 'permission-denied' })).toBe(
+      'Impossible d’enregistrer l’article du menu. Vérifiez le fichier et réessayez.',
+    );
+  });
+
+  it('rejects the upload completion promise when Storage reports an error', async () => {
+    const uploadTask = uploadMenuImage({
+      restaurantId: 'rest123',
+      itemId: 'item456',
+      file: new File(['data'], 'item.webp', { type: 'image/webp' }),
+    });
+    const error = { code: 'storage/unauthenticated' };
+
+    mockEmitUploadError?.(error);
+
+    await expect(uploadTask.complete).rejects.toEqual(error);
+  });
+
   it('tolerates object-not-found during deleteMenuImage', async () => {
     const { deleteObject } = require('firebase/storage');
     deleteObject.mockImplementationOnce(async () => {
@@ -107,5 +134,16 @@ describe('MenuImageStorageService', () => {
     });
 
     await expect(deleteMenuImage('menu-images/rest1/item1/up1.webp')).resolves.toBeUndefined();
+  });
+
+  it('propagates authorization failures during deleteMenuImage', async () => {
+    const { deleteObject } = require('firebase/storage');
+    const error = new Error('Unauthorized');
+    (error as any).code = 'storage/unauthorized';
+    deleteObject.mockImplementationOnce(async () => {
+      throw error;
+    });
+
+    await expect(deleteMenuImage('menu-images/rest1/item1/up1.webp')).rejects.toBe(error);
   });
 });

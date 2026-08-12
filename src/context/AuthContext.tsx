@@ -191,9 +191,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Recharger aussi les données Firestore
         const resolvedUserData = await fetchUserData(refreshedUser);
         if (!resolvedUserData) {
+          setUserData(null);
+          setAuthStatus('unauthenticated');
           throw new Error('Impossible de recharger le profil utilisateur.');
         }
-        setAuthStatus(resolvedUserData ? 'authenticated' : 'unauthenticated');
+        setAuthStatus('authenticated');
       } catch (err) {
         console.error('Erreur lors du rechargement de l\'utilisateur:', err);
         throw err;

@@ -69,13 +69,16 @@ export function getMenuImageStorageErrorMessage(error: unknown): string {
     ? String((error as { code?: unknown }).code)
     : '';
 
-  if (code === 'storage/unauthorized' || code === 'storage/permission-denied') {
+  if (code === 'storage/unauthenticated') {
+    return 'Votre session Firebase a expiré. Reconnectez-vous avant de modifier les images du menu.';
+  }
+  if (code === 'storage/unauthorized') {
     return 'Vous n’avez pas les droits pour modifier les images de ce restaurant.';
   }
   if (code === 'storage/canceled') {
     return 'Le chargement de l’image a été annulé.';
   }
-  return 'Impossible de charger l’image du menu. Vérifiez le fichier et réessayez.';
+  return 'Impossible d’enregistrer l’article du menu. Vérifiez le fichier et réessayez.';
 }
 
 /**
@@ -169,5 +172,6 @@ export async function deleteMenuImage(path: string): Promise<void> {
       imageStoragePath: path,
       error,
     });
+    throw error;
   }
 }

@@ -63,9 +63,12 @@ function ReloadConsumer() {
   return (
     <AuthContext.Consumer>
       {(value) => (
-        <button type="button" onClick={() => { reloadPromise = value?.reloadUser(); }}>
-          Recharger
-        </button>
+        <div>
+          <span data-testid="reload-auth-status">{value?.authStatus}</span>
+          <button type="button" onClick={() => { reloadPromise = value?.reloadUser(); }}>
+            Recharger
+          </button>
+        </div>
       )}
     </AuthContext.Consumer>
   );
@@ -165,6 +168,7 @@ describe('AuthProvider', () => {
     mockGetDoc.mockResolvedValueOnce({ exists: () => false });
     fireEvent.click(screen.getByRole('button', { name: 'Recharger' }));
     await expect(reloadPromise).rejects.toThrow('Impossible de recharger le profil utilisateur.');
+    await waitFor(() => expect(screen.getByTestId('reload-auth-status')).toHaveTextContent('unauthenticated'));
     expect(mockUser.reload).toHaveBeenCalledTimes(1);
   });
 });
