@@ -9,7 +9,8 @@ const STATUS_LABEL: Record<ParcelStatus, string> = {
   pending: 'En attente',
   accepted: 'Assigné — en route vers retrait',
   in_transit: 'Colis récupéré, en transit',
-  delivered: 'Livré',
+  delivered: 'Livré — En attente de confirmation',
+  completed: 'Livraison terminée & Payée',
   cancelled: 'Annulé',
 }
 
@@ -143,24 +144,63 @@ export default function DriverParcelPage() {
           </div>
 
           <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-2 text-sm">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Colis</h2>
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Détails & Rémunération</h2>
             <div className="flex justify-between">
               <span className="text-slate-400">Description</span>
               <span className="text-white text-right max-w-[60%] truncate">{parcel.description}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Taille</span>
-              <span className="text-white capitalize">{parcel.sizeCategory}</span>
-            </div>
+            {parcel.parcelType && (
+              <div className="flex justify-between">
+                <span className="text-slate-400">Type</span>
+                <span className="text-white capitalize">{parcel.parcelType}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-slate-400">Distance</span>
               <span className="text-white">{parcel.distanceKm.toFixed(1)} km</span>
             </div>
-            <div className="flex justify-between border-t border-white/5 pt-2 mt-2">
-              <span className="text-slate-400">Montant course</span>
-              <span className="text-primary font-bold">{parcel.price.toFixed(2)} {parcel.currency}</span>
+            <div className="border-t border-white/5 pt-2 mt-2 space-y-1.5">
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Prix total client</span>
+                <span>{parcel.price.toFixed(2)} {parcel.currency}</span>
+              </div>
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>Frais plateforme Medjira (30%)</span>
+                <span>{(parcel.platformFee ?? parcel.price * 0.3).toFixed(2)} {parcel.currency}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm font-bold pt-1 border-t border-white/5">
+                <span className="text-green-400">Gains Chauffeur (70%)</span>
+                <span className="text-green-400 text-base">
+                  {(parcel.driverEarnings ?? parcel.price * 0.7).toFixed(2)} {parcel.currency}
+                </span>
+              </div>
             </div>
           </div>
+
+          {/* Statut de paiement du chauffeur */}
+          {parcel.status === 'delivered' && !parcel.driverPaidOut && (
+            <div className="glass-card rounded-2xl p-4 border border-amber-500/30 bg-amber-500/10 flex items-start gap-3">
+              <MaterialIcon name="schedule" className="text-amber-400 text-[24px] mt-0.5" />
+              <div>
+                <p className="font-bold text-sm text-white">En attente de confirmation client</p>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Dès que le destinataire ou le client aura cliqué sur &laquo;&nbsp;J&apos;ai reçu mon colis&nbsp;&raquo; (ou automatiquement sous 24h), vos 70% seront versés sur votre solde.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {(parcel.status === 'completed' || parcel.driverPaidOut) && (
+            <div className="glass-card rounded-2xl p-4 border border-green-500/30 bg-green-500/10 flex items-start gap-3">
+              <MaterialIcon name="account_balance_wallet" className="text-green-400 text-[24px] mt-0.5" />
+              <div>
+                <p className="font-bold text-sm text-white">Paiement 70% Crédité !</p>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Vos gains de {(parcel.driverEarnings ?? parcel.price * 0.7).toFixed(2)} {parcel.currency} ont été ajoutés à votre portefeuille/gains chauffeur.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-2 text-sm">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">Destinataire</h2>

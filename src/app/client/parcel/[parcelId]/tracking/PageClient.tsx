@@ -1,9 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useClientParcelTracking } from '@/hooks/useClientParcelTracking'
+import { confirmParcelReceipt } from '@/services/parcel.service'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
+import { Capacitor } from '@capacitor/core'
 
 const ParcelTrackingMap = dynamic(() => import('./ParcelTrackingMap'), {
   ssr: false,
@@ -11,14 +15,26 @@ const ParcelTrackingMap = dynamic(() => import('./ParcelTrackingMap'), {
 })
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: 'En attente d\'un chauffeur',
+  pending: "En attente d'un chauffeur",
   accepted: 'Chauffeur en route vers le retrait',
   in_transit: 'Colis en transit',
-  delivered: 'Colis livré',
+  delivered: 'Colis déposé — En attente de votre confirmation',
+  completed: 'Colis reçu & paiement validé',
   cancelled: 'Annulé',
 }
 
-const STATUS_STEPS = ['pending', 'accepted', 'in_transit', 'delivered'] as const
+const STATUS_STEPS = ['pending', 'accepted', 'in_transit', 'delivered', 'completed'] as const
+
+const triggerHaptic = async (type: 'light' | 'success' | 'error') => {
+  if (!Capacitor.isNativePlatform()) return
+  try {
+    if (type === 'light') await Haptics.impact({ style: ImpactStyle.Light })
+    else if (type === 'success') await Haptics.notification({ type: NotificationType.Success })
+    else if (type === 'error') await Haptics.notification({ type: NotificationType.Error })
+  } catch {
+    // Ignore
+  }
+}
 
 export default function ClientParcelTrackingPage() {
   const params = useParams()
@@ -27,6 +43,23 @@ export default function ClientParcelTrackingPage() {
 
   const { parcel, parcelLoading, parcelError, driverLocation, isDriverOnline } =
     useClientParcelTracking(parcelId)
+
+  const [confirming, setConfirming] = useState(false)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
+
+  const handleConfirmReceipt = async () => {
+    setConfirming(true)
+    setConfirmError(null)
+    try {
+      await confirmParcelReceipt(parcelId)
+      await triggerHaptic('success')
+    } catch (err) {
+      await triggerHaptic('error')
+      setConfirmError(err instanceof Error ? err.message : 'Erreur lors de la confirmation du colis')
+    } finally {
+      setConfirming(false)
+    }
+  }
 
   if (parcelLoading) {
     return (
@@ -83,6 +116,55 @@ export default function ClientParcelTrackingPage() {
               dropoff={{ lat: parcel.dropoffLocation.latitude, lng: parcel.dropoffLocation.longitude }}
             />
           </div>
+
+          {/* Action confirmation "J'ai reçu mon colis" */}
+          {parcel.status === 'delivered' && !parcel.driverPaidOut && (
+            <div className="glass-card rounded-2xl p-5 border border-primary/30 bg-primary/10 space-y-3">
+              <div className="flex items-center gap-3 text-white">
+                <MaterialIcon name="mark_email_read" className="text-primary text-[28px]" />
+                <div>
+                  <h3 className="font-bold text-base text-white">Le chauffeur a déposé le colis</h3>
+                  <p className="text-xs text-slate-300">
+                    Veuillez confirmer la réception pour valider la livraison et débloquer les 70% pour le chauffeur.
+                  </p>
+                </div>
+              </div>
+
+              {confirmError && (
+                <div className="text-xs bg-red-500/10 border border-red-500/20 text-red-400 p-2.5 rounded-xl">
+                  {confirmError}
+                </div>
+              )}
+
+              <button
+                onClick={handleConfirmReceipt}
+                disabled={confirming}
+                className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {confirming ? (
+                  <>
+                    <MaterialIcon name="progress_activity" className="animate-spin" />
+                    Validation en cours…
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcon name="check_circle" />
+                    J&apos;ai reçu mon colis
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {(parcel.status === 'completed' || parcel.driverPaidOut) && (
+            <div className="glass-card rounded-2xl p-4 border border-green-500/30 bg-green-500/10 flex items-center gap-3 text-green-400">
+              <MaterialIcon name="verified" size="md" />
+              <div>
+                <p className="font-bold text-sm text-white">Réception confirmée</p>
+                <p className="text-xs text-slate-300">Le paiement a été libéré avec succès pour le chauffeur.</p>
+              </div>
+            </div>
+          )}
 
           <div className="glass-card rounded-2xl p-5 border border-white/5">
             <h2 className="text-sm font-bold text-white mb-3 uppercase tracking-wide">Statut</h2>

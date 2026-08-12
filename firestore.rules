@@ -47,6 +47,12 @@ service cloud.firestore {
     function isEmailVerified() {
       return isAuthenticated() && request.auth.token.email_verified == true;
     }
+
+    function isValidParcelDriverTransition() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status']) ||
+        (resource.data.get('status', null) == 'accepted' && request.resource.data.get('status', null) == 'in_transit') ||
+        (resource.data.get('status', null) == 'in_transit' && request.resource.data.get('status', null) == 'delivered');
+    }
     
     // ============================================================================
     // COLLECTION USERS (CLIENTS)
@@ -576,7 +582,7 @@ service cloud.firestore {
     // COLLECTION PARCELS (COLIS)
     // ============================================================================
     
-    // Collection parcels - Les utilisateurs peuvent lire et créer leurs propres colis
+    // Collection parcels - Les colis sont créés et finalisés uniquement par les Cloud Functions.
     match /parcels/{parcelId} {
       // Lecture : Les utilisateurs authentifiés peuvent lire les colis où ils sont impliqués
       // Permet à l'expéditeur, au destinataire et au chauffeur de voir les informations du colis
@@ -586,11 +592,9 @@ service cloud.firestore {
                       resource.data.get('receiverId', null) == request.auth.uid ||
                       resource.data.get('driverId', null) == request.auth.uid);
       
-      // Création : Les utilisateurs authentifiés peuvent créer des colis
-      // Permet aux clients de créer des demandes de livraison de colis
-      // VALIDATION : senderId doit correspondre à l'utilisateur authentifié
-      allow create: if isAuthenticated() &&
-                       request.resource.data.senderId == request.auth.uid;
+      // Création : interdite côté client. La Cloud Function vérifie l'identité,
+      // recalcule le prix et écrit avec l'Admin SDK.
+      allow create: if false;
       
       // FIX #C13 : WHITELIST pour /parcels/{id} (au lieu d'un accès complet)
       // Empêche l'altération des champs financiers par sender/driver.
@@ -599,9 +603,10 @@ service cloud.firestore {
       allow update: if isAuthenticated() &&
                        resource.data.get('driverId', null) == request.auth.uid &&
                        request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['status', 'driverLocation', 'pickedUpAt',
-                                   'deliveredAt', 'notes', 'updatedAt',
-                                   'deliveryProofPhoto']);
+                          .hasOnly(['status', 'driverLocation', 'pickedUpAt',
+                                    'deliveredAt', 'notes', 'updatedAt',
+                                    'deliveryProofPhoto']) &&
+                       isValidParcelDriverTransition();
 
       // Whitelist sender (expéditeur) : annulation douce (uniquement avant pickup) + notes
       allow update: if isAuthenticated() &&

@@ -1321,12 +1321,12 @@ describe('Tests des règles Firestore - Medjira Taxi App', () => {
   describe('Collection parcels', () => {
     const parcelId = 'test-parcel-id';
 
-    test('Création de colis par expéditeur', async () => {
+    test('Création directe de colis par expéditeur doit échouer', async () => {
       await setupUser(aliceId, 'alice@example.com');
       
       const aliceDb = testEnv.authenticatedContext(aliceId).firestore();
       
-      await assertSucceeds(addDoc(collection(aliceDb, 'parcels'), {
+      await assertFails(addDoc(collection(aliceDb, 'parcels'), {
         senderId: aliceId,
         receiverId: bobId,
         driverId: null,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
@@ -15,16 +16,24 @@ import {
   createParcelOrder,
   estimateParcelPrice,
   ParcelValidationError,
-  PARCEL_SIZE_LABELS,
+  PARCEL_TYPE_LABELS,
   type ParcelLocation,
-  type ParcelSizeCategory,
+  type ParcelType,
+  type ParcelOrderResult,
 } from '@/services/parcel.service';
+import { finalizeParcelCardPayment } from '@/services/parcel.service';
+import { subscribeToWallet } from '@/services/wallet.service';
 import { getMarketByCountryCode, getSupportedCountryNames } from '@/utils/constants';
 import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 import { useCountryDetection } from '@/hooks/useCountryDetection';
 import type { PlaceSuggestion } from '@/types';
 
-type Step = 'form' | 'submitting' | 'success' | 'error';
+const StripePaymentElement = dynamic(
+  () => import('@/components/stripe/StripePaymentElement').then((module) => ({ default: module.StripePaymentElement })),
+  { ssr: false, loading: () => <div className="h-48 w-full animate-pulse rounded-xl bg-white/10" /> },
+);
+
+type Step = 'form' | 'submitting' | 'card_payment' | 'success' | 'error';
 
 const triggerHaptic = async (type: 'light' | 'medium' | 'success' | 'error') => {
   if (!Capacitor.isNativePlatform()) return;
@@ -53,8 +62,8 @@ interface FormData {
   pickupLocation: ParcelLocation | null;
   dropoffAddress: string;
   dropoffLocation: ParcelLocation | null;
-  sizeCategory: ParcelSizeCategory;
-  description: string;
+  parcelType: ParcelType;
+  customType: string;
   recipientName: string;
   recipientPhone: string;
   pickupInstructions: string;
@@ -65,8 +74,8 @@ const initialFormData: FormData = {
   pickupLocation: null,
   dropoffAddress: '',
   dropoffLocation: null,
-  sizeCategory: 'small',
-  description: '',
+  parcelType: 'food',
+  customType: '',
   recipientName: '',
   recipientPhone: '',
   pickupInstructions: '',
@@ -77,7 +86,7 @@ export default function ColisPage() {
   const { currentUser } = useAuth();
   const { isLoaded, loadError, autocompleteService } = useGoogleMaps();
 
-  const { preciseLocation, error: geoError, loading: geoLoading, getCurrentPosition } = useCapacitorGeolocation();
+  const { preciseLocation, getCurrentPosition } = useCapacitorGeolocation();
 
   const gpsLocation = preciseLocation ? { lat: preciseLocation.lat, lng: preciseLocation.lng } : null;
 
@@ -96,6 +105,17 @@ export default function ColisPage() {
   const [priceEstimate, setPriceEstimate] = useState<{ price: number; distance: number; duration: number; currency: string } | null>(null);
   const [priceLoading, setPriceLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'card'>('wallet');
+  const [pendingCardPayment, setPendingCardPayment] = useState<ParcelOrderResult | null>(null);
+
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    const unsub = subscribeToWallet(currentUser.uid, (w) => {
+      setWalletBalance(w.balance);
+    });
+    return () => unsub();
+  }, [currentUser?.uid]);
 
   const geocodePlace = useCallback(async (suggestion: PlaceSuggestion): Promise<ParcelLocation | null> => {
     if (!window.google?.maps?.Geocoder) return null;
@@ -151,15 +171,16 @@ export default function ColisPage() {
       return;
     }
     setFieldErrors((prev) => {
-      const { pickup: _p, dropoff: _d, ...rest } = prev;
-      return rest;
+      const next = { ...prev };
+      delete next.pickup;
+      delete next.dropoff;
+      return next;
     });
     setPriceLoading(true);
     try {
       const estimate = await estimateParcelPrice(
         formData.pickupLocation,
-        formData.dropoffLocation,
-        formData.sizeCategory
+        formData.dropoffLocation
       );
       setPriceEstimate({ ...estimate, currency: estimate.currency });
     } catch (err) {
@@ -170,7 +191,7 @@ export default function ColisPage() {
     } finally {
       setPriceLoading(false);
     }
-  }, [formData.pickupLocation, formData.dropoffLocation, formData.sizeCategory]);
+  }, [detectedCountry, formData.pickupLocation, formData.dropoffLocation]);
 
   useEffect(() => {
     updatePriceEstimate();
@@ -180,7 +201,9 @@ export default function ColisPage() {
     const errors: Record<string, string> = {};
     if (!formData.pickupLocation) errors.pickup = "L'adresse de retrait est requise";
     if (!formData.dropoffLocation) errors.dropoff = "L'adresse de livraison est requise";
-    if (formData.description.trim().length < 3) errors.description = 'Décrivez brièvement le colis';
+    if (formData.parcelType === 'other' && !formData.customType.trim()) {
+      errors.customType = 'Veuillez préciser le type de colis';
+    }
     if (formData.recipientName.trim().length < 2) errors.recipientName = 'Le nom du destinataire est requis';
     if (formData.recipientPhone.trim().length < 8) errors.recipientPhone = 'Numéro de téléphone invalide';
     setFieldErrors(errors);
@@ -201,17 +224,23 @@ export default function ColisPage() {
     setErrorMsg(null);
 
     try {
-      const parcelId = await createParcelOrder({
+      const result = await createParcelOrder({
         senderId: currentUser.uid,
         recipientName: formData.recipientName.trim(),
         recipientPhone: formData.recipientPhone.trim(),
         pickupLocation: formData.pickupLocation!,
         dropoffLocation: formData.dropoffLocation!,
-        description: formData.description.trim(),
-        weight: PARCEL_SIZE_LABELS[formData.sizeCategory].weightMax,
-        sizeCategory: formData.sizeCategory,
+        parcelType: formData.parcelType,
+        customType: formData.customType.trim() || undefined,
         pickupInstructions: formData.pickupInstructions.trim() || undefined,
+        paymentMethod,
       });
+
+      if (result.paymentMethod === 'card' && result.clientSecret && result.paymentIntentId) {
+        setPendingCardPayment(result);
+        setStep('card_payment');
+        return;
+      }
 
       await triggerHaptic('success');
       setStep('success');
@@ -228,6 +257,20 @@ export default function ColisPage() {
       const message = err instanceof Error ? err.message : 'Une erreur est survenue lors de la création du colis';
       setErrorMsg(message);
       setStep('error');
+    }
+  };
+
+  const handleCardPaymentSuccess = async (paymentIntentId: string) => {
+    if (!pendingCardPayment) return;
+    setStep('submitting');
+    try {
+      await finalizeParcelCardPayment(pendingCardPayment.parcelId, paymentIntentId);
+      await triggerHaptic('success');
+      setStep('success');
+    } catch (err) {
+      await triggerHaptic('error');
+      setErrorMsg(err instanceof Error ? err.message : 'Impossible de finaliser le paiement.');
+      setStep('card_payment');
     }
   };
 
@@ -295,6 +338,31 @@ export default function ColisPage() {
     );
   }
 
+  if (step === 'card_payment' && pendingCardPayment?.clientSecret) {
+    return (
+      <div className="min-h-screen bg-background max-w-[430px] mx-auto flex flex-col">
+        <div className="flex-1 p-4 pt-8">
+          <div className="glass-card rounded-2xl border border-white/10 p-5">
+            <h2 className="mb-2 text-xl font-bold text-white">Paiement sécurisé</h2>
+            <p className="mb-6 text-sm text-slate-400">
+              Confirmez le paiement pour lancer la recherche d’un chauffeur.
+            </p>
+            <StripePaymentElement
+              clientSecret={pendingCardPayment.clientSecret}
+              amount={pendingCardPayment.amount}
+              currency={pendingCardPayment.currency}
+              onSuccess={handleCardPaymentSuccess}
+              onError={(message) => setErrorMsg(message)}
+              submitLabel="Payer et confirmer le colis"
+            />
+            {errorMsg && <p className="mt-4 text-sm text-red-400">{errorMsg}</p>}
+          </div>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background pb-32 max-w-[430px] mx-auto">
       <NetworkStatusBanner />
@@ -346,6 +414,7 @@ export default function ColisPage() {
             error={fieldErrors.pickup}
             location={gpsLocation}
             countryRestriction={detectedCountry ? [detectedCountry.toLowerCase()] : undefined}
+            enableLocationButton={true}
           />
 
           <AddressInput
@@ -363,62 +432,61 @@ export default function ColisPage() {
             error={fieldErrors.dropoff}
             location={gpsLocation}
             countryRestriction={detectedCountry ? [detectedCountry.toLowerCase()] : undefined}
+            enableLocationButton={true}
           />
         </section>
 
         <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <MaterialIcon name="inventory_2" className="text-primary" />
-            Taille du colis
+            Type de colis
           </h2>
-          <div className="space-y-3">
-            {(Object.entries(PARCEL_SIZE_LABELS) as [ParcelSizeCategory, typeof PARCEL_SIZE_LABELS[ParcelSizeCategory]][]).map(
-              ([key, info]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={async () => {
-                    setFormData((prev) => ({ ...prev, sizeCategory: key }));
-                    await triggerHaptic('light');
-                  }}
-                  className={[
-                    'w-full p-4 rounded-xl border text-left transition-all',
-                    formData.sizeCategory === key
-                      ? 'border-primary bg-primary/10'
-                      : 'border-white/10',
-                  ].join(' ')}
-                >
-                  <p className="text-sm font-medium text-white">{info.label}</p>
-                  <p className="text-xs text-slate-400">{info.description}</p>
-                </button>
-              )
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {(Object.entries(PARCEL_TYPE_LABELS) as [ParcelType, typeof PARCEL_TYPE_LABELS[ParcelType]][]).map(
+              ([key, info]) => {
+                const isSelected = formData.parcelType === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={async () => {
+                      setFormData((prev) => ({ ...prev, parcelType: key }));
+                      await triggerHaptic('light');
+                    }}
+                    className={[
+                      'p-3 rounded-xl border flex items-center gap-2.5 transition-all text-left touch-manipulation',
+                      isSelected
+                        ? 'border-primary bg-primary/10 text-white font-medium'
+                        : 'border-white/10 text-slate-300 hover:bg-white/5',
+                    ].join(' ')}
+                  >
+                    <MaterialIcon name={info.icon} className={isSelected ? 'text-primary' : 'text-slate-400'} size="md" />
+                    <span className="text-sm">{info.label}</span>
+                  </button>
+                );
+              }
             )}
           </div>
-        </section>
 
-        <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <MaterialIcon name="description" className="text-primary" />
-            Détails
-          </h2>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">
-              Description du colis <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              placeholder="Ex: Documents, cadeau, matériel électronique…"
-              className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              style={{ fontSize: '16px' }}
-              rows={2}
-              maxLength={200}
-            />
-            {fieldErrors.description && (
-              <p className="mt-1 text-sm text-red-500">{fieldErrors.description}</p>
-            )}
-          </div>
+          {formData.parcelType === 'other' && (
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-slate-300 mb-1">
+                Précisez le type de colis <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.customType}
+                onChange={(e) => setFormData((prev) => ({ ...prev, customType: e.target.value }))}
+                placeholder="Ex: Clés, vêtement, appareil..."
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
+                style={{ fontSize: '16px' }}
+                maxLength={100}
+              />
+              {fieldErrors.customType && (
+                <p className="mt-1 text-xs text-red-500">{fieldErrors.customType}</p>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
@@ -502,6 +570,81 @@ export default function ColisPage() {
           </section>
         )}
 
+        <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <MaterialIcon name="account_balance_wallet" className="text-primary" />
+            Mode de paiement (100% In-App)
+          </h2>
+
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentMethod('wallet');
+                triggerHaptic('light');
+              }}
+              className={[
+                'p-3.5 rounded-xl border text-left transition-all touch-manipulation flex flex-col gap-1',
+                paymentMethod === 'wallet'
+                  ? 'border-primary bg-primary/10 text-white font-medium'
+                  : 'border-white/10 text-slate-400 hover:bg-white/5',
+              ].join(' ')}
+            >
+              <div className="flex items-center gap-2 font-semibold text-sm">
+                <MaterialIcon name="account_balance_wallet" className={paymentMethod === 'wallet' ? 'text-primary' : 'text-slate-400'} size="sm" />
+                Wallet Medjira
+              </div>
+              <span className="text-xs text-slate-300">
+                {walletBalance !== null
+                  ? `Solde : ${walletBalance.toFixed(2)} ${priceEstimate?.currency || 'CAD'}`
+                  : 'Chargement solde…'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentMethod('card');
+                triggerHaptic('light');
+              }}
+              className={[
+                'p-3.5 rounded-xl border text-left transition-all touch-manipulation flex flex-col gap-1',
+                paymentMethod === 'card'
+                  ? 'border-primary bg-primary/10 text-white font-medium'
+                  : 'border-white/10 text-slate-400 hover:bg-white/5',
+              ].join(' ')}
+            >
+              <div className="flex items-center gap-2 font-semibold text-sm">
+                <MaterialIcon name="credit_card" className={paymentMethod === 'card' ? 'text-primary' : 'text-slate-400'} size="sm" />
+                Carte bancaire
+              </div>
+              <span className="text-xs text-slate-300">Paiement Stripe</span>
+            </button>
+          </div>
+
+          {paymentMethod === 'wallet' &&
+            priceEstimate &&
+            walletBalance !== null &&
+            walletBalance < priceEstimate.price && (
+              <div className="bg-amber-500/10 border border-amber-500/20 p-3.5 rounded-xl text-xs space-y-2">
+                <div className="flex items-start gap-2 text-amber-300">
+                  <MaterialIcon name="warning" size="sm" className="mt-0.5 flex-shrink-0" />
+                  <span>
+                    Solde insuffisant ({walletBalance.toFixed(2)} / {priceEstimate.price.toFixed(2)} {priceEstimate.currency}). Rechargez votre portefeuille ou payez par carte bancaire.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push('/wallet/recharger')}
+                  className="w-full py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
+                >
+                  <MaterialIcon name="add_card" size="sm" />
+                  Recharger mon portefeuille
+                </button>
+              </div>
+            )}
+        </section>
+
         {priceLoading && (
           <div className="glass-card p-5 rounded-2xl border border-white/5 flex items-center justify-center gap-2">
             <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary" />
@@ -518,7 +661,15 @@ export default function ColisPage() {
         <div className="mt-4">
           <button
             onClick={handleSubmit}
-            disabled={step === 'submitting' || !formData.pickupLocation || !formData.dropoffLocation}
+            disabled={
+              step === 'submitting' ||
+              !formData.pickupLocation ||
+              !formData.dropoffLocation ||
+              (paymentMethod === 'wallet' &&
+                priceEstimate !== null &&
+                walletBalance !== null &&
+                walletBalance < priceEstimate.price)
+            }
             className="w-full bg-gradient-to-r from-primary to-[#ffae33] active:scale-[0.98] text-white font-bold py-4 px-6 rounded-2xl transition-transform disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-base sm:text-lg primary-glow flex justify-center items-center gap-2"
             style={{ minHeight: '48px' }}
           >

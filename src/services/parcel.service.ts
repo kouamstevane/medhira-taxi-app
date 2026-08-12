@@ -1,26 +1,14 @@
 'use client';
 
-import {
-  collection,
-  doc,
-  setDoc,
-  getDocs,
-  query,
-  where,
-  limit,
-  serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '@/config/firebase';
-import { typedServerTimestamp } from '@/lib/firebase-helpers';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '@/config/firebase';
 import {
   getMarketByCountryCode,
   getSupportedCountryNames,
   applyRounding,
 } from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
-import { logger } from '@/utils/logger';
 import { z } from 'zod';
-import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
 
 export const MAX_PARCEL_DISTANCE_KM = 800;
 
@@ -31,12 +19,14 @@ export interface ParcelLocation {
   country: string;
 }
 
-export type ParcelSizeCategory = 'small' | 'medium' | 'large';
+export type ParcelType = 'food' | 'medicine' | 'document' | 'flowers' | 'other';
 
-export const PARCEL_SIZE_LABELS: Record<ParcelSizeCategory, { label: string; description: string; weightMax: number }> = {
-  small: { label: 'Petit', description: '< 5 kg · Sac, enveloppe', weightMax: 5 },
-  medium: { label: 'Moyen', description: '5-15 kg · Boîte, carton', weightMax: 15 },
-  large: { label: 'Grand', description: '15-30 kg · Colis volumineux', weightMax: 30 },
+export const PARCEL_TYPE_LABELS: Record<ParcelType, { label: string; icon: string }> = {
+  food: { label: 'Nourriture', icon: 'restaurant' },
+  medicine: { label: 'Médicament', icon: 'medical_services' },
+  document: { label: 'Document', icon: 'description' },
+  flowers: { label: 'Fleurs', icon: 'local_florist' },
+  other: { label: 'Autres', icon: 'inventory_2' },
 };
 
 const LocationSchema = z.object({
@@ -55,16 +45,27 @@ const CreateParcelSchema = z.object({
   recipientPhone: z.string().min(8, 'Numéro de téléphone invalide'),
   pickupLocation: LocationSchema,
   dropoffLocation: LocationSchema,
-  description: z.string().min(3, 'Décrivez brièvement le colis').max(200),
-  weight: z.number().min(0.1).max(30),
-  sizeCategory: z.enum(['small', 'medium', 'large']),
+  parcelType: z.enum(['food', 'medicine', 'document', 'flowers', 'other']),
+  customType: z.string().max(100).optional(),
+  description: z.string().max(200).optional(),
+  weight: z.number().min(0.1).max(30).optional(),
   pickupInstructions: z.string().max(200).optional(),
+  paymentMethod: z.enum(['wallet', 'card']).default('wallet'),
 }).refine(
   (data) => data.pickupLocation.country === data.dropoffLocation.country,
   { message: 'Le retrait et la livraison doivent être dans le même pays (envoi national uniquement)', path: ['dropoffLocation'] }
 );
 
 export type CreateParcelInput = z.infer<typeof CreateParcelSchema>;
+
+export interface ParcelOrderResult {
+  parcelId: string;
+  amount: number;
+  currency: string;
+  paymentMethod: 'wallet' | 'card';
+  clientSecret?: string;
+  paymentIntentId?: string;
+}
 
 export class ParcelValidationError extends Error {
   constructor(message: string, public field?: string) {
@@ -82,8 +83,7 @@ export interface PriceEstimate {
 
 export const estimateParcelPrice = async (
   pickup: ParcelLocation,
-  dropoff: ParcelLocation,
-  sizeCategory: ParcelSizeCategory
+  dropoff: ParcelLocation
 ): Promise<PriceEstimate> => {
   const pickupMarket = getMarketByCountryCode(pickup.country);
   if (!pickupMarket) {
@@ -119,8 +119,7 @@ export const estimateParcelPrice = async (
 
   const pricing = pickupMarket.config.parcelPricing;
   const baseDelivery = distanceKm * pricing.pricePerKm;
-  const multiplier = pricing.sizeMultiplier[sizeCategory];
-  const rawPrice = (pricing.basePrice + baseDelivery) * multiplier;
+  const rawPrice = pricing.basePrice + baseDelivery;
   const price = applyRounding(rawPrice, pricing.roundingStrategy);
 
   return {
@@ -131,74 +130,38 @@ export const estimateParcelPrice = async (
   };
 };
 
-const lookupRecipientByPhone = async (phone: string): Promise<string | null> => {
-  const normalized = phone.replace(/\s+/g, '');
-  if (normalized.length < 8) return null;
-  try {
-    const usersRef = collection(db, FIRESTORE_COLLECTIONS.USERS);
-    const q = query(usersRef, where('phoneNumber', '==', normalized), limit(1));
-    const snap = await getDocs(q);
-    if (snap.empty) return null;
-    return snap.docs[0].id;
-  } catch (err) {
-    logger.warn('Impossible de chercher le destinataire par téléphone', { error: err });
-    return null;
-  }
-};
-
-export const createParcelOrder = async (data: CreateParcelInput): Promise<string> => {
+export const createParcelOrder = async (data: CreateParcelInput): Promise<ParcelOrderResult> => {
   const validated = CreateParcelSchema.safeParse(data);
   if (!validated.success) {
     const firstError = validated.error.issues[0];
     throw new ParcelValidationError(firstError.message, firstError.path[0]?.toString());
   }
 
-  const priceEstimate = await estimateParcelPrice(
-    data.pickupLocation,
-    data.dropoffLocation,
-    data.sizeCategory
+  const createFn = httpsCallable<Omit<CreateParcelInput, 'senderId'>, ParcelOrderResult>(
+    functions,
+    'createParcelOrder',
   );
+  const request = { ...data } as Partial<CreateParcelInput>;
+  delete request.senderId;
+  const result = await createFn(request as Omit<CreateParcelInput, 'senderId'>);
+  return result.data;
+};
 
-  const receiverId = await lookupRecipientByPhone(data.recipientPhone);
-  const recipientIsGuest = receiverId === null;
+export const finalizeParcelCardPayment = async (
+  parcelId: string,
+  paymentIntentId: string,
+): Promise<void> => {
+  const finalizeFn = httpsCallable<
+    { parcelId: string; paymentIntentId: string },
+    { success: boolean }
+  >(functions, 'finalizeParcelCardPayment');
+  await finalizeFn({ parcelId, paymentIntentId });
+};
 
-  const parcelsRef = collection(db, FIRESTORE_COLLECTIONS.PARCELS);
-  const newParcelRef = doc(parcelsRef);
-
-  const parcel = {
-    parcelId: newParcelRef.id,
-    senderId: data.senderId,
-    receiverId: receiverId || '',
-    recipientName: data.recipientName,
-    recipientPhone: data.recipientPhone.replace(/\s+/g, ''),
-    recipientIsGuest,
-    driverId: null,
-    status: 'pending' as const,
-    pickupLocation: data.pickupLocation,
-    dropoffLocation: data.dropoffLocation,
-    description: data.description,
-    weight: data.weight,
-    sizeCategory: data.sizeCategory,
-    pickupInstructions: data.pickupInstructions || '',
-    estimatedPrice: priceEstimate.price,
-    finalPrice: null,
-    price: priceEstimate.price,
-    currency: priceEstimate.currency,
-    distanceKm: priceEstimate.distance,
-    durationMinutes: priceEstimate.duration,
-    createdAt: typedServerTimestamp(),
-    updatedAt: typedServerTimestamp(),
-  };
-
-  await setDoc(newParcelRef, parcel);
-
-  logger.info('Colis créé', {
-    parcelId: newParcelRef.id,
-    price: priceEstimate.price,
-    distance: priceEstimate.distance,
-    country: data.pickupLocation.country,
-    recipientHasAccount: !recipientIsGuest,
-  });
-
-  return newParcelRef.id;
+export const confirmParcelReceipt = async (parcelId: string): Promise<void> => {
+  const confirmFn = httpsCallable<{ parcelId: string }, { success: boolean }>(
+    functions,
+    'confirmParcelReceipt'
+  );
+  await confirmFn({ parcelId });
 };

@@ -6,6 +6,8 @@ import {
   isStorageObjectNotFound,
 } from '../menu-image-storage.service';
 
+let mockEmitUploadComplete: (() => void) | undefined;
+
 jest.mock('../../config/firebase', () => ({
   getFirebaseStorage: jest.fn(() => ({ mockStorage: true })),
 }));
@@ -18,8 +20,9 @@ jest.mock('firebase/storage', () => {
     uploadBytesResumable: jest.fn(() => {
       const listeners: Record<string, (snapshot: any) => void> = {};
       return {
-        on: (event: string, next: (snap: any) => void, _error: any, _complete: any) => {
+        on: (event: string, next: (snap: any) => void, _error: any, complete: () => void) => {
           listeners[event] = next;
+          mockEmitUploadComplete = complete;
           next({ bytesTransferred: 50, totalBytes: 100 });
         },
         pause: jest.fn(() => true),
@@ -65,6 +68,27 @@ describe('MenuImageStorageService', () => {
     expect(typeof uploadTask.resume).toBe('function');
     expect(typeof uploadTask.cancel).toBe('function');
     expect(progressFn).toHaveBeenCalledWith(50);
+  });
+
+  it('resolves its completion promise only after the upload finishes', async () => {
+    const file = new File(['data'], 'item.webp', { type: 'image/webp' });
+    const uploadTask = uploadMenuImage({
+      restaurantId: 'rest123',
+      itemId: 'item456',
+      file,
+    });
+
+    let completed = false;
+    const completion = uploadTask.complete.then(() => {
+      completed = true;
+    });
+
+    await Promise.resolve();
+    expect(completed).toBe(false);
+
+    mockEmitUploadComplete?.();
+    await expect(completion).resolves.toBeUndefined();
+    expect(completed).toBe(true);
   });
 
   it('tolerates object-not-found during deleteMenuImage', async () => {

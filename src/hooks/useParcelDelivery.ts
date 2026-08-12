@@ -5,7 +5,7 @@ import { ref as rtdbRef, set, remove } from 'firebase/database'
 import { db, getFirebaseDatabase } from '@/config/firebase'
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections'
 
-export type ParcelStatus = 'pending' | 'accepted' | 'in_transit' | 'delivered' | 'cancelled'
+export type ParcelStatus = 'pending' | 'accepted' | 'in_transit' | 'delivered' | 'cancelled' | 'completed'
 
 export interface ParcelDoc {
   parcelId: string
@@ -18,15 +18,23 @@ export interface ParcelDoc {
   pickupLocation: { address: string; latitude: number; longitude: number; country: string }
   dropoffLocation: { address: string; latitude: number; longitude: number; country: string }
   description: string
-  sizeCategory: 'small' | 'medium' | 'large'
+  parcelType?: 'food' | 'medicine' | 'document' | 'flowers' | 'other'
+  customType?: string
+  sizeCategory?: 'small' | 'medium' | 'large'
   pickupInstructions?: string
   price: number
   currency: string
   distanceKm: number
+  paymentMethod?: 'wallet' | 'card'
+  paymentStatus?: 'pending' | 'reserved' | 'paid'
+  driverEarnings?: number
+  platformFee?: number
+  driverPaidOut?: boolean
   createdAt?: unknown
   acceptedAt?: unknown
   pickedUpAt?: unknown
   deliveredAt?: unknown
+  confirmedAt?: unknown
 }
 
 export const ACTIVE_PARCEL_STATUSES: readonly ParcelStatus[] = ['accepted', 'in_transit']

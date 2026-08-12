@@ -33,7 +33,7 @@ export default function ParcelOrdersList({ uid, header }: Props) {
         <OrderCard
           key={p.parcelId}
           title={p.description}
-          badge={p.sizeCategory}
+          badge={p.parcelType ? (p.customType || p.parcelType) : (p.sizeCategory || 'Colis')}
           lines={[
             { icon: 'my_location', text: p.pickupLocation.address },
             { icon: 'location_on', text: p.dropoffLocation.address },

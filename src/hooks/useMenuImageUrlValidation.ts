@@ -60,7 +60,7 @@ export function useMenuImageUrlValidation(): UseMenuImageUrlValidationReturn {
         if (!controller.signal.aborted) {
           setIsValidating(false);
           const errorMsg =
-            err instanceof Error ? err.message : 'Impossible de charger l image depuis cette URL';
+            err instanceof Error ? err.message : "Impossible de charger l'image depuis cette URL";
           setValidationError(errorMsg);
         }
         return false;

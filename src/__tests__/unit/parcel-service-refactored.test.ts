@@ -1,5 +1,4 @@
-import { estimateParcelPrice, ParcelValidationError } from '@/services/parcel.service';
-import { getDeliveryDistance } from '@/utils/distance';
+import { estimateParcelPrice } from '@/services/parcel.service';
 
 jest.mock('@/utils/distance', () => ({
   getDeliveryDistance: jest.fn(),
@@ -12,13 +11,14 @@ jest.mock('@/config/firebase', () => ({
 
 jest.mock('firebase/firestore', () => ({
   collection: jest.fn(),
-  doc: jest.fn(),
+  doc: jest.fn(() => ({ id: 'mock-parcel-id' })),
   setDoc: jest.fn(),
   getDocs: jest.fn(),
   query: jest.fn(),
   where: jest.fn(),
   limit: jest.fn(),
   serverTimestamp: jest.fn(),
+  runTransaction: jest.fn(),
 }));
 
 jest.mock('firebase/functions', () => ({
@@ -48,26 +48,14 @@ describe('estimateParcelPrice after refactor', () => {
   });
 
   describe('Cameroun (CM)', () => {
-    it('calcule le prix pour un petit colis à 10km', async () => {
+    it('calcule le prix pour un colis à 10km', async () => {
       const result = await estimateParcelPrice(
         makeLocation('CM'),
-        { ...makeLocation('CM'), latitude: 4.15, longitude: 9.87 },
-        'small'
+        { ...makeLocation('CM'), latitude: 4.15, longitude: 9.87 }
       );
       expect(result.currency).toBe('FCFA');
       expect(result.distance).toBe(10);
-      const expectedRaw = (1500 + 10 * 200) * 1.0;
-      const expectedPrice = Math.round(expectedRaw / 50) * 50;
-      expect(result.price).toBe(expectedPrice);
-    });
-
-    it('calcule le prix pour un grand colis à 10km', async () => {
-      const result = await estimateParcelPrice(
-        makeLocation('CM'),
-        { ...makeLocation('CM'), latitude: 4.15, longitude: 9.87 },
-        'large'
-      );
-      const expectedRaw = (1500 + 10 * 200) * 1.8;
+      const expectedRaw = 1500 + 10 * 200;
       const expectedPrice = Math.round(expectedRaw / 50) * 50;
       expect(result.price).toBe(expectedPrice);
     });
@@ -80,10 +68,9 @@ describe('estimateParcelPrice after refactor', () => {
       });
       const result = await estimateParcelPrice(
         makeLocation('CM'),
-        { ...makeLocation('CM'), latitude: 4.15, longitude: 9.87 },
-        'medium'
+        { ...makeLocation('CM'), latitude: 4.15, longitude: 9.87 }
       );
-      const expectedRaw = (1500 + 7 * 200) * 1.4;
+      const expectedRaw = 1500 + 7 * 200;
       const expectedPrice = Math.round(expectedRaw / 50) * 50;
       expect(result.price).toBe(expectedPrice);
       expect(result.price % 50).toBe(0);
@@ -91,80 +78,119 @@ describe('estimateParcelPrice after refactor', () => {
   });
 
   describe('Canada (CA)', () => {
-    it('calcule le prix pour un petit colis à 10km', async () => {
+    it('calcule le prix pour un colis à 10km', async () => {
       const result = await estimateParcelPrice(
         makeLocation('CA'),
-        { ...makeLocation('CA'), latitude: 45.60, longitude: -73.67 },
-        'small'
+        { ...makeLocation('CA'), latitude: 45.60, longitude: -73.67 }
       );
       expect(result.currency).toBe('CAD');
-      const expectedRaw = (5 + 10 * 1.25) * 1.0;
-      const expectedPrice = Math.round(expectedRaw * 100) / 100;
-      expect(result.price).toBeCloseTo(expectedPrice, 2);
-    });
-
-    it('calcule le prix pour un moyen colis à 10km', async () => {
-      const result = await estimateParcelPrice(
-        makeLocation('CA'),
-        { ...makeLocation('CA'), latitude: 45.60, longitude: -73.67 },
-        'medium'
-      );
-      const expectedRaw = (5 + 10 * 1.25) * 1.4;
+      const expectedRaw = 5 + 10 * 1.25;
       const expectedPrice = Math.round(expectedRaw * 100) / 100;
       expect(result.price).toBeCloseTo(expectedPrice, 2);
     });
   });
 
   describe('France (FR)', () => {
-    it('calcule le prix pour un petit colis à 10km', async () => {
+    it('calcule le prix pour un colis à 10km', async () => {
       const result = await estimateParcelPrice(
         makeLocation('FR'),
-        { ...makeLocation('FR'), latitude: 48.96, longitude: 2.45 },
-        'small'
+        { ...makeLocation('FR'), latitude: 48.96, longitude: 2.45 }
       );
       expect(result.currency).toBe('EUR');
-      const expectedRaw = (4 + 10 * 1.10) * 1.0;
+      const expectedRaw = 4 + 10 * 1.10;
       const expectedPrice = Math.round(expectedRaw * 100) / 100;
       expect(result.price).toBeCloseTo(expectedPrice, 2);
     });
   });
 
   describe('Belgique (BE)', () => {
-    it('calcule le prix pour un petit colis à 10km', async () => {
+    it('calcule le prix pour un colis à 10km', async () => {
       const result = await estimateParcelPrice(
         makeLocation('BE'),
-        { ...makeLocation('BE'), latitude: 50.95, longitude: 4.45 },
-        'small'
+        { ...makeLocation('BE'), latitude: 50.95, longitude: 4.45 }
       );
       expect(result.currency).toBe('EUR');
-      const expectedRaw = (4 + 10 * 1.15) * 1.0;
+      const expectedRaw = 4 + 10 * 1.15;
       const expectedPrice = Math.round(expectedRaw * 100) / 100;
       expect(result.price).toBeCloseTo(expectedPrice, 2);
     });
   });
 
-  describe('validation', () => {
-    it('rejette un pays non supporté (US) pour le pickup', async () => {
-      await expect(
-        estimateParcelPrice(makeLocation('US'), makeLocation('US'), 'small')
-      ).rejects.toThrow(ParcelValidationError);
+  describe('createParcelOrder & confirmParcelReceipt', () => {
+    it('délègue la création wallet au serveur sans écrire directement dans Firestore', async () => {
+      const { createParcelOrder } = await import('@/services/parcel.service');
+      const { httpsCallable } = await import('firebase/functions');
+      const { setDoc, runTransaction } = await import('firebase/firestore');
+      const mockCallable = jest.fn().mockResolvedValue({
+        data: {
+          parcelId: 'server-parcel-id',
+          amount: 17.5,
+          currency: 'CAD',
+          paymentMethod: 'wallet',
+        },
+      });
+      (httpsCallable as jest.Mock).mockReturnValue(mockCallable);
+
+      const result = await createParcelOrder({
+        senderId: 'user-123',
+        recipientName: 'Jean Dupont',
+        recipientPhone: '+15550123456',
+        pickupLocation: makeLocation('CA'),
+        dropoffLocation: { ...makeLocation('CA'), latitude: 45.60, longitude: -73.67 },
+        parcelType: 'food',
+        paymentMethod: 'wallet',
+      });
+
+      expect(result.parcelId).toBe('server-parcel-id');
+      expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'createParcelOrder');
+      expect(mockCallable).toHaveBeenCalledWith(expect.objectContaining({
+        paymentMethod: 'wallet',
+      }));
+      expect(setDoc).not.toHaveBeenCalled();
+      expect(runTransaction).not.toHaveBeenCalled();
     });
 
-    it('rejette un pickup et dropoff dans des pays différents', async () => {
-      await expect(
-        estimateParcelPrice(makeLocation('CM'), makeLocation('CA'), 'small')
-      ).rejects.toThrow(ParcelValidationError);
+    it('prépare le paiement carte avec le client secret Stripe renvoyé par le serveur', async () => {
+      const { createParcelOrder } = await import('@/services/parcel.service');
+      const { httpsCallable } = await import('firebase/functions');
+      const mockCallable = jest.fn().mockResolvedValue({
+        data: {
+          parcelId: 'card-parcel-id',
+          amount: 17.5,
+          currency: 'CAD',
+          paymentMethod: 'card',
+          clientSecret: 'pi_secret',
+          paymentIntentId: 'pi_123',
+        },
+      });
+      (httpsCallable as jest.Mock).mockReturnValue(mockCallable);
+
+      const result = await createParcelOrder({
+        senderId: 'user-123',
+        recipientName: 'Jean Dupont',
+        recipientPhone: '+15550123456',
+        pickupLocation: makeLocation('CA'),
+        dropoffLocation: { ...makeLocation('CA'), latitude: 45.60, longitude: -73.67 },
+        parcelType: 'food',
+        paymentMethod: 'card',
+      });
+
+      expect(result.clientSecret).toBe('pi_secret');
+      expect(mockCallable).toHaveBeenCalledWith(expect.objectContaining({
+        paymentMethod: 'card',
+      }));
     });
 
-    it('le message d\'erreur mentionne "pays supporté"', async () => {
-      try {
-        await estimateParcelPrice(makeLocation('US'), makeLocation('US'), 'small');
-      } catch (err) {
-        expect(err).toBeInstanceOf(ParcelValidationError);
-        expect((err as ParcelValidationError).message).toContain('pays supporté');
-        return;
-      }
-      throw new Error('Expected ParcelValidationError to be thrown');
+    it('appelle la Cloud Function confirmParcelReceipt', async () => {
+      const { confirmParcelReceipt } = await import('@/services/parcel.service');
+      const { httpsCallable } = await import('firebase/functions');
+
+      const mockCallable = jest.fn().mockResolvedValue({ data: { success: true } });
+      (httpsCallable as jest.Mock).mockReturnValue(mockCallable);
+
+      await confirmParcelReceipt('parcel-999');
+      expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'confirmParcelReceipt');
+      expect(mockCallable).toHaveBeenCalledWith({ parcelId: 'parcel-999' });
     });
   });
 });

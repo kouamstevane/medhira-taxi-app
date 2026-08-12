@@ -159,7 +159,7 @@ export function validateExternalImageLoad(
       };
       img.onerror = () => {
         cleanup();
-        reject(new Error('Impossible de charger l image depuis cette URL'));
+        reject(new Error("Impossible de charger l'image depuis cette URL"));
       };
       img.src = url;
     } else {

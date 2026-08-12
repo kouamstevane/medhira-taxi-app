@@ -27,6 +27,7 @@ export interface UploadMenuTask {
   uploadId: string;
   path: string;
   task: UploadTask;
+  complete: Promise<void>;
   getDownloadURL: () => Promise<string>;
   pause: () => boolean;
   resume: () => boolean;
@@ -79,31 +80,33 @@ export function uploadMenuImage(input: UploadMenuImageInput): UploadMenuTask {
 
   const task = uploadBytesResumable(storageRef, input.file, metadata);
 
-  if (input.onProgress) {
+  const complete = new Promise<void>((resolve, reject) => {
     task.on(
       'state_changed',
       (snapshot) => {
-        if (snapshot.totalBytes > 0) {
+        if (input.onProgress && snapshot.totalBytes > 0) {
           const progress = Math.round(
             (snapshot.bytesTransferred / snapshot.totalBytes) * 100
           );
-          input.onProgress?.(progress);
+          input.onProgress(progress);
         }
       },
       (error) => {
-        // Log Error in upload task listener
         console.error('[MenuImageStorage] Upload task error:', {
           path,
           error,
         });
-      }
+        reject(error);
+      },
+      resolve
     );
-  }
+  });
 
   return {
     uploadId,
     path,
     task,
+    complete,
     getDownloadURL: async () => {
       return getDownloadURL(storageRef);
     },

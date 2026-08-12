@@ -238,7 +238,7 @@ export default function MenuManagementClient() {
       }
     } catch (err) {
       if (!controller.signal.aborted) {
-        const msg = err instanceof Error ? err.message : 'Échec de la compression de l image';
+        const msg = err instanceof Error ? err.message : "Échec de la compression de l'image";
         setCompressionError(msg);
         showError(msg);
       }
@@ -324,6 +324,7 @@ export default function MenuManagementClient() {
         currentUploadTaskRef.current = uploadTask;
         createdStoragePath = uploadTask.path;
 
+        await uploadTask.complete;
         const downloadUrl = await uploadTask.getDownloadURL();
 
         imageUpdate = {
@@ -759,7 +760,7 @@ export default function MenuManagementClient() {
 
                     {urlValidation.isValidating && (
                       <p className="text-xs text-amber-400 flex items-center gap-1">
-                        <MaterialIcon name="refresh" className="animate-spin text-sm" /> Vérification de l image...
+                        <MaterialIcon name="refresh" className="animate-spin text-sm" /> Vérification de l'image...
                       </p>
                     )}
 

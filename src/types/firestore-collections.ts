@@ -407,7 +407,10 @@ export interface ParcelCollection {
   };
   description: string;
   weight: number;
-  sizeCategory: 'small' | 'medium' | 'large';
+  parcelType?: 'food' | 'medicine' | 'document' | 'flowers' | 'other';
+  customType?: string;
+  /** Legacy field retained for parcels created before parcelType was introduced. */
+  sizeCategory?: 'small' | 'medium' | 'large';
   pickupInstructions?: string;
   estimatedPrice: number;
   finalPrice: number | null;
@@ -416,7 +419,7 @@ export interface ParcelCollection {
   distanceKm: number;
   durationMinutes: number;
   paymentMethod?: 'wallet' | 'card';
-  paymentStatus?: 'reserved' | 'paid';
+  paymentStatus?: 'pending' | 'reserved' | 'paid';
   driverEarnings?: number;
   platformFee?: number;
   driverPaidOut?: boolean;

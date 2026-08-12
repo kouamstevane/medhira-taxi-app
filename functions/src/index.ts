@@ -2398,8 +2398,13 @@ export {
   onTaxiBookingDriverArrived,
 } from './bookingNotifications/index.js';
 
-// Livraison de colis : matching automatique + SMS au destinataire
+// Livraison de colis : matching automatique + SMS au destinataire + confirmation & payout (70/30)
 export {
   onParcelCreated,
+  onParcelPaymentValidated,
   onParcelStatusChanged,
+  createParcelOrder,
+  finalizeParcelCardPayment,
+  confirmParcelReceipt,
+  autoConfirmDeliveredParcels,
 } from './parcels/index.js';

@@ -139,6 +139,39 @@ export const PayFoodOrderWithCardSchema = z.object({
 });
 export type PayFoodOrderWithCardInput = z.infer<typeof PayFoodOrderWithCardSchema>;
 
+export const CreateParcelOrderSchema = z.object({
+  clientRequestId: z.string().regex(/^[A-Za-z0-9_-]{8,80}$/).optional(),
+  recipientName: z.string().min(2).max(120),
+  recipientPhone: z.string().regex(/^\+?[0-9 ()-]{8,32}$/),
+  pickupLocation: z.object({
+    address: z.string().min(5).max(300),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    country: z.string().regex(/^[A-Za-z]{2}$/),
+  }).strict(),
+  dropoffLocation: z.object({
+    address: z.string().min(5).max(300),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    country: z.string().regex(/^[A-Za-z]{2}$/),
+  }).strict(),
+  parcelType: z.enum(['food', 'medicine', 'document', 'flowers', 'other']),
+  customType: z.string().max(100).optional(),
+  description: z.string().max(200).optional(),
+  weight: z.number().min(0.1).max(30).optional(),
+  pickupInstructions: z.string().max(200).optional(),
+  sizeCategory: z.enum(['small', 'medium', 'large']).default('small'),
+  paymentMethod: z.enum(['wallet', 'card']),
+}).strict().refine(
+  data => data.pickupLocation.country.toUpperCase() === data.dropoffLocation.country.toUpperCase(),
+  { message: 'Le retrait et la livraison doivent être dans le même pays.' },
+);
+
+export const FinalizeParcelCardPaymentSchema = z.object({
+  parcelId: z.string().min(1).max(128),
+  paymentIntentId: z.string().regex(/^pi_[A-Za-z0-9]+$/),
+}).strict();
+
 export const CreateFoodOrderRequestSchema = z.object({
   restaurantId: z.string().min(1),
   orderItems: z.array(z.object({
