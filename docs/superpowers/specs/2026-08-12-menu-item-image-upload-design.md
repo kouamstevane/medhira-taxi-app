@@ -115,7 +115,7 @@ Le service de compression doit appliquer les garde-fous suivants avant Canvas :
 
 - liste blanche MIME : `image/jpeg`, `image/png`, `image/webp`;
 - taille d’entrée maximale : 10 Mo;
-- limite absolue de sortie : `MENU_IMAGE_MAX_BYTES = 500 * 1024` octets; cette constante unique est utilisée par le compresseur, les règles Storage et les tests;
+- limite contractuelle de sortie : `500 * 1024` octets. Cette valeur est définie dans le compresseur et les tests TypeScript, puis reproduite explicitement dans `storage.rules`; les tests vérifient que les deux valeurs restent identiques;
 - vérifier le MIME et la taille avant décodage, puis refuser l’image avant l’allocation du Canvas si son plus grand côté dépasse 6000 px ou si sa résolution dépasse 16 mégapixels;
 - nettoyage de chaque `ObjectURL` dans tous les chemins de sortie;
 - résultat strictement WebP; aucun fallback silencieux vers le fichier original;
