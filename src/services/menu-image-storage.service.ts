@@ -64,6 +64,23 @@ export function isStorageObjectNotFound(error: unknown): boolean {
   return code === 'storage/object-not-found';
 }
 
+export function getMenuImageStorageErrorMessage(error: unknown): string {
+  const code = error && typeof error === 'object' && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : '';
+
+  if (code === 'storage/unauthenticated') {
+    return 'Votre session Firebase a expiré. Reconnectez-vous avant de modifier les images du menu.';
+  }
+  if (code === 'storage/unauthorized') {
+    return 'Vous n’avez pas les droits pour modifier les images de ce restaurant.';
+  }
+  if (code === 'storage/canceled') {
+    return 'Le chargement de l’image a été annulé.';
+  }
+  return 'Impossible d’enregistrer l’article du menu. Vérifiez le fichier et réessayez.';
+}
+
 /**
  * Démarre un upload resumable d'image de menu dans Firebase Storage.
  */
@@ -98,7 +115,7 @@ export function uploadMenuImage(input: UploadMenuImageInput): UploadMenuTask {
         });
         reject(error);
       },
-      resolve
+      resolve,
     );
   });
 
@@ -155,5 +172,6 @@ export async function deleteMenuImage(path: string): Promise<void> {
       imageStoragePath: path,
       error,
     });
+    throw error;
   }
 }

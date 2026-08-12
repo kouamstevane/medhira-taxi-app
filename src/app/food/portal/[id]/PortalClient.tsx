@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, auth } from '@/config/firebase';
+import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/useToast';
@@ -14,7 +13,8 @@ import type { Restaurant, FoodOrder } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import Link from 'next/link';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
-import { RestaurantClientActivation } from '@/components/restaurant/RestaurantClientActivation';
+import { RestaurantPortalPayoutBanner } from '@/components/restaurant/RestaurantPortalPayoutBanner';
+import { RestaurantPortalHeader } from './RestaurantPortalHeader';
 import { getRestaurantPortalPath } from '../restaurant-portal-paths';
 
 export default function PortalClient() {
@@ -25,7 +25,6 @@ export default function PortalClient() {
   const [loading, setLoading] = useState(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [orders, setOrders] = useState<FoodOrder[]>([]);
-  const [hasClientRole, setHasClientRole] = useState(false);
   const [stats, setStats] = useState({
     todayOrders: 0,
     pendingOrders: 0,
@@ -49,11 +48,6 @@ export default function PortalClient() {
       }
 
       try {
-        const userSnap = await getDoc(doc(db, 'users', user.uid));
-        if (userSnap.exists()) {
-          setHasClientRole(userSnap.data().roles?.client?.enabled === true);
-        }
-
         const res = await FoodDeliveryService.getRestaurantById(id);
         if (!res) {
           showError("Restaurant introuvable");
@@ -123,27 +117,7 @@ export default function PortalClient() {
     <div className="min-h-screen bg-background">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-      {/* Header */}
-      <div className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-            <MaterialIcon name="shopping_bag" size="lg" className="text-primary" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">{restaurant.name}</h1>
-            <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">Tableau de bord gérant</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <RestaurantClientActivation hasClientRole={hasClientRole} />
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="text-sm font-bold text-slate-400 hover:text-white transition cursor-pointer"
-          >
-            Quitter le portail
-          </button>
-        </div>
-      </div>
+      <RestaurantPortalHeader restaurantName={restaurant.name} />
 
       <main className="max-w-6xl mx-auto p-4 sm:p-8">
 
@@ -156,6 +130,11 @@ export default function PortalClient() {
             </p>
           </div>
         )}
+
+        <RestaurantPortalPayoutBanner
+          status={restaurant.status}
+          stripeConnectStatus={restaurant.stripeConnectStatus}
+        />
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

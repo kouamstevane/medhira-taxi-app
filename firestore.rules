@@ -53,6 +53,22 @@ service cloud.firestore {
         (resource.data.get('status', null) == 'accepted' && request.resource.data.get('status', null) == 'in_transit') ||
         (resource.data.get('status', null) == 'in_transit' && request.resource.data.get('status', null) == 'delivered');
     }
+
+    // A professional role remains selectable only while its source document exists,
+    // belongs to the signed-in user, and is not suspended.
+    function canActivateDriverRole(userData) {
+      return 'driver' in userData.roles
+        && exists(/databases/$(database)/documents/drivers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/drivers/$(request.auth.uid)).data.status != 'suspended';
+    }
+
+    function canActivateRestaurantRole(userData) {
+      return 'restaurant' in userData.roles
+        && userData.roles.restaurant.restaurantId is string
+        && exists(/databases/$(database)/documents/restaurants/$(userData.roles.restaurant.restaurantId))
+        && get(/databases/$(database)/documents/restaurants/$(userData.roles.restaurant.restaurantId)).data.ownerId == request.auth.uid
+        && get(/databases/$(database)/documents/restaurants/$(userData.roles.restaurant.restaurantId)).data.status != 'suspended';
+    }
     
     // ============================================================================
     // COLLECTION USERS (CLIENTS)
@@ -119,10 +135,10 @@ service cloud.firestore {
                         && resource.data.roles.client.enabled == true
                         && request.resource.data.get('accountState', 'active') == 'active')
                       || (request.resource.data.activeRole == 'driver'
-                        && 'driver' in resource.data.roles
+                        && canActivateDriverRole(resource.data)
                         && request.resource.data.get('accountState', 'active') == 'active')
                       || (request.resource.data.activeRole == 'restaurant'
-                        && 'restaurant' in resource.data.roles
+                        && canActivateRestaurantRole(resource.data)
                         && request.resource.data.get('accountState', 'active') == 'active')
                       || (request.resource.data.activeRole == 'driver_onboarding'
                         && request.resource.data.accountState == 'driver_onboarding'

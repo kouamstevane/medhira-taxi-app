@@ -8,6 +8,7 @@ import {
   uploadMenuImage,
   deleteMenuImage,
   createMenuItemId,
+  getMenuImageStorageErrorMessage,
   type UploadMenuTask,
 } from '@/services/menu-image-storage.service';
 import { imageCompressionService, type CompressionResult } from '@/services/image-compression.service';
@@ -23,6 +24,20 @@ import type { MenuItem } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
+
+function getMenuItemSaveErrorMessage(error: unknown): string {
+  const code = error && typeof error === 'object' && 'code' in error
+    ? String((error as { code?: unknown }).code)
+    : '';
+
+  if (code === 'unauthenticated') {
+    return 'Votre session a expiré. Reconnectez-vous avant de modifier le menu.';
+  }
+  if (code === 'permission-denied') {
+    return 'Vous n’avez pas les droits pour modifier ce menu.';
+  }
+  return getMenuImageStorageErrorMessage(error);
+}
 
 export default function MenuManagementClient() {
   const router = useRouter();
@@ -284,6 +299,7 @@ export default function MenuManagementClient() {
 
     setIsSaving(true);
     let createdStoragePath: string | null = null;
+    let oldImageCleanupFailed = false;
 
     try {
       const itemData: Partial<MenuItem> = {
@@ -347,12 +363,19 @@ export default function MenuManagementClient() {
         oldStoragePath &&
         (imageChoice === 'upload' || imageChoice === 'external-url' || imageChoice === 'remove')
       ) {
-        deleteMenuImage(oldStoragePath).catch((err) => {
+        try {
+          await deleteMenuImage(oldStoragePath);
+        } catch (err) {
+          oldImageCleanupFailed = true;
           console.error("[MenuManagementClient] Non-fatal cleanup error for old image:", err);
-        });
+        }
       }
 
-      showSuccess(editingItem ? "Article modifié" : "Article ajouté");
+      showSuccess(
+        oldImageCleanupFailed
+          ? `${editingItem ? "Article modifié" : "Article ajouté"}, mais l’ancienne image n’a pas pu être supprimée`
+          : (editingItem ? "Article modifié" : "Article ajouté"),
+      );
 
       // Rafraîchir le menu
       const items = await FoodDeliveryService.getRestaurantMenuFull(restaurantId);
@@ -371,7 +394,7 @@ export default function MenuManagementClient() {
         }
       }
 
-      showError("Erreur lors de l'enregistrement de l'article");
+      showError(getMenuItemSaveErrorMessage(error));
     } finally {
       setIsSaving(false);
       setIsUploading(false);
@@ -396,12 +419,22 @@ export default function MenuManagementClient() {
       const itemToDelete = menuItems.find((i) => i.id === itemId);
       await FoodDeliveryService.deleteMenuItem(restaurantId, itemId);
 
+      let imageCleanupFailed = false;
       if (itemToDelete?.imageStoragePath) {
-        deleteMenuImage(itemToDelete.imageStoragePath).catch(() => {});
+        try {
+          await deleteMenuImage(itemToDelete.imageStoragePath);
+        } catch (error) {
+          imageCleanupFailed = true;
+          console.error("[MenuManagementClient] Menu image cleanup failed after item deletion:", error);
+        }
       }
 
       setMenuItems((prev) => prev.filter((i) => i.id !== itemId));
-      showSuccess("Article supprimé");
+      showSuccess(
+        imageCleanupFailed
+          ? "Article supprimé, mais son image n’a pas pu être supprimée"
+          : "Article supprimé",
+      );
     } catch {
       showError("Erreur de suppression");
     }

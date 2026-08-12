@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Timestamp } from 'firebase/firestore';
 import { AuthContext, AuthProvider } from '../AuthContext';
 
@@ -15,7 +15,11 @@ const mockUser = {
 const mockGetDoc = jest.fn();
 
 jest.mock('@/config/firebase', () => ({
-  auth: {},
+  auth: {
+    get currentUser() {
+      return mockUser;
+    },
+  },
   db: {},
 }));
 
@@ -47,6 +51,23 @@ function PaymentMethodConsumer() {
           <span data-testid="roles">
             {Object.keys(value?.userData?.roles ?? {}).join(',')}
           </span>
+        </div>
+      )}
+    </AuthContext.Consumer>
+  );
+}
+
+let reloadPromise: Promise<void> | undefined;
+
+function ReloadConsumer() {
+  return (
+    <AuthContext.Consumer>
+      {(value) => (
+        <div>
+          <span data-testid="reload-auth-status">{value?.authStatus}</span>
+          <button type="button" onClick={() => { reloadPromise = value?.reloadUser(); }}>
+            Recharger
+          </button>
         </div>
       )}
     </AuthContext.Consumer>
@@ -133,5 +154,21 @@ describe('AuthProvider', () => {
       expect(screen.getByText('authenticated')).toBeInTheDocument();
     });
     expect(mockUser.getIdToken).toHaveBeenCalledWith(true);
+  });
+
+  it('rejects reloadUser when the user document cannot be resolved', async () => {
+    reloadPromise = undefined;
+    render(
+      <AuthProvider>
+        <ReloadConsumer />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(mockGetDoc).toHaveBeenCalled());
+    mockGetDoc.mockResolvedValueOnce({ exists: () => false });
+    fireEvent.click(screen.getByRole('button', { name: 'Recharger' }));
+    await expect(reloadPromise).rejects.toThrow('Impossible de recharger le profil utilisateur.');
+    await waitFor(() => expect(screen.getByTestId('reload-auth-status')).toHaveTextContent('unauthenticated'));
+    expect(mockUser.reload).toHaveBeenCalledTimes(1);
   });
 });
