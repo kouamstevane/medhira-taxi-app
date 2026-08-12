@@ -212,4 +212,3 @@
 - `toggleAvailability` ne modifie aucune propriété image.
 - Les règles Firestore et Storage reproduisent exactement le contrat.
 - Le modal est accessible, scrollable et au-dessus de BottomNav.
-
