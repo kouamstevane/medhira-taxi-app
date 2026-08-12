@@ -1,5 +1,5 @@
 import React from 'react';
-import Image from 'next/image';
+import { MenuItemImage } from '@/components/food/MenuItemImage';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { MenuItem, Restaurant } from '@/types/food-delivery';
 import { useCartStore } from '@/store/cartStore';
@@ -35,17 +35,14 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, restaurant }) 
       }`}
     >
       <div className="flex gap-4">
-        {item.imageUrl && (
-          <div className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-white/10">
-            <Image
-              src={item.imageUrl}
-              alt={item.name}
-              fill
-              className="object-cover"
-              sizes="96px"
-            />
-          </div>
-        )}
+        <div className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-white/10">
+          <MenuItemImage
+            src={item.imageUrl}
+            imageStoragePath={item.imageStoragePath}
+            alt={item.name}
+            sizes="96px"
+          />
+        </div>
 
         <div className="flex-1 flex flex-col justify-between">
           <div>

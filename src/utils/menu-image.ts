@@ -75,7 +75,7 @@ export function validateMenuImageUrl(value: string): { valid: boolean; error?: s
  * Vérifie si l'URL ou le path provient de Firebase Storage.
  * Le paramètre `imageStoragePath` est le signal prioritaire.
  */
-export function isFirebaseStorageImageUrl(value?: string, imageStoragePath?: string): boolean {
+export function isFirebaseStorageImageUrl(value?: string | null, imageStoragePath?: string | null): boolean {
   if (imageStoragePath && imageStoragePath.trim() !== '') {
     return true;
   }
@@ -92,7 +92,7 @@ export function isFirebaseStorageImageUrl(value?: string, imageStoragePath?: str
  * Détermine s'il faut utiliser la balise <img> native au lieu de next/image
  * (notamment pour les URLs de l'émulateur Firebase Storage local qui ne peuvent pas être optimisées par Next.js).
  */
-export function shouldUseNativeImageForFirebaseUrl(value?: string): boolean {
+export function shouldUseNativeImageForFirebaseUrl(value?: string | null): boolean {
   if (!value || typeof value !== 'string') return false;
   const lower = value.toLowerCase();
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
+import { MenuItemImage } from '@/components/food/MenuItemImage';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
@@ -234,13 +234,12 @@ export default function MenuManagementClient() {
                 {categoryItems.map(item => (
                   <div key={item.id} className={`glass-card p-4 rounded-3xl border border-white/5 flex gap-4 group hover:border-white/10 transition ${!item.isAvailable ? 'opacity-60' : ''}`}>
                     <div className="w-24 h-24 bg-white/10 rounded-2xl overflow-hidden relative shrink-0">
-                      {item.imageUrl ? (
-                        <Image src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" width={96} height={96} unoptimized />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-slate-500">
-                          <MaterialIcon name="image" size="xl" />
-                        </div>
-                      )}
+                      <MenuItemImage
+                        src={item.imageUrl}
+                        imageStoragePath={item.imageStoragePath}
+                        alt={item.name}
+                        sizes="96px"
+                      />
                     </div>
                     <div className="flex-1 flex flex-col justify-between py-1">
                       <div>
