@@ -18,19 +18,21 @@ Permettre au restaurateur d’associer une image à un article du menu en choisi
 Le formulaire utilisera une union explicite :
 
 ```ts
-type MenuImageState = 'image-unchanged' | 'external-url' | 'upload' | 'remove';
+type MenuImageState = 'image-none' | 'image-unchanged' | 'external-url' | 'upload' | 'remove';
 ```
 
+- `image-none` : état initial d’un nouvel article sans image; aucun champ image n’est envoyé à Firestore.
 - `image-unchanged` : mode initial en modification lorsqu’une image existante doit être conservée; aucun champ image n’est envoyé à Firestore.
 - `external-url` : l’URL directe saisie remplace l’image actuelle; `imageStoragePath` est supprimé du document si nécessaire.
 - `upload` : le fichier compressé remplace l’image actuelle; `imageUrl` et `imageStoragePath` sont remplacés.
 - `remove` : suppression explicite; `deleteField()` est utilisé pour retirer `imageUrl` et `imageStoragePath`.
 
-Pour un nouvel article sans image, l’état initial est `remove`. Les transitions sont pilotées par l’interface, pas déduites uniquement de chaînes vides. Cela distingue donc clairement “aucune modification” de “supprimer l’image”.
+`remove` n’est disponible que lorsqu’une image existante est effectivement supprimée. Les transitions sont pilotées par l’interface, pas déduites uniquement de chaînes vides. Cela distingue donc clairement “aucune image lors de la création”, “aucune modification” et “supprimer une image existante”.
 
 Le contrat de mise à jour du service exposera cette intention séparément des autres champs de l’article. Il ne construira jamais `imageUrl: undefined` pour représenter une suppression :
 
 - `image-unchanged` omet entièrement les champs image;
+- `image-none` omet entièrement les champs image lors de la création;
 - `external-url` écrit l’URL et utilise `deleteField()` pour `imageStoragePath`;
 - `upload` écrit l’URL et le chemin Storage;
 - `remove` utilise `deleteField()` pour `imageUrl` et `imageStoragePath`.
@@ -48,7 +50,8 @@ Le choix `Lien externe` affiche l’URL directe. Le choix `Importer une image` a
 
 - Les liens `share.google` et autres liens de partage indirects sont refusés avec un message indiquant qu’un lien direct vers le fichier image est requis.
 - Le fichier sélectionné est validé puis compressé immédiatement en WebP; l’échec de compression bloque l’enregistrement et n’envoie jamais le fichier original.
-- Pendant compression ou upload, les actions de fermeture sont bloquées; une nouvelle tentative réutilise le fichier compressé conservé en mémoire.
+- L’import utilise `uploadBytesResumable()` et expose la progression, `Pause`, `Reprendre` et `Annuler l’import`. Une erreur définitive permet une nouvelle tentative depuis zéro avec le fichier compressé conservé en mémoire et un nouvel `uploadId`; une pause ou une reprise utilise la même tâche. La tâche n’est pas persistée après démontage ou rechargement de la page.
+- Pendant compression ou upload, les actions de fermeture sont bloquées; l’utilisateur doit d’abord annuler l’import. Le bouton `Annuler l’import` annule la tâche, supprime tout objet temporaire déjà créé si nécessaire et réactive la fermeture.
 - Le bouton final est nommé `Enregistrer`.
 
 ## Identifiants et flux Storage/Firestore
@@ -71,7 +74,7 @@ Flux d’un upload :
 
 1. Valider/comprimer le fichier; aucune écriture Storage n’a lieu si la compression échoue.
 2. Générer `itemId` puis `uploadId`.
-3. Téléverser le WebP avec `contentType: image/webp`.
+3. Téléverser le WebP avec `contentType: image/webp` et `cacheControl: public,max-age=31536000,immutable`.
 4. Récupérer `imageUrl` et appeler `upsertMenuItem` avec `imageUrl` et `imageStoragePath`.
 5. Si Firestore échoue, supprimer le nouvel objet Storage et laisser le formulaire ouvert avec le fichier compressé pour permettre une reprise.
 6. Si Firestore réussit et qu’une ancienne `imageStoragePath` gérée existe, la supprimer après la sauvegarde. Une erreur de suppression ne doit pas annuler l’article sauvegardé; elle doit être journalisée pour le nettoyage.
@@ -84,20 +87,35 @@ Flux conservation : ne toucher à aucun champ image. Le service doit accepter un
 
 Les chemins Storage et l’URL doivent être enregistrés ensemble pour ne jamais tenter de reconstruire un chemin depuis une URL Firebase. Un nettoyage périodique des objets `menu-images` non référencés devra être prévu comme tâche d’exploitation ultérieure; les erreurs de suppression seront journalisées avec `restaurantId`, `itemId` et le chemin concerné.
 
+## Rendu des images et compatibilité Next.js
+
+Le composant d’affichage choisira le rendu selon la source :
+
+- une URL Firebase Storage identifiée par son domaine/format attendu utilisera `next/image`, avec `sizes="96px"`, afin de bénéficier de l’optimisation Next.js;
+- une URL externe utilisera un `<img>` natif avec `loading="lazy"`, `decoding="async"`, dimensions explicites et gestion d’erreur; elle ne sera pas passée à `next/image` par défaut;
+- aucun `remotePatterns` générique tel que `hostname: '**'` ne sera ajouté. Un domaine externe ne pourra utiliser `next/image` que s’il est explicitement autorisé et validé dans la configuration;
+- le build mobile conserve `images.unoptimized: true` via `next.config.ts` lorsque `MOBILE_BUILD=true`; les tests couvriront ce mode et le rendu natif/optimisé attendu.
+
+Une URL externe valide syntaxiquement doit être chargée dans l’aperçu avant l’enregistrement. Si le navigateur ne peut pas décoder sa réponse comme image, l’aperçu passe en erreur et l’enregistrement est bloqué avec un message demandant une URL directe vers un fichier image. La vérification client ne remplace pas les validations de sécurité Firestore.
+
+Les URLs externes en production doivent utiliser `https`. `http` peut uniquement être accepté en développement local si cette exception est explicitement signalée à l’utilisateur; aucune URL HTTP ne doit être enregistrée pour un déploiement de production.
+
 ## Compression, taille et performances
 
 Le service de compression doit appliquer les garde-fous suivants avant Canvas :
 
 - liste blanche MIME : `image/jpeg`, `image/png`, `image/webp`;
 - taille d’entrée maximale : 10 Mo;
-- dimension d’entrée maximale de 8000 px sur le plus grand côté et plafond de 25 mégapixels avant décodage/Canvas;
+- vérifier le MIME et la taille avant décodage, puis refuser l’image avant l’allocation du Canvas si son plus grand côté dépasse 6000 px ou si sa résolution dépasse 16 mégapixels;
 - nettoyage de chaque `ObjectURL` dans tous les chemins de sortie;
 - résultat strictement WebP; aucun fallback silencieux vers le fichier original;
 - protection contre les sélections rapides : chaque sélection reçoit un identifiant de requête et un résultat obsolète est ignoré.
 
+Tout `ObjectURL` d’aperçu ou de compression sera révoqué lors du remplacement du fichier, de la suppression de l’image, de l’annulation de l’import et au démontage du composant. Après suppression, la valeur du `<input type="file">` sera réinitialisée afin de permettre la sélection du même fichier.
+
 Pour les images de menu, la cible est une largeur/hauteur maximale de 1200 px, un poids généralement compris entre 150 et 300 Ko et une limite dure de 500 Ko après compression. Une compression WebP bornée par plusieurs niveaux de qualité peut être utilisée; si la limite dure ne peut pas être respectée, l’enregistrement échoue avec un message clair.
 
-Les images Firebase Storage seront servies via l’optimiseur `next/image` avec `sizes="96px"` et sans `unoptimized`; `next.config.ts` possède déjà le `remotePattern` Firebase nécessaire. Les URLs externes resteront explicitement non optimisées si leur domaine n’est pas configuré; elles seront signalées comme moins fiables et potentiellement plus lourdes. Une miniature Storage dédiée reste hors périmètre immédiat.
+Les images Firebase Storage seront servies via l’optimiseur `next/image` avec `sizes="96px"`; `next.config.ts` possède déjà le `remotePattern` Firebase nécessaire en mode web. Les URLs externes utiliseront le rendu natif décrit ci-dessus. Une miniature Storage dédiée reste hors périmètre immédiat.
 
 ## Validation et sécurité
 
@@ -109,16 +127,16 @@ Dans `isValidMenuItem`, valider les champs optionnels lorsqu’ils existent :
 
 - `imageUrl` est une chaîne d’au plus 2048 caractères, correspondant à `^https?://...`, et ne peut pas utiliser au minimum `share.google` ou `photos.google.com` comme domaine de partage;
 - `imageStoragePath` est une chaîne d’au plus 512 caractères correspondant au chemin `menu-images/{restaurantId}/{itemId}/{uploadId}.webp`;
-- lorsqu’un `imageStoragePath` existe, `imageUrl` doit être présent, être une URL `https://firebasestorage.googleapis.com/...` et le chemin doit commencer par le restaurant et l’article du document;
+- lorsqu’un `imageStoragePath` existe, `imageUrl` doit être présent et être une URL Firebase de forme validée;
 - lorsqu’aucun `imageStoragePath` n’existe, `imageUrl` peut être une URL externe HTTP(S) validée.
 
-Les règles doivent conserver les contrôles existants de propriétaire et de champs autorisés. `deleteField()` doit être couvert par un test de règles pour les mises à jour d’articles existants.
+Les règles Firestore valident uniquement la forme et la longueur de `imageStoragePath`; elles ne tenteront pas de corréler exactement le chemin encodé avec l’URL Firebase et ses tokens. La protection réelle du chemin, du type, de la taille et du propriétaire est assurée par les règles Storage. Le service applicatif garantit la correspondance exacte entre `imageUrl` et `imageStoragePath` avant l’écriture Firestore. Les règles doivent conserver les contrôles existants de propriétaire et de champs autorisés. `deleteField()` doit être couvert par un test de règles pour les mises à jour d’articles existants.
 
 ### Storage
 
 Ajouter une règle dédiée à `menu-images/{restaurantId}/{itemId}/{uploadId}.webp` :
 
-- lecture pour les utilisateurs autorisés à voir les menus selon le modèle actuel;
+- lecture pour tout utilisateur authentifié, alignée sur la règle Firestore actuelle de lecture des `menu_items`;
 - `create` seulement si l’utilisateur authentifié est le propriétaire Firestore du restaurant, que le chemin est valide, que `contentType == 'image/webp'` et que la taille est inférieure ou égale à 500 Ko;
 - `update` explicitement refusé, car chaque remplacement crée un nouvel `uploadId`;
 - `delete` seulement pour le propriétaire du restaurant ou le mécanisme serveur de nettoyage autorisé.
@@ -145,15 +163,15 @@ Le bouton `Enregistrer` reste accessible au clavier et désactivé pendant les o
 ## Tests
 
 - Tests unitaires de la validation URL : URL directe HTTP(S) acceptée, URL non HTTP(S), lien de partage et URL trop longue refusés.
-- Tests de la machine d’état : conservation, URL externe, upload et suppression; vérifier que `image-unchanged` n’envoie aucun champ image et que `remove` utilise `deleteField()`.
+- Tests de la machine d’état : nouvel article sans image, conservation, URL externe, upload et suppression; vérifier que `image-none` et `image-unchanged` n’envoient aucun champ image et que `remove` utilise `deleteField()`.
 - Test de génération anticipée de `itemId` et de chemin unique `uploadId`.
 - Test du flux upload : compression WebP, upload Storage, URL/chemin sauvegardés et suppression de l’ancien fichier après réussite Firestore.
 - Test de compensation : échec Firestore supprime le nouvel upload; échec de suppression ancienne image ne fait pas échouer la sauvegarde.
-- Tests d’erreurs : entrée trop volumineuse, MIME non autorisé, pixels excessifs, compression impossible, upload interrompu puis reprise, sélection rapide de deux fichiers.
+- Tests d’erreurs : entrée trop volumineuse, MIME non autorisé, pixels excessifs, compression impossible, upload resumable mis en pause puis repris, upload annulé, nouvelle tentative depuis zéro après échec définitif, sélection rapide de deux fichiers.
 - Tests de règles Firestore : propriétaire, champs autorisés, URL/chemin valides, suppression réelle de `imageUrl` et `imageStoragePath`, conservation d’une image existante.
-- Tests de règles Storage : propriétaire, autre utilisateur, non-authentifié, mauvais type, taille excessive, update refusé et delete autorisé.
+- Tests de règles Storage : lecture authentifiée autorisée, lecture non authentifiée refusée, propriétaire autorisé à créer/supprimer, autre utilisateur refusé, mauvais type, taille excessive et update refusé.
 - Tests du modal : `role`, focus initial, piège clavier, restauration du focus, `Escape`, verrouillage du scroll, fermeture bloquée pendant upload, confirmation des modifications et footer accessible sur mobile.
-- Vérification de non-régression de l’affichage public du menu et de l’optimisation des images Firebase.
+- Vérification de non-régression : affichage d’une URL Firebase via `next/image`, affichage d’une URL externe via `<img>`, erreur d’une URL valide mais non-image, création d’un article sans image, resélection du même fichier après suppression, annulation d’un upload, comportement mobile avec `images.unoptimized: true` et optimisation/cache des images Firebase.
 
 ## Hors périmètre immédiat
 
