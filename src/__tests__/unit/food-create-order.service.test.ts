@@ -31,6 +31,41 @@ jest.mock('@/config/firebase', () => ({
 import { httpsCallable } from 'firebase/functions';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+describe('FoodDeliveryService.payFoodOrderWithCard', () => {
+  test('omits paymentIntentId while preparing a new card payment', async () => {
+    const payCallable = jest.fn().mockResolvedValue({
+      data: {
+        clientSecret: 'pi_secret_123',
+        paymentIntentId: 'pi_123',
+        amount: 34,
+        currency: 'cad',
+      },
+    });
+    (httpsCallable as jest.Mock).mockReturnValue(payCallable);
+
+    await FoodDeliveryService.payFoodOrderWithCard('food_order_123');
+
+    expect(payCallable).toHaveBeenCalledWith({ orderId: 'food_order_123' });
+    expect(Object.prototype.hasOwnProperty.call(payCallable.mock.calls[0][0], 'paymentIntentId')).toBe(false);
+  });
+
+  test('sends paymentIntentId only after Stripe confirms the payment', async () => {
+    const payCallable = jest.fn().mockResolvedValue({ data: { transactionId: 'tx_123' } });
+    (httpsCallable as jest.Mock).mockReturnValue(payCallable);
+
+    await FoodDeliveryService.payFoodOrderWithCard('food_order_123', 'pi_123');
+
+    expect(payCallable).toHaveBeenCalledWith({
+      orderId: 'food_order_123',
+      paymentIntentId: 'pi_123',
+    });
+  });
+});
+
 describe('FoodDeliveryService.createFoodOrder', () => {
   test('returns server-verified totals without charging the wallet immediately', async () => {
     const createCallable = jest.fn().mockResolvedValue({

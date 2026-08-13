@@ -578,7 +578,8 @@ export const payFoodOrderWithCard = async (
       { orderId: string; paymentIntentId?: string },
       { transactionId?: string; clientSecret?: string; paymentIntentId?: string; amount?: number; currency?: string }
     >(functions, 'payFoodOrderWithCard');
-    const result = await payCallable({ orderId, paymentIntentId });
+    const payload = paymentIntentId ? { orderId, paymentIntentId } : { orderId };
+    const result = await payCallable(payload);
     return result.data;
   } catch (error) {
     console.error('[food-delivery.service] payFoodOrderWithCard failed:', error);
