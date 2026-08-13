@@ -10,6 +10,7 @@ import { CartDrawer } from '@/components/food/CartDrawer';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { isRestaurantOpenAt } from '@/utils/restaurant-hours';
 
 export default function RestaurantClient() {
   const params = useParams()
@@ -66,6 +67,7 @@ export default function RestaurantClient() {
     acc[category].push(item);
     return acc;
   }, {} as Record<string, MenuItem[]>);
+  const isRestaurantOpen = isRestaurantOpenAt(restaurant, new Date());
 
   return (
     <div className="min-h-screen bg-background pb-32 max-w-[430px] mx-auto">
@@ -125,7 +127,7 @@ export default function RestaurantClient() {
 
       {/* Menu List */}
       <div className="px-4 mt-8">
-        {!restaurant.isOpen && (
+        {!isRestaurantOpen && (
           <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 mb-6 flex items-start gap-3">
             <MaterialIcon name="info" size="md" className="shrink-0 mt-0.5" />
             <div>
@@ -153,7 +155,7 @@ export default function RestaurantClient() {
         )}
       </div>
 
-      {restaurant.isOpen && <CartDrawer />}
+      {isRestaurantOpen && <CartDrawer />}
       <BottomNav />
     </div>
   );

@@ -63,6 +63,15 @@
             border-radius: 999px;
             text-decoration: none;
         }
+        .actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn.secondary {
+            background: #374151;
+        }
     </style>
 </head>
 <body>
@@ -76,7 +85,7 @@
     <script>
         (function () {
             var params = new URLSearchParams(window.location.search);
-            var onboarding = params.get('onboarding') || 'success';
+            var onboarding = params.get('onboarding') || params.get('status') || 'success';
             var accountId = params.get('account_id') || '';
             var role = params.get('role') || '';
             var content = document.getElementById('content');
@@ -97,10 +106,10 @@
                 '<h1>' + title + '</h1>' +
                 '<div class="badge ' + badgeClass + '">' + badgeText + (role ? ' · ' + role : '') + '</div>' +
                 '<p>' + message + '</p>' +
-                '<p class="muted" id="fallback">Si l\'app ne s\'ouvre pas, retournez manuellement dans Medjira.</p>';
+                '<p class="muted" id="fallback">Si l\'ouverture automatique est bloquée, utilisez le bouton ci-dessous.</p>' +
+                '<div class="actions"><a id="open-app" class="btn" href="#">Ouvrir Medjira</a><a id="open-web" class="btn secondary" href="#">Continuer sur le Web</a></div>';
 
-            if (isSuccess) {
-                // Try to open the app
+            if (isSuccess || onboarding === 'refresh') {
                 var deepLinkParams = new URLSearchParams();
                 deepLinkParams.set('onboarding', onboarding);
                 if (accountId) deepLinkParams.set('account_id', accountId);
@@ -117,19 +126,31 @@
                 } else if (isIOS) {
                     deepLinkUrl = 'medjira://stripe-return?' + paramStr;
                 } else {
-                    deepLinkUrl = 'medjira://stripe-return?' + paramStr; // fallback
+                    deepLinkUrl = 'medjira://stripe-return?' + paramStr;
                 }
 
-                try {
-                    window.location.href = deepLinkUrl;
-                } catch (e) {
-                    // Ignore
+                var openApp = document.getElementById('open-app');
+                var openWeb = document.getElementById('open-web');
+                var webRoute = role === 'restaurant'
+                    ? '/restaurant/onboarding/payments'
+                    : role === 'driver'
+                        ? '/driver/payments/setup'
+                        : '/';
+                var webUrl = window.location.origin + webRoute + '?onboarding=' + encodeURIComponent(onboarding);
+                openApp.href = deepLinkUrl;
+                openWeb.href = webUrl;
+                openApp.textContent = onboarding === 'refresh' ? 'Revenir dans Medjira' : 'Ouvrir Medjira';
+                if (!isAndroid && !isIOS) {
+                    openApp.style.display = 'none';
+                    openWeb.className = 'btn';
                 }
 
-                // After 3 seconds, show fallback if not opened
-                setTimeout(function() {
-                    document.getElementById('fallback').innerHTML = 'Retournez dans l\'app Medjira';
-                }, 3000);
+                if (isSuccess && (isAndroid || isIOS)) {
+                    try {
+                        window.location.href = deepLinkUrl;
+                    } catch (e) {
+                    }
+                }
             }
         })();
     </script>

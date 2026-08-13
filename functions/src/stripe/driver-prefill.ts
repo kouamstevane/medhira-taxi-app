@@ -1,3 +1,5 @@
+import { toE164 } from './connect-account.js';
+
 interface DriverIndividualInput {
   firstName?: string;
   lastName?: string;
@@ -78,36 +80,6 @@ function parseStripeDob(iso: string | undefined): StripeDob | null {
   if (month < 1 || month > 12) return null;
   if (day < 1 || day > 31) return null;
   return { day, month, year };
-}
-
-const COUNTRY_DIAL_CODE: Record<string, string> = {
-  CA: '1',
-  US: '1',
-  FR: '33',
-  BE: '32',
-  CM: '237',
-};
-
-function toE164(raw: string | undefined, country: string): string | undefined {
-  if (!raw) return undefined;
-  const trimmed = raw.trim();
-  if (!trimmed) return undefined;
-
-  if (trimmed.startsWith('+')) {
-    const digits = trimmed.slice(1).replace(/\D/g, '');
-    if (digits.length >= 8 && digits.length <= 15) return `+${digits}`;
-    return undefined;
-  }
-
-  const digits = trimmed.replace(/\D/g, '');
-  if (!digits) return undefined;
-
-  const dial = COUNTRY_DIAL_CODE[country.toUpperCase()];
-  if (!dial) return undefined;
-
-  const normalized = digits.startsWith(dial) ? digits : dial + digits;
-  if (normalized.length < 8 || normalized.length > 15) return undefined;
-  return `+${normalized}`;
 }
 
 export function buildDriverIndividualPrefill({

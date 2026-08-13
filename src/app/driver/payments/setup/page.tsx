@@ -210,8 +210,8 @@ function PaymentSetupContent() {
       const origin = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
       const linkFn = httpsCallable<{ returnUrl: string; refreshUrl: string }, { url: string }>(fn, 'createConnectOnboardLink');
       const linkRes = await linkFn({
-        returnUrl: `${origin}/stripe-return/?role=driver&status=success`,
-        refreshUrl: `${origin}/stripe-return/?role=driver&status=refresh`,
+        returnUrl: `${origin}/stripe-return?role=driver&status=success`,
+        refreshUrl: `${origin}/stripe-return?role=driver&status=refresh`,
       });
       const url = linkRes.data?.url;
       if (!url) throw new Error('URL d\'onboarding manquante.');

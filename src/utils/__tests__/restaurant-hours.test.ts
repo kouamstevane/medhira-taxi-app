@@ -1,5 +1,6 @@
 import {
   getOpeningHoursForDate,
+  isRestaurantOpenAt,
   normalizeOpeningHours,
   validateOpeningHours,
 } from '@/utils/restaurant-hours';
@@ -47,5 +48,14 @@ describe('restaurant hours', () => {
 
     expect(result.key).toBe('monday');
     expect(result.label).toBe('Lundi');
+  });
+
+  it('keeps ordering available during configured opening hours', () => {
+    const date = new Date('2026-08-13T12:00:00');
+    const openingHours = normalizeOpeningHours({
+      thursday: { open: '09:00', close: '22:00', closed: false },
+    });
+
+    expect(isRestaurantOpenAt({ isOpen: false, openingHours }, date)).toBe(true);
   });
 });

@@ -25,6 +25,7 @@ interface ReverseGeocodeResult {
 export const reverseGeocode = onCall(
   {
     region: 'europe-west1',
+    cors: true,
     secrets: [googleMapsApiKey],
     // minInstances: 1 évite les cold starts (~5s) au prix d'une instance
     // toujours active. Indispensable pour le flow de réservation qui doit

@@ -31,7 +31,7 @@ export interface UserRoles {
 
 export type ActiveRole = 'client' | 'driver' | 'restaurant' | 'driver_onboarding' | 'restaurant_onboarding';
 export type AppAccountState = 'active' | 'driver_onboarding' | 'restaurant_onboarding';
-export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+export type AuthStatus = 'loading' | 'authenticated' | 'degraded' | 'unauthenticated';
 
 export interface RestaurantDraftData {
   name?: string;

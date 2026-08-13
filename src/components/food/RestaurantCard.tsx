@@ -4,12 +4,15 @@ import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Restaurant } from '@/types/food-delivery';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { isRestaurantOpenAt } from '@/utils/restaurant-hours';
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
 }
 
 export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) => {
+  const isOpen = isRestaurantOpenAt(restaurant, new Date());
+
   return (
     <Link href={`/food/restaurant/${restaurant.id}`} className="block">
       <div className="glass-card rounded-2xl border border-white/5 overflow-hidden hover:border-white/10 transition-all duration-300 hover:scale-[1.01]">
@@ -32,7 +35,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) =>
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
           {/* Badge fermé */}
-          {!restaurant.isOpen && (
+          {!isOpen && (
             <div className="absolute top-3 left-3 bg-destructive text-white text-xs font-bold px-2 py-1 rounded-full">
               Fermé
             </div>

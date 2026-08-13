@@ -11,6 +11,7 @@ import {
 } from './foodOrderPricing.js';
 import { resolveRestaurantCommissionRate } from './foodSettlement.js';
 import { DEFAULT_RESTAURANT_COMMISSION_RATE } from '../config/stripe.js';
+import { isRestaurantOpenForOrdering } from './restaurantAvailability.js';
 
 const googleMapsApiKey = defineSecret('GOOGLE_MAPS_API_KEY');
 
@@ -106,7 +107,11 @@ export const createFoodOrder = onCall(
     }
 
     const restaurant = restaurantSnap.data()!;
-    if (restaurant.status !== 'approved' || restaurant.stripeConnectStatus !== 'active' || restaurant.isOpen === false) {
+    if (
+      restaurant.status !== 'approved'
+      || restaurant.stripeConnectStatus !== 'active'
+      || !isRestaurantOpenForOrdering(restaurant, new Date())
+    ) {
       throw new HttpsError('failed-precondition', 'Ce restaurant n\'est pas disponible actuellement.');
     }
 

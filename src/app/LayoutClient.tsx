@@ -21,6 +21,7 @@ import { VoipCallProvider } from '@/context/VoipCallProvider';
 import { Toaster } from 'react-hot-toast';
 import { NotificationHandler } from '@/components/notifications/NotificationHandler';
 import { getDriverInvitationPathFromUrl } from '@/app/auth/driver-invitation/driver-invitation-links';
+import { getStripeReturnPathFromUrl } from '@/app/stripe-return/stripe-return-links';
 
 interface LayoutClientProps {
   children: React.ReactNode;
@@ -73,6 +74,12 @@ export default function LayoutClient({ children }: LayoutClientProps) {
     if (!Capacitor.isNativePlatform()) return;
 
     const navigateFromAppUrl = (url: string) => {
+      const stripeReturnPath = getStripeReturnPathFromUrl(url);
+      if (stripeReturnPath) {
+        router.replace(stripeReturnPath);
+        return;
+      }
+
       const path = getDriverInvitationPathFromUrl(url);
       if (path) router.replace(path);
     };

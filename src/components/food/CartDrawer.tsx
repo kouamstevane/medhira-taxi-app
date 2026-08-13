@@ -21,7 +21,7 @@ export const CartDrawer: React.FC = () => {
     <>
       {/* Floating Button when drawer is closed */}
       {!isOpen && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4">
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4">
           <button
             onClick={() => setIsOpen(true)}
             className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white rounded-2xl p-4 flex items-center justify-between shadow-lg shadow-primary/25 hover:opacity-95 transition-all transform hover:scale-[1.02] active:scale-95 primary-glow"
@@ -49,14 +49,14 @@ export const CartDrawer: React.FC = () => {
       {/* Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-50 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 bg-black/60 z-[60] backdrop-blur-sm transition-opacity"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       {/* Drawer */}
       <div
-        className={`fixed inset-x-0 bottom-0 z-50 glass-card rounded-t-3xl shadow-2xl transition-transform duration-300 ease-in-out transform flex flex-col max-h-[90vh] border-t border-white/10 ${
+        className={`fixed inset-x-0 bottom-0 z-[70] glass-card rounded-t-3xl shadow-2xl transition-transform duration-300 ease-in-out transform flex flex-col max-h-[90vh] border-t border-white/10 ${
           isOpen ? 'translate-y-0' : 'translate-y-full'
         }`}
       >

@@ -43,7 +43,11 @@ export function ProtectedPageGuard({
         </div>
         <h2 className="text-2xl font-bold text-white mb-2">Medjira</h2>
         <p className="text-muted-foreground animate-pulse">
-          {authStatus === 'loading' ? 'Chargement...' : 'Redirection...'}
+          {authStatus === 'degraded'
+            ? 'Connexion temporairement indisponible...'
+            : authStatus === 'loading'
+              ? 'Chargement...'
+              : 'Redirection...'}
         </p>
       </div>
     </div>

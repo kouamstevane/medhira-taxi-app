@@ -76,6 +76,9 @@ function ReloadConsumer() {
 
 describe('AuthProvider', () => {
   beforeEach(() => {
+    mockGetDoc.mockClear();
+    mockUser.getIdToken.mockReset();
+    mockUser.getIdToken.mockResolvedValue('token');
     mockGetDoc.mockResolvedValue({
       exists: () => true,
       data: () => ({
@@ -154,6 +157,46 @@ describe('AuthProvider', () => {
       expect(screen.getByText('authenticated')).toBeInTheDocument();
     });
     expect(mockUser.getIdToken).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps the Firebase session when token refresh fails because of the network', async () => {
+    mockUser.getIdToken.mockRejectedValue({
+      code: 'auth/network-request-failed',
+      message: 'Firebase: Error (auth/network-request-failed).',
+    });
+
+    render(
+      <AuthProvider>
+        <PaymentMethodConsumer />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('degraded')).toBeInTheDocument());
+    expect(mockGetDoc).not.toHaveBeenCalled();
+  });
+
+  it('retries profile synchronization when the browser comes back online', async () => {
+    const networkError = {
+      code: 'auth/network-request-failed',
+      message: 'Firebase: Error (auth/network-request-failed).',
+    };
+    mockUser.getIdToken
+      .mockRejectedValueOnce(networkError)
+      .mockRejectedValueOnce(networkError)
+      .mockRejectedValueOnce(networkError)
+      .mockResolvedValueOnce('token');
+
+    render(
+      <AuthProvider>
+        <PaymentMethodConsumer />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('degraded')).toBeInTheDocument());
+    window.dispatchEvent(new Event('online'));
+
+    await waitFor(() => expect(screen.getByText('authenticated')).toBeInTheDocument());
+    expect(mockGetDoc).toHaveBeenCalledTimes(1);
   });
 
   it('rejects reloadUser when the user document cannot be resolved', async () => {

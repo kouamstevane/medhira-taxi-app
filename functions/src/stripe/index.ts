@@ -24,6 +24,7 @@ import { DRIVER_SHARE_RATE } from '../config/stripe.js';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { createStripeClient } from './stripe-client.js';
 import { buildDriverIndividualPrefill } from './driver-prefill.js';
+import { buildBusinessProfile, buildConnectAccountParams } from './connect-account.js';
 import { generatePersonalDriverTrips } from '../personalDriver/tripGeneration.js';
 import {
   isPersonalDriverSubscriptionReadyForActivation,
@@ -1524,57 +1525,6 @@ interface CreateConnectAccountResult {
   status: 'pending' | 'existing';
 }
 
-// =============================================================================
-// Business profile Medjira — pré-rempli côté serveur pour éviter au chauffeur
-// l'écran "Informations sur votre entreprise" dans Stripe-hosted onboarding.
-//
-// Pour changer ces valeurs (ex: nouveau site web officiel) :
-//   1. Modifier ci-dessous
-//   2. Redéployer : firebase deploy --only functions:createConnectAccount
-//
-// MCC (Merchant Category Code) :
-//   - 4121 = Limousines and Taxicabs (chauffeurs taxi)
-//   - 4215 = Courier Services: Air and Ground (livreurs)
-// =============================================================================
-const MEDJIRA_BUSINESS_PROFILE = {
-  url: 'https://medjira-service.firebaseapp.com',
-  supportEmail: 'medjira@medjira.com',
-  mccTaxi: '4121',
-  mccDelivery: '4215',
-  productDescriptionTaxi: 'Service de transport de personnes via l\'application Medjira.',
-  productDescriptionDelivery: 'Service de livraison de repas et colis via l\'application Medjira.',
-  productDescriptionMixed: 'Services de transport de personnes et de livraison via l\'application Medjira.',
-};
-
-/**
- * Construit l'objet `business_profile` à pré-remplir côté Stripe selon le
- * type de chauffeur (taxi, livreur, ou les deux).
- */
-function buildBusinessProfile(driverType: string | undefined): Record<string, unknown> {
-  let mcc: string;
-  let product_description: string;
-  switch (driverType) {
-    case 'livreur':
-      mcc = MEDJIRA_BUSINESS_PROFILE.mccDelivery;
-      product_description = MEDJIRA_BUSINESS_PROFILE.productDescriptionDelivery;
-      break;
-    case 'les_deux':
-      mcc = MEDJIRA_BUSINESS_PROFILE.mccTaxi; // activité principale = taxi
-      product_description = MEDJIRA_BUSINESS_PROFILE.productDescriptionMixed;
-      break;
-    case 'chauffeur':
-    default:
-      mcc = MEDJIRA_BUSINESS_PROFILE.mccTaxi;
-      product_description = MEDJIRA_BUSINESS_PROFILE.productDescriptionTaxi;
-  }
-  return {
-    mcc,
-    product_description,
-    url: MEDJIRA_BUSINESS_PROFILE.url,
-    support_email: MEDJIRA_BUSINESS_PROFILE.supportEmail,
-  };
-}
-
 export const createConnectAccount = onCall(
   {
     region: 'europe-west1',
@@ -1643,7 +1593,10 @@ export const createConnectAccount = onCall(
 
     // Business profile Medjira — évite l'écran "Informations sur votre entreprise".
     const driverType = (snap.data()?.driverType as string | undefined) ?? 'chauffeur';
-    const businessProfile = buildBusinessProfile(driverType);
+    const businessProfile = buildBusinessProfile({
+      role: driverType === 'livreur' ? 'delivery' : driverType === 'les_deux' ? 'mixed' : 'driver',
+      country,
+    });
 
     console.log('[createConnectAccount] prefill summary', {
       uid,
@@ -1666,15 +1619,15 @@ export const createConnectAccount = onCall(
     if (existing) {
       try {
         const acct = await stripeClient.accounts.retrieve(existing);
-        if (acct && !('deleted' in acct && acct.deleted) && !acct.details_submitted) {
-          // On envoie TOUJOURS le business_profile (Medjira-wide). On ajoute
-          // l'individual seulement s'il y a au moins un champ utile à pré-remplir.
+        if (acct && !('deleted' in acct && acct.deleted)) {
           const hasIndividualPrefill = firstName || lastName || phone || dob;
+          const canUpdateIndividual = !acct.details_submitted;
           console.log('[createConnectAccount] updating existing account with prefill', {
             uid,
             accountId: existing,
             individualKeys: hasIndividualPrefill ? Object.keys(individual) : [],
             withBusinessProfile: true,
+            withIndividual: canUpdateIndividual && !!hasIndividualPrefill,
           });
           // Retry-without-prefill : si Stripe rejette un champ (ex: phone invalide),
           // on l'enlève et on retente — sans bloquer le retour.
@@ -1682,7 +1635,7 @@ export const createConnectAccount = onCall(
           for (let attempt = 1; attempt <= 4; attempt++) {
             try {
               const updatePayload: Record<string, unknown> = { business_profile: businessProfile };
-              if (hasIndividualPrefill) updatePayload.individual = currentInd;
+              if (canUpdateIndividual && hasIndividualPrefill) updatePayload.individual = currentInd;
               await stripeClient.accounts.update(existing, updatePayload);
               console.log('[createConnectAccount] update ok', { uid, accountId: existing, attempt });
               break;
@@ -1726,22 +1679,6 @@ export const createConnectAccount = onCall(
       console.log('[createConnectAccount] returning existing account', { uid, accountId: existing, durationMs: Date.now() - t0 });
       return { accountId: existing, status: 'existing' };
     }
-    const buildAccountPayload = (ind: Record<string, unknown>) => ({
-      country,
-      email: tokenEmail,
-      controller: {
-        stripe_dashboard: { type: 'none' as const },
-        fees: { payer: 'application' as const },
-        losses: { payments: 'application' as const },
-        requirement_collection: 'application' as const,
-      },
-      capabilities: { transfers: { requested: true } },
-      business_type: 'individual' as const,
-      individual: ind,
-      business_profile: businessProfile,
-      metadata: { accountType: 'driver', driverId: uid, platform: 'medjira_taxi' },
-    });
-
     // Helper : retire récursivement les clés `individual.<rejectedField>` puis retry.
     // Stripe renvoie `param` au format "individual[phone]" → on extrait "phone".
     const stripParamFromIndividual = (param: string | undefined, ind: Record<string, unknown>): { ind: Record<string, unknown>; removed: string | null } => {
@@ -1772,7 +1709,14 @@ export const createConnectAccount = onCall(
             attempt,
             individualKeys: Object.keys(currentIndividual),
           });
-          account = await stripeClient.accounts.create(buildAccountPayload(currentIndividual), {
+          account = await stripeClient.accounts.create(buildConnectAccountParams({
+            role: 'driver',
+            country,
+            email: tokenEmail,
+            individual: currentIndividual,
+            businessProfile,
+            metadata: { accountType: 'driver', driverId: uid, platform: 'medjira_taxi' },
+          }) as Parameters<typeof stripeClient.accounts.create>[0], {
             // L'idempotencyKey doit changer entre attempts car le payload diffère.
             idempotencyKey: `account_${uid}_v${attempt}`,
           });

@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import type { Restaurant, FoodOrder } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
-import { getOpeningHoursForDate, normalizeOpeningHours } from '@/utils/restaurant-hours';
+import { getOpeningHoursForDate, isRestaurantOpenAt, normalizeOpeningHours } from '@/utils/restaurant-hours';
 import Link from 'next/link';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { RestaurantPortalPayoutBanner } from '@/components/restaurant/RestaurantPortalPayoutBanner';
@@ -114,10 +114,12 @@ export default function PortalClient() {
 
   if (!restaurant || !id) return null;
 
+  const now = new Date();
   const todayHours = getOpeningHoursForDate(
     normalizeOpeningHours(restaurant.openingHours),
-    new Date(),
+    now,
   );
+  const isRestaurantOpen = isRestaurantOpenAt(restaurant, now);
 
   return (
     <div className="min-h-screen bg-background">
@@ -269,19 +271,9 @@ export default function PortalClient() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-slate-300">Ouvert actuellement</span>
-                  <button
-                    className={`w-12 h-6 rounded-full transition relative ${restaurant.isOpen ? 'bg-green-500' : 'bg-slate-600'}`}
-                    onClick={async () => {
-                      try {
-                        await FoodDeliveryService.updateRestaurantStatus(id, restaurant.status, { isOpen: !restaurant.isOpen });
-                        setRestaurant(prev => prev ? { ...prev, isOpen: !prev.isOpen } : null);
-                      } catch {
-                        showError("Erreur lors de la mise à jour");
-                      }
-                    }}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${restaurant.isOpen ? 'left-7' : 'left-1'}`}></div>
-                  </button>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${isRestaurantOpen ? 'bg-green-500/15 text-green-400' : 'bg-slate-600/30 text-slate-400'}`}>
+                    {isRestaurantOpen ? 'Oui' : 'Non'}
+                  </span>
                 </div>
                 <div className="h-px bg-white/5"></div>
                 <div>
@@ -296,6 +288,7 @@ export default function PortalClient() {
                     Modifier les horaires
                     <MaterialIcon name="arrow_forward" size="sm" />
                   </Link>
+                  <p className="mt-3 text-xs text-slate-500">Les commandes suivent automatiquement les horaires configurés.</p>
                 </div>
               </div>
             </div>

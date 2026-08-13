@@ -6,6 +6,7 @@ import * as admin from 'firebase-admin';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { createStripeClient, isStripeError } from './stripe-client.js';
 import { getActiveMarketCountryCode } from '../config/market.js';
+import { buildBusinessProfile, buildConnectAccountParams } from './connect-account.js';
 
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const DEFAULT_APP_BASE_URL = 'https://medjira-service.web.app';
@@ -52,6 +53,15 @@ export async function handleCreateStripeConnectAccount(request: CallableRequest<
   }
   const stripe = createStripeClient(stripeSecretKey);
   const baseUrl = getAppBaseUrl();
+  const country = getActiveMarketCountryCode();
+  const businessProfile = buildBusinessProfile({
+    role: 'restaurant',
+    country,
+    name: r.name,
+    productDescription: r.description,
+    supportEmail: r.email ?? r.ownerEmail,
+    supportPhone: r.phone,
+  });
 
   let accountId: string | undefined = r.stripeAccountId;
 
@@ -60,15 +70,30 @@ export async function handleCreateStripeConnectAccount(request: CallableRequest<
   } else {
     if (accountId && r.stripeConnectStatus === 'active') throw new HttpsError('already-exists', 'Compte Stripe déjà actif.');
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: getActiveMarketCountryCode(),
+      const account = await stripe.accounts.create(buildConnectAccountParams({
+        role: 'restaurant',
+        country,
         email: r.ownerEmail,
+        businessProfile,
         metadata: { accountType: 'restaurant', ownerUid: uid, restaurantId },
-        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
-      });
+      }) as Parameters<typeof stripe.accounts.create>[0]);
       accountId = account.id;
       await restRef.update({ stripeAccountId: accountId, stripeConnectStatus: 'in_progress', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    }
+  }
+
+  if (r.stripeAccountId) {
+    try {
+      const account = await stripe.accounts.retrieve(accountId!);
+      if (!('deleted' in account && account.deleted)) {
+        await stripe.accounts.update(accountId!, { business_profile: businessProfile });
+      }
+    } catch (error) {
+      logger.warn('[createStripeConnectAccount] Could not update restaurant prefill', {
+        restaurantId,
+        accountId,
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -76,8 +101,8 @@ export async function handleCreateStripeConnectAccount(request: CallableRequest<
   try {
     link = await stripe.accountLinks.create({
       account: accountId!,
-      refresh_url: `${baseUrl}/stripe-return/?role=restaurant&status=refresh`,
-      return_url: `${baseUrl}/stripe-return/?role=restaurant&status=success`,
+      refresh_url: `${baseUrl}/stripe-return?role=restaurant&status=refresh`,
+      return_url: `${baseUrl}/stripe-return?role=restaurant&status=success`,
       type: 'account_onboarding',
     });
   } catch (error) {

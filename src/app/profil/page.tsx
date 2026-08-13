@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { auth, db, functions, getFirebaseStorage } from '@/config/firebase';
-import { doc, getDoc, updateDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
@@ -15,9 +15,14 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { InputField } from '@/components/forms/InputField';
 import { SelectField } from '@/components/forms/SelectField';
 import { useToast } from '@/hooks/useToast';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 import { getFirestoreErrorMessage, logFirestoreError } from '@/utils/firestore-error-handler';
 import { CURRENCY_CODE, DEFAULT_LOCALE } from '@/utils/constants';
+import { shouldOpenAddressEditor } from './profile-navigation';
+import { ProfileAddressField } from './ProfileAddressField';
+import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import type { PlaceSuggestion } from '@/types';
+import { buildProfileUpdate, persistProfileUpdate } from './profile-update';
 
 interface ProfileFormData {
   firstName: string;
@@ -83,7 +88,8 @@ export default function ProfilPage() {
   const [deleting, setDeleting] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
-  const { currentUser } = useAuth();
+  const { currentUser, reloadUser } = useAuth();
+  const { autocompleteService } = useGoogleMaps();
 
   // Initialize form with default values
   const form = useForm<ProfileFormData>({
@@ -113,6 +119,12 @@ export default function ProfilPage() {
     }
   }, [userData, editing, form]);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined' && shouldOpenAddressEditor(window.location.search)) {
+      setEditing(true);
+    }
+  }, []);
+
   // Reliance on AuthContext for authentication and document existence check.
   // AuthContext now handles signing out if the Firestore document is deleted.
   useEffect(() => {
@@ -128,7 +140,7 @@ export default function ProfilPage() {
             firstName: data.firstName || '',
             lastName: data.lastName || '',
             email: currentUser.email || '',
-            phone: data.phone || '',
+            phone: data.phone || data.phoneNumber || '',
             address: data.address || '',
             city: data.city || '',
             country: data.country || 'Canada',
@@ -148,12 +160,7 @@ export default function ProfilPage() {
     };
 
     fetchUserData();
-  }, [currentUser, router]);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setUserData(prev => ({ ...prev, [name]: value }));
-  };
+  }, [currentUser, router, loading]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -184,12 +191,13 @@ export default function ProfilPage() {
       if (!user) throw new Error("No user");
 
       const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
-        ...data,
-        email: user.email,
-        profileImageUrl: imageUrl,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
+      await persistProfileUpdate(
+        () => setDoc(userRef, {
+          ...buildProfileUpdate(data, user.email, imageUrl),
+          updatedAt: serverTimestamp()
+        }, { merge: true }),
+        reloadUser
+      );
 
       // Update local state
       setUserData(prev => ({ ...prev, ...data }));
@@ -407,11 +415,17 @@ export default function ProfilPage() {
                 />
               </div>
 
-              <InputField
-                  type="text"
-                  {...form.register('address')}
-                  label="Adresse"
-                  placeholder="Votre adresse actuelle"
+              <Controller
+                name="address"
+                control={form.control}
+                render={({ field }) => (
+                  <ProfileAddressField
+                    value={field.value}
+                    onChange={field.onChange}
+                    onSelect={(suggestion: PlaceSuggestion) => field.onChange(suggestion.description)}
+                    autocompleteService={autocompleteService}
+                  />
+                )}
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

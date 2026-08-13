@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.medjiraservice.medjiraserviceapp2",
+      "sha256_cert_fingerprints": [
+        "C9:9F:FC:EA:E2:80:D7:F0:13:46:AA:2C:E9:97:04:F8:25:A2:66:83:09:9E:DD:64:11:A5:10:F1:12:31:00:40"
+      ]
+    }
+  }
+]

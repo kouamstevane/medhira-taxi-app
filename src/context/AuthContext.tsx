@@ -19,14 +19,19 @@ import type { AuthStatus } from '@/types/user';
 const AUTH_DATA_RETRY_LIMIT = 2;
 const AUTH_DATA_RETRY_DELAY_MS = 150;
 
+interface UserDataFetchResult {
+  data: UserData | null;
+  transient: boolean;
+}
+
 function isTransientAuthDataError(error: unknown): boolean {
   const errorCode = (error as Record<string, unknown>)?.code as string | undefined;
   const errorMessage = error instanceof Error ? error.message : String(error);
 
   return (
-    errorCode === 'unavailable'
+    errorCode === 'auth/network-request-failed'
+    || errorCode === 'unavailable'
     || errorCode === 'deadline-exceeded'
-    || errorCode === 'permission-denied'
     || errorMessage.includes('offline')
     || errorMessage.includes('network')
   );
@@ -47,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [authStatus, setAuthStatus] = useState<AuthStatus>('loading');
-  const [error] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   /**
@@ -56,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * Lecture exclusive de `users/{uid}` (modèle V1, spec §3.1). Le statut effectif
    * d'un rôle pro (driver, restaurant) est lu à la demande via roles.service.
    */
-  const fetchUserData = async (user: User, attempt = 0): Promise<UserData | null> => {
+  const fetchUserData = async (user: User, attempt = 0): Promise<UserDataFetchResult> => {
     try {
       console.log('[AuthContext] Début chargement données utilisateur', {
         uid: user.uid,
@@ -112,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
 
         setUserData(resolvedUserData);
-        return resolvedUserData;
+        return { data: resolvedUserData, transient: false };
       } else {
         console.info('[AuthContext] Document utilisateur inexistant (peut être en cours de création)', {
           uid: user.uid,
@@ -120,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         setUserData(null);
-        return null;
+        return { data: null, transient: false };
       }
     } catch (err: unknown) {
       if (isTransientAuthDataError(err) && attempt < AUTH_DATA_RETRY_LIMIT) {
@@ -133,11 +138,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const errorObj = err instanceof Error ? err : null;
       const errorCode = (err as Record<string, unknown>)?.code as string | undefined;
       const errorMessage = errorObj?.message ?? String(err);
-      if (errorCode === 'unavailable' || errorMessage.includes('offline')) {
+      if (isTransientAuthDataError(err)) {
         console.warn('[AuthContext] Impossible de charger les données utilisateur (hors ligne):', {
           uid: user.uid,
-          errorMessage
+          errorCode,
+          errorMessage,
         });
+        return { data: null, transient: true };
       } else {
         console.error('[AuthContext] Erreur lors du chargement des données utilisateur:', {
           error: err,
@@ -148,33 +155,69 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
       setUserData(null);
-      return null;
+      return { data: null, transient: false };
     }
+  };
+
+  const resolveAuthenticatedUser = async (user: User): Promise<void> => {
+    const result = await fetchUserData(user);
+
+    if (auth.currentUser?.uid !== user.uid) return;
+
+    if (result.data) {
+      setError(null);
+      setAuthStatus('authenticated');
+      setLoading(false);
+      return;
+    }
+
+    if (result.transient) {
+      setError('Connexion temporairement indisponible. Synchronisation en attente.');
+      setAuthStatus('degraded');
+      setLoading(true);
+      return;
+    }
+
+    setError(null);
+    setAuthStatus('unauthenticated');
+    setLoading(false);
   };
 
   useEffect(() => {
     // Écouter les changements d'état d'authentification Firebase
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setLoading(true);
-      setAuthStatus('loading');
       setCurrentUser(user);
 
       if (user) {
+        setLoading(true);
+        setAuthStatus('loading');
         //  CORRECTION BUG #2 : Lire emailVerified directement depuis l'objet user
         setIsEmailVerified(user.emailVerified || false);
-        const resolvedUserData = await fetchUserData(user);
-        setAuthStatus(resolvedUserData ? 'authenticated' : 'unauthenticated');
+        await resolveAuthenticatedUser(user);
       } else {
+        setLoading(false);
+        setError(null);
         setIsEmailVerified(false);
         setUserData(null);
         setAuthStatus('unauthenticated');
       }
-
-      setLoading(false);
     });
 
+    const retryWhenOnline = () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      setLoading(true);
+      setAuthStatus('loading');
+      void resolveAuthenticatedUser(user);
+    };
+
+    window.addEventListener('online', retryWhenOnline);
+
     // Nettoyage de l'écouteur lors du démontage
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener('online', retryWhenOnline);
+    };
   }, []);
 
   /**
@@ -189,12 +232,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setCurrentUser(refreshedUser);
         setIsEmailVerified(refreshedUser.emailVerified || false);
         // Recharger aussi les données Firestore
-        const resolvedUserData = await fetchUserData(refreshedUser);
-        if (!resolvedUserData) {
+        const result = await fetchUserData(refreshedUser);
+        if (result.transient) {
+          setError('Connexion temporairement indisponible. Synchronisation en attente.');
+          setAuthStatus('degraded');
+          return;
+        }
+        if (!result.data) {
           setUserData(null);
           setAuthStatus('unauthenticated');
           throw new Error('Impossible de recharger le profil utilisateur.');
         }
+        setError(null);
         setAuthStatus('authenticated');
       } catch (err) {
         console.error('Erreur lors du rechargement de l\'utilisateur:', err);

@@ -10,28 +10,25 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Capacitor } from '@capacitor/core';
 import type { PlacesAutocompleteService } from './usePlacesAutocomplete';
 
 interface UseGoogleMapsReturn {
   isLoaded: boolean;
   loadError: string | null;
-  directionsService: google.maps.DirectionsService | null;
   autocompleteService: PlacesAutocompleteService | null;
 }
 
 /**
  * Hook pour charger Google Maps API et initialiser les services
  * 
- * @returns {UseGoogleMapsReturn} État de chargement de Google Maps
+ * @returns {UseGoogleMapsReturn} État de chargement de Places
  * 
  * @example
- * const { isLoaded, directionsService, autocompleteService } = useGoogleMaps();
+ * const { isLoaded, autocompleteService } = useGoogleMaps();
  */
 export const useGoogleMaps = (): UseGoogleMapsReturn => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService | null>(null);
   const [autocompleteService, setAutocompleteService] = useState<PlacesAutocompleteService | null>(null);
 
   const mountedRef = useRef(true);
@@ -45,11 +42,6 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
   const initializeServices = useCallback(async () => {
     if (window.google && window.google.maps) {
       try {
-        // Vérifier que DirectionsService est disponible
-        if (!window.google.maps.DirectionsService) {
-          throw new Error('DirectionsService non disponible. Vérifiez que Google Maps API est chargée.');
-        }
-
         // Vérifier que la bibliothèque places est disponible (peut prendre un peu de temps)
         if (!window.google.maps.places) {
           // Attendre un peu et réessayer
@@ -58,7 +50,6 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
             if (window.google?.maps?.places) {
               try {
                 const placesLibrary = await window.google.maps.importLibrary('places') as google.maps.PlacesLibrary;
-                setDirectionsService(new window.google.maps.DirectionsService());
                 setAutocompleteService({
                   fetchAutocompleteSuggestions: placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions.bind(
                     placesLibrary.AutocompleteSuggestion,
@@ -81,7 +72,6 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
         // Initialiser les services
         if (!mountedRef.current) return;
         const placesLibrary = await window.google.maps.importLibrary('places') as google.maps.PlacesLibrary;
-        setDirectionsService(new window.google.maps.DirectionsService());
         setAutocompleteService({
           fetchAutocompleteSuggestions: placesLibrary.AutocompleteSuggestion.fetchAutocompleteSuggestions.bind(
             placesLibrary.AutocompleteSuggestion,
@@ -102,7 +92,11 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     if (window.google && window.google.maps) {
       // Attendre que places soit disponible si ce n'est pas déjà le cas
       if (window.google.maps.places) {
-        initializeServices();
+        const initializationTimer = window.setTimeout(() => {
+          void initializeServices();
+        }, 0);
+
+        return () => window.clearTimeout(initializationTimer);
       } else {
         // Attendre un peu pour que places se charge
         const checkPlaces = setInterval(() => {
@@ -165,14 +159,18 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     }
 
     if (!apiKey) {
-      setLoadError('Clé API Google Maps manquante.');
-      return;
+      const errorTimer = window.setTimeout(() => {
+        setLoadError('Clé API Google Maps manquante.');
+      }, 0);
+      return () => window.clearTimeout(errorTimer);
     }
 
     // Vérifier que la clé API a le bon format
     if (!apiKey.startsWith('AIza')) {
-      setLoadError('Format de clé API invalide. La clé doit commencer par "AIza"');
-      return;
+      const errorTimer = window.setTimeout(() => {
+        setLoadError('Format de clé API invalide. La clé doit commencer par "AIza"');
+      }, 0);
+      return () => window.clearTimeout(errorTimer);
     }
 
     const script = document.createElement('script');
@@ -207,5 +205,5 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     };
   }, [initializeServices]);
 
-  return { isLoaded, loadError, directionsService, autocompleteService };
+  return { isLoaded, loadError, autocompleteService };
 };

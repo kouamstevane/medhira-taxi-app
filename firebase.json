@@ -9,7 +9,10 @@
     "rules": "database.rules.json"
   },
   "hosting": {
-    "public": "medjira-privacy",
+    "public": "out",
+    "predeploy": ["npm run mobile:build"],
+    "cleanUrls": true,
+    "trailingSlash": false,
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
   },
   "storage": {

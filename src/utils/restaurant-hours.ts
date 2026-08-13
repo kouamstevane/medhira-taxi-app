@@ -90,3 +90,23 @@ export function getOpeningHoursForDate(
 
   return { ...hours[key], key, label };
 }
+
+export function isRestaurantOpenAt(
+  restaurant: {
+    isOpen?: boolean;
+    openingHours?: Record<string, StoredRestaurantOpeningHour>;
+  },
+  date: Date,
+): boolean {
+  if (!restaurant.openingHours) {
+    return restaurant.isOpen !== false;
+  }
+
+  const today = getOpeningHoursForDate(normalizeOpeningHours(restaurant.openingHours), date);
+  if (today.closed || !TIME_PATTERN.test(today.open) || !TIME_PATTERN.test(today.close)) {
+    return false;
+  }
+
+  const currentMinutes = date.getHours() * 60 + date.getMinutes();
+  return currentMinutes >= timeToMinutes(today.open) && currentMinutes < timeToMinutes(today.close);
+}

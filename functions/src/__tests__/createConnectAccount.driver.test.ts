@@ -180,5 +180,36 @@ describe('createConnectAccount driver flow', () => {
       })
     );
   });
+
+  it('keeps the driver business profile synchronized after KYC submission', async () => {
+    mockDriverDocRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        driverType: 'chauffeur',
+        stripeAccountId: 'acct_existing',
+      }),
+    });
+    mockPrivateDocRef.get.mockResolvedValue({ exists: false });
+    mockStripeInstance.accounts.retrieve.mockResolvedValue({ details_submitted: true });
+
+    const { createConnectAccount } = await import('../stripe/index.js');
+    const result = await createConnectAccount(
+      makeRequest({ country: 'CA' }, { uid: 'driver-1', token: { email: 'driver@example.com', email_verified: true } }),
+      undefined as any
+    );
+
+    expect(result).toEqual({ accountId: 'acct_existing', status: 'existing' });
+    expect(mockStripeInstance.accounts.update).toHaveBeenCalledWith(
+      'acct_existing',
+      expect.objectContaining({
+        business_profile: expect.objectContaining({
+          mcc: '4121',
+          url: 'https://medjira-service.firebaseapp.com',
+          product_description: 'Service de transport de personnes via l’application Medjira.',
+        }),
+      })
+    );
+    expect(mockStripeInstance.accounts.update.mock.calls[0][1]).not.toHaveProperty('individual');
+  });
 });
 export {};

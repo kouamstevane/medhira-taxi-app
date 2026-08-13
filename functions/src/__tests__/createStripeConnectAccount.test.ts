@@ -14,7 +14,7 @@ jest.mock('firebase-admin', () => ({
 }));
 
 const mockStripeInstance = {
-  accounts: { create: jest.fn() },
+  accounts: { create: jest.fn(), retrieve: jest.fn(), update: jest.fn() },
   accountLinks: { create: jest.fn() },
 };
 
@@ -146,6 +146,10 @@ describe('createStripeConnectAccount', () => {
         ownerId: 'u1',
         status: 'approved',
         ownerEmail: 'o@t.com',
+        name: 'Chez Nous',
+        description: 'Cuisine familiale',
+        phone: '06 12 34 56 78',
+        email: 'contact@cheznous.ca',
       }),
     };
     const updateFn = jest.fn().mockResolvedValue(undefined);
@@ -169,6 +173,11 @@ describe('createStripeConnectAccount', () => {
         type: 'express',
         country: 'FR',
         metadata: expect.objectContaining({ accountType: 'restaurant', restaurantId: 'r1' }),
+        business_profile: expect.objectContaining({
+          name: 'Chez Nous',
+          product_description: 'Cuisine familiale',
+          support_email: 'contact@cheznous.ca',
+        }),
       })
     );
     expect(updateFn).toHaveBeenCalledWith(
@@ -179,8 +188,8 @@ describe('createStripeConnectAccount', () => {
     );
     expect(mockStripeInstance.accountLinks.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        refresh_url: 'https://medjira-service.web.app/stripe-return/?role=restaurant&status=refresh',
-        return_url: 'https://medjira-service.web.app/stripe-return/?role=restaurant&status=success',
+        refresh_url: 'https://medjira-service.web.app/stripe-return?role=restaurant&status=refresh',
+        return_url: 'https://medjira-service.web.app/stripe-return?role=restaurant&status=success',
       })
     );
   });
@@ -210,6 +219,84 @@ describe('createStripeConnectAccount', () => {
     expect(result.onboardingUrl).toBe('https://onboard.stripe.com/existing');
     expect(result.mode).toBe('onboarding');
     expect(mockStripeInstance.accounts.create).not.toHaveBeenCalled();
+  });
+
+  it('updates business information before reopening an incomplete account', async () => {
+    const snap = {
+      exists: true,
+      data: () => ({
+        ownerId: 'u1',
+        status: 'approved',
+        stripeAccountId: 'acct_existing',
+        stripeConnectStatus: 'in_progress',
+        ownerEmail: 'o@t.com',
+        name: 'Chez Nous',
+        description: 'Cuisine familiale',
+        phone: '514 555 0101',
+      }),
+    };
+    mockFirestoreInstance.doc.mockReturnValue({
+      get: jest.fn().mockResolvedValue(snap),
+    });
+    mockStripeInstance.accounts.retrieve.mockResolvedValue({ details_submitted: false });
+    mockStripeInstance.accounts.update.mockResolvedValue({ id: 'acct_existing' });
+    mockStripeInstance.accountLinks.create.mockResolvedValue({ url: 'https://onboard.stripe.com/existing' });
+
+    const { handleCreateStripeConnectAccount } = await import('../stripe/createStripeConnectAccount.js');
+    await handleCreateStripeConnectAccount(
+      makeRequest({ restaurantId: 'r1', mode: 'onboarding' }, { uid: 'u1' })
+    );
+
+    expect(mockStripeInstance.accounts.update).toHaveBeenCalledWith(
+      'acct_existing',
+      expect.objectContaining({
+        business_profile: expect.objectContaining({
+          name: 'Chez Nous',
+          product_description: 'Cuisine familiale',
+        }),
+      })
+    );
+  });
+
+  it('synchronizes the business profile even when Stripe already submitted account details', async () => {
+    const snap = {
+      exists: true,
+      data: () => ({
+        ownerId: 'u1',
+        status: 'approved',
+        stripeAccountId: 'acct_submitted',
+        stripeConnectStatus: 'restricted',
+        ownerEmail: 'o@t.com',
+        name: 'Chez Nous',
+        description: 'Cuisine familiale',
+        phone: '06 12 34 56 78',
+        email: 'contact@cheznous.ca',
+      }),
+    };
+    mockFirestoreInstance.doc.mockReturnValue({
+      get: jest.fn().mockResolvedValue(snap),
+    });
+    mockStripeInstance.accounts.retrieve.mockResolvedValue({ details_submitted: true });
+    mockStripeInstance.accounts.update.mockResolvedValue({ id: 'acct_submitted' });
+    mockStripeInstance.accountLinks.create.mockResolvedValue({ url: 'https://onboard.stripe.com/submitted' });
+
+    const { handleCreateStripeConnectAccount } = await import('../stripe/createStripeConnectAccount.js');
+    await handleCreateStripeConnectAccount(
+      makeRequest({ restaurantId: 'r1', mode: 'update' }, { uid: 'u1' })
+    );
+
+    expect(mockStripeInstance.accounts.update).toHaveBeenCalledWith(
+      'acct_submitted',
+      expect.objectContaining({
+        business_profile: expect.objectContaining({
+          mcc: '5812',
+          url: 'https://medjira-service.firebaseapp.com',
+          product_description: 'Cuisine familiale',
+          support_email: 'contact@cheznous.ca',
+          support_phone: '+33612345678',
+        }),
+      })
+    );
   });
 
   it('returns an onboarding link for an existing account in update mode', async () => {
