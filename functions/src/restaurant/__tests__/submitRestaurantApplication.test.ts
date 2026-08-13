@@ -125,6 +125,15 @@ describe('CreateFoodOrderRequestSchema', () => {
     expect(CreateFoodOrderRequestSchema.safeParse(validPayload).success).toBe(true);
   });
 
+  test('accepts a card payment request with delivery options', () => {
+    expect(CreateFoodOrderRequestSchema.safeParse({
+      ...validPayload,
+      deliveryPreference: 'meet_at_door',
+      deliveryInstructions: 'Porte gauche',
+      paymentMethod: 'card',
+    }).success).toBe(true);
+  });
+
   test('rejects client-supplied totals and payment validation fields', () => {
     const result = CreateFoodOrderRequestSchema.safeParse({
       ...validPayload,
