@@ -814,7 +814,14 @@ service cloud.firestore {
           && isValidOpeningHour(request.resource.data.openingHours.thursday)
           && isValidOpeningHour(request.resource.data.openingHours.friday)
           && isValidOpeningHour(request.resource.data.openingHours.saturday)
-          && isValidOpeningHour(request.resource.data.openingHours.sunday);
+          && isValidOpeningHour(request.resource.data.openingHours.sunday)
+          && (!request.resource.data.openingHours.monday.closed
+              || !request.resource.data.openingHours.tuesday.closed
+              || !request.resource.data.openingHours.wednesday.closed
+              || !request.resource.data.openingHours.thursday.closed
+              || !request.resource.data.openingHours.friday.closed
+              || !request.resource.data.openingHours.saturday.closed
+              || !request.resource.data.openingHours.sunday.closed);
       }
 
       // Lecture : Filtrage par statut côté serveur (plus côté client)

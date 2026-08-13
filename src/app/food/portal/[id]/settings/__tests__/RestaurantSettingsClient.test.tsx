@@ -151,4 +151,14 @@ describe('RestaurantSettingsClient', () => {
       'Impossible d’enregistrer les horaires. Réessayez.',
     );
   });
+
+  it('renders a recoverable error state when loading fails', async () => {
+    mockGetRestaurantById.mockReset().mockRejectedValue(new Error('network'));
+    render(<RestaurantSettingsClient />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Erreur lors du chargement des paramètres.',
+    );
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
 });

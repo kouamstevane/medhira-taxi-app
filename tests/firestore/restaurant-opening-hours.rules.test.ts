@@ -36,7 +36,7 @@ describe('Restaurant opening hours Firestore rules', () => {
   });
 
   afterAll(async () => {
-    await testEnv.cleanup();
+    await testEnv?.cleanup();
   });
 
   beforeEach(async () => {
@@ -81,6 +81,18 @@ describe('Restaurant opening hours Firestore rules', () => {
         ...validOpeningHours,
         monday: { open: '09:00', close: '22:00' },
       },
+      updatedAt: '2026-08-13T00:00:00.000Z',
+    }));
+  });
+
+  it('rejects a schedule with every day closed', async () => {
+    const db = testEnv.authenticatedContext(ownerId).firestore();
+    const closedOpeningHours = Object.fromEntries(
+      Object.entries(validOpeningHours).map(([day, value]) => [day, { ...value, closed: true }]),
+    );
+
+    await assertFails(updateDoc(doc(db, 'restaurants', restaurantId), {
+      openingHours: closedOpeningHours,
       updatedAt: '2026-08-13T00:00:00.000Z',
     }));
   });

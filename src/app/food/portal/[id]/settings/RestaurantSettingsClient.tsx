@@ -37,6 +37,7 @@ export default function RestaurantSettingsClient() {
   const [hours, setHours] = useState<RestaurantOpeningHours | null>(null);
   const [savedHours, setSavedHours] = useState<RestaurantOpeningHours | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -72,11 +73,14 @@ export default function RestaurantSettingsClient() {
         }
 
         const normalizedHours = normalizeOpeningHours(result.openingHours);
+        setLoadError(null);
         setRestaurant(result);
         setHours(normalizedHours);
         setSavedHours(cloneOpeningHours(normalizedHours));
       } catch {
-        showError('Erreur lors du chargement des paramètres.');
+        const message = 'Erreur lors du chargement des paramètres.';
+        setLoadError(message);
+        showError(message);
       } finally {
         setLoading(false);
       }
@@ -129,10 +133,27 @@ export default function RestaurantSettingsClient() {
     }
   };
 
-  if (loading || !restaurant || !hours || !id) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <LoadingSpinner />
+      </div>
+    );
+  }
+
+  if (loadError || !restaurant || !hours || !id) {
+    return (
+      <div className="min-h-screen bg-background px-4 py-16 text-center text-slate-300">
+        <div className="mx-auto max-w-md rounded-3xl border border-red-500/20 bg-red-500/5 p-8">
+          <MaterialIcon name="error" size="xl" className="mx-auto mb-4 text-red-300" />
+          <p role="alert" className="text-sm text-red-200">{loadError ?? 'Paramètres indisponibles.'}</p>
+          <Link
+            href={id ? getRestaurantPortalPath(id) : '/restaurant/dashboard'}
+            className="mt-6 inline-flex rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-primary/50 hover:text-primary"
+          >
+            Retour au tableau de bord
+          </Link>
+        </div>
       </div>
     );
   }
@@ -148,7 +169,7 @@ export default function RestaurantSettingsClient() {
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">Réglages du restaurant</p>
-            <h2 className="text-3xl font-bold text-white">Paramètres</h2>
+            <h1 className="text-3xl font-bold text-white">Paramètres</h1>
             <p className="mt-2 text-sm text-slate-400">Gérez les horaires de votre restaurant.</p>
           </div>
           <Link
