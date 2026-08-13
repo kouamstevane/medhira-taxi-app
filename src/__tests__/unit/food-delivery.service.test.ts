@@ -4,6 +4,7 @@ import {
   calculateDeliveryCost,
   calculateTotalOrderPrice,
   canStartFoodOrderCheckout,
+  shouldShowFoodOrderInCustomerHistory,
   subscribeRestaurantOrders,
 } from '@/services/food-delivery.service';
 import type { OrderItem } from '@/types/food-delivery';
@@ -97,6 +98,32 @@ describe('FoodDeliveryService — Unit Tests', () => {
         cancelledBy: 'client',
         cancellationReason: 'payment_failed',
       });
+    });
+  });
+
+  describe('customer order history visibility', () => {
+    it('hides incomplete payment attempts while keeping real cancellations visible', () => {
+      expect(shouldShowFoodOrderInCustomerHistory({
+        status: 'pending_payment',
+        paymentValidated: false,
+      })).toBe(false);
+
+      expect(shouldShowFoodOrderInCustomerHistory({
+        status: 'cancelled',
+        paymentValidated: false,
+        cancellationReason: 'payment_abandoned',
+      })).toBe(false);
+
+      expect(shouldShowFoodOrderInCustomerHistory({
+        status: 'cancelled',
+        paymentValidated: true,
+        cancellationReason: 'restaurant_cancelled',
+      })).toBe(true);
+
+      expect(shouldShowFoodOrderInCustomerHistory({
+        status: 'confirmed',
+        paymentValidated: true,
+      })).toBe(true);
     });
   });
 

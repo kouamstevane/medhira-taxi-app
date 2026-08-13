@@ -177,6 +177,22 @@ export const buildPaymentFailureCancellationUpdate = () => ({
   cancellationReason: 'payment_failed',
 });
 
+export const shouldShowFoodOrderInCustomerHistory = (
+  order: Pick<FoodOrder, 'status' | 'paymentValidated' | 'cancellationReason'>,
+): boolean => {
+  if (order.status === 'pending_payment') return false;
+
+  if (
+    order.status === 'cancelled'
+    && order.paymentValidated !== true
+    && (order.cancellationReason === 'payment_abandoned' || order.cancellationReason === 'payment_failed')
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
 export const canStartFoodOrderCheckout = ({
   paymentMethod,
   walletBalance,
@@ -627,10 +643,12 @@ export const getUserFoodOrders = async (
   );
 
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map((docSnap) => ({
-    ...docSnap.data(),
-    id: docSnap.id,
-  })) as FoodOrder[];
+  return querySnapshot.docs
+    .map((docSnap) => ({
+      ...docSnap.data(),
+      id: docSnap.id,
+    }))
+    .filter((order) => shouldShowFoodOrderInCustomerHistory(order as FoodOrder)) as FoodOrder[];
   } catch (error) {
     console.error('[food-delivery.service] getUserFoodOrders failed:', error);
     throw error;
@@ -892,6 +910,7 @@ export const FoodDeliveryService = {
   calculateBasePrice,
   calculateTotalOrderPrice,
   buildPaymentFailureCancellationUpdate,
+  shouldShowFoodOrderInCustomerHistory,
   canStartFoodOrderCheckout,
   getApprovedRestaurants,
   getRestaurantMenu,
