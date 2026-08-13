@@ -7,13 +7,17 @@ import { useCartStore } from '@/store/cartStore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { useAuth } from '@/hooks/useAuth';
+import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 
 import { CURRENCY_CODE } from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
 import type { CreateFoodOrderResult } from '@/services/food-delivery.service';
+import { CHECKOUT_FOOTER_CLASS, getFoodCheckoutErrorMessage, PROFILE_ADDRESS_EDIT_HREF } from './checkout-ui';
+import { getInitialCheckoutAddress, getInitialCheckoutInputValue, isCheckoutAddressValid, isProfileAddressSelected, PROFILE_ADDRESS_PLACEHOLDER } from './checkout-address';
 
 const StripePaymentElement = dynamic(
   () => import('@/components/stripe/StripePaymentElement').then((module) => ({ default: module.StripePaymentElement })),
@@ -24,6 +28,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { currentUser: user, userData } = useAuth();
   const { items, restaurant, getSubtotal, clearCart } = useCartStore();
+  const { autocompleteService } = useGoogleMaps();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -46,9 +51,10 @@ export default function CheckoutPage() {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
-  const userAddress = userData?.address?.trim();
-  const hasValidAddress = Boolean(userAddress && userAddress !== 'Veuillez définir votre adresse dans le profil');
-  const deliveryAddress = hasValidAddress ? userAddress! : '';
+  const userAddress = getInitialCheckoutAddress(userData?.address, PROFILE_ADDRESS_PLACEHOLDER);
+  const [checkoutAddress, setCheckoutAddress] = useState(getInitialCheckoutInputValue);
+  const hasValidAddress = isCheckoutAddressValid(checkoutAddress);
+  const deliveryAddress = checkoutAddress.trim();
 
   // Auth / Cart Guard
   React.useEffect(() => {
@@ -140,7 +146,7 @@ export default function CheckoutPage() {
     setErrorMsg(null);
 
     if (!hasValidAddress) {
-      setErrorMsg('Veuillez renseigner votre adresse de livraison dans votre profil avant de commander.');
+      setErrorMsg('Renseignez une adresse de livraison valide (5 à 500 caractères).');
       return;
     }
 
@@ -202,7 +208,7 @@ export default function CheckoutPage() {
       return;
     } catch (error: unknown) {
       console.error('Erreur lors de la validation:', error);
-      const msg = error instanceof Error ? error.message : 'Une erreur est survenue lors de la validation de votre commande.';
+      const msg = getFoodCheckoutErrorMessage(error);
       setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -255,27 +261,52 @@ export default function CheckoutPage() {
         {/* Delivery Address */}
         <section className="glass-card p-5 rounded-2xl border border-white/5">
           <h2 className="text-lg font-bold text-white mb-4">Adresse de livraison</h2>
-          <div className="flex items-start gap-4">
-            <div className="bg-primary/10 p-3 rounded-full text-primary mt-1">
-              <MaterialIcon name="location_on" size="lg" />
-            </div>
-            <div className="flex-1">
-              <p className="font-semibold text-white">Domicile</p>
-              {hasValidAddress ? (
-                <>
-                  <p className="text-slate-400 text-sm mt-1">{deliveryAddress}</p>
-                  <p className="text-slate-500 text-xs mt-1">
-                    {distanceLoading
-                      ? 'Calcul de la distance...'
-                      : `${distanceIsEstimate ? '~' : ''} ${deliveryDistance.toFixed(1)} km · ~${durationMinutes} min`}
-                  </p>
-                </>
-              ) : (
-                <p className="text-destructive text-sm mt-1 font-medium">Adresse non renseignée dans votre profil</p>
-              )}
-            </div>
-            <button onClick={() => router.push('/profil')} className="text-primary text-sm font-semibold">
-              {hasValidAddress ? 'Modifier' : 'Ajouter'}
+          <div className="space-y-4">
+            <AddressInput
+              label="Domicile"
+              value={checkoutAddress}
+              onChange={setCheckoutAddress}
+              onSelect={(suggestion) => setCheckoutAddress(suggestion.description)}
+              placeholder="Saisissez votre adresse"
+              autocompleteService={autocompleteService}
+              enableLocationButton
+              locationButtonLabel="Utiliser ma position"
+            />
+
+            {userAddress && (
+              <button
+                type="button"
+                onClick={() => setCheckoutAddress(userAddress)}
+                aria-pressed={isProfileAddressSelected(checkoutAddress, userAddress)}
+                className={[
+                  'w-full rounded-xl border px-3 py-3 text-left transition hover:bg-primary/15',
+                  isProfileAddressSelected(checkoutAddress, userAddress)
+                    ? 'border-primary bg-primary/10'
+                    : 'border-white/10 bg-white/[0.03]',
+                ].join(' ')}
+              >
+                <span className="block text-xs font-medium uppercase tracking-wide text-primary">Adresse enregistrée</span>
+                <span className="mt-1 block text-sm text-white">
+                  {isProfileAddressSelected(checkoutAddress, userAddress)
+                    ? 'Adresse de mon profil sélectionnée'
+                    : 'Utiliser l’adresse de mon profil'}
+                </span>
+                <span className="mt-1 block text-xs text-slate-400">{userAddress}</span>
+              </button>
+            )}
+
+            {hasValidAddress ? (
+              <p className="text-slate-500 text-xs">
+                {distanceLoading
+                  ? 'Calcul de la distance...'
+                  : `${distanceIsEstimate ? '~' : ''} ${deliveryDistance.toFixed(1)} km · ~${durationMinutes} min`}
+              </p>
+            ) : (
+              <p className="text-destructive text-sm font-medium">Renseignez une adresse pour continuer.</p>
+            )}
+
+            <button onClick={() => router.push(PROFILE_ADDRESS_EDIT_HREF)} className="text-primary text-sm font-semibold">
+              Modifier mon adresse enregistrée
             </button>
           </div>
         </section>
@@ -421,7 +452,7 @@ export default function CheckoutPage() {
 
       {/* Checkout Footer */}
       {!cardPayment && (
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-background/80 backdrop-blur-xl border-t border-white/5 z-20 max-w-[430px] mx-auto">
+      <div className={CHECKOUT_FOOTER_CLASS}>
         <button
           onClick={handleCreateOrder}
           disabled={loading || !canStartCheckout || !hasValidAddress}
