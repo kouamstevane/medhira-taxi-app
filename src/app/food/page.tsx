@@ -106,13 +106,19 @@ export default function FoodHomePage() {
         <div className="absolute -top-20 -right-20 w-72 h-72 bg-primary/25 blur-3xl rounded-full pointer-events-none" />
         <div className="absolute -bottom-24 -left-16 w-56 h-56 bg-primary/10 blur-3xl rounded-full pointer-events-none" />
 
-        <div className="relative flex justify-between items-center mb-6 pt-4">
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white">Food Delivery</h1>
+        <div className="relative flex flex-wrap items-start justify-between gap-3 mb-6 pt-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Food Delivery</h1>
             <p className="text-slate-400 mt-1">Qu'est-ce qui vous ferait plaisir ?</p>
           </div>
-          <Link href="/food/orders" className="glass-card border border-white/10 p-3 rounded-full hover:bg-white/5 transition-colors">
-             <MaterialIcon name="delivery_dining" size="lg" className="text-primary" />
+          <Link
+            href="/food/orders"
+            aria-label="Suivre ma commande"
+            className="inline-flex max-w-full shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold text-primary shadow-[0_0_18px_rgba(242,146,0,0.12)] transition-colors hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <MaterialIcon name="delivery_dining" size="md" className="text-primary" />
+            <span>Suivre ma commande</span>
+            <MaterialIcon name="chevron_right" size="sm" className="text-primary/70" />
           </Link>
         </div>
 
