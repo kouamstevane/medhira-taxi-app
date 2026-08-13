@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import type { Restaurant, FoodOrder } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
+import { getOpeningHoursForDate, normalizeOpeningHours } from '@/utils/restaurant-hours';
 import Link from 'next/link';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { RestaurantPortalPayoutBanner } from '@/components/restaurant/RestaurantPortalPayoutBanner';
@@ -112,6 +113,11 @@ export default function PortalClient() {
   }
 
   if (!restaurant || !id) return null;
+
+  const todayHours = getOpeningHoursForDate(
+    normalizeOpeningHours(restaurant.openingHours),
+    new Date(),
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -280,7 +286,16 @@ export default function PortalClient() {
                 <div className="h-px bg-white/5"></div>
                 <div>
                   <p className="text-xs text-slate-500 mb-2">Horaires aujourd'hui</p>
-                  <p className="text-sm font-bold text-slate-300">08:00 - 22:00</p>
+                  <p className="text-sm font-bold text-slate-300">
+                    {todayHours.closed ? 'Fermé aujourd’hui' : `${todayHours.open} – ${todayHours.close}`}
+                  </p>
+                  <Link
+                    href={getRestaurantPortalPath(id, 'settings')}
+                    className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                  >
+                    Modifier les horaires
+                    <MaterialIcon name="arrow_forward" size="sm" />
+                  </Link>
                 </div>
               </div>
             </div>
