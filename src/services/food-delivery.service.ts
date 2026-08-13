@@ -424,6 +424,11 @@ export interface CreateFoodOrderResult {
   deliveryDistance: number;
 }
 
+const compactOptionalString = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+};
+
 /**
  * Créer une nouvelle commande de livraison de repas
  * 
@@ -479,19 +484,42 @@ export const createFoodOrder = async (
     >(functions, 'createFoodOrder');
     const selectedPaymentMethod = orderData.paymentMethod ?? 'wallet';
 
-    const result = await createCallable({
+    const payload: {
+      restaurantId: string;
+      orderItems: OrderItem[];
+      isWeekend: boolean;
+      deliveryAddress: string;
+      deliveryLocation?: { lat: number; lng: number };
+      deliveryPreference?: 'leave_at_door' | 'meet_outside' | 'meet_at_door';
+      deliveryInstructions?: string;
+      customerPhone?: string;
+      clientNeighbourhood?: string;
+      cityId?: string;
+      paymentMethod: 'wallet' | 'card';
+    } = {
       restaurantId: orderData.restaurantId,
       orderItems: orderData.orderItems,
       isWeekend: orderData.isWeekend,
-      deliveryAddress: orderData.deliveryAddress,
-      deliveryLocation: orderData.deliveryLocation,
-      deliveryPreference: orderData.deliveryPreference,
-      deliveryInstructions: orderData.deliveryInstructions,
-      customerPhone: orderData.customerPhone,
-      clientNeighbourhood: orderData.clientNeighbourhood,
-      cityId: orderData.cityId,
+      deliveryAddress: orderData.deliveryAddress.trim(),
       paymentMethod: selectedPaymentMethod,
-    });
+    };
+
+    if (orderData.deliveryLocation) payload.deliveryLocation = orderData.deliveryLocation;
+    if (orderData.deliveryPreference) payload.deliveryPreference = orderData.deliveryPreference;
+
+    const deliveryInstructions = compactOptionalString(orderData.deliveryInstructions);
+    if (deliveryInstructions) payload.deliveryInstructions = deliveryInstructions;
+
+    const customerPhone = compactOptionalString(orderData.customerPhone);
+    if (customerPhone) payload.customerPhone = customerPhone;
+
+    const clientNeighbourhood = compactOptionalString(orderData.clientNeighbourhood);
+    if (clientNeighbourhood) payload.clientNeighbourhood = clientNeighbourhood;
+
+    const cityId = compactOptionalString(orderData.cityId);
+    if (cityId) payload.cityId = cityId;
+
+    const result = await createCallable(payload);
     const order = result.data;
 
     logger.info(
