@@ -1,4 +1,4 @@
-export type RestaurantPortalSection = 'menu' | 'orders';
+export type RestaurantPortalSection = 'menu' | 'orders' | 'settings';
 
 export function getRestaurantPortalPath(
   restaurantId: string,

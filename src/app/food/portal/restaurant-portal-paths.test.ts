@@ -11,6 +11,9 @@ describe('restaurant portal paths', () => {
     expect(getRestaurantPortalPath('rest/123')).toBe(
       '/food/portal?restaurantId=rest%2F123',
     );
+    expect(getRestaurantPortalPath('rest/123', 'settings')).toBe(
+      '/food/portal/settings?restaurantId=rest%2F123',
+    );
   });
 
   it('reads the restaurant ID from the query string', () => {

@@ -35,6 +35,7 @@ export const portalNavItems = (restaurantId: string): NavItem[] => [
   { href: getRestaurantPortalPath(restaurantId), icon: 'dashboard', label: 'Dashboard' },
   { href: getRestaurantPortalPath(restaurantId, 'orders'), icon: 'receipt_long', label: 'Commandes' },
   { href: getRestaurantPortalPath(restaurantId, 'menu'), icon: 'menu_book', label: 'Menu' },
+  { href: getRestaurantPortalPath(restaurantId, 'settings'), icon: 'settings', label: 'Paramètres' },
 ];
 
 export const adminNavItems: NavItem[] = [

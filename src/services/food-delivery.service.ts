@@ -63,6 +63,7 @@ import type {
 } from '@/types';
 import { z } from 'zod';
 import { FIRESTORE_COLLECTIONS, FIRESTORE_SUBCOLLECTIONS } from '@/types/firestore-collections';
+import type { RestaurantOpeningHours } from '@/utils/restaurant-hours';
 
 // ============================================================================
 // CONSTANTES
@@ -841,6 +842,22 @@ export const updateRestaurantStatus = async (
   }
 };
 
+export const updateRestaurantOpeningHours = async (
+  restaurantId: string,
+  openingHours: RestaurantOpeningHours,
+): Promise<void> => {
+  try {
+    const restaurantRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId);
+    await updateDoc(restaurantRef, {
+      openingHours,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('[food-delivery.service] updateRestaurantOpeningHours failed:', error);
+    throw error;
+  }
+};
+
 export const FoodDeliveryService = {
   calculateDeliveryCost,
   calculateBasePrice,
@@ -863,6 +880,7 @@ export const FoodDeliveryService = {
   getRestaurantById,
   getPendingRestaurants,
   updateRestaurantStatus,
+  updateRestaurantOpeningHours,
   
   /**
    * Récupérer le menu complet (incluant articles indisponibles pour le gérant)
