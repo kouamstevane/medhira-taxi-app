@@ -45,7 +45,7 @@ export interface Restaurant {
   totalReviews: number;
   isOpen?: boolean;
   openingHours?: {
-    [day: string]: { open: string; close: string } | null; // null = fermé
+    [day: string]: { open: string; close: string; closed?: boolean } | null;
   };
   location?: {
     lat: number;
