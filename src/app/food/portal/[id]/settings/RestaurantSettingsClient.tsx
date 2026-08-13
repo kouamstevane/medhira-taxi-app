@@ -121,7 +121,9 @@ export default function RestaurantSettingsClient() {
       setSavedHours(cloneOpeningHours(hours));
       showSuccess('Horaires enregistrés.');
     } catch {
-      showError('Impossible d’enregistrer les horaires. Réessayez.');
+      const saveError = 'Impossible d’enregistrer les horaires. Réessayez.';
+      setValidationError(saveError);
+      showError(saveError);
     } finally {
       setIsSaving(false);
     }

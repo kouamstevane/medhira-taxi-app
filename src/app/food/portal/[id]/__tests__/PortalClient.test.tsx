@@ -82,12 +82,12 @@ function makeRestaurant(): Restaurant {
     isOpen: true,
     openingHours: {
       monday: { open: '10:00', close: '20:00', closed: false },
-      tuesday: { open: '10:00', close: '20:00', closed: false },
-      wednesday: { open: '10:00', close: '20:00', closed: false },
-      thursday: { open: '10:00', close: '20:00', closed: false },
-      friday: { open: '10:00', close: '20:00', closed: false },
-      saturday: { open: '10:00', close: '20:00', closed: false },
-      sunday: { open: '10:00', close: '20:00', closed: false },
+      tuesday: { open: '11:00', close: '19:00', closed: false },
+      wednesday: { open: '11:00', close: '19:00', closed: false },
+      thursday: { open: '11:00', close: '19:00', closed: false },
+      friday: { open: '11:00', close: '19:00', closed: false },
+      saturday: { open: '11:00', close: '19:00', closed: false },
+      sunday: null,
     },
     stripeConnectStatus: 'active',
     createdAt: {} as Restaurant['createdAt'],
@@ -95,9 +95,16 @@ function makeRestaurant(): Restaurant {
   };
 }
 
+let getDaySpy: jest.SpyInstance;
+
 beforeEach(() => {
+  getDaySpy = jest.spyOn(Date.prototype, 'getDay').mockReturnValue(1);
   mockGetRestaurantById.mockReset().mockResolvedValue(makeRestaurant());
   mockGetRestaurantOrders.mockReset().mockResolvedValue([]);
+});
+
+afterEach(() => {
+  getDaySpy.mockRestore();
 });
 
 it('shows the real current-day schedule and settings link', async () => {
@@ -106,4 +113,11 @@ it('shows the real current-day schedule and settings link', async () => {
   expect(await screen.findByText('10:00 – 20:00')).toBeInTheDocument();
   expect(screen.getByText('Modifier les horaires')).toBeInTheDocument();
   expect(screen.queryByText('08:00 - 22:00')).not.toBeInTheDocument();
+});
+
+it('shows Fermé aujourd’hui for a closed current day', async () => {
+  getDaySpy.mockReturnValue(0);
+  render(<PortalClient />);
+
+  expect(await screen.findByText('Fermé aujourd’hui')).toBeInTheDocument();
 });

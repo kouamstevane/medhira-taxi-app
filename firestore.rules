@@ -788,6 +788,35 @@ service cloud.firestore {
     // ============================================================================
     
     match /restaurants/{restaurantId} {
+      function isValidOpeningHour(value) {
+        return value is map
+          && value.keys().hasAll(['open', 'close', 'closed'])
+          && value.keys().hasOnly(['open', 'close', 'closed'])
+          && value.open is string
+          && value.close is string
+          && value.closed is bool
+          && value.open.matches('^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$')
+          && value.close.matches('^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$')
+          && (value.closed || value.close > value.open);
+      }
+
+      function hasValidOpeningHours() {
+        return request.resource.data.openingHours is map
+          && request.resource.data.openingHours.keys().hasAll([
+            'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+          ])
+          && request.resource.data.openingHours.keys().hasOnly([
+            'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+          ])
+          && isValidOpeningHour(request.resource.data.openingHours.monday)
+          && isValidOpeningHour(request.resource.data.openingHours.tuesday)
+          && isValidOpeningHour(request.resource.data.openingHours.wednesday)
+          && isValidOpeningHour(request.resource.data.openingHours.thursday)
+          && isValidOpeningHour(request.resource.data.openingHours.friday)
+          && isValidOpeningHour(request.resource.data.openingHours.saturday)
+          && isValidOpeningHour(request.resource.data.openingHours.sunday);
+      }
+
       // Lecture : Filtrage par statut côté serveur (plus côté client)
       // - Un client ne voit que les restaurants 'approved'
       // - Le propriétaire voit son propre restaurant quel que soit son statut
@@ -809,7 +838,9 @@ service cloud.firestore {
                         request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['name', 'description', 'address', 'phone', 'email',
                                     'cuisineType', 'avgPricePerPerson', 'imageUrl', 'coverImageUrl',
-                                    'isOpen', 'openingHours', 'location', 'updatedAt']))
+                                    'isOpen', 'openingHours', 'location', 'updatedAt']) &&
+                        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['openingHours']) ||
+                         hasValidOpeningHours()))
                     || isAdmin();
       
       // Suppression : Admin uniquement

@@ -105,6 +105,10 @@ describe('RestaurantSettingsClient', () => {
     expect(await screen.findByRole('heading', { name: 'Paramètres' })).toBeInTheDocument();
     expect(screen.getByLabelText('Lundi ouverture')).toHaveValue('10:00');
     expect(screen.queryByLabelText('Mardi ouverture')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Tableau de bord/i })).toHaveAttribute(
+      'href',
+      '/food/portal?restaurantId=restaurant-1',
+    );
   });
 
   it('prevents saving when every day is closed', async () => {
@@ -127,5 +131,24 @@ describe('RestaurantSettingsClient', () => {
 
     await waitFor(() => expect(mockUpdateRestaurantOpeningHours).toHaveBeenCalled());
     expect(mockShowSuccess).toHaveBeenCalledWith('Horaires enregistrés.');
+  });
+
+  it('redirects a non-owner away from the settings page', async () => {
+    mockGetRestaurantById.mockResolvedValueOnce(makeRestaurant({ ownerId: 'another-owner' }));
+    render(<RestaurantSettingsClient />);
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+    expect(mockShowError).toHaveBeenCalledWith('Accès non autorisé.');
+  });
+
+  it('keeps an inline error when saving fails', async () => {
+    mockUpdateRestaurantOpeningHours.mockRejectedValueOnce(new Error('network'));
+    render(<RestaurantSettingsClient />);
+    fireEvent.change(await screen.findByLabelText('Lundi ouverture'), { target: { value: '08:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les horaires' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Impossible d’enregistrer les horaires. Réessayez.',
+    );
   });
 });
