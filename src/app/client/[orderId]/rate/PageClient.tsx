@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { addDoc, collection, serverTimestamp, doc, getDoc, query, where, getDocs, limit } from 'firebase/firestore'
 import { z } from 'zod'
 import { auth, db } from '@/config/firebase'
@@ -14,8 +14,9 @@ const ratingSchema = z.object({
 export default function RateDriverPage() {
   const params = useParams()
   const router = useRouter()
-  const rawOrderId = params.orderId
-  const orderId = typeof rawOrderId === 'string' ? rawOrderId : ''
+  const searchParams = useSearchParams()
+  const rawOrderId = searchParams.get('orderId') || params.orderId
+  const orderId = typeof rawOrderId === 'string' ? rawOrderId.trim() : ''
   const [score, setScore] = useState(0)
   const [hovered, setHovered] = useState(0)
   const [comment, setComment] = useState('')

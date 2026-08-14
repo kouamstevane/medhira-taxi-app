@@ -9,6 +9,7 @@ import {
 import { formatCurrencyWithCode } from '@/utils/format'
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore'
 import { OrderCard } from './OrderCard'
+import { getDriverDeliveryPath } from '@/utils/entity-route-paths'
 
 interface Props {
   uid: string
@@ -54,7 +55,7 @@ export default function DeliveryOrdersList({ uid, header }: Props) {
           statusLabel={DELIVERY_STATUS_LABELS[order.status]}
           statusVariant={order.status === 'assigned' ? 'amber' : 'primary'}
           priceLabel={formatCurrencyWithCode(order.driverEarnings ?? 0)}
-          onClick={() => router.push(`/driver/delivery/${order.orderId}`)}
+          onClick={() => router.push(getDriverDeliveryPath(order.orderId))}
         />
       ))}
     </div>

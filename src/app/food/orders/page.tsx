@@ -9,6 +9,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { getFoodOrderDetailPath } from '@/utils/entity-route-paths';
 
 export default function OrdersHistoryPage() {
   const router = useRouter();
@@ -77,7 +78,7 @@ export default function OrdersHistoryPage() {
           orders.map((order) => (
             <div
               key={order.id}
-              onClick={() => router.push(`/food/orders/${order.id}`)}
+              onClick={() => router.push(getFoodOrderDetailPath(order.id))}
               className="glass-card p-5 rounded-2xl border border-white/5 cursor-pointer hover:bg-white/5 transition-all active:scale-[0.98]"
             >
               <div className="flex justify-between items-start mb-3">

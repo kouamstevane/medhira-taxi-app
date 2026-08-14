@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
@@ -69,7 +69,8 @@ export const resolveRestaurantConversationUid = async (
 
 export default function OrderTrackingClient() {
   const params = useParams()
-  const orderId = params.id as string
+  const searchParams = useSearchParams()
+  const orderId = searchParams.get('id')?.trim() || (params.id as string) || ''
   const router = useRouter();
   const { showError, toasts, removeToast } = useToast();
   const { currentUser, userData } = useAuth();

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { addDoc, collection, serverTimestamp, doc, getDoc, query, where, limit, getDocs } from 'firebase/firestore'
 import { z } from 'zod'
 import { auth, db } from '@/config/firebase'
@@ -33,7 +33,8 @@ interface BookingData {
 export default function RateTaxiRidePage() {
   const params = useParams()
   const router = useRouter()
-  const rawBookingId = params.bookingId
+  const searchParams = useSearchParams()
+  const rawBookingId = searchParams.get('bookingId') || params.bookingId
   const bookingId = typeof rawBookingId === 'string' ? rawBookingId : ''
   const [score, setScore] = useState(0)
   const [hovered, setHovered] = useState(0)

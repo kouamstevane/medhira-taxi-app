@@ -9,6 +9,7 @@ import { BottomNav, driverNavItems } from '@/components/ui/BottomNav'
 import { useDocumentStatus } from '@/hooks/useDocumentStatus'
 import type { DocStatus } from '@/hooks/useDocumentStatus'
 import { getDriverDocumentsSummary } from './documents-summary'
+import { getDriverDocumentReuploadPath } from '@/utils/entity-route-paths'
 
 type Filter = 'all' | 'not_submitted' | 'pending' | 'approved' | 'rejected'
 
@@ -186,7 +187,7 @@ export default function DriverDocumentsPage() {
               return (
                 <button
                   key={document.key}
-                  onClick={() => router.push(`/driver/documents/${document.key}`)}
+                    onClick={() => router.push(getDriverDocumentReuploadPath(document.key))}
                   className="glass-card flex w-full items-center gap-3 rounded-2xl p-4 text-left transition-all hover:bg-white/[0.03] active:scale-[0.99]"
                 >
                   <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl ${visual.bg}`}>

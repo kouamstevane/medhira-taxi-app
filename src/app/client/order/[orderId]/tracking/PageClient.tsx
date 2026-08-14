@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { doc, onSnapshot } from 'firebase/firestore'
@@ -23,7 +23,8 @@ interface OrderData {
 
 export default function ClientTrackingPage() {
   const params = useParams()
-  const orderId = params.orderId as string
+  const searchParams = useSearchParams()
+  const orderId = searchParams.get('orderId')?.trim() || (params.orderId as string) || ''
   const { driverLocation, isOnline } = useDeliveryTracking(orderId)
   const [order, setOrder] = useState<OrderData | null>(null)
 

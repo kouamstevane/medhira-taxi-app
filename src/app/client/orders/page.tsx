@@ -18,6 +18,11 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
+import {
+  getClientOrderTrackingPath,
+  getClientParcelTrackingPath,
+  getFoodOrderDetailPath,
+} from '@/utils/entity-route-paths';
 
 type OrderType = 'all' | 'taxi' | 'food' | 'parcel';
 
@@ -111,11 +116,11 @@ const getTypeLabel = (type: 'taxi' | 'food' | 'parcel'): string => {
 const getOrderDetailPath = (order: UnifiedOrder): string => {
   switch (order.type) {
     case 'taxi':
-      return `/client/order/${order.id}/tracking`;
+      return getClientOrderTrackingPath(order.id);
     case 'food':
-      return `/food/orders/${order.id}`;
+      return getFoodOrderDetailPath(order.id);
     case 'parcel':
-      return `/client/parcel/${order.id}/tracking`;
+      return getClientParcelTrackingPath(order.id);
     default:
       return '#';
   }

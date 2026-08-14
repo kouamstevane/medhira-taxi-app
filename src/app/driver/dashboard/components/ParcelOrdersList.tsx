@@ -5,6 +5,7 @@ import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections'
 import { useDriverAssignedDocs } from '@/hooks/useDriverAssignedDocs'
 import { ACTIVE_PARCEL_STATUSES, type ParcelDoc } from '@/hooks/useParcelDelivery'
 import { OrderCard } from './OrderCard'
+import { getDriverParcelPath } from '@/utils/entity-route-paths'
 
 interface Props {
   uid: string
@@ -41,7 +42,7 @@ export default function ParcelOrdersList({ uid, header }: Props) {
           statusLabel={p.status === 'accepted' ? 'À récupérer' : 'En transit'}
           statusVariant={p.status === 'accepted' ? 'amber' : 'primary'}
           priceLabel={`${p.price.toFixed(2)} ${p.currency}`}
-          onClick={() => router.push(`/driver/parcel/${p.parcelId}`)}
+          onClick={() => router.push(getDriverParcelPath(p.parcelId))}
         />
       ))}
     </div>

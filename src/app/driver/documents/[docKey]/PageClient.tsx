@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { auth, db, getFirebaseStorage } from '@/config/firebase'
@@ -27,7 +27,8 @@ const DOC_LABELS: Record<AllowedDocKey, string> = {
 export default function DocumentReuploadPage() {
   const params = useParams()
   const router = useRouter()
-  const docKey = params.docKey as string
+  const searchParams = useSearchParams()
+  const docKey = searchParams.get('docKey')?.trim() || (params.docKey as string) || ''
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)

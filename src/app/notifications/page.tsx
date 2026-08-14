@@ -12,6 +12,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { useAuth } from "@/hooks/useAuth";
 import { NotificationCollection } from "@/services/notification.service";
 import { driverNavItems, adminNavItems } from "@/components/ui/BottomNav";
+import { getFoodOrderDetailPath } from '@/utils/entity-route-paths';
 
 type SystemNotification = Omit<NotificationCollection, 'type' | 'createdAt'> & {
   type: NotificationCollection['type'] | `sys_${string}`;
@@ -248,7 +249,8 @@ export default function NotificationsPage() {
       } else if (notif.type === "payment_received") {
         router.push("/wallet");
       } else if (notif.type === "food_order_update") {
-        if (notif.metadata.orderId) router.push(`/food/orders/${notif.metadata.orderId}`);
+        const orderId = notif.metadata?.orderId;
+        if (typeof orderId === 'string' && orderId.trim()) router.push(getFoodOrderDetailPath(orderId));
       }
     }
   };

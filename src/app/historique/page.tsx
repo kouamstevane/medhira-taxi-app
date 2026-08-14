@@ -14,6 +14,7 @@ import { Booking } from '@/types/booking';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { getClientParcelTrackingPath } from '@/utils/entity-route-paths';
 import {
   getHistoryAction,
   getHistoryStatusPresentation,
@@ -367,7 +368,7 @@ export default function HistoriquePage() {
                       {action && id && (
                         <div className="mt-3 pt-3 border-t border-white/10">
                           <Link
-                            href={`/client/parcel/${id}/tracking`}
+                            href={getClientParcelTrackingPath(id)}
                             className="flex items-center justify-center w-full px-4 py-2.5 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all hover:opacity-90 active:scale-[0.98]"
                           >
                             <MaterialIcon name={action.icon} size="sm" className="mr-2" />

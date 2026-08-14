@@ -1,5 +1,5 @@
 'use client'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
 import { useDeliveryOrder } from '@/hooks/useDeliveryOrder'
 import Level1_Acceptance from './components/Level1_Acceptance'
@@ -13,7 +13,8 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon'
 export default function DeliveryOrderPage() {
   const params = useParams()
   const router = useRouter()
-  const orderId = params.orderId as string
+  const searchParams = useSearchParams()
+  const orderId = searchParams.get('orderId')?.trim() || (params.orderId as string) || ''
   const { order, loading, updateStatus, confirmPickup, confirmDelivery, uploadProofPhoto, reportNotReady } = useDeliveryOrder(orderId)
 
   useEffect(() => {

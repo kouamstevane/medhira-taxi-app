@@ -16,6 +16,7 @@ import { db } from '@/config/firebase';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
 import type { CreateFoodOrderResult } from '@/services/food-delivery.service';
+import { getFoodOrderDetailPath } from '@/utils/entity-route-paths';
 import { CHECKOUT_FOOTER_CLASS, getFoodCheckoutErrorMessage, PROFILE_ADDRESS_EDIT_HREF } from './checkout-ui';
 import { getInitialCheckoutAddress, getInitialCheckoutInputValue, isCheckoutAddressValid, isProfileAddressSelected, PROFILE_ADDRESS_PLACEHOLDER } from './checkout-address';
 
@@ -181,7 +182,7 @@ export default function CheckoutPage() {
         }
 
         setSubmitted(true);
-        router.push(`/food/orders/${serverOrder.orderId}`);
+        router.push(getFoodOrderDetailPath(serverOrder.orderId));
         clearCart();
         return;
       }
@@ -223,7 +224,7 @@ export default function CheckoutPage() {
       await FoodDeliveryService.payFoodOrderWithCard(cardPayment.orderId, paymentIntentId);
       setSubmitted(true);
       clearCart();
-      router.push(`/food/orders/${cardPayment.orderId}`);
+      router.push(getFoodOrderDetailPath(cardPayment.orderId));
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Paiement carte non confirmé.';
       setErrorMsg(msg);

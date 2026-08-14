@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, auth, functions } from '@/config/firebase'
@@ -28,7 +28,8 @@ const DOC_LABELS: Record<string, string> = {
 export default function AdminDriverDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const uid = params.uid as string
+  const searchParams = useSearchParams()
+  const uid = searchParams.get('uid')?.trim() || (params.uid as string) || ''
   const [driver, setDriver] = useState<DriverCollection | null>(null)
   // RGPD #C2 : documents vivent dans drivers/{uid}/private/personal
   const [privateData, setPrivateData] = useState<DriverPrivate | null>(null)

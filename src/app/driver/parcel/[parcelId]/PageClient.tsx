@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useParcelDelivery, type ParcelStatus } from '@/hooks/useParcelDelivery'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
@@ -17,7 +17,8 @@ const STATUS_LABEL: Record<ParcelStatus, string> = {
 export default function DriverParcelPage() {
   const params = useParams()
   const router = useRouter()
-  const parcelId = params.parcelId as string
+  const searchParams = useSearchParams()
+  const parcelId = searchParams.get('parcelId')?.trim() || (params.parcelId as string) || ''
   const { parcel, loading, error, updateStatus } = useParcelDelivery(parcelId)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actioning, setActioning] = useState(false)

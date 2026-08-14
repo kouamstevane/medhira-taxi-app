@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { Restaurant, MenuItem } from '@/types/food-delivery';
@@ -14,7 +14,8 @@ import { isRestaurantOpenAt } from '@/utils/restaurant-hours';
 
 export default function RestaurantClient() {
   const params = useParams()
-  const id = params.id as string
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id')?.trim() || (typeof params.id === 'string' ? params.id : '');
   const router = useRouter();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);

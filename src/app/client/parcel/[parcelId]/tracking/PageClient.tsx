@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useClientParcelTracking } from '@/hooks/useClientParcelTracking'
 import { confirmParcelReceipt } from '@/services/parcel.service'
@@ -39,7 +39,8 @@ const triggerHaptic = async (type: 'light' | 'success' | 'error') => {
 export default function ClientParcelTrackingPage() {
   const params = useParams()
   const router = useRouter()
-  const parcelId = params.parcelId as string
+  const searchParams = useSearchParams()
+  const parcelId = searchParams.get('parcelId')?.trim() || (params.parcelId as string) || ''
 
   const { parcel, parcelLoading, parcelError, driverLocation, isDriverOnline } =
     useClientParcelTracking(parcelId)

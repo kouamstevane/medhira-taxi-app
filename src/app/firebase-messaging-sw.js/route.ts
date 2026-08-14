@@ -51,7 +51,7 @@ self.addEventListener('notificationclick', (event) => {
   } else if (data.type === 'trip_completed' || data.type === 'payment_received') {
     url = '/historique';
   } else if (data.type === 'food_order') {
-    url = data.orderId ? '/food/orders/' + data.orderId : '/food/orders';
+    url = data.orderId ? '/food/orders/detail?id=' + encodeURIComponent(data.orderId) : '/food/orders';
   }
 
   event.waitUntil(
