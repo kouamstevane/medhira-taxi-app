@@ -121,3 +121,12 @@ it('shows Fermé aujourd’hui for a closed current day', async () => {
 
   expect(await screen.findByText('Fermé aujourd’hui')).toBeInTheDocument();
 });
+
+it('hides dashboard action cards below the desktop breakpoint', async () => {
+  render(<PortalClient />);
+
+  const menuCard = await screen.findByText('Gérer le Menu');
+  const actionGrid = menuCard.closest('div.grid');
+
+  expect(actionGrid).toHaveClass('hidden', 'lg:grid');
+});
