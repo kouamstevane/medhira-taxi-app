@@ -73,10 +73,34 @@ describe('BulkCsvImportModal', () => {
       expect(MenuImportClientService.uploadMenuImportFile).toHaveBeenCalledWith(
         'resto-123',
         expect.any(File),
-        expect.any(Function)
+        expect.any(Function),
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
       expect(MenuImportClientService.startMenuFileImport).toHaveBeenCalled();
       expect(defaultProps.onImportCompleted).toHaveBeenCalled();
     });
+  });
+
+  test('aborts an in-flight upload when Annuler is clicked', async () => {
+    (MenuImportClientService.uploadMenuImportFile as jest.Mock).mockImplementationOnce(
+      () => new Promise(() => undefined)
+    );
+
+    render(<BulkCsvImportModal {...defaultProps} />);
+
+    const file = new File(['name,price\nPizza,12'], 'menu.csv', { type: 'text/csv' });
+    fireEvent.change(screen.getByTestId('file-input'), { target: { files: [file] } });
+    fireEvent.click(screen.getByText("Lancer l'importation"));
+
+    await waitFor(() => {
+      expect(MenuImportClientService.uploadMenuImportFile).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByText('Annuler'));
+
+    const uploadOptions = (MenuImportClientService.uploadMenuImportFile as jest.Mock).mock.calls[0][3];
+    expect(uploadOptions.signal.aborted).toBe(true);
+    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+    expect(MenuImportClientService.startMenuFileImport).not.toHaveBeenCalled();
   });
 });

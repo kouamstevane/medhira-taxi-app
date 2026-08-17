@@ -3,6 +3,7 @@ import {
   listenToImportProgress,
   uploadMenuImportFile,
 } from '../menu-import-client.service';
+import { uploadBytesResumable } from 'firebase/storage';
 
 jest.mock('@/config/firebase', () => ({
   db: {},
@@ -96,6 +97,25 @@ describe('menu-import-client.service', () => {
       expect(result.importId).toBe('mock-import-id-123');
       expect(result.type).toBe('excel');
       expect(result.filePath).toBe(`menu-imports/${restaurantId}/mock-import-id-123.xlsx`);
+    });
+
+    test('cancels and rejects when the upload exceeds its timeout', async () => {
+      jest.useFakeTimers();
+      const cancel = jest.fn();
+      (uploadBytesResumable as jest.Mock).mockReturnValueOnce({
+        on: jest.fn(),
+        cancel,
+      });
+
+      const validCsv = new File(['name,price\nBurger,12'], 'catalogue.csv', { type: 'text/csv' });
+      const uploadPromise = uploadMenuImportFile(restaurantId, validCsv, undefined, { timeoutMs: 1000 });
+      const rejectedUpload = expect(uploadPromise).rejects.toThrow(/expiré/i);
+
+      await jest.advanceTimersByTimeAsync(1000);
+
+      await rejectedUpload;
+      expect(cancel).toHaveBeenCalledTimes(1);
+      jest.useRealTimers();
     });
   });
 

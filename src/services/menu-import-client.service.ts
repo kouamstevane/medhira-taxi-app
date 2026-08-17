@@ -15,6 +15,13 @@ export interface MenuImportUploadResult {
   type: 'csv' | 'excel';
 }
 
+export interface MenuImportUploadOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+export const MENU_IMPORT_UPLOAD_TIMEOUT_MS = 30_000;
+
 export interface StoreConnectionParams {
   restaurantId: string;
   siteUrl: string;
@@ -28,7 +35,8 @@ export interface StoreConnectionParams {
 export async function uploadMenuImportFile(
   restaurantId: string,
   file: File,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  options: MenuImportUploadOptions = {}
 ): Promise<MenuImportUploadResult> {
   if (!restaurantId || !restaurantId.trim()) {
     throw new Error('Identifiant du restaurant requis pour le téléversement');
@@ -71,7 +79,38 @@ export async function uploadMenuImportFile(
     : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
   return new Promise((resolve, reject) => {
+    if (options.signal?.aborted) {
+      const error = new Error('Téléversement annulé');
+      error.name = 'AbortError';
+      reject(error);
+      return;
+    }
+
+    let settled = false;
     const uploadTask = uploadBytesResumable(storageRef, file, { contentType });
+    const cleanup = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      options.signal?.removeEventListener('abort', handleAbort);
+    };
+    const rejectUpload = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    };
+    const handleAbort = () => {
+      if (settled) return;
+      uploadTask.cancel();
+      const error = new Error('Téléversement annulé');
+      error.name = 'AbortError';
+      rejectUpload(error);
+    };
+
+    options.signal?.addEventListener('abort', handleAbort, { once: true });
+    const timeoutId = setTimeout(() => {
+      uploadTask.cancel();
+      rejectUpload(new Error('Le téléversement du fichier a expiré'));
+    }, options.timeoutMs ?? MENU_IMPORT_UPLOAD_TIMEOUT_MS);
 
     uploadTask.on(
       'state_changed',
@@ -81,10 +120,19 @@ export async function uploadMenuImportFile(
           onProgress(progress);
         }
       },
-      (error) => {
-        reject(new Error(`Échec du téléversement du fichier: ${error.message}`));
+      (error: { code?: string; message: string }) => {
+        if (error.code === 'storage/canceled') {
+          const cancelledError = new Error('Téléversement annulé');
+          cancelledError.name = 'AbortError';
+          rejectUpload(cancelledError);
+          return;
+        }
+        rejectUpload(new Error(`Échec du téléversement du fichier: ${error.message}`));
       },
       () => {
+        if (settled) return;
+        settled = true;
+        cleanup();
         resolve({
           importId,
           filePath,

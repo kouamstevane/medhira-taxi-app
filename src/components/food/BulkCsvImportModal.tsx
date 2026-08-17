@@ -33,6 +33,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
 
   const unsubscribeRef = useRef<Unsubscribe | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadAbortControllerRef = useRef<AbortController | null>(null);
 
   // Clean up snapshot listener on close or unmount
   const cleanupSubscription = () => {
@@ -42,8 +43,14 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
     }
   };
 
+  const cancelActiveUpload = () => {
+    uploadAbortControllerRef.current?.abort();
+    uploadAbortControllerRef.current = null;
+  };
+
   useEffect(() => {
     return () => {
+      cancelActiveUpload();
       cleanupSubscription();
     };
   }, []);
@@ -55,6 +62,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
       );
       if (!confirm) return;
     }
+    cancelActiveUpload();
     cleanupSubscription();
     setFile(null);
     setUploadProgress(0);
@@ -96,18 +104,24 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
       setErrorMessage(null);
       setUploadProgress(0);
 
-      // 1. Upload to Storage
-      const uploadResult = await uploadMenuImportFile(restaurantId, file, (progress) => {
-        setUploadProgress(progress);
-      });
+      const uploadAbortController = new AbortController();
+      uploadAbortControllerRef.current = uploadAbortController;
+      let uploadResult: Awaited<ReturnType<typeof uploadMenuImportFile>>;
+      try {
+        uploadResult = await uploadMenuImportFile(restaurantId, file, (progress) => {
+          setUploadProgress(progress);
+        }, { signal: uploadAbortController.signal });
+      } finally {
+        if (uploadAbortControllerRef.current === uploadAbortController) {
+          uploadAbortControllerRef.current = null;
+        }
+      }
 
-      // 2. Call Cloud Function
       const { importId } = await startMenuFileImport({
         ...uploadResult,
         restaurantId,
       });
 
-      // 3. Listen to job progress in real-time
       cleanupSubscription();
       unsubscribeRef.current = listenToImportProgress(
         restaurantId,
@@ -129,6 +143,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
         }
       );
     } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       setIsProcessing(false);
       setErrorMessage(err instanceof Error ? err.message : "Échec du démarrage de l'importation");
     }
