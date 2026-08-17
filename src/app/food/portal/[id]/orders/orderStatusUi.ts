@@ -88,6 +88,10 @@ export function getRestaurantOrderFilterGroupLabel(group: RestaurantOrderFilterG
   return RESTAURANT_ORDER_FILTER_GROUP_LABELS[group];
 }
 
+export function getRestaurantOrderDetailsClassName(isExpanded: boolean): string {
+  return `${isExpanded ? 'block' : 'hidden'} lg:block`;
+}
+
 export function getRestaurantOrderFilterStatusSet(group: RestaurantOrderFilterGroup): FoodOrderStatus[] | null {
   return group === 'all' ? null : RESTAURANT_ORDER_FILTER_STATUS_SETS[group];
 }

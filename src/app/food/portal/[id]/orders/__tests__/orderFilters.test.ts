@@ -2,6 +2,7 @@ import {
   getRestaurantOrderFilterClassName,
   getRestaurantOrderFilterGroupLabel,
   getRestaurantOrderFilterStatusSet,
+  getRestaurantOrderDetailsClassName,
   RESTAURANT_ORDER_FILTER_GROUPS,
   RESTAURANT_ORDER_FILTERS,
   RESTAURANT_ORDER_STATUS_LABELS,
@@ -9,6 +10,11 @@ import {
 } from '../orderStatusUi';
 
 describe('restaurant order status UI', () => {
+  test('collapses order details on mobile until expanded', () => {
+    expect(getRestaurantOrderDetailsClassName(false)).toContain('hidden lg:block');
+    expect(getRestaurantOrderDetailsClassName(true)).toContain('block lg:block');
+  });
+
   test('groups restaurant statuses into compact operational filters', () => {
     expect(RESTAURANT_ORDER_FILTER_GROUPS).toEqual([
       'all',

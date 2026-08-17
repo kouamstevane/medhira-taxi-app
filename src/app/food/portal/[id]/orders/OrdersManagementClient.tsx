@@ -19,6 +19,7 @@ import {
   getRestaurantOrderFilterClassName,
   getRestaurantOrderFilterGroupLabel,
   getRestaurantOrderFilterStatusSet,
+  getRestaurantOrderDetailsClassName,
   getRestaurantOrderStatusLabel,
   RESTAURANT_ORDER_FILTER_GROUPS,
   RESTAURANT_ORDER_FILTERS,
@@ -36,6 +37,7 @@ export default function OrdersManagementClient() {
   const [orders, setOrders] = useState<FoodOrder[]>([]);
   const [filterGroup, setFilterGroup] = useState<RestaurantOrderFilterGroup>('all');
   const [exactStatus, setExactStatus] = useState<FoodOrder['status'] | ''>('');
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set());
   const [currentUserUid, setCurrentUserUid] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,6 +97,18 @@ export default function OrdersManagementClient() {
     } catch {
       showError("Erreur lors de la mise à jour");
     }
+  };
+
+  const toggleOrderDetails = (orderId: string) => {
+    setExpandedOrderIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      if (nextIds.has(orderId)) {
+        nextIds.delete(orderId);
+      } else {
+        nextIds.add(orderId);
+      }
+      return nextIds;
+    });
   };
 
   const activeStatuses = exactStatus
@@ -269,7 +283,24 @@ export default function OrdersManagementClient() {
                   </div>
                 )}
 
-                <div className="grid gap-4 bg-white/[0.02] p-4 md:grid-cols-[minmax(0,1fr)_18rem] md:p-5">
+                <div className="border-b border-white/10 p-3 lg:hidden">
+                  <button
+                    type="button"
+                    aria-expanded={expandedOrderIds.has(order.id)}
+                    aria-controls={`order-${order.id}-details`}
+                    onClick={() => toggleOrderDetails(order.id)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-left text-sm font-semibold text-slate-200 transition hover:border-primary/40 hover:bg-white/10"
+                  >
+                    <span>{order.orderItems.length} {order.orderItems.length > 1 ? 'articles' : 'article'} · Voir les détails</span>
+                    <MaterialIcon name={expandedOrderIds.has(order.id) ? 'expand_less' : 'expand_more'} size="md" className="shrink-0 text-primary" />
+                  </button>
+                </div>
+
+                <div
+                  id={`order-${order.id}-details`}
+                  className={`${getRestaurantOrderDetailsClassName(expandedOrderIds.has(order.id))} bg-white/[0.02] p-4 md:p-5`}
+                >
+                  <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
                   <section aria-labelledby={`order-${order.id}-items`} className="min-w-0">
                     <h4 id={`order-${order.id}-items`} className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Articles</h4>
                     <div className="space-y-2">
@@ -345,6 +376,7 @@ export default function OrdersManagementClient() {
                       </div>
                     )}
                   </aside>
+                  </div>
                 </div>
               </article>
             ))}
