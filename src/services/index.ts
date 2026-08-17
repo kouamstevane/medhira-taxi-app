@@ -21,3 +21,7 @@ export * as DriverService from './driver.service';
 
 // Service VoIP
 export { voipService as VoipService } from './voip.service';
+
+// Service d'importation et synchronisation de menus
+export * as MenuImportClientService from './menu-import-client.service';
+export { foodDeliveryService as FoodDeliveryService } from './food-delivery.service';

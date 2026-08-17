@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { FoodDeliveryService, type MenuImageUpdate } from '@/services/food-delivery.service';
@@ -14,8 +14,11 @@ import {
 import { imageCompressionService, type CompressionResult } from '@/services/image-compression.service';
 import { useMenuImageUrlValidation } from '@/hooks/useMenuImageUrlValidation';
 import { MenuItemImage } from '@/components/food/MenuItemImage';
+import { BulkCsvImportModal } from '@/components/food/BulkCsvImportModal';
+import { StoreConnectorModal } from '@/components/food/StoreConnectorModal';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
@@ -39,6 +42,8 @@ function getMenuItemSaveErrorMessage(error: unknown): string {
   return getMenuImageStorageErrorMessage(error);
 }
 
+const DEFAULT_CATEGORIES = ['Entrées', 'Plats', 'Desserts', 'Boissons', 'Accompagnements', 'Snacks'];
+
 export default function MenuManagementClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -48,10 +53,41 @@ export default function MenuManagementClient() {
   const [loading, setLoading] = useState(true);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+  const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Pagination states
+  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Dynamic Categories calculation
+  const dynamicCategories = useMemo(() => {
+    const fromItems = Array.from(
+      new Set(
+        menuItems
+          .map((item) => item.category?.trim())
+          .filter(Boolean) as string[]
+      )
+    );
+    const combined = Array.from(new Set([...DEFAULT_CATEGORIES, ...fromItems]));
+    return combined.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  }, [menuItems]);
+
+  const activeCategories = useMemo(() => {
+    const present = Array.from(
+      new Set(
+        menuItems
+          .map((item) => item.category?.trim())
+          .filter(Boolean) as string[]
+      )
+    );
+    return present.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  }, [menuItems]);
 
   // Validation hook pour URLs externes
   const urlValidation = useMenuImageUrlValidation();
@@ -87,7 +123,36 @@ export default function MenuManagementClient() {
     isAvailable: true,
   });
 
-  const categories = ["Entrées", "Plats", "Desserts", "Boissons", "Accompagnements", "Snacks"];
+  const loadFirstPage = useCallback(async (restId: string) => {
+    setLoading(true);
+    try {
+      const page = await FoodDeliveryService.getRestaurantMenuPaginated(restId, 50, null);
+      setMenuItems(page.items);
+      setLastDoc(page.lastDoc);
+      setHasMore(page.hasMore);
+    } catch (error) {
+      console.error('Error loading menu:', error);
+      showError('Erreur lors du chargement du menu');
+    } finally {
+      setLoading(false);
+    }
+  }, [showError]);
+
+  const handleLoadMore = async () => {
+    if (!id || !lastDoc || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const page = await FoodDeliveryService.getRestaurantMenuPaginated(id, 50, lastDoc);
+      setMenuItems((prev) => [...prev, ...page.items]);
+      setLastDoc(page.lastDoc);
+      setHasMore(page.hasMore);
+    } catch (error) {
+      console.error('Error loading more items:', error);
+      showError('Erreur lors du chargement des plats suivants');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) {
@@ -109,18 +174,16 @@ export default function MenuManagementClient() {
           router.push('/dashboard');
           return;
         }
-        const items = await FoodDeliveryService.getRestaurantMenuFull(id);
-        setMenuItems(items);
+        await loadFirstPage(id);
       } catch (error) {
-        console.error("Error loading menu:", error);
-        showError("Erreur lors du chargement du menu");
-      } finally {
+        console.error('Error loading restaurant:', error);
+        showError('Erreur lors du chargement du restaurant');
         setLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [id, router, showError]);
+  }, [id, router, showError, loadFirstPage]);
 
   // Révoquer l'ObjectURL de prévisualisation au démontage ou remplacement
   const cleanupPreview = useCallback(() => {
@@ -208,7 +271,7 @@ export default function MenuManagementClient() {
         name: '',
         description: '',
         price: '',
-        category: categories[0],
+        category: dynamicCategories[0] || 'Plats',
         isAvailable: true,
       });
       setImageChoice('image-unchanged');
@@ -378,8 +441,7 @@ export default function MenuManagementClient() {
       );
 
       // Rafraîchir le menu
-      const items = await FoodDeliveryService.getRestaurantMenuFull(restaurantId);
-      setMenuItems(items);
+      await loadFirstPage(restaurantId);
       resetImageEditorState();
       setIsModalOpen(false);
     } catch (error) {
@@ -466,12 +528,28 @@ export default function MenuManagementClient() {
             <p className="text-xs text-slate-500">{menuItems.length} articles au total</p>
           </div>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="bg-gradient-to-r from-primary to-[#ffae33] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 primary-glow hover:opacity-90 transition"
-        >
-          <MaterialIcon name="add" size="md" /> Nouveau
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsCsvModalOpen(true)}
+            className="glass-card border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition text-sm min-h-[44px]"
+          >
+            <span>📥</span> <span className="hidden sm:inline">Importer catalogue</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsStoreModalOpen(true)}
+            className="glass-card border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition text-sm min-h-[44px]"
+          >
+            <span>🛒</span> <span className="hidden sm:inline">Connecter boutique</span>
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="bg-gradient-to-r from-primary to-[#ffae33] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 primary-glow hover:opacity-90 transition min-h-[44px]"
+          >
+            <MaterialIcon name="add" size="md" /> Nouveau
+          </button>
+        </div>
       </header>
 
       <main className="max-w-5xl mx-auto p-4 sm:p-8">
@@ -492,11 +570,11 @@ export default function MenuManagementClient() {
             />
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {categories.map((cat) => (
+            {(activeCategories.length > 0 ? activeCategories : DEFAULT_CATEGORIES).map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory((prev) => (prev === cat ? null : cat))}
-                className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition ${
+                className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition min-h-[44px] ${
                   selectedCategory === cat
                     ? 'bg-primary text-white font-bold'
                     : 'glass-card border border-white/5 text-slate-300 hover:bg-white/10'
@@ -509,7 +587,7 @@ export default function MenuManagementClient() {
         </div>
 
         {/* Categories & Items Grid */}
-        {categories.map((category) => {
+        {(activeCategories.length > 0 ? activeCategories : dynamicCategories).map((category) => {
           if (selectedCategory && selectedCategory !== category) return null;
           const categoryItems = menuItems.filter(
             (i) =>
@@ -599,9 +677,33 @@ export default function MenuManagementClient() {
             </p>
             <button
               onClick={() => handleOpenModal()}
-              className="bg-gradient-to-r from-primary to-[#ffae33] text-white px-8 py-3 rounded-2xl font-bold primary-glow hover:opacity-90 transition"
+              className="bg-primary text-white px-8 py-3 rounded-2xl font-bold primary-glow hover:opacity-90 transition min-h-[44px]"
             >
               Ajouter un plat
+            </button>
+          </div>
+        )}
+
+        {/* Bouton Charger plus pour pagination Firestore */}
+        {hasMore && (
+          <div className="flex justify-center pt-8 pb-4">
+            <button
+              type="button"
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className="px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition flex items-center gap-2 min-h-[44px] shadow-lg"
+            >
+              {isLoadingMore ? (
+                <>
+                  <LoadingSpinner />
+                  <span>Chargement...</span>
+                </>
+              ) : (
+                <>
+                  <span>Charger plus de plats</span>
+                  <MaterialIcon name="expand_more" size="md" />
+                </>
+              )}
             </button>
           </div>
         )}
@@ -676,18 +778,36 @@ export default function MenuManagementClient() {
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                     Catégorie *
                   </label>
-                  <select
+                  <input
+                    type="text"
+                    list="category-suggestions"
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white appearance-none"
+                    className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white"
+                    placeholder="Ex: Plats, Desserts, Burgers..."
                     required
-                  >
-                    {categories.map((c) => (
-                      <option key={c} value={c} className="bg-[#1A1A1A]">
-                        {c}
-                      </option>
+                  />
+                  <datalist id="category-suggestions">
+                    {dynamicCategories.map((c) => (
+                      <option key={c} value={c} />
                     ))}
-                  </select>
+                  </datalist>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {dynamicCategories.slice(0, 6).map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setForm({ ...form, category: cat })}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition ${
+                          form.category === cat
+                            ? 'bg-primary text-white font-bold'
+                            : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -939,6 +1059,27 @@ export default function MenuManagementClient() {
           </div>
         </div>
       )}
+      {/* Modales d'importation de catalogue */}
+      <BulkCsvImportModal
+        isOpen={isCsvModalOpen}
+        onClose={() => setIsCsvModalOpen(false)}
+        restaurantId={restaurantId}
+        onImportCompleted={() => {
+          showSuccess('Catalogue importé avec succès !');
+          if (id) loadFirstPage(id);
+        }}
+      />
+
+      <StoreConnectorModal
+        isOpen={isStoreModalOpen}
+        onClose={() => setIsStoreModalOpen(false)}
+        restaurantId={restaurantId}
+        onSyncCompleted={() => {
+          showSuccess('Synchronisation WooCommerce terminée !');
+          if (id) loadFirstPage(id);
+        }}
+      />
+
       <BottomNav items={portalNavItems(restaurantId)} />
     </div>
   );

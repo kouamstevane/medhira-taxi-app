@@ -1,0 +1,9 @@
+externalId,name,description,price,category,preparationTime,isAvailable
+ERR-OK1,Salade César Authentique,"Laitue romaine croquante, filet de poulet rôti, copeaux de parmesan AOP, croûtons à l'ail et sauce césar",12.00,Salades Fraîches,10,true
+ERR-BAD1,Plat Prix Negatif Invalide,"Ce plat contient un prix négatif qui doit être rejeté par le validateur",-5.00,Tests Erreurs,5,true
+ERR-OK2,Croque-Monsieur Truffé,"Pain de mie doré au beurre de truffe, jambon blanc fermier, emmental râpé et béchamel onctueuse",9.50,Snacks Chauds,10,true
+,Wrap Poulet Avocat Sans Reference,"Ce plat n'a pas d'identifiant SKU/externalId et doit être tracé comme erreur",8.50,Tests Erreurs,5,true
+ERR-OK3,Club Sandwich Saumon Fumé,"Saumon fumé de Norvège, cream cheese à la ciboulette, concombre et jeunes pousses",11.50,Snacks Chauds,8,true
+ERR-BAD2,Plat Prix Astronomique,"Ce plat dépasse le plafond autorisé de 50 millions et doit être rejeté",99999999,Tests Erreurs,5,true
+ERR-OK4,Pancakes Sirop d'Erable & Myrtilles,"Trois pancakes moelleux, myrtilles fraîches et filet de véritable sirop d'érable pur québécois",7.50,Desserts & Brunch,12,true
+ERR-OK5,Jus Détox Pomme Concombre Gingembre,"Pomme verte Granny Smith, concombre frais, citron vert et touche de gingembre pressé à froid",5.00,Boissons Fraîches,5,true

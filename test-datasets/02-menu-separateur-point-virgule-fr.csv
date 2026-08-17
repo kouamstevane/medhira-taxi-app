@@ -1,0 +1,7 @@
+Reference;Intitule;Description;Tarif;Rayon;Duree;Actif
+TACO-001;Tacos 2 Viandes;"Tenders croustillants, viande hachée épicée, frites et sauce fromagère maison fondante";9,50;Street Food;10;oui
+TACO-002;Tacos Végétarien Gourmand;"Falafels aux herbes fraîches, légumes grillés, avocat, frites et sauce blanche";8,90;Street Food;10;oui
+BOWL-001;Poke Bowl Saumon Teriyaki;"Saumon frais d'Écosse mariné, riz vinaigré, mangue fraîche, edamame, radis et sésame";15,90;Bowls & Salades;10;true
+BOWL-002;Green Superfood Bowl;"Quinoa bio, avocat tranché, pois chiches rôtis au paprika, grenade, pousses d'épinard et tahini";13,50;Bowls & Salades;8;true
+SIDE-001;Frites Patate Douce & Paprika;"Frites croustillantes de patates douces servies avec une sauce aïoli aux herbes";4,50;Accompagnements;7;oui
+SIDE-002;Moelleux Mac & Cheese Bites;"Boulettes de macaronis au cheddar fondant panées et dorées au four";5,50;Accompagnements;7;oui

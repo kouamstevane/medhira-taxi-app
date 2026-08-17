@@ -1,11 +1,19 @@
 import type { NextConfig } from "next";
+import path from "path";
 import { getNextBuildDirectory } from './scripts/next-build-path.mjs';
 
 const isMobile = process.env.MOBILE_BUILD === 'true';
 
+function getTurbopackRoot(): string {
+  if (__dirname.includes('.worktrees')) {
+    return path.resolve(__dirname, '..', '..');
+  }
+  return path.resolve(__dirname);
+}
+
 const nextConfig: NextConfig = {
   distDir: getNextBuildDirectory({ isMobile }),
-  outputFileTracingRoot: __dirname,
+  outputFileTracingRoot: getTurbopackRoot(),
   async redirects() {
     return [
       { source: '/driver/historique', destination: '/driver/activite?tab=historique', permanent: true },
@@ -64,7 +72,9 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  turbopack: {},
+  turbopack: {
+    root: getTurbopackRoot(),
+  },
 };
 
 export default nextConfig;

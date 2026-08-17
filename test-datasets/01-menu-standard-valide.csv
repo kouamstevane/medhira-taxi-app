@@ -1,0 +1,11 @@
+externalId,name,description,price,category,preparationTime,isAvailable
+BUR-001,Burger Medjira Gourmet,"Pain brioché artisanal, steak haché façon bouchère 180g, cheddar affiné 18 mois, oignons caramélisés et sauce secrète",14.50,Burgers Signature,15,true
+BUR-002,Smash Burger Double,"Double steak smashé croustillant, double american cheese, pickles maison et sauce moutarde douce",12.90,Burgers Signature,10,true
+BUR-003,Chicken Crispy Burger,"Filet de poulet fermier pané aux épices douces, coleslaw croquant et mayonnaise fumée",13.50,Burgers Signature,15,true
+PIZ-001,Pizza Margherita DOP,"Sauce tomate San Marzano bio, mozzarella di Bufala Campana, basilic frais et filet d'huile d'olive extra vierge",11.00,Pizzas Artisanales,12,true
+PIZ-002,Pizza Truffe & Stracciatella,"Crème de truffe noire d'été, mozzarella fior di latte, champignons de Paris et stracciatella crémeuse",17.50,Pizzas Artisanales,15,true
+PIZ-003,Pizza Reine Royale,"Sauce tomate San Marzano, mozzarella, jambon blanc aux herbes supérieur et champignons frais rôtis",13.50,Pizzas Artisanales,12,true
+DES-001,Tiramisu Traditionnel Café,"Véritable mascarpone italien, génoise imbibée au café espresso bio et cacao amer Valrhona",6.50,Desserts Maison,5,true
+DES-002,Fondant au Chocolat Coeur Coulant,"Chocolat noir 70% pur beurre de cacao, servi tiède avec une boule de glace vanille Bourbon",7.00,Desserts Maison,8,true
+BOI-001,Limonade Maison Menthe Citron,"Citrons jaunes pressés minute, feuilles de menthe fraîche et eau pétillante infusée",4.50,Boissons Fraîches,5,true
+BOI-002,Thé Glacé Pêche Hibiscus,"Infusion artisanale de thé noir et fleurs d'hibiscus, nectar de pêche de vigne",4.00,Boissons Fraîches,5,true

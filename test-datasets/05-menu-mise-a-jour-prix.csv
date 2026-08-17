@@ -1,0 +1,6 @@
+externalId,name,description,price,category,preparationTime,isAvailable
+BUR-001,Burger Medjira Gourmet (Recette Améliorée),"Pain brioché artisanal, steak haché façon bouchère 200g (+20g), cheddar affiné 24 mois et sauce secrète",16.00,Burgers Signature,15,true
+BUR-002,Smash Burger Double,"Double steak smashé croustillant, double american cheese, pickles maison et sauce moutarde douce",13.50,Burgers Signature,10,true
+PIZ-001,Pizza Margherita DOP,"Sauce tomate San Marzano bio, mozzarella di Bufala Campana, basilic frais et filet d'huile d'olive extra vierge",12.00,Pizzas Artisanales,12,true
+DES-001,Tiramisu Traditionnel Café,"Véritable mascarpone italien, génoise imbibée au café espresso bio et cacao amer Valrhona",7.00,Desserts Maison,5,true
+BOI-001,Limonade Maison Menthe Citron,"Citrons jaunes pressés minute, feuilles de menthe fraîche et eau pétillante infusée",4.90,Boissons Fraîches,5,true

@@ -72,11 +72,71 @@ export interface Restaurant {
 // MENU ITEMS (sous-collection de restaurants)
 // ============================================================================
 
+// ============================================================================
+// MENU IMPORT & SYNC TYPES
+// ============================================================================
+
+export type MenuItemSource = 'csv' | 'excel' | 'woocommerce' | 'manual';
+export type MenuImportType = 'csv' | 'excel' | 'woocommerce';
+export type MenuImportStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface MenuImportError {
+  row?: number;
+  item?: string;
+  message: string;
+}
+
+export interface MenuImportJob {
+  id: string;
+  restaurantId: string;
+  type: MenuImportType;
+  status: MenuImportStatus;
+  filePath?: string;
+  integrationId?: string;
+  totalItems: number;
+  processedItems: number;
+  failedItems: number;
+  errors: MenuImportError[];
+  attemptCount?: number;
+  leaseExpiresAt?: Timestamp | Date;
+  createdAt: Timestamp | Date;
+  updatedAt: Timestamp | Date;
+  completedAt?: Timestamp | Date;
+}
+
+export type MenuImportSubCollection = MenuImportJob;
+
+export interface MenuItemImportFields {
+  source?: MenuItemSource;
+  externalId?: string;
+  sourceUpdatedAt?: Timestamp | Date;
+  lastImportId?: string;
+}
+
+export interface ParsedMenuRow {
+  rowNumber: number;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  externalId: string;
+  preparationTime?: number;
+  isAvailable: boolean;
+  sourceUpdatedAt?: Date;
+}
+
+export interface SyncSummary {
+  totalItems: number;
+  processedItems: number;
+  failedItems: number;
+  deactivatedItems: number;
+}
+
 /**
  * Interface MenuItem
  * Représente un plat dans le menu d'un restaurant (Règle 2).
  */
-export interface MenuItem {
+export interface MenuItem extends MenuItemImportFields {
   id: string;
   restaurantId: string;
   name: string;

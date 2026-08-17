@@ -34,6 +34,7 @@ import {
   deleteField,
   limit,
   startAfter,
+  documentId,
   onSnapshot,
   DocumentData,
   QueryDocumentSnapshot,
@@ -362,6 +363,72 @@ export const getRestaurantMenu = async (
   })) as MenuItem[];
   } catch (error) {
     console.error('[food-delivery.service] getRestaurantMenu failed:', error);
+    throw error;
+  }
+};
+
+export interface MenuPage {
+  items: MenuItem[];
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  hasMore: boolean;
+}
+
+/**
+ * Récupère le menu d'un restaurant de manière paginée avec curseur Firestore.
+ * Trié par catégorie ascendant puis documentId ascendant.
+ *
+ * @param restaurantId - ID du restaurant
+ * @param pageSize - Taille de page bornée entre 1 et 100 (défaut: 50)
+ * @param cursor - Dernier document reçu pour la page suivante
+ */
+export const getRestaurantMenuPaginated = async (
+  restaurantId: string,
+  pageSize: number = 50,
+  cursor: QueryDocumentSnapshot<DocumentData> | null = null
+): Promise<MenuPage> => {
+  try {
+    const boundedPageSize = Math.max(1, Math.min(pageSize, 100));
+    const menuRef = collection(
+      db,
+      FIRESTORE_COLLECTIONS.RESTAURANTS,
+      restaurantId,
+      FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS
+    );
+
+    let q = query(
+      menuRef,
+      orderBy('category', 'asc'),
+      orderBy(documentId(), 'asc'),
+      limit(boundedPageSize)
+    );
+
+    if (cursor) {
+      q = query(
+        menuRef,
+        orderBy('category', 'asc'),
+        orderBy(documentId(), 'asc'),
+        startAfter(cursor),
+        limit(boundedPageSize)
+      );
+    }
+
+    const querySnapshot = await getDocs(q);
+    const docs = querySnapshot.docs;
+    const items = docs.map((docSnap) => ({
+      ...docSnap.data(),
+      id: docSnap.id,
+    })) as MenuItem[];
+
+    const lastDoc = docs.length > 0 ? docs[docs.length - 1] : null;
+    const hasMore = docs.length === boundedPageSize;
+
+    return {
+      items,
+      lastDoc,
+      hasMore,
+    };
+  } catch (error) {
+    console.error('[food-delivery.service] getRestaurantMenuPaginated failed:', error);
     throw error;
   }
 };
@@ -929,6 +996,7 @@ export const FoodDeliveryService = {
   getPendingRestaurants,
   updateRestaurantStatus,
   updateRestaurantOpeningHours,
+  getRestaurantMenuPaginated,
   
   /**
    * Récupérer le menu complet (incluant articles indisponibles pour le gérant)
@@ -996,6 +1064,7 @@ export const FoodDeliveryService = {
       }
 
       if (!itemData.id) {
+        data.source = itemData.source || 'manual';
         data.createdAt = serverTimestamp();
       }
 

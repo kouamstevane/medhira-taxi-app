@@ -861,16 +861,24 @@ service cloud.firestore {
           && request.resource.data.description.size() <= 1000
           && request.resource.data.price is number
           && request.resource.data.price > 0
-          && request.resource.data.price <= 1000
+          && request.resource.data.price <= 50000000
           && request.resource.data.category is string
           && request.resource.data.category.size() >= 1
           && request.resource.data.category.size() <= 80
           && request.resource.data.isAvailable is bool
+          && (!('preparationTime' in request.resource.data) || (request.resource.data.preparationTime is int && request.resource.data.preparationTime >= 1 && request.resource.data.preparationTime <= 1440))
           && (!('imageUrl' in request.resource.data) || (request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2048))
           && (!('imageStoragePath' in request.resource.data) || (request.resource.data.imageStoragePath is string && request.resource.data.imageStoragePath.size() <= 256))
+          && (!('source' in request.resource.data) || (request.resource.data.source in ['csv', 'excel', 'woocommerce', 'manual']))
+          && (!('externalId' in request.resource.data) || (request.resource.data.externalId is string && request.resource.data.externalId.size() >= 1 && request.resource.data.externalId.size() <= 256))
+          && (!('source' in request.resource.data) || request.resource.data.source == 'manual' || ('externalId' in request.resource.data && request.resource.data.externalId is string && request.resource.data.externalId.size() >= 1))
+          && (!('sourceUpdatedAt' in request.resource.data) || request.resource.data.sourceUpdatedAt is timestamp)
+          && (!('lastImportId' in request.resource.data) || (request.resource.data.lastImportId is string && request.resource.data.lastImportId.size() <= 128))
           && request.resource.data.keys()
             .hasOnly(['id', 'restaurantId', 'name', 'description', 'price', 'category',
-                      'imageUrl', 'imageStoragePath', 'isAvailable', 'createdAt', 'updatedAt']);
+                      'imageUrl', 'imageStoragePath', 'isAvailable', 'preparationTime',
+                      'source', 'externalId', 'sourceUpdatedAt', 'lastImportId',
+                      'createdAt', 'updatedAt']);
       }
 
       function isMenuAvailabilityOnlyUpdate() {
@@ -885,17 +893,38 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         
         // Écriture : Seul le propriétaire du restaurant parent
-        // Modifications immédiatement visibles (Règle 2)
+        // Création cliente : source doit être 'manual' (ou absent pour legacy) et sans métadonnées d'import serveur
         allow create: if isAuthenticated() &&
           get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid &&
-          isValidMenuItem();
+          isValidMenuItem() &&
+          (!('source' in request.resource.data) || request.resource.data.source == 'manual') &&
+          !('sourceUpdatedAt' in request.resource.data) &&
+          !('lastImportId' in request.resource.data);
 
+        // Modification cliente : interdiction de modifier la provenance ou les clés d'import
         allow update: if isAuthenticated() &&
           get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid &&
-          (isValidMenuItem() || isMenuAvailabilityOnlyUpdate());
+          (isValidMenuItem() || isMenuAvailabilityOnlyUpdate()) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['source', 'externalId', 'sourceUpdatedAt', 'lastImportId']);
 
-        allow delete: if isAuthenticated() &&
+        // Suppression physique interdite (désactivation logique via isAvailable uniquement)
+        allow delete: if false;
+      }
+
+      // Sous-collection menu_imports — Traitements d'import de menu
+      match /menu_imports/{importId} {
+        // Lecture : Seul le propriétaire du restaurant parent
+        allow read: if isAuthenticated() &&
           get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
+
+        // Écritures gérées exclusivement par l'Admin SDK / Cloud Functions
+        allow create, update, delete: if false;
+      }
+
+      // Sous-collection private_integrations — Intégrations privées (WooCommerce, etc.)
+      match /private_integrations/{integrationId} {
+        // Inaccessible côté client
+        allow read, write: if false;
       }
     }
     

@@ -23,7 +23,16 @@ jest.mock('@/services/food-delivery.service', () => ({
   FoodDeliveryService: {
     getRestaurantById: jest.fn(),
     getRestaurantMenuFull: jest.fn(),
+    getRestaurantMenuPaginated: jest.fn(),
   },
+}));
+
+jest.mock('@/components/food/BulkCsvImportModal', () => ({
+  BulkCsvImportModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div data-testid="csv-modal">CSV Modal</div> : null),
+}));
+
+jest.mock('@/components/food/StoreConnectorModal', () => ({
+  StoreConnectorModal: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div data-testid="store-modal">Store Modal</div> : null),
 }));
 
 jest.mock('@/hooks/useToast', () => ({
@@ -59,9 +68,9 @@ jest.mock('next/image', () => ({
 
 const mockOnAuthStateChanged = onAuthStateChanged as jest.Mock;
 const mockGetRestaurantById = FoodDeliveryService.getRestaurantById as jest.Mock;
-const mockGetRestaurantMenuFull = FoodDeliveryService.getRestaurantMenuFull as jest.Mock;
+const mockGetRestaurantMenuPaginated = FoodDeliveryService.getRestaurantMenuPaginated as jest.Mock;
 
-describe('MenuManagementClient authentication', () => {
+describe('MenuManagementClient', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockOnAuthStateChanged.mockImplementation(
@@ -75,15 +84,32 @@ describe('MenuManagementClient authentication', () => {
       ownerId: 'owner-1',
       name: 'Restaurant test',
     });
-    mockGetRestaurantMenuFull.mockResolvedValue([]);
+    mockGetRestaurantMenuPaginated.mockResolvedValue({
+      items: [
+        { id: '1', name: 'Burger Maison', category: 'Burgers Gourmet', price: 15, isAvailable: true },
+        { id: '2', name: 'Tiramisu', category: 'Desserts Italiens', price: 6, isAvailable: true },
+      ],
+      lastDoc: null,
+      hasMore: false,
+    });
   });
 
-  it('does not redirect an authenticated restaurant owner to login', async () => {
+  it('does not redirect an authenticated restaurant owner to login and loads paginated items', async () => {
     render(<MenuManagementClient />);
 
     await waitFor(() => expect(mockGetRestaurantById).toHaveBeenCalledWith('restaurant-1'));
+    expect(mockGetRestaurantMenuPaginated).toHaveBeenCalledWith('restaurant-1', 50, null);
 
     expect(push).not.toHaveBeenCalledWith('/login');
     expect(replace).not.toHaveBeenCalledWith('/login');
+  });
+
+  it('renders import catalogue and connect boutique buttons', async () => {
+    const { getByText } = render(<MenuManagementClient />);
+
+    await waitFor(() => {
+      expect(getByText(/Importer catalogue/i)).toBeInTheDocument();
+      expect(getByText(/Connecter boutique/i)).toBeInTheDocument();
+    });
   });
 });

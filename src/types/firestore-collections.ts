@@ -603,7 +603,7 @@ export interface RestaurantCollection {
  * - Create/Update/Delete : Propriétaire du restaurant parent uniquement
  */
 export interface MenuItemSubCollection {
-  itemId: string;
+  id: string;
   restaurantId: string;
   name: string;
   description?: string;
@@ -613,6 +613,10 @@ export interface MenuItemSubCollection {
   imageStoragePath?: string;
   isAvailable: boolean;
   preparationTime?: number;
+  source?: 'csv' | 'excel' | 'woocommerce' | 'manual';
+  externalId?: string;
+  sourceUpdatedAt?: Date;
+  lastImportId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -935,7 +939,15 @@ export const FIRESTORE_SUBCOLLECTIONS = {
   REQUESTS: 'requests',
   // Food Delivery Module
   MENU_ITEMS: 'menu_items',
+  MENU_IMPORTS: 'menu_imports',
+  PRIVATE_INTEGRATIONS: 'private_integrations',
 } as const;
+
+export const getMenuImportPath = (restaurantId: string, importId: string) =>
+  `restaurants/${restaurantId}/menu_imports/${importId}`;
+
+export const getMenuImportStoragePath = (restaurantId: string, importId: string, extension: 'csv' | 'xlsx') =>
+  `menu-imports/${restaurantId}/${importId}.${extension}`;
 
 export type FirestoreCollection = typeof FIRESTORE_COLLECTIONS[keyof typeof FIRESTORE_COLLECTIONS];
 export type FirestoreSubCollection = typeof FIRESTORE_SUBCOLLECTIONS[keyof typeof FIRESTORE_SUBCOLLECTIONS];
