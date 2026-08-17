@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import {
+  classifyMenuImportRows,
   computeImportedMenuItemId,
   normalizeMenuRow,
   parseCsvBuffer,
@@ -10,6 +11,43 @@ import { isPublicRoutableIp, validateWooCommerceTarget } from '../woocommerceSec
 import { assertXlsxArchiveWithinLimits } from '../xlsxLimits.js';
 
 describe('Menu Import Pure Helpers & Parsers', () => {
+  describe('classifyMenuImportRows', () => {
+    test('classifies valid new rows and same-source updates for review', () => {
+      const result = classifyMenuImportRows(
+        'csv',
+        [
+          { name: 'Burger', description: 'Maison', price: '12', category: 'Plats', externalId: 'new-1' },
+          { name: 'Pizza', description: 'DOP', price: '15', category: 'Pizzas', externalId: 'existing-1' },
+        ],
+        new Map([
+          [computeImportedMenuItemId('csv', 'existing-1'), { source: 'csv', externalId: 'existing-1' }],
+        ])
+      );
+
+      expect(result.summary).toEqual({ totalRows: 2, importableRows: 2, invalidRows: 0, conflictRows: 0, newRows: 1, updateRows: 1 });
+      expect(result.rows.map((row) => row.status)).toEqual(['new', 'update']);
+      expect(result.rows.every((row) => row.selectable)).toBe(true);
+    });
+
+    test('keeps invalid and conflicting rows visible but not selectable', () => {
+      const result = classifyMenuImportRows(
+        'csv',
+        [
+          { name: 'Prix invalide', price: '-5', category: 'Tests', externalId: 'bad-price' },
+          { name: 'Conflit manuel', price: '10', category: 'Tests', externalId: 'manual-1' },
+        ],
+        new Map([
+          [computeImportedMenuItemId('csv', 'manual-1'), { source: 'manual', externalId: 'manual-1' }],
+        ])
+      );
+
+      expect(result.summary).toEqual({ totalRows: 2, importableRows: 0, invalidRows: 1, conflictRows: 1, newRows: 0, updateRows: 0 });
+      expect(result.rows.every((row) => !row.selectable)).toBe(true);
+      expect(result.rows[0].error).toMatch(/prix invalide/i);
+      expect(result.rows[1].error).toMatch(/manuel/i);
+    });
+  });
+
   describe('computeImportedMenuItemId', () => {
     test('produces deterministic sha256-based ID prefixed with item_', () => {
       const id1 = computeImportedMenuItemId('csv', 'SKU-100');

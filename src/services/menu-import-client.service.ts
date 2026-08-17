@@ -4,7 +4,7 @@ import {
   FIRESTORE_SUBCOLLECTIONS,
   getMenuImportStoragePath,
 } from '@/types/firestore-collections';
-import type { MenuImportJob } from '@/types/food-delivery';
+import type { MenuImportJob, MenuImportPreview } from '@/types/food-delivery';
 import { collection, doc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { ref, uploadBytesResumable } from 'firebase/storage';
@@ -18,6 +18,18 @@ export interface MenuImportUploadResult {
 export interface MenuImportUploadOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+}
+
+export interface MenuImportFileInput {
+  restaurantId: string;
+  importId: string;
+  filePath: string;
+  type: 'csv' | 'excel';
+}
+
+export interface StartMenuImportInput extends MenuImportFileInput {
+  reviewConfirmed: true;
+  includedRowNumbers: number[];
 }
 
 export const MENU_IMPORT_UPLOAD_TIMEOUT_MS = 30_000;
@@ -147,10 +159,10 @@ export async function uploadMenuImportFile(
  * Calls Cloud Function to validate file in Storage and create pending import job
  */
 export async function startMenuFileImport(
-  input: MenuImportUploadResult & { restaurantId: string }
+  input: StartMenuImportInput
 ): Promise<{ importId: string }> {
   const callable = httpsCallable<
-    { restaurantId: string; importId: string; filePath: string; type: 'csv' | 'excel' },
+    StartMenuImportInput,
     { importId: string }
   >(functions, 'startMenuFileImport');
 
@@ -159,8 +171,16 @@ export async function startMenuFileImport(
     importId: input.importId,
     filePath: input.filePath,
     type: input.type,
+    reviewConfirmed: input.reviewConfirmed,
+    includedRowNumbers: input.includedRowNumbers,
   });
 
+  return response.data;
+}
+
+export async function previewMenuFileImport(input: MenuImportFileInput): Promise<MenuImportPreview> {
+  const callable = httpsCallable<MenuImportFileInput, MenuImportPreview>(functions, 'previewMenuFileImport');
+  const response = await callable(input);
   return response.data;
 }
 

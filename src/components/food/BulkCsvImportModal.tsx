@@ -4,10 +4,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   downloadSampleCsvTemplate,
   listenToImportProgress,
+  previewMenuFileImport,
   startMenuFileImport,
   uploadMenuImportFile,
 } from '@/services/menu-import-client.service';
-import type { MenuImportJob } from '@/types/food-delivery';
+import type { MenuImportJob, MenuImportPreview } from '@/types/food-delivery';
+import type { MenuImportFileInput } from '@/services/menu-import-client.service';
 import type { Unsubscribe } from 'firebase/firestore';
 
 interface BulkCsvImportModalProps {
@@ -28,6 +30,10 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importJob, setImportJob] = useState<MenuImportJob | null>(null);
+  const [preview, setPreview] = useState<MenuImportPreview | null>(null);
+  const [pendingImport, setPendingImport] = useState<MenuImportFileInput | null>(null);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [stage, setStage] = useState<'select' | 'review' | 'processing'>('select');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showErrorsList, setShowErrorsList] = useState(false);
 
@@ -68,6 +74,10 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
     setUploadProgress(0);
     setIsProcessing(false);
     setImportJob(null);
+    setPreview(null);
+    setPendingImport(null);
+    setSelectedRows(new Set());
+    setStage('select');
     setErrorMessage(null);
     onClose();
   };
@@ -75,6 +85,10 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
   const handleFileChange = (selectedFile: File | null) => {
     setErrorMessage(null);
     setImportJob(null);
+    setPreview(null);
+    setPendingImport(null);
+    setSelectedRows(new Set());
+    setStage('select');
     setShowErrorsList(false);
     if (!selectedFile) {
       setFile(null);
@@ -97,7 +111,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
     setFile(selectedFile);
   };
 
-  const handleStartImport = async () => {
+  const handlePreviewImport = async () => {
     if (!file || !restaurantId) return;
 
     try {
@@ -118,15 +132,41 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
         }
       }
 
-      const { importId } = await startMenuFileImport({
-        ...uploadResult,
+      const previewInput: MenuImportFileInput = {
         restaurantId,
+        ...uploadResult,
+      };
+      const importPreview = await previewMenuFileImport(previewInput);
+      setPendingImport(previewInput);
+      setPreview(importPreview);
+      setSelectedRows(new Set(importPreview.rows.filter((row) => row.selectable).map((row) => row.rowNumber)));
+      setStage('review');
+      setIsProcessing(false);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setIsProcessing(false);
+      setErrorMessage(err instanceof Error ? err.message : "Échec de l'analyse du fichier");
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!pendingImport || selectedRows.size === 0) return;
+
+    try {
+      setIsProcessing(true);
+      setErrorMessage(null);
+      setStage('processing');
+
+      await startMenuFileImport({
+        ...pendingImport,
+        reviewConfirmed: true,
+        includedRowNumbers: [...selectedRows].sort((a, b) => a - b),
       });
 
       cleanupSubscription();
       unsubscribeRef.current = listenToImportProgress(
         restaurantId,
-        importId,
+        pendingImport.importId,
         (job) => {
           setImportJob(job);
           if (job.status === 'completed') {
@@ -145,10 +185,26 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
         }
       );
     } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') return;
       setIsProcessing(false);
+      setStage('review');
       setErrorMessage(err instanceof Error ? err.message : "Échec du démarrage de l'importation");
     }
+  };
+
+  const handleBackToFile = () => {
+    setPreview(null);
+    setPendingImport(null);
+    setSelectedRows(new Set());
+    setStage('select');
+  };
+
+  const toggleRowSelection = (rowNumber: number) => {
+    setSelectedRows((current) => {
+      const next = new Set(current);
+      if (next.has(rowNumber)) next.delete(rowNumber);
+      else next.add(rowNumber);
+      return next;
+    });
   };
 
   if (!isOpen) return null;
@@ -204,7 +260,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           </div>
 
           {/* File Dropzone */}
-          {!importJob && (
+          {!importJob && stage === 'select' && (
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -268,7 +324,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           )}
 
           {/* Uploading Progress */}
-          {isProcessing && uploadProgress < 100 && !importJob && (
+          {isProcessing && stage === 'select' && uploadProgress < 100 && !importJob && (
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-medium text-zinc-600 dark:text-zinc-400">
                 <span>Téléversement du fichier...</span>
@@ -279,6 +335,78 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                   className="h-full bg-amber-500 transition-all duration-300 rounded-full"
                   style={{ width: `${uploadProgress}%` }}
                 />
+              </div>
+            </div>
+          )}
+
+          {preview && stage === 'review' && (
+            <div className="space-y-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">Récapitulatif de l’importation</h3>
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                    Vérifiez les lignes sélectionnées. Rien ne sera ajouté ou modifié avant votre confirmation.
+                  </p>
+                </div>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  {selectedRows.size} sélectionnée(s)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-5">
+                {[
+                  ['Total', preview.summary.totalRows, 'text-zinc-900 dark:text-zinc-100'],
+                  ['Nouveaux', preview.summary.newRows, 'text-emerald-700 dark:text-emerald-300'],
+                  ['Mises à jour', preview.summary.updateRows, 'text-blue-700 dark:text-blue-300'],
+                  ['Invalides', preview.summary.invalidRows, 'text-red-700 dark:text-red-300'],
+                  ['Conflits', preview.summary.conflictRows, 'text-amber-700 dark:text-amber-300'],
+                ].map(([label, value, color]) => (
+                  <div key={String(label)} className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900">
+                    <div className="text-zinc-500 dark:text-zinc-400">{label}</div>
+                    <div className={`text-base font-bold ${color}`}>{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {preview.summary.importableRows === 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                  Aucune ligne importable. Corrigez le fichier puis relancez l’analyse.
+                </div>
+              )}
+
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                  {preview.rows.map((row) => (
+                    <label key={row.rowNumber} className={`flex items-start gap-3 p-3 text-sm ${row.selectable ? 'cursor-pointer' : 'bg-zinc-100/70 dark:bg-zinc-900/50'}`}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Importer la ligne ${row.rowNumber}`}
+                        checked={selectedRows.has(row.rowNumber)}
+                        disabled={!row.selectable}
+                        onChange={() => toggleRowSelection(row.rowNumber)}
+                        className="mt-1 h-4 w-4 accent-amber-600"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
+                          <span>Ligne {row.rowNumber}</span>
+                          <span>{row.name || 'Sans nom'}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] ${
+                            row.status === 'new' ? 'bg-emerald-100 text-emerald-800' :
+                            row.status === 'update' ? 'bg-blue-100 text-blue-800' :
+                            row.status === 'conflict' ? 'bg-amber-100 text-amber-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {row.status === 'new' ? 'Nouveau' : row.status === 'update' ? 'Mise à jour' : row.status === 'conflict' ? 'Conflit' : 'Invalide'}
+                          </span>
+                        </span>
+                        <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
+                          {row.externalId || 'Identifiant manquant'}{row.category ? ` · ${row.category}` : ''}{row.price ? ` · ${row.price} CAD` : ''}
+                        </span>
+                        {row.error && <span className="mt-1 block text-xs text-red-700 dark:text-red-300">{row.error}</span>}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -385,9 +513,9 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
             {importJob?.status === 'completed' ? 'Fermer' : 'Annuler'}
           </button>
 
-          {!importJob && (
+          {!importJob && stage === 'select' && (
             <button
-              onClick={handleStartImport}
+              onClick={handlePreviewImport}
               disabled={!file || isProcessing}
               className={`px-6 py-2.5 rounded-xl font-medium text-sm text-white transition-all shadow-md min-h-[44px] ${
                 !file || isProcessing
@@ -395,8 +523,27 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                   : 'bg-amber-600 hover:bg-amber-700 active:scale-95'
               }`}
             >
-              {isProcessing ? 'Importation...' : "Lancer l'importation"}
+              {isProcessing ? 'Analyse du fichier...' : 'Analyser le fichier'}
             </button>
+          )}
+
+          {!importJob && stage === 'review' && (
+            <>
+              <button
+                onClick={handleBackToFile}
+                disabled={isProcessing}
+                className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors min-h-[44px]"
+              >
+                Retour au fichier
+              </button>
+              <button
+                onClick={handleConfirmImport}
+                disabled={selectedRows.size === 0 || isProcessing}
+                className="px-6 py-2.5 rounded-xl font-medium text-sm text-white transition-all shadow-md min-h-[44px] bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-400 disabled:cursor-not-allowed"
+              >
+                Confirmer et importer ({selectedRows.size})
+              </button>
+            </>
           )}
 
           {importJob?.status === 'completed' && (

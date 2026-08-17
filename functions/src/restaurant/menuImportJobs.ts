@@ -11,7 +11,12 @@ import {
   MenuImportJobRecord,
   MenuItemSource,
   MenuRowZodSchema,
+  ExistingImportedMenuItem,
+  MenuImportPreview,
+  MenuImportPreviewRow,
+  MenuImportPreviewSummary,
   ParsedMenuRow,
+  PreviewMenuFileImportSchema,
   StartMenuFileImportSchema,
   SyncSummary,
 } from './menuImportContracts.js';
@@ -298,6 +303,93 @@ export function normalizeMenuRow(row: Record<string, unknown>, rowNumber: number
   };
 }
 
+function previewRowFromRawRecord(rawRow: Record<string, unknown>, rowNumber: number): Pick<MenuImportPreviewRow, 'rowNumber' | 'name' | 'description' | 'price' | 'category' | 'externalId'> {
+  return {
+    rowNumber,
+    name: String(rawRow.name || rawRow.nom || rawRow.titre || '').trim(),
+    description: stripHtml(String(rawRow.description || rawRow.desc || rawRow.details || '')).slice(0, 180),
+    price: Number.parseFloat(String(rawRow.price || rawRow.prix || rawRow.tarif || '').replace(',', '.')) || 0,
+    category: String(rawRow.category || rawRow.categorie || rawRow.type || '').trim(),
+    externalId: String(rawRow.externalId || rawRow.external_id || rawRow.sku || rawRow.id || '').trim(),
+  };
+}
+
+export function classifyMenuImportRows(
+  type: 'csv' | 'excel',
+  rawRecords: Array<Record<string, unknown>>,
+  existingItems: Map<string, ExistingImportedMenuItem>
+): MenuImportPreview {
+  const rows: MenuImportPreviewRow[] = [];
+  const firstRowByExternalId = new Map<string, number>();
+
+  for (let index = 0; index < rawRecords.length; index += 1) {
+    const rawRow = rawRecords[index];
+    const rowNumber = index + 2;
+    const display = previewRowFromRawRecord(rawRow, rowNumber);
+
+    try {
+      const parsed = normalizeMenuRow(rawRow, rowNumber);
+      const duplicateRowNumber = firstRowByExternalId.get(parsed.externalId);
+      if (duplicateRowNumber !== undefined) {
+        const previousRow = rows.find((row) => row.rowNumber === duplicateRowNumber);
+        if (previousRow) {
+          previousRow.status = 'conflict';
+          previousRow.selectable = false;
+          previousRow.error = `externalId dupliqué avec la ligne ${rowNumber}`;
+        }
+        rows.push({
+          ...parsed,
+          description: parsed.description.slice(0, 180),
+          status: 'conflict',
+          selectable: false,
+          error: `externalId déjà utilisé à la ligne ${duplicateRowNumber}`,
+        });
+        continue;
+      }
+      firstRowByExternalId.set(parsed.externalId, rowNumber);
+
+      const itemId = computeImportedMenuItemId(type, parsed.externalId);
+      const existing = existingItems.get(itemId);
+      if (existing && (existing.source !== type || existing.externalId !== parsed.externalId)) {
+        const sourceLabel = existing.source === 'manual' ? 'manuel' : existing.source || 'inconnue';
+        rows.push({
+          ...parsed,
+          description: parsed.description.slice(0, 180),
+          status: 'conflict',
+          selectable: false,
+          error: `Collision avec une autre source (${sourceLabel})`,
+        });
+        continue;
+      }
+
+      rows.push({
+        ...parsed,
+        description: parsed.description.slice(0, 180),
+        status: existing ? 'update' : 'new',
+        selectable: true,
+      });
+    } catch (error: unknown) {
+      rows.push({
+        ...display,
+        status: 'invalid',
+        selectable: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const summary: MenuImportPreviewSummary = {
+    totalRows: rows.length,
+    importableRows: rows.filter((row) => row.selectable).length,
+    invalidRows: rows.filter((row) => row.status === 'invalid').length,
+    conflictRows: rows.filter((row) => row.status === 'conflict').length,
+    newRows: rows.filter((row) => row.status === 'new').length,
+    updateRows: rows.filter((row) => row.status === 'update').length,
+  };
+
+  return { importId: '', rows, summary };
+}
+
 /**
  * Checks if an error during import worker execution is transient and retryable
  */
@@ -319,6 +411,78 @@ export function isRetryableMenuImportError(error: unknown): boolean {
 }
 
 /**
+ * Callable Function: previewMenuFileImport
+ */
+export const previewMenuFileImport = onCall(
+  { region: 'europe-west1' },
+  async (request: CallableRequest<unknown>) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Authentification requise');
+    }
+
+    const validation = PreviewMenuFileImportSchema.safeParse(request.data);
+    if (!validation.success) {
+      throw new HttpsError('invalid-argument', 'Données de requête invalides', validation.error.format());
+    }
+
+    const { restaurantId, importId, filePath, type } = validation.data;
+    const db = admin.firestore();
+    const restaurantDoc = await db.collection('restaurants').doc(restaurantId).get();
+    if (!restaurantDoc.exists || restaurantDoc.data()?.ownerId !== request.auth.uid) {
+      throw new HttpsError('permission-denied', "Vous n'êtes pas autorisé à prévisualiser ce menu");
+    }
+
+    const expectedExtension = type === 'csv' ? 'csv' : 'xlsx';
+    const expectedPath = `menu-imports/${restaurantId}/${importId}.${expectedExtension}`;
+    if (filePath !== expectedPath) {
+      throw new HttpsError('invalid-argument', `Chemin de fichier inattendu: attendu ${expectedPath}`);
+    }
+
+    const file = admin.storage().bucket().file(filePath);
+    const [exists] = await file.exists();
+    if (!exists) {
+      throw new HttpsError('not-found', "Le fichier téléversé n'a pas été trouvé dans le stockage");
+    }
+
+    const [metadata] = await file.getMetadata();
+    const size = Number.parseInt(String(metadata.size || '0'), 10);
+    if (size <= 0 || size > 15 * 1024 * 1024) {
+      throw new HttpsError('invalid-argument', 'La taille du fichier doit être comprise entre 1 octet et 15 Mo');
+    }
+
+    const [fileBuffer] = await file.download();
+    const rawRecords = type === 'csv' ? parseCsvBuffer(fileBuffer) : await parseXlsxBuffer(fileBuffer);
+    const existingItems = new Map<string, ExistingImportedMenuItem>();
+    const refs = new Map<string, FirebaseFirestore.DocumentReference>();
+
+    for (let index = 0; index < rawRecords.length; index += 1) {
+      try {
+        const parsed = normalizeMenuRow(rawRecords[index], index + 2);
+        const itemId = computeImportedMenuItemId(type, parsed.externalId);
+        refs.set(itemId, db.doc(`restaurants/${restaurantId}/menu_items/${itemId}`));
+      } catch {
+      }
+    }
+
+    const refValues = [...refs.values()];
+    for (let index = 0; index < refValues.length; index += 100) {
+      const snapshots = await db.getAll(...refValues.slice(index, index + 100));
+      snapshots.forEach((snapshot) => {
+        if (snapshot.exists) {
+          const data = snapshot.data() || {};
+          existingItems.set(snapshot.id, { source: data.source, externalId: data.externalId });
+        }
+      });
+    }
+
+    return {
+      ...classifyMenuImportRows(type, rawRecords, existingItems),
+      importId,
+    } satisfies MenuImportPreview;
+  }
+);
+
+/**
  * Callable Function: startMenuFileImport
  */
 export const startMenuFileImport = onCall(
@@ -333,7 +497,7 @@ export const startMenuFileImport = onCall(
       throw new HttpsError('invalid-argument', 'Données de requête invalides', validation.error.format());
     }
 
-    const { restaurantId, importId, filePath, type } = validation.data;
+    const { restaurantId, importId, filePath, type, reviewConfirmed, includedRowNumbers } = validation.data;
     const db = admin.firestore();
 
     // Verify restaurant ownership
@@ -380,6 +544,8 @@ export const startMenuFileImport = onCall(
       processedItems: 0,
       failedItems: 0,
       errors: [],
+      reviewConfirmed,
+      includedRowNumbers,
       attemptCount: 0,
       createdAt: now,
       updatedAt: now,
@@ -474,8 +640,15 @@ export async function executeMenuImportJob(restaurantId: string, importId: strin
       rawRecords = await parseXlsxBuffer(fileBuffer);
     }
 
+    const includedRows = activeJob.includedRowNumbers
+      ? new Set(activeJob.includedRowNumbers)
+      : null;
+    const selectedRecords = rawRecords
+      .map((rawRow, index) => ({ rawRow, rowNumber: index + 2 }))
+      .filter(({ rowNumber }) => !includedRows || includedRows.has(rowNumber));
+
     await jobRef.update({
-      totalItems: rawRecords.length,
+      totalItems: selectedRecords.length,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -484,9 +657,8 @@ export async function executeMenuImportJob(restaurantId: string, importId: strin
     const errors: MenuImportError[] = [];
 
     // Process rows sequentially or in batches with collision protection
-    for (let i = 0; i < rawRecords.length; i++) {
-      const rawRow = rawRecords[i];
-      const rowNum = i + 2;
+    for (let i = 0; i < selectedRecords.length; i++) {
+      const { rawRow, rowNumber: rowNum } = selectedRecords[i];
 
       try {
         const parsed = normalizeMenuRow(rawRow, rowNum);
@@ -560,7 +732,7 @@ export async function executeMenuImportJob(restaurantId: string, importId: strin
       }
 
       // Update progress every PROGRESS_BATCH_SIZE rows
-      if ((i + 1) % PROGRESS_BATCH_SIZE === 0 || i === rawRecords.length - 1) {
+      if ((i + 1) % PROGRESS_BATCH_SIZE === 0 || i === selectedRecords.length - 1) {
         await jobRef.update({
           processedItems: processedCount,
           failedItems: failedCount,

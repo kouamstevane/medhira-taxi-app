@@ -22,6 +22,7 @@ export interface MenuImportJobRecord {
   processedItems: number;
   failedItems: number;
   errors: MenuImportError[];
+  includedRowNumbers?: number[];
   attemptCount?: number;
   leaseExpiresAt?: admin.firestore.Timestamp;
   createdAt: admin.firestore.Timestamp;
@@ -39,6 +40,40 @@ export interface ParsedMenuRow {
   preparationTime?: number;
   isAvailable: boolean;
   sourceUpdatedAt?: Date;
+}
+
+export type MenuImportPreviewStatus = 'new' | 'update' | 'invalid' | 'conflict';
+
+export interface MenuImportPreviewRow {
+  rowNumber: number;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  externalId: string;
+  status: MenuImportPreviewStatus;
+  selectable: boolean;
+  error?: string;
+}
+
+export interface MenuImportPreviewSummary {
+  totalRows: number;
+  importableRows: number;
+  invalidRows: number;
+  conflictRows: number;
+  newRows: number;
+  updateRows: number;
+}
+
+export interface MenuImportPreview {
+  importId: string;
+  rows: MenuImportPreviewRow[];
+  summary: MenuImportPreviewSummary;
+}
+
+export interface ExistingImportedMenuItem {
+  source?: string;
+  externalId?: string;
 }
 
 export interface SyncSummary {
@@ -59,6 +94,15 @@ export const MenuRowZodSchema = z.object({
 });
 
 export const StartMenuFileImportSchema = z.object({
+  restaurantId: z.string().trim().min(1, 'restaurantId requis'),
+  importId: z.string().trim().min(1, 'importId requis'),
+  filePath: z.string().trim().min(1, 'filePath requis'),
+  type: z.enum(['csv', 'excel']),
+  reviewConfirmed: z.literal(true),
+  includedRowNumbers: z.array(z.number().int().min(2)).min(1).max(10000),
+});
+
+export const PreviewMenuFileImportSchema = z.object({
   restaurantId: z.string().trim().min(1, 'restaurantId requis'),
   importId: z.string().trim().min(1, 'importId requis'),
   filePath: z.string().trim().min(1, 'filePath requis'),

@@ -1,9 +1,12 @@
 import {
   downloadSampleCsvTemplate,
   listenToImportProgress,
+  previewMenuFileImport,
+  startMenuFileImport,
   uploadMenuImportFile,
 } from '../menu-import-client.service';
 import { uploadBytesResumable } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
 
 jest.mock('@/config/firebase', () => ({
   db: {},
@@ -116,6 +119,33 @@ describe('menu-import-client.service', () => {
       await rejectedUpload;
       expect(cancel).toHaveBeenCalledTimes(1);
       jest.useRealTimers();
+    });
+  });
+
+  describe('review-first import flow', () => {
+    test('requests a server preview without starting an import job', async () => {
+      const preview = await previewMenuFileImport({
+        restaurantId,
+        importId: 'preview-1',
+        filePath: `menu-imports/${restaurantId}/preview-1.csv`,
+        type: 'csv',
+      });
+
+      expect(preview).toEqual({ importId: 'mock-import-id-123' });
+      expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'previewMenuFileImport');
+    });
+
+    test('starts an import only with explicit review confirmation and selected rows', async () => {
+      await startMenuFileImport({
+        restaurantId,
+        importId: 'preview-1',
+        filePath: `menu-imports/${restaurantId}/preview-1.csv`,
+        type: 'csv',
+        reviewConfirmed: true,
+        includedRowNumbers: [2, 4],
+      });
+
+      expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'startMenuFileImport');
     });
   });
 
