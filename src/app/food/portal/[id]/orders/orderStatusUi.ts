@@ -1,5 +1,23 @@
 import type { FoodOrderStatus } from '@/types/food-delivery';
 
+export const RESTAURANT_ORDER_FILTER_GROUPS = [
+  'all',
+  'to_process',
+  'preparing',
+  'in_delivery',
+  'completed',
+] as const;
+
+export type RestaurantOrderFilterGroup = typeof RESTAURANT_ORDER_FILTER_GROUPS[number];
+
+export const RESTAURANT_ORDER_FILTER_GROUP_LABELS: Record<RestaurantOrderFilterGroup, string> = {
+  all: 'Toutes',
+  to_process: 'À traiter',
+  preparing: 'En préparation',
+  in_delivery: 'En livraison',
+  completed: 'Terminées',
+};
+
 export const RESTAURANT_ORDER_FILTERS = [
   'all',
   'pending_payment',
@@ -28,6 +46,20 @@ export const RESTAURANT_REJECTABLE_STATUSES: FoodOrderStatus[] = [
   'no_driver_available',
 ];
 
+const RESTAURANT_ORDER_FILTER_STATUS_SETS: Record<Exclude<RestaurantOrderFilterGroup, 'all'>, FoodOrderStatus[]> = {
+  to_process: ['pending_payment', 'pending', 'confirmed', 'accepted'],
+  preparing: ['preparing', 'ready'],
+  in_delivery: [
+    'driver_heading_to_restaurant',
+    'driver_arrived_restaurant',
+    'picked_up',
+    'out_for_delivery',
+    'arriving',
+    'delivering',
+  ],
+  completed: ['delivered', 'no_driver_available', 'cancelled', 'cancelled_by_restaurant'],
+};
+
 export const RESTAURANT_ORDER_STATUS_LABELS: Record<FoodOrderStatus | 'all', string> = {
   all: 'Toutes',
   pending_payment: 'Paiement en attente',
@@ -50,6 +82,14 @@ export const RESTAURANT_ORDER_STATUS_LABELS: Record<FoodOrderStatus | 'all', str
 
 export function getRestaurantOrderStatusLabel(status: FoodOrderStatus | 'all'): string {
   return RESTAURANT_ORDER_STATUS_LABELS[status] ?? status;
+}
+
+export function getRestaurantOrderFilterGroupLabel(group: RestaurantOrderFilterGroup): string {
+  return RESTAURANT_ORDER_FILTER_GROUP_LABELS[group];
+}
+
+export function getRestaurantOrderFilterStatusSet(group: RestaurantOrderFilterGroup): FoodOrderStatus[] | null {
+  return group === 'all' ? null : RESTAURANT_ORDER_FILTER_STATUS_SETS[group];
 }
 
 export function getRestaurantOrderFilterClassName(isActive: boolean): string {
