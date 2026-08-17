@@ -60,7 +60,8 @@ export function BottomNav({ items = defaultUserItems, className }: BottomNavProp
       >
         <div className="mx-auto flex max-w-md items-center justify-between">
           {items.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const itemPath = item.href.split('?')[0];
+            const isActive = pathname === itemPath || pathname.startsWith(itemPath + '/');
             return (
               <Link
                 key={item.href}

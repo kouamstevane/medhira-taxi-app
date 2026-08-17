@@ -1,8 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import { BottomNav, adminNavItems, portalNavItems } from '../BottomNav';
 
+let mockPathname = '/admin/drivers';
+
 jest.mock('next/navigation', () => ({
-  usePathname: () => '/admin/drivers',
+  usePathname: () => mockPathname,
 }));
 
 jest.mock('../MaterialIcon', () => ({
@@ -26,5 +28,16 @@ describe('BottomNav', () => {
       icon: 'settings',
       label: 'Paramètres',
     });
+  });
+
+  it.each([
+    ['/food/portal', 'Dashboard'],
+    ['/food/portal/orders', 'Commandes'],
+  ])('highlights %s when the portal link has a restaurant query', (currentPath, activeLabel) => {
+    mockPathname = currentPath;
+
+    render(<BottomNav items={portalNavItems('restaurant-1')} />);
+
+    expect(screen.getByRole('link', { name: new RegExp(activeLabel) })).toHaveClass('text-primary');
   });
 });
