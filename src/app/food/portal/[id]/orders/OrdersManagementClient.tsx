@@ -17,9 +17,13 @@ import type { ConversationContext } from '@/types/conversation';
 import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
 import {
   getRestaurantOrderFilterClassName,
+  getRestaurantOrderFilterGroupLabel,
+  getRestaurantOrderFilterStatusSet,
   getRestaurantOrderStatusLabel,
+  RESTAURANT_ORDER_FILTER_GROUPS,
   RESTAURANT_ORDER_FILTERS,
   RESTAURANT_REJECTABLE_STATUSES,
+  type RestaurantOrderFilterGroup,
 } from './orderStatusUi';
 
 export default function OrdersManagementClient() {
@@ -30,7 +34,8 @@ export default function OrdersManagementClient() {
   const [loading, setLoading] = useState(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [orders, setOrders] = useState<FoodOrder[]>([]);
-  const [filter, setFilter] = useState<FoodOrder['status'] | 'all'>('all');
+  const [filterGroup, setFilterGroup] = useState<RestaurantOrderFilterGroup>('all');
+  const [exactStatus, setExactStatus] = useState<FoodOrder['status'] | ''>('');
   const [currentUserUid, setCurrentUserUid] = useState<string | null>(null);
 
   useEffect(() => {
@@ -92,9 +97,17 @@ export default function OrdersManagementClient() {
     }
   };
 
-  const filteredOrders = filter === 'all'
+  const activeStatuses = exactStatus
+    ? [exactStatus]
+    : getRestaurantOrderFilterStatusSet(filterGroup);
+
+  const filteredOrders = activeStatuses === null
     ? orders
-    : orders.filter(o => o.status === filter);
+    : orders.filter((order) => activeStatuses.includes(order.status));
+
+  const activeFilterLabel = exactStatus
+    ? getRestaurantOrderStatusLabel(exactStatus)
+    : getRestaurantOrderFilterGroupLabel(filterGroup);
 
   if (loading || !id) return (
     <div className="min-h-screen flex items-center justify-center bg-background">
@@ -133,7 +146,6 @@ export default function OrdersManagementClient() {
     <div className="min-h-screen bg-background pb-20">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-      {/* Header */}
       <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => router.push(getRestaurantPortalPath(id))} className="p-2 hover:bg-white/10 rounded-full transition">
@@ -146,185 +158,203 @@ export default function OrdersManagementClient() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto p-4 sm:p-8">
-
-        {/* Filters */}
-        <div
-          role="group"
-          aria-label="Filtrer les commandes par statut"
-          className="-mx-4 mb-8 flex gap-2 overflow-x-auto px-4 pb-2 scrollbar-hide sm:mx-0 sm:px-0"
-        >
-          {RESTAURANT_ORDER_FILTERS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              aria-pressed={filter === s}
-              onClick={() => setFilter(s as FoodOrder['status'] | 'all')}
-              className={getRestaurantOrderFilterClassName(filter === s)}
+      <main className="mx-auto max-w-5xl p-4 sm:p-8">
+        <section className="mb-6 space-y-3" aria-label="Filtrer les commandes par statut">
+          <div role="group" aria-label="Filtrer par étape" className="flex flex-wrap gap-2">
+            {RESTAURANT_ORDER_FILTER_GROUPS.map((group) => (
+              <button
+                key={group}
+                type="button"
+                aria-pressed={!exactStatus && filterGroup === group}
+                onClick={() => {
+                  setExactStatus('');
+                  setFilterGroup(group);
+                }}
+                className={getRestaurantOrderFilterClassName(!exactStatus && filterGroup === group)}
+              >
+                {getRestaurantOrderFilterGroupLabel(group)}
+              </button>
+            ))}
+          </div>
+          <label className="flex w-full items-center gap-3 text-sm text-slate-400 sm:max-w-xs">
+            <span className="shrink-0">Statut précis</span>
+            <select
+              aria-label="Statut précis"
+              value={exactStatus}
+              onChange={(event) => {
+                const status = event.target.value as FoodOrder['status'] | '';
+                setExactStatus(status);
+                if (!status) setFilterGroup('all');
+              }}
+              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
             >
-              {getRestaurantOrderStatusLabel(s)}
-            </button>
-          ))}
-        </div>
+              <option value="">Tous les statuts</option>
+              {RESTAURANT_ORDER_FILTERS.filter((status) => status !== 'all').map((status) => (
+                <option key={status} value={status}>
+                  {getRestaurantOrderStatusLabel(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
 
-        {/* Orders List */}
         <div className="space-y-4">
-          {filteredOrders.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()).map(order => (
-            <div key={order.id} className="glass-card rounded-3xl border border-white/5 overflow-hidden hover:border-white/10 transition">
-              <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5">
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${getStatusColor(order.status)}`}>
-                    <MaterialIcon name={getStatusIcon(order.status)} size="md" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-white">Commande #{order.id.slice(-5).toUpperCase()}</h3>
-                      <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${getStatusColor(order.status)}`}>
-                        {getRestaurantOrderStatusLabel(order.status)}
-                      </span>
+          {[...filteredOrders]
+            .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+            .map((order) => (
+              <article key={order.id} className="glass-card overflow-hidden rounded-2xl border border-white/10 transition hover:border-white/20">
+                <header className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 p-4 sm:p-5">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${getStatusColor(order.status)}`}>
+                      <MaterialIcon name={getStatusIcon(order.status)} size="md" />
                     </div>
-                    <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                      <MaterialIcon name="schedule" size="sm" /> {order.createdAt.toDate().toLocaleString()}
-                    </p>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="break-words font-bold text-white">Commande #{order.id.slice(-5).toUpperCase()}</h3>
+                        <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${getStatusColor(order.status)}`}>
+                          {getRestaurantOrderStatusLabel(order.status)}
+                        </span>
+                      </div>
+                      <p className="mt-1 flex flex-wrap items-center gap-1 text-xs text-slate-500">
+                        <MaterialIcon name="schedule" size="sm" /> {order.createdAt.toDate().toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <p className="text-xs text-slate-500 mb-1">Total</p>
+                  <div className="shrink-0 text-left sm:text-right">
+                    <p className="text-xs text-slate-500">Total</p>
                     <p className="font-bold text-primary">{formatCurrencyWithCode(order.totalOrderPrice)}</p>
                   </div>
-                  <div className="flex gap-2">
-                    {order.status === 'confirmed' && (
-                      <button
-                        onClick={() => updateOrderStatus(order.id, 'accepted')}
-                        className="w-full h-10 bg-primary text-white text-sm font-bold rounded-xl"
-                      >
-                        Accepter la commande (assigner un livreur)
-                      </button>
-                    )}
-                    {order.status === 'accepted' && (
-                      <button
-                        onClick={() => updateOrderStatus(order.id, 'preparing')}
-                        className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-500/20 transition"
-                      >
-                        Préparer
-                      </button>
-                    )}
-                    {order.status === 'preparing' && (
-                      <button
-                        onClick={() => updateOrderStatus(order.id, 'ready')}
-                        className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-500/20 transition"
-                      >
-                        Prêt
-                      </button>
-                    )}
-                    {RESTAURANT_REJECTABLE_STATUSES.includes(order.status) && (
-                      <button
-                        onClick={() => updateOrderStatus(order.id, 'cancelled_by_restaurant')}
-                        className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-2 rounded-xl text-xs font-bold hover:bg-destructive/20 transition"
-                      >
-                        Refuser
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
+                </header>
 
-              <div className="p-5 bg-white/[0.02] flex flex-col sm:flex-row gap-6">
-                <div className="flex-1">
-                  <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-3">Articles</h4>
-                  <div className="space-y-2">
-                    {order.orderItems.map((item, idx) => (
-                      <div key={idx} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
-                        <div className="flex items-center gap-3">
-                          <span className="w-6 h-6 bg-primary/10 text-primary rounded-lg flex items-center justify-center text-xs font-bold">{item.itemQuantity}</span>
-                          <span className="text-sm font-medium text-slate-300">{item.itemName}</span>
-                        </div>
-                        <span className="text-xs font-bold text-slate-400">{formatCurrencyWithCode(item.itemPrice * item.itemQuantity)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="sm:w-64 border-l sm:pl-6 border-white/5">
-                  <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-3">Client</h4>
-                  {order.pickupCode && (
-                    <div className="mb-4 bg-primary/10 border border-primary/20 rounded-xl p-3">
-                      <p className="text-[10px] uppercase font-bold text-primary mb-1">Code retrait</p>
-                      <p className="text-2xl font-mono font-bold text-white tracking-widest">{order.pickupCode}</p>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-white/5 border border-white/10 rounded-full flex items-center justify-center text-slate-400">
-                      <MaterialIcon name="person" size="md" />
-                    </div>
+                {(order.status === 'confirmed' || order.status === 'accepted' || order.status === 'preparing' || RESTAURANT_REJECTABLE_STATUSES.includes(order.status)) && (
+                  <div className="flex flex-col gap-3 border-b border-white/10 bg-primary/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-sm font-bold text-white">Client ID: {order.userId.slice(0, 8)}</p>
-                      <p className="text-xs text-primary hover:underline cursor-pointer">Voir les coordonnées</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Prochaine action</p>
+                      <p className="mt-1 text-sm text-slate-300">Faites progresser cette commande ou refusez-la.</p>
+                    </div>
+                    <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">
+                      {order.status === 'confirmed' && (
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'accepted')}
+                          className="h-10 w-full rounded-xl bg-primary px-4 text-sm font-bold text-white sm:w-auto"
+                        >
+                          Accepter la commande
+                        </button>
+                      )}
+                      {order.status === 'accepted' && (
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'preparing')}
+                          className="h-10 w-full rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 text-sm font-bold text-blue-400 transition hover:bg-blue-500/20 sm:w-auto"
+                        >
+                          Préparer
+                        </button>
+                      )}
+                      {order.status === 'preparing' && (
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'ready')}
+                          className="h-10 w-full rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 text-sm font-bold text-blue-400 transition hover:bg-blue-500/20 sm:w-auto"
+                        >
+                          Marquer comme prête
+                        </button>
+                      )}
+                      {RESTAURANT_REJECTABLE_STATUSES.includes(order.status) && (
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'cancelled_by_restaurant')}
+                          className="h-10 w-full rounded-xl border border-destructive/20 bg-destructive/10 px-4 text-sm font-bold text-destructive transition hover:bg-destructive/20 sm:w-auto"
+                        >
+                          Refuser
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div className="p-3 bg-white/5 rounded-xl border border-white/5 mb-3">
-                    <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Livraison</p>
-                    <p className="text-xs text-slate-300 line-clamp-2">{order.deliveryAddress}</p>
-                  </div>
-                  {currentUserUid && restaurant && (
+                )}
+
+                <div className="grid gap-4 bg-white/[0.02] p-4 md:grid-cols-[minmax(0,1fr)_18rem] md:p-5">
+                  <section aria-labelledby={`order-${order.id}-items`} className="min-w-0">
+                    <h4 id={`order-${order.id}-items`} className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Articles</h4>
                     <div className="space-y-2">
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Contacter le client</p>
-                        <ConversationLauncher
-                          context={{
-                            type: 'food',
-                            entityId: order.id,
-                            participantA: {
-                              uid: currentUserUid,
-                              name: restaurant.name,
-                              role: 'restaurant',
-                            },
-                            participantB: {
-                              uid: order.userId,
-                              name: order.customerName || 'Client',
-                              role: 'client',
-                            },
-                          } as ConversationContext}
-                          currentUserUid={currentUserUid}
-                          variant="icon-label"
-                        />
+                      {order.orderItems.map((item, idx) => (
+                        <div key={idx} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/5 p-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">{item.itemQuantity}</span>
+                            <span className="break-words text-sm font-medium text-slate-300">{item.itemName}</span>
+                          </div>
+                          <span className="shrink-0 text-xs font-bold text-slate-400">{formatCurrencyWithCode(item.itemPrice * item.itemQuantity)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <aside className="space-y-4 border-t border-white/10 pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+                    <section aria-labelledby={`order-${order.id}-client`}>
+                      <h4 id={`order-${order.id}-client`} className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Client</h4>
+                      {order.pickupCode && (
+                        <div className="mb-4 rounded-xl border border-primary/20 bg-primary/10 p-3">
+                          <p className="mb-1 text-[10px] font-bold uppercase text-primary">Code retrait</p>
+                          <p className="font-mono text-2xl font-bold tracking-widest text-white">{order.pickupCode}</p>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-400">
+                          <MaterialIcon name="person" size="md" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-bold text-white">Client ID: {order.userId.slice(0, 8)}</p>
+                          <p className="text-xs text-primary">Voir les coordonnées</p>
+                        </div>
                       </div>
-                      {order.driverId && (
+                    </section>
+
+                    <section aria-labelledby={`order-${order.id}-delivery`}>
+                      <h4 id={`order-${order.id}-delivery`} className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Livraison</h4>
+                      <div className="rounded-xl border border-white/5 bg-white/5 p-3">
+                        <p className="break-words text-xs text-slate-300">{order.deliveryAddress}</p>
+                      </div>
+                    </section>
+
+                    {currentUserUid && restaurant && (
+                      <div className="space-y-3">
                         <div>
-                          <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Contacter le livreur</p>
+                          <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Contacter le client</p>
                           <ConversationLauncher
                             context={{
                               type: 'food',
                               entityId: order.id,
-                              participantA: {
-                                uid: currentUserUid,
-                                name: restaurant.name,
-                                role: 'restaurant',
-                              },
-                              participantB: {
-                                uid: order.driverId,
-                                name: order.driverName || 'Livreur',
-                                role: 'livreur',
-                              },
+                              participantA: { uid: currentUserUid, name: restaurant.name, role: 'restaurant' },
+                              participantB: { uid: order.userId, name: order.customerName || 'Client', role: 'client' },
                             } as ConversationContext}
                             currentUserUid={currentUserUid}
                             variant="icon-label"
                           />
                         </div>
-                      )}
-                    </div>
-                  )}
+                        {order.driverId && (
+                          <div>
+                            <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Contacter le livreur</p>
+                            <ConversationLauncher
+                              context={{
+                                type: 'food',
+                                entityId: order.id,
+                                participantA: { uid: currentUserUid, name: restaurant.name, role: 'restaurant' },
+                                participantB: { uid: order.driverId, name: order.driverName || 'Livreur', role: 'livreur' },
+                              } as ConversationContext}
+                              currentUserUid={currentUserUid}
+                              variant="icon-label"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </aside>
                 </div>
-              </div>
-            </div>
-          ))}
+              </article>
+            ))}
 
           {filteredOrders.length === 0 && (
             <div className="py-20 text-center">
-              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/5">
                 <MaterialIcon name="shopping_bag" size="xl" className="text-slate-500" />
               </div>
-              <p className="text-slate-400">Aucune commande trouvée dans cette catégorie.</p>
+              <p className="text-slate-400">Aucune commande dans « {activeFilterLabel} ».</p>
             </div>
           )}
         </div>

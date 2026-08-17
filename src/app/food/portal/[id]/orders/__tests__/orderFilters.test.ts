@@ -1,11 +1,42 @@
 import {
   getRestaurantOrderFilterClassName,
+  getRestaurantOrderFilterGroupLabel,
+  getRestaurantOrderFilterStatusSet,
+  RESTAURANT_ORDER_FILTER_GROUPS,
   RESTAURANT_ORDER_FILTERS,
   RESTAURANT_ORDER_STATUS_LABELS,
   RESTAURANT_REJECTABLE_STATUSES,
 } from '../orderStatusUi';
 
 describe('restaurant order status UI', () => {
+  test('groups restaurant statuses into compact operational filters', () => {
+    expect(RESTAURANT_ORDER_FILTER_GROUPS).toEqual([
+      'all',
+      'to_process',
+      'preparing',
+      'in_delivery',
+      'completed',
+    ]);
+    expect(getRestaurantOrderFilterGroupLabel('to_process')).toBe('À traiter');
+    expect(getRestaurantOrderFilterStatusSet('completed')).toEqual([
+      'delivered',
+      'no_driver_available',
+      'cancelled',
+      'cancelled_by_restaurant',
+    ]);
+  });
+
+  test('covers every restaurant status once across non-all groups', () => {
+    const groupedStatuses = RESTAURANT_ORDER_FILTER_GROUPS
+      .filter((group) => group !== 'all')
+      .flatMap((group) => getRestaurantOrderFilterStatusSet(group) ?? []);
+
+    expect(new Set(groupedStatuses).size).toBe(groupedStatuses.length);
+    expect(new Set(groupedStatuses)).toEqual(
+      new Set(RESTAURANT_ORDER_FILTERS.filter((status) => status !== 'all')),
+    );
+  });
+
   test('includes every restaurant-actionable status in the filters', () => {
     expect(RESTAURANT_ORDER_FILTERS).toEqual([
       'all',
