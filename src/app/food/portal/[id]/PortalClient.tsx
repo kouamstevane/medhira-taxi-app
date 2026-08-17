@@ -183,7 +183,7 @@ export default function PortalClient() {
 
           {/* Main Actions */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="hidden lg:grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div
                 onClick={() => router.push(getRestaurantPortalPath(id, 'menu'))}
                 className="p-6 glass-card border border-white/5 rounded-3xl hover:scale-[1.02] transition cursor-pointer group"
