@@ -136,4 +136,70 @@ describe('Storage rules', () => {
     // 7. Owner delete succeeds
     await assertSucceeds(deleteObject(ref((ownerStorage as any)._delegate, imagePath)));
   });
+
+  test('menu-imports private upload rules for CSV and XLSX', async () => {
+    const restaurantId = 'food-resto-imports';
+    const ownerId = 'food-resto-owner-imports';
+    const otherUserId = 'other-user-imports';
+
+    await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+      await setDoc(doc(context.firestore(), 'restaurants', restaurantId), {
+        ownerId,
+        status: 'approved',
+      });
+    });
+
+    const ownerStorage = testEnv.authenticatedContext(ownerId).storage();
+    const otherStorage = testEnv.authenticatedContext(otherUserId).storage();
+    const anonStorage = testEnv.unauthenticatedContext().storage();
+
+    const csvBlob = new Blob(['name,price\nBurger,10'], { type: 'text/csv' });
+    const xlsxBlob = new Blob(['mock-xlsx-data'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+    // 1. Owner can upload CSV
+    const csvPath = `menu-imports/${restaurantId}/import-1.csv`;
+    await assertSucceeds(
+      uploadBytes(ref((ownerStorage as any)._delegate, csvPath), csvBlob, {
+        contentType: 'text/csv',
+      })
+    );
+
+    // 2. Owner can upload XLSX
+    const xlsxPath = `menu-imports/${restaurantId}/import-1.xlsx`;
+    await assertSucceeds(
+      uploadBytes(ref((ownerStorage as any)._delegate, xlsxPath), xlsxBlob, {
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+    );
+
+    // 3. .xls is disallowed
+    const xlsBlob = new Blob(['legacy-xls'], { type: 'application/vnd.ms-excel' });
+    const xlsPath = `menu-imports/${restaurantId}/import-1.xls`;
+    await assertFails(
+      uploadBytes(ref((ownerStorage as any)._delegate, xlsPath), xlsBlob, {
+        contentType: 'application/vnd.ms-excel',
+      })
+    );
+
+    // 4. Non-owner cannot upload
+    await assertFails(
+      uploadBytes(ref((otherStorage as any)._delegate, `menu-imports/${restaurantId}/import-2.csv`), csvBlob, {
+        contentType: 'text/csv',
+      })
+    );
+
+    // 5. Unauthenticated cannot upload
+    await assertFails(
+      uploadBytes(ref((anonStorage as any)._delegate, `menu-imports/${restaurantId}/import-3.csv`), csvBlob, {
+        contentType: 'text/csv',
+      })
+    );
+
+    // 6. Direct client read is forbidden (processed by Cloud Functions Admin SDK)
+    await assertFails(getBytes(ref((ownerStorage as any)._delegate, csvPath)));
+
+    // 7. Direct client delete is forbidden
+    const { deleteObject } = require('firebase/storage');
+    await assertFails(deleteObject(ref((ownerStorage as any)._delegate, csvPath)));
+  });
 });

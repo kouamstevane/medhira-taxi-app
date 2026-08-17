@@ -83,8 +83,7 @@ async function getOAuthClient() {
   return _oauthClient;
 }
 
-// Définir le secret de chiffrement depuis Firebase Secret Manager
-const encryptionMasterKey = defineSecret('ENCRYPTION_MASTER_KEY');
+import { encryptionMasterKey } from './config/secrets.js';
 // Définir le secret Resend pour l'envoi d'emails OTP
 const resendApiKey = defineSecret('RESEND_API_KEY');
 const stripeSecretKey = defineSecret('STRIPE_SECRET_KEY');
@@ -382,6 +381,9 @@ export { activateClientRole } from './roles/activateClientRole.js';
 export { notifyAdminNewRestaurant } from './admin/notifyAdminNewRestaurant.js';
 export { cleanupExpiredOnboardingDrafts } from './admin/cleanupExpiredOnboardingDrafts.js';
 export { createStripeConnectAccount } from './stripe/createStripeConnectAccount.js';
+export { startMenuFileImport, processMenuImportWorker } from './restaurant/menuImportJobs.js';
+export { recoverExpiredMenuImportJobs } from './restaurant/recoverExpiredMenuImportJobs.js';
+export { testStoreConnection, saveStoreIntegration, startRestaurantStoreSync } from './restaurant/syncRestaurantStoreApi.js';
 
 /**
  * Cloud Function: cleanupFailedUploads

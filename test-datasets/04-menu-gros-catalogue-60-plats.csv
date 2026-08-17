@@ -1,0 +1,61 @@
+externalId,name,description,price,category,preparationTime,isAvailable
+ASIA-001,Pad Thaï Crevettes Royales,"Nouilles de riz sautées au tamarin, crevettes sauvages, tofu bio, cacahuètes torréfiées et pousses de soja",14.50,Cuisine Asiatique,15,true
+ASIA-002,Pad Thaï Poulet Fermier,"Nouilles de riz sautées, émincé de poulet fermier, œuf bio, citron vert et ciboulette thaï",13.00,Cuisine Asiatique,15,true
+ASIA-003,Bo Bun Bœuf Lemongrass,"Vermicelles de riz tièdes, bœuf mariné à la citronnelle, nems croustillants, menthe et coriandre",13.50,Cuisine Asiatique,12,true
+ASIA-004,Bo Bun Végétarien Nems Tofu,"Vermicelles de riz, nems aux légumes, tofu sauté aux épices douces et cacahuètes",12.50,Cuisine Asiatique,12,true
+ASIA-005,Ramen Tonkotsu Traditionnel,"Bouillon riche mijoté 18h, nouilles fraîches, porc chashu fondant, œuf ajitsuke et algues nori",15.00,Cuisine Asiatique,20,true
+ASIA-006,Ramen Miso Végétal,"Bouillon umami aux champignons shiitake et miso blanc, pousses de bambou et tofu soyeux",13.50,Cuisine Asiatique,18,true
+ASIA-007,Gyozas Poulet Grillés (6 pcs),"Raviolis japonais artisanaux farcis au poulet et légumes, dorés à la poêle et sauce ponzu",6.50,Cuisine Asiatique,8,true
+ASIA-008,Gyozas Légumes Vapeur (6 pcs),"Raviolis vapeur garnis de chou chinois, champignons noirs et carottes au gingembre",6.00,Cuisine Asiatique,8,true
+ASIA-009,Riz Sauté Nasi Goreng,"Riz au jasmin sauté aux épices indonésiennes, petits légumes croquants et œuf au plat",11.50,Cuisine Asiatique,10,true
+ASIA-010,Curry Vert Thaï au Poulet,"Lait de coco onctueux, pâte de curry vert maison, pousses de bambou, basilic thaï et riz jasmin",14.00,Cuisine Asiatique,15,true
+ASIA-011,Curry Massaman Bœuf Mijoté,"Bœuf fondant braisé 4h au lait de coco, pommes de terre, cardamome et cacahuètes",16.00,Cuisine Asiatique,20,true
+ASIA-012,Nems Croustillants au Porc (4 pcs),"Rouleaux frits artisanaux servis avec feuilles de salade fraîche, menthe et sauce nuoc-mâm",6.00,Cuisine Asiatique,7,true
+ASIA-013,Rouleaux de Printemps Crevettes (2 pcs),"Feuilles de riz fraîches, crevettes, vermicelles, menthe, coriandre et sauce cacahuète",5.50,Cuisine Asiatique,5,true
+ASIA-014,Tataki de Thon Rouge Sésame,"Thon rouge mariné au soja et yuzu, snacké à la flamme et croûte de sésame bicolore",16.50,Cuisine Asiatique,10,true
+ASIA-015,Yakitori Bœuf Fromage (4 brochettes),"Brochettes de carpaccio de bœuf enroulées autour d'emmental fondant, sauce teriyaki",8.00,Cuisine Asiatique,10,true
+ITAL-001,Penne all'Arrabbiata Piquante,"Penne de blé dur trafilées au bronze, sauce tomate épicée au piment calabrais et pecorino",11.50,Trattoria Italienne,12,true
+ITAL-002,Spaghetti alla Carbonara Guanciale,"Spaghetti artisanaux, jaune d'œuf bio, guanciale croustillant et pecorino romano AOP (sans crème)",14.50,Trattoria Italienne,15,true
+ITAL-003,Tagliatelle al Ragù Bolognese,"Tagliatelles fraîches aux œufs, mijoté de bœuf et veau pendant 6 heures, parmesan 24 mois",15.00,Trattoria Italienne,15,true
+ITAL-004,Gnocchi Gorgonzola & Noix,"Gnocchis de pommes de terre roulés main, crème de gorgonzola dolce et éclats de noix toastées",13.50,Trattoria Italienne,12,true
+ITAL-005,Lasagne Tradizionale al Forno,"Feuilles de pâtes fraîches, bolognaise fondante, béchamel muscade et gratinée de mozzarella",14.00,Trattoria Italienne,20,true
+ITAL-006,Risotto Crémeux aux Cèpes Sauvages,"Riz Carnaroli crémeux au bouillon de volaille, cèpes poêlés, persil plat et parmesan",16.50,Trattoria Italienne,18,true
+ITAL-007,Carpaccio di Manzo alla Veneziana,"Fines tranches de filet de bœuf, roquette poivrée, câpres marinées, copeaux de parmesan",13.00,Trattoria Italienne,8,true
+ITAL-008,Burrata Pugliese 250g & Focaccia,"Burrata crémeuse des Pouilles, tomates datterino confites, pesto génois et focaccia tiède",14.00,Trattoria Italienne,6,true
+ITAL-009,Calzone Farcito Classico,"Pizza soufflée farcie de sauce tomate, fior di latte, jambon cuit supérieur et champignons",13.50,Trattoria Italienne,15,true
+ITAL-010,Pizza Quattro Formaggi DOP,"Gorgonzola, taleggio, fior di latte et provolone doux sur pâte fermentée 48 heures",14.50,Trattoria Italienne,12,true
+ITAL-011,Pizza Diavola Piquante,"Sauce tomate San Marzano, spianata piccante de Calabre, mozzarella et origan sauvage",13.50,Trattoria Italienne,12,true
+ITAL-012,Pizza Parma & Rucola,"Jambon de Parme 24 mois, roquette sauvage, copeaux de parmesan et mozzarella fior di latte",15.50,Trattoria Italienne,12,true
+ITAL-013,Arancini Siciliani al Ragù (3 pcs),"Boules de riz safranées croustillantes farcies au ragù de viande et petits pois",7.50,Trattoria Italienne,10,true
+ITAL-014,Focaccia Romarin & Fleur de Sel,"Pain traditionnel italien huile d'olive vierge, romarin frais et fleur de sel de Guérande",4.50,Trattoria Italienne,5,true
+ITAL-015,Torta della Nonna aux Pignons,"Tarte toscane à la crème pâtissière citronnée recouverte de pignons de pin dorés",6.50,Trattoria Italienne,5,true
+MEX-001,Burrito Carnitas Porc Confit,"Grande galette de blé, porc confit aux agrumes, riz mexicain, haricots noirs, guacamole et pico de gallo",13.50,Cantina Mexicaine,12,true
+MEX-002,Burrito Tinga de Poulet Épicé,"Poulet effiloché en sauce chipotle fumée, poivrons sautés, fromage monterey jack fondu",12.50,Cantina Mexicaine,12,true
+MEX-003,Burrito Barbacoa Bœuf Épicé,"Bœuf effiloché fondant cuit à l'étouffée, sauce salsa verde, crème fraîche et coriandre",14.00,Cantina Mexicaine,15,true
+MEX-004,Tacos Al Pastor Porc & Ananas (3 pcs),"Tortillas de maïs maison, porc mariné au rocou, ananas rôti caramélisé et oignon rouge",11.50,Cantina Mexicaine,10,true
+MEX-005,Tacos Birria Bœuf & Bouillon (3 pcs),"Tacos dorés à la plancha farcis de bœuf fondant, servis avec leur bouillon de cuisson pimenté",13.50,Cantina Mexicaine,12,true
+MEX-006,Quesadilla Fromage Oaxaca & Chorizo,"Tortilla de blé croustillante garnie de fromage fondu filant et dés de chorizo grillés",9.00,Cantina Mexicaine,8,true
+MEX-007,Quesadilla Végétarienne Champignons & Maïs,"Fromage fondu, champignons sautés à l'ail, maïs doux grillé et sauce jalapeño",8.50,Cantina Mexicaine,8,true
+MEX-008,Nachos Grande Supreme Guacamole,"Chips de maïs croustillantes, fromage coulant, bœuf épicé, jalapeños, guacamole frais et salsa",10.50,Cantina Mexicaine,8,true
+MEX-009,Guacamole Fait Maison & Totopos,"Avocats Hass écrasés minute au mortier, jus de lime, coriandre, tomate et oignons rouges",7.00,Cantina Mexicaine,5,true
+MEX-010,Fajitas Poulet Marinée à Partager,"Poêlée grésillante de poulet, poivrons et oignons, servie avec 4 tortillas chaudes et sauces",16.50,Cantina Mexicaine,18,true
+MEX-011,Enchiladas Rojas au Bœuf (2 pcs),"Tortillas roulées gratinées de sauce tomate pimentée, fromage mexicain et crème aigre",13.00,Cantina Mexicaine,15,true
+MEX-012,Chili con Carne Traditionnel,"Ragoût mijoté de bœuf haché, haricots rouges, maïs, poivrons et épices mexicaines, servi avec riz",12.50,Cantina Mexicaine,12,true
+MEX-013,Jalapeño Poppers Cheddar (5 pcs),"Piments jalapeños farcis au cheddar crémeux, panés et dorés au croustillant parfait",6.50,Cantina Mexicaine,6,true
+MEX-014,Churros Dulce de Leche (4 pcs),"Bâtonnets de churros chauds saupoudrés de cannelle, accompagnés d'un pot de confiture de lait",5.50,Cantina Mexicaine,6,true
+MEX-015,Jarritos Soda Mexicain Mangue,"Véritable soda mexicain artisanal pur sucre de canne au jus de mangue naturelle",3.80,Cantina Mexicaine,2,true
+SWEET-001,Cheesecake New Yorkais Coulis Framboise,"Gâteau au fromage frais crémeux sur base sablée pur beurre, coulis de framboises fraîches",6.50,Pâtisseries & Desserts,5,true
+SWEET-002,Carrot Cake Épices Douces & Glaçage,"Gâteau moelleux aux carottes râpées, noix de pécan toastées et glaçage cream cheese vanillé",6.00,Pâtisseries & Desserts,5,true
+SWEET-003,Brownie Chocolat Noix de Pécan,"Chocolat noir intense 70%, inclusions de noix de pécan caramélisées et pointe de sel de mer",5.00,Pâtisseries & Desserts,5,true
+SWEET-004,Cookie Géant Pépites Trois Chocolats,"Cookie mi-cuit fondant au cœur, pépites de chocolat noir, blanc et lait de Madagascar",3.80,Pâtisseries & Desserts,3,true
+SWEET-005,Millefeuille Vanille Bourbon de Madagascar,"Feuilletage croustillant inversé, crème diplomate légère et onctueuse à la vanille bourbon",7.00,Pâtisseries & Desserts,5,true
+SWEET-006,Tartelette Citron Meringuée Flambée,"Pâte sablée croustillante, crémeux citron jaune酸doux et meringue italienne dorée au chalumeau",6.50,Pâtisseries & Desserts,5,true
+SWEET-007,Paris-Brest Praliné Noisettes du Piémont,"Pâte à chou dorée, craquelin amande et crème mousseline généreuse au praliné maison",7.00,Pâtisseries & Desserts,5,true
+SWEET-008,Éclair Tout Chocolat Guanaja,"Pâte à chou pur beurre, crémeux au chocolat noir 70% et glaçage miroir brillant",4.50,Pâtisseries & Desserts,4,true
+SWEET-009,Muffin Cœur Coulant Nutella,"Muffin ultra moelleux à la vanille avec un généreux cœur fondant de pâte à tartiner",3.50,Pâtisseries & Desserts,3,true
+SWEET-010,Gaufre de Liège Sucre Perlé,"Véritable gaufre belge caramélisée au sucre perlé, croustillante à l'extérieur et moelleuse dedans",4.00,Pâtisseries & Desserts,4,true
+SWEET-011,Crêpe Suzette Grand Marnier,"Crêpe fine flambée au beurre d'orange douce, zestes confits et pointe de liqueur",6.00,Pâtisseries & Desserts,6,true
+SWEET-012,Profiteroles Glace Vanille Sauce Chocolat (3 pcs),"Choux maison garnis de glace artisanale à la vanille, nappés de sauce chocolat chaude",7.50,Pâtisseries & Desserts,6,true
+SWEET-013,Café Gourmand 4 Mignardises,"Espresso bio accompagné de 4 réductions sucrées du chef (macaron, cannelé, chou, financier)",8.00,Pâtisseries & Desserts,5,true
+SWEET-014,Coupe Glacée Dame Blanche Artisanale,"Trois boules de glace vanille bourbon, sauce chocolat noir maison et crème chantilly",7.00,Pâtisseries & Desserts,5,true
+SWEET-015,Smoothie Mangue Passion Ananas,"Fruits tropicaux frais mixés minute sans sucre ajouté avec un trait de jus de pomme bio",5.50,Pâtisseries & Desserts,4,true

@@ -111,6 +111,27 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
     }
 
+    // Fichiers d'import de menu (CSV et XLSX, max 15 Mo, propriétaire du restaurant uniquement)
+    match /menu-imports/{restaurantId}/{fileName} {
+      // Lecture : Non autorisé directement côté client (traité par Cloud Functions Admin SDK)
+      allow read: if false;
+
+      // Création : Propriétaire du restaurant uniquement, .csv ou .xlsx, taille <= 15 MiB
+      allow create: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/restaurants/$(restaurantId))
+        && firestore.get(/databases/(default)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid
+        && (fileName.matches('.*\\.csv$') || fileName.matches('.*\\.xlsx$'))
+        && (request.resource.contentType == 'text/csv'
+            || request.resource.contentType == 'application/vnd.ms-excel'
+            || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            || request.resource.contentType == 'application/octet-stream'
+            || request.resource.contentType == 'text/plain')
+        && request.resource.size <= 15 * 1024 * 1024;
+
+      // Update et Delete : Refusés côté client (suppression assurée par Cloud Functions Admin SDK après traitement)
+      allow update, delete: if false;
+    }
+
     // Bloquer tout le reste par défaut
     match /{allPaths=**} {
       allow read, write: if false;
