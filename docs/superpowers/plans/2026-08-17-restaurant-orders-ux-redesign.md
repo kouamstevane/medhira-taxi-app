@@ -38,7 +38,9 @@ test('groups restaurant statuses into compact operational filters', () => {
     'all', 'to_process', 'preparing', 'in_delivery', 'completed',
   ]);
   expect(getRestaurantOrderFilterGroupLabel('to_process')).toBe('À traiter');
-  expect(getRestaurantOrderFilterStatusSet('completed')).toEqual(['delivered']);
+  expect(getRestaurantOrderFilterStatusSet('completed')).toEqual([
+    'delivered', 'no_driver_available', 'cancelled', 'cancelled_by_restaurant',
+  ]);
 });
 
 test('covers every restaurant status once across non-all groups', () => {
