@@ -15,6 +15,7 @@ input, textarea, select {
   transform: translateZ(0); /* Force GPU rendering pour éviter les sauts */
 }
 
+
 /* Empêcher le redimensionnement du viewport quand le clavier s'ouvre */
 @supports (height: 100dvh) {
   body {

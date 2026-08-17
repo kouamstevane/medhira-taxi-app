@@ -46,6 +46,10 @@ export const adminNavItems: NavItem[] = [
 
 export function BottomNav({ items = defaultUserItems, className }: BottomNavProps) {
   const pathname = usePathname();
+  const activeItemPath = items
+    .map((item) => item.href.split('?')[0])
+    .filter((itemPath) => pathname === itemPath || pathname.startsWith(itemPath + '/'))
+    .sort((a, b) => b.length - a.length)[0];
 
   return (
     <>
@@ -61,7 +65,7 @@ export function BottomNav({ items = defaultUserItems, className }: BottomNavProp
         <div className="mx-auto flex max-w-md items-center justify-between">
           {items.map((item) => {
             const itemPath = item.href.split('?')[0];
-            const isActive = pathname === itemPath || pathname.startsWith(itemPath + '/');
+            const isActive = itemPath === activeItemPath;
             return (
               <Link
                 key={item.href}
@@ -73,7 +77,7 @@ export function BottomNav({ items = defaultUserItems, className }: BottomNavProp
               >
                 <MaterialIcon
                   name={item.icon}
-                  filled={isActive}
+                  filled={false}
                   className="text-[24px]"
                 />
                 <span

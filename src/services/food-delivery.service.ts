@@ -37,9 +37,11 @@ import {
   documentId,
   onSnapshot,
   DocumentData,
+  QueryConstraint,
   QueryDocumentSnapshot,
   Unsubscribe,
-  setDoc
+  setDoc,
+  Timestamp,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApps, getApp } from 'firebase/app';
@@ -65,6 +67,10 @@ import type {
 import { z } from 'zod';
 import { FIRESTORE_COLLECTIONS, FIRESTORE_SUBCOLLECTIONS } from '@/types/firestore-collections';
 import type { RestaurantOpeningHours } from '@/utils/restaurant-hours';
+import {
+  RESTAURANT_ORDER_HISTORY_STATUSES,
+  RESTAURANT_ORDER_OPERATIONAL_STATUSES,
+} from '@/utils/food-order-status';
 
 // ============================================================================
 // CONSTANTES
@@ -762,14 +768,17 @@ export const subscribeRestaurantOrders = (
   onOrders: (orders: FoodOrder[]) => void,
   onError?: (error: Error) => void,
   limitCount: number = 100,
+  statuses?: readonly FoodOrderStatus[],
 ): Unsubscribe => {
   const ordersRef = collection(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS);
-  const q = query(
-    ordersRef,
-    where('restaurantId', '==', restaurantId),
-    orderBy('createdAt', 'desc'),
-    limit(limitCount),
-  );
+  const constraints: QueryConstraint[] = [where('restaurantId', '==', restaurantId)];
+
+  if (statuses && statuses.length > 0) {
+    constraints.push(where('status', 'in', [...statuses]));
+  }
+
+  constraints.push(orderBy('createdAt', 'desc'), limit(limitCount));
+  const q = query(ordersRef, ...constraints);
 
   return onSnapshot(
     q,
@@ -784,6 +793,83 @@ export const subscribeRestaurantOrders = (
       onError?.(error);
     },
   );
+};
+
+export const subscribeRestaurantActiveOrders = (
+  restaurantId: string,
+  onOrders: (orders: FoodOrder[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe => subscribeRestaurantOrders(
+  restaurantId,
+  onOrders,
+  onError,
+  100,
+  RESTAURANT_ORDER_OPERATIONAL_STATUSES,
+);
+
+export interface RestaurantOrderHistoryPage {
+  orders: FoodOrder[];
+  hasMore: boolean;
+  nextCursor: QueryDocumentSnapshot<DocumentData> | null;
+}
+
+export interface RestaurantOrderHistoryPageOptions {
+  dateKey?: string;
+  cursor?: QueryDocumentSnapshot<DocumentData> | null;
+  pageSize?: number;
+}
+
+const parseRestaurantHistoryDate = (dateKey?: string): Date => {
+  if (dateKey && /^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    const [year, month, day] = dateKey.split('-').map(Number);
+    const parsedDate = new Date(year, month - 1, day);
+    if (
+      parsedDate.getFullYear() === year
+      && parsedDate.getMonth() === month - 1
+      && parsedDate.getDate() === day
+    ) {
+      return parsedDate;
+    }
+  }
+
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+};
+
+export const getRestaurantOrderHistoryPage = async (
+  restaurantId: string,
+  options: RestaurantOrderHistoryPageOptions = {},
+): Promise<RestaurantOrderHistoryPage> => {
+  const { dateKey, cursor = null, pageSize = 25 } = options;
+  const boundedPageSize = Math.min(Math.max(pageSize, 1), 50);
+  const dayStart = parseRestaurantHistoryDate(dateKey);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate() + 1);
+  const ordersRef = collection(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS);
+  const constraints: QueryConstraint[] = [
+    where('restaurantId', '==', restaurantId),
+    where('status', 'in', [...RESTAURANT_ORDER_HISTORY_STATUSES]),
+    where('createdAt', '>=', Timestamp.fromDate(dayStart)),
+    where('createdAt', '<', Timestamp.fromDate(dayEnd)),
+    orderBy('createdAt', 'desc'),
+  ];
+
+  if (cursor) {
+    constraints.push(startAfter(cursor));
+  }
+
+  constraints.push(limit(boundedPageSize));
+  const snapshot = await getDocs(query(ordersRef, ...constraints));
+  const orders = snapshot.docs.map((docSnap) => ({
+    ...docSnap.data(),
+    id: docSnap.id,
+  })) as FoodOrder[];
+
+  return {
+    orders,
+    hasMore: orders.length === boundedPageSize,
+    nextCursor: snapshot.docs.at(-1) ?? null,
+  };
 };
 
 /**

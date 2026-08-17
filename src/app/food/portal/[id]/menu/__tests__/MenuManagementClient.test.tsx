@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import MenuManagementClient from '../MenuManagementClient';
 import { onAuthStateChanged } from 'firebase/auth';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
@@ -110,6 +110,15 @@ describe('MenuManagementClient', () => {
     await waitFor(() => {
       expect(getByText(/Importer catalogue/i)).toBeInTheDocument();
       expect(getByText(/Connecter boutique/i)).toBeInTheDocument();
+    });
+  });
+
+  it('uses Lucide icons for the import and store actions', async () => {
+    render(<MenuManagementClient />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Importer catalogue/i }).querySelector('[data-testid="LucideIcon-icon"]')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Connecter boutique/i }).querySelector('[data-testid="LucideIcon-icon"]')).toBeTruthy();
     });
   });
 });

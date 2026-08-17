@@ -180,6 +180,7 @@ export const materialIconMap: Record<string, LucideIcon> = {
   error_outline: CircleAlert,
   event: Clock3,
   event_available: CalendarCheck,
+  expand_less: ChevronUp,
   expand_more: ChevronDown,
   fact_check: ClipboardCheck,
   favorite: Heart,

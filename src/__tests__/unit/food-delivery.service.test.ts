@@ -4,7 +4,9 @@ import {
   calculateDeliveryCost,
   calculateTotalOrderPrice,
   canStartFoodOrderCheckout,
+  getRestaurantOrderHistoryPage,
   shouldShowFoodOrderInCustomerHistory,
+  subscribeRestaurantActiveOrders,
   subscribeRestaurantOrders,
 } from '@/services/food-delivery.service';
 import type { OrderItem } from '@/types/food-delivery';
@@ -153,6 +155,11 @@ describe('FoodDeliveryService — Unit Tests', () => {
   describe('restaurant order live subscription', () => {
     it('exposes a realtime subscription API for restaurant portals', () => {
       expect(typeof subscribeRestaurantOrders).toBe('function');
+    });
+
+    it('exposes a capped active-order subscription and paginated history API', () => {
+      expect(typeof subscribeRestaurantActiveOrders).toBe('function');
+      expect(typeof getRestaurantOrderHistoryPage).toBe('function');
     });
   });
 });

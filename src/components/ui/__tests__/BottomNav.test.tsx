@@ -8,7 +8,9 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('../MaterialIcon', () => ({
-  MaterialIcon: ({ name }: { name: string }) => <span>{name}</span>,
+  MaterialIcon: ({ name, filled }: { name: string; filled?: boolean }) => (
+    <span data-filled={filled ? 'true' : 'false'}>{name}</span>
+  ),
 }));
 
 describe('BottomNav', () => {
@@ -39,5 +41,22 @@ describe('BottomNav', () => {
     render(<BottomNav items={portalNavItems('restaurant-1')} />);
 
     expect(screen.getByRole('link', { name: new RegExp(activeLabel) })).toHaveClass('text-primary');
+  });
+
+  it('highlights only the most specific portal destination on nested routes', () => {
+    mockPathname = '/food/portal/orders/';
+
+    render(<BottomNav items={portalNavItems('restaurant-1')} />);
+
+    expect(screen.getByRole('link', { name: /Dashboard/ })).not.toHaveClass('text-primary');
+    expect(screen.getByRole('link', { name: /Commandes/ })).toHaveClass('text-primary');
+  });
+
+  it('keeps the active navbar icon outlined instead of filling its shape', () => {
+    mockPathname = '/food/portal/orders';
+
+    render(<BottomNav items={portalNavItems('restaurant-1')} />);
+
+    expect(screen.getByText('receipt_long')).toHaveAttribute('data-filled', 'false');
   });
 });

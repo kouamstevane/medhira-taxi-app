@@ -27,6 +27,7 @@ import type { MenuItem } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
+import { FileDown, ShoppingCart } from 'lucide-react';
 
 function getMenuItemSaveErrorMessage(error: unknown): string {
   const code = error && typeof error === 'object' && 'code' in error
@@ -532,16 +533,20 @@ export default function MenuManagementClient() {
           <button
             type="button"
             onClick={() => setIsCsvModalOpen(true)}
+            aria-label="Importer catalogue"
             className="glass-card border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition text-sm min-h-[44px]"
           >
-            <span>📥</span> <span className="hidden sm:inline">Importer catalogue</span>
+            <FileDown size={17} strokeWidth={2.2} aria-hidden="true" />
+            <span className="hidden sm:inline">Importer catalogue</span>
           </button>
           <button
             type="button"
             onClick={() => setIsStoreModalOpen(true)}
+            aria-label="Connecter boutique"
             className="glass-card border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition text-sm min-h-[44px]"
           >
-            <span>🛒</span> <span className="hidden sm:inline">Connecter boutique</span>
+            <ShoppingCart size={17} strokeWidth={2.2} aria-hidden="true" />
+            <span className="hidden sm:inline">Connecter boutique</span>
           </button>
           <button
             onClick={() => handleOpenModal()}

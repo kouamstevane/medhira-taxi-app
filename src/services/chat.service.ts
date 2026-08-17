@@ -47,30 +47,25 @@ export const ensureConversation = async (
   );
 
   const convRef = doc(db, 'conversations', conversationId);
-  const snap = await getDoc(convRef);
 
-  if (!snap.exists()) {
-    const participantsMap: Record<string, ConversationParticipant> = {
-      [context.participantA.uid]: context.participantA,
-      [context.participantB.uid]: context.participantB,
-    };
+  const participantsMap: Record<string, ConversationParticipant> = {
+    [context.participantA.uid]: context.participantA,
+    [context.participantB.uid]: context.participantB,
+  };
 
-    await setDoc(convRef, {
+  await setDoc(
+    convRef,
+    {
       type: context.type,
       entityId: context.entityId,
       participants: participantsMap,
-      participantUids: [context.participantA.uid, context.participantB.uid],
-      lastMessage: null,
-      lastMessageAt: null,
-      unreadCount: {
-        [context.participantA.uid]: 0,
-        [context.participantB.uid]: 0,
-      },
+      participantUids: [context.participantA.uid, context.participantB.uid].sort(),
       createdAt: serverTimestamp(),
-    });
+    },
+    { merge: true }
+  );
 
-    logger.info('Conversation créée', { conversationId, type: context.type });
-  }
+  logger.info('Conversation assurée', { conversationId, type: context.type });
 
   return conversationId;
 };

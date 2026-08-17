@@ -18,6 +18,7 @@ const applicationIconNames = [
   'door_front',
   'drive_eta',
   'event_available',
+  'expand_less',
   'favorite',
   'filter_list',
   'folder_open',

@@ -238,7 +238,7 @@ export function ChatModal(props: ChatModalProps) {
     : 'Conversation active';
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center sm:justify-center">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-end sm:items-center sm:justify-center">
       {toast && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-4 py-2 rounded-lg shadow-lg text-sm font-medium transition-all animate-[fadeIn_0.2s_ease-in] ${
           toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'

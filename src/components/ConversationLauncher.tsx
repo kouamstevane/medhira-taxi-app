@@ -70,11 +70,13 @@ export function ConversationLauncher({
   const baseBtn =
     variant === 'fab'
       ? 'w-14 h-14 rounded-full shadow-lg flex items-center justify-center'
-      : 'w-10 h-10 rounded-full flex items-center justify-center';
+      : variant === 'icon-label'
+        ? 'inline-flex min-w-[5.5rem] h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold whitespace-nowrap'
+        : 'w-9 h-9 rounded-full flex items-center justify-center';
 
   return (
     <>
-      <div className={`flex items-center space-x-2 ${className}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${className}`}>
         {showChatButton && (
           <button
             type="button"
@@ -84,7 +86,7 @@ export function ConversationLauncher({
           >
             <MaterialIcon name="chat" size="md" />
             {variant === 'icon-label' && (
-              <span className="ml-2 text-sm">Message</span>
+              <span className="text-xs font-semibold">Message</span>
             )}
           </button>
         )}
@@ -106,7 +108,7 @@ export function ConversationLauncher({
               <MaterialIcon name="phone" size="md" />
             )}
             {variant === 'icon-label' && !calling && (
-              <span className="ml-2 text-sm">Appeler</span>
+              <span className="text-xs font-semibold">Appeler</span>
             )}
           </button>
         )}
