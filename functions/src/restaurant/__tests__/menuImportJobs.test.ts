@@ -93,6 +93,26 @@ describe('Menu Import Pure Helpers & Parsers', () => {
       expect(result.isAvailable).toBe(true);
     });
 
+    test('normalizes the French catalogue headers used by the semicolon dataset', () => {
+      const rawRow = {
+        Reference: 'TACO-001',
+        Intitule: 'Tacos 2 Viandes',
+        Description: 'Tenders croustillants et sauce fromagère',
+        Tarif: '9,50',
+        Rayon: 'Street Food',
+        Duree: '10',
+        Actif: 'oui',
+      };
+
+      const result = normalizeMenuRow(rawRow, 2);
+      expect(result.name).toBe('Tacos 2 Viandes');
+      expect(result.price).toBe(9.5);
+      expect(result.category).toBe('Street Food');
+      expect(result.externalId).toBe('TACO-001');
+      expect(result.preparationTime).toBe(10);
+      expect(result.isAvailable).toBe(true);
+    });
+
     test('throws error with row number if externalId is missing', () => {
       const rawRow = {
         name: 'Burger',

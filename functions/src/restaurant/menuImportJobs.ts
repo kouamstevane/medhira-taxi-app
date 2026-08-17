@@ -203,17 +203,17 @@ export function normalizeMenuRow(row: Record<string, unknown>, rowNumber: number
     const normKey = normalizeHeaderKey(key);
     const strVal = val !== undefined && val !== null ? String(val).trim() : '';
 
-    if (['name', 'nom', 'titre', 'plat', 'item'].includes(normKey)) {
+    if (['name', 'nom', 'titre', 'plat', 'item', 'intitule', 'libelle'].includes(normKey)) {
       name = strVal;
     } else if (['description', 'desc', 'details', 'detail'].includes(normKey)) {
       description = strVal;
     } else if (['price', 'prix', 'tarif', 'amount', 'prixunitaire'].includes(normKey)) {
       rawPrice = strVal;
-    } else if (['category', 'categorie', 'type', 'section'].includes(normKey)) {
+    } else if (['category', 'categorie', 'type', 'section', 'rayon'].includes(normKey)) {
       category = strVal;
     } else if (['externalid', 'external_id', 'idexterne', 'sku', 'id', 'reference', 'ref'].includes(normKey)) {
       externalId = strVal;
-    } else if (['preparationtime', 'preparation_time', 'tempspreparation', 'tempsdepreparation', 'preptime'].includes(normKey)) {
+    } else if (['preparationtime', 'preparation_time', 'tempspreparation', 'tempsdepreparation', 'preptime', 'duree', 'dureepreparation'].includes(normKey)) {
       rawPrepTime = strVal;
     } else if (['isavailable', 'is_available', 'disponible', 'disponibilite', 'actif', 'active'].includes(normKey)) {
       rawAvailable = strVal;
