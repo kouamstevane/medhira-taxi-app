@@ -1069,8 +1069,12 @@ export default function MenuManagementClient() {
         isOpen={isCsvModalOpen}
         onClose={() => setIsCsvModalOpen(false)}
         restaurantId={restaurantId}
-        onImportCompleted={() => {
-          showSuccess('Catalogue importé avec succès !');
+        onImportCompleted={(job) => {
+          if (job.failedItems > 0) {
+            showError(`Import terminé avec ${job.failedItems} anomalie(s). Consultez les détails.`);
+          } else {
+            showSuccess('Catalogue importé avec succès !');
+          }
           if (id) loadFirstPage(id);
         }}
       />

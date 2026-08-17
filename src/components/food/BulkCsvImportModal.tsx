@@ -14,7 +14,7 @@ interface BulkCsvImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   restaurantId: string;
-  onImportCompleted?: () => void;
+  onImportCompleted?: (job: MenuImportJob) => void;
 }
 
 export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
@@ -75,6 +75,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
   const handleFileChange = (selectedFile: File | null) => {
     setErrorMessage(null);
     setImportJob(null);
+    setShowErrorsList(false);
     if (!selectedFile) {
       setFile(null);
       return;
@@ -130,8 +131,9 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           setImportJob(job);
           if (job.status === 'completed') {
             setIsProcessing(false);
+            setShowErrorsList(job.failedItems > 0);
             if (onImportCompleted) {
-              onImportCompleted();
+              onImportCompleted(job);
             }
           } else if (job.status === 'failed') {
             setIsProcessing(false);
@@ -155,6 +157,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
   const processed = importJob?.processedItems || 0;
   const failed = importJob?.failedItems || 0;
   const progressPercent = total > 0 ? Math.min(100, Math.round(((processed + failed) / total) * 100)) : 0;
+  const completedWithErrors = importJob?.status === 'completed' && failed > 0;
 
   return (
     <div
@@ -289,8 +292,10 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                 </span>
                 <span
                   className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                    importJob.status === 'completed'
+                    importJob.status === 'completed' && !completedWithErrors
                       ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                      : completedWithErrors
+                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                       : importJob.status === 'failed'
                       ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
                       : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 animate-pulse'
@@ -298,7 +303,8 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                 >
                   {importJob.status === 'pending' && 'En attente...'}
                   {importJob.status === 'processing' && 'Traitement en cours...'}
-                  {importJob.status === 'completed' && 'Terminé avec succès'}
+                  {importJob.status === 'completed' && !completedWithErrors && 'Terminé avec succès'}
+                  {completedWithErrors && 'Terminé avec anomalies'}
                   {importJob.status === 'failed' && 'Échec'}
                 </span>
               </div>
@@ -307,8 +313,10 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
               <div className="w-full h-2.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
                 <div
                   className={`h-full transition-all duration-500 rounded-full ${
-                    importJob.status === 'completed'
+                    importJob.status === 'completed' && !completedWithErrors
                       ? 'bg-emerald-500'
+                      : completedWithErrors
+                      ? 'bg-amber-500'
                       : importJob.status === 'failed'
                       ? 'bg-red-500'
                       : 'bg-amber-500'

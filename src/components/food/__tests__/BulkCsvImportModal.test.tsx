@@ -77,8 +77,53 @@ describe('BulkCsvImportModal', () => {
         expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
       expect(MenuImportClientService.startMenuFileImport).toHaveBeenCalled();
-      expect(defaultProps.onImportCompleted).toHaveBeenCalled();
+      expect(defaultProps.onImportCompleted).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'completed', failedItems: 0 })
+      );
     });
+  });
+
+  test('reports completed imports with row errors without treating them as fully successful', async () => {
+    (MenuImportClientService.uploadMenuImportFile as jest.Mock).mockResolvedValueOnce({
+      importId: 'imp-789',
+      filePath: 'menu-imports/resto-123/imp-789.csv',
+      type: 'csv',
+    });
+    (MenuImportClientService.startMenuFileImport as jest.Mock).mockResolvedValueOnce({
+      importId: 'imp-789',
+    });
+    const job = {
+      id: 'imp-789',
+      restaurantId: 'resto-123',
+      type: 'csv' as const,
+      status: 'completed' as const,
+      totalItems: 3,
+      processedItems: 2,
+      failedItems: 1,
+      errors: [{ row: 3, message: 'Le prix doit être positif' }],
+    };
+    (MenuImportClientService.listenToImportProgress as jest.Mock).mockImplementation(
+      (restaurantId, importId, onJob) => {
+        onJob({ ...job, restaurantId, id: importId });
+        return jest.fn();
+      }
+    );
+
+    render(<BulkCsvImportModal {...defaultProps} />);
+    fireEvent.change(screen.getByTestId('file-input'), {
+      target: { files: [new File(['name,price\nPizza,-1'], 'menu.csv', { type: 'text/csv' })] },
+    });
+    fireEvent.click(screen.getByText("Lancer l'importation"));
+
+    await waitFor(() => {
+      expect(defaultProps.onImportCompleted).toHaveBeenCalledWith(
+        expect.objectContaining({ failedItems: 1 })
+      );
+      expect(screen.getByText('Terminé avec anomalies')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/1 anomalie\(s\) détectée\(s\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Le prix doit être positif/)).toBeInTheDocument();
   });
 
   test('aborts an in-flight upload when Annuler is clicked', async () => {
