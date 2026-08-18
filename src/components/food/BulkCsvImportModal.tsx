@@ -61,6 +61,17 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [isOpen]);
+
   const handleClose = () => {
     if (isProcessing && importJob?.status === 'processing') {
       const confirm = window.confirm(

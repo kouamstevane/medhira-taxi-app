@@ -28,6 +28,12 @@ describe('BulkCsvImportModal', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  test('locks background scrolling while the modal is open', () => {
+    render(<BulkCsvImportModal {...defaultProps} />);
+
+    expect(document.body.style.overflow).toBe('hidden');
+  });
+
   test('triggers downloadSampleCsvTemplate on template button click', () => {
     render(<BulkCsvImportModal {...defaultProps} />);
     const downloadBtn = screen.getByText(/Télécharger le modèle CSV/i);
