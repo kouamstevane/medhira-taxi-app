@@ -15,7 +15,7 @@ describe('MenuItemImage Component', () => {
     render(<MenuItemImage alt="Pizza" />);
     expect(screen.queryByTestId('next-image')).toBeNull();
     expect(screen.queryByRole('img')).toBeNull();
-    expect(screen.getByTestId('menu-item-image-placeholder')).toBeInTheDocument();
+    expect(screen.getByTestId('menu-item-image-placeholder')).toHaveClass('absolute', 'inset-0');
   });
 
   it('renders next/image for production Firebase Storage URL', () => {

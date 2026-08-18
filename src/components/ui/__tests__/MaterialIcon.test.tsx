@@ -55,6 +55,8 @@ const applicationIconNames = [
   'trending_up',
   'upload_file',
   'viewport',
+  'visibility',
+  'visibility_off',
   'volume_off',
   'volume_up',
   'weekend',

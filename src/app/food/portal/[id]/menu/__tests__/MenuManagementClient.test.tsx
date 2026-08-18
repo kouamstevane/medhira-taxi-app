@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MenuManagementClient from '../MenuManagementClient';
 import { onAuthStateChanged } from 'firebase/auth';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
@@ -8,6 +8,7 @@ const replace = jest.fn();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace }),
+  usePathname: () => '/food/portal/menu/',
   useSearchParams: () => new URLSearchParams('restaurantId=restaurant-1'),
 }));
 
@@ -24,6 +25,7 @@ jest.mock('@/services/food-delivery.service', () => ({
     getRestaurantById: jest.fn(),
     getRestaurantMenuFull: jest.fn(),
     getRestaurantMenuPaginated: jest.fn(),
+    deleteMenuItem: jest.fn(),
   },
 }));
 
@@ -69,6 +71,7 @@ jest.mock('next/image', () => ({
 const mockOnAuthStateChanged = onAuthStateChanged as jest.Mock;
 const mockGetRestaurantById = FoodDeliveryService.getRestaurantById as jest.Mock;
 const mockGetRestaurantMenuPaginated = FoodDeliveryService.getRestaurantMenuPaginated as jest.Mock;
+const mockDeleteMenuItem = FoodDeliveryService.deleteMenuItem as jest.Mock;
 
 describe('MenuManagementClient', () => {
   beforeEach(() => {
@@ -94,16 +97,17 @@ describe('MenuManagementClient', () => {
       totalCount: 2,
       availableCount: 2,
     });
+    mockDeleteMenuItem.mockResolvedValue(undefined);
   });
 
   it('does not redirect an authenticated restaurant owner to login and loads paginated items', async () => {
     render(<MenuManagementClient />);
 
     await waitFor(() => expect(mockGetRestaurantById).toHaveBeenCalledWith('restaurant-1'));
-    expect(mockGetRestaurantMenuPaginated).toHaveBeenCalledWith(
+    await waitFor(() => expect(mockGetRestaurantMenuPaginated).toHaveBeenCalledWith(
       'restaurant-1',
       expect.objectContaining({ pageSize: 50, cursor: null }),
-    );
+    ));
 
     expect(push).not.toHaveBeenCalledWith('/login');
     expect(replace).not.toHaveBeenCalledWith('/login');
@@ -125,5 +129,23 @@ describe('MenuManagementClient', () => {
       expect(screen.getByRole('button', { name: /Importer catalogue/i }).querySelector('[data-testid="LucideIcon-icon"]')).toBeTruthy();
       expect(screen.getByRole('button', { name: /Connecter boutique/i }).querySelector('[data-testid="LucideIcon-icon"]')).toBeTruthy();
     });
+  });
+
+  it('requires confirmation before deleting a menu item', async () => {
+    render(<MenuManagementClient />);
+
+    const deleteButton = await screen.findByRole('button', { name: 'Supprimer Burger Maison' });
+    fireEvent.click(deleteButton);
+
+    expect(screen.getByRole('dialog', { name: 'Supprimer un plat ?' })).toBeInTheDocument();
+    expect(mockDeleteMenuItem).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(screen.queryByRole('dialog', { name: 'Supprimer un plat ?' })).not.toBeInTheDocument();
+
+    fireEvent.click(deleteButton);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer la suppression' }));
+
+    await waitFor(() => expect(mockDeleteMenuItem).toHaveBeenCalledWith('restaurant-1', '1'));
   });
 });

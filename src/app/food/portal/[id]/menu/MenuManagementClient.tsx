@@ -28,6 +28,7 @@ import { FileDown, ShoppingCart } from 'lucide-react';
 import { MenuCatalogToolbar } from '@/components/restaurant/menu/MenuCatalogToolbar';
 import { MenuCatalogTable } from '@/components/restaurant/menu/MenuCatalogTable';
 import { MenuCatalogPagination } from '@/components/restaurant/menu/MenuCatalogPagination';
+import { DeleteMenuItemDialog } from '@/components/restaurant/menu/DeleteMenuItemDialog';
 import { useMenuCatalogQuery } from '@/hooks/useMenuCatalogQuery';
 
 function getMenuItemSaveErrorMessage(error: unknown): string {
@@ -58,6 +59,8 @@ export default function MenuManagementClient() {
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<MenuItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const catalog = useMenuCatalogQuery(restaurantId);
   const menuItems = catalog.items;
@@ -428,11 +431,17 @@ export default function MenuManagementClient() {
     }
   };
 
-  const deleteItem = async (itemId: string) => {
-    if (!confirm("Supprimer cet article ?")) return;
+  const requestDeleteItem = (itemId: string) => {
+    const item = menuItems.find((menuItem) => menuItem.id === itemId);
+    if (item) setPendingDeleteItem(item);
+  };
+
+  const confirmDeleteItem = async () => {
+    if (!pendingDeleteItem || isDeleting) return;
+    const itemToDelete = pendingDeleteItem;
+    setIsDeleting(true);
     try {
-      const itemToDelete = menuItems.find((i) => i.id === itemId);
-      await FoodDeliveryService.deleteMenuItem(restaurantId, itemId);
+      await FoodDeliveryService.deleteMenuItem(restaurantId, itemToDelete.id);
 
       let imageCleanupFailed = false;
       if (itemToDelete?.imageStoragePath) {
@@ -445,6 +454,7 @@ export default function MenuManagementClient() {
       }
 
       await catalog.reload();
+      setPendingDeleteItem(null);
       showSuccess(
         imageCleanupFailed
           ? "Article supprimé, mais son image n’a pas pu être supprimée"
@@ -452,6 +462,8 @@ export default function MenuManagementClient() {
       );
     } catch {
       showError("Erreur de suppression");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -466,6 +478,17 @@ export default function MenuManagementClient() {
   return (
     <div className="min-h-screen bg-background pb-20">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      {pendingDeleteItem && (
+        <DeleteMenuItemDialog
+          item={pendingDeleteItem}
+          onCancel={() => {
+            if (!isDeleting) setPendingDeleteItem(null);
+          }}
+          onConfirm={() => void confirmDeleteItem()}
+          isProcessing={isDeleting}
+        />
+      )}
 
       {/* Header */}
       <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
@@ -550,7 +573,7 @@ export default function MenuManagementClient() {
             onSelectAll={catalog.toggleAllVisible}
             onToggleAvailability={toggleAvailability}
             onEdit={handleOpenModal}
-            onDelete={deleteItem}
+            onDelete={requestDeleteItem}
           />
         )}
 

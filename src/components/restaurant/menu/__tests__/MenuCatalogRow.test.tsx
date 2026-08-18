@@ -15,6 +15,7 @@ describe('MenuCatalogRow', () => {
     expect(screen.getByText('Burger Maison')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Modifier Burger Maison' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Supprimer Burger Maison' })).toBeInTheDocument();
+    expect(screen.getByTestId('menu-image').parentElement).toHaveClass('relative', 'size-12', 'overflow-hidden');
   });
 
   it('toggles selection through the checkbox', () => {

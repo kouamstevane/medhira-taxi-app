@@ -25,7 +25,7 @@ export function MenuCatalogRow({ item, selected, onSelect, onToggleAvailability,
         className="size-4 accent-primary"
       />
       <div className="flex min-w-0 items-center gap-3">
-        <div className="size-12 shrink-0 overflow-hidden rounded-xl bg-white/[0.06]">
+        <div className="relative size-12 shrink-0 overflow-hidden rounded-xl bg-white/[0.06]">
           <MenuItemImage src={item.imageUrl} imageStoragePath={item.imageStoragePath} alt="" sizes="48px" />
         </div>
         <div className="min-w-0">

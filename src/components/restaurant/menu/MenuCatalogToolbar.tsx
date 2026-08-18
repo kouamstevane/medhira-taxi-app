@@ -39,13 +39,13 @@ export function MenuCatalogToolbar({
   const hasFilters = Boolean(search || category || availability !== 'all' || sort !== 'category');
 
   return (
-    <section aria-label="Recherche et filtres du menu" className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+    <section aria-label="Recherche et filtres du menu" className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <p className="text-sm font-semibold text-white">
             {formatCount(totalCount, 'plat', 'plats')}
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="truncate text-xs text-slate-500">
             {formatCount(availableCount, 'disponible', 'disponibles')}
           </p>
         </div>
@@ -64,15 +64,26 @@ export function MenuCatalogToolbar({
         <span className="sr-only">Rechercher un plat</span>
         <MaterialIcon name="search" size="md" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
         <input
-          type="search"
+          type="text"
+          inputMode="search"
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Rechercher un plat, une catégorie ou une référence..."
-          className="glass-input min-h-12 w-full rounded-2xl pl-12 pr-4 text-sm text-white outline-none transition focus:ring-2 focus:ring-primary/30"
+          className="glass-input min-h-12 w-full rounded-2xl pl-12 pr-14 text-sm text-white outline-none transition focus:ring-2 focus:ring-primary/30"
         />
+        {search && (
+          <button
+            type="button"
+            onClick={() => onSearchChange('')}
+            aria-label="Effacer la recherche"
+            className="absolute right-2 top-1/2 flex size-12 -translate-y-1/2 items-center justify-center rounded-xl text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <MaterialIcon name="close" size="lg" />
+          </button>
+        )}
       </label>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide" role="group" aria-label="Disponibilité">
+      <div className="flex gap-2 overflow-x-auto px-1 pb-0.5 scrollbar-hide" role="group" aria-label="Disponibilité">
         {([
           ['all', 'Tous'],
           ['available', 'Disponibles'],
