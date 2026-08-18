@@ -13,6 +13,7 @@ export interface MenuImportUploadResult {
   importId: string;
   filePath: string;
   type: 'csv' | 'excel';
+  fileFormat: 'csv' | 'zip' | 'xlsx';
 }
 
 export interface MenuImportUploadOptions {
@@ -25,6 +26,7 @@ export interface MenuImportFileInput {
   importId: string;
   filePath: string;
   type: 'csv' | 'excel';
+  fileFormat: 'csv' | 'zip' | 'xlsx';
 }
 
 export interface StartMenuImportInput extends MenuImportFileInput {
@@ -33,6 +35,12 @@ export interface StartMenuImportInput extends MenuImportFileInput {
 }
 
 export const MENU_IMPORT_UPLOAD_TIMEOUT_MS = 30_000;
+
+export const MENU_IMPORT_TEMPLATE_URLS = {
+  csv: '/templates/menu-import/menu-template.csv',
+  zip: '/templates/menu-import/menu-template.zip',
+  xlsx: '/templates/menu-import/menu-template.xlsx',
+} as const;
 
 export interface StoreConnectionParams {
   restaurantId: string;
@@ -60,10 +68,11 @@ export async function uploadMenuImportFile(
 
   const fileName = file.name.toLowerCase();
   const isCsv = fileName.endsWith('.csv');
+  const isZip = fileName.endsWith('.zip');
   const isXlsx = fileName.endsWith('.xlsx');
 
-  if (!isCsv && !isXlsx) {
-    throw new Error('Format de fichier non supporté. Veuillez sélectionner un fichier .csv ou .xlsx');
+  if (!isCsv && !isZip && !isXlsx) {
+    throw new Error('Format de fichier non supporté. Veuillez sélectionner un fichier .csv, .zip ou .xlsx');
   }
 
   const maxSizeBytes = 15 * 1024 * 1024; // 15 MiB
@@ -74,8 +83,9 @@ export async function uploadMenuImportFile(
     throw new Error('Le fichier sélectionné est vide');
   }
 
-  const type: 'csv' | 'excel' = isCsv ? 'csv' : 'excel';
-  const extension: 'csv' | 'xlsx' = isCsv ? 'csv' : 'xlsx';
+  const type: 'csv' | 'excel' = isXlsx ? 'excel' : 'csv';
+  const extension: 'csv' | 'zip' | 'xlsx' = isCsv ? 'csv' : isZip ? 'zip' : 'xlsx';
+  const fileFormat: 'csv' | 'zip' | 'xlsx' = extension;
 
   // Generate deterministic unique doc ID
   const importId = doc(
@@ -88,6 +98,8 @@ export async function uploadMenuImportFile(
 
   const contentType = isCsv
     ? 'text/csv'
+    : isZip
+    ? 'application/zip'
     : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
   return new Promise((resolve, reject) => {
@@ -149,6 +161,7 @@ export async function uploadMenuImportFile(
           importId,
           filePath,
           type,
+          fileFormat,
         });
       }
     );
@@ -171,6 +184,7 @@ export async function startMenuFileImport(
     importId: input.importId,
     filePath: input.filePath,
     type: input.type,
+    fileFormat: input.fileFormat,
     reviewConfirmed: input.reviewConfirmed,
     includedRowNumbers: input.includedRowNumbers,
   });
@@ -210,6 +224,7 @@ export function listenToImportProgress(
           id: docSnap.id,
           restaurantId,
           type: data.type,
+          fileFormat: data.fileFormat,
           status: data.status,
           filePath: data.filePath,
           integrationId: data.integrationId,
@@ -239,13 +254,13 @@ export function listenToImportProgress(
  * Downloads a sample CSV template with UTF-8 BOM and correct headers
  */
 export function downloadSampleCsvTemplate(): void {
-  const headers = 'externalId,name,description,price,category,preparationTime,isAvailable\n';
+  const headers = 'externalId,name,description,price,category,isAvailable,image\n';
   const sample1 =
-    'SKU-001,Burger Classic,"Steak haché du boucher, sauce maison, cheddar affiné",12.50,Plats,15,true\n';
+    'SKU-001,Burger Classic,"Steak haché du boucher, sauce maison, cheddar affiné",12.50,Plats,true,SKU-001.jpg\n';
   const sample2 =
-    'SKU-002,Tiramisu Traditionnel,"Dessert italien artisanal au mascarpone et café",6.00,Desserts,5,true\n';
+    'SKU-002,Tiramisu Traditionnel,"Dessert italien artisanal au mascarpone et café",6.00,Desserts,true,SKU-002.jpg\n';
   const sample3 =
-    'SKU-003,Limonade Maison,"Citron pressé frais, menthe et eau pétillante",4.50,Boissons,5,true\n';
+    'SKU-003,Limonade Maison,"Citron pressé frais, menthe et eau pétillante",4.50,Boissons,true,SKU-003.jpg\n';
 
   const csvContent = '\uFEFF' + headers + sample1 + sample2 + sample3;
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

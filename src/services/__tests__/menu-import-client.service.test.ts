@@ -1,4 +1,5 @@
 import {
+  MENU_IMPORT_TEMPLATE_URLS,
   downloadSampleCsvTemplate,
   listenToImportProgress,
   previewMenuFileImport,
@@ -102,6 +103,16 @@ describe('menu-import-client.service', () => {
       expect(result.filePath).toBe(`menu-imports/${restaurantId}/mock-import-id-123.xlsx`);
     });
 
+    test('successfully uploads ZIP catalogue with correct type and path', async () => {
+      const validZip = new File(['zip-binary'], 'catalogue.zip', { type: 'application/zip' });
+
+      const result = await uploadMenuImportFile(restaurantId, validZip);
+
+      expect(result.importId).toBe('mock-import-id-123');
+      expect(result.type).toBe('csv');
+      expect(result.filePath).toBe(`menu-imports/${restaurantId}/mock-import-id-123.zip`);
+    });
+
     test('cancels and rejects when the upload exceeds its timeout', async () => {
       jest.useFakeTimers();
       const cancel = jest.fn();
@@ -129,6 +140,7 @@ describe('menu-import-client.service', () => {
         importId: 'preview-1',
         filePath: `menu-imports/${restaurantId}/preview-1.csv`,
         type: 'csv',
+        fileFormat: 'csv',
       });
 
       expect(preview).toEqual({ importId: 'mock-import-id-123' });
@@ -141,6 +153,7 @@ describe('menu-import-client.service', () => {
         importId: 'preview-1',
         filePath: `menu-imports/${restaurantId}/preview-1.csv`,
         type: 'csv',
+        fileFormat: 'csv',
         reviewConfirmed: true,
         includedRowNumbers: [2, 4],
       });
@@ -177,6 +190,14 @@ describe('menu-import-client.service', () => {
 
       expect(appendSpy).toHaveBeenCalled();
       expect(removeSpy).toHaveBeenCalled();
+    });
+
+    test('exposes one downloadable template per supported import format', () => {
+      expect(MENU_IMPORT_TEMPLATE_URLS).toEqual({
+        csv: '/templates/menu-import/menu-template.csv',
+        zip: '/templates/menu-import/menu-template.zip',
+        xlsx: '/templates/menu-import/menu-template.xlsx',
+      });
     });
   });
 });
