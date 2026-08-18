@@ -20,7 +20,21 @@ describe('BulkCsvImportModal', () => {
   test('renders modal when isOpen is true', () => {
     render(<BulkCsvImportModal {...defaultProps} />);
     expect(screen.getByText('Importer un catalogue de plats')).toBeInTheDocument();
-    expect(screen.getByText(/Télécharger le modèle CSV/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Besoin d’un modèle ?' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Modèle CSV/i })).toHaveAttribute(
+      'href',
+      '/templates/menu-import/menu-template.csv'
+    );
+    expect(screen.getByRole('link', { name: /Modèle ZIP/i })).toHaveAttribute(
+      'href',
+      '/templates/menu-import/menu-template.zip'
+    );
+    expect(screen.getByRole('link', { name: /Modèle Excel/i })).toHaveAttribute(
+      'href',
+      '/templates/menu-import/menu-template.xlsx'
+    );
+    expect(screen.getByText(/Obligatoires :/i)).toBeInTheDocument();
+    expect(screen.queryByText(/preparationTime/i)).not.toBeInTheDocument();
   });
 
   test('does not render when isOpen is false', () => {
@@ -34,11 +48,9 @@ describe('BulkCsvImportModal', () => {
     expect(document.body.style.overflow).toBe('hidden');
   });
 
-  test('triggers downloadSampleCsvTemplate on template button click', () => {
+  test('does not trigger a service call when a template link is rendered', () => {
     render(<BulkCsvImportModal {...defaultProps} />);
-    const downloadBtn = screen.getByText(/Télécharger le modèle CSV/i);
-    fireEvent.click(downloadBtn);
-    expect(MenuImportClientService.downloadSampleCsvTemplate).toHaveBeenCalledTimes(1);
+    expect(MenuImportClientService.downloadSampleCsvTemplate).not.toHaveBeenCalled();
   });
 
   test('shows a review before starting the import job', async () => {
@@ -46,6 +58,7 @@ describe('BulkCsvImportModal', () => {
       importId: 'imp-456',
       filePath: 'menu-imports/resto-123/imp-456.csv',
       type: 'csv',
+      fileFormat: 'csv',
     });
     (MenuImportClientService.previewMenuFileImport as jest.Mock).mockResolvedValueOnce({
       importId: 'imp-456',
@@ -57,6 +70,7 @@ describe('BulkCsvImportModal', () => {
           price: 12,
           category: 'Plats',
           externalId: 'pizza-1',
+          hasImage: false,
           status: 'new',
           selectable: true,
         },
@@ -100,6 +114,7 @@ describe('BulkCsvImportModal', () => {
         importId: 'imp-456',
         filePath: 'menu-imports/resto-123/imp-456.csv',
         type: 'csv',
+        fileFormat: 'csv',
       });
       expect(screen.getByText('Récapitulatif de l’importation')).toBeInTheDocument();
       expect(screen.getByText('Pizza')).toBeInTheDocument();
@@ -114,6 +129,7 @@ describe('BulkCsvImportModal', () => {
         importId: 'imp-456',
         filePath: 'menu-imports/resto-123/imp-456.csv',
         type: 'csv',
+        fileFormat: 'csv',
         reviewConfirmed: true,
         includedRowNumbers: [2],
       });
@@ -128,6 +144,7 @@ describe('BulkCsvImportModal', () => {
       importId: 'imp-789',
       filePath: 'menu-imports/resto-123/imp-789.csv',
       type: 'csv',
+      fileFormat: 'csv',
     });
     (MenuImportClientService.previewMenuFileImport as jest.Mock).mockResolvedValueOnce({
       importId: 'imp-789',
@@ -139,6 +156,7 @@ describe('BulkCsvImportModal', () => {
           price: 0,
           category: 'Tests',
           externalId: 'bad-1',
+          hasImage: false,
           status: 'invalid',
           selectable: false,
           error: 'Prix invalide',

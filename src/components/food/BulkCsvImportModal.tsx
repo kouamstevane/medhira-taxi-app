@@ -2,7 +2,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  downloadSampleCsvTemplate,
+  AlertTriangle,
+  Archive,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  FolderOpen,
+  Info,
+  X,
+} from 'lucide-react';
+import {
+  MENU_IMPORT_TEMPLATE_URLS,
   listenToImportProgress,
   previewMenuFileImport,
   startMenuFileImport,
@@ -107,8 +117,8 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
     }
 
     const name = selectedFile.name.toLowerCase();
-    if (!name.endsWith('.csv') && !name.endsWith('.xlsx')) {
-      setErrorMessage('Format de fichier non supporté. Veuillez choisir un fichier .csv ou .xlsx');
+    if (!name.endsWith('.csv') && !name.endsWith('.zip') && !name.endsWith('.xlsx')) {
+      setErrorMessage('Format de fichier non supporté. Veuillez choisir un fichier .csv, .zip ou .xlsx');
       setFile(null);
       return;
     }
@@ -241,7 +251,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
               Importer un catalogue de plats
             </h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-              Fichiers acceptés : CSV et Excel XLSX (jusqu'à 10 000 plats, max 15 Mo)
+              Fichiers acceptés : CSV, ZIP et Excel XLSX (jusqu'à 10 000 plats, max 15 Mo)
             </p>
           </div>
           <button
@@ -249,25 +259,68 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
             aria-label="Fermer"
             className="p-2 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
-            ✕
+            <X aria-hidden="true" className="size-5" />
           </button>
         </div>
 
         {/* Body */}
         <div className="py-6 space-y-6 flex-1">
-          {/* Action Bar / Template Download */}
-          <div className="flex items-center justify-between p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
-            <div className="text-sm text-amber-900 dark:text-amber-200">
-              <span className="font-semibold">Modèle prêt à l'emploi</span> : Utilisez notre fichier CSV formaté avec les
-              colonnes requises.
+          {/* Compact template guidance */}
+          <div
+            aria-labelledby="import-template-help"
+            className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-800/40"
+          >
+            <div className="flex items-start gap-2.5">
+              <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <div className="min-w-0 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
+                <h3 id="import-template-help" className="font-semibold text-zinc-900 dark:text-zinc-100">
+                  Besoin d’un modèle ?
+                </h3>
+                <p>
+                  Obligatoires : <code>externalId</code>, <code>name</code>, <code>price</code>. Optionnelles :{' '}
+                  <code>description</code>, <code>category</code>, <code>isAvailable</code>, <code>image</code>.
+                </p>
+                <p className="mt-0.5">CSV sans images · ZIP avec images locales · Excel avec images intégrées.</p>
+              </div>
             </div>
-            <button
-              onClick={downloadSampleCsvTemplate}
-              type="button"
-              className="px-4 py-2 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition-colors min-h-[44px] flex items-center gap-2 whitespace-nowrap"
-            >
-              📥 Télécharger le modèle CSV
-            </button>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <a
+                href={MENU_IMPORT_TEMPLATE_URLS.csv}
+                download="modele-import-menu.csv"
+                className="flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-xs transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+              >
+                <FileText aria-hidden="true" className="size-4 shrink-0 text-emerald-600" />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100">Modèle CSV</span>
+                  <span className="block text-zinc-500 dark:text-zinc-400">Sans images</span>
+                </span>
+                <Download aria-hidden="true" className="size-3.5 shrink-0 text-zinc-400" />
+              </a>
+              <a
+                href={MENU_IMPORT_TEMPLATE_URLS.zip}
+                download="modele-import-menu.zip"
+                className="flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-xs transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+              >
+                <Archive aria-hidden="true" className="size-4 shrink-0 text-blue-600" />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100">Modèle ZIP</span>
+                  <span className="block text-zinc-500 dark:text-zinc-400">CSV + images</span>
+                </span>
+                <Download aria-hidden="true" className="size-3.5 shrink-0 text-zinc-400" />
+              </a>
+              <a
+                href={MENU_IMPORT_TEMPLATE_URLS.xlsx}
+                download="modele-import-menu.xlsx"
+                className="flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-xs transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+              >
+                <FileSpreadsheet aria-hidden="true" className="size-4 shrink-0 text-violet-600" />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100">Modèle Excel</span>
+                  <span className="block text-zinc-500 dark:text-zinc-400">Images intégrées</span>
+                </span>
+                <Download aria-hidden="true" className="size-3.5 shrink-0 text-zinc-400" />
+              </a>
+            </div>
           </div>
 
           {/* File Dropzone */}
@@ -298,13 +351,17 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                 ref={fileInputRef}
                 data-testid="file-input"
                 type="file"
-                accept=".csv, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/csv"
+                accept=".csv, .zip, .xlsx, application/zip, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/csv"
                 onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
                 className="hidden"
               />
 
               <div className="flex flex-col items-center justify-center space-y-2">
-                <span className="text-4xl">{file ? '📄' : '📁'}</span>
+                {file ? (
+                  <FileText aria-hidden="true" className="size-9 text-emerald-600" />
+                ) : (
+                  <FolderOpen aria-hidden="true" className="size-9 text-zinc-500" />
+                )}
                 {file ? (
                   <div>
                     <p className="font-medium text-zinc-900 dark:text-zinc-100">{file.name}</p>
@@ -315,7 +372,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                 ) : (
                   <div>
                     <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                      Glissez votre fichier CSV ou XLSX ici
+                      Glissez votre fichier CSV, ZIP ou XLSX ici
                     </p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                       ou cliquez pour sélectionner depuis votre ordinateur
@@ -329,7 +386,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           {/* Error Banner */}
           {errorMessage && (
             <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300 flex items-start gap-3">
-              <span>⚠️</span>
+              <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
               <div className="flex-1">{errorMessage}</div>
             </div>
           )}
