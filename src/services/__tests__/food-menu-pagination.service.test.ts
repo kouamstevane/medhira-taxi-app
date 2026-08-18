@@ -1,5 +1,5 @@
 import { getRestaurantMenuPaginated } from '../food-delivery.service';
-import { getDocs, query, limit, startAfter, orderBy, collection, documentId } from 'firebase/firestore';
+import { getDocs, getCountFromServer, query, limit, startAfter, orderBy, collection, documentId } from 'firebase/firestore';
 
 jest.mock('@/config/firebase', () => ({
   db: {},
@@ -9,6 +9,7 @@ jest.mock('firebase/firestore', () => ({
   collection: jest.fn(() => ({})),
   doc: jest.fn(() => ({ id: 'mock-id' })),
   getDocs: jest.fn(),
+  getCountFromServer: jest.fn(() => Promise.resolve({ data: () => ({ count: 0 }) })),
   query: jest.fn((...args) => ({ args })),
   where: jest.fn(),
   orderBy: jest.fn((field, dir) => ({ field, dir })),
@@ -19,6 +20,7 @@ jest.mock('firebase/firestore', () => ({
   setDoc: jest.fn(),
   serverTimestamp: jest.fn(),
   deleteField: jest.fn(),
+  writeBatch: jest.fn(() => ({ update: jest.fn(), commit: jest.fn(() => Promise.resolve()) })),
 }));
 
 describe('food-menu-pagination service', () => {
@@ -26,6 +28,7 @@ describe('food-menu-pagination service', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (getCountFromServer as jest.Mock).mockResolvedValue({ data: () => ({ count: 0 }) });
   });
 
   test('loads first page with default limit 50 ordered by category and documentId', async () => {

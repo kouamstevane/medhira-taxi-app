@@ -26,6 +26,7 @@ import {
   doc, 
   getDoc, 
   getDocs, 
+  getCountFromServer,
   query, 
   where, 
   orderBy, 
@@ -41,11 +42,13 @@ import {
   QueryDocumentSnapshot,
   Unsubscribe,
   setDoc,
+  writeBatch,
   Timestamp,
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApps, getApp } from 'firebase/app';
 import { db } from '@/config/firebase';
+import { buildMenuSearchPrefixes, normalizeMenuSearchValue, type MenuCatalogQuery, type MenuCatalogSort } from '@/utils/menu-catalog';
 
 export type MenuImageUpdate =
   | { state: 'image-none' }
@@ -377,6 +380,8 @@ export interface MenuPage {
   items: MenuItem[];
   lastDoc: QueryDocumentSnapshot<DocumentData> | null;
   hasMore: boolean;
+  totalCount: number;
+  availableCount: number;
 }
 
 /**
@@ -389,10 +394,15 @@ export interface MenuPage {
  */
 export const getRestaurantMenuPaginated = async (
   restaurantId: string,
-  pageSize: number = 50,
-  cursor: QueryDocumentSnapshot<DocumentData> | null = null
+  optionsOrPageSize: MenuCatalogQuery | number = {},
+  legacyCursor: QueryDocumentSnapshot<DocumentData> | null = null,
 ): Promise<MenuPage> => {
   try {
+    const options: MenuCatalogQuery = typeof optionsOrPageSize === 'number'
+      ? { pageSize: optionsOrPageSize, cursor: legacyCursor }
+      : optionsOrPageSize;
+    const pageSize = options.pageSize ?? 50;
+    const cursor = options.cursor ?? null;
     const boundedPageSize = Math.max(1, Math.min(pageSize, 100));
     const menuRef = collection(
       db,
@@ -401,22 +411,33 @@ export const getRestaurantMenuPaginated = async (
       FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS
     );
 
-    let q = query(
-      menuRef,
-      orderBy('category', 'asc'),
-      orderBy(documentId(), 'asc'),
-      limit(boundedPageSize)
-    );
-
-    if (cursor) {
-      q = query(
-        menuRef,
-        orderBy('category', 'asc'),
-        orderBy(documentId(), 'asc'),
-        startAfter(cursor),
-        limit(boundedPageSize)
-      );
+    const catalogConstraints: QueryConstraint[] = [];
+    const normalizedSearch = normalizeMenuSearchValue(options.search ?? '');
+    if (normalizedSearch.length >= 2) {
+      catalogConstraints.push(where('searchPrefixes', 'array-contains', normalizedSearch));
     }
+    if (options.category) {
+      catalogConstraints.push(where('category', '==', options.category));
+    }
+    const constraints = [...catalogConstraints];
+    if (options.availability === 'available') {
+      constraints.push(where('isAvailable', '==', true));
+    } else if (options.availability === 'unavailable') {
+      constraints.push(where('isAvailable', '==', false));
+    }
+
+    const sort: MenuCatalogSort = options.sort ?? 'category';
+    const orderField = sort === 'price-asc' || sort === 'price-desc' ? 'price' : sort;
+    const orderDirection = sort === 'price-desc' ? 'desc' : 'asc';
+    constraints.push(orderBy(orderField, orderDirection), orderBy(documentId(), 'asc'));
+
+    const countSnapshot = await getCountFromServer(query(menuRef, ...constraints));
+    const availableCountSnapshot = await getCountFromServer(
+      query(menuRef, ...catalogConstraints, where('isAvailable', '==', true)),
+    );
+    const pageConstraints = [...constraints, limit(boundedPageSize)];
+    if (cursor) pageConstraints.push(startAfter(cursor));
+    const q = query(menuRef, ...pageConstraints);
 
     const querySnapshot = await getDocs(q);
     const docs = querySnapshot.docs;
@@ -432,11 +453,34 @@ export const getRestaurantMenuPaginated = async (
       items,
       lastDoc,
       hasMore,
+      totalCount: countSnapshot.data().count,
+      availableCount: availableCountSnapshot.data().count,
     };
   } catch (error) {
     console.error('[food-delivery.service] getRestaurantMenuPaginated failed:', error);
     throw error;
   }
+};
+
+export const bulkUpdateMenuItemAvailability = async (
+  restaurantId: string,
+  itemIds: string[],
+  isAvailable: boolean,
+): Promise<void> => {
+  if (itemIds.length === 0) return;
+
+  const batch = writeBatch(db);
+  for (const itemId of itemIds) {
+    const itemRef = doc(
+      db,
+      FIRESTORE_COLLECTIONS.RESTAURANTS,
+      restaurantId,
+      FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+      itemId,
+    );
+    batch.update(itemRef, { isAvailable, updatedAt: serverTimestamp() });
+  }
+  await batch.commit();
 };
 
 export const createRestaurant = async (
@@ -1120,6 +1164,11 @@ export const FoodDeliveryService = {
         description: itemData.description ?? '',
         price: itemData.price ?? 0,
         category: itemData.category ?? 'Plats',
+        searchPrefixes: buildMenuSearchPrefixes([
+          itemData.name ?? '',
+          itemData.category ?? 'Plats',
+          itemData.externalId ?? '',
+        ]),
         isAvailable: itemData.isAvailable ?? true,
         updatedAt: serverTimestamp(),
       };

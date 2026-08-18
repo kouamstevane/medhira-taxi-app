@@ -91,6 +91,8 @@ describe('MenuManagementClient', () => {
       ],
       lastDoc: null,
       hasMore: false,
+      totalCount: 2,
+      availableCount: 2,
     });
   });
 
@@ -98,7 +100,10 @@ describe('MenuManagementClient', () => {
     render(<MenuManagementClient />);
 
     await waitFor(() => expect(mockGetRestaurantById).toHaveBeenCalledWith('restaurant-1'));
-    expect(mockGetRestaurantMenuPaginated).toHaveBeenCalledWith('restaurant-1', 50, null);
+    expect(mockGetRestaurantMenuPaginated).toHaveBeenCalledWith(
+      'restaurant-1',
+      expect.objectContaining({ pageSize: 50, cursor: null }),
+    );
 
     expect(push).not.toHaveBeenCalledWith('/login');
     expect(replace).not.toHaveBeenCalledWith('/login');

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { FoodDeliveryService, type MenuImageUpdate } from '@/services/food-delivery.service';
+import { FoodDeliveryService, bulkUpdateMenuItemAvailability, type MenuImageUpdate } from '@/services/food-delivery.service';
 import {
   uploadMenuImage,
   deleteMenuImage,
@@ -13,21 +13,22 @@ import {
 } from '@/services/menu-image-storage.service';
 import { imageCompressionService, type CompressionResult } from '@/services/image-compression.service';
 import { useMenuImageUrlValidation } from '@/hooks/useMenuImageUrlValidation';
-import { MenuItemImage } from '@/components/food/MenuItemImage';
 import { BulkCsvImportModal } from '@/components/food/BulkCsvImportModal';
 import { StoreConnectorModal } from '@/components/food/StoreConnectorModal';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ERROR_MESSAGES, CURRENCY_CODE } from '@/utils/constants';
 import type { MenuItem } from '@/types';
-import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
 import { FileDown, ShoppingCart } from 'lucide-react';
+import { MenuCatalogToolbar } from '@/components/restaurant/menu/MenuCatalogToolbar';
+import { MenuCatalogTable } from '@/components/restaurant/menu/MenuCatalogTable';
+import { MenuCatalogPagination } from '@/components/restaurant/menu/MenuCatalogPagination';
+import { useMenuCatalogQuery } from '@/hooks/useMenuCatalogQuery';
 
 function getMenuItemSaveErrorMessage(error: unknown): string {
   const code = error && typeof error === 'object' && 'code' in error
@@ -52,19 +53,14 @@ export default function MenuManagementClient() {
   const restaurantId = id ?? '';
   const { showError, showSuccess, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  // Pagination states
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const catalog = useMenuCatalogQuery(restaurantId);
+  const menuItems = catalog.items;
 
   // Dynamic Categories calculation
   const dynamicCategories = useMemo(() => {
@@ -77,17 +73,6 @@ export default function MenuManagementClient() {
     );
     const combined = Array.from(new Set([...DEFAULT_CATEGORIES, ...fromItems]));
     return combined.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-  }, [menuItems]);
-
-  const activeCategories = useMemo(() => {
-    const present = Array.from(
-      new Set(
-        menuItems
-          .map((item) => item.category?.trim())
-          .filter(Boolean) as string[]
-      )
-    );
-    return present.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
   }, [menuItems]);
 
   // Validation hook pour URLs externes
@@ -124,37 +109,6 @@ export default function MenuManagementClient() {
     isAvailable: true,
   });
 
-  const loadFirstPage = useCallback(async (restId: string) => {
-    setLoading(true);
-    try {
-      const page = await FoodDeliveryService.getRestaurantMenuPaginated(restId, 50, null);
-      setMenuItems(page.items);
-      setLastDoc(page.lastDoc);
-      setHasMore(page.hasMore);
-    } catch (error) {
-      console.error('Error loading menu:', error);
-      showError('Erreur lors du chargement du menu');
-    } finally {
-      setLoading(false);
-    }
-  }, [showError]);
-
-  const handleLoadMore = async () => {
-    if (!id || !lastDoc || isLoadingMore) return;
-    setIsLoadingMore(true);
-    try {
-      const page = await FoodDeliveryService.getRestaurantMenuPaginated(id, 50, lastDoc);
-      setMenuItems((prev) => [...prev, ...page.items]);
-      setLastDoc(page.lastDoc);
-      setHasMore(page.hasMore);
-    } catch (error) {
-      console.error('Error loading more items:', error);
-      showError('Erreur lors du chargement des plats suivants');
-    } finally {
-      setIsLoadingMore(false);
-    }
-  };
-
   useEffect(() => {
     if (!id) {
       router.replace('/restaurant/dashboard');
@@ -175,7 +129,7 @@ export default function MenuManagementClient() {
           router.push('/dashboard');
           return;
         }
-        await loadFirstPage(id);
+        setLoading(false);
       } catch (error) {
         console.error('Error loading restaurant:', error);
         showError('Erreur lors du chargement du restaurant');
@@ -184,7 +138,7 @@ export default function MenuManagementClient() {
     });
 
     return () => unsubscribe();
-  }, [id, router, showError, loadFirstPage]);
+  }, [id, router, showError]);
 
   // Révoquer l'ObjectURL de prévisualisation au démontage ou remplacement
   const cleanupPreview = useCallback(() => {
@@ -442,7 +396,7 @@ export default function MenuManagementClient() {
       );
 
       // Rafraîchir le menu
-      await loadFirstPage(restaurantId);
+      await catalog.reload();
       resetImageEditorState();
       setIsModalOpen(false);
     } catch (error) {
@@ -468,9 +422,7 @@ export default function MenuManagementClient() {
   const toggleAvailability = async (item: MenuItem) => {
     try {
       await FoodDeliveryService.updateMenuItemAvailability(restaurantId, item.id, !item.isAvailable);
-      setMenuItems((prev) =>
-        prev.map((i) => (i.id === item.id ? { ...i, isAvailable: !i.isAvailable } : i))
-      );
+      await catalog.reload();
     } catch {
       showError("Erreur de mise à jour");
     }
@@ -492,7 +444,7 @@ export default function MenuManagementClient() {
         }
       }
 
-      setMenuItems((prev) => prev.filter((i) => i.id !== itemId));
+      await catalog.reload();
       showSuccess(
         imageCleanupFailed
           ? "Article supprimé, mais son image n’a pas pu être supprimée"
@@ -526,7 +478,7 @@ export default function MenuManagementClient() {
           </button>
           <div>
             <h1 className="text-xl font-bold text-white">Gestion du Menu</h1>
-            <p className="text-xs text-slate-500">{menuItems.length} articles au total</p>
+            <p className="text-xs text-slate-500">{catalog.totalCount.toLocaleString('fr-FR')} articles au total</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -557,121 +509,52 @@ export default function MenuManagementClient() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto p-4 sm:p-8">
-        {/* Search & Filters */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-8">
-          <div className="relative flex-1">
-            <MaterialIcon
-              name="search"
-              size="md"
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              type="text"
-              placeholder="Rechercher un plat..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 glass-input rounded-2xl focus:ring-2 focus:ring-primary/20 outline-none text-white"
-            />
+      <main className="mx-auto max-w-6xl space-y-6 p-4 pb-24 sm:p-8 sm:pb-28">
+        <MenuCatalogToolbar
+          search={catalog.search}
+          category={catalog.category}
+          categories={dynamicCategories}
+          availability={catalog.availability}
+          sort={catalog.sort}
+          totalCount={catalog.totalCount}
+          availableCount={catalog.availableCount}
+          onSearchChange={catalog.setSearch}
+          onCategoryChange={catalog.setCategory}
+          onAvailabilityChange={catalog.setAvailability}
+          onSortChange={catalog.setSort}
+          onClearFilters={catalog.clearFilters}
+        />
+
+        {catalog.error && (
+          <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-200">
+            <span>{catalog.error}</span>
+            <button type="button" onClick={catalog.retry} className="min-h-11 rounded-xl px-3 font-bold hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Réessayer</button>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {(activeCategories.length > 0 ? activeCategories : DEFAULT_CATEGORIES).map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory((prev) => (prev === cat ? null : cat))}
-                className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition min-h-[44px] ${
-                  selectedCategory === cat
-                    ? 'bg-primary text-white font-bold'
-                    : 'glass-card border border-white/5 text-slate-300 hover:bg-white/10'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+        )}
+
+        {catalog.selectedIds.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/[0.08] p-3">
+            <span className="text-xs font-bold text-primary">{catalog.selectedIds.length} plat(s) sélectionné(s)</span>
+            <div className="flex gap-2">
+              <button type="button" onClick={async () => { await bulkUpdateMenuItemAvailability(restaurantId, catalog.selectedIds, true); await catalog.reload(); }} className="min-h-11 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-emerald-300">Rendre disponibles</button>
+              <button type="button" onClick={async () => { await bulkUpdateMenuItemAvailability(restaurantId, catalog.selectedIds, false); await catalog.reload(); }} className="min-h-11 rounded-xl bg-white/[0.06] px-3 text-xs font-bold text-slate-300">Masquer</button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Categories & Items Grid */}
-        {(activeCategories.length > 0 ? activeCategories : dynamicCategories).map((category) => {
-          if (selectedCategory && selectedCategory !== category) return null;
-          const categoryItems = menuItems.filter(
-            (i) =>
-              i.category === category &&
-              (!searchQuery || i.name.toLowerCase().includes(searchQuery.toLowerCase()))
-          );
-          if (categoryItems.length === 0) return null;
+        {!catalog.isLoading && catalog.items.length > 0 && (
+          <MenuCatalogTable
+            items={catalog.items}
+            selectedIds={catalog.selectedIds}
+            onSelect={catalog.toggleSelected}
+            onSelectAll={catalog.toggleAllVisible}
+            onToggleAvailability={toggleAvailability}
+            onEdit={handleOpenModal}
+            onDelete={deleteItem}
+          />
+        )}
 
-          return (
-            <section key={category} className="mb-10">
-              <h3 className="text-lg font-bold text-white mb-5 flex items-center gap-3">
-                <span className="w-1 h-6 bg-primary rounded-full"></span>
-                {category}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {categoryItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`glass-card p-4 rounded-3xl border border-white/5 flex gap-4 group hover:border-white/10 transition ${
-                      !item.isAvailable ? 'opacity-60' : ''
-                    }`}
-                  >
-                    <div className="w-24 h-24 bg-white/10 rounded-2xl overflow-hidden relative shrink-0">
-                      <MenuItemImage
-                        src={item.imageUrl}
-                        imageStoragePath={item.imageStoragePath}
-                        alt={item.name}
-                        sizes="96px"
-                      />
-                    </div>
-                    <div className="flex-1 flex flex-col justify-between py-1">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-bold text-white group-hover:text-primary transition">
-                            {item.name}
-                          </h4>
-                          <span className="font-bold text-primary">
-                            {formatCurrencyWithCode(item.price)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                          {item.description}
-                        </p>
-                      </div>
-                      <div className="flex items-center justify-between mt-4">
-                        <button
-                          onClick={() => toggleAvailability(item)}
-                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full transition ${
-                            item.isAvailable
-                              ? 'bg-green-500/10 text-green-400'
-                              : 'bg-white/5 text-slate-500'
-                          }`}
-                        >
-                          {item.isAvailable ? 'Disponible' : 'Indisponible'}
-                        </button>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleOpenModal(item)}
-                            className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition"
-                          >
-                            <MaterialIcon name="edit" size="sm" />
-                          </button>
-                          <button
-                            onClick={() => deleteItem(item.id)}
-                            className="p-2 text-slate-500 hover:text-destructive hover:bg-destructive/10 rounded-lg transition"
-                          >
-                            <MaterialIcon name="delete" size="sm" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-
-        {menuItems.length === 0 && (
+        {!catalog.isLoading && catalog.items.length === 0 && catalog.totalCount === 0 && (
           <div className="py-20 text-center">
             <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
               <MaterialIcon name="menu_book" size="xl" className="text-slate-500" />
@@ -689,28 +572,26 @@ export default function MenuManagementClient() {
           </div>
         )}
 
-        {/* Bouton Charger plus pour pagination Firestore */}
-        {hasMore && (
-          <div className="flex justify-center pt-8 pb-4">
-            <button
-              type="button"
-              onClick={handleLoadMore}
-              disabled={isLoadingMore}
-              className="px-8 py-3 rounded-2xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition flex items-center gap-2 min-h-[44px] shadow-lg"
-            >
-              {isLoadingMore ? (
-                <>
-                  <LoadingSpinner />
-                  <span>Chargement...</span>
-                </>
-              ) : (
-                <>
-                  <span>Charger plus de plats</span>
-                  <MaterialIcon name="expand_more" size="md" />
-                </>
-              )}
-            </button>
+        {!catalog.isLoading && catalog.items.length === 0 && catalog.totalCount > 0 && (
+          <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] px-6 py-16 text-center">
+            <MaterialIcon name="search_off" size="xl" className="mx-auto mb-4 text-slate-500" />
+            <h3 className="text-lg font-bold text-white">Aucun plat trouvé</h3>
+            <p className="mt-2 text-sm text-slate-500">Modifiez votre recherche ou réinitialisez les filtres.</p>
+            <button type="button" onClick={catalog.clearFilters} className="mt-6 min-h-11 rounded-xl bg-primary px-4 text-sm font-bold text-white">Réinitialiser les filtres</button>
           </div>
+        )}
+
+        {(catalog.items.length > 0 || catalog.totalCount > 0) && (
+          <MenuCatalogPagination
+            pageIndex={catalog.pageIndex}
+            pageSize={catalog.pageSize}
+            totalCount={catalog.totalCount}
+            hasNextPage={catalog.hasNextPage}
+            hasPreviousPage={catalog.hasPreviousPage}
+            isLoading={catalog.isLoadingPage}
+            onPrevious={catalog.goPrevious}
+            onNext={catalog.goNext}
+          />
         )}
       </main>
 
@@ -1069,13 +950,13 @@ export default function MenuManagementClient() {
         isOpen={isCsvModalOpen}
         onClose={() => setIsCsvModalOpen(false)}
         restaurantId={restaurantId}
-        onImportCompleted={(job) => {
+        onImportCompleted={async (job) => {
           if (job.failedItems > 0) {
             showError(`Import terminé avec ${job.failedItems} anomalie(s). Consultez les détails.`);
           } else {
             showSuccess('Catalogue importé avec succès !');
           }
-          if (id) loadFirstPage(id);
+          await catalog.reload();
         }}
       />
 
@@ -1083,9 +964,9 @@ export default function MenuManagementClient() {
         isOpen={isStoreModalOpen}
         onClose={() => setIsStoreModalOpen(false)}
         restaurantId={restaurantId}
-        onSyncCompleted={() => {
+        onSyncCompleted={async () => {
           showSuccess('Synchronisation WooCommerce terminée !');
-          if (id) loadFirstPage(id);
+          await catalog.reload();
         }}
       />
 

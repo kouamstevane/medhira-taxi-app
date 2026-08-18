@@ -174,6 +174,7 @@ export interface MenuItem extends MenuItemImportFields {
   category: string; // Ex: "Entrées", "Plats", "Desserts", "Boissons"
   imageUrl?: string;
   imageStoragePath?: string;
+  searchPrefixes?: string[];
   isAvailable: boolean; // Disponibilité en temps réel
   preparationTime?: number; // Temps de préparation estimé en minutes
   createdAt: Timestamp;

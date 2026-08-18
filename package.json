@@ -37,7 +37,8 @@
     "test:regression": "playwright test e2e/registration-full-flow.spec.ts e2e/registration-otp.spec.ts",
     "reset:driver-submit-rate-limit": "node scripts/reset-driver-submit-rate-limit.mjs",
     "reset:driver-stripe": "node scripts/reset-driver-stripe.mjs",
-    "optimize:images": "node optimize-images.js"
+    "optimize:images": "node optimize-images.js",
+    "menu:backfill-search": "node scripts/backfill-menu-search.mjs"
   },
   "dependencies": {
     "@capacitor-community/stripe": "^8.1.1",

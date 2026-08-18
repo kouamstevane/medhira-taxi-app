@@ -22,6 +22,7 @@ import {
 } from './menuImportContracts.js';
 import { requestWooCommerce, validateWooCommerceTarget } from './woocommerceSecurity.js';
 import { assertXlsxArchiveWithinLimits } from './xlsxLimits.js';
+import { buildMenuSearchPrefixes } from './menuSearchMetadata.js';
 
 export const MAX_IMPORT_ROWS = 10000;
 export const MAX_IMPORT_COLUMNS = 64;
@@ -689,6 +690,7 @@ export async function executeMenuImportJob(restaurantId: string, importId: strin
                 description: parsed.description,
                 price: parsed.price,
                 category: parsed.category,
+                searchPrefixes: buildMenuSearchPrefixes([parsed.name, parsed.category, parsed.externalId]),
                 preparationTime: parsed.preparationTime ?? admin.firestore.FieldValue.delete(),
                 isAvailable: parsed.isAvailable,
                 source: activeJob.type,
@@ -707,6 +709,7 @@ export async function executeMenuImportJob(restaurantId: string, importId: strin
               description: parsed.description,
               price: parsed.price,
               category: parsed.category,
+              searchPrefixes: buildMenuSearchPrefixes([parsed.name, parsed.category, parsed.externalId]),
               preparationTime: parsed.preparationTime ?? null,
               isAvailable: parsed.isAvailable,
               source: activeJob.type,
