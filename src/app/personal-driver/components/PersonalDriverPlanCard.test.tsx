@@ -12,11 +12,9 @@ describe('Personal Driver client entry', () => {
     );
     expect(screen.getByText('Personal Driver')).toBeVisible();
     expect(
-      screen.getByText(
-        "Planifiez vos deplacements reguliers et connaissez votre cout mensuel a l'avance.",
-      ),
+      screen.getByText('Un chauffeur dédié pour vos trajets réguliers.'),
     ).toBeVisible();
-    expect(screen.getByText('Configurer mon transport mensuel')).toBeVisible();
+    expect(screen.queryByText('Configurer mon transport mensuel')).not.toBeInTheDocument();
     expect(screen.queryByText(
       /Commander un taxi|Reserver une course maintenant|Trouver un chauffeur/,
     )).not.toBeInTheDocument();
