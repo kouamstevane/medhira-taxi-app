@@ -20,20 +20,20 @@ describe('BulkCsvImportModal', () => {
   test('renders modal when isOpen is true', () => {
     render(<BulkCsvImportModal {...defaultProps} />);
     expect(screen.getByText('Importer un catalogue de plats')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Besoin d’un modèle ?' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Modèle CSV/i })).toHaveAttribute(
+    expect(screen.getByLabelText('Modèles d’importation')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /modèle CSV sans images/i })).toHaveAttribute(
       'href',
       '/templates/menu-import/menu-template.csv'
     );
-    expect(screen.getByRole('link', { name: /Modèle ZIP/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /modèle ZIP avec images locales/i })).toHaveAttribute(
       'href',
       '/templates/menu-import/menu-template.zip'
     );
-    expect(screen.getByRole('link', { name: /Modèle Excel/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /modèle Excel avec images intégrées/i })).toHaveAttribute(
       'href',
       '/templates/menu-import/menu-template.xlsx'
     );
-    expect(screen.getByText(/Obligatoires :/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Obligatoires :/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/preparationTime/i)).not.toBeInTheDocument();
   });
 

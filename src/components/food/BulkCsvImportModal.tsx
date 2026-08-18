@@ -267,60 +267,43 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
         <div className="py-6 space-y-6 flex-1">
           {/* Compact template guidance */}
           <div
-            aria-labelledby="import-template-help"
-            className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-800/40"
+            aria-label="Modèles d’importation"
+            className="flex flex-nowrap items-center gap-1.5 overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50/80 px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-800/40"
           >
-            <div className="flex items-start gap-2.5">
-              <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <div className="min-w-0 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">
-                <h3 id="import-template-help" className="font-semibold text-zinc-900 dark:text-zinc-100">
-                  Besoin d’un modèle ?
-                </h3>
-                <p>
-                  Obligatoires : <code>externalId</code>, <code>name</code>, <code>price</code>. Optionnelles :{' '}
-                  <code>description</code>, <code>category</code>, <code>isAvailable</code>, <code>image</code>.
-                </p>
-                <p className="mt-0.5">CSV sans images · ZIP avec images locales · Excel avec images intégrées.</p>
-              </div>
-            </div>
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <a
-                href={MENU_IMPORT_TEMPLATE_URLS.csv}
-                download="modele-import-menu.csv"
-                className="flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-xs transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
-              >
-                <FileText aria-hidden="true" className="size-4 shrink-0 text-emerald-600" />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100">Modèle CSV</span>
-                  <span className="block text-zinc-500 dark:text-zinc-400">Sans images</span>
-                </span>
-                <Download aria-hidden="true" className="size-3.5 shrink-0 text-zinc-400" />
-              </a>
-              <a
-                href={MENU_IMPORT_TEMPLATE_URLS.zip}
-                download="modele-import-menu.zip"
-                className="flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-xs transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
-              >
-                <Archive aria-hidden="true" className="size-4 shrink-0 text-blue-600" />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100">Modèle ZIP</span>
-                  <span className="block text-zinc-500 dark:text-zinc-400">CSV + images</span>
-                </span>
-                <Download aria-hidden="true" className="size-3.5 shrink-0 text-zinc-400" />
-              </a>
-              <a
-                href={MENU_IMPORT_TEMPLATE_URLS.xlsx}
-                download="modele-import-menu.xlsx"
-                className="flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-left text-xs transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
-              >
-                <FileSpreadsheet aria-hidden="true" className="size-4 shrink-0 text-violet-600" />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold text-zinc-900 dark:text-zinc-100">Modèle Excel</span>
-                  <span className="block text-zinc-500 dark:text-zinc-400">Images intégrées</span>
-                </span>
-                <Download aria-hidden="true" className="size-3.5 shrink-0 text-zinc-400" />
-              </a>
-            </div>
+            <Info aria-hidden="true" className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <a
+              href={MENU_IMPORT_TEMPLATE_URLS.csv}
+              download="modele-import-menu.csv"
+              aria-label="Télécharger le modèle CSV sans images"
+              title="CSV sans images"
+              className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+            >
+              <FileText aria-hidden="true" className="size-3.5 text-emerald-600" />
+              CSV
+              <Download aria-hidden="true" className="size-3 text-zinc-400" />
+            </a>
+            <a
+              href={MENU_IMPORT_TEMPLATE_URLS.zip}
+              download="modele-import-menu.zip"
+              aria-label="Télécharger le modèle ZIP avec images locales"
+              title="ZIP avec images locales"
+              className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+            >
+              <Archive aria-hidden="true" className="size-3.5 text-blue-600" />
+              ZIP
+              <Download aria-hidden="true" className="size-3 text-zinc-400" />
+            </a>
+            <a
+              href={MENU_IMPORT_TEMPLATE_URLS.xlsx}
+              download="modele-import-menu.xlsx"
+              aria-label="Télécharger le modèle Excel avec images intégrées"
+              title="Excel avec images intégrées"
+              className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+            >
+              <FileSpreadsheet aria-hidden="true" className="size-3.5 text-violet-600" />
+              Excel
+              <Download aria-hidden="true" className="size-3 text-zinc-400" />
+            </a>
           </div>
 
           {/* File Dropzone */}
