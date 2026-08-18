@@ -117,7 +117,7 @@ describe('Menu Import Pure Helpers & Parsers', () => {
         Prix: '14,50 €',
         Catégorie: 'Plats',
         'Id Externe': 'ext-999',
-        'Temps de préparation': '25',
+        image: 'images/burger.jpg',
         Disponible: 'oui',
       };
 
@@ -127,7 +127,8 @@ describe('Menu Import Pure Helpers & Parsers', () => {
       expect(result.price).toBe(14.5);
       expect(result.category).toBe('Plats');
       expect(result.externalId).toBe('ext-999');
-      expect(result.preparationTime).toBe(25);
+      expect(result.image).toBe('images/burger.jpg');
+      expect(result).not.toHaveProperty('preparationTime');
       expect(result.isAvailable).toBe(true);
     });
 
@@ -138,7 +139,7 @@ describe('Menu Import Pure Helpers & Parsers', () => {
         Description: 'Tenders croustillants et sauce fromagère',
         Tarif: '9,50',
         Rayon: 'Street Food',
-        Duree: '10',
+        Image: 'images/tacos.png',
         Actif: 'oui',
       };
 
@@ -147,7 +148,7 @@ describe('Menu Import Pure Helpers & Parsers', () => {
       expect(result.price).toBe(9.5);
       expect(result.category).toBe('Street Food');
       expect(result.externalId).toBe('TACO-001');
-      expect(result.preparationTime).toBe(10);
+      expect(result.image).toBe('images/tacos.png');
       expect(result.isAvailable).toBe(true);
     });
 
@@ -169,6 +170,13 @@ describe('Menu Import Pure Helpers & Parsers', () => {
       };
 
       expect(() => normalizeMenuRow(rawRow, 7)).toThrow(/Ligne 7/);
+    });
+
+    test('uses the general category when category is omitted', () => {
+      const result = normalizeMenuRow({ name: 'Burger', price: '10', externalId: 'sku-2' }, 2);
+
+      expect(result.category).toBe('Général');
+      expect(result.isAvailable).toBe(true);
     });
   });
 

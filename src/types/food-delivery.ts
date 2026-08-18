@@ -78,6 +78,7 @@ export interface Restaurant {
 
 export type MenuItemSource = 'csv' | 'excel' | 'woocommerce' | 'manual';
 export type MenuImportType = 'csv' | 'excel' | 'woocommerce';
+export type MenuImportFileFormat = 'csv' | 'zip' | 'xlsx';
 export type MenuImportStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 export interface MenuImportError {
@@ -90,6 +91,7 @@ export interface MenuImportJob {
   id: string;
   restaurantId: string;
   type: MenuImportType;
+  fileFormat?: MenuImportFileFormat;
   status: MenuImportStatus;
   filePath?: string;
   integrationId?: string;
@@ -113,6 +115,7 @@ export interface MenuImportPreviewRow {
   price: number;
   category: string;
   externalId: string;
+  hasImage: boolean;
   status: MenuImportPreviewStatus;
   selectable: boolean;
   error?: string;

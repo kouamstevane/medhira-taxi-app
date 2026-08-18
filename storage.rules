@@ -111,17 +111,18 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
     }
 
-    // Fichiers d'import de menu (CSV et XLSX, max 15 Mo, propriétaire du restaurant uniquement)
+    // Fichiers d'import de menu (CSV, ZIP et XLSX, max 15 Mo, propriétaire du restaurant uniquement)
     match /menu-imports/{restaurantId}/{fileName} {
       // Lecture : Non autorisé directement côté client (traité par Cloud Functions Admin SDK)
       allow read: if false;
 
-      // Création : Propriétaire du restaurant uniquement, .csv ou .xlsx, taille <= 15 MiB
+      // Création : Propriétaire du restaurant uniquement, .csv, .zip ou .xlsx, taille <= 15 MiB
       allow create: if request.auth != null
         && firestore.exists(/databases/(default)/documents/restaurants/$(restaurantId))
         && firestore.get(/databases/(default)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid
-        && (fileName.matches('.*\\.csv$') || fileName.matches('.*\\.xlsx$'))
+        && (fileName.matches('.*\\.csv$') || fileName.matches('.*\\.zip$') || fileName.matches('.*\\.xlsx$'))
         && (request.resource.contentType == 'text/csv'
+            || request.resource.contentType == 'application/zip'
             || request.resource.contentType == 'application/vnd.ms-excel'
             || request.resource.contentType == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             || request.resource.contentType == 'application/octet-stream'

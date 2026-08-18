@@ -3,6 +3,7 @@ import type * as admin from 'firebase-admin';
 
 export type MenuItemSource = 'csv' | 'excel' | 'woocommerce' | 'manual';
 export type MenuImportType = 'csv' | 'excel' | 'woocommerce';
+export type MenuImportFileFormat = 'csv' | 'zip' | 'xlsx';
 export type MenuImportStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 export interface MenuImportError {
@@ -15,6 +16,7 @@ export interface MenuImportJobRecord {
   id: string;
   restaurantId: string;
   type: MenuImportType;
+  fileFormat?: MenuImportFileFormat;
   status: MenuImportStatus;
   filePath?: string;
   integrationId?: string;
@@ -37,8 +39,8 @@ export interface ParsedMenuRow {
   price: number;
   category: string;
   externalId: string;
-  preparationTime?: number;
   isAvailable: boolean;
+  image?: string;
   sourceUpdatedAt?: Date;
 }
 
@@ -51,6 +53,7 @@ export interface MenuImportPreviewRow {
   price: number;
   category: string;
   externalId: string;
+  hasImage: boolean;
   status: MenuImportPreviewStatus;
   selectable: boolean;
   error?: string;
@@ -89,25 +92,29 @@ export const MenuRowZodSchema = z.object({
   price: z.number().positive('Le prix doit être strictement positif').max(50_000_000, 'Le prix dépasse la limite maximale'),
   category: z.string().trim().min(1, 'La catégorie est requise').max(80, 'La catégorie ne peut pas dépasser 80 caractères'),
   externalId: z.string().trim().min(1, 'externalId est requis').max(256, 'externalId ne peut pas dépasser 256 caractères'),
-  preparationTime: z.number().int().min(1).max(1440).optional(),
   isAvailable: z.boolean().default(true),
+  image: z.string().trim().max(512, "Le nom de l'image ne peut pas dépasser 512 caractères").optional(),
 });
 
-export const StartMenuFileImportSchema = z.object({
+const MenuFileImportFormatFields = {
   restaurantId: z.string().trim().min(1, 'restaurantId requis'),
   importId: z.string().trim().min(1, 'importId requis'),
   filePath: z.string().trim().min(1, 'filePath requis'),
   type: z.enum(['csv', 'excel']),
+  fileFormat: z.enum(['csv', 'zip', 'xlsx']),
+};
+
+const MenuFileImportFormatSchema = z.object(MenuFileImportFormatFields).refine(
+  (data) => (data.type === 'excel') === (data.fileFormat === 'xlsx'),
+  'Le type et le format du fichier ne correspondent pas'
+);
+
+export const StartMenuFileImportSchema = MenuFileImportFormatSchema.extend({
   reviewConfirmed: z.literal(true),
   includedRowNumbers: z.array(z.number().int().min(2)).min(1).max(10000),
 });
 
-export const PreviewMenuFileImportSchema = z.object({
-  restaurantId: z.string().trim().min(1, 'restaurantId requis'),
-  importId: z.string().trim().min(1, 'importId requis'),
-  filePath: z.string().trim().min(1, 'filePath requis'),
-  type: z.enum(['csv', 'excel']),
-});
+export const PreviewMenuFileImportSchema = MenuFileImportFormatSchema;
 
 export const TestStoreConnectionSchema = z.object({
   restaurantId: z.string().trim().min(1, 'restaurantId requis'),

@@ -946,7 +946,7 @@ export const FIRESTORE_SUBCOLLECTIONS = {
 export const getMenuImportPath = (restaurantId: string, importId: string) =>
   `restaurants/${restaurantId}/menu_imports/${importId}`;
 
-export const getMenuImportStoragePath = (restaurantId: string, importId: string, extension: 'csv' | 'xlsx') =>
+export const getMenuImportStoragePath = (restaurantId: string, importId: string, extension: 'csv' | 'zip' | 'xlsx') =>
   `menu-imports/${restaurantId}/${importId}.${extension}`;
 
 export type FirestoreCollection = typeof FIRESTORE_COLLECTIONS[keyof typeof FIRESTORE_COLLECTIONS];

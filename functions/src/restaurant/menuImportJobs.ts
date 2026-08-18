@@ -1,5 +1,4 @@
 import * as crypto from 'crypto';
-import { parse as parseCsvSync } from 'csv-parse/sync';
 import ExcelJS from 'exceljs';
 import * as admin from 'firebase-admin';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
@@ -20,15 +19,36 @@ import {
   StartMenuFileImportSchema,
   SyncSummary,
 } from './menuImportContracts.js';
+import { ParsedMenuImportRecord, parseXlsxImportBuffer, parseZipCsvBuffer } from './menuImportAssets.js';
 import { requestWooCommerce, validateWooCommerceTarget } from './woocommerceSecurity.js';
 import { assertXlsxArchiveWithinLimits } from './xlsxLimits.js';
 import { buildMenuSearchPrefixes } from './menuSearchMetadata.js';
+import { uploadMenuItemImage } from './menuImportStorage.js';
+import { parseCsvBuffer, MAX_IMPORT_COLUMNS, MAX_IMPORT_ROWS } from './menuImportParsing.js';
 
-export const MAX_IMPORT_ROWS = 10000;
-export const MAX_IMPORT_COLUMNS = 64;
+export { parseCsvBuffer } from './menuImportParsing.js';
+
 export const MAX_ATTEMPTS = 5;
 export const MAX_ERRORS_STORED = 100;
 export const PROGRESS_BATCH_SIZE = 50;
+
+function getExpectedImportExtension(fileFormat: 'csv' | 'zip' | 'xlsx'): 'csv' | 'zip' | 'xlsx' {
+  return fileFormat;
+}
+
+async function parseImportFileBuffer(buffer: Buffer, fileFormat: 'csv' | 'zip' | 'xlsx'): Promise<ParsedMenuImportRecord[]> {
+  if (fileFormat === 'zip') return parseZipCsvBuffer(buffer);
+  if (fileFormat === 'xlsx') return parseXlsxImportBuffer(buffer);
+  return parseCsvBuffer(buffer).map((rawRow, index) => {
+    const hasImageReference = Object.entries(rawRow).some(([key, value]) =>
+      ['image', 'imageurl', 'photo', 'imagefile', 'fichierimage'].includes(normalizeHeaderKey(key)) && String(value || '').trim().length > 0
+    );
+    if (hasImageReference) {
+      throw new Error(`Ligne ${index + 2}: la colonne image nécessite un fichier ZIP avec le dossier images`);
+    }
+    return { rawRow, rowNumber: index + 2 };
+  });
+}
 
 /**
  * Computes deterministic ID for imported menu items:
@@ -63,56 +83,6 @@ function normalizeHeaderKey(key: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]/g, '')
     .trim();
-}
-
-/**
- * Parses raw CSV buffer into array of key-value records
- */
-export function parseCsvBuffer(buffer: Buffer): Array<Record<string, string>> {
-  let content = buffer.toString('utf8');
-  if (content.charCodeAt(0) === 0xfeff) {
-    content = content.slice(1);
-  }
-
-  // Detect delimiter (; or ,) from first non-empty line
-  const firstLine = content.split(/\r?\n/).find((line) => line.trim().length > 0) || '';
-  const commaCount = (firstLine.match(/,/g) || []).length;
-  const semicolonCount = (firstLine.match(/;/g) || []).length;
-  const delimiter = semicolonCount > commaCount ? ';' : ',';
-
-  const rawRecords: Array<Record<string, string>> = parseCsvSync(content, {
-    columns: true,
-    skip_empty_lines: true,
-    trim: true,
-    relax_column_count: true,
-    bom: true,
-    delimiter,
-  });
-
-  if (rawRecords.length > MAX_IMPORT_ROWS) {
-    throw new Error(`Le fichier CSV dépasse la limite maximale autorisée de ${MAX_IMPORT_ROWS} lignes (${rawRecords.length} reçues)`);
-  }
-
-  if (rawRecords.length === 0) {
-    return [];
-  }
-
-  // Validate headers
-  const headers = Object.keys(rawRecords[0] || {});
-  if (headers.length > MAX_IMPORT_COLUMNS) {
-    throw new Error(`Le fichier CSV dépasse la limite de ${MAX_IMPORT_COLUMNS} colonnes (${headers.length} détectées)`);
-  }
-
-  const normalizedHeaders = new Set<string>();
-  for (const h of headers) {
-    const norm = normalizeHeaderKey(h);
-    if (norm && normalizedHeaders.has(norm)) {
-      throw new Error(`En-tête de colonne en double détecté dans le fichier CSV: "${h}"`);
-    }
-    if (norm) normalizedHeaders.add(norm);
-  }
-
-  return rawRecords;
 }
 
 /**
@@ -201,8 +171,8 @@ export function normalizeMenuRow(row: Record<string, unknown>, rowNumber: number
   let rawPrice = '';
   let category = '';
   let externalId = '';
-  let rawPrepTime = '';
   let rawAvailable = '';
+  let image = '';
   let rawDate = '';
 
   for (const [key, val] of Object.entries(row)) {
@@ -219,10 +189,10 @@ export function normalizeMenuRow(row: Record<string, unknown>, rowNumber: number
       category = strVal;
     } else if (['externalid', 'external_id', 'idexterne', 'sku', 'id', 'reference', 'ref'].includes(normKey)) {
       externalId = strVal;
-    } else if (['preparationtime', 'preparation_time', 'tempspreparation', 'tempsdepreparation', 'preptime', 'duree', 'dureepreparation'].includes(normKey)) {
-      rawPrepTime = strVal;
     } else if (['isavailable', 'is_available', 'disponible', 'disponibilite', 'actif', 'active'].includes(normKey)) {
       rawAvailable = strVal;
+    } else if (['image', 'imageurl', 'photo', 'imagefile', 'fichierimage'].includes(normKey)) {
+      image = strVal;
     } else if (['sourceupdatedat', 'source_updated_at', 'datemaj', 'updatedat'].includes(normKey)) {
       rawDate = strVal;
     }
@@ -258,15 +228,6 @@ export function normalizeMenuRow(row: Record<string, unknown>, rowNumber: number
     }
   }
 
-  // Parse prep time
-  let preparationTime: number | undefined = undefined;
-  if (rawPrepTime) {
-    const parsed = parseInt(rawPrepTime, 10);
-    if (!isNaN(parsed) && parsed >= 1 && parsed <= 1440) {
-      preparationTime = parsed;
-    }
-  }
-
   // Validate with Zod schema
   const validation = MenuRowZodSchema.safeParse({
     name,
@@ -274,8 +235,8 @@ export function normalizeMenuRow(row: Record<string, unknown>, rowNumber: number
     price,
     category: category || 'Général',
     externalId,
-    preparationTime,
     isAvailable,
+    image: image || undefined,
   });
 
   if (!validation.success) {
@@ -298,13 +259,13 @@ export function normalizeMenuRow(row: Record<string, unknown>, rowNumber: number
     price: validation.data.price,
     category: validation.data.category,
     externalId: validation.data.externalId,
-    preparationTime: validation.data.preparationTime,
     isAvailable: validation.data.isAvailable,
+    image: validation.data.image,
     sourceUpdatedAt,
   };
 }
 
-function previewRowFromRawRecord(rawRow: Record<string, unknown>, rowNumber: number): Pick<MenuImportPreviewRow, 'rowNumber' | 'name' | 'description' | 'price' | 'category' | 'externalId'> {
+function previewRowFromRawRecord(rawRow: Record<string, unknown>, rowNumber: number): Pick<MenuImportPreviewRow, 'rowNumber' | 'name' | 'description' | 'price' | 'category' | 'externalId' | 'hasImage'> {
   return {
     rowNumber,
     name: String(rawRow.name || rawRow.nom || rawRow.titre || '').trim(),
@@ -312,20 +273,28 @@ function previewRowFromRawRecord(rawRow: Record<string, unknown>, rowNumber: num
     price: Number.parseFloat(String(rawRow.price || rawRow.prix || rawRow.tarif || '').replace(',', '.')) || 0,
     category: String(rawRow.category || rawRow.categorie || rawRow.type || '').trim(),
     externalId: String(rawRow.externalId || rawRow.external_id || rawRow.sku || rawRow.id || '').trim(),
+    hasImage: Object.entries(rawRow).some(([key, value]) =>
+      ['image', 'imageurl', 'photo', 'imagefile', 'fichierimage'].includes(normalizeHeaderKey(key)) && String(value || '').trim().length > 0
+    ),
   };
 }
 
 export function classifyMenuImportRows(
   type: 'csv' | 'excel',
-  rawRecords: Array<Record<string, unknown>>,
+  rawRecords: Array<Record<string, unknown> | ParsedMenuImportRecord>,
   existingItems: Map<string, ExistingImportedMenuItem>
 ): MenuImportPreview {
   const rows: MenuImportPreviewRow[] = [];
   const firstRowByExternalId = new Map<string, number>();
+  const isParsedRecord = (record: Record<string, unknown> | ParsedMenuImportRecord): record is ParsedMenuImportRecord =>
+    Object.prototype.hasOwnProperty.call(record, 'rawRow') && typeof (record as { rawRow?: unknown }).rawRow === 'object';
 
   for (let index = 0; index < rawRecords.length; index += 1) {
-    const rawRow = rawRecords[index];
-    const rowNumber = index + 2;
+    const record = rawRecords[index];
+    const parsedRecord = isParsedRecord(record) ? record : undefined;
+    const rawRow: Record<string, unknown> = parsedRecord ? parsedRecord.rawRow : record as Record<string, unknown>;
+    const imageAsset = parsedRecord?.imageAsset;
+    const rowNumber = ('rowNumber' in record && typeof record.rowNumber === 'number') ? record.rowNumber : index + 2;
     const display = previewRowFromRawRecord(rawRow, rowNumber);
 
     try {
@@ -341,6 +310,7 @@ export function classifyMenuImportRows(
         rows.push({
           ...parsed,
           description: parsed.description.slice(0, 180),
+          hasImage: Boolean(parsed.image || imageAsset),
           status: 'conflict',
           selectable: false,
           error: `externalId déjà utilisé à la ligne ${duplicateRowNumber}`,
@@ -356,6 +326,7 @@ export function classifyMenuImportRows(
         rows.push({
           ...parsed,
           description: parsed.description.slice(0, 180),
+          hasImage: Boolean(parsed.image || imageAsset),
           status: 'conflict',
           selectable: false,
           error: `Collision avec une autre source (${sourceLabel})`,
@@ -366,6 +337,7 @@ export function classifyMenuImportRows(
       rows.push({
         ...parsed,
         description: parsed.description.slice(0, 180),
+        hasImage: Boolean(parsed.image || imageAsset),
         status: existing ? 'update' : 'new',
         selectable: true,
       });
@@ -426,14 +398,14 @@ export const previewMenuFileImport = onCall(
       throw new HttpsError('invalid-argument', 'Données de requête invalides', validation.error.format());
     }
 
-    const { restaurantId, importId, filePath, type } = validation.data;
+    const { restaurantId, importId, filePath, type, fileFormat } = validation.data;
     const db = admin.firestore();
     const restaurantDoc = await db.collection('restaurants').doc(restaurantId).get();
     if (!restaurantDoc.exists || restaurantDoc.data()?.ownerId !== request.auth.uid) {
       throw new HttpsError('permission-denied', "Vous n'êtes pas autorisé à prévisualiser ce menu");
     }
 
-    const expectedExtension = type === 'csv' ? 'csv' : 'xlsx';
+    const expectedExtension = getExpectedImportExtension(fileFormat);
     const expectedPath = `menu-imports/${restaurantId}/${importId}.${expectedExtension}`;
     if (filePath !== expectedPath) {
       throw new HttpsError('invalid-argument', `Chemin de fichier inattendu: attendu ${expectedPath}`);
@@ -452,13 +424,13 @@ export const previewMenuFileImport = onCall(
     }
 
     const [fileBuffer] = await file.download();
-    const rawRecords = type === 'csv' ? parseCsvBuffer(fileBuffer) : await parseXlsxBuffer(fileBuffer);
+    const parsedRecords = await parseImportFileBuffer(fileBuffer, fileFormat);
     const existingItems = new Map<string, ExistingImportedMenuItem>();
     const refs = new Map<string, FirebaseFirestore.DocumentReference>();
 
-    for (let index = 0; index < rawRecords.length; index += 1) {
+    for (let index = 0; index < parsedRecords.length; index += 1) {
       try {
-        const parsed = normalizeMenuRow(rawRecords[index], index + 2);
+        const parsed = normalizeMenuRow(parsedRecords[index].rawRow, index + 2);
         const itemId = computeImportedMenuItemId(type, parsed.externalId);
         refs.set(itemId, db.doc(`restaurants/${restaurantId}/menu_items/${itemId}`));
       } catch {
@@ -477,7 +449,7 @@ export const previewMenuFileImport = onCall(
     }
 
     return {
-      ...classifyMenuImportRows(type, rawRecords, existingItems),
+      ...classifyMenuImportRows(type, parsedRecords, existingItems),
       importId,
     } satisfies MenuImportPreview;
   }
@@ -498,7 +470,7 @@ export const startMenuFileImport = onCall(
       throw new HttpsError('invalid-argument', 'Données de requête invalides', validation.error.format());
     }
 
-    const { restaurantId, importId, filePath, type, reviewConfirmed, includedRowNumbers } = validation.data;
+    const { restaurantId, importId, filePath, type, fileFormat, reviewConfirmed, includedRowNumbers } = validation.data;
     const db = admin.firestore();
 
     // Verify restaurant ownership
@@ -508,7 +480,7 @@ export const startMenuFileImport = onCall(
     }
 
     // Verify file path structure
-    const expectedExtension = type === 'csv' ? 'csv' : 'xlsx';
+    const expectedExtension = getExpectedImportExtension(fileFormat);
     const expectedPath = `menu-imports/${restaurantId}/${importId}.${expectedExtension}`;
     if (filePath !== expectedPath) {
       throw new HttpsError('invalid-argument', `Chemin de fichier inattendu: attendu ${expectedPath}`);
@@ -539,6 +511,7 @@ export const startMenuFileImport = onCall(
       id: importId,
       restaurantId,
       type,
+      fileFormat,
       status: 'pending',
       filePath,
       totalItems: 0,
@@ -634,18 +607,13 @@ export async function executeMenuImportJob(restaurantId: string, importId: strin
     const file = bucket.file(activeJob.filePath);
     const [fileBuffer] = await file.download();
 
-    let rawRecords: Array<Record<string, string>> = [];
-    if (activeJob.type === 'csv') {
-      rawRecords = parseCsvBuffer(fileBuffer);
-    } else {
-      rawRecords = await parseXlsxBuffer(fileBuffer);
-    }
+    const parsedRecords = await parseImportFileBuffer(fileBuffer, activeJob.fileFormat || (activeJob.type === 'excel' ? 'xlsx' : 'csv'));
 
     const includedRows = activeJob.includedRowNumbers
       ? new Set(activeJob.includedRowNumbers)
       : null;
-    const selectedRecords = rawRecords
-      .map((rawRow, index) => ({ rawRow, rowNumber: index + 2 }))
+    const selectedRecords = parsedRecords
+      .map((record, index) => ({ ...record, rowNumber: record.rowNumber || index + 2 }))
       .filter(({ rowNumber }) => !includedRows || includedRows.has(rowNumber));
 
     await jobRef.update({
@@ -659,12 +627,15 @@ export async function executeMenuImportJob(restaurantId: string, importId: strin
 
     // Process rows sequentially or in batches with collision protection
     for (let i = 0; i < selectedRecords.length; i++) {
-      const { rawRow, rowNumber: rowNum } = selectedRecords[i];
+      const { rawRow, imageAsset, rowNumber: rowNum } = selectedRecords[i];
 
       try {
         const parsed = normalizeMenuRow(rawRow, rowNum);
         const itemId = computeImportedMenuItemId(activeJob.type, parsed.externalId);
         const itemRef = db.doc(`restaurants/${restaurantId}/menu_items/${itemId}`);
+        const importedImage = imageAsset
+          ? await uploadMenuItemImage(restaurantId, itemId, imageAsset)
+          : undefined;
 
         // Read existing item inside transaction for strict collision check
         await db.runTransaction(async (t) => {
@@ -691,8 +662,8 @@ export async function executeMenuImportJob(restaurantId: string, importId: strin
                 price: parsed.price,
                 category: parsed.category,
                 searchPrefixes: buildMenuSearchPrefixes([parsed.name, parsed.category, parsed.externalId]),
-                preparationTime: parsed.preparationTime ?? admin.firestore.FieldValue.delete(),
                 isAvailable: parsed.isAvailable,
+                ...(importedImage ? { imageUrl: importedImage.url, imageStoragePath: importedImage.storagePath } : {}),
                 source: activeJob.type,
                 externalId: parsed.externalId,
                 sourceUpdatedAt: parsed.sourceUpdatedAt ? admin.firestore.Timestamp.fromDate(parsed.sourceUpdatedAt) : admin.firestore.FieldValue.delete(),
@@ -710,8 +681,8 @@ export async function executeMenuImportJob(restaurantId: string, importId: strin
               price: parsed.price,
               category: parsed.category,
               searchPrefixes: buildMenuSearchPrefixes([parsed.name, parsed.category, parsed.externalId]),
-              preparationTime: parsed.preparationTime ?? null,
               isAvailable: parsed.isAvailable,
+              ...(importedImage ? { imageUrl: importedImage.url, imageStoragePath: importedImage.storagePath } : {}),
               source: activeJob.type,
               externalId: parsed.externalId,
               sourceUpdatedAt: parsed.sourceUpdatedAt ? admin.firestore.Timestamp.fromDate(parsed.sourceUpdatedAt) : null,

@@ -21,6 +21,7 @@ describe('BulkCsvImportModal', () => {
     render(<BulkCsvImportModal {...defaultProps} />);
     expect(screen.getByText('Importer un catalogue de plats')).toBeInTheDocument();
     expect(screen.getByLabelText('Modèles d’importation')).toBeInTheDocument();
+    expect(screen.getByText('Besoin d’un modèle ?')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /modèle CSV sans images/i })).toHaveAttribute(
       'href',
       '/templates/menu-import/menu-template.csv'
