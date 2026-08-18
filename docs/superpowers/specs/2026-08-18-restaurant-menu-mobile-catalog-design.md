@@ -136,3 +136,11 @@ Les tests devront couvrir :
 5. Les actions secondaires ne compressent pas le bouton de création sur petit écran.
 6. La version desktop exploite l'espace disponible avec un tableau lisible.
 7. Les erreurs et les résultats vides donnent une action de récupération claire.
+
+## Correction visuelle complémentaire
+
+Le placeholder d'image des plats sans image ne doit jamais recouvrir le catalogue. Le conteneur de miniature doit établir un contexte de positionnement local afin que le placeholder et les images en mode `fill` restent limités à la miniature prévue.
+
+Sur mobile, la barre de recherche et les filtres doivent rester compacts et la liste doit conserver une densité suffisante pour parcourir rapidement 50 résultats. Les actions secondaires d'import et de connexion doivent rester accessibles sans pousser le bouton de création hors écran. Aucun bloc d'état ou de chargement ne doit réserver plusieurs centaines de pixels lorsqu'il n'est pas nécessaire.
+
+La vérification visuelle doit inclure au minimum une largeur mobile de 436 px et une largeur desktop, avec un plat sans image et un catalogue contenant plusieurs résultats.
