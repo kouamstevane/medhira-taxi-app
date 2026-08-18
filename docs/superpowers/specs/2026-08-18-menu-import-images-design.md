@@ -29,6 +29,24 @@ Colonnes optionnelles :
 
 `preparationTime` n'est plus reconnu ni écrit lors d'un import.
 
+Exemple CSV utilisé dans un ZIP :
+
+```csv
+externalId,name,description,price,category,isAvailable,image
+SKU-001,Burger Classic,"Steak haché et cheddar",12.50,Burgers,true,SKU-001.jpg
+```
+
+Structure attendue :
+
+```text
+menu.zip
+├── menu.csv
+└── images/
+    └── SKU-001.jpg
+```
+
+Dans Excel, la première feuille est utilisée. La ligne 1 contient l'en-tête `image` ; chaque image doit être ancrée dans cette colonne et sur la ligne du plat correspondant.
+
 ## Flux de données
 
 1. Le client accepte `.csv`, `.zip` et `.xlsx`, avec la limite existante de 15 Mo. Un CSV simple reste disponible pour les catalogues sans images ; le ZIP est utilisé dès qu'il faut joindre des images locales.
@@ -62,3 +80,15 @@ Les images sont facultatives. Une ligne sans image reste importable. Pour les mi
 - Tests de sécurité des chemins ZIP et des limites d'archive.
 - Tests du client pour les extensions et le template.
 - Template/documentation mis à jour avec `image`, sans `preparationTime`.
+
+## Aide et modèles téléchargeables
+
+La fenêtre d'import ne présente pas une grande carte d'aide persistante. Elle affiche une aide compacte, placée au-dessus de la zone de dépôt, avec trois actions indépendantes :
+
+- **Modèle CSV** : fichier CSV propre, sans image, prêt à importer ;
+- **Modèle ZIP** : archive contenant exactement un CSV et des images d'exemple référencées par la colonne `image` ;
+- **Modèle Excel** : classeur XLSX avec une image réellement intégrée et ancrée dans la colonne `image` de sa ligne.
+
+Chaque modèle doit être autonome et sans ambiguïté : les exemples utilisent les en-têtes exacts de l'import, les colonnes obligatoires et optionnelles sont expliquées dans l'interface, et `preparationTime` n'apparaît dans aucun modèle. Le téléchargement individuel est l'action principale ; un éventuel téléchargement groupé reste secondaire.
+
+Les contrôles utilisent les icônes Lucide existantes du projet (`Download`, `FileSpreadsheet`, `Archive`, `Info`) et non des emojis ou des icônes textuelles.
