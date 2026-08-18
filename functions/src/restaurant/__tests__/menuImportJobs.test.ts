@@ -95,6 +95,12 @@ describe('Menu Import Pure Helpers & Parsers', () => {
       expect(records[0].SKU).toBe('sku-42');
     });
 
+    test('ignores short template notes written as comment lines', () => {
+      const csvStr = '# Obligatoires : externalId, name, price\n# Optionnels : description, category, isAvailable, image\nexternalId,name,price\nSKU-001,Burger,12';
+      const records = parseCsvBuffer(Buffer.from(csvStr, 'utf8'));
+      expect(records).toEqual([{ externalId: 'SKU-001', name: 'Burger', price: '12' }]);
+    });
+
     test('handles quoted values with commas and newlines', () => {
       const csvStr = 'name,description,price,category,externalId\n"Pizza, double cheese","Sauce tomate, fromage\net herbes",14,Pizzas,sku-99';
       const records = parseCsvBuffer(Buffer.from(csvStr, 'utf8'));

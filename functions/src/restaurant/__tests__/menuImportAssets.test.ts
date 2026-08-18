@@ -22,7 +22,7 @@ function createZip(entries: Array<{ name: string; data: string | Buffer }>): Pro
 describe('menu import assets', () => {
   test('associates ZIP images with CSV rows', async () => {
     const buffer = await createZip([
-      { name: 'menu.csv', data: 'externalId,name,price,category,image\nSKU-001,Burger,12,Burgers,SKU-001.png' },
+      { name: 'menu.csv', data: '# Obligatoires : externalId, name, price\n# Optionnels : category, image\nexternalId,name,price,category,image\nSKU-001,Burger,12,Burgers,SKU-001.png' },
       { name: 'images/SKU-001.png', data: Buffer.from('png-data') },
     ]);
 

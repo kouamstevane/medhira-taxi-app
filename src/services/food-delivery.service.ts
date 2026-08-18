@@ -462,6 +462,19 @@ export const getRestaurantMenuPaginated = async (
   }
 };
 
+export const getRestaurantMenuCategories = async (restaurantId: string): Promise<string[]> => {
+  const menuRef = collection(
+    db,
+    FIRESTORE_COLLECTIONS.RESTAURANTS,
+    restaurantId,
+    FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+  );
+  const snapshot = await getDocs(menuRef);
+  return Array.from(new Set(snapshot.docs
+    .map((snapshotDoc) => String(snapshotDoc.data().category ?? '').trim())
+    .filter(Boolean)));
+};
+
 export const bulkUpdateMenuItemAvailability = async (
   restaurantId: string,
   itemIds: string[],
@@ -1127,6 +1140,7 @@ export const FoodDeliveryService = {
   updateRestaurantStatus,
   updateRestaurantOpeningHours,
   getRestaurantMenuPaginated,
+  getRestaurantMenuCategories,
   
   /**
    * Récupérer le menu complet (incluant articles indisponibles pour le gérant)

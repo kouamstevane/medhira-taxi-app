@@ -16,7 +16,10 @@ export function parseCsvBuffer(buffer: Buffer): Array<Record<string, string>> {
   let content = buffer.toString('utf8');
   if (content.charCodeAt(0) === 0xfeff) content = content.slice(1);
 
-  const firstLine = content.split(/\r?\n/).find((line) => line.trim().length > 0) || '';
+  const firstLine = content.split(/\r?\n/).find((line) => {
+    const trimmed = line.trim();
+    return trimmed.length > 0 && !trimmed.startsWith('#');
+  }) || '';
   const commaCount = (firstLine.match(/,/g) || []).length;
   const semicolonCount = (firstLine.match(/;/g) || []).length;
   const delimiter = semicolonCount > commaCount ? ';' : ',';
@@ -26,6 +29,7 @@ export function parseCsvBuffer(buffer: Buffer): Array<Record<string, string>> {
     trim: true,
     relax_column_count: true,
     bom: true,
+    comment: '#',
     delimiter,
   });
 

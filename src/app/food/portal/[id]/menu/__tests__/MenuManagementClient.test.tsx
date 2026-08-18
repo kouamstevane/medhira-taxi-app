@@ -113,21 +113,20 @@ describe('MenuManagementClient', () => {
     expect(replace).not.toHaveBeenCalledWith('/login');
   });
 
-  it('renders import catalogue and connect boutique buttons', async () => {
+  it('renders the import catalogue button while the store connector remains hidden', async () => {
     const { getByText } = render(<MenuManagementClient />);
 
     await waitFor(() => {
       expect(getByText(/Importer catalogue/i)).toBeInTheDocument();
-      expect(getByText(/Connecter boutique/i)).toBeInTheDocument();
     });
+    expect(screen.queryByRole('button', { name: /Connecter boutique/i })).not.toBeInTheDocument();
   });
 
-  it('uses Lucide icons for the import and store actions', async () => {
+  it('uses a Lucide icon for the import action', async () => {
     render(<MenuManagementClient />);
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Importer catalogue/i }).querySelector('[data-testid="LucideIcon-icon"]')).toBeTruthy();
-      expect(screen.getByRole('button', { name: /Connecter boutique/i }).querySelector('[data-testid="LucideIcon-icon"]')).toBeTruthy();
     });
   });
 

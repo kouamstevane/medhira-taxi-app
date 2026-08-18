@@ -42,6 +42,7 @@ export function useMenuCatalogQuery(restaurantId: string) {
   const [category, setCategoryState] = useState<string | null>(initialQuery.category ?? null);
   const [availability, setAvailabilityState] = useState<MenuCatalogAvailability>(initialQuery.availability ?? 'all');
   const [sort, setSortState] = useState<MenuCatalogSort>(initialQuery.sort ?? 'category');
+  const [categories, setCategories] = useState<string[]>([]);
   const [state, setState] = useState<MenuCatalogState>({
     items: [], totalCount: 0, availableCount: 0, pageIndex: 0, hasNextPage: false,
     hasPreviousPage: false, isLoading: true, isLoadingPage: false, error: null, selectedIds: [],
@@ -100,6 +101,15 @@ export function useMenuCatalogQuery(restaurantId: string) {
     return () => window.clearTimeout(timeout);
   }, [currentQuery, fetchPage, restaurantId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!restaurantId) return () => { cancelled = true; };
+    void FoodDeliveryService.getRestaurantMenuCategories(restaurantId)
+      .then((values) => { if (!cancelled) setCategories(values); })
+      .catch(() => { if (!cancelled) setCategories([]); });
+    return () => { cancelled = true; };
+  }, [restaurantId]);
+
   const setCriteria = useCallback((next: Partial<Pick<MenuCatalogQuery, 'search' | 'category' | 'availability' | 'sort'>>) => {
     const nextQuery = { search, category, availability, sort, ...next };
     setSearchState(nextQuery.search ?? '');
@@ -140,6 +150,7 @@ export function useMenuCatalogQuery(restaurantId: string) {
     category,
     availability,
     sort,
+    categories,
     pageSize: PAGE_SIZE,
     setSearch: (value: string) => setCriteria({ search: value }),
     setCategory: (value: string | null) => setCriteria({ category: value }),

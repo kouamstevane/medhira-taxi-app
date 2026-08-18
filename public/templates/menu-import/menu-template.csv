@@ -1,4 +1,8 @@
-﻿externalId,name,description,price,category,isAvailable,image
+﻿# Obligatoires : externalId, name, price
+# Optionnels : description, category, isAvailable, image
+# image : utilisez un fichier ZIP pour associer des images locales
+
+externalId,name,description,price,category,isAvailable,image
 SKU-001,Burger Classic,"Steak haché, cheddar et sauce maison",12.50,Burgers,true,
 SKU-002,Tiramisu Traditionnel,"Mascarpone, café et cacao",6.00,Desserts,true,
 SKU-003,Limonade Maison,"Citron pressé, menthe et eau pétillante",4.50,Boissons,true,

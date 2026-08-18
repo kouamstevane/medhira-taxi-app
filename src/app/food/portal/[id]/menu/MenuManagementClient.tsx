@@ -30,6 +30,9 @@ import { MenuCatalogTable } from '@/components/restaurant/menu/MenuCatalogTable'
 import { MenuCatalogPagination } from '@/components/restaurant/menu/MenuCatalogPagination';
 import { DeleteMenuItemDialog } from '@/components/restaurant/menu/DeleteMenuItemDialog';
 import { useMenuCatalogQuery } from '@/hooks/useMenuCatalogQuery';
+import { mergeMenuCategories } from '@/utils/menu-categories';
+
+const STORE_CONNECTOR_ENABLED = false;
 
 function getMenuItemSaveErrorMessage(error: unknown): string {
   const code = error && typeof error === 'object' && 'code' in error
@@ -66,17 +69,10 @@ export default function MenuManagementClient() {
   const menuItems = catalog.items;
 
   // Dynamic Categories calculation
-  const dynamicCategories = useMemo(() => {
-    const fromItems = Array.from(
-      new Set(
-        menuItems
-          .map((item) => item.category?.trim())
-          .filter(Boolean) as string[]
-      )
-    );
-    const combined = Array.from(new Set([...DEFAULT_CATEGORIES, ...fromItems]));
-    return combined.sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-  }, [menuItems]);
+  const dynamicCategories = useMemo(
+    () => mergeMenuCategories(DEFAULT_CATEGORIES, menuItems, catalog.categories),
+    [catalog.categories, menuItems],
+  );
 
   // Validation hook pour URLs externes
   const urlValidation = useMenuImageUrlValidation();
@@ -514,15 +510,17 @@ export default function MenuManagementClient() {
             <FileDown size={17} strokeWidth={2.2} aria-hidden="true" />
             <span className="hidden sm:inline">Importer catalogue</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setIsStoreModalOpen(true)}
-            aria-label="Connecter boutique"
-            className="glass-card border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition text-sm min-h-[44px]"
-          >
-            <ShoppingCart size={17} strokeWidth={2.2} aria-hidden="true" />
-            <span className="hidden sm:inline">Connecter boutique</span>
-          </button>
+          {STORE_CONNECTOR_ENABLED && (
+            <button
+              type="button"
+              onClick={() => setIsStoreModalOpen(true)}
+              aria-label="Connecter boutique"
+              className="glass-card border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition text-sm min-h-[44px]"
+            >
+              <ShoppingCart size={17} strokeWidth={2.2} aria-hidden="true" />
+              <span className="hidden sm:inline">Connecter boutique</span>
+            </button>
+          )}
           <button
             onClick={() => handleOpenModal()}
             className="bg-gradient-to-r from-primary to-[#ffae33] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 primary-glow hover:opacity-90 transition min-h-[44px]"
