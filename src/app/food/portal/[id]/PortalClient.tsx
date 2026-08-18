@@ -9,7 +9,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
-import type { Restaurant, FoodOrder } from '@/types';
+import type { Restaurant } from '@/types';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { getOpeningHoursForDate, isRestaurantOpenAt, normalizeOpeningHours } from '@/utils/restaurant-hours';
 import Link from 'next/link';
@@ -25,7 +25,6 @@ export default function PortalClient() {
   const { showError, toasts, removeToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
-  const [orders, setOrders] = useState<FoodOrder[]>([]);
   const [stats, setStats] = useState({
     todayOrders: 0,
     pendingOrders: 0,
@@ -66,7 +65,6 @@ export default function PortalClient() {
 
         // Fetch orders for stats
         const restaurantOrders = await FoodDeliveryService.getRestaurantOrders(id);
-        setOrders(restaurantOrders);
 
         // Calculate stats
         const today = new Date();
@@ -213,51 +211,6 @@ export default function PortalClient() {
               </div>
             </div>
 
-            {/* Recent Orders List */}
-            <div className="glass-card rounded-3xl border border-white/5 overflow-hidden">
-              <div className="p-6 border-b border-white/5 flex items-center justify-between">
-                <h3 className="font-bold text-white">Commandes Récentes</h3>
-                <Link href={getRestaurantPortalPath(id, 'orders')} className="text-sm font-bold text-primary hover:underline">Voir tout</Link>
-              </div>
-              <div className="divide-y divide-white/5">
-                {orders.slice(0, 5).map((order) => (
-                  <div key={order.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        order.status === 'delivered' ? 'bg-green-500/10 text-green-400' :
-                        order.status === 'cancelled' ? 'bg-destructive/10 text-destructive' :
-                        'bg-blue-500/10 text-blue-400'
-                      }`}>
-                        <MaterialIcon name="inventory_2" size="md" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-white">#{order.id.slice(-6).toUpperCase()}</p>
-                        <p className="text-xs text-slate-500">{order.orderItems.length} articles • {formatCurrencyWithCode(order.totalOrderPrice)}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
-                          order.status === 'delivered' ? 'bg-green-500/10 text-green-400' :
-                          order.status === 'confirmed' ? 'bg-blue-500/10 text-blue-400' :
-                          order.status === 'preparing' ? 'bg-primary/10 text-primary' :
-                          'bg-white/5 text-slate-400'
-                        }`}>
-                          {order.status}
-                        </span>
-                        <p className="text-[10px] text-slate-500 mt-1">
-                          {new Date(order.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                    </div>
-                  </div>
-                ))}
-                {orders.length === 0 && (
-                  <div className="p-12 text-center text-slate-500">
-                    <MaterialIcon name="inventory_2" size="xl" className="mx-auto mb-4 opacity-20" />
-                    <p>Aucune commande pour le moment</p>
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Sidebar / Quick Settings */}

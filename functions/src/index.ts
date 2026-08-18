@@ -381,7 +381,7 @@ export { activateClientRole } from './roles/activateClientRole.js';
 export { notifyAdminNewRestaurant } from './admin/notifyAdminNewRestaurant.js';
 export { cleanupExpiredOnboardingDrafts } from './admin/cleanupExpiredOnboardingDrafts.js';
 export { createStripeConnectAccount } from './stripe/createStripeConnectAccount.js';
-export { startMenuFileImport, processMenuImportWorker } from './restaurant/menuImportJobs.js';
+export { previewMenuFileImport, startMenuFileImport, processMenuImportWorker } from './restaurant/menuImportJobs.js';
 export { recoverExpiredMenuImportJobs } from './restaurant/recoverExpiredMenuImportJobs.js';
 export { testStoreConnection, saveStoreIntegration, startRestaurantStoreSync } from './restaurant/syncRestaurantStoreApi.js';
 

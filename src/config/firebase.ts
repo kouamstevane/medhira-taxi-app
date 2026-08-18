@@ -13,6 +13,7 @@ import { connectFunctionsEmulator, getFunctions, Functions } from "firebase/func
 import { connectStorageEmulator, getStorage, type FirebaseStorage } from "firebase/storage";
 import { connectDatabaseEmulator, getDatabase, type Database } from "firebase/database";
 import { Capacitor } from "@capacitor/core";
+import { firestoreSettings } from "./firestore-settings";
 
 export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -24,6 +25,8 @@ export const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
   databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
 };
+
+export { firestoreSettings } from "./firestore-settings";
 
 let app: FirebaseApp;
 
@@ -43,7 +46,7 @@ if (typeof window !== 'undefined') {
   try {
     const isNative = Capacitor.isNativePlatform();
     initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: true,
+      ...firestoreSettings,
       localCache: persistentLocalCache({
         tabManager: isNative ? persistentSingleTabManager(undefined) : persistentMultipleTabManager()
       })

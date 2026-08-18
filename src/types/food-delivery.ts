@@ -104,6 +104,35 @@ export interface MenuImportJob {
   completedAt?: Timestamp | Date;
 }
 
+export type MenuImportPreviewStatus = 'new' | 'update' | 'invalid' | 'conflict';
+
+export interface MenuImportPreviewRow {
+  rowNumber: number;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  externalId: string;
+  status: MenuImportPreviewStatus;
+  selectable: boolean;
+  error?: string;
+}
+
+export interface MenuImportPreviewSummary {
+  totalRows: number;
+  importableRows: number;
+  invalidRows: number;
+  conflictRows: number;
+  newRows: number;
+  updateRows: number;
+}
+
+export interface MenuImportPreview {
+  importId: string;
+  rows: MenuImportPreviewRow[];
+  summary: MenuImportPreviewSummary;
+}
+
 export type MenuImportSubCollection = MenuImportJob;
 
 export interface MenuItemImportFields {

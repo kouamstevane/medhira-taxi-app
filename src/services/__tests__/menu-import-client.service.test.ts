@@ -1,8 +1,12 @@
 import {
   downloadSampleCsvTemplate,
   listenToImportProgress,
+  previewMenuFileImport,
+  startMenuFileImport,
   uploadMenuImportFile,
 } from '../menu-import-client.service';
+import { uploadBytesResumable } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
 
 jest.mock('@/config/firebase', () => ({
   db: {},
@@ -96,6 +100,52 @@ describe('menu-import-client.service', () => {
       expect(result.importId).toBe('mock-import-id-123');
       expect(result.type).toBe('excel');
       expect(result.filePath).toBe(`menu-imports/${restaurantId}/mock-import-id-123.xlsx`);
+    });
+
+    test('cancels and rejects when the upload exceeds its timeout', async () => {
+      jest.useFakeTimers();
+      const cancel = jest.fn();
+      (uploadBytesResumable as jest.Mock).mockReturnValueOnce({
+        on: jest.fn(),
+        cancel,
+      });
+
+      const validCsv = new File(['name,price\nBurger,12'], 'catalogue.csv', { type: 'text/csv' });
+      const uploadPromise = uploadMenuImportFile(restaurantId, validCsv, undefined, { timeoutMs: 1000 });
+      const rejectedUpload = expect(uploadPromise).rejects.toThrow(/expiré/i);
+
+      await jest.advanceTimersByTimeAsync(1000);
+
+      await rejectedUpload;
+      expect(cancel).toHaveBeenCalledTimes(1);
+      jest.useRealTimers();
+    });
+  });
+
+  describe('review-first import flow', () => {
+    test('requests a server preview without starting an import job', async () => {
+      const preview = await previewMenuFileImport({
+        restaurantId,
+        importId: 'preview-1',
+        filePath: `menu-imports/${restaurantId}/preview-1.csv`,
+        type: 'csv',
+      });
+
+      expect(preview).toEqual({ importId: 'mock-import-id-123' });
+      expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'previewMenuFileImport');
+    });
+
+    test('starts an import only with explicit review confirmation and selected rows', async () => {
+      await startMenuFileImport({
+        restaurantId,
+        importId: 'preview-1',
+        filePath: `menu-imports/${restaurantId}/preview-1.csv`,
+        type: 'csv',
+        reviewConfirmed: true,
+        includedRowNumbers: [2, 4],
+      });
+
+      expect(httpsCallable).toHaveBeenCalledWith(expect.anything(), 'startMenuFileImport');
     });
   });
 
