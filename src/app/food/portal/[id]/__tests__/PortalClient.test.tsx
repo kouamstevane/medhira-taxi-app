@@ -126,7 +126,15 @@ it('hides dashboard action cards below the desktop breakpoint', async () => {
   render(<PortalClient />);
 
   const menuCard = await screen.findByText('Gérer le Menu');
-  const actionGrid = menuCard.closest('div.grid');
+  const actionGrid = menuCard.closest('div.hidden');
 
   expect(actionGrid).toHaveClass('hidden', 'lg:grid');
+});
+
+it('does not render the redundant recent orders card', async () => {
+  render(<PortalClient />);
+
+  await screen.findByText('Chez Medjira');
+
+  expect(screen.queryByText('Commandes Récentes')).not.toBeInTheDocument();
 });
