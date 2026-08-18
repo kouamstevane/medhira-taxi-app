@@ -52,7 +52,7 @@ if (typeof window !== 'undefined') {
       })
     });
     firestoreInstance = getFirestore(app);
-  } catch (e) {
+  } catch {
     console.warn('Firestore déjà initialisé, utilisation getFirestore');
     firestoreInstance = getFirestore(app);
   }
