@@ -184,6 +184,58 @@ export interface MenuItem extends MenuItemImportFields {
   updatedAt: Timestamp;
 }
 
+export interface CustomerMenuModifierOption {
+  id: string;
+  label: string;
+  priceDelta: number;
+  isDefault?: boolean;
+  isAvailable: boolean;
+}
+
+export interface CustomerMenuModifierGroup {
+  id: string;
+  label: string;
+  selectionType: 'single' | 'multiple';
+  required: boolean;
+  minSelections: number;
+  maxSelections: number;
+  options: CustomerMenuModifierOption[];
+}
+
+export interface CustomerMenuSupplement {
+  id: string;
+  label: string;
+  price: number;
+  isAvailable: boolean;
+}
+
+export interface CustomerMenuAllergen {
+  code: string;
+  label: string;
+}
+
+export interface CustomerMenuNutrition {
+  calories?: number;
+  proteinGrams?: number;
+  carbsGrams?: number;
+  fatGrams?: number;
+  saltGrams?: number;
+}
+
+export interface CustomerMenuItemDetails {
+  itemId: string;
+  description?: string;
+  imageUrl?: string;
+  modifierGroups: CustomerMenuModifierGroup[];
+  supplements: CustomerMenuSupplement[];
+  allergens: CustomerMenuAllergen[];
+  nutrition?: CustomerMenuNutrition;
+  checkoutRules: {
+    allowZeroQuantity?: boolean;
+    maxQuantity?: number;
+  };
+}
+
 // ============================================================================
 // COMMANDES (FOOD ORDERS)
 // ============================================================================

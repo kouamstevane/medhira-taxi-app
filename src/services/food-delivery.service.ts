@@ -67,6 +67,14 @@ import type {
   DeliveryReview,
   DeliveryPriceResult,
 } from '@/types';
+import type {
+  CustomerMenuAllergen,
+  CustomerMenuItemDetails,
+  CustomerMenuModifierGroup,
+  CustomerMenuModifierOption,
+  CustomerMenuNutrition,
+  CustomerMenuSupplement,
+} from '@/types/food-delivery';
 import { z } from 'zod';
 import { FIRESTORE_COLLECTIONS, FIRESTORE_SUBCOLLECTIONS } from '@/types/firestore-collections';
 import type { RestaurantOpeningHours } from '@/utils/restaurant-hours';
@@ -372,6 +380,177 @@ export const getRestaurantMenu = async (
   })) as MenuItem[];
   } catch (error) {
     console.error('[food-delivery.service] getRestaurantMenu failed:', error);
+    throw error;
+  }
+};
+
+const toFiniteNumber = (value: unknown): number | undefined => (
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined
+);
+
+const toOptionalString = (value: unknown): string | undefined => (
+  typeof value === 'string' && value.trim().length > 0 ? value : undefined
+);
+
+const toRecord = (value: unknown): Record<string, unknown> | null => (
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+);
+
+const toCustomerMenuModifierOption = (value: unknown): CustomerMenuModifierOption | null => {
+  const record = toRecord(value);
+  if (!record) return null;
+
+  const id = toOptionalString(record.id);
+  const label = toOptionalString(record.label);
+  if (!id || !label || record.isAvailable === false) return null;
+
+  const option: CustomerMenuModifierOption = {
+    id,
+    label,
+    priceDelta: toFiniteNumber(record.priceDelta) ?? 0,
+    isAvailable: true,
+  };
+
+  if (typeof record.isDefault === 'boolean') {
+    option.isDefault = record.isDefault;
+  }
+
+  return option;
+};
+
+const toCustomerMenuModifierGroups = (value: unknown): CustomerMenuModifierGroup[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((entry) => {
+    const record = toRecord(entry);
+    if (!record) return [];
+
+    const id = toOptionalString(record.id);
+    const label = toOptionalString(record.label);
+    if (!id || !label) return [];
+
+    return [{
+      id,
+      label,
+      selectionType: record.selectionType === 'multiple' ? 'multiple' : 'single',
+      required: record.required === true,
+      minSelections: toFiniteNumber(record.minSelections) ?? 0,
+      maxSelections: toFiniteNumber(record.maxSelections) ?? 0,
+      options: Array.isArray(record.options)
+        ? record.options
+          .map((option) => toCustomerMenuModifierOption(option))
+          .filter((option): option is CustomerMenuModifierOption => option !== null)
+        : [],
+    }];
+  });
+};
+
+const toCustomerMenuSupplements = (value: unknown): CustomerMenuSupplement[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((entry) => {
+    const record = toRecord(entry);
+    if (!record) return [];
+
+    const id = toOptionalString(record.id);
+    const label = toOptionalString(record.label);
+    if (!id || !label || record.isAvailable === false) return [];
+
+    return [{
+      id,
+      label,
+      price: toFiniteNumber(record.price) ?? 0,
+      isAvailable: true,
+    }];
+  });
+};
+
+const toCustomerMenuAllergens = (value: unknown): CustomerMenuAllergen[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((entry) => {
+    const record = toRecord(entry);
+    if (!record) return [];
+
+    const code = toOptionalString(record.code);
+    const label = toOptionalString(record.label);
+    if (!code || !label) return [];
+
+    return [{ code, label }];
+  });
+};
+
+const toCustomerMenuNutrition = (value: unknown): CustomerMenuNutrition | undefined => {
+  const record = toRecord(value);
+  if (!record) return undefined;
+
+  const nutrition: CustomerMenuNutrition = {};
+  const calories = toFiniteNumber(record.calories);
+  const proteinGrams = toFiniteNumber(record.proteinGrams);
+  const carbsGrams = toFiniteNumber(record.carbsGrams);
+  const fatGrams = toFiniteNumber(record.fatGrams);
+  const saltGrams = toFiniteNumber(record.saltGrams);
+
+  if (calories !== undefined) nutrition.calories = calories;
+  if (proteinGrams !== undefined) nutrition.proteinGrams = proteinGrams;
+  if (carbsGrams !== undefined) nutrition.carbsGrams = carbsGrams;
+  if (fatGrams !== undefined) nutrition.fatGrams = fatGrams;
+  if (saltGrams !== undefined) nutrition.saltGrams = saltGrams;
+
+  return Object.keys(nutrition).length > 0 ? nutrition : undefined;
+};
+
+const toCustomerMenuCheckoutRules = (value: unknown): CustomerMenuItemDetails['checkoutRules'] => {
+  const record = toRecord(value);
+  if (!record) return {};
+
+  const checkoutRules: CustomerMenuItemDetails['checkoutRules'] = {};
+  if (typeof record.allowZeroQuantity === 'boolean') {
+    checkoutRules.allowZeroQuantity = record.allowZeroQuantity;
+  }
+
+  const maxQuantity = toFiniteNumber(record.maxQuantity);
+  if (maxQuantity !== undefined) {
+    checkoutRules.maxQuantity = maxQuantity;
+  }
+
+  return checkoutRules;
+};
+
+export const getCustomerMenuItemDetails = async (
+  restaurantId: string,
+  itemId: string,
+): Promise<CustomerMenuItemDetails | null> => {
+  try {
+    const itemRef = doc(
+      db,
+      FIRESTORE_COLLECTIONS.RESTAURANTS,
+      restaurantId,
+      FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+      itemId,
+    );
+    const itemSnapshot = await getDoc(itemRef);
+
+    if (!itemSnapshot.exists()) {
+      return null;
+    }
+
+    const data = itemSnapshot.data();
+
+    return {
+      itemId: itemSnapshot.id,
+      description: toOptionalString(data.description),
+      imageUrl: toOptionalString(data.imageUrl),
+      modifierGroups: toCustomerMenuModifierGroups(data.modifierGroups),
+      supplements: toCustomerMenuSupplements(data.supplements),
+      allergens: toCustomerMenuAllergens(data.allergens),
+      nutrition: toCustomerMenuNutrition(data.nutrition),
+      checkoutRules: toCustomerMenuCheckoutRules(data.checkoutRules),
+    };
+  } catch (error) {
+    console.error('[food-delivery.service] getCustomerMenuItemDetails failed:', error);
     throw error;
   }
 };
@@ -1219,6 +1398,7 @@ export const FoodDeliveryService = {
   updateRestaurantOpeningHours,
   getCustomerRestaurantMenuPage,
   getCustomerRestaurantMenuCategories,
+  getCustomerMenuItemDetails,
   getRestaurantMenuPaginated,
   getRestaurantMenuCategories,
   
