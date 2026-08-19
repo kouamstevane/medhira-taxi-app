@@ -293,6 +293,10 @@ export interface OrderItem {
   itemName: string;
   itemQuantity: number;
   itemPrice: number;
+  customization?: {
+    modifierSelections: CustomerMenuModifierSelection[];
+    supplementIds: string[];
+  };
 }
 
 /**

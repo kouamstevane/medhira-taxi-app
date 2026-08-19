@@ -179,6 +179,14 @@ export const CreateFoodOrderRequestSchema = z.object({
     itemName: z.string().min(1).max(200),
     itemQuantity: z.number().int().positive().max(99),
     itemPrice: z.number().positive(),
+    customization: z.object({
+      modifierSelections: z.array(z.object({
+        groupId: z.string().min(1),
+        selectionType: z.enum(['single', 'multiple']),
+        optionIds: z.array(z.string()),
+      })),
+      supplementIds: z.array(z.string()),
+    }).optional(),
   })).min(1).max(99),
   isWeekend: z.boolean(),
   deliveryAddress: z.string().min(5).max(500),

@@ -2,9 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import type { CustomerMenuItemDetails as CustomerMenuItemDetailsData, MenuItem, Restaurant } from '@/types/food-delivery';
+import type {
+  CustomerMenuCustomizationPayload,
+  CustomerMenuItemDetails as CustomerMenuItemDetailsData,
+  MenuItem,
+  Restaurant,
+} from '@/types/food-delivery';
 import { MenuItemImage } from '@/components/food/MenuItemImage';
-import { CustomerMenuItemCustomization, type CustomerMenuCustomizationPayload } from '@/components/food/CustomerMenuItemCustomization';
+import { CustomerMenuItemCustomization } from '@/components/food/CustomerMenuItemCustomization';
 import { CURRENCY_CODE } from '@/utils/constants';
 
 interface CustomerMenuItemDetailsProps {

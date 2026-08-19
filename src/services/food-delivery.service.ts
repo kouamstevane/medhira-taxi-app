@@ -809,6 +809,14 @@ const CreateFoodOrderSchema = z.object({
     itemName: z.string(),
     itemPrice: z.number().positive(),
     itemQuantity: z.number().int().positive(),
+    customization: z.object({
+      modifierSelections: z.array(z.object({
+        groupId: z.string().min(1),
+        selectionType: z.enum(['single', 'multiple']),
+        optionIds: z.array(z.string()),
+      })),
+      supplementIds: z.array(z.string()),
+    }).optional(),
   })).min(1, 'La commande doit contenir au moins un article'),
   deliveryDistance: z.number().nonnegative(),
   isWeekend: z.boolean(),

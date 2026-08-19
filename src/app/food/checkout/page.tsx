@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useCartStore } from '@/store/cartStore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
+import { buildCheckoutOrderItems } from '@/services/checkout.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { AddressInput } from '@/app/taxi/components/AddressInput';
@@ -187,12 +188,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      const orderItems = items.map(item => ({
-        menuItemId: item.id!,
-        itemName: item.name,
-        itemQuantity: item.quantity,
-        itemPrice: item.price
-      }));
+      const orderItems = buildCheckoutOrderItems(items);
 
       const createdOrder = await FoodDeliveryService.createFoodOrder({
         userId: user!.uid,

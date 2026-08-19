@@ -22,6 +22,14 @@ export interface ClientFoodOrderItem {
   itemName: string;
   itemQuantity: number;
   itemPrice: number;
+  customization?: {
+    modifierSelections: Array<{
+      groupId: string;
+      selectionType: 'single' | 'multiple';
+      optionIds: string[];
+    }>;
+    supplementIds: string[];
+  };
 }
 
 export interface VerifiedMenuItem {
@@ -100,6 +108,7 @@ export function calculateVerifiedFoodOrderTotals(
       itemName: menuItem.name,
       itemQuantity: quantity,
       itemPrice: roundMoney(menuItem.price),
+      customization: item.customization,
     };
   });
 

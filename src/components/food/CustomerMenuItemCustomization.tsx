@@ -8,6 +8,7 @@ import type {
   CustomerMenuSupplement,
   MenuItem,
 } from '@/types/food-delivery';
+import { validateCustomerMenuCustomization } from '@/services/checkout.service';
 import { CURRENCY_CODE } from '@/utils/constants';
 
 interface CustomerMenuItemCustomizationProps {
@@ -177,21 +178,7 @@ export function CustomerMenuItemCustomization({
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    for (const group of modifierGroups) {
-      const selectedIds = modifierSelections[group.id] ?? [];
-      if (selectedIds.length < getGroupMinimumSelections(group)) {
-        setValidationMessage(formatValidationMessage(group, 'min'));
-        return;
-      }
-    }
-
-    if (maximumQuantity !== undefined && quantity > maximumQuantity) {
-      setValidationMessage(`Vous pouvez ajouter jusqu’à ${maximumQuantity} exemplaires pour ce plat.`);
-      return;
-    }
-
-    setValidationMessage(null);
-    onAddToCart?.({
+    const nextPayload: CustomerMenuCustomizationPayload = {
       itemId: item.id,
       quantity,
       modifierSelections: modifierGroups
@@ -204,7 +191,22 @@ export function CustomerMenuItemCustomization({
       supplementIds: selectedSupplementIds,
       checkoutRules,
       customizationPrice: totalCustomizationPrice,
-    });
+    };
+
+    const validation = validateCustomerMenuCustomization({
+      itemId: item.id,
+      modifierGroups,
+      supplements,
+      allergens: [],
+      checkoutRules: checkoutRules ?? {},
+    }, nextPayload);
+    if (!validation.valid) {
+      setValidationMessage(validation.errors[0]?.message ?? 'Vérifiez les choix du plat avant de continuer.');
+      return;
+    }
+
+    setValidationMessage(null);
+    onAddToCart?.(nextPayload);
   };
 
   return (

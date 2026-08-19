@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MenuItemCard } from '../MenuItemCard';
 import { useCartStore } from '@/store/cartStore';
-import type { MenuItem, Restaurant } from '@/types/food-delivery';
+import type { CustomerMenuCustomizationPayload, MenuItem, Restaurant } from '@/types/food-delivery';
 
 jest.mock('@/store/cartStore', () => ({
   useCartStore: jest.fn(),
@@ -29,20 +29,7 @@ jest.mock('@/components/food/CustomerMenuItemDetails', () => ({
     isOpen: boolean;
     item: MenuItem;
     onClose: () => void;
-    onAddToCart?: (payload: {
-      itemId: string;
-      quantity: number;
-      modifierSelections: Array<{
-        groupId: string;
-        selectionType: 'single' | 'multiple';
-        optionIds: string[];
-      }>;
-      supplementIds: string[];
-      checkoutRules?: {
-        allowZeroQuantity?: boolean;
-        maxQuantity?: number;
-      };
-    }) => void;
+    onAddToCart?: (payload: CustomerMenuCustomizationPayload) => void;
   }) => {
     if (!isOpen) return null;
 
