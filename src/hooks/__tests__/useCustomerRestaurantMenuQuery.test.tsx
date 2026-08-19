@@ -6,10 +6,11 @@ import {
 } from '@/services/food-delivery.service';
 
 let searchParams = new URLSearchParams('category=Pizzas');
+let pathname = '/restaurants/resto-1/menu';
 const replace = jest.fn();
 
 jest.mock('next/navigation', () => ({
-  usePathname: () => '/restaurants/resto-1/menu',
+  usePathname: () => pathname,
   useRouter: () => ({ replace }),
   useSearchParams: () => searchParams,
 }));
@@ -37,8 +38,9 @@ const createDeferred = <T,>() => {
 describe('useCustomerRestaurantMenuQuery', () => {
   beforeEach(() => {
     jest.useFakeTimers();
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     searchParams = new URLSearchParams('category=Pizzas');
+    pathname = '/restaurants/resto-1/menu';
     mockedGetCustomerRestaurantMenuCategories.mockResolvedValue([
       { name: 'Pizzas', availableCount: 2 },
     ]);
@@ -168,7 +170,40 @@ describe('useCustomerRestaurantMenuQuery', () => {
       result.current.setSearch('burger');
     });
 
-    expect(replace).toHaveBeenLastCalledWith('/restaurants/resto-1/menu?search=burger&category=Pizzas', {
+    expect(replace).toHaveBeenLastCalledWith('/restaurants/resto-1/menu?category=Pizzas&search=burger', {
+      scroll: false,
+    });
+  });
+
+  it('preserves the canonical restaurant id and unrelated query params when syncing filters', async () => {
+    pathname = '/food/restaurant';
+    searchParams = new URLSearchParams('id=resto-1&category=Pizzas&source=homepage');
+    mockedGetCustomerRestaurantMenuPage.mockResolvedValue({
+      items: [],
+      lastDoc: null,
+      hasMore: false,
+    });
+
+    const { result } = renderHook(() => useCustomerRestaurantMenuQuery('resto-1'));
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(250);
+    });
+
+    act(() => {
+      result.current.setSearch('burger');
+    });
+
+    expect(replace).toHaveBeenLastCalledWith(
+      '/food/restaurant?id=resto-1&category=Pizzas&source=homepage&search=burger',
+      { scroll: false },
+    );
+
+    act(() => {
+      result.current.clearFilters();
+    });
+
+    expect(replace).toHaveBeenLastCalledWith('/food/restaurant?id=resto-1&source=homepage', {
       scroll: false,
     });
   });
@@ -226,6 +261,61 @@ describe('useCustomerRestaurantMenuQuery', () => {
     });
 
     expect(result.current.items).toEqual([{ id: 'item-2', name: 'Burger Maison' }]);
+  });
+
+  it('does not apply an old response after criteria change during the debounce window', async () => {
+    const initialRequest = createDeferred<{
+      items: Array<{ id: string; name: string }>;
+      lastDoc: { id: string } | null;
+      hasMore: boolean;
+    }>();
+    const nextRequest = createDeferred<{
+      items: Array<{ id: string; name: string }>;
+      lastDoc: { id: string } | null;
+      hasMore: boolean;
+    }>();
+
+    mockedGetCustomerRestaurantMenuPage
+      .mockReturnValueOnce(initialRequest.promise)
+      .mockReturnValueOnce(nextRequest.promise);
+
+    const { result } = renderHook(() => useCustomerRestaurantMenuQuery('resto-1'));
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(250);
+    });
+
+    act(() => {
+      result.current.setSearch('burger');
+    });
+
+    await act(async () => {
+      initialRequest.resolve({
+        items: [{ id: 'item-1', name: 'Pizza Margherita' }],
+        lastDoc: { id: 'cursor-1' },
+        hasMore: true,
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.items).toEqual([]);
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(250);
+    });
+
+    await act(async () => {
+      nextRequest.resolve({
+        items: [{ id: 'item-2', name: 'Burger Maison' }],
+        lastDoc: { id: 'cursor-2' },
+        hasMore: false,
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.items).toEqual([{ id: 'item-2', name: 'Burger Maison' }]);
+    });
   });
 
   it('clears the error and refetches on retry', async () => {

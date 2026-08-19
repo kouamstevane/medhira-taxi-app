@@ -57,14 +57,25 @@ export function useCustomerRestaurantMenuQuery(restaurantId: string) {
 
   const cursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
   const requestIdRef = useRef(0);
+  const invalidateActiveRequest = useCallback(() => {
+    requestIdRef.current += 1;
+  }, []);
 
   const syncUrl = useCallback((nextSearch: string, nextCategory: string | null) => {
-    const params = new URLSearchParams();
-    if (nextSearch) params.set('search', nextSearch);
-    if (nextCategory) params.set('category', nextCategory);
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextSearch) {
+      params.set('search', nextSearch);
+    } else {
+      params.delete('search');
+    }
+    if (nextCategory) {
+      params.set('category', nextCategory);
+    } else {
+      params.delete('category');
+    }
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [pathname, router]);
+  }, [pathname, router, searchParams]);
 
   const runQuery = useCallback(async ({
     nextSearch,
@@ -124,6 +135,7 @@ export function useCustomerRestaurantMenuQuery(restaurantId: string) {
   useEffect(() => {
     if (!restaurantId) return;
 
+    invalidateActiveRequest();
     setState((previous) => ({
       ...previous,
       items: [],
@@ -141,7 +153,7 @@ export function useCustomerRestaurantMenuQuery(restaurantId: string) {
     }, DEBOUNCE_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [category, restaurantId, runQuery, search]);
+  }, [category, invalidateActiveRequest, restaurantId, runQuery, search]);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -164,20 +176,23 @@ export function useCustomerRestaurantMenuQuery(restaurantId: string) {
   }, [restaurantId]);
 
   const setSearch = useCallback((nextSearch: string) => {
+    invalidateActiveRequest();
     setSearchState(nextSearch);
     syncUrl(nextSearch, category);
-  }, [category, syncUrl]);
+  }, [category, invalidateActiveRequest, syncUrl]);
 
   const setCategory = useCallback((nextCategory: string | null) => {
+    invalidateActiveRequest();
     setCategoryState(nextCategory);
     syncUrl(search, nextCategory);
-  }, [search, syncUrl]);
+  }, [invalidateActiveRequest, search, syncUrl]);
 
   const clearFilters = useCallback(() => {
+    invalidateActiveRequest();
     setSearchState('');
     setCategoryState(null);
     syncUrl('', null);
-  }, [syncUrl]);
+  }, [invalidateActiveRequest, syncUrl]);
 
   const loadMore = useCallback(() => {
     if (state.isLoading || state.isLoadingMore || !state.hasMore || !cursorRef.current) return;
