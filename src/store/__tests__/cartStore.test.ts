@@ -32,6 +32,12 @@ const item: MenuItem = {
   updatedAt: {} as MenuItem['updatedAt'],
 };
 
+const secondItem: MenuItem = {
+  ...item,
+  id: 'item-2',
+  name: 'Salade fraîcheur',
+};
+
 describe('cartStore', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -80,6 +86,30 @@ describe('cartStore', () => {
         supplementIds: ['drink'],
         checkoutRules: { maxQuantity: 3 },
       },
+    }));
+  });
+
+  it('increments the quantity when the same legacy item is added twice', () => {
+    useCartStore.getState().addItem(secondItem, restaurant, 1);
+    useCartStore.getState().addItem(item, restaurant, 1);
+    useCartStore.getState().addItem(item, restaurant, 1);
+
+    const state = useCartStore.getState();
+
+    expect(state.items).toHaveLength(2);
+    expect(state.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: secondItem.id,
+        quantity: 1,
+      }),
+      expect.objectContaining({
+        id: item.id,
+        quantity: 2,
+      }),
+    ]));
+    expect(state.items.find((cartItem) => cartItem.id === item.id)).toEqual(expect.objectContaining({
+      id: item.id,
+      quantity: 2,
     }));
   });
 });

@@ -70,7 +70,7 @@ export const useCartStore = create<CartState>()(
               items: state.items.map((cartItem) => 
                 cartItem.id === item.id
                   ? { ...cartItem, quantity: cartItem.quantity + nextQuantity } 
-                  : i
+                  : cartItem
               ),
               restaurant,
             };
