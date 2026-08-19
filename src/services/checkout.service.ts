@@ -9,6 +9,7 @@ export type CustomerMenuValidationErrorCode =
   | 'required_modifier_group'
   | 'single_selection_limit'
   | 'modifier_selection_limit'
+  | 'duplicate_modifier_option'
   | 'unknown_modifier_group'
   | 'unknown_modifier_option'
   | 'unavailable_modifier_option'
@@ -100,7 +101,7 @@ export function validateCustomerMenuCustomization(
 
     const selectedOptionIds = new Set(selection.optionIds);
     if (selectedOptionIds.size !== selection.optionIds.length) {
-      errors.push(createError(itemId, 'modifier_selection_limit', `Une option ne peut pas être sélectionnée plusieurs fois pour ${group.label}.`, {
+      errors.push(createError(itemId, 'duplicate_modifier_option', `Une option ne peut pas être sélectionnée plusieurs fois pour ${group.label}.`, {
         groupId: group.id,
       }));
     }
