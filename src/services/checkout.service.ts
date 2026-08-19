@@ -99,6 +99,11 @@ export function validateCustomerMenuCustomization(
     selectedGroupIds.add(selection.groupId);
 
     const selectedOptionIds = new Set(selection.optionIds);
+    if (selectedOptionIds.size !== selection.optionIds.length) {
+      errors.push(createError(itemId, 'modifier_selection_limit', `Une option ne peut pas être sélectionnée plusieurs fois pour ${group.label}.`, {
+        groupId: group.id,
+      }));
+    }
     if (group.selectionType === 'single' && selection.optionIds.length > 1) {
       errors.push(createError(itemId, 'single_selection_limit', `Choisissez une seule option pour ${group.label}.`, {
         groupId: group.id,

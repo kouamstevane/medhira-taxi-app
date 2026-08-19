@@ -124,6 +124,20 @@ describe('customer menu checkout validation', () => {
     ]));
   });
 
+  it('rejects duplicate option ids in a multiple-select group', () => {
+    const result = validateCustomerMenuCustomization(details, payload({
+      modifierSelections: [
+        { groupId: 'size', selectionType: 'single', optionIds: ['regular'] },
+        { groupId: 'extras', selectionType: 'multiple', optionIds: ['cheese', 'cheese'] },
+      ],
+    }));
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'modifier_selection_limit', groupId: 'extras' }),
+    ]));
+  });
+
   it('rejects selections beyond a multiple-select group maximum', () => {
     const result = validateCustomerMenuCustomization(details, payload({
       modifierSelections: [
