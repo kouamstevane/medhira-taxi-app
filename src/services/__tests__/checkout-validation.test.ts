@@ -4,7 +4,11 @@ import type {
   MenuItem,
   Restaurant,
 } from '@/types/food-delivery';
-import { buildCheckoutOrderItems, validateCustomerMenuCustomization } from '../checkout.service';
+import {
+  buildCheckoutOrderItems,
+  validateCartForCheckout,
+  validateCustomerMenuCustomization,
+} from '../checkout.service';
 import { useCartStore } from '@/store/cartStore';
 
 const details: CustomerMenuItemDetails = {
@@ -109,6 +113,17 @@ describe('customer menu checkout validation', () => {
     ]));
   });
 
+  it('rejects duplicate option ids in a single-select group', () => {
+    const result = validateCustomerMenuCustomization(details, payload({
+      modifierSelections: [{ groupId: 'size', selectionType: 'single', optionIds: ['regular', 'regular'] }],
+    }));
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'single_selection_limit' }),
+    ]));
+  });
+
   it('rejects selections beyond a multiple-select group maximum', () => {
     const result = validateCustomerMenuCustomization(details, payload({
       modifierSelections: [
@@ -172,5 +187,32 @@ describe('customer menu checkout validation', () => {
         supplementIds: ['drink'],
       },
     });
+  });
+
+  it('falls back to the legacy item id when menuItemId is absent', () => {
+    const [line] = buildCheckoutOrderItems([{
+      ...item,
+      menuItemId: undefined,
+      quantity: 1,
+    }]);
+
+    expect(line.menuItemId).toBe(item.id);
+  });
+
+  it('rejects a customized cart item when its detail contract is unavailable', () => {
+    const result = validateCartForCheckout([{
+      ...item,
+      menuItemId: item.id,
+      quantity: 1,
+      customization: {
+        modifierSelections: [],
+        supplementIds: [],
+      },
+    }], new Map());
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'item_mismatch' }),
+    ]));
   });
 });

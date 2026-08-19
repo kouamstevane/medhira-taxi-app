@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useCartStore } from '@/store/cartStore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import { buildCheckoutOrderItems } from '@/services/checkout.service';
+import { buildCheckoutOrderItems, validateCartForCheckout } from '@/services/checkout.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { AddressInput } from '@/app/taxi/components/AddressInput';
@@ -186,6 +186,23 @@ export default function CheckoutPage() {
         router.push(getFoodOrderDetailPath(serverOrder.orderId));
         clearCart();
         return;
+      }
+
+      const detailsEntries = await Promise.all(
+        items
+          .filter((item) => Boolean(item.customization))
+          .map(async (item) => {
+            const itemId = item.menuItemId ?? item.id;
+            const details = await FoodDeliveryService.getCustomerMenuItemDetails(restaurant.id, itemId);
+            return [itemId, details] as const;
+          }),
+      );
+      const detailsByItemId = new Map(
+        detailsEntries.filter((entry): entry is [string, NonNullable<typeof entry[1]>] => entry[1] !== null),
+      );
+      const validation = validateCartForCheckout(items, detailsByItemId);
+      if (!validation.valid) {
+        throw new Error(validation.errors[0]?.message ?? 'Vérifiez les personnalisations avant de continuer.');
       }
 
       const orderItems = buildCheckoutOrderItems(items);

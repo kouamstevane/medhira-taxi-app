@@ -32,7 +32,7 @@ export interface CustomerMenuValidationResult {
 
 export interface CheckoutCartItem {
   id: string;
-  menuItemId: string;
+  menuItemId?: string;
   name: string;
   price: number;
   quantity: number;
@@ -45,7 +45,7 @@ export interface CheckoutCartItem {
 
 export function buildCheckoutOrderItems(items: readonly CheckoutCartItem[]): OrderItem[] {
   return items.map((item) => ({
-    menuItemId: item.menuItemId,
+    menuItemId: item.menuItemId ?? item.id,
     itemName: item.name,
     itemQuantity: item.quantity,
     itemPrice: item.price,
@@ -99,7 +99,7 @@ export function validateCustomerMenuCustomization(
     selectedGroupIds.add(selection.groupId);
 
     const selectedOptionIds = new Set(selection.optionIds);
-    if (group.selectionType === 'single' && selectedOptionIds.size > 1) {
+    if (group.selectionType === 'single' && selection.optionIds.length > 1) {
       errors.push(createError(itemId, 'single_selection_limit', `Choisissez une seule option pour ${group.label}.`, {
         groupId: group.id,
       }));
@@ -108,7 +108,7 @@ export function validateCustomerMenuCustomization(
     const maxSelections = group.selectionType === 'single'
       ? 1
       : group.maxSelections > 0 ? group.maxSelections : Number.POSITIVE_INFINITY;
-    if (selectedOptionIds.size > maxSelections) {
+    if (selection.optionIds.length > maxSelections) {
       errors.push(createError(itemId, 'modifier_selection_limit', `Trop d’options sélectionnées pour ${group.label}.`, {
         groupId: group.id,
       }));
@@ -166,16 +166,20 @@ export function validateCartForCheckout(
   const errors: CustomerMenuValidationError[] = [];
 
   for (const item of items) {
-    const details = detailsByItemId.get(item.menuItemId);
+    const itemId = item.menuItemId ?? item.id;
+    const details = detailsByItemId.get(itemId);
     if (!details) {
+      if (item.customization) {
+        errors.push(createError(itemId, 'item_mismatch', 'Les détails de personnalisation de ce plat sont indisponibles.'));
+      }
       if (!Number.isInteger(item.quantity) || item.quantity < 1) {
-        errors.push(createError(item.menuItemId, 'quantity_limit', 'La quantité sélectionnée n’est pas valide.'));
+        errors.push(createError(itemId, 'quantity_limit', 'La quantité sélectionnée n’est pas valide.'));
       }
       continue;
     }
 
     const payload: CustomerMenuCustomizationPayload = {
-      itemId: item.menuItemId,
+      itemId,
       quantity: item.quantity,
       modifierSelections: item.customization?.modifierSelections ?? [],
       supplementIds: item.customization?.supplementIds ?? [],
