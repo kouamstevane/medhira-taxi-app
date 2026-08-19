@@ -109,7 +109,7 @@ describe('customer menu checkout validation', () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'duplicate_modifier_option' }),
+      expect.objectContaining({ code: 'single_selection_limit' }),
     ]));
   });
 
@@ -120,7 +120,7 @@ describe('customer menu checkout validation', () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: 'single_selection_limit' }),
+      expect.objectContaining({ code: 'duplicate_modifier_option' }),
     ]));
   });
 
