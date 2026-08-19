@@ -4,45 +4,69 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import { Restaurant, MenuItem } from '@/types/food-delivery';
-import { MenuItemCard } from '@/components/food/MenuItemCard';
+import { Restaurant } from '@/types/food-delivery';
 import { CartDrawer } from '@/components/food/CartDrawer';
+import { RestaurantMenuNavigation } from '@/components/food/RestaurantMenuNavigation';
+import { RestaurantMenuList } from '@/components/food/RestaurantMenuList';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { useCustomerRestaurantMenuQuery } from '@/hooks/useCustomerRestaurantMenuQuery';
 import { isRestaurantOpenAt } from '@/utils/restaurant-hours';
 
 export default function RestaurantClient() {
-  const params = useParams()
+  const params = useParams();
   const searchParams = useSearchParams();
   const id = searchParams.get('id')?.trim() || (typeof params.id === 'string' ? params.id : '');
   const router = useRouter();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const {
+    items,
+    categories,
+    search,
+    category,
+    isLoading,
+    isLoadingMore,
+    error,
+    hasMore,
+    setSearch,
+    setCategory,
+    loadMore,
+    retry,
+    clearFilters,
+  } = useCustomerRestaurantMenuQuery(id);
 
   useEffect(() => {
-    if (id) {
-      loadRestaurantData();
-    }
-  }, [id]);
+    let cancelled = false;
 
-  const loadRestaurantData = async () => {
-    try {
-      const current = await FoodDeliveryService.getRestaurantById(id);
+    const loadRestaurantData = async () => {
+      try {
+        const current = await FoodDeliveryService.getRestaurantById(id);
 
-      if (current) {
-        setRestaurant(current);
-        const menu = await FoodDeliveryService.getRestaurantMenu(id);
-        setMenuItems(menu);
+        if (!cancelled && current) {
+          setRestaurant(current);
+        }
+      } catch (error) {
+        console.error('Erreur chargement détails:', error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Erreur chargement détails:', error);
-    } finally {
+    };
+
+    if (id) {
+      void loadRestaurantData();
+    } else {
       setLoading(false);
     }
-  };
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   if (loading) {
     return (
@@ -61,18 +85,10 @@ export default function RestaurantClient() {
     );
   }
 
-  // Grouper les items par catégorie
-  const groupedMenu = menuItems.reduce((acc, item) => {
-    const category = item.category || 'Populaires';
-    if (!acc[category]) acc[category] = [];
-    acc[category].push(item);
-    return acc;
-  }, {} as Record<string, MenuItem[]>);
   const isRestaurantOpen = isRestaurantOpenAt(restaurant, new Date());
 
   return (
     <div className="min-h-screen bg-background pb-32 max-w-[430px] mx-auto">
-      {/* Cover Image & Back button */}
       <div className="relative h-64 w-full bg-white/5">
         {restaurant.imageUrl && (
           <Image
@@ -93,7 +109,6 @@ export default function RestaurantClient() {
         </button>
       </div>
 
-      {/* Restaurant Info Header */}
       <div className="relative -mt-16 px-4 z-10">
         <div className="glass-card rounded-2xl p-6 border border-white/5">
           <div className="flex justify-between items-start">
@@ -110,7 +125,6 @@ export default function RestaurantClient() {
             {Array.isArray(restaurant.cuisineType) ? restaurant.cuisineType.join(' • ') : restaurant.cuisineType} • {restaurant.avgPricePerPerson} {CURRENCY_CODE} / pers.
           </p>
 
-
           <div className="flex items-center gap-6 text-sm text-slate-300 font-medium">
             <div className="flex items-center gap-2">
               <MaterialIcon name="schedule" size="sm" className="text-primary" />
@@ -126,8 +140,16 @@ export default function RestaurantClient() {
         </div>
       </div>
 
-      {/* Menu List */}
       <div className="px-4 mt-8">
+        <RestaurantMenuNavigation
+          search={search}
+          category={category}
+          categories={categories}
+          onSearchChange={setSearch}
+          onCategoryChange={setCategory}
+          onClearFilters={clearFilters}
+        />
+
         {!isRestaurantOpen && (
           <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 mb-6 flex items-start gap-3">
             <MaterialIcon name="info" size="md" className="shrink-0 mt-0.5" />
@@ -138,22 +160,20 @@ export default function RestaurantClient() {
           </div>
         )}
 
-        {Object.entries(groupedMenu).map(([category, items]) => (
-          <div key={category} className="mb-8">
-            <h2 className="text-xl font-bold text-white mb-4 tracking-tight capitalize">{category}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {items.map((item) => (
-                <MenuItemCard key={item.id} item={item} restaurant={restaurant} />
-              ))}
-            </div>
-          </div>
-        ))}
-
-        {menuItems.length === 0 && (
-          <div className="text-center py-10 glass-card rounded-2xl border border-white/5">
-            <p className="text-slate-400 font-medium">Ce restaurant n'a pas encore ajouté de plats à son menu.</p>
-          </div>
-        )}
+        {isRestaurantOpen ? (
+          <RestaurantMenuList
+            restaurant={restaurant}
+            items={items}
+            search={search}
+            category={category}
+            isLoading={isLoading}
+            isLoadingMore={isLoadingMore}
+            error={error}
+            hasMore={hasMore}
+            onLoadMore={loadMore}
+            onRetry={retry}
+          />
+        ) : null}
       </div>
 
       {isRestaurantOpen && <CartDrawer />}
