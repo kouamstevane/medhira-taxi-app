@@ -1,19 +1,14 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import type { CustomerMenuItemDetails, CustomerMenuModifierGroup, CustomerMenuSupplement, MenuItem } from '@/types/food-delivery';
+import React, { useEffect, useMemo, useState } from 'react';
+import type {
+  CustomerMenuCustomizationPayload,
+  CustomerMenuItemDetails,
+  CustomerMenuModifierGroup,
+  CustomerMenuSupplement,
+  MenuItem,
+} from '@/types/food-delivery';
 import { CURRENCY_CODE } from '@/utils/constants';
-
-export interface CustomerMenuCustomizationPayload {
-  itemId: string;
-  quantity: number;
-  modifierSelections: Array<{
-    groupId: string;
-    selectionType: CustomerMenuModifierGroup['selectionType'];
-    optionIds: string[];
-  }>;
-  supplementIds: string[];
-}
 
 interface CustomerMenuItemCustomizationProps {
   item: Pick<MenuItem, 'id' | 'name' | 'price'>;
@@ -73,13 +68,32 @@ export function CustomerMenuItemCustomization({
   item,
   modifierGroups,
   supplements,
+  checkoutRules,
   onAddToCart,
 }: CustomerMenuItemCustomizationProps) {
+  const minimumQuantity = 1;
+  const maximumQuantity = checkoutRules?.maxQuantity && checkoutRules.maxQuantity > 0
+    ? checkoutRules.maxQuantity
+    : undefined;
   const [modifierSelections, setModifierSelections] = useState<ModifierSelectionsState>(() =>
     getInitialModifierSelections(modifierGroups),
   );
   const [selectedSupplementIds, setSelectedSupplementIds] = useState<string[]>([]);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState(minimumQuantity);
+
+  useEffect(() => {
+    setModifierSelections(getInitialModifierSelections(modifierGroups));
+    setSelectedSupplementIds([]);
+    setValidationMessage(null);
+    setQuantity(minimumQuantity);
+  }, [
+    item.id,
+    modifierGroups,
+    supplements,
+    checkoutRules?.allowZeroQuantity,
+    checkoutRules?.maxQuantity,
+  ]);
 
   const totalCustomizationPrice = useMemo(() => {
     const modifierTotal = modifierGroups.reduce((sum, group) => {
@@ -99,6 +113,23 @@ export function CustomerMenuItemCustomization({
 
     return modifierTotal + supplementTotal;
   }, [modifierGroups, modifierSelections, selectedSupplementIds, supplements]);
+
+  const handleIncrementQuantity = () => {
+    setValidationMessage(null);
+    setQuantity((current) => {
+      if (maximumQuantity !== undefined && current >= maximumQuantity) {
+        setValidationMessage(`Vous pouvez ajouter jusqu’à ${maximumQuantity} exemplaires pour ce plat.`);
+        return current;
+      }
+
+      return current + 1;
+    });
+  };
+
+  const handleDecrementQuantity = () => {
+    setValidationMessage(null);
+    setQuantity((current) => Math.max(minimumQuantity, current - 1));
+  };
 
   const handleSingleSelection = (group: CustomerMenuModifierGroup, optionId: string) => {
     setModifierSelections((current) => ({
@@ -154,10 +185,15 @@ export function CustomerMenuItemCustomization({
       }
     }
 
+    if (maximumQuantity !== undefined && quantity > maximumQuantity) {
+      setValidationMessage(`Vous pouvez ajouter jusqu’à ${maximumQuantity} exemplaires pour ce plat.`);
+      return;
+    }
+
     setValidationMessage(null);
     onAddToCart?.({
       itemId: item.id,
-      quantity: 1,
+      quantity,
       modifierSelections: modifierGroups
         .map((group) => ({
           groupId: group.id,
@@ -166,11 +202,46 @@ export function CustomerMenuItemCustomization({
         }))
         .filter((group) => group.optionIds.length > 0),
       supplementIds: selectedSupplementIds,
+      checkoutRules,
+      customizationPrice: totalCustomizationPrice,
     });
   };
 
   return (
     <form className="space-y-5" onSubmit={handleSubmit}>
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Quantité</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              {maximumQuantity !== undefined
+                ? `Quantité maximale : ${maximumQuantity}`
+                : 'Ajoutez la quantité souhaitée avant de confirmer.'}
+            </p>
+          </div>
+
+          <div className="flex items-center overflow-hidden rounded-full border border-white/10 bg-black/10">
+            <button
+              type="button"
+              aria-label="Diminuer la quantité"
+              onClick={handleDecrementQuantity}
+              className="px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+            >
+              -
+            </button>
+            <span className="min-w-12 px-3 text-center text-sm font-semibold text-white">{quantity}</span>
+            <button
+              type="button"
+              aria-label="Augmenter la quantité"
+              onClick={handleIncrementQuantity}
+              className="px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      </section>
+
       {modifierGroups.map((group) => {
         const selectedIds = modifierSelections[group.id] ?? [];
 
@@ -264,15 +335,15 @@ export function CustomerMenuItemCustomization({
       <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
         <div className="flex items-center justify-between text-sm text-slate-300">
           <span>{item.name}</span>
-          <span>{item.price.toFixed(2)} {CURRENCY_CODE}</span>
+          <span>{(item.price * quantity).toFixed(2)} {CURRENCY_CODE}</span>
         </div>
         <div className="mt-2 flex items-center justify-between text-sm text-slate-300">
           <span>Personnalisation</span>
-          <span>{totalCustomizationPrice.toFixed(2)} {CURRENCY_CODE}</span>
+          <span>{(totalCustomizationPrice * quantity).toFixed(2)} {CURRENCY_CODE}</span>
         </div>
         <div className="mt-3 flex items-center justify-between text-base font-semibold text-white">
           <span>Total</span>
-          <span>{(item.price + totalCustomizationPrice).toFixed(2)} {CURRENCY_CODE}</span>
+          <span>{((item.price + totalCustomizationPrice) * quantity).toFixed(2)} {CURRENCY_CODE}</span>
         </div>
       </div>
 

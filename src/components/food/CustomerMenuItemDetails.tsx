@@ -56,6 +56,7 @@ export function CustomerMenuItemDetails({
     const loadDetails = async () => {
       setLoading(true);
       setError(null);
+      setDetails(null);
 
       try {
         const nextDetails = await FoodDeliveryService.getCustomerMenuItemDetails(restaurant.id, item.id);
@@ -203,6 +204,7 @@ export function CustomerMenuItemDetails({
 
               <div className="mt-4">
                 <CustomerMenuItemCustomization
+                  key={`${item.id}:${details.itemId}:${details.modifierGroups.length}:${details.supplements.length}:${details.checkoutRules.maxQuantity ?? 'none'}:${details.checkoutRules.allowZeroQuantity ?? 'none'}`}
                   item={item}
                   modifierGroups={details.modifierGroups}
                   supplements={details.supplements}
@@ -217,4 +219,3 @@ export function CustomerMenuItemDetails({
     </div>
   );
 }
-

@@ -222,6 +222,12 @@ export interface CustomerMenuNutrition {
   saltGrams?: number;
 }
 
+export interface CustomerMenuModifierSelection {
+  groupId: string;
+  selectionType: CustomerMenuModifierGroup['selectionType'];
+  optionIds: string[];
+}
+
 export interface CustomerMenuItemDetails {
   itemId: string;
   description?: string;
@@ -234,6 +240,15 @@ export interface CustomerMenuItemDetails {
     allowZeroQuantity?: boolean;
     maxQuantity?: number;
   };
+}
+
+export interface CustomerMenuCustomizationPayload {
+  itemId: string;
+  quantity: number;
+  modifierSelections: CustomerMenuModifierSelection[];
+  supplementIds: string[];
+  checkoutRules?: CustomerMenuItemDetails['checkoutRules'];
+  customizationPrice: number;
 }
 
 // ============================================================================

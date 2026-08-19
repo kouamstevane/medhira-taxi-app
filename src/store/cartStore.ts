@@ -1,9 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { MenuItem, Restaurant } from '@/types/food-delivery';
+import type { CustomerMenuCustomizationPayload, MenuItem, Restaurant } from '@/types/food-delivery';
 
 export interface CartItem extends MenuItem {
+  menuItemId: string;
+  basePrice?: number;
   quantity: number;
+  customization?: {
+    modifierSelections: CustomerMenuCustomizationPayload['modifierSelections'];
+    supplementIds: string[];
+    checkoutRules?: CustomerMenuCustomizationPayload['checkoutRules'];
+  };
 }
 
 interface CartState {
@@ -11,7 +18,8 @@ interface CartState {
   restaurant: Restaurant | null;
   
   // Actions
-  addItem: (item: MenuItem, restaurant: Restaurant) => void;
+  addItem: (item: MenuItem, restaurant: Restaurant, quantity?: number) => void;
+  addCustomizedItem: (item: MenuItem, restaurant: Restaurant, payload: CustomerMenuCustomizationPayload) => void;
   removeItem: (itemId: string) => void;
   updateQuantity: (itemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -21,27 +29,47 @@ interface CartState {
   getSubtotal: () => number;
 }
 
+const normalizeModifierSelections = (modifierSelections: CustomerMenuCustomizationPayload['modifierSelections']) => (
+  modifierSelections
+    .map((selection) => ({
+      ...selection,
+      optionIds: [...selection.optionIds].sort(),
+    }))
+    .sort((left, right) => left.groupId.localeCompare(right.groupId))
+);
+
+const buildCustomizedCartItemId = (
+  itemId: string,
+  payload: CustomerMenuCustomizationPayload,
+) => JSON.stringify({
+  itemId,
+  modifierSelections: normalizeModifierSelections(payload.modifierSelections),
+  supplementIds: [...payload.supplementIds].sort(),
+  checkoutRules: payload.checkoutRules ?? {},
+});
+
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
       restaurant: null,
 
-      addItem: (item, restaurant) => {
+      addItem: (item, restaurant, quantity = 1) => {
         set((state) => {
+          const nextQuantity = Math.max(quantity, 1);
           if (state.restaurant && state.restaurant.id !== restaurant.id) {
             return {
-              items: [{ ...item, quantity: 1 }],
+              items: [{ ...item, menuItemId: item.id, quantity: nextQuantity }],
               restaurant,
             };
           }
 
-          const existingItem = state.items.find(i => i.id === item.id);
+          const existingItem = state.items.find((cartItem) => cartItem.id === item.id);
           if (existingItem) {
             return {
-              items: state.items.map(i => 
-                i.id === item.id 
-                  ? { ...i, quantity: i.quantity + 1 } 
+              items: state.items.map((cartItem) => 
+                cartItem.id === item.id
+                  ? { ...cartItem, quantity: cartItem.quantity + nextQuantity } 
                   : i
               ),
               restaurant,
@@ -49,8 +77,68 @@ export const useCartStore = create<CartState>()(
           }
 
           return {
-            items: [...state.items, { ...item, quantity: 1 }],
+            items: [...state.items, { ...item, menuItemId: item.id, quantity: nextQuantity }],
             restaurant: restaurant,
+          };
+        });
+      },
+
+      addCustomizedItem: (item, restaurant, payload) => {
+        set((state) => {
+          const maxQuantity = payload.checkoutRules?.maxQuantity && payload.checkoutRules.maxQuantity > 0
+            ? payload.checkoutRules.maxQuantity
+            : undefined;
+          const requestedQuantity = Math.max(payload.quantity, 1);
+          const nextCartItemId = buildCustomizedCartItemId(item.id, payload);
+          const normalizedSelections = normalizeModifierSelections(payload.modifierSelections);
+
+          const buildCartItems = (items: CartItem[]) => {
+            const existingItem = items.find((cartItem) => cartItem.id === nextCartItemId);
+            if (existingItem) {
+              const nextQuantity = existingItem.quantity + requestedQuantity;
+              const boundedQuantity = maxQuantity !== undefined
+                ? Math.min(nextQuantity, maxQuantity)
+                : nextQuantity;
+
+              return items.map((cartItem) => (
+                cartItem.id === nextCartItemId
+                  ? { ...cartItem, quantity: boundedQuantity }
+                  : cartItem
+              ));
+            }
+
+            const boundedQuantity = maxQuantity !== undefined
+              ? Math.min(requestedQuantity, maxQuantity)
+              : requestedQuantity;
+
+            return [
+              ...items,
+              {
+                ...item,
+                id: nextCartItemId,
+                menuItemId: item.id,
+                basePrice: item.price,
+                price: item.price + payload.customizationPrice,
+                quantity: boundedQuantity,
+                customization: {
+                  modifierSelections: normalizedSelections,
+                  supplementIds: [...payload.supplementIds].sort(),
+                  checkoutRules: payload.checkoutRules,
+                },
+              },
+            ];
+          };
+
+          if (state.restaurant && state.restaurant.id !== restaurant.id) {
+            return {
+              items: buildCartItems([]),
+              restaurant,
+            };
+          }
+
+          return {
+            items: buildCartItems(state.items),
+            restaurant,
           };
         });
       },

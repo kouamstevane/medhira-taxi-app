@@ -88,6 +88,8 @@ describe('CustomerMenuItemCustomization', () => {
         { groupId: 'toppings', selectionType: 'multiple', optionIds: ['cheese', 'bacon'] },
       ],
       supplementIds: ['drink'],
+      checkoutRules: undefined,
+      customizationPrice: 6.5,
     });
   });
 
@@ -115,5 +117,85 @@ describe('CustomerMenuItemCustomization', () => {
 
     expect(screen.getByText('Vous pouvez choisir jusqu’à 2 options pour Garnitures.')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Oignons' })).not.toBeChecked();
+  });
+
+  it('resets previous selections and validation when the active item changes', async () => {
+    const user = userEvent.setup();
+    const onAddToCart = jest.fn();
+    const nextItem: MenuItem = {
+      ...item,
+      id: 'item-2',
+      name: 'Wrap du chef',
+    };
+
+    const { rerender } = render(
+      <CustomerMenuItemCustomization
+        item={item}
+        modifierGroups={modifierGroups}
+        supplements={supplements}
+        onAddToCart={onAddToCart}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Ajouter au panier' }));
+    expect(screen.getByText('Sélectionnez au moins 1 option pour Taille.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'Grand' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Fromage' }));
+    expect(screen.getByRole('radio', { name: 'Grand' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Fromage' })).toBeChecked();
+
+    rerender(
+      <CustomerMenuItemCustomization
+        item={nextItem}
+        modifierGroups={modifierGroups}
+        supplements={supplements}
+        onAddToCart={onAddToCart}
+      />,
+    );
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Grand' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Fromage' })).not.toBeChecked();
+  });
+
+  it('enforces checkout quantity rules and includes them in the add-to-cart payload', async () => {
+    const user = userEvent.setup();
+    const onAddToCart = jest.fn();
+
+    render(
+      <CustomerMenuItemCustomization
+        item={item}
+        modifierGroups={modifierGroups}
+        supplements={supplements}
+        checkoutRules={{ maxQuantity: 2 }}
+        onAddToCart={onAddToCart}
+      />,
+    );
+
+    expect(screen.getByText('Quantité maximale : 2')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'Petit' }));
+    await user.click(screen.getByRole('button', { name: 'Augmenter la quantité' }));
+    expect(screen.getByText('2')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Augmenter la quantité' }));
+    expect(screen.getByText('Vous pouvez ajouter jusqu’à 2 exemplaires pour ce plat.')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Ajouter au panier' }));
+
+    expect(onAddToCart).toHaveBeenCalledWith({
+      itemId: item.id,
+      quantity: 2,
+      modifierSelections: [
+        { groupId: 'size', selectionType: 'single', optionIds: ['small'] },
+      ],
+      supplementIds: [],
+      checkoutRules: {
+        maxQuantity: 2,
+      },
+      customizationPrice: 0,
+    });
   });
 });
