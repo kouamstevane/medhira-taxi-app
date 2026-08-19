@@ -843,6 +843,15 @@
       "collectionGroup": "menu_items",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "isAvailable", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "menu_items",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "searchPrefixes", "arrayConfig": "CONTAINS" },
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "__name__", "order": "ASCENDING" }

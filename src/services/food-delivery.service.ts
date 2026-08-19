@@ -376,6 +376,97 @@ export const getRestaurantMenu = async (
   }
 };
 
+export interface CustomerRestaurantMenuPageOptions {
+  restaurantId: string;
+  search?: string;
+  category?: string | null;
+  cursor?: QueryDocumentSnapshot<DocumentData> | null;
+  pageSize?: number;
+}
+
+export interface CustomerRestaurantMenuPage {
+  items: MenuItem[];
+  lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+  hasMore: boolean;
+}
+
+export interface CustomerRestaurantMenuCategory {
+  name: string;
+  availableCount: number;
+}
+
+export const getCustomerRestaurantMenuPage = async (
+  options: CustomerRestaurantMenuPageOptions,
+): Promise<CustomerRestaurantMenuPage> => {
+  try {
+    const boundedPageSize = Math.max(1, Math.min(options.pageSize ?? 24, 24));
+    const menuRef = collection(
+      db,
+      FIRESTORE_COLLECTIONS.RESTAURANTS,
+      options.restaurantId,
+      FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+    );
+
+    const constraints: QueryConstraint[] = [where('isAvailable', '==', true)];
+    const normalizedSearch = normalizeMenuSearchValue(options.search ?? '');
+    if (normalizedSearch.length >= 2) {
+      constraints.push(where('searchPrefixes', 'array-contains', normalizedSearch));
+    }
+    if (options.category) {
+      constraints.push(where('category', '==', options.category));
+    }
+    constraints.push(orderBy('category', 'asc'), orderBy(documentId(), 'asc'));
+    if (options.cursor) {
+      constraints.push(startAfter(options.cursor));
+    }
+    constraints.push(limit(boundedPageSize));
+
+    const querySnapshot = await getDocs(query(menuRef, ...constraints));
+    const items = querySnapshot.docs.map((docSnap) => ({
+      ...docSnap.data(),
+      id: docSnap.id,
+    })) as MenuItem[];
+
+    return {
+      items,
+      lastDoc: querySnapshot.docs.at(-1) ?? null,
+      hasMore: querySnapshot.docs.length === boundedPageSize,
+    };
+  } catch (error) {
+    console.error('[food-delivery.service] getCustomerRestaurantMenuPage failed:', error);
+    throw error;
+  }
+};
+
+export const getCustomerRestaurantMenuCategories = async (
+  restaurantId: string,
+): Promise<CustomerRestaurantMenuCategory[]> => {
+  try {
+    const menuRef = collection(
+      db,
+      FIRESTORE_COLLECTIONS.RESTAURANTS,
+      restaurantId,
+      FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+    );
+
+    const querySnapshot = await getDocs(query(menuRef, where('isAvailable', '==', true)));
+    const counts = new Map<string, number>();
+
+    for (const docSnap of querySnapshot.docs) {
+      const name = String(docSnap.data().category ?? '').trim();
+      if (!name) continue;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+
+    return Array.from(counts.entries())
+      .map(([name, availableCount]) => ({ name, availableCount }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  } catch (error) {
+    console.error('[food-delivery.service] getCustomerRestaurantMenuCategories failed:', error);
+    throw error;
+  }
+};
+
 export interface MenuPage {
   items: MenuItem[];
   lastDoc: QueryDocumentSnapshot<DocumentData> | null;
@@ -530,19 +621,6 @@ export const createRestaurant = async (
 // ============================================================================
 // COMMANDES (Règles 3, 4, 5, 8)
 // ============================================================================
-
-/**
- * Génère un code unique de récupération (6 caractères alphanumériques)
- * Utilisé par le chauffeur pour prouver la récupération au restaurant (Règle 4)
- */
-const generatePickupCode = (): string => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-};
 
 const CreateFoodOrderSchema = z.object({
   userId: z.string().min(1, 'User ID requis'),
@@ -1139,6 +1217,8 @@ export const FoodDeliveryService = {
   getPendingRestaurants,
   updateRestaurantStatus,
   updateRestaurantOpeningHours,
+  getCustomerRestaurantMenuPage,
+  getCustomerRestaurantMenuCategories,
   getRestaurantMenuPaginated,
   getRestaurantMenuCategories,
   
