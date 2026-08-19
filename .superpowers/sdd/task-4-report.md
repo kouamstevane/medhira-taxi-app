@@ -3,7 +3,7 @@
 Status: complete
 
 Commit(s):
-- Pending commit
+- `4744dd7` - `feat: paginate customer restaurant menus`
 
 Files:
 - `src/app/food/restaurant/[id]/RestaurantClient.tsx`
