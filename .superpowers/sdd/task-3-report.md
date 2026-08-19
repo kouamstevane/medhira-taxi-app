@@ -1,47 +1,33 @@
-# Task 3 Report: Firestore Rules and Indexes
+# Task 3 Report
 
-## Implementation
+Status: complete
 
-- Added `personal_driver_subscriptions` rules: owners and admins can read; all client SDK writes are denied, preserving Cloud Functions/Admin SDK control of payment and activation state.
-- Added `personal_driver_trips` rules: owners, assigned drivers, and admins can read; admins can create, update, and delete; assigned drivers can update only operational fields.
-- Added five required composite indexes for subscription and trip access patterns.
-- Added focused emulator-backed rules coverage in `tests/firestore/personal-driver.rules.test.ts`.
+Commit(s):
+- Implementation: `8a1e3cc` (`feat: add restaurant menu navigation and list`)
 
-## Test Results
+Files:
+- `src/components/food/RestaurantMenuNavigation.tsx`
+- `src/components/food/RestaurantMenuList.tsx`
+- `src/components/food/__tests__/RestaurantMenuNavigation.test.tsx`
+- `src/components/food/__tests__/RestaurantMenuList.test.tsx`
 
-Initial required command:
+Exact commands and output:
+- `npx jest src/components/food/__tests__/RestaurantMenuNavigation.test.tsx src/components/food/__tests__/RestaurantMenuList.test.tsx --runInBand`
+  - Red run: failed as expected because the components did not exist.
+  - Key output:
+    - `Cannot find module '../RestaurantMenuList' from 'src/components/food/__tests__/RestaurantMenuList.test.tsx'`
+    - `Cannot find module '../RestaurantMenuNavigation' from 'src/components/food/__tests__/RestaurantMenuNavigation.test.tsx'`
+- `npx jest src/components/food/__tests__/RestaurantMenuNavigation.test.tsx src/components/food/__tests__/RestaurantMenuList.test.tsx --runInBand`
+  - Green run: `Test Suites: 2 passed, 2 total`
+  - Green run: `Tests: 3 passed, 3 total`
+- `npx eslint src/components/food/RestaurantMenuNavigation.tsx src/components/food/RestaurantMenuList.tsx src/components/food/__tests__/RestaurantMenuNavigation.test.tsx src/components/food/__tests__/RestaurantMenuList.test.tsx`
+  - Passed with exit code `0` and no output.
 
-```text
-npm run test:firestore -- personal-driver
-```
+Self-review:
+- `RestaurantMenuNavigation` is accessible, sticky, horizontally scrollable, and exposes the exact French labels and counts required by the brief.
+- `RestaurantMenuList` renders `MenuItemCard`, shows initial skeletons, inline next-page loading, retryable error state, empty filtered messaging, and the load-more control without pulling restaurant-open logic into the component.
+- The implementation keeps the changes scoped to the two requested components and their tests.
 
-Result: failed before implementation because no Firestore emulator was listening on `127.0.0.1:8080`. The Jest pattern also included unrelated suites, which produced existing failures in `src/__tests__/unit/firestore-error-handler.test.ts` and the shared Firestore Jest setup.
-
-Focused verification command:
-
-```text
-npx firebase emulators:exec --only firestore "npx jest --config jest.firestore.config.js tests/firestore/personal-driver.rules.test.ts --runInBand"
-```
-
-Result: passed. One suite, six tests passed.
-
-The focused test locally neutralizes the shared setup's recursive `console.warn` and `console.error` hooks so expected permission denials can be asserted without stack-overflowing. No shared setup files were changed.
-
-## Validation
-
-- `firestore.indexes.json` parses as valid JSON.
-- `git diff --check` passed for the implementation files.
-
-## Review Fix Evidence
-
-- Changed `personal_driver_subscriptions` create, update, and delete rules to `false`; Admin SDK writes remain available because Admin SDK bypasses Firestore rules.
-- Replaced the admin client-SDK subscription activation test with negative coverage for admin create/update/delete and owner create/update/delete attempts, including `status` and `paymentStatus`.
-- Strengthened assigned-driver trip coverage for protected `assignedDriverId`, `userId`, `subscriptionId`, and `scheduledAt` fields, and added read/update denial coverage for an unassigned driver.
-
-Focused verification command:
-
-```text
-npx firebase emulators:exec --only firestore "npx jest --config jest.firestore.config.js tests/firestore/personal-driver.rules.test.ts --runInBand"
-```
-
-Result: passed. One suite, eight tests passed.
+Concerns:
+- I did not run a browser visual pass, so the sticky layout and overflow behavior were verified through implementation and tests rather than screenshots.
+- The working tree still contains unrelated edits in `.superpowers/sdd/task-1-report.md` and `.superpowers/sdd/task-2-report.md`; I left those untouched.
