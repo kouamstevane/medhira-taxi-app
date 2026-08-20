@@ -79,6 +79,7 @@ function makeRequest(data: unknown, uid?: string) {
 describe('clientManagePersonalDriver', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers().setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
     mockTransaction.get.mockReset();
     mockTransaction.update.mockReset();
     mockTransaction.set.mockReset();

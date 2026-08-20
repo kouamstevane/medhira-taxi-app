@@ -19,3 +19,21 @@ if (typeof global.TextEncoder === 'undefined') {
   global.TextEncoder = TextEncoder;
   global.TextDecoder = TextDecoder;
 }
+
+if (typeof global.ReadableStream === 'undefined') {
+  const { ReadableStream, WritableStream, TransformStream } = require('stream/web');
+  global.ReadableStream = ReadableStream;
+  global.WritableStream = WritableStream;
+  global.TransformStream = TransformStream;
+}
+
+if (typeof global.setImmediate === 'undefined') {
+  global.setImmediate = (callback, ...args) => setTimeout(callback, 0, ...args);
+  global.clearImmediate = (timer) => clearTimeout(timer);
+}
+
+if (typeof global.MessagePort === 'undefined') {
+  const { MessagePort, MessageChannel } = require('worker_threads');
+  global.MessagePort = MessagePort;
+  global.MessageChannel = MessageChannel;
+}

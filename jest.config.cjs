@@ -7,6 +7,10 @@
  */
 
 const nextJest = require('next/jest');
+const path = require('path');
+
+const escapePathForRegex = (value) => value.replaceAll('\\', '\\\\').replaceAll('.', '\\.');
+const ignorePath = (relativePath) => escapePathForRegex(path.resolve(__dirname, relativePath)) + '[\\\\/]';
 
 const createJestConfig = nextJest({
   // Chemin vers l'app Next.js pour charger next.config.js et .env
@@ -47,9 +51,9 @@ const customJestConfig = {
     '<rootDir>/.worktrees/',
 
     // Tests Playwright — doivent être lancés via `npx playwright test`
-    '<rootDir>/e2e/',
+    ignorePath('e2e'),
     // Tests Firestore rules — nécessitent les émulateurs Firebase (`npm run test:firestore:emulators`)
-    '<rootDir>/tests/',
+    ignorePath('tests'),
     // Fichiers de setup/helpers qui ne contiennent pas de tests
     '<rootDir>/src/__tests__/setup/',
   ],
