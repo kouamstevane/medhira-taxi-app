@@ -12,14 +12,15 @@ interface RestaurantCardProps {
 
 export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) => {
   const isOpen = isRestaurantOpenAt(restaurant, new Date());
+  const coverImageUrl = restaurant.coverImageUrl || restaurant.imageUrl;
 
   return (
     <Link href={`/food/restaurant?id=${encodeURIComponent(restaurant.id)}`} className="block">
       <div className="glass-card rounded-2xl border border-white/5 overflow-hidden hover:border-white/10 transition-all duration-300 hover:scale-[1.01]">
         <div className="relative h-48 w-full bg-white/10">
-          {restaurant.imageUrl ? (
+          {coverImageUrl ? (
             <Image
-              src={restaurant.imageUrl}
+              src={coverImageUrl}
               alt={restaurant.name}
               fill
               className="object-cover"

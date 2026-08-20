@@ -86,13 +86,14 @@ export default function RestaurantClient() {
   }
 
   const isRestaurantOpen = isRestaurantOpenAt(restaurant, new Date());
+  const coverImageUrl = restaurant.coverImageUrl || restaurant.imageUrl;
 
   return (
     <div className="min-h-screen bg-background pb-32 max-w-[430px] mx-auto">
       <div className="relative h-64 w-full bg-white/5">
-        {restaurant.imageUrl && (
+        {coverImageUrl && (
           <Image
-            src={restaurant.imageUrl}
+            src={coverImageUrl}
             alt={restaurant.name}
             fill
             className="object-cover"
@@ -111,8 +112,23 @@ export default function RestaurantClient() {
 
       <div className="relative -mt-16 px-4 z-10">
         <div className="glass-card rounded-2xl p-6 border border-white/5">
-          <div className="flex justify-between items-start">
-            <h1 className="text-2xl font-extrabold text-white mb-2">{restaurant.name}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              {restaurant.logoUrl ? (
+                <Image
+                  src={restaurant.logoUrl}
+                  alt={`Logo ${restaurant.name}`}
+                  width={52}
+                  height={52}
+                  className="size-13 shrink-0 rounded-xl object-cover ring-2 ring-white/10"
+                />
+              ) : (
+                <div className="flex size-13 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <MaterialIcon name="restaurant" size="lg" />
+                </div>
+              )}
+              <h1 className="text-2xl font-extrabold text-white">{restaurant.name}</h1>
+            </div>
             {restaurant.rating > 0 && (
               <div className="flex items-center gap-1.5 bg-green-500/10 text-green-400 px-2.5 py-1 rounded-lg font-bold">
                 <MaterialIcon name="star" size="sm" filled />

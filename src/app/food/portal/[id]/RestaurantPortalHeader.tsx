@@ -2,15 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { AuthService } from '@/services';
 
 interface RestaurantPortalHeaderProps {
   restaurantName: string;
+  logoUrl?: string | null;
 }
 
-export function RestaurantPortalHeader({ restaurantName }: RestaurantPortalHeaderProps) {
+export function RestaurantPortalHeader({ restaurantName, logoUrl }: RestaurantPortalHeaderProps) {
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,9 +34,13 @@ export function RestaurantPortalHeader({ restaurantName }: RestaurantPortalHeade
   return (
     <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/5 bg-background/80 px-4 py-4 backdrop-blur-xl sm:px-8">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-          <MaterialIcon name="shopping_bag" size="lg" className="text-primary" />
-        </div>
+        {logoUrl ? (
+          <Image src={logoUrl} alt={`Logo ${restaurantName}`} width={40} height={40} className="size-10 shrink-0 rounded-xl object-cover" />
+        ) : (
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+            <MaterialIcon name="shopping_bag" size="lg" className="text-primary" />
+          </div>
+        )}
         <div className="min-w-0">
           <h1 className="truncate text-xl font-bold text-white">{restaurantName}</h1>
           <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Tableau de bord gérant</p>

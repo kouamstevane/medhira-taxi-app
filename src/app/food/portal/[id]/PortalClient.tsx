@@ -123,7 +123,7 @@ export default function PortalClient() {
     <div className="min-h-screen bg-background">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
 
-      <RestaurantPortalHeader restaurantName={restaurant.name} />
+      <RestaurantPortalHeader restaurantName={restaurant.name} logoUrl={restaurant.logoUrl} />
 
       <main className="max-w-6xl mx-auto p-4 sm:p-8">
 

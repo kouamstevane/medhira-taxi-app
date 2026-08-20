@@ -49,4 +49,10 @@ describe('RestaurantCard', () => {
       '/food/restaurant?id=restaurant-123',
     );
   });
+
+  it('prefers the modern cover image over the legacy image URL', () => {
+    render(<RestaurantCard restaurant={{ ...restaurant, imageUrl: 'https://legacy.test/image.webp', coverImageUrl: 'https://cdn.test/cover.webp' }} />);
+
+    expect(screen.getByLabelText('Chez Medjira')).toHaveAttribute('src', 'https://cdn.test/cover.webp');
+  });
 });
