@@ -153,6 +153,7 @@ docs/
 docs/*
 !docs/quality/
 !docs/quality/personal-driver-quality-gate.md
+!docs/quality/CUSTOMER_MENU_V2_ROLLOUT.md
 # Kilo AI framework
 .kilo/
 
