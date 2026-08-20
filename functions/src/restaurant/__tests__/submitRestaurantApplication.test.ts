@@ -43,6 +43,7 @@ describe('SubmitRestaurantApplicationRequestSchema', () => {
         ...validPayload.data,
         imageUrl: null,
         coverImageUrl: null,
+        logoUrl: null,
       },
     });
 

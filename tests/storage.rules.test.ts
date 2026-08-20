@@ -137,6 +137,52 @@ describe('Storage rules', () => {
     await assertSucceeds(deleteObject(ref((ownerStorage as any)._delegate, imagePath)));
   });
 
+  test('restaurant visual storage rules enforce owner uploads, versioned names, size limits, and public reads', async () => {
+    const restaurantId = 'restaurant-visual-storage';
+    const ownerId = 'restaurant-visual-owner';
+    const otherUserId = 'restaurant-visual-other';
+
+    await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+      await setDoc(doc(context.firestore(), 'restaurants', restaurantId), {
+        ownerId,
+        status: 'approved',
+      });
+    });
+
+    const ownerStorage = testEnv.authenticatedContext(ownerId).storage();
+    const otherStorage = testEnv.authenticatedContext(otherUserId).storage();
+    const anonStorage = testEnv.unauthenticatedContext().storage();
+    const validBlob = new Blob(['a'.repeat(100 * 1024)], { type: 'image/webp' });
+    const logoPath = `restaurant-images/${restaurantId}/logo-upload-1.webp`;
+
+    await assertSucceeds(uploadBytes(ref((ownerStorage as any)._delegate, logoPath), validBlob, {
+      contentType: 'image/webp',
+    }));
+    await assertSucceeds(getBytes(ref((anonStorage as any)._delegate, logoPath)));
+
+    await assertFails(uploadBytes(
+      ref((otherStorage as any)._delegate, `restaurant-images/${restaurantId}/cover-upload-2.webp`),
+      validBlob,
+      { contentType: 'image/webp' },
+    ));
+    await assertFails(uploadBytes(
+      ref((ownerStorage as any)._delegate, `restaurant-images/${restaurantId}/logo-upload-3.jpg`),
+      validBlob,
+      { contentType: 'image/webp' },
+    ));
+
+    const hugeBlob = new Blob(['a'.repeat(2 * 1024 * 1024 + 1)], { type: 'image/webp' });
+    await assertFails(uploadBytes(
+      ref((ownerStorage as any)._delegate, `restaurant-images/${restaurantId}/cover-upload-huge.webp`),
+      hugeBlob,
+      { contentType: 'image/webp' },
+    ));
+
+    const { deleteObject } = require('firebase/storage');
+    await assertFails(deleteObject(ref((otherStorage as any)._delegate, logoPath)));
+    await assertSucceeds(deleteObject(ref((ownerStorage as any)._delegate, logoPath)));
+  });
+
   test('menu-imports private upload rules for CSV and XLSX', async () => {
     const restaurantId = 'food-resto-imports';
     const ownerId = 'food-resto-owner-imports';

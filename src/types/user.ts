@@ -41,6 +41,7 @@ export interface RestaurantDraftData {
   phoneNumber?: string;
   avgPricePerPerson?: number;
   openingHours?: Record<string, { open: string; close: string; closed: boolean }>;
+  logoUrl?: string;
   coverImageUrl?: string;
 }
 

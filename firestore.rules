@@ -849,10 +849,14 @@ service cloud.firestore {
                         request.resource.data.ownerId == resource.data.ownerId &&
                         request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['name', 'description', 'address', 'phone', 'email',
-                                    'cuisineType', 'avgPricePerPerson', 'imageUrl', 'coverImageUrl',
+                                    'cuisineType', 'avgPricePerPerson', 'imageUrl', 'logoUrl', 'coverImageUrl',
                                     'isOpen', 'openingHours', 'location', 'updatedAt']) &&
                         (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['openingHours']) ||
-                         hasValidOpeningHours()))
+                         hasValidOpeningHours())
+                        && (!('logoUrl' in request.resource.data) || request.resource.data.logoUrl == null
+                            || (request.resource.data.logoUrl is string && request.resource.data.logoUrl.size() <= 2048))
+                        && (!('coverImageUrl' in request.resource.data) || request.resource.data.coverImageUrl == null
+                            || (request.resource.data.coverImageUrl is string && request.resource.data.coverImageUrl.size() <= 2048)))
                     || isAdmin();
       
       // Suppression : Admin uniquement

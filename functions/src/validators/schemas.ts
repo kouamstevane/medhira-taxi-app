@@ -239,6 +239,7 @@ export const RestaurantApplicationDataSchema = z.object({
   commissionRate: z.number().min(0).max(100).optional(),
   imageUrl: z.string().max(1024).nullish(),
   coverImageUrl: z.string().max(1024).nullish(),
+  logoUrl: z.string().max(1024).nullish(),
   openingHours: z.record(
     z.string(),
     z.object({

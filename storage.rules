@@ -111,6 +111,24 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
     }
 
+    // Logo et photo de couverture du restaurant
+    match /restaurant-images/{restaurantId}/{imageName} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/restaurants/$(restaurantId))
+        && firestore.get(/databases/(default)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid
+        && imageName.matches('(logo|cover)-[A-Za-z0-9_-]+\\.webp')
+        && request.resource.contentType == 'image/webp'
+        && request.resource.size <= 2 * 1024 * 1024;
+
+      allow update: if false;
+
+      allow delete: if request.auth != null
+        && firestore.exists(/databases/(default)/documents/restaurants/$(restaurantId))
+        && firestore.get(/databases/(default)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
+    }
+
     // Fichiers d'import de menu (CSV, ZIP et XLSX, max 15 Mo, propriétaire du restaurant uniquement)
     match /menu-imports/{restaurantId}/{fileName} {
       // Lecture : Non autorisé directement côté client (traité par Cloud Functions Admin SDK)

@@ -36,6 +36,7 @@ export interface Restaurant {
   phone: string;
   email: string;
   imageUrl?: string;
+  logoUrl?: string;
   coverImageUrl?: string;
   cuisineType: string[]; // Ex: ["Italienne", "Indienne"] (Règle 9)
   avgPricePerPerson: number; // Estimation du coût moyen (Règle 10)
