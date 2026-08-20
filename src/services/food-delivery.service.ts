@@ -1380,6 +1380,21 @@ export const updateRestaurantOpeningHours = async (
   }
 };
 
+export const updateRestaurantVisuals = async (
+  restaurantId: string,
+  visuals: { logoUrl?: string | null; coverImageUrl?: string | null },
+): Promise<void> => {
+  try {
+    await updateDoc(doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId), {
+      ...visuals,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('[food-delivery.service] updateRestaurantVisuals failed:', error);
+    throw error;
+  }
+};
+
 export const FoodDeliveryService = {
   calculateDeliveryCost,
   calculateBasePrice,
@@ -1404,6 +1419,7 @@ export const FoodDeliveryService = {
   getPendingRestaurants,
   updateRestaurantStatus,
   updateRestaurantOpeningHours,
+  updateRestaurantVisuals,
   getCustomerRestaurantMenuPage,
   getCustomerRestaurantMenuCategories,
   getCustomerMenuItemDetails,

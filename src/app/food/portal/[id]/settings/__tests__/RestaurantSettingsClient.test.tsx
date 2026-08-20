@@ -27,7 +27,19 @@ jest.mock('@/services/food-delivery.service', () => ({
   FoodDeliveryService: {
     getRestaurantById: jest.fn(),
     updateRestaurantOpeningHours: jest.fn(),
+    updateRestaurantVisuals: jest.fn(),
   },
+}));
+
+jest.mock('@/services/restaurant-image.service', () => ({
+  deleteRestaurantImage: jest.fn(),
+  getRestaurantImageStorageErrorMessage: jest.fn(() => 'Erreur visuelle'),
+  uploadRestaurantImage: jest.fn(),
+}));
+
+jest.mock('@/utils/restaurant-image', () => ({
+  ...jest.requireActual('@/utils/restaurant-image'),
+  prepareRestaurantImage: jest.fn(),
 }));
 
 jest.mock('@/hooks/useToast', () => ({
@@ -57,6 +69,13 @@ jest.mock('@/app/food/portal/[id]/RestaurantPortalHeader', () => ({
     <div>{restaurantName}</div>
   ),
 }));
+
+const mockUpdateRestaurantVisuals = FoodDeliveryService.updateRestaurantVisuals as jest.Mock;
+const { prepareRestaurantImage: mockPrepareRestaurantImage } = require('@/utils/restaurant-image');
+const {
+  deleteRestaurantImage: mockDeleteRestaurantImage,
+  uploadRestaurantImage: mockUploadRestaurantImage,
+} = require('@/services/restaurant-image.service');
 
 jest.mock('@/components/ui/MaterialIcon', () => ({
   MaterialIcon: ({ name }: { name: string }) => <span>{name}</span>,
@@ -88,6 +107,13 @@ beforeEach(() => {
   mockPush.mockClear();
   mockGetRestaurantById.mockReset();
   mockUpdateRestaurantOpeningHours.mockReset().mockResolvedValue(undefined);
+  mockUpdateRestaurantVisuals.mockReset().mockResolvedValue(undefined);
+  mockPrepareRestaurantImage.mockReset().mockResolvedValue(new Blob(['webp'], { type: 'image/webp' }));
+  mockUploadRestaurantImage.mockReset().mockResolvedValue({
+    path: 'restaurant-images/restaurant-1/cover-upload-1.webp',
+    url: 'https://firebasestorage.googleapis.com/v0/b/demo/o/restaurant-images%2Frestaurant-1%2Fcover-upload-1.webp',
+  });
+  mockDeleteRestaurantImage.mockReset().mockResolvedValue(undefined);
   mockShowError.mockClear();
   mockShowSuccess.mockClear();
   mockGetRestaurantById.mockResolvedValue(makeRestaurant({
@@ -131,6 +157,31 @@ describe('RestaurantSettingsClient', () => {
 
     await waitFor(() => expect(mockUpdateRestaurantOpeningHours).toHaveBeenCalled());
     expect(mockShowSuccess).toHaveBeenCalledWith('Horaires enregistrés.');
+  });
+
+  it('saves a replacement cover without touching the logo', async () => {
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: jest.fn(() => 'blob:cover') });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: jest.fn() });
+
+    try {
+      render(<RestaurantSettingsClient />);
+      const input = await screen.findByLabelText('Choisir la photo de couverture');
+      fireEvent.change(input, {
+        target: { files: [new File(['cover'], 'cover.png', { type: 'image/png' })] },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les visuels' }));
+
+      await waitFor(() => expect(mockUpdateRestaurantVisuals).toHaveBeenCalledWith(
+        'restaurant-1',
+        expect.objectContaining({ coverImageUrl: expect.stringContaining('restaurant-images') }),
+      ));
+      expect(mockShowSuccess).toHaveBeenCalledWith('Visuels enregistrés.');
+    } finally {
+      Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: originalCreateObjectURL });
+      Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: originalRevokeObjectURL });
+    }
   });
 
   it('redirects a non-owner away from the settings page', async () => {

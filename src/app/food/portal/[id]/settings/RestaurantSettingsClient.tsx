@@ -21,6 +21,16 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { RestaurantPortalHeader } from '../RestaurantPortalHeader';
 import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
+import { RestaurantVisualPicker } from '@/components/food/RestaurantVisualPicker';
+import {
+  getRestaurantImagePathFromUrl,
+  prepareRestaurantImage,
+} from '@/utils/restaurant-image';
+import {
+  deleteRestaurantImage,
+  getRestaurantImageStorageErrorMessage,
+  uploadRestaurantImage,
+} from '@/services/restaurant-image.service';
 
 function cloneOpeningHours(hours: RestaurantOpeningHours): RestaurantOpeningHours {
   return Object.fromEntries(
@@ -36,6 +46,15 @@ export default function RestaurantSettingsClient() {
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [hours, setHours] = useState<RestaurantOpeningHours | null>(null);
   const [savedHours, setSavedHours] = useState<RestaurantOpeningHours | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [savedLogoUrl, setSavedLogoUrl] = useState<string | null>(null);
+  const [savedCoverImageUrl, setSavedCoverImageUrl] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [logoRemoved, setLogoRemoved] = useState(false);
+  const [coverRemoved, setCoverRemoved] = useState(false);
+  const [visualRefreshKey, setVisualRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -77,6 +96,10 @@ export default function RestaurantSettingsClient() {
         setRestaurant(result);
         setHours(normalizedHours);
         setSavedHours(cloneOpeningHours(normalizedHours));
+        setLogoUrl(result.logoUrl ?? null);
+        setCoverImageUrl(result.coverImageUrl ?? result.imageUrl ?? null);
+        setSavedLogoUrl(result.logoUrl ?? null);
+        setSavedCoverImageUrl(result.coverImageUrl ?? result.imageUrl ?? null);
       } catch {
         const message = 'Erreur lors du chargement des paramètres.';
         setLoadError(message);
@@ -93,6 +116,8 @@ export default function RestaurantSettingsClient() {
     () => Boolean(hours && savedHours && JSON.stringify(hours) !== JSON.stringify(savedHours)),
     [hours, savedHours],
   );
+
+  const isVisualDirty = Boolean(logoFile || coverFile || logoRemoved || coverRemoved);
 
   const updateDay = (
     key: keyof RestaurantOpeningHours,
@@ -133,6 +158,67 @@ export default function RestaurantSettingsClient() {
     }
   };
 
+  const handleVisualSubmit = async () => {
+    if (!id || !isVisualDirty) return;
+
+    setIsSaving(true);
+    const uploadedPaths: string[] = [];
+    const updates: { logoUrl?: string | null; coverImageUrl?: string | null } = {};
+
+    try {
+      if (logoFile) {
+        const blob = await prepareRestaurantImage(logoFile, 'logo');
+        const uploaded = await uploadRestaurantImage({ restaurantId: id, kind: 'logo', blob });
+        uploadedPaths.push(uploaded.path);
+        updates.logoUrl = uploaded.url;
+      } else if (logoRemoved) {
+        updates.logoUrl = null;
+      }
+
+      if (coverFile) {
+        const blob = await prepareRestaurantImage(coverFile, 'cover');
+        const uploaded = await uploadRestaurantImage({ restaurantId: id, kind: 'cover', blob });
+        uploadedPaths.push(uploaded.path);
+        updates.coverImageUrl = uploaded.url;
+      } else if (coverRemoved) {
+        updates.coverImageUrl = null;
+      }
+
+      await FoodDeliveryService.updateRestaurantVisuals(id, updates);
+
+      const previousPaths = [
+        updates.logoUrl !== undefined
+          ? getRestaurantImagePathFromUrl(savedLogoUrl ?? '')
+          : null,
+        updates.coverImageUrl !== undefined
+          ? getRestaurantImagePathFromUrl(savedCoverImageUrl ?? '')
+          : null,
+      ];
+      await Promise.all(previousPaths.map((path) => path ? deleteRestaurantImage(path).catch(() => undefined) : undefined));
+
+      const nextLogoUrl = updates.logoUrl === undefined ? savedLogoUrl : updates.logoUrl;
+      const nextCoverImageUrl = updates.coverImageUrl === undefined ? savedCoverImageUrl : updates.coverImageUrl;
+      setLogoUrl(nextLogoUrl);
+      setCoverImageUrl(nextCoverImageUrl);
+      setSavedLogoUrl(nextLogoUrl);
+      setSavedCoverImageUrl(nextCoverImageUrl);
+      setLogoFile(null);
+      setCoverFile(null);
+      setLogoRemoved(false);
+      setCoverRemoved(false);
+      setVisualRefreshKey((value) => value + 1);
+      showSuccess('Visuels enregistrés.');
+    } catch (visualError) {
+      await Promise.all(uploadedPaths.map((path) => deleteRestaurantImage(path).catch(() => undefined)));
+      const message = visualError instanceof Error && visualError.message.startsWith('Le ')
+        ? visualError.message
+        : getRestaurantImageStorageErrorMessage(visualError);
+      showError(message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -163,7 +249,7 @@ export default function RestaurantSettingsClient() {
   return (
     <div className="min-h-screen bg-background pb-20">
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <RestaurantPortalHeader restaurantName={restaurant.name} />
+      <RestaurantPortalHeader restaurantName={restaurant.name} logoUrl={logoUrl} />
 
       <main className="mx-auto max-w-3xl p-4 sm:p-8">
         <div className="mb-8 flex items-start justify-between gap-4">
@@ -180,6 +266,55 @@ export default function RestaurantSettingsClient() {
             <span className="hidden sm:inline">Tableau de bord</span>
           </Link>
         </div>
+
+        <section className="glass-card mb-6 rounded-3xl border border-white/5 p-5 sm:p-7">
+          <div className="mb-6 flex items-start gap-4">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
+              <MaterialIcon name="photo_library" size="lg" className="text-primary" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-white">Identité visuelle</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-400">
+                Ajoutez un logo carré et une couverture horizontale pour présenter votre restaurant.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <RestaurantVisualPicker
+              key={`logo-${visualRefreshKey}`}
+              kind="logo"
+              currentUrl={logoUrl}
+              onChange={(file, action) => {
+                setLogoFile(file);
+                setLogoRemoved(action === 'remove');
+              }}
+              disabled={isSaving}
+            />
+            <RestaurantVisualPicker
+              key={`cover-${visualRefreshKey}`}
+              kind="cover"
+              currentUrl={coverImageUrl}
+              onChange={(file, action) => {
+                setCoverFile(file);
+                setCoverRemoved(action === 'remove');
+              }}
+              disabled={isSaving}
+            />
+          </div>
+
+          <div className="mt-6 flex justify-end border-t border-white/5 pt-6">
+            <button
+              type="button"
+              disabled={!isVisualDirty || isSaving}
+              onClick={handleVisualSubmit}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-6 py-3.5 font-bold text-white primary-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+            >
+              {isSaving && <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+              {isSaving ? 'Enregistrement…' : 'Enregistrer les visuels'}
+            </button>
+          </div>
+        </section>
 
         <section className="glass-card rounded-3xl border border-white/5 p-5 sm:p-7">
           <div className="mb-6 flex items-start gap-4">
