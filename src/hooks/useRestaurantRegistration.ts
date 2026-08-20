@@ -19,6 +19,14 @@ import { db, auth, functions } from '@/config/firebase';
 import { mapHttpsError } from '@/services/cloud-functions.helpers';
 import { createRestaurantOnboardingAccount, signInWithGoogleForRestaurant } from '@/services/auth.service';
 import { AuthContext } from '@/context/AuthContext';
+import {
+  getRestaurantImagePathFromUrl,
+  prepareRestaurantImage,
+} from '@/utils/restaurant-image';
+import {
+  deleteRestaurantImage,
+  uploadRestaurantImage,
+} from '@/services/restaurant-image.service';
 
 export interface Step1Data {
   firstName: string;
@@ -42,7 +50,12 @@ export interface Step3Data {
   email: string;
   avgPricePerPerson?: number;
   imageUrl?: string;
+  logoUrl?: string;
   coverImageUrl?: string;
+  logoFile?: File;
+  coverFile?: File;
+  logoRemoved?: boolean;
+  coverRemoved?: boolean;
   location: { lat: number; lng: number };
 }
 
@@ -209,6 +222,8 @@ export function useRestaurantRegistration() {
     if (!user) return;
     try {
       const newFields = { ...data } as Record<string, unknown>;
+      delete newFields.logoFile;
+      delete newFields.coverFile;
       if ('cuisineType' in newFields) {
         newFields.cuisineTypes = newFields.cuisineType;
         delete newFields.cuisineType;
@@ -279,6 +294,7 @@ export function useRestaurantRegistration() {
         cuisineType: step3Data.cuisineType,
         avgPricePerPerson: step3Data.avgPricePerPerson,
         imageUrl: step3Data.imageUrl,
+        logoUrl: step3Data.logoUrl,
         coverImageUrl: step3Data.coverImageUrl,
         openingHours: data.openingHours,
         location: step3Data.location,
@@ -291,6 +307,69 @@ export function useRestaurantRegistration() {
 
       const result = await submit(requestPayload);
       const resultData = result.data as { restaurantId: string };
+
+      const uploadedPaths: string[] = [];
+      const visualUpdates: Record<string, unknown> = {};
+      try {
+        const visualInputs: Array<{
+          kind: 'logo' | 'cover';
+          file?: File;
+          removed?: boolean;
+          field: 'logoUrl' | 'coverImageUrl';
+          previousUrl?: string;
+        }> = [
+          {
+            kind: 'logo',
+            file: step3Data.logoFile,
+            removed: step3Data.logoRemoved,
+            field: 'logoUrl',
+            previousUrl: step3Data.logoUrl,
+          },
+          {
+            kind: 'cover',
+            file: step3Data.coverFile,
+            removed: step3Data.coverRemoved,
+            field: 'coverImageUrl',
+            previousUrl: step3Data.coverImageUrl,
+          },
+        ];
+
+        for (const visual of visualInputs) {
+          if (visual.file) {
+            const preparedImage = await prepareRestaurantImage(visual.file, visual.kind);
+            const uploadedImage = await uploadRestaurantImage({
+              restaurantId: resultData.restaurantId,
+              kind: visual.kind,
+              blob: preparedImage,
+            });
+            uploadedPaths.push(uploadedImage.path);
+            visualUpdates[visual.field] = uploadedImage.url;
+          } else if (visual.removed) {
+            visualUpdates[visual.field] = null;
+          }
+        }
+
+        if (Object.keys(visualUpdates).length > 0) {
+          await updateDoc(doc(db, 'restaurants', resultData.restaurantId), {
+            ...visualUpdates,
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        for (const visual of visualInputs) {
+          const nextUrl = visualUpdates[visual.field];
+          const previousPath = visual.previousUrl
+            ? getRestaurantImagePathFromUrl(visual.previousUrl)
+            : null;
+          if (previousPath && nextUrl !== undefined && nextUrl !== visual.previousUrl) {
+            await deleteRestaurantImage(previousPath);
+          }
+        }
+      } catch (visualError) {
+        await Promise.all(uploadedPaths.map((path) => deleteRestaurantImage(path).catch(() => undefined)));
+        throw visualError;
+      }
+
       if (authContext) {
         await authContext.reloadUser();
       }
@@ -410,6 +489,7 @@ export function useRestaurantRegistration() {
             email: r.email || '',
             avgPricePerPerson: r.avgPricePerPerson,
             imageUrl: r.imageUrl,
+            logoUrl: r.logoUrl,
             coverImageUrl: r.coverImageUrl,
             location: r.location,
           });

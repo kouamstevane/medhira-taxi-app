@@ -45,6 +45,8 @@ describe('Step3Restaurant', () => {
     render(<Step3Restaurant onNext={jest.fn()} onBack={jest.fn()} loading={false} />);
 
     expect(screen.getByRole('button', { name: 'Pizza' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByLabelText('Choisir le logo')).toBeInTheDocument();
+    expect(screen.getByLabelText('Choisir la photo de couverture')).toBeInTheDocument();
   });
 
   it('shows the existing restaurant name validation error instead of advancing an empty form', () => {

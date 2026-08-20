@@ -12,6 +12,7 @@ import { CURRENCY_CODE } from '@/utils/constants';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { PlaceSuggestion } from '@/types';
+import { RestaurantVisualPicker } from '@/components/food/RestaurantVisualPicker';
 
 interface Step3RestaurantProps {
   onNext: (data: Step3Data) => void;
@@ -30,6 +31,10 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
   const [email, setEmail] = useState(initialData?.email || '');
   const [avgPrice, setAvgPrice] = useState(initialData?.avgPricePerPerson?.toString() || '');
   const [location, setLocation] = useState(initialData?.location);
+  const [logoFile, setLogoFile] = useState<File | null>(initialData?.logoFile ?? null);
+  const [coverFile, setCoverFile] = useState<File | null>(initialData?.coverFile ?? null);
+  const [logoRemoved, setLogoRemoved] = useState(Boolean(initialData?.logoRemoved));
+  const [coverRemoved, setCoverRemoved] = useState(Boolean(initialData?.coverRemoved));
   const [error, setError] = useState<string | null>(null);
 
   const toggleCuisine = (cuisine: string) => {
@@ -96,6 +101,10 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
       email: email.trim(),
       avgPricePerPerson: avgPrice ? parseFloat(avgPrice) : undefined,
       location: resolvedLocation,
+      ...(logoFile ? { logoFile } : {}),
+      ...(coverFile ? { coverFile } : {}),
+      ...(logoRemoved ? { logoRemoved: true } : {}),
+      ...(coverRemoved ? { coverRemoved: true } : {}),
     });
   };
 
@@ -161,6 +170,31 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
           </div>
 
           <InputField id="avgPrice" type="number" label={`Prix moyen par personne (${CURRENCY_CODE}, optionnel)`} value={avgPrice} onChange={(e) => setAvgPrice(e.target.value)} placeholder="25" min="0" step="1" />
+
+          <div className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div>
+              <h3 className="text-base font-semibold text-white">Identité visuelle</h3>
+              <p className="mt-1 text-xs text-gray-400">Ces visuels aideront les clients à reconnaître votre établissement.</p>
+            </div>
+            <RestaurantVisualPicker
+              kind="logo"
+              currentUrl={initialData?.logoUrl}
+              onChange={(file, action) => {
+                setLogoFile(file);
+                setLogoRemoved(action === 'remove');
+              }}
+              disabled={loading}
+            />
+            <RestaurantVisualPicker
+              kind="cover"
+              currentUrl={initialData?.coverImageUrl || initialData?.imageUrl}
+              onChange={(file, action) => {
+                setCoverFile(file);
+                setCoverRemoved(action === 'remove');
+              }}
+              disabled={loading}
+            />
+          </div>
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onBack} className={cn(driverSecondaryButtonClassName, 'flex-1')} aria-label="Retour à l'étape précédente">
