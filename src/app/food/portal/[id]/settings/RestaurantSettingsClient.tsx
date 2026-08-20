@@ -58,6 +58,8 @@ export default function RestaurantSettingsClient() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -219,6 +221,19 @@ export default function RestaurantSettingsClient() {
     }
   };
 
+  const handleDeleteRestaurant = async () => {
+    if (!id) return;
+
+    setIsDeleting(true);
+    try {
+      await FoodDeliveryService.deleteRestaurant(id);
+      router.replace('/dashboard');
+    } catch {
+      showError('Impossible de supprimer complètement le restaurant. Réessayez.');
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -289,7 +304,7 @@ export default function RestaurantSettingsClient() {
                 setLogoFile(file);
                 setLogoRemoved(action === 'remove');
               }}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
             />
             <RestaurantVisualPicker
               key={`cover-${visualRefreshKey}`}
@@ -299,14 +314,14 @@ export default function RestaurantSettingsClient() {
                 setCoverFile(file);
                 setCoverRemoved(action === 'remove');
               }}
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
             />
           </div>
 
           <div className="mt-6 flex justify-end border-t border-white/5 pt-6">
             <button
               type="button"
-              disabled={!isVisualDirty || isSaving}
+              disabled={!isVisualDirty || isSaving || isDeleting}
               onClick={handleVisualSubmit}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-6 py-3.5 font-bold text-white primary-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
             >
@@ -359,6 +374,7 @@ export default function RestaurantSettingsClient() {
                         type="checkbox"
                         checked={!day.closed}
                         onChange={(event) => updateDay(key, 'closed', !event.target.checked)}
+                        disabled={isDeleting}
                         aria-label={`${label} ouvert`}
                         className="peer sr-only"
                       />
@@ -374,6 +390,7 @@ export default function RestaurantSettingsClient() {
                         Ouverture
                         <input
                           type="time"
+                          disabled={isDeleting}
                           value={day.open}
                           onChange={(event) => updateDay(key, 'open', event.target.value)}
                           aria-label={`${label} ouverture`}
@@ -384,6 +401,7 @@ export default function RestaurantSettingsClient() {
                         Fermeture
                         <input
                           type="time"
+                          disabled={isDeleting}
                           value={day.close}
                           onChange={(event) => updateDay(key, 'close', event.target.value)}
                           aria-label={`${label} fermeture`}
@@ -399,7 +417,7 @@ export default function RestaurantSettingsClient() {
             <div className="flex justify-end border-t border-white/5 pt-6">
               <button
                 type="submit"
-                disabled={!isDirty || isSaving}
+                disabled={!isDirty || isSaving || isDeleting}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-6 py-3.5 font-bold text-white primary-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
               >
                 {isSaving && <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
@@ -407,6 +425,57 @@ export default function RestaurantSettingsClient() {
               </button>
             </div>
           </form>
+        </section>
+
+        <section className="mt-6 rounded-3xl border border-red-500/25 bg-red-500/5 p-5 sm:p-7">
+          <div className="flex items-start gap-4">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-red-500/10">
+              <MaterialIcon name="delete_forever" size="lg" className="text-red-300" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-white">Zone dangereuse</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-400">
+                Supprimer ce restaurant efface définitivement sa fiche, son menu, ses imports et ses images.
+                Cette action est irréversible.
+              </p>
+
+              {!showDeleteConfirmation ? (
+                <button
+                  type="button"
+                  disabled={isSaving || isDeleting}
+                  onClick={() => setShowDeleteConfirmation(true)}
+                  className="mt-5 rounded-xl border border-red-500/40 px-4 py-3 text-sm font-bold text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Supprimer ce restaurant
+                </button>
+              ) : (
+                <div className="mt-5 rounded-2xl border border-red-500/30 bg-black/20 p-4">
+                  <p className="text-sm font-semibold text-red-100">Confirmation de suppression définitive</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    Le restaurant et toutes ses données seront supprimés du compte et de Firebase Storage.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={() => setShowDeleteConfirmation(false)}
+                      className="rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-slate-300 transition hover:border-white/20 disabled:opacity-40"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isDeleting}
+                      onClick={handleDeleteRestaurant}
+                      className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDeleting ? 'Suppression…' : 'Supprimer définitivement'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </section>
       </main>
 

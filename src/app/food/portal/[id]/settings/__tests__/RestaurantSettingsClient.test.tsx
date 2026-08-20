@@ -4,13 +4,15 @@ import RestaurantSettingsClient from '../RestaurantSettingsClient';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 const mockGetRestaurantById = FoodDeliveryService.getRestaurantById as jest.Mock;
 const mockUpdateRestaurantOpeningHours = FoodDeliveryService.updateRestaurantOpeningHours as jest.Mock;
+const mockDeleteRestaurant = FoodDeliveryService.deleteRestaurant as jest.Mock;
 const mockShowError = jest.fn();
 const mockShowSuccess = jest.fn();
 
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
   useSearchParams: () => new URLSearchParams('restaurantId=restaurant-1'),
 }));
 
@@ -28,6 +30,7 @@ jest.mock('@/services/food-delivery.service', () => ({
     getRestaurantById: jest.fn(),
     updateRestaurantOpeningHours: jest.fn(),
     updateRestaurantVisuals: jest.fn(),
+    deleteRestaurant: jest.fn(),
   },
 }));
 
@@ -105,9 +108,11 @@ function makeRestaurant(overrides: Partial<Restaurant> = {}): Restaurant {
 
 beforeEach(() => {
   mockPush.mockClear();
+  mockReplace.mockClear();
   mockGetRestaurantById.mockReset();
   mockUpdateRestaurantOpeningHours.mockReset().mockResolvedValue(undefined);
   mockUpdateRestaurantVisuals.mockReset().mockResolvedValue(undefined);
+  mockDeleteRestaurant.mockReset().mockResolvedValue(undefined);
   mockPrepareRestaurantImage.mockReset().mockResolvedValue(new Blob(['webp'], { type: 'image/webp' }));
   mockUploadRestaurantImage.mockReset().mockResolvedValue({
     path: 'restaurant-images/restaurant-1/cover-upload-1.webp',
@@ -211,5 +216,19 @@ describe('RestaurantSettingsClient', () => {
       'Erreur lors du chargement des paramètres.',
     );
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('deletes the restaurant only after the explicit confirmation step', async () => {
+    render(<RestaurantSettingsClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer ce restaurant' }));
+
+    expect(screen.getByText(/suppression définitive/i)).toBeInTheDocument();
+    expect(mockDeleteRestaurant).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer définitivement' }));
+
+    await waitFor(() => expect(mockDeleteRestaurant).toHaveBeenCalledWith('restaurant-1'));
+    expect(mockReplace).toHaveBeenCalledWith('/dashboard');
   });
 });

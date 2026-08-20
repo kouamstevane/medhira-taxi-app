@@ -805,6 +805,23 @@ export const createRestaurant = async (
   }
 };
 
+export const deleteRestaurant = async (restaurantId: string): Promise<void> => {
+  try {
+    if (!restaurantId.trim()) throw new Error('Identifiant de restaurant requis.');
+
+    const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
+    const app = getApps().length ? getApp() : undefined;
+    if (!app) throw new Error('Firebase app not initialized');
+
+    const functions = getFunctions(app, functionsRegion);
+    const callable = httpsCallable(functions, 'deleteRestaurant');
+    await callable({ restaurantId });
+  } catch (error) {
+    console.error('[food-delivery.service] deleteRestaurant failed:', error);
+    throw error;
+  }
+};
+
 // ============================================================================
 // COMMANDES (Règles 3, 4, 5, 8)
 // ============================================================================
@@ -1422,6 +1439,7 @@ export const FoodDeliveryService = {
   submitDeliveryReview,
   submitRestaurantReview,
   createRestaurant,
+  deleteRestaurant,
   getRestaurantByOwner,
   getRestaurantsByOwner,
   getRestaurantById,
