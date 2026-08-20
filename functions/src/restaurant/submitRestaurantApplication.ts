@@ -11,6 +11,20 @@ export function isEmailVerifiedForSubmission(
   return request.auth?.token.email_verified === true;
 }
 
+export function getRestaurantIdsFromRole(role: unknown): string[] {
+  if (!role || typeof role !== 'object') return [];
+
+  const candidate = role as { restaurantId?: unknown; restaurantIds?: unknown };
+  const storedIds = Array.isArray(candidate.restaurantIds)
+    ? candidate.restaurantIds.filter((value): value is string => typeof value === 'string' && value.length > 0)
+    : [];
+  const activeId = typeof candidate.restaurantId === 'string' && candidate.restaurantId.length > 0
+    ? [candidate.restaurantId]
+    : [];
+
+  return [...new Set([...storedIds, ...activeId])];
+}
+
 export const submitRestaurantApplication = onCall(
   { region: 'europe-west1' },
   async (request: CallableRequest) => {
@@ -59,17 +73,13 @@ export const submitRestaurantApplication = onCall(
           throw new HttpsError('failed-precondition', 'Email non vérifié — passez par l\'étape 2 du wizard.');
         }
 
-        if (userData.roles?.restaurant != null) {
-          if (payload.restaurantId) {
-            const restoSnap = await transaction.get(db.collection('restaurants').doc(payload.restaurantId));
-            if (!restoSnap.exists || restoSnap.data()?.ownerId !== uid) {
-              throw new HttpsError('failed-precondition', 'Restaurant introuvable ou non propriétaire.');
-            }
-            if (restoSnap.data()?.status !== 'rejected') {
-              throw new HttpsError('already-exists', 'Vous avez déjà un restaurant actif.');
-            }
-          } else {
-            throw new HttpsError('already-exists', 'Vous avez déjà un restaurant associé à ce compte.');
+        if (payload.restaurantId) {
+          const restoSnap = await transaction.get(db.collection('restaurants').doc(payload.restaurantId));
+          if (!restoSnap.exists || restoSnap.data()?.ownerId !== uid) {
+            throw new HttpsError('failed-precondition', 'Restaurant introuvable ou non propriétaire.');
+          }
+          if (restoSnap.data()?.status !== 'rejected') {
+            throw new HttpsError('already-exists', 'Ce restaurant est déjà soumis.');
           }
         }
 
@@ -102,9 +112,15 @@ export const submitRestaurantApplication = onCall(
         }
 
         const restaurantId = restaurantRef.id;
+        const restaurantIds = getRestaurantIdsFromRole(userData.roles?.restaurant);
+        if (!restaurantIds.includes(restaurantId)) restaurantIds.push(restaurantId);
 
         transaction.update(userRef, {
-          'roles.restaurant': { restaurantId, joinedAt: now },
+          'roles.restaurant': {
+            restaurantId,
+            joinedAt: userData.roles?.restaurant?.joinedAt ?? now,
+            restaurantIds,
+          },
           activeRole: 'restaurant',
           lastActiveRole: 'restaurant',
           accountState: 'active',

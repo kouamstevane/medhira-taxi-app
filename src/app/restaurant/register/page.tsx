@@ -1,7 +1,6 @@
 'use client';
 
 import { Suspense, useCallback } from 'react';
-import Link from 'next/link';
 import { useRestaurantRegistration } from '@/hooks/useRestaurantRegistration';
 import type { Step3Data } from '@/hooks/useRestaurantRegistration';
 import { Step1Account } from './components/Step1Account';
@@ -9,7 +8,6 @@ import { Step2EmailVerification } from './components/Step2EmailVerification';
 import { Step3Restaurant } from './components/Step3Restaurant';
 import { Step4Hours } from './components/Step4Hours';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 function RestaurantRegisterWizard() {
   const {
@@ -19,7 +17,6 @@ function RestaurantRegisterWizard() {
     isSubmitting,
     fromBecomePro,
     restoringDraft,
-    alreadyHasRestaurant,
     step1Data,
     step3Data,
     step4Data,
@@ -49,25 +46,6 @@ function RestaurantRegisterWizard() {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <LoadingSpinner />
-      </div>
-    );
-  }
-
-  if (alreadyHasRestaurant) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4">
-        <div className="w-full max-w-md text-center glass-card rounded-3xl p-8 border border-white/5">
-          <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
-            <MaterialIcon name="store" size="xl" className="text-orange-500" />
-          </div>
-          <h2 className="text-xl font-bold text-white mb-2">Vous avez déjà un restaurant</h2>
-          <p className="text-gray-400 text-sm mb-6">
-            Un seul restaurant par compte est autorisé. Contactez le support si nécessaire.
-          </p>
-          <Link href="/dashboard" className="inline-block h-[48px] px-6 glass-card border border-white/10 text-slate-300 font-semibold rounded-xl leading-[48px]">
-            Retour au dashboard
-          </Link>
-        </div>
       </div>
     );
   }

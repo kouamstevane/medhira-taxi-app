@@ -80,7 +80,6 @@ export function useRestaurantRegistration() {
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [restoringDraft, setRestoringDraft] = useState(false);
-  const [alreadyHasRestaurant, setAlreadyHasRestaurant] = useState(false);
 
   const [step1Data, setStep1DataState] = useState<Partial<Step1Data>>({});
   const [step2Data, setStep2DataState] = useState<Partial<Step2Data>>({});
@@ -125,18 +124,6 @@ export function useRestaurantRegistration() {
       accountState: 'restaurant_onboarding',
       updatedAt: now,
     });
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(getAuth(), async (user) => {
-      if (!user) return;
-      const snap = await getDoc(doc(db, 'users', user.uid));
-      if (snap.exists() && snap.data().roles?.restaurant != null) {
-        setAlreadyHasRestaurant(true);
-        setError('Vous avez déjà un restaurant associé à ce compte.');
-      }
-    });
-    return () => unsubscribe();
   }, []);
 
   const handleStep1Submit = useCallback(async (data: Step1Data) => {
@@ -513,7 +500,6 @@ export function useRestaurantRegistration() {
     restaurantId,
     fromBecomePro,
     restoringDraft,
-    alreadyHasRestaurant,
     step1Data,
     step2Data,
     step3Data,

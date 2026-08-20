@@ -2,7 +2,10 @@ import {
   CreateFoodOrderRequestSchema,
   SubmitRestaurantApplicationRequestSchema,
 } from '../../validators/schemas';
-import { isEmailVerifiedForSubmission } from '../submitRestaurantApplication';
+import {
+  getRestaurantIdsFromRole,
+  isEmailVerifiedForSubmission,
+} from '../submitRestaurantApplication';
 
 describe('SubmitRestaurantApplicationRequestSchema', () => {
   const validPayload = {
@@ -151,5 +154,18 @@ describe('isEmailVerifiedForSubmission', () => {
   test('uses the Firebase Auth token rather than client profile data', () => {
     expect(isEmailVerifiedForSubmission({ auth: { token: { email_verified: true } } } as never)).toBe(true);
     expect(isEmailVerifiedForSubmission({ auth: { token: { email_verified: false } } } as never)).toBe(false);
+  });
+});
+
+describe('getRestaurantIdsFromRole', () => {
+  test('keeps legacy restaurant roles compatible', () => {
+    expect(getRestaurantIdsFromRole({ restaurantId: 'rest_legacy' })).toEqual(['rest_legacy']);
+  });
+
+  test('deduplicates the active restaurant and stored restaurant list', () => {
+    expect(getRestaurantIdsFromRole({
+      restaurantId: 'rest_2',
+      restaurantIds: ['rest_1', 'rest_2', 'rest_1'],
+    })).toEqual(['rest_1', 'rest_2']);
   });
 });

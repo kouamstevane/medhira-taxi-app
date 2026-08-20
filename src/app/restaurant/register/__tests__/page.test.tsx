@@ -52,4 +52,32 @@ describe('RestaurantRegisterPage', () => {
     expect(setStepData).toHaveBeenCalledWith(3, { name: 'Le Bistrot', location: { lat: 1, lng: 2 } });
     expect(goToStep).toHaveBeenCalledWith(4);
   });
+
+  it('allows a signed-in owner to register another restaurant', () => {
+    mockUseRestaurantRegistration.mockReturnValue({
+      currentStep: 3,
+      loading: false,
+      error: null,
+      isSubmitting: false,
+      fromBecomePro: true,
+      restoringDraft: false,
+      alreadyHasRestaurant: true,
+      step1Data: {},
+      step3Data: {},
+      step4Data: {},
+      setStepData: jest.fn(),
+      goToStep: jest.fn(),
+      handleStep1Submit: jest.fn(),
+      handleGoogleSignIn: jest.fn(),
+      handleStep2Verified: jest.fn(),
+      handleDraftSave: jest.fn(),
+      saveDraftDebounced: jest.fn(),
+      handleSubmit: jest.fn(),
+    });
+
+    render(<RestaurantRegisterPage />);
+
+    expect(screen.getByRole('button', { name: 'continue' })).toBeInTheDocument();
+    expect(screen.queryByText('Vous avez déjà un restaurant')).not.toBeInTheDocument();
+  });
 });

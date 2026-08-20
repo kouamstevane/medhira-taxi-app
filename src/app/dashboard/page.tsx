@@ -72,7 +72,7 @@ export default function Dashboard() {
     activeRole: "client",
     roles: {},
   });
-  const [restaurantData, setRestaurantData] = useState<Restaurant | null>(null);
+  const [restaurantData, setRestaurantData] = useState<Restaurant[]>([]);
   const unsubscribeNotifsRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -210,11 +210,11 @@ export default function Dashboard() {
       void fetchHistory(currentUser.uid);
 
       if (roles.restaurant != null) {
-        FoodDeliveryService.getRestaurantByOwner(currentUser.uid)
+        FoodDeliveryService.getRestaurantsByOwner(currentUser.uid)
           .then(setRestaurantData)
           .catch((error) => console.error("Erreur chargement restaurant:", error));
       } else {
-        setRestaurantData(null);
+        setRestaurantData([]);
       }
     });
 
@@ -361,28 +361,39 @@ export default function Dashboard() {
         )}
 
         {/* Restaurateur shortcut — capacité roles.restaurant. */}
-        {userData.roles?.restaurant != null && restaurantData && (
+        {userData.roles?.restaurant != null && restaurantData.length > 0 && (
           <section className="mb-6">
-            <GlassCard
-              variant="bordered"
-              className="p-4 cursor-pointer"
-              onClick={() => router.push(getRestaurantPortalPath(restaurantData.id))}
-            >
-              <div className="flex items-center gap-3">
-                <div className="size-10 rounded-full bg-red-500/10 flex items-center justify-center">
-                  <MaterialIcon name="storefront" className="text-red-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-white font-bold">{restaurantData.name}</p>
-                  <p className="text-slate-400 text-xs">Gérer menus et commandes</p>
-                </div>
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  restaurantData.status === 'approved' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'
-                }`}>
-                  {restaurantData.status === 'approved' ? 'Actif' : 'En attente'}
-                </span>
-              </div>
-            </GlassCard>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <h2 className="text-white text-[20px] font-bold tracking-tight">Mes restaurants</h2>
+              <Link href="/restaurant/register?from=become-pro" className="text-primary font-semibold text-sm">
+                Ajouter
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {restaurantData.map((restaurant) => (
+                <GlassCard
+                  key={restaurant.id}
+                  variant="bordered"
+                  className="p-4 cursor-pointer"
+                  onClick={() => router.push(getRestaurantPortalPath(restaurant.id))}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                      <MaterialIcon name="storefront" className="text-red-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-bold truncate">{restaurant.name}</p>
+                      <p className="text-slate-400 text-xs">Gérer menus et commandes</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      restaurant.status === 'approved' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'
+                    }`}>
+                      {restaurant.status === 'approved' ? 'Actif' : 'En attente'}
+                    </span>
+                  </div>
+                </GlassCard>
+              ))}
+            </div>
           </section>
         )}
 

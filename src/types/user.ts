@@ -21,6 +21,7 @@ export interface RoleDriver {
 export interface RoleRestaurant {
   restaurantId: string;
   joinedAt: Timestamp;
+  restaurantIds?: string[];
 }
 
 export interface UserRoles {

@@ -328,20 +328,28 @@ export const getRestaurantById = async (restaurantId: string): Promise<Restauran
  */
 export const getRestaurantByOwner = async (ownerId: string): Promise<Restaurant | null> => {
   try {
-  const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
-  const q = query(
-    restaurantsRef,
-    where('ownerId', '==', ownerId),
-    limit(1)
-  );
-  
-  const querySnapshot = await getDocs(q);
-  if (querySnapshot.empty) return null;
-  
-  const docSnap = querySnapshot.docs[0];
-  return { ...docSnap.data(), id: docSnap.id } as Restaurant;
+  const restaurants = await getRestaurantsByOwner(ownerId);
+  return restaurants[0] ?? null;
   } catch (error) {
     console.error('[food-delivery.service] getRestaurantByOwner failed:', error);
+    throw error;
+  }
+};
+
+export const getRestaurantsByOwner = async (ownerId: string): Promise<Restaurant[]> => {
+  try {
+    const restaurantsRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS);
+    const q = query(
+      restaurantsRef,
+      where('ownerId', '==', ownerId),
+    );
+
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs
+      .map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }) as Restaurant)
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  } catch (error) {
+    console.error('[food-delivery.service] getRestaurantsByOwner failed:', error);
     throw error;
   }
 };
@@ -1415,6 +1423,7 @@ export const FoodDeliveryService = {
   submitRestaurantReview,
   createRestaurant,
   getRestaurantByOwner,
+  getRestaurantsByOwner,
   getRestaurantById,
   getPendingRestaurants,
   updateRestaurantStatus,
