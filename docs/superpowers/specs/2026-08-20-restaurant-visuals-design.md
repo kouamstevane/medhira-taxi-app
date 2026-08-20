@@ -44,13 +44,13 @@ Les aperçus utilisent une URL locale révoquée après remplacement ou démonta
 Un service dédié aux visuels du restaurant encapsule la génération des chemins, la conversion WebP, l’upload, la récupération de l’URL et la suppression tolérante. Les fichiers sont stockés sous :
 
 ```text
-restaurant-images/{restaurantId}/logo.webp
-restaurant-images/{restaurantId}/cover.webp
+restaurant-images/{restaurantId}/logo-{uploadId}.webp
+restaurant-images/{restaurantId}/cover-{uploadId}.webp
 ```
 
-Le document Firestore conserve les URLs publiques dans `logoUrl` et `coverImageUrl`. Les uploads utilisent d’abord l’identité du propriétaire et l’existence du document restaurant comme garde-fous Storage. Le service met à jour Firestore uniquement après un upload réussi et nettoie les objets nouvellement créés si la sauvegarde Firestore échoue.
+Le document Firestore conserve les URLs publiques dans `logoUrl` et `coverImageUrl`. Les uploads utilisent d’abord l’identité du propriétaire et l’existence du document restaurant comme garde-fous Storage. Chaque upload utilise un nom versionné ; le service met à jour Firestore uniquement après un upload réussi, supprime les nouveaux objets si la sauvegarde échoue et supprime l’ancien objet seulement après la confirmation de la nouvelle URL.
 
-Le schéma de candidature Cloud Function accepte `logoUrl` en plus des champs visuels déjà présents. Les règles Firestore autorisent `logoUrl` dans les mises à jour limitées du propriétaire et conservent les restrictions existantes sur le statut, la commission, Stripe et le propriétaire. Les règles Storage autorisent uniquement le propriétaire du restaurant à créer, remplacer ou supprimer `logo.webp` et `cover.webp`; la lecture reste publique pour permettre l’affichage côté client.
+Le schéma de candidature Cloud Function accepte `logoUrl` en plus des champs visuels déjà présents. Les règles Firestore autorisent `logoUrl` dans les mises à jour limitées du propriétaire et conservent les restrictions existantes sur le statut, la commission, Stripe et le propriétaire. Les règles Storage autorisent uniquement le propriétaire du restaurant à créer ou supprimer les fichiers `logo-{uploadId}.webp` et `cover-{uploadId}.webp`; la lecture reste publique pour permettre l’affichage côté client.
 
 ## Gestion des erreurs et compatibilité
 
