@@ -94,7 +94,7 @@ export function RestaurantVisualPicker({
           <img src={previewUrl} alt={label.title} className="h-full w-full object-cover" />
         ) : (
           <span className="flex flex-col items-center gap-2 text-gray-400">
-            <MaterialIcon name="add_photo_alternate" size="xl" />
+            <MaterialIcon name="photo_camera" size="xl" />
             <span className="text-sm">{label.empty}</span>
           </span>
         )}
