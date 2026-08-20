@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { Timestamp } from 'firebase-admin/firestore';
 import { buildMenuSearchPrefixes } from '../src/utils/menu-catalog';
+import {
+  legacyCustomerMenuSeedItem,
+  richCustomerMenuSeedItem,
+} from '../src/quality/customer-menu-v2-fixtures';
 import { clearFirestoreEmulator, seedDoc } from './helpers/firestore-seed';
 
 const RESTAURANT_ID = 'rest-menu-e2e-001';
@@ -45,6 +49,27 @@ async function seedRestaurantWithMenu() {
   });
 
   const menuItems = [
+    {
+      id: legacyCustomerMenuSeedItem.id,
+      name: legacyCustomerMenuSeedItem.name,
+      category: legacyCustomerMenuSeedItem.category,
+      price: legacyCustomerMenuSeedItem.price,
+      description: legacyCustomerMenuSeedItem.description,
+      isAvailable: legacyCustomerMenuSeedItem.isAvailable ?? true,
+    },
+    {
+      id: richCustomerMenuSeedItem.id,
+      name: richCustomerMenuSeedItem.name,
+      category: richCustomerMenuSeedItem.category,
+      price: richCustomerMenuSeedItem.price,
+      description: richCustomerMenuSeedItem.description,
+      isAvailable: richCustomerMenuSeedItem.isAvailable ?? true,
+      modifierGroups: richCustomerMenuSeedItem.modifierGroups,
+      supplements: richCustomerMenuSeedItem.supplements,
+      allergens: richCustomerMenuSeedItem.allergens,
+      nutrition: richCustomerMenuSeedItem.nutrition,
+      checkoutRules: richCustomerMenuSeedItem.checkoutRules,
+    },
     {
       id: 'boisson-01-citronnade-maison',
       name: 'Citronnade Maison',

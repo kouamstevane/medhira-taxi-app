@@ -617,6 +617,42 @@ export interface MenuItemSubCollection {
   externalId?: string;
   sourceUpdatedAt?: Date;
   lastImportId?: string;
+  modifierGroups?: {
+    id: string;
+    label: string;
+    selectionType: 'single' | 'multiple';
+    required: boolean;
+    minSelections: number;
+    maxSelections: number;
+    options: {
+      id: string;
+      label: string;
+      priceDelta: number;
+      isDefault?: boolean;
+      isAvailable: boolean;
+    }[];
+  }[];
+  supplements?: {
+    id: string;
+    label: string;
+    price: number;
+    isAvailable: boolean;
+  }[];
+  allergens?: {
+    code: string;
+    label: string;
+  }[];
+  nutrition?: {
+    calories?: number;
+    proteinGrams?: number;
+    carbsGrams?: number;
+    fatGrams?: number;
+    saltGrams?: number;
+  };
+  checkoutRules?: {
+    allowZeroQuantity?: boolean;
+    maxQuantity?: number;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

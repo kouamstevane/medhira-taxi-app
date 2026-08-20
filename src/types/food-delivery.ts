@@ -180,6 +180,11 @@ export interface MenuItem extends MenuItemImportFields {
   searchPrefixes?: string[];
   isAvailable: boolean; // Disponibilité en temps réel
   preparationTime?: number; // Temps de préparation estimé en minutes
+  modifierGroups?: CustomerMenuModifierGroup[];
+  supplements?: CustomerMenuSupplement[];
+  allergens?: CustomerMenuAllergen[];
+  nutrition?: CustomerMenuNutrition;
+  checkoutRules?: CustomerMenuItemDetails['checkoutRules'];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

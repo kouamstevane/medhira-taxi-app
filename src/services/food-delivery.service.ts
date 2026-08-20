@@ -1437,23 +1437,47 @@ export const FoodDeliveryService = {
       const menuRef = collection(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS);
       const itemId = itemData.id || doc(menuRef).id;
       const itemDocRef = doc(menuRef, itemId);
+      const {
+        modifierGroups,
+        supplements,
+        allergens,
+        nutrition,
+        checkoutRules,
+        ...legacyItemData
+      } = itemData;
 
       const data: Record<string, unknown> = {
-        ...itemData,
+        ...legacyItemData,
         id: itemId,
         restaurantId,
-        name: itemData.name ?? '',
-        description: itemData.description ?? '',
-        price: itemData.price ?? 0,
-        category: itemData.category ?? 'Plats',
+        name: legacyItemData.name ?? '',
+        description: legacyItemData.description ?? '',
+        price: legacyItemData.price ?? 0,
+        category: legacyItemData.category ?? 'Plats',
         searchPrefixes: buildMenuSearchPrefixes([
-          itemData.name ?? '',
-          itemData.category ?? 'Plats',
-          itemData.externalId ?? '',
+          legacyItemData.name ?? '',
+          legacyItemData.category ?? 'Plats',
+          legacyItemData.externalId ?? '',
         ]),
-        isAvailable: itemData.isAvailable ?? true,
+        isAvailable: legacyItemData.isAvailable ?? true,
         updatedAt: serverTimestamp(),
       };
+
+      if (modifierGroups !== undefined) {
+        data.modifierGroups = modifierGroups;
+      }
+      if (supplements !== undefined) {
+        data.supplements = supplements;
+      }
+      if (allergens !== undefined) {
+        data.allergens = allergens;
+      }
+      if (nutrition !== undefined) {
+        data.nutrition = nutrition;
+      }
+      if (checkoutRules !== undefined) {
+        data.checkoutRules = checkoutRules;
+      }
 
       // Supprimer les clés images éventuelles de itemData pour que imageUpdate gouverne totalement le comportement
       delete data.imageUrl;
@@ -1481,7 +1505,7 @@ export const FoodDeliveryService = {
       }
 
       if (!itemData.id) {
-        data.source = itemData.source || 'manual';
+        data.source = legacyItemData.source || 'manual';
         data.createdAt = serverTimestamp();
       }
 
