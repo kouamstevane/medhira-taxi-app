@@ -41,9 +41,16 @@ export default function AdminRestaurantsPage() {
   const [filter, setFilter] = useState<'pending_approval' | 'approved' | 'rejected' | 'all'>('pending_approval');
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [commissionRateDraft, setCommissionRateDraft] = useState('');
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isAdmin = useAdminAuth();
+
+  useEffect(() => {
+    setCommissionRateDraft(
+      selectedRestaurant ? String(selectedRestaurant.commissionRate ?? 5) : '',
+    );
+  }, [selectedRestaurant]);
 
   // Fetch Restaurants
   useEffect(() => {
@@ -114,6 +121,51 @@ export default function AdminRestaurantsPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erreur lors de la mise à jour du statut.';
       logger.error('Mise à jour statut restaurant', err instanceof Error ? err : new Error(String(err)));
+      toast.error(message);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handleCommissionRateSave = async (restaurantId: string) => {
+    if (!auth.currentUser) {
+      toast.error('Session expirée. Veuillez vous reconnecter.');
+      return;
+    }
+
+    const commissionRate = Number(commissionRateDraft);
+    if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
+      toast.error('Le taux de commission doit être compris entre 0 et 100 %.');
+      return;
+    }
+
+    setProcessing(restaurantId);
+    try {
+      const adminManageRestaurant = httpsCallable(functions, 'adminManageRestaurant');
+      const result = await adminManageRestaurant({
+        action: 'set_commission_rate',
+        restaurantId,
+        commissionRate,
+      });
+      const response = result.data as { commissionRate?: number };
+      const savedRate = typeof response.commissionRate === 'number'
+        ? response.commissionRate
+        : commissionRate;
+
+      setRestaurants(prev => prev.map(restaurant => (
+        restaurant.id === restaurantId
+          ? { ...restaurant, commissionRate: savedRate }
+          : restaurant
+      )));
+      setSelectedRestaurant(prev => (
+        prev?.id === restaurantId
+          ? { ...prev, commissionRate: savedRate }
+          : prev
+      ));
+      toast.success('Commission mise à jour.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erreur lors de la mise à jour de la commission.';
+      logger.error('Mise à jour commission restaurant', err instanceof Error ? err : new Error(String(err)));
       toast.error(message);
     } finally {
       setProcessing(null);
@@ -383,6 +435,44 @@ export default function AdminRestaurantsPage() {
                       </span>
                     </div>
                   ))}
+                </div>
+              </section>
+
+              <section className="pt-8 border-t border-white/10 space-y-4">
+                <div className="flex items-center gap-3">
+                  <MaterialIcon name="percent" size="md" className="text-primary" />
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Commission Medira</h3>
+                    <p className="text-xs text-slate-400">Ce taux s&apos;appliquera aux nouvelles commandes.</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-5 bg-primary/5 rounded-2xl border border-primary/10">
+                  <div className="flex-1 space-y-2">
+                    <label htmlFor="restaurant-commission-rate" className="block text-xs font-semibold text-slate-300">
+                      Taux de commission du restaurant
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="restaurant-commission-rate"
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.01}
+                        value={commissionRateDraft}
+                        onChange={(event) => setCommissionRateDraft(event.target.value)}
+                        className="glass-input w-full p-3 pr-10 rounded-xl text-sm"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">%</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleCommissionRateSave(selectedRestaurant.id)}
+                    disabled={!!processing}
+                    className="h-12 px-5 bg-primary hover:bg-primary/90 text-black font-bold rounded-xl transition-all disabled:opacity-50"
+                  >
+                    {processing === selectedRestaurant.id ? 'Enregistrement...' : 'Enregistrer la commission'}
+                  </button>
                 </div>
               </section>
 
