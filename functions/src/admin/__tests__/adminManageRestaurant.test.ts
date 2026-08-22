@@ -24,4 +24,25 @@ describe('ManageRestaurantSchema', () => {
       reason: '',
     }).success).toBe(true);
   });
+
+  it('accepts a commission-rate update payload', () => {
+    expect(schema?.safeParse({
+      action: 'set_commission_rate',
+      restaurantId: 'restaurant-1',
+      commissionRate: 15,
+    }).success).toBe(true);
+  });
+
+  it('rejects commission rates outside the inclusive 0-100 range', () => {
+    expect(schema?.safeParse({
+      action: 'set_commission_rate',
+      restaurantId: 'restaurant-1',
+      commissionRate: 100.01,
+    }).success).toBe(false);
+    expect(schema?.safeParse({
+      action: 'set_commission_rate',
+      restaurantId: 'restaurant-1',
+      commissionRate: -0.01,
+    }).success).toBe(false);
+  });
 });

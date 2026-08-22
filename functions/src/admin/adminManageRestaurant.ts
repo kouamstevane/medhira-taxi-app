@@ -8,11 +8,33 @@ import { sendRestaurantStatusEmail } from '../email-service.js';
 
 const resendApiKey = defineSecret('RESEND_API_KEY');
 
-export const ManageRestaurantSchema = z.object({
-  action: z.enum(['approve', 'reject', 'suspend', 'unsuspend']),
-  restaurantId: z.string().min(1),
-  reason: z.string().optional().nullable(),
-});
+export const ManageRestaurantSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('approve'),
+    restaurantId: z.string().min(1),
+    reason: z.string().optional().nullable(),
+  }),
+  z.object({
+    action: z.literal('reject'),
+    restaurantId: z.string().min(1),
+    reason: z.string().optional().nullable(),
+  }),
+  z.object({
+    action: z.literal('suspend'),
+    restaurantId: z.string().min(1),
+    reason: z.string().optional().nullable(),
+  }),
+  z.object({
+    action: z.literal('unsuspend'),
+    restaurantId: z.string().min(1),
+    reason: z.string().optional().nullable(),
+  }),
+  z.object({
+    action: z.literal('set_commission_rate'),
+    restaurantId: z.string().min(1),
+    commissionRate: z.number().finite().min(0).max(100),
+  }),
+]);
 
 export const adminManageRestaurant = onCall(
   { region: 'europe-west1', secrets: [resendApiKey] },
@@ -35,7 +57,7 @@ export const adminManageRestaurant = onCall(
       );
     }
 
-    const { action, restaurantId, reason } = parsed.data;
+    const { action, restaurantId } = parsed.data;
 
     const firestore = admin.firestore();
     const restaurantRef = firestore
@@ -54,6 +76,22 @@ export const adminManageRestaurant = onCall(
     const restaurantName = (restaurantData?.name as string | undefined) || 'Restaurant';
 
     switch (action) {
+      case 'set_commission_rate':
+        {
+          const { commissionRate } = parsed.data;
+        await restaurantRef.update({
+          commissionRate,
+          commissionRateUpdatedAt: now,
+          commissionRateUpdatedBy: uid,
+          updatedAt: now,
+        });
+        return {
+          success: true,
+          commissionRate,
+          message: 'Commission du restaurant mise à jour',
+        };
+        }
+
       case 'approve':
         try {
           await firestore.runTransaction(async (transaction) => {
@@ -127,6 +165,8 @@ export const adminManageRestaurant = onCall(
         };
 
       case 'reject':
+        {
+        const { reason } = parsed.data;
         if (!reason) {
           throw new HttpsError(
             'invalid-argument',
@@ -141,8 +181,11 @@ export const adminManageRestaurant = onCall(
           updatedAt: now,
         });
         return { success: true, message: 'Restaurant refusé' };
+        }
 
       case 'suspend':
+        {
+        const { reason } = parsed.data;
         if (!reason) {
           throw new HttpsError(
             'invalid-argument',
@@ -157,6 +200,7 @@ export const adminManageRestaurant = onCall(
           updatedAt: now,
         });
         return { success: true, message: 'Restaurant suspendu' };
+        }
 
       case 'unsuspend':
         await restaurantRef.update({
