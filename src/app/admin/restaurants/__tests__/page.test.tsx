@@ -51,7 +51,7 @@ jest.mock('@/components/ui/MaterialIcon', () => ({
 
 jest.mock('next/image', () => ({
   __esModule: true,
-  default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img {...props} />,
+  default: ({ alt }: { alt?: string }) => <span role="img" aria-label={alt} />,
 }));
 
 jest.mock('react-hot-toast', () => ({

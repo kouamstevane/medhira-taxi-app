@@ -63,8 +63,8 @@ describe('adminManageRestaurant commission action', () => {
       data: () => ({ name: 'Restaurant A' }),
     });
     restaurantRef.update.mockResolvedValue(undefined);
-    const module = await import('../adminManageRestaurant.js');
-    handler = module.adminManageRestaurant as unknown as typeof handler;
+    const loadedModule = await import('../adminManageRestaurant.js');
+    handler = loadedModule.adminManageRestaurant as unknown as typeof handler;
   });
 
   it('stores the requested rate and audit fields', async () => {
