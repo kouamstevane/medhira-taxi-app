@@ -20,6 +20,7 @@ import {
   toStripeAmount,
   type VerifiedMenuItem,
 } from '../food/foodOrderPricing.js';
+import { resolveFoodOrderCommissionRate } from '../food/foodSettlement.js';
 
 const CURRENCY_CODE = 'CAD';
 const CURRENCY = 'cad';
@@ -203,7 +204,10 @@ export const payFoodOrderWithCard = onCall(
           stripePaymentIntentId: paymentIntent.id,
           paymentCurrency: CURRENCY,
           paymentStatus: paymentIntent.status,
-          commissionRate: verifiedOrder.order.restaurant.commissionRate,
+          commissionRate: resolveFoodOrderCommissionRate(
+            verifiedOrder.order.commissionRate,
+            verifiedOrder.order.restaurant.commissionRate,
+          ),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 

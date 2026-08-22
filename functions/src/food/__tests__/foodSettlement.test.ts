@@ -1,4 +1,7 @@
-import { calculateFoodSettlement } from '../foodSettlement';
+import {
+  calculateFoodSettlement,
+  resolveFoodOrderCommissionRate,
+} from '../foodSettlement';
 
 describe('calculateFoodSettlement', () => {
   test('uses a 5 percent restaurant commission by default', () => {
@@ -36,5 +39,13 @@ describe('calculateFoodSettlement', () => {
       driverAmountCents: 0,
       platformAmountCents: 1000,
     });
+  });
+
+  test('keeps the commission captured on an existing order', () => {
+    expect(resolveFoodOrderCommissionRate(15, 5)).toBe(15);
+  });
+
+  test('falls back to the current restaurant rate for legacy orders without a snapshot', () => {
+    expect(resolveFoodOrderCommissionRate(undefined, 10)).toBe(10);
   });
 });

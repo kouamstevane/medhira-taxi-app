@@ -28,6 +28,15 @@ export function resolveRestaurantCommissionRate(rate: number | null | undefined)
   return Math.min(Math.max(rate as number, 0), 100);
 }
 
+export function resolveFoodOrderCommissionRate(orderRate: unknown, restaurantRate: unknown): number {
+  const preferredRate = typeof orderRate === 'number' && Number.isFinite(orderRate)
+    ? orderRate
+    : typeof restaurantRate === 'number' && Number.isFinite(restaurantRate)
+      ? restaurantRate
+      : undefined;
+  return resolveRestaurantCommissionRate(preferredRate);
+}
+
 export function calculateFoodSettlement(input: FoodSettlementInput): FoodSettlement {
   const restaurantGrossCents = toCents(input.basePrice);
   const driverGrossCents = toCents(input.deliveryCost);
