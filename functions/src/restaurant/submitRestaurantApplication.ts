@@ -7,7 +7,9 @@ import { DEFAULT_RESTAURANT_COMMISSION_RATE } from '../config/stripe.js';
 
 export function isEmailVerifiedForSubmission(
   request: Pick<CallableRequest, 'auth'>,
+  authUserVerified?: boolean,
 ): boolean {
+  if (authUserVerified !== undefined) return authUserVerified;
   return request.auth?.token.email_verified === true;
 }
 
@@ -33,6 +35,7 @@ export const submitRestaurantApplication = onCall(
     }
 
     const uid = request.auth.uid;
+    const authUser = await admin.auth().getUser(uid);
 
     await enforceRateLimit({
       identifier: uid,
@@ -69,7 +72,7 @@ export const submitRestaurantApplication = onCall(
 
         const userData = userSnap.data()!;
 
-        if (!isEmailVerifiedForSubmission(request)) {
+        if (!isEmailVerifiedForSubmission(request, authUser.emailVerified)) {
           throw new HttpsError('failed-precondition', 'Email non vérifié — passez par l\'étape 2 du wizard.');
         }
 

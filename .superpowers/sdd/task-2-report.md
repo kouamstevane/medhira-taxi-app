@@ -73,7 +73,10 @@ Concerns:
 
 ## Review Fix Follow-up (2026-08-19)
 
-Status: implemented in the current checkout, pending commit at the time of this report entry.
+Status: complete
+
+Commit(s):
+- `5dd50eb851dc40ff5d4b97ac3e4a64ade3ed4c3e` - `fix: wire customer menu customization into cart flow`
 
 Fixed review findings:
 - Wired `CustomerMenuItemDetails` into the live customer card flow through `MenuItemCard`, with legacy fallback back into the flat cart path when an item has no V2 metadata.
@@ -162,6 +165,73 @@ Focused RED/GREEN evidence:
    Snapshots:   0 total
    Time:        7.774 s, estimated 8 s
    Ran all test suites matching src/components/food/__tests__/MenuItemCard.test.tsx|src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx|src/components/food/__tests__/CustomerMenuItemDetails.test.tsx|src/components/food/__tests__/RestaurantMenuList.test.tsx|src/store/__tests__/cartStore.test.ts.
+   ```
+
+Working tree note:
+- `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-5-report.md`, and `AGENTS.md` were already dirty before this follow-up and were intentionally left untouched.
+
+---
+
+## Task 2 Legacy Cart Fix Follow-up (2026-08-19)
+
+Status: complete
+
+Commit(s):
+- `d9aec43411358f3a862ce1431b1530482f9f86d0` - `fix: handle duplicate legacy cart items`
+
+Fixed review finding:
+- Corrected the legacy-item branch in `src/store/cartStore.ts` so duplicate legacy menu items increment quantity instead of throwing on the non-matching cart line.
+
+Files changed for this follow-up:
+- `src/store/cartStore.ts`
+- `src/store/__tests__/cartStore.test.ts`
+
+Focused RED/GREEN evidence:
+
+1. RED phase
+
+   Command:
+
+   ```bash
+   npx jest src/store/__tests__/cartStore.test.ts --runInBand
+   ```
+
+   Output:
+
+   ```text
+   FAIL src/store/__tests__/cartStore.test.ts
+     ● cartStore › increments the quantity when the same legacy item is added twice
+
+       ReferenceError: i is not defined
+
+     at i (src/store/cartStore.ts:73:21)
+         at Array.map (<anonymous>)
+         at map (src/store/cartStore.ts:70:34)
+         at setState (node_modules/zustand/vanilla.js:7:55)
+         at node_modules/zustand/middleware.js:372:7
+         at Object.set [as addItem] (src/store/cartStore.ts:58:9)
+         at Object.addItem (src/store/__tests__/cartStore.test.ts:95:29)
+
+   Test Suites: 1 failed, 1 total
+   Tests:       1 failed, 1 passed, 2 total
+   ```
+
+2. GREEN phase
+
+   Command:
+
+   ```bash
+   npx jest src/store/__tests__/cartStore.test.ts src/components/food/__tests__/MenuItemCard.test.tsx src/components/food/__tests__/CartDrawer.test.tsx --runInBand
+   ```
+
+   Output:
+
+   ```text
+   Test Suites: 3 passed, 3 total
+   Tests:       6 passed, 6 total
+   Snapshots:   0 total
+   Time:        5.021 s
+   Ran all test suites matching src\store\__tests__\cartStore.test.ts|src\components\food\__tests__\MenuItemCard.test.tsx|src\components\food\__tests__\CartDrawer.test.tsx.
    ```
 
 Working tree note:

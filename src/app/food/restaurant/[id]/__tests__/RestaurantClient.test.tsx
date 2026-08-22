@@ -189,4 +189,19 @@ describe('RestaurantClient', () => {
     expect(screen.queryByTestId('cart-drawer')).not.toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Navigation du bas' })).toBeInTheDocument();
   });
+
+  it('does not expose a restaurant whose Stripe account is not active through a direct URL', async () => {
+    mockedGetRestaurantById.mockResolvedValue({
+      ...restaurant,
+      stripeConnectStatus: 'restricted',
+    });
+
+    render(<RestaurantClient />);
+
+    expect(await screen.findByRole('heading', { name: 'Restaurant indisponible' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Chez Medjira' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('searchbox', { name: 'Rechercher un plat' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('cart-drawer')).not.toBeInTheDocument();
+    expect(mockedUseCustomerRestaurantMenuQuery).toHaveBeenLastCalledWith('');
+  });
 });

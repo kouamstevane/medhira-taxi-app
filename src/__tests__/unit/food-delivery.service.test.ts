@@ -4,6 +4,7 @@ import {
   calculateDeliveryCost,
   calculateTotalOrderPrice,
   canStartFoodOrderCheckout,
+  getApprovedRestaurants,
   getRestaurantOrderHistoryPage,
   shouldShowFoodOrderInCustomerHistory,
   subscribeRestaurantActiveOrders,
@@ -11,7 +12,40 @@ import {
 } from '@/services/food-delivery.service';
 import type { OrderItem } from '@/types/food-delivery';
 
+const restaurantDocuments = [
+  { id: 'active-restaurant', data: () => ({ name: 'Restaurant actif', status: 'approved', stripeConnectStatus: 'active', createdAt: 3 }) },
+  { id: 'setup-restaurant', data: () => ({ name: 'Restaurant en configuration', status: 'approved', stripeConnectStatus: 'not_started', createdAt: 2 }) },
+  { id: 'restricted-restaurant', data: () => ({ name: 'Restaurant restreint', status: 'approved', stripeConnectStatus: 'restricted', createdAt: 1 }) },
+];
+
+jest.mock('@/config/firebase', () => ({ db: {} }));
+
+jest.mock('firebase/firestore', () => ({
+  collection: jest.fn(() => ({ collection: 'restaurants' })),
+  where: jest.fn((field: string, operator: string, value: unknown) => ({ field, operator, value })),
+  orderBy: jest.fn((field: string, direction: string) => ({ field, direction })),
+  limit: jest.fn((value: number) => ({ limit: value })),
+  query: jest.fn((_collection: unknown, ...constraints: Array<Record<string, unknown>>) => ({ constraints })),
+  getDocs: jest.fn(async (request: { constraints: Array<Record<string, unknown>> }) => {
+    const equalityConstraints = request.constraints.filter(
+      (constraint) => constraint.operator === '=='
+    );
+    const docs = restaurantDocuments.filter((document) => equalityConstraints.every(
+      (constraint) => document.data()[constraint.field as 'status' | 'stripeConnectStatus'] === constraint.value
+    ));
+    return { docs };
+  }),
+}));
+
 describe('FoodDeliveryService — Unit Tests', () => {
+  describe('approved restaurant visibility', () => {
+    it('returns only approved restaurants with active Stripe payments', async () => {
+      const result = await getApprovedRestaurants();
+
+      expect(result.restaurants.map((restaurant) => restaurant.name)).toEqual(['Restaurant actif']);
+    });
+  });
+
   describe('calculateBasePrice', () => {
     it('calcule la somme exacte pour un panier d\'articles', () => {
       const orderItems: OrderItem[] = [

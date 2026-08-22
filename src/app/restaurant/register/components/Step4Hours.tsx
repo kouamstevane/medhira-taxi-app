@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useEffect, useRef, useState, FormEvent } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { cn } from '@/lib/utils';
 import { driverFieldClassName, driverPrimaryButtonClassName, driverSecondaryButtonClassName } from '@/app/driver/register/components/driverOnboardingStyles';
@@ -13,17 +13,28 @@ interface Step4HoursProps {
   initialData?: Partial<Step4Data>;
   loading: boolean;
   onChange?: (hours: Step4Data['openingHours']) => void;
+  error?: string | null;
 }
 
 const DEFAULT_HOURS: Step4Data['openingHours'] = Object.fromEntries(
   RESTAURANT_DAYS.map(({ key }) => [key, { open: '09:00', close: '22:00', closed: key === 'sunday' }])
 ) as Step4Data['openingHours'];
 
-export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange }: Step4HoursProps) {
+export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange, error: submissionError }: Step4HoursProps) {
   const [hours, setHours] = useState<Step4Data['openingHours']>(
     initialData?.openingHours || DEFAULT_HOURS
   );
-  const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  const error = submissionError || validationError;
+
+  useEffect(() => {
+    const errorElement = errorRef.current;
+    if (!errorElement || !error) return;
+
+    errorElement.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    errorElement.focus({ preventScroll: true });
+  }, [error]);
 
   const updateDay = (key: string, field: string, value: string | boolean) => {
     const next = {
@@ -36,11 +47,11 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange }:
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setValidationError(null);
 
     const openDays = Object.entries(hours).filter(([, v]) => !v.closed);
     if (openDays.length === 0) {
-      setError('Au moins un jour doit être ouvert.');
+      setValidationError('Au moins un jour doit être ouvert.');
       return;
     }
 
@@ -54,7 +65,14 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange }:
         <p className="text-gray-400 mb-6">Étape 4 sur 4 — Définissez vos horaires</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm" role="alert">
+          <div
+            ref={errorRef}
+            className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm"
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            tabIndex={-1}
+          >
             {error}
           </div>
         )}

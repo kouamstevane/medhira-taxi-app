@@ -49,13 +49,15 @@ describe('Step3Restaurant', () => {
     expect(screen.getByLabelText('Choisir la photo de couverture')).toBeInTheDocument();
   });
 
-  it('shows the existing restaurant name validation error instead of advancing an empty form', () => {
+  it('focuses the validation error so it is visible after clicking continue', async () => {
     const onNext = jest.fn();
     render(<Step3Restaurant onNext={onNext} onBack={jest.fn()} loading={false} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Continuer aux horaires/i }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Le nom du restaurant est requis.');
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Le nom du restaurant est requis.');
+    await waitFor(() => expect(alert).toHaveFocus());
     expect(onNext).not.toHaveBeenCalled();
   });
 

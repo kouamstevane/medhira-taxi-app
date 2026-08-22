@@ -17,7 +17,7 @@ import { httpsCallable } from 'firebase/functions';
 import toast from 'react-hot-toast';
 import { db, auth, functions } from '@/config/firebase';
 import { mapHttpsError } from '@/services/cloud-functions.helpers';
-import { createRestaurantOnboardingAccount, signInWithGoogleForRestaurant } from '@/services/auth.service';
+import { createRestaurantOnboardingAccount, signInWithGoogleForRestaurant, signOut } from '@/services/auth.service';
 import { AuthContext } from '@/context/AuthContext';
 import {
   getRestaurantImagePathFromUrl,
@@ -80,6 +80,7 @@ export function useRestaurantRegistration() {
   const [submissionSuccess, setSubmissionSuccess] = useState(false);
   const [restaurantId, setRestaurantId] = useState<string | null>(null);
   const [restoringDraft, setRestoringDraft] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const [step1Data, setStep1DataState] = useState<Partial<Step1Data>>({});
   const [step2Data, setStep2DataState] = useState<Partial<Step2Data>>({});
@@ -113,6 +114,22 @@ export function useRestaurantRegistration() {
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
+
+  const leaveRegistration = useCallback(async (destination: '/' | '/login') => {
+    setIsLeaving(true);
+    setError(null);
+    try {
+      if (auth.currentUser) {
+        await signOut();
+      }
+      router.replace(destination);
+    } catch (err: unknown) {
+      const mapped = mapHttpsError(err);
+      setError(mapped.message);
+      toast.error(mapped.message);
+      setIsLeaving(false);
+    }
+  }, [router]);
 
   const markRestaurantOnboarding = useCallback(async (userId: string, currentStep: 2 | 3 | 4) => {
     const now = serverTimestamp();
@@ -265,6 +282,7 @@ export function useRestaurantRegistration() {
       setStep4DataState(data);
       const user = auth.currentUser;
       if (!user) throw new Error('Non authentifié');
+      await user.getIdToken(true);
 
       const submit = httpsCallable(functions, 'submitRestaurantApplication');
 
@@ -280,9 +298,6 @@ export function useRestaurantRegistration() {
         email: step3Data.email,
         cuisineType: step3Data.cuisineType,
         avgPricePerPerson: step3Data.avgPricePerPerson,
-        imageUrl: step3Data.imageUrl,
-        logoUrl: step3Data.logoUrl,
-        coverImageUrl: step3Data.coverImageUrl,
         openingHours: data.openingHours,
         location: step3Data.location,
       };
@@ -494,6 +509,7 @@ export function useRestaurantRegistration() {
   return {
     currentStep,
     loading,
+    isLeaving,
     error,
     isSubmitting,
     submissionSuccess,
@@ -509,6 +525,7 @@ export function useRestaurantRegistration() {
     setStepData,
     setError,
     clearError,
+    leaveRegistration,
     handleStep1Submit,
     handleGoogleSignIn,
     handleStep2Verified,

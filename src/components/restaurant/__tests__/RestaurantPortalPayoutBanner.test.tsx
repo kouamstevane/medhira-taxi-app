@@ -14,6 +14,7 @@ describe('RestaurantPortalPayoutBanner', () => {
     render(<RestaurantPortalPayoutBanner status="approved" stripeConnectStatus={stripeConnectStatus} />);
 
     expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', href);
+    expect(screen.getByText('Votre restaurant ne sera pas affiché aux clients tant que votre compte de paiement Stripe n\'est pas actif.')).toBeInTheDocument();
   });
 
   it('renders nothing for an active or non-approved restaurant', () => {

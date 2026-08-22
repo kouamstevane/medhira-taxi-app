@@ -24,6 +24,7 @@ import type { NextRequest } from 'next/server';
 // FIX #C12 : vérification cryptographique de la signature JWT (Edge runtime compatible).
 // `jose` gère le cache JWKS en interne (HTTP Cache-Control respecté).
 import { jwtVerify, createRemoteJWKSet, type JWTPayload } from 'jose';
+import { shouldRedirectAuthenticatedPublicRoute } from '@/utils/authenticated-public-navigation';
 
 const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'medjira-service';
 
@@ -191,8 +192,7 @@ export async function middleware(request: NextRequest) {
   const isRestaurantPublicRoute = matchesRoute(pathname, RESTAURANT_PUBLIC_ROUTES);
 
   if (isAuthenticated && (isPublicRoute || isDriverPublicRoute || isRestaurantPublicRoute)) {
-    const excludedRoutes = ['/'];
-    const shouldRedirect = !excludedRoutes.includes(pathname);
+    const shouldRedirect = shouldRedirectAuthenticatedPublicRoute(pathname);
 
     if (shouldRedirect) {
       // Routage post-login basique : le routage fin selon driverStatus/restaurantStatus

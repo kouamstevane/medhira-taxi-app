@@ -249,7 +249,11 @@ describe('useRestaurantRegistration — restaurant submission contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     const firebaseConfig = require('@/config/firebase');
-    firebaseConfig.auth.currentUser = { uid: 'restaurant-owner', email: 'owner@test.fr' };
+    firebaseConfig.auth.currentUser = {
+      uid: 'restaurant-owner',
+      email: 'owner@test.fr',
+      getIdToken: jest.fn().mockResolvedValue('fresh-token'),
+    };
   });
 
   test('handleSubmit sends the Cloud Function data envelope expected by the backend', async () => {
@@ -287,6 +291,80 @@ describe('useRestaurantRegistration — restaurant submission contract', () => {
       }),
     });
     expect(mockReplace).toHaveBeenCalledWith('/restaurant/pending?id=rest_123');
+  });
+
+  test('refreshes the Firebase ID token before submitting verified restaurant data', async () => {
+    const firebaseConfig = require('@/config/firebase');
+    const getIdToken = jest.fn().mockResolvedValue('fresh-token');
+    firebaseConfig.auth.currentUser = {
+      uid: 'restaurant-owner',
+      email: 'owner@test.fr',
+      getIdToken,
+    };
+    const { httpsCallable } = require('firebase/functions');
+    const submitApplication = jest.fn().mockResolvedValue({ data: { restaurantId: 'rest_token' } });
+    httpsCallable.mockReturnValueOnce(submitApplication);
+
+    const { result } = renderHook(() => useRestaurantRegistration());
+
+    act(() => {
+      result.current.setStepData(3, {
+        name: 'Le Bistrot',
+        description: 'Restaurant français traditionnel',
+        cuisineType: ['Française'],
+        address: '12 Rue de Paris',
+        phone: '+33123456789',
+        email: 'bistrot@test.fr',
+        location: { lat: 48.8566, lng: 2.3522 },
+      });
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit({
+        openingHours: {
+          monday: { open: '09:00', close: '22:00', closed: false },
+        },
+      });
+    });
+
+    expect(getIdToken).toHaveBeenCalledWith(true);
+    expect(submitApplication).toHaveBeenCalled();
+  });
+
+  test('does not send visual URL fields to the strict submission schema', async () => {
+    const { httpsCallable } = require('firebase/functions');
+    const submitApplication = jest.fn().mockResolvedValue({ data: { restaurantId: 'rest_visuals' } });
+    httpsCallable.mockReturnValueOnce(submitApplication);
+
+    const { result } = renderHook(() => useRestaurantRegistration());
+
+    act(() => {
+      result.current.setStepData(3, {
+        name: 'Le Bistrot',
+        description: 'Restaurant français traditionnel',
+        cuisineType: ['Française'],
+        address: '12 Rue de Paris',
+        phone: '+33123456789',
+        email: 'bistrot@test.fr',
+        imageUrl: 'https://example.com/legacy.jpg',
+        logoUrl: 'https://example.com/logo.webp',
+        coverImageUrl: 'https://example.com/cover.webp',
+        location: { lat: 48.8566, lng: 2.3522 },
+      });
+    });
+
+    await act(async () => {
+      await result.current.handleSubmit({
+        openingHours: {
+          monday: { open: '09:00', close: '22:00', closed: false },
+        },
+      });
+    });
+
+    const submittedData = submitApplication.mock.calls[0][0].data;
+    expect(submittedData).not.toHaveProperty('imageUrl');
+    expect(submittedData).not.toHaveProperty('logoUrl');
+    expect(submittedData).not.toHaveProperty('coverImageUrl');
   });
 
   test('refreshes the authenticated profile before redirecting after submission', async () => {

@@ -5,7 +5,7 @@ import {
   RulesTestContext,
   RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -57,6 +57,22 @@ describe('Restaurant visual Firestore rules', () => {
     }));
   });
 
+  it('allows visual updates when the newly created restaurant has no Stripe account field yet', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+      await setDoc(doc(context.firestore(), 'restaurants', 'restaurant-without-stripe'), {
+        ownerId,
+        status: 'pending_approval',
+        commissionRate: 5,
+        stripeConnectStatus: 'not_started',
+      });
+    });
+
+    const db = testEnv.authenticatedContext(ownerId).firestore();
+    await assertSucceeds(updateDoc(doc(db, 'restaurants', 'restaurant-without-stripe'), {
+      logoUrl: 'https://firebasestorage.googleapis.com/v0/b/demo/o/logo-new.webp',
+    }));
+  });
+
   it('rejects visual updates from another user and protects restaurant ownership fields', async () => {
     const otherDb = testEnv.authenticatedContext(otherUserId).firestore();
     await assertFails(updateDoc(doc(otherDb, 'restaurants', restaurantId), {
@@ -75,5 +91,31 @@ describe('Restaurant visual Firestore rules', () => {
     await assertFails(updateDoc(doc(db, 'restaurants', restaurantId), {
       logoUrl: `https://firebasestorage.googleapis.com/v0/b/demo/o/${'a'.repeat(2049)}`,
     }));
+  });
+
+  it('blocks direct reads of restaurants and menus when Stripe is not active', async () => {
+    const unavailableRestaurantId = 'restaurant-without-active-stripe';
+
+    await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'restaurants', unavailableRestaurantId), {
+        ownerId,
+        status: 'approved',
+        commissionRate: 10,
+        stripeConnectStatus: 'restricted',
+      });
+      await setDoc(doc(db, 'restaurants', unavailableRestaurantId, 'menu_items', 'menu-item-1'), {
+        name: 'Plat masqué',
+        isAvailable: true,
+      });
+    });
+
+    const clientDb = testEnv.authenticatedContext(otherUserId).firestore();
+    await assertFails(getDoc(doc(clientDb, 'restaurants', unavailableRestaurantId)));
+    await assertFails(getDoc(doc(clientDb, 'restaurants', unavailableRestaurantId, 'menu_items', 'menu-item-1')));
+
+    const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+    await assertSucceeds(getDoc(doc(ownerDb, 'restaurants', unavailableRestaurantId)));
+    await assertSucceeds(getDoc(doc(ownerDb, 'restaurants', unavailableRestaurantId, 'menu_items', 'menu-item-1')));
   });
 });

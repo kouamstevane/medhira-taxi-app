@@ -6,6 +6,9 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 type Props = { status: StripeConnectStatus };
 
+const RESTAURANT_VISIBILITY_MESSAGE =
+  "Votre restaurant ne sera pas affiché aux clients tant que votre compte de paiement Stripe n'est pas actif.";
+
 export function StripeConnectBanner({ status }: Props) {
   if (status === 'active') return null;
 
@@ -16,6 +19,7 @@ export function StripeConnectBanner({ status }: Props) {
         <div className="flex-1">
           <p className="text-white font-semibold">Configurez vos paiements</p>
           <p className="text-slate-300 text-sm">Pour recevoir vos premières commandes, finalisez votre compte Stripe.</p>
+          <p className="text-slate-300 text-sm mt-1">{RESTAURANT_VISIBILITY_MESSAGE}</p>
         </div>
         <Link href="/restaurant/onboarding/payments" className="bg-orange-500 text-white rounded-md px-4 py-2 text-sm font-semibold">Configurer</Link>
       </div>
@@ -29,6 +33,7 @@ export function StripeConnectBanner({ status }: Props) {
         <div className="flex-1">
           <p className="text-white font-semibold">Onboarding Stripe en cours</p>
           <p className="text-slate-300 text-sm">Reprenez là où vous vous êtes arrêté pour activer les paiements.</p>
+          <p className="text-slate-300 text-sm mt-1">{RESTAURANT_VISIBILITY_MESSAGE}</p>
         </div>
         <Link href="/restaurant/onboarding/payments" className="bg-blue-500 text-white rounded-md px-4 py-2 text-sm font-semibold">Reprendre</Link>
       </div>
@@ -41,6 +46,7 @@ export function StripeConnectBanner({ status }: Props) {
       <div className="flex-1">
         <p className="text-white font-semibold">Action requise sur votre compte Stripe</p>
         <p className="text-slate-300 text-sm">Stripe demande des informations supplémentaires pour réactiver les paiements.</p>
+        <p className="text-slate-300 text-sm mt-1">{RESTAURANT_VISIBILITY_MESSAGE}</p>
       </div>
       <Link href="/restaurant/onboarding/payments?mode=update" className="bg-red-500 text-white rounded-md px-4 py-2 text-sm font-semibold">Réparer</Link>
     </div>

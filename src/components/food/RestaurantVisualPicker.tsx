@@ -86,12 +86,14 @@ export function RestaurantVisualPicker({
       </div>
 
       <label
-        className={`relative flex cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/20 bg-white/[0.04] transition hover:border-primary/70 ${
-          kind === 'logo' ? 'aspect-square max-w-[220px]' : 'aspect-video'
-        } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+        className={`relative flex aspect-video w-full cursor-pointer items-center justify-center overflow-hidden rounded-2xl border border-dashed border-white/20 bg-white/[0.04] transition hover:border-primary/70 ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
       >
         {previewUrl ? (
-          <img src={previewUrl} alt={label.title} className="h-full w-full object-cover" />
+          <img
+            src={previewUrl}
+            alt={label.title}
+            className={`h-full w-full ${kind === 'logo' ? 'object-contain p-6' : 'object-cover'}`}
+          />
         ) : (
           <span className="flex flex-col items-center gap-2 text-gray-400">
             <MaterialIcon name="photo_camera" size="xl" />

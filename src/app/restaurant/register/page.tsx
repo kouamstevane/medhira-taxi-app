@@ -8,11 +8,15 @@ import { Step2EmailVerification } from './components/Step2EmailVerification';
 import { Step3Restaurant } from './components/Step3Restaurant';
 import { Step4Hours } from './components/Step4Hours';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { cn } from '@/lib/utils';
+import { driverSecondaryButtonClassName } from '@/app/driver/register/components/driverOnboardingStyles';
 
 function RestaurantRegisterWizard() {
   const {
     currentStep,
     loading,
+    isLeaving,
     error,
     isSubmitting,
     fromBecomePro,
@@ -28,6 +32,7 @@ function RestaurantRegisterWizard() {
     handleDraftSave,
     saveDraftDebounced,
     handleSubmit,
+    leaveRegistration,
   } = useRestaurantRegistration();
 
   const progress = (currentStep / 4) * 100;
@@ -53,6 +58,28 @@ function RestaurantRegisterWizard() {
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <div className="w-full max-w-md mx-auto px-4 pt-4">
+        <nav className="mb-4 flex items-center justify-between" aria-label="Navigation de l'inscription">
+          <button
+            type="button"
+            onClick={() => void leaveRegistration('/')}
+            disabled={isLeaving}
+            className={cn(driverSecondaryButtonClassName, 'h-10 min-h-10 w-auto gap-2 rounded-xl px-3 text-sm')}
+            aria-label="Accueil"
+          >
+            <MaterialIcon name="home" size="sm" />
+            Accueil
+          </button>
+          <button
+            type="button"
+            onClick={() => void leaveRegistration('/login')}
+            disabled={isLeaving}
+            className={cn(driverSecondaryButtonClassName, 'h-10 min-h-10 w-auto gap-2 rounded-xl px-3 text-sm')}
+            aria-label="Connexion"
+          >
+            <MaterialIcon name="login" size="sm" />
+            Connexion
+          </button>
+        </nav>
         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
             className="h-full bg-primary rounded-full transition-all duration-300"
@@ -104,6 +131,7 @@ function RestaurantRegisterWizard() {
           onBack={() => goToStep(3)}
           initialData={step4Data as Partial<import('@/hooks/useRestaurantRegistration').Step4Data> | undefined}
           loading={loading || isSubmitting}
+          error={error}
         />
       )}
     </div>

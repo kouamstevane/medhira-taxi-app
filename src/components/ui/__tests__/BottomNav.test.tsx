@@ -14,6 +14,13 @@ jest.mock('../MaterialIcon', () => ({
 }));
 
 describe('BottomNav', () => {
+  it('does not render while a full-screen admin detail panel is open', () => {
+    render(<BottomNav items={adminNavItems} hidden />);
+
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('bottom-nav-spacer')).not.toBeInTheDocument();
+  });
+
   it('laisse le défilement passer autour des liens et réserve sa hauteur', () => {
     render(<BottomNav items={adminNavItems} />);
 

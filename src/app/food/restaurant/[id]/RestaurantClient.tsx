@@ -21,6 +21,7 @@ export default function RestaurantClient() {
   const router = useRouter();
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const {
     items,
@@ -36,7 +37,7 @@ export default function RestaurantClient() {
     loadMore,
     retry,
     clearFilters,
-  } = useCustomerRestaurantMenuQuery(id);
+  } = useCustomerRestaurantMenuQuery(restaurant?.id ?? '');
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +47,11 @@ export default function RestaurantClient() {
         const current = await FoodDeliveryService.getRestaurantById(id);
 
         if (!cancelled && current) {
-          setRestaurant(current);
+          const isAvailableToCustomers = current.status === 'approved' && current.stripeConnectStatus === 'active';
+          setUnavailable(!isAvailableToCustomers);
+          if (isAvailableToCustomers) {
+            setRestaurant(current);
+          }
         }
       } catch (error) {
         console.error('Erreur chargement détails:', error);
@@ -79,7 +84,12 @@ export default function RestaurantClient() {
   if (!restaurant) {
     return (
       <div className="min-h-screen text-center py-20 bg-background">
-        <h2 className="text-xl font-bold text-white">Restaurant introuvable</h2>
+        <h2 className="text-xl font-bold text-white">
+          {unavailable ? 'Restaurant indisponible' : 'Restaurant introuvable'}
+        </h2>
+        {unavailable && (
+          <p className="mt-2 text-slate-400">Ce restaurant n’est pas disponible actuellement.</p>
+        )}
         <button onClick={() => router.back()} className="mt-4 text-primary font-medium">Retour</button>
       </div>
     );

@@ -430,7 +430,7 @@ export default function AdminRestaurantsPage() {
           </div>
         </div>
       )}
-      <BottomNav items={adminNavItems} />
+      <BottomNav items={adminNavItems} hidden={Boolean(selectedRestaurant)} />
     </div>
   );
 }

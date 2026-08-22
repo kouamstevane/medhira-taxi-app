@@ -155,6 +155,14 @@ describe('isEmailVerifiedForSubmission', () => {
     expect(isEmailVerifiedForSubmission({ auth: { token: { email_verified: true } } } as never)).toBe(true);
     expect(isEmailVerifiedForSubmission({ auth: { token: { email_verified: false } } } as never)).toBe(false);
   });
+
+  test('accepts the authoritative Firebase Auth state when the token is stale', () => {
+    const verifier = isEmailVerifiedForSubmission as unknown as (request: unknown, authUserVerified: boolean) => boolean;
+    expect(verifier(
+      { auth: { token: { email_verified: false } } } as never,
+      true,
+    )).toBe(true);
+  });
 });
 
 describe('getRestaurantIdsFromRole', () => {

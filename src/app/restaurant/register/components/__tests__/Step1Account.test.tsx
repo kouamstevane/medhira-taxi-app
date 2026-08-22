@@ -9,7 +9,7 @@ describe('Step1Account', () => {
     expect(screen.getByLabelText('Nom')).toHaveClass('focus:ring-[#f29200]');
     expect(screen.getByLabelText('Email')).toHaveClass('rounded-xl');
     expect(screen.getByLabelText('Mot de passe')).toHaveClass('glass-input');
-    expect(screen.getByLabelText('Téléphone (optionnel)')).toHaveClass('h-14');
+    expect(screen.getByLabelText('Téléphone')).toHaveClass('h-14');
     expect(screen.getByRole('button', { name: /Créer le compte et continuer/i })).toHaveClass('from-[#f29200]');
   });
 
@@ -23,6 +23,23 @@ describe('Step1Account', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('allows the password to be shown and hidden without changing its value', () => {
+    render(<Step1Account onSubmit={jest.fn()} loading={false} error={null} />);
+
+    const password = screen.getByLabelText('Mot de passe');
+    expect(password).toHaveAttribute('type', 'password');
+
+    fireEvent.change(password, { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Afficher le mot de passe' }));
+
+    expect(password).toHaveAttribute('type', 'text');
+    expect(password).toHaveValue('password123');
+    expect(screen.getByRole('button', { name: 'Masquer le mot de passe' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer le mot de passe' }));
+    expect(password).toHaveAttribute('type', 'password');
+  });
+
   it('submits trimmed required account values without an optional phone number', async () => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
     render(<Step1Account onSubmit={onSubmit} loading={false} error={null} />);
@@ -31,7 +48,7 @@ describe('Step1Account', () => {
     fireEvent.change(screen.getByLabelText('Nom'), { target: { value: '  Curie ' } });
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: '  marie@curie.fr  ' } });
     fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'password123' } });
-    fireEvent.change(screen.getByLabelText('Téléphone (optionnel)'), { target: { value: '   ' } });
+    fireEvent.change(screen.getByLabelText('Téléphone'), { target: { value: '   ' } });
     fireEvent.click(screen.getByRole('button', { name: /Créer le compte et continuer/i }));
 
     await waitFor(() => {

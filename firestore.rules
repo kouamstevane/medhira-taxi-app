@@ -829,12 +829,13 @@ service cloud.firestore {
               || !request.resource.data.openingHours.sunday.closed);
       }
 
-      // Lecture : Filtrage par statut côté serveur (plus côté client)
-      // - Un client ne voit que les restaurants 'approved'
+      // Lecture : disponibilité client vérifiée côté serveur (plus côté client)
+      // - Un client ne voit que les restaurants approuvés avec un compte Stripe actif
       // - Le propriétaire voit son propre restaurant quel que soit son statut
       // - L'admin voit tous les restaurants
       allow read: if isAuthenticated() &&
-                     (resource.data.status == 'approved' ||
+                     ((resource.data.get('status', null) == 'approved' &&
+                       resource.data.get('stripeConnectStatus', null) == 'active') ||
                       resource.data.ownerId == request.auth.uid ||
                       isAdmin());
       
@@ -845,7 +846,7 @@ service cloud.firestore {
                         request.resource.data.status == resource.data.status &&
                         request.resource.data.commissionRate == resource.data.commissionRate &&
                         request.resource.data.stripeConnectStatus == resource.data.stripeConnectStatus &&
-                        request.resource.data.stripeAccountId == resource.data.stripeAccountId &&
+                        request.resource.data.get('stripeAccountId', null) == resource.data.get('stripeAccountId', null) &&
                         request.resource.data.ownerId == resource.data.ownerId &&
                         request.resource.data.diff(resource.data).affectedKeys()
                           .hasOnly(['name', 'description', 'address', 'phone', 'email',
@@ -898,8 +899,13 @@ service cloud.firestore {
       
       // Sous-collection menu_items — Plats du restaurant (Règle 2)
       match /menu_items/{itemId} {
-        // Lecture : Tous les authentifiés (menus visibles instantanément)
-        allow read: if isAuthenticated();
+        // Lecture : clients uniquement pour les restaurants approuvés et Stripe actifs.
+        // Le propriétaire et l'admin conservent l'accès à leur espace de gestion.
+        allow read: if isAuthenticated() &&
+          ((get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.get('status', null) == 'approved' &&
+            get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.get('stripeConnectStatus', null) == 'active') ||
+           get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.get('ownerId', null) == request.auth.uid ||
+           isAdmin());
         
         // Écriture : Seul le propriétaire du restaurant parent
         // Création cliente : source doit être 'manual' (ou absent pour legacy) et sans métadonnées d'import serveur

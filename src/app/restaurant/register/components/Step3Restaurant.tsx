@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent, useCallback } from 'react';
+import { useState, FormEvent, useCallback, useEffect, useRef } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { InputField } from '@/components/forms/InputField';
 import { TextAreaField } from '@/components/forms/TextAreaField';
@@ -36,6 +36,15 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
   const [logoRemoved, setLogoRemoved] = useState(Boolean(initialData?.logoRemoved));
   const [coverRemoved, setCoverRemoved] = useState(Boolean(initialData?.coverRemoved));
   const [error, setError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const errorElement = errorRef.current;
+    if (!errorElement || !error) return;
+
+    errorElement.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    errorElement.focus({ preventScroll: true });
+  }, [error]);
 
   const toggleCuisine = (cuisine: string) => {
     setCuisineType((prev) =>
@@ -115,7 +124,14 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
         <p className="text-gray-400 mb-6">Étape 3 sur 4 — Informations du restaurant</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm" role="alert">
+          <div
+            ref={errorRef}
+            className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm"
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            tabIndex={-1}
+          >
             {error}
           </div>
         )}
@@ -171,7 +187,7 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
 
           <InputField id="avgPrice" type="number" label={`Prix moyen par personne (${CURRENCY_CODE}, optionnel)`} value={avgPrice} onChange={(e) => setAvgPrice(e.target.value)} placeholder="25" min="0" step="1" />
 
-          <div className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <div>
               <h3 className="text-base font-semibold text-white">Identité visuelle</h3>
               <p className="mt-1 text-xs text-gray-400">Ces visuels aideront les clients à reconnaître votre établissement.</p>

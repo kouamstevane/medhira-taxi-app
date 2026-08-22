@@ -61,6 +61,7 @@ describe('firestore composite indexes for food restoration', () => {
       { fieldPath: 'avgPricePerPerson', order: 'ASCENDING' },
       { fieldPath: 'createdAt', order: 'DESCENDING' },
     ])).toBe(true);
+
   });
 });
 

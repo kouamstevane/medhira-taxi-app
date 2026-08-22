@@ -23,6 +23,7 @@ export function Step1Account({ onSubmit, onGoogleSignIn, loading, error: externa
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -101,11 +102,34 @@ export function Step1Account({ onSubmit, onGoogleSignIn, loading, error: externa
           </div>
 
           <div>
-            <InputField id="password" type="password" label="Mot de passe" aria-label="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimum 8 caractères" required aria-required="true" autoComplete="new-password" minLength={8} />
+            <InputField
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              label="Mot de passe"
+              aria-label="Mot de passe"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Minimum 8 caractères"
+              required
+              aria-required="true"
+              autoComplete="new-password"
+              minLength={8}
+              rightIcon={(
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                  aria-pressed={showPassword}
+                  className="flex size-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <MaterialIcon name={showPassword ? 'visibility_off' : 'visibility'} size="sm" />
+                </button>
+              )}
+            />
           </div>
 
           <div>
-            <InputField id="phone" type="tel" label="Téléphone (optionnel)" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+33 6 12 34 56 78" autoComplete="tel" />
+            <InputField id="phone" type="tel" label="Téléphone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+33 6 12 34 56 78" autoComplete="tel" />
           </div>
 
           <button type="submit" disabled={loading} className={cn(driverPrimaryButtonClassName, 'mt-6')} aria-label="Créer le compte et continuer">

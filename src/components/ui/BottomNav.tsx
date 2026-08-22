@@ -15,6 +15,7 @@ interface NavItem {
 interface BottomNavProps {
   readonly items?: readonly NavItem[];
   readonly className?: string;
+  readonly hidden?: boolean;
 }
 
 const defaultUserItems: NavItem[] = [
@@ -44,8 +45,10 @@ export const adminNavItems: NavItem[] = [
   { href: '/admin/restaurants', icon: 'restaurant', label: 'Restaurants' },
 ];
 
-export function BottomNav({ items = defaultUserItems, className }: BottomNavProps) {
+export function BottomNav({ items = defaultUserItems, className, hidden = false }: BottomNavProps) {
   const pathname = usePathname();
+  if (hidden) return null;
+
   const activeItemPath = items
     .map((item) => item.href.split('?')[0])
     .filter((itemPath) => pathname === itemPath || pathname.startsWith(itemPath + '/'))
