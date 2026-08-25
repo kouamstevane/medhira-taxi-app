@@ -15,7 +15,7 @@ export function useActiveRideGuard(): { hasActiveRide: boolean; loading: boolean
   useEffect(() => {
     if (!isDriver || !currentUser) return;
     const q = query(
-      collection(db, 'rides'),
+      collection(db, 'bookings'),
       where('driverId', '==', currentUser.uid),
       where('status', 'in', ACTIVE_RIDE_STATUSES as unknown as string[])
     );

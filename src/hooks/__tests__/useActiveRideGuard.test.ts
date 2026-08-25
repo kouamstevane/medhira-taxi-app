@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react'
 import { useActiveRideGuard } from '../useActiveRideGuard'
 import * as useAuthModule from '@/hooks/useAuth'
+import { collection } from 'firebase/firestore'
 
 const mockOnSnapshot = jest.fn()
 const mockUnsubscribe = jest.fn()
@@ -20,6 +21,7 @@ jest.mock('@/hooks/useAuth', () => ({
 }))
 
 const mockUseAuth = useAuthModule.useAuth as jest.Mock
+const mockCollection = collection as jest.Mock
 
 describe('useActiveRideGuard', () => {
   beforeEach(() => {
@@ -51,6 +53,8 @@ describe('useActiveRideGuard', () => {
     })
 
     const { result } = renderHook(() => useActiveRideGuard())
+
+    expect(mockCollection).toHaveBeenCalledWith({}, 'bookings')
 
     act(() => {
       snapshotCallback({ empty: false })
