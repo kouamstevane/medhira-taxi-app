@@ -1,5 +1,7 @@
 import type { PersonalDriverPlan, PersonalDriverPlanId } from '@/types/personal-driver';
 
+export const PERSONAL_DRIVER_PLAN_IDS: PersonalDriverPlanId[] = ['basic', 'classic', 'premium'];
+
 export const PERSONAL_DRIVER_PLANS: Record<PersonalDriverPlanId, PersonalDriverPlan> = {
   basic: {
     id: 'basic',

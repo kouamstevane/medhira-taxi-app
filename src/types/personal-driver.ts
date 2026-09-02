@@ -44,6 +44,27 @@ export interface PersonalDriverPlan {
   benefits: string[];
 }
 
+export interface PersonalDriverPlanDocument {
+  name?: string;
+  badge?: string;
+  promise?: string;
+  pricePerKm?: number;
+  minimumBillableKm?: number;
+  minimumAmount?: number;
+  allowedWeekdays?: PersonalDriverWeekday[];
+  includedRegularWaitMinutes?: number;
+  includedSpecialTrips?: number;
+  benefits?: string[];
+  updatedAt?: string | Date | { toDate: () => Date };
+  updatedBy?: string;
+}
+
+export interface PersonalDriverPlansResult {
+  plans: Record<PersonalDriverPlanId, PersonalDriverPlan>;
+  source: 'firestore' | 'fallback';
+  error: Error | null;
+}
+
 export interface PersonalDriverPriceInput {
   monthlyDistanceKm: number;
   requestedWeekdays: PersonalDriverWeekday[];

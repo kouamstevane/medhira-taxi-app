@@ -1,73 +1,80 @@
-# Task 1 Report
+# Task 1 Report: Editable Personal Driver Plans
 
-**Task:** Define the V2 customer menu item data model and service contracts
+## Outcome
 
-**Status:** Implemented in the current checkout
+Implemented the typed personal-driver plan catalogue loader with Firestore fallback behavior, static defaults, and validation for plan overrides.
 
-**Scope**
-- Modified `src/types/food-delivery.ts`
-- Modified `src/services/food-delivery.service.ts`
-- Created `src/services/__tests__/customer-menu-item-details.service.test.ts`
-- Did not modify `firestore.indexes.json` because the Task 1 detail path uses a single-document read and did not require a verified composite index
+## RED Evidence
 
-**Brief alignment**
-- Kept the existing V1 paginated customer menu discovery flow unchanged
-- Added the exact V2 customer detail contract types requested by the brief
-- Added a dedicated customer item detail read path so dish details can load on demand
-- Preserved legacy compatibility by returning empty arrays, `{}` checkout rules, and `undefined` nutrition when V2 fields are absent
+Focused test command:
 
-**RED evidence**
-- Command:
-  - `npx jest src/services/__tests__/customer-menu-item-details.service.test.ts --runInBand`
-- Result:
-  - `FAIL src/services/__tests__/customer-menu-item-details.service.test.ts`
-  - `TypeError: (0 , _fooddeliveryservice.getCustomerMenuItemDetails) is not a function`
-- Why this was the correct RED:
-  - The failing test proved the new customer detail service entrypoint did not exist yet
-  - All three tests failed for the missing contract/service boundary, which matches the Task 1 brief expectation
+```bash
+npx jest src/services/personal-driver/plan-config.service.test.ts --runInBand
+```
 
-**GREEN evidence**
-- Command:
-  - `npx jest src/services/__tests__/customer-menu-item-details.service.test.ts --runInBand`
-- Result:
-  - `Test Suites: 1 passed, 1 total`
-  - `Tests: 3 passed, 3 total`
+Observed failure before implementation:
 
-**Implementation details**
-- `src/types/food-delivery.ts`
-  - Added `CustomerMenuModifierOption`
-  - Added `CustomerMenuModifierGroup`
-  - Added `CustomerMenuSupplement`
-  - Added `CustomerMenuAllergen`
-  - Added `CustomerMenuNutrition`
-  - Added `CustomerMenuItemDetails`
-- `src/services/food-delivery.service.ts`
-  - Added a dedicated `getCustomerMenuItemDetails(restaurantId, itemId)` read path backed by `getDoc`
-  - Added detail-mapping helpers for modifier groups, modifier options, supplements, allergens, nutrition, and checkout rules
-  - Filtered out unavailable modifier options and unavailable supplements
-  - Preserved default modifier options when available
-  - Returned sparse nutrition objects without inventing missing nutrition fields
-  - Returned empty arrays and `undefined` nutrition for legacy documents
-  - Exposed the new function through `FoodDeliveryService`
-- `src/services/__tests__/customer-menu-item-details.service.test.ts`
-  - Added legacy fallback coverage
-  - Added V2 availability filtering and sparse nutrition coverage
-  - Added dedicated checkout rules lookup coverage proving the detail path does not depend on the catalog page query
+```text
+Cannot find module './plan-config.service' from 'src/services/personal-driver/plan-config.service.test.ts'
+```
 
-**Focused test cases added**
-1. Legacy menu items deserialize with empty modifier groups, supplements, allergens, and `undefined` nutrition
-2. V2 detail reads return only available modifier options and supplements while preserving defaults and sparse nutrition values
-3. Checkout rules are returned from a dedicated item detail lookup and can be read without invoking the paginated catalog query
+The test suite failed for all 3 tests because the loader module did not exist yet, which matched the expected red state.
 
-**Self-review**
-- The new detail reader is scoped to a single document read, so it does not alter the V1 paginated catalog behavior
-- The mapper is intentionally defensive around legacy or partially populated menu documents
-- The new tests verify the requested contract behavior at the service boundary using the repo’s existing Firestore mocking style
-- No extra files in the implementation scope were modified
+## GREEN Evidence
 
-**Concerns**
-- The type contracts were added to `src/types/food-delivery.ts` only. They are available for direct imports there, but they are not re-exported from `src/types/index.ts` because Task 1 scoped the required file changes to the food-delivery type surface itself
+Focused test command after implementation:
 
-**Commit**
-- Planned conventional commit:
-  - `feat: add customer menu item detail contracts`
+```bash
+npx jest src/services/personal-driver/plan-config.service.test.ts --runInBand
+```
+
+Result:
+
+```text
+Test Suites: 1 passed, 1 total
+Tests: 3 passed, 3 total
+```
+
+Regression command from the brief:
+
+```bash
+npx jest src/services/personal-driver/plan-config.service.test.ts src/services/personal-driver/pricing.service.test.ts --runInBand
+```
+
+Result:
+
+```text
+Test Suites: 2 passed, 2 total
+Tests: 8 passed, 8 total
+```
+
+## Files Changed
+
+- `src/types/personal-driver.ts`
+- `src/services/personal-driver/plans.ts`
+- `src/services/personal-driver/plan-config.service.ts`
+- `src/services/personal-driver/plan-config.service.test.ts`
+- `.superpowers/sdd/task-1-report.md`
+
+## What Changed
+
+- Added `PERSONAL_DRIVER_PLAN_IDS` for the fixed `basic`, `classic`, and `premium` catalogue order.
+- Added `PersonalDriverPlanDocument` with optional `updatedAt` and `updatedBy` metadata.
+- Added `PersonalDriverPlansResult` for the loader return shape.
+- Implemented `normalizePersonalDriverPlan(planId, raw)` to merge valid Firestore overrides over the static defaults.
+- Implemented `getPersonalDriverPlans()` to read `personal_driver_plans`, accept only the fixed IDs, and return static fallback plans plus the read error when Firestore access fails.
+- Added tests for:
+  - Premium override merging with missing plan fallback.
+  - Invalid plan data falling back to the static default.
+  - Firestore read failure returning fallback plans and the thrown error.
+
+## Self-Review
+
+- The loader is intentionally conservative: any invalid field in a plan document causes that document to fall back to the static default.
+- The service only accepts the three known plan IDs and ignores extra documents in the collection.
+- Static plan values remain the fallback source of truth when Firestore data is absent or unusable.
+
+## Concerns
+
+- The validation accepts finite non-negative numeric overrides for price and amount fields, which matches the task brief, but the domain may later want tighter integer-only rules for count-like fields.
+- The new loader is not yet wired into any consuming UI or service entry point in this task; that integration is likely part of a later step.
