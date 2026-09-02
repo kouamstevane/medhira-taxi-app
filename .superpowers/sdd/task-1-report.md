@@ -78,3 +78,93 @@ Tests: 8 passed, 8 total
 
 - The validation accepts finite non-negative numeric overrides for price and amount fields, which matches the task brief, but the domain may later want tighter integer-only rules for count-like fields.
 - The new loader is not yet wired into any consuming UI or service entry point in this task; that integration is likely part of a later step.
+
+## Fix Follow-Up
+
+Reviewer finding addressed:
+
+- `plan-config.service.ts` was returning `PERSONAL_DRIVER_PLANS` fallback objects and nested arrays by shared reference.
+- A consumer could mutate `allowedWeekdays` or `benefits` on a returned fallback plan and corrupt future callers.
+- Extra Firestore document IDs were also verified to stay out of the returned catalogue.
+
+## RED Evidence
+
+Focused regression command before the fix:
+
+```bash
+npx jest src/services/personal-driver/plan-config.service.test.ts --runInBand
+```
+
+Observed failure:
+
+```text
+FAIL src/services/personal-driver/plan-config.service.test.ts
+  ● personal driver plan catalogue loader › keeps fallback plans and static defaults isolated from consumer mutation
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+    @@ -2,6 +2,7 @@
+        1,
+        2,
+        3,
+        4,
+        5,
+    +   6,
+```
+
+That failure showed the returned fallback plan was sharing state with the exported static defaults.
+
+## GREEN Evidence
+
+Focused regression command after the fix:
+
+```bash
+npx jest src/services/personal-driver/plan-config.service.test.ts --runInBand
+```
+
+Result:
+
+```text
+Test Suites: 1 passed, 1 total
+Tests: 5 passed, 5 total
+```
+
+Paired task command from the brief after the fix:
+
+```bash
+npx jest src/services/personal-driver/plan-config.service.test.ts src/services/personal-driver/pricing.service.test.ts --runInBand
+```
+
+Result:
+
+```text
+Test Suites: 2 passed, 2 total
+Tests: 10 passed, 10 total
+```
+
+## Changed Files
+
+- `src/services/personal-driver/plan-config.service.ts`
+- `src/services/personal-driver/plan-config.service.test.ts`
+- `.superpowers/sdd/task-1-report.md`
+
+## What Changed in the Fix
+
+- Added deep-clone helpers for single plans and plan maps so returned data no longer shares arrays with `PERSONAL_DRIVER_PLANS`.
+- Kept the Firestore merge behavior unchanged apart from cloning, so pricing and validation logic stayed intact.
+- Added a regression test that mutates a returned fallback plan and proves both the static defaults and a subsequent load stay unchanged.
+- Added a focused regression test showing an extra Firestore document ID is ignored and does not appear in the returned catalogue.
+
+## Self-Review
+
+- The fix is narrowly scoped to reference isolation and catalogue membership.
+- The fallback path now returns cloned plan data, so consumers can mutate their copy without corrupting future loads.
+- The Firestore-loaded path now returns cloned plan data as well, which keeps behavior consistent across all source modes.
+
+## Concerns After Fix
+
+- The loader still performs a shallow merge of scalar fields over a cloned base plan, which is appropriate for the current plan shape but should be revisited if nested objects are added later.
+- The existing test harness emits verbose logging, so the Jest output is noisier than ideal, but the assertions and pass/fail signal remain clear.

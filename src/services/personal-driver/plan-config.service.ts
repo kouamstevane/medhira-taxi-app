@@ -48,6 +48,21 @@ function normalizeText(value: string): string {
   return value.trim();
 }
 
+function clonePersonalDriverPlan(plan: PersonalDriverPlan): PersonalDriverPlan {
+  return {
+    ...plan,
+    allowedWeekdays: [...plan.allowedWeekdays],
+    benefits: [...plan.benefits],
+  };
+}
+
+function clonePersonalDriverPlans(plans: Record<PersonalDriverPlanId, PersonalDriverPlan>): Record<PersonalDriverPlanId, PersonalDriverPlan> {
+  return PERSONAL_DRIVER_PLAN_IDS.reduce((result, planId) => {
+    result[planId] = clonePersonalDriverPlan(plans[planId]);
+    return result;
+  }, {} as Record<PersonalDriverPlanId, PersonalDriverPlan>);
+}
+
 function readPlanData(planId: PersonalDriverPlanId, raw: PersonalDriverPlanDocument | undefined): PersonalDriverPlan | null {
   const fallbackPlan = PERSONAL_DRIVER_PLANS[planId];
   if (!raw) return null;
@@ -108,7 +123,7 @@ function readPlanData(planId: PersonalDriverPlanId, raw: PersonalDriverPlanDocum
   }
 
   return {
-    ...fallbackPlan,
+    ...clonePersonalDriverPlan(fallbackPlan),
     ...overrides,
   };
 }
@@ -142,13 +157,13 @@ export async function getPersonalDriverPlans(): Promise<PersonalDriverPlansResul
     }, {} as Record<PersonalDriverPlanId, PersonalDriverPlan>);
 
     return {
-      plans,
+      plans: clonePersonalDriverPlans(plans),
       source: 'firestore',
       error: null,
     };
   } catch (error) {
     return {
-      plans: PERSONAL_DRIVER_PLANS,
+      plans: clonePersonalDriverPlans(PERSONAL_DRIVER_PLANS),
       source: 'fallback',
       error: error instanceof Error ? error : new Error('Failed to load personal driver plans'),
     };
