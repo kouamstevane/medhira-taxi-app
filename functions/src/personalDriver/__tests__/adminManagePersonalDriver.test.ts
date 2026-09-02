@@ -6,6 +6,7 @@ const mockDriverRef = { id: 'driver_1' };
 const mockVehicleRef = { id: 'veh_1' };
 const mockLockRef = { id: 'period_lock_1' };
 const mockAdminRef = { get: jest.fn() };
+const mockPlanRef = { id: 'premium', set: jest.fn() };
 const mockNotificationRef = { id: 'notification_1' };
 const mockStripeRetrieve = jest.fn();
 const mockStripeCancel = jest.fn();
@@ -46,6 +47,7 @@ const mockDb = {
     if (name === 'vehicles') return { doc: jest.fn(() => mockVehicleRef) };
     if (name === 'personal_driver_subscriptions') return { doc: jest.fn(() => mockSubRef) };
     if (name === 'personal_driver_subscription_locks') return { doc: jest.fn(() => mockLockRef) };
+    if (name === 'personal_driver_plans') return { doc: jest.fn(() => mockPlanRef) };
     if (name === 'personal_driver_trips') {
       return {
         doc: jest.fn(() => mockTripRef),
@@ -62,7 +64,10 @@ jest.mock('firebase-admin', () => ({
   apps: [{}],
   initializeApp: jest.fn(),
   firestore: Object.assign(jest.fn(() => mockDb), {
-    FieldValue: { serverTimestamp: jest.fn(() => ({ __ts: true })) },
+    FieldValue: {
+      delete: jest.fn(() => ({ __delete: true })),
+      serverTimestamp: jest.fn(() => ({ __ts: true })),
+    },
   }),
 }));
 
@@ -92,6 +97,23 @@ jest.mock('../entitlement', () => ({
 
 function makeRequest(data: unknown, uid?: string) {
   return { data, auth: uid ? { uid } : undefined } as never;
+}
+
+function validPlan(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'premium',
+    name: 'Premium',
+    badge: 'Service prioritaire',
+    promise: 'Un service privilégie, chaque jour',
+    pricePerKm: 1.1,
+    minimumBillableKm: 591,
+    minimumAmount: 650,
+    allowedWeekdays: [0, 1, 2, 3, 4, 5, 6],
+    includedRegularWaitMinutes: 10,
+    includedSpecialTrips: 4,
+    benefits: ['Service 7j/7', '10 min attente gratuites'],
+    ...overrides,
+  };
 }
 
 describe('adminManagePersonalDriver', () => {
@@ -143,6 +165,115 @@ describe('adminManagePersonalDriver', () => {
     const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
     await expect(adminManagePersonalDriver(makeRequest({ action: 'validateSubscription', subscriptionId: 'sub_1' }, 'admin_1')))
       .rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+
+  it('rejects unauthenticated plan updates', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'updatePlan',
+      plan: validPlan(),
+    }))).rejects.toMatchObject({ code: 'unauthenticated' });
+
+    expect(mockPlanRef.set).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-admin plan updates before writing', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+    mockAdminRef.get.mockResolvedValueOnce({ exists: false });
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'updatePlan',
+      plan: validPlan(),
+    }, 'driver_1'))).rejects.toMatchObject({ code: 'permission-denied' });
+
+    expect(mockPlanRef.set).not.toHaveBeenCalled();
+  });
+
+  it('saves audited plan updates with server timestamp merge', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'updatePlan',
+      plan: validPlan({ name: ' Premium ', benefits: [' Priorité maximale '] }),
+    }, 'admin_1'))).resolves.toEqual({ success: true, planId: 'premium' });
+
+    expect(mockPlanRef.set).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'premium',
+      name: 'Premium',
+      benefits: ['Priorité maximale'],
+      updatedAt: { __ts: true },
+      updatedBy: 'admin_1',
+    }), { merge: true });
+  });
+
+  it('clears an empty badge during merge plan updates', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'updatePlan',
+      plan: validPlan({ badge: '' }),
+    }, 'admin_1'))).resolves.toEqual({ success: true, planId: 'premium' });
+
+    expect(mockPlanRef.set).toHaveBeenCalledWith(expect.objectContaining({
+      badge: { __delete: true },
+    }), { merge: true });
+  });
+
+  it('rejects plan updates for unknown fixed IDs', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'updatePlan',
+      plan: validPlan({ id: 'enterprise' }),
+    }, 'admin_1'))).rejects.toMatchObject({
+      code: 'invalid-argument',
+      message: 'Identifiant de forfait invalide.',
+    });
+
+    expect(mockPlanRef.set).not.toHaveBeenCalled();
+  });
+
+  it('rejects plan updates with negative numbers', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'updatePlan',
+      plan: validPlan({ pricePerKm: -1 }),
+    }, 'admin_1'))).rejects.toMatchObject({
+      code: 'invalid-argument',
+      message: 'Le prix par km doit être compris entre 0 et 1000.',
+    });
+
+    expect(mockPlanRef.set).not.toHaveBeenCalled();
+  });
+
+  it('rejects plan updates with duplicate weekdays', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'updatePlan',
+      plan: validPlan({ allowedWeekdays: [1, 1, 2] }),
+    }, 'admin_1'))).rejects.toMatchObject({
+      code: 'invalid-argument',
+      message: 'Les jours autorisés doivent être uniques.',
+    });
+
+    expect(mockPlanRef.set).not.toHaveBeenCalled();
+  });
+
+  it('rejects plan updates with empty benefits', async () => {
+    const { adminManagePersonalDriver } = require('../adminManagePersonalDriver');
+
+    await expect(adminManagePersonalDriver(makeRequest({
+      action: 'updatePlan',
+      plan: validPlan({ benefits: ['Service 7j/7', ''] }),
+    }, 'admin_1'))).rejects.toMatchObject({
+      code: 'invalid-argument',
+      message: 'Chaque avantage doit contenir entre 1 et 200 caractères.',
+    });
+
+    expect(mockPlanRef.set).not.toHaveBeenCalled();
   });
 
   it('cancels a trip through the shared operational cancellation path', async () => {

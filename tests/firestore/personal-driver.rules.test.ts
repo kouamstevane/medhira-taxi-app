@@ -22,6 +22,7 @@ describe('Personal driver Firestore rules', () => {
   const unassignedDriverId = 'personal-driver-unassigned-driver';
   const subscriptionId = 'personal-driver-subscription';
   const tripId = 'personal-driver-trip';
+  const planId = 'premium';
 
   const subscription = {
     userId: clientId,
@@ -39,6 +40,19 @@ describe('Personal driver Firestore rules', () => {
     scheduledAt: '2026-07-25T10:00:00.000Z',
     updatedAt: '2026-07-24T10:00:00.000Z',
     driverLocation: { latitude: 4.05, longitude: 9.7 },
+  };
+
+  const plan = {
+    id: planId,
+    name: 'Premium',
+    promise: 'Un service privilégie, chaque jour',
+    pricePerKm: 1.1,
+    minimumBillableKm: 591,
+    minimumAmount: 650,
+    allowedWeekdays: [0, 1, 2, 3, 4, 5, 6],
+    includedRegularWaitMinutes: 10,
+    includedSpecialTrips: 4,
+    benefits: ['Service 7j/7'],
   };
 
   beforeAll(async () => {
@@ -61,9 +75,29 @@ describe('Personal driver Firestore rules', () => {
     await testEnv.withSecurityRulesDisabled(async (context: RulesTestContext) => {
       const db = context.firestore();
       await setDoc(doc(db, 'admins', adminId), { uid: adminId });
+      await setDoc(doc(db, 'personal_driver_plans', planId), plan);
       await setDoc(doc(db, 'personal_driver_subscriptions', subscriptionId), subscription);
       await setDoc(doc(db, 'personal_driver_trips', tripId), trip);
     });
+  });
+
+  test('unauthenticated public users can read fixed personal driver plans', async () => {
+    const db = testEnv.unauthenticatedContext().firestore();
+
+    await assertSucceeds(getDoc(doc(db, 'personal_driver_plans', 'basic')));
+    await assertSucceeds(getDoc(doc(db, 'personal_driver_plans', 'classic')));
+    await assertSucceeds(getDoc(doc(db, 'personal_driver_plans', 'premium')));
+    await assertFails(getDoc(doc(db, 'personal_driver_plans', 'enterprise')));
+  });
+
+  test('clients cannot create, update, or delete personal driver plans', async () => {
+    const db = testEnv.authenticatedContext(clientId).firestore();
+
+    await assertFails(setDoc(doc(db, 'personal_driver_plans', 'basic'), plan));
+    await assertFails(updateDoc(doc(db, 'personal_driver_plans', planId), {
+      pricePerKm: 2,
+    }));
+    await assertFails(deleteDoc(doc(db, 'personal_driver_plans', planId)));
   });
 
   test('client can read their own subscription and trip', async () => {

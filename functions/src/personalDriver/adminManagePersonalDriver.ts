@@ -93,6 +93,7 @@ function parseTripScheduledDate(tripData: FirebaseFirestore.DocumentData | undef
 }
 
 const SCHEDULE_COLLISION_WINDOW_MS = 60 * 60 * 1000;
+const PERSONAL_DRIVER_PLAN_IDS = ['basic', 'classic', 'premium'] as const;
 
 function assertNoScheduleCollision(
   targetTripId: string,
@@ -114,7 +115,60 @@ function assertNoScheduleCollision(
   }
 }
 
+const planIdSchema = z.enum(PERSONAL_DRIVER_PLAN_IDS, {
+  error: 'Identifiant de forfait invalide.',
+});
+
+const trimmedTextSchema = (min: number, max: number, message: string) => z.string()
+  .trim()
+  .min(min, message)
+  .max(max, message);
+
+const personalDriverPlanSchema = z.object({
+  id: planIdSchema,
+  name: trimmedTextSchema(1, 80, 'Le nom doit contenir entre 1 et 80 caractères.'),
+  badge: z.string()
+    .trim()
+    .max(80, 'Le badge doit contenir au maximum 80 caractères.')
+    .optional(),
+  promise: trimmedTextSchema(1, 200, 'La promesse doit contenir entre 1 et 200 caractères.'),
+  pricePerKm: z.number()
+    .finite()
+    .min(0, 'Le prix par km doit être compris entre 0 et 1000.')
+    .max(1000, 'Le prix par km doit être compris entre 0 et 1000.'),
+  minimumBillableKm: z.number()
+    .int('La distance minimale doit être un entier positif inférieur ou égal à 100000.')
+    .positive('La distance minimale doit être un entier positif inférieur ou égal à 100000.')
+    .max(100000, 'La distance minimale doit être un entier positif inférieur ou égal à 100000.'),
+  minimumAmount: z.number()
+    .finite()
+    .min(0, 'Le montant minimum doit être compris entre 0 et 1000000.')
+    .max(1000000, 'Le montant minimum doit être compris entre 0 et 1000000.'),
+  allowedWeekdays: z.array(z.number()
+    .int('Les jours autorisés doivent être des entiers entre 0 et 6.')
+    .min(0, 'Les jours autorisés doivent être des entiers entre 0 et 6.')
+    .max(6, 'Les jours autorisés doivent être des entiers entre 0 et 6.'))
+    .min(1, 'Le forfait doit autoriser entre 1 et 7 jours.')
+    .max(7, 'Le forfait doit autoriser entre 1 et 7 jours.')
+    .refine((weekdays) => new Set(weekdays).size === weekdays.length, 'Les jours autorisés doivent être uniques.'),
+  includedRegularWaitMinutes: z.number()
+    .int('Les minutes d’attente incluses doivent être comprises entre 0 et 1440.')
+    .min(0, 'Les minutes d’attente incluses doivent être comprises entre 0 et 1440.')
+    .max(1440, 'Les minutes d’attente incluses doivent être comprises entre 0 et 1440.'),
+  includedSpecialTrips: z.number()
+    .int('Les trajets spéciaux inclus doivent être compris entre 0 et 100.')
+    .min(0, 'Les trajets spéciaux inclus doivent être compris entre 0 et 100.')
+    .max(100, 'Les trajets spéciaux inclus doivent être compris entre 0 et 100.'),
+  benefits: z.array(trimmedTextSchema(1, 200, 'Chaque avantage doit contenir entre 1 et 200 caractères.'))
+    .min(1, 'Le forfait doit contenir entre 1 et 12 avantages.')
+    .max(12, 'Le forfait doit contenir entre 1 et 12 avantages.'),
+});
+
 const adminActionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('updatePlan'),
+    plan: personalDriverPlanSchema,
+  }),
   z.object({
     action: z.literal('cancelSubscription'),
     subscriptionId: z.string().min(1),
@@ -162,6 +216,30 @@ export const adminManagePersonalDriver = onCall(
 
     const db = getDb();
     const payload = parsed.data;
+
+    if (payload.action === 'updatePlan') {
+      const plan = {
+        id: payload.plan.id,
+        name: payload.plan.name,
+        badge: payload.plan.badge ? payload.plan.badge : admin.firestore.FieldValue.delete(),
+        promise: payload.plan.promise,
+        pricePerKm: payload.plan.pricePerKm,
+        minimumBillableKm: payload.plan.minimumBillableKm,
+        minimumAmount: payload.plan.minimumAmount,
+        allowedWeekdays: payload.plan.allowedWeekdays,
+        includedRegularWaitMinutes: payload.plan.includedRegularWaitMinutes,
+        includedSpecialTrips: payload.plan.includedSpecialTrips,
+        benefits: payload.plan.benefits,
+      };
+
+      await db.collection('personal_driver_plans').doc(plan.id).set({
+        ...plan,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedBy: adminUid,
+      }, { merge: true });
+
+      return { success: true, planId: plan.id };
+    }
 
     if (payload.action === 'cancelSubscription') {
       const subRef = db.collection('personal_driver_subscriptions').doc(payload.subscriptionId);

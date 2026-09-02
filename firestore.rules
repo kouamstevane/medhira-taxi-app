@@ -342,6 +342,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /personal_driver_plans/{planId} {
+      allow read: if planId == 'basic' || planId == 'classic' || planId == 'premium';
+      allow write: if false;
+    }
+
     match /personal_driver_trips/{tripId} {
       allow read: if isAuthenticated() &&
                      (resource.data.userId == request.auth.uid ||
