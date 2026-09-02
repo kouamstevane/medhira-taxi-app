@@ -13,8 +13,9 @@ import {
 } from './routeDistance.js';
 import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js';
 import { getLocalCalendarDate, localDateTimeToUtc, resolveAddressCoordinates } from './locationTimeZone.js';
-import { calculatePersonalDriverPrices, SPECIAL_TRIP_LIMITS } from './pricing.js';
+import { calculatePersonalDriverPrices } from './pricing.js';
 import type { PersonalDriverPlanId, PersonalDriverPlanPrice, PersonalDriverWeekday } from './pricing.js';
+import { getConfiguredPersonalDriverPlans } from './planConfig.js';
 import { assertValidSubscriptionSchedule } from './subscriptionSchedule.js';
 import {
   claimSubscriptionPeriodLock,
@@ -362,6 +363,12 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
       throw new HttpsError('failed-precondition', 'Jours source absents.');
     }
     const selectedWeekdays = rawSelectedWeekdays as PersonalDriverWeekday[];
+    const selectedPlanIdTyped = selectedPlanId as PersonalDriverPlanId;
+    const configuredPlans = await getConfiguredPersonalDriverPlans(db);
+    const selectedPlan = configuredPlans[selectedPlanIdTyped];
+    if (!selectedWeekdays.every((weekday) => selectedPlan.allowedWeekdays.includes(weekday))) {
+      throw new HttpsError('failed-precondition', 'La formule source ne couvre plus les jours demandés.');
+    }
 
     const periodEndDateExclusive = getPeriodEndDateExclusive(periodStartDate);
     const occurrences = countWeekdayOccurrences(periodStartDate, periodEndDateExclusive, selectedWeekdays);
@@ -381,8 +388,8 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
     const priceComparison = calculatePersonalDriverPrices({
       monthlyDistanceKm,
       requestedWeekdays: selectedWeekdays,
-    });
-    const selectedPlanPrice = priceComparison.plans[selectedPlanId as PersonalDriverPlanId];
+    }, configuredPlans);
+    const selectedPlanPrice = priceComparison.plans[selectedPlanIdTyped];
     if (!selectedPlanPrice.isEligible) throw new HttpsError('failed-precondition', 'La formule source ne couvre plus les jours demandés.');
     const amount = toMoney(selectedPlanPrice.totalBeforeTax);
     if (amount > MAX_AMOUNT) throw new HttpsError('invalid-argument', `Montant maximum : ${MAX_AMOUNT}`);
@@ -483,7 +490,7 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         distanceReturnKm: quote.distanceReturnKm,
         monthlyDistanceKm: quote.monthlyDistanceKm,
         monthlyDistanceKmRemaining: quote.monthlyDistanceKm,
-        includedSpecialTrips: SPECIAL_TRIP_LIMITS[selectedPlanPrice.planId],
+        includedSpecialTrips: selectedPlanPrice.includedSpecialTrips,
         specialTripsUsed: 0,
         specialTripsDistanceUsedKm: 0,
         passengerCount: Number(source.passengerCount ?? 1),

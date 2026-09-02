@@ -9,11 +9,11 @@ import { googleMapsApiKey } from '../config/googleMaps.js';
 import { createStripeClient } from '../stripe/stripe-client.js';
 import {
   calculatePersonalDriverPrices,
-  SPECIAL_TRIP_LIMITS,
   type PersonalDriverPlanId,
   type PersonalDriverPlanPrice,
   type PersonalDriverWeekday,
 } from './pricing.js';
+import { getConfiguredPersonalDriverPlans } from './planConfig.js';
 import { calculateAuthoritativeMonthlyDistanceKm, calculateServerRoute } from './routeDistance.js';
 import { countWeekdayOccurrences, getPeriodEndDateExclusive } from './period.js';
 import { localDateTimeToUtc, resolveAddressCoordinates, resolvePickupLocationAndTimeZone } from './locationTimeZone.js';
@@ -240,9 +240,6 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     const input = parsed.data;
     const selectedWeekdays = input.selectedWeekdays as PersonalDriverWeekday[];
     const selectedPlanId = input.selectedPlanId as PersonalDriverPlanId;
-    if (selectedPlanId === 'basic' && selectedWeekdays.some((weekday) => weekday === 0 || weekday === 6)) {
-      throw new HttpsError('invalid-argument', 'Le forfait Basic est disponible du lundi au vendredi uniquement.');
-    }
 
     const db = getDb();
     const requestedSubscriptionRef = db.collection('personal_driver_subscriptions')
@@ -254,6 +251,12 @@ export const createPersonalDriverSubscriptionPayment = onCall(
       userId,
     );
     if (persistedReplay) return persistedReplay;
+
+    const configuredPlans = await getConfiguredPersonalDriverPlans(db);
+    const selectedPlan = configuredPlans[selectedPlanId];
+    if (!selectedWeekdays.every((weekday) => selectedPlan.allowedWeekdays.includes(weekday))) {
+      throw new HttpsError('invalid-argument', 'Le forfait sélectionné ne couvre pas les jours demandés.');
+    }
 
     const now = new Date();
     const periodEndDateExclusive = getPeriodEndDateExclusive(input.startDate);
@@ -293,7 +296,7 @@ export const createPersonalDriverSubscriptionPayment = onCall(
     const priceComparison = calculatePersonalDriverPrices({
       monthlyDistanceKm: authoritativeMonthlyDistanceKm,
       requestedWeekdays: selectedWeekdays,
-    });
+    }, configuredPlans);
     const selectedPlanPrice = priceComparison.plans[selectedPlanId];
     if (!selectedPlanPrice.isEligible) {
       throw new HttpsError('invalid-argument', 'Le forfait sélectionné ne couvre pas les jours demandés.');
@@ -480,7 +483,7 @@ export const createPersonalDriverSubscriptionPayment = onCall(
           distanceReturnKm: quote.distanceReturnKm,
           monthlyDistanceKm: quote.monthlyDistanceKm,
           monthlyDistanceKmRemaining: quote.monthlyDistanceKm,
-          includedSpecialTrips: SPECIAL_TRIP_LIMITS[selectedPlanId],
+          includedSpecialTrips: selectedPlanPrice.includedSpecialTrips,
           specialTripsUsed: 0,
           specialTripsDistanceUsedKm: 0,
           passengerCount: input.passengerCount,

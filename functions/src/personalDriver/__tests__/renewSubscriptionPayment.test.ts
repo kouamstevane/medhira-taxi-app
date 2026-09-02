@@ -1,6 +1,7 @@
 const sourceRef = { id: 'sub_old', get: jest.fn() };
 const newRef = { id: 'sub_new', get: jest.fn() };
 const lockRef = { id: 'period_lock' };
+const mockPlanCollectionGet = jest.fn();
 export {};
 
 const mockTransaction = {
@@ -11,6 +12,7 @@ const mockTransaction = {
 };
 const mockDb = {
   collection: jest.fn((name: string) => ({
+    ...(name === 'personal_driver_plans' ? { get: mockPlanCollectionGet } : {}),
     doc: (id: string) => name === 'personal_driver_subscriptions'
       ? (id === 'sub_old' ? sourceRef : newRef)
       : name === 'personal_driver_subscription_locks'
@@ -81,6 +83,12 @@ function makeRequest(data: unknown, uid = 'user_1') {
   return { data, auth: { uid } } as never;
 }
 
+function configurePersonalDriverPlan(id: string, data: Record<string, unknown>) {
+  mockPlanCollectionGet.mockResolvedValue({
+    docs: [{ id, data: () => data }],
+  });
+}
+
 const sourceSubscription = {
   id: 'sub_old',
   userId: 'user_1',
@@ -115,6 +123,8 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
     mockCallableOptions.length = 0;
     sourceRef.get.mockResolvedValue({ exists: true, data: () => sourceSubscription });
     newRef.get.mockResolvedValue({ exists: false });
+    mockPlanCollectionGet.mockReset();
+    mockPlanCollectionGet.mockResolvedValue({ docs: [] });
     transactionData = undefined;
     lockData = undefined;
     mockTransaction.get.mockImplementation(async (ref) => {
@@ -248,6 +258,67 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
       expect.objectContaining({
         periodStartDate: '2026-08-03',
         periodEndDateExclusive: '2026-09-02',
+      }),
+    );
+  });
+
+  it('prices Premium renewals from the configured plan snapshot', async () => {
+    configurePersonalDriverPlan('premium', {
+      minimumAmount: 800,
+      allowedWeekdays: [1, 2, 3, 4, 5],
+      includedSpecialTrips: 1,
+    });
+    sourceRef.get.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        ...sourceSubscription,
+        selectedPlanId: 'premium',
+      }),
+    });
+    const { renewPersonalDriverSubscriptionPayment } = require('../renewSubscriptionPayment');
+
+    const result = await renewPersonalDriverSubscriptionPayment(makeRequest({
+      sourceSubscriptionId: 'sub_old',
+      requestId: 'renew_premium_configured',
+    }));
+
+    expect(result).toEqual(expect.objectContaining({
+      amount: 800,
+      quote: expect.objectContaining({
+        selectedPlanPrice: expect.objectContaining({
+          planId: 'premium',
+          minimumAmount: 800,
+          includedSpecialTrips: 1,
+          totalBeforeTax: 800,
+        }),
+        totalAmount: 800,
+      }),
+    }));
+    expect(mockPlanCollectionGet).toHaveBeenCalledTimes(1);
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 80000 }),
+      expect.any(Object),
+    );
+    expect(mockTransaction.update).toHaveBeenCalledWith(
+      newRef,
+      expect.objectContaining({
+        selectedPlanId: 'premium',
+        selectedPlanPrice: expect.objectContaining({
+          minimumAmount: 800,
+          includedSpecialTrips: 1,
+          totalBeforeTax: 800,
+        }),
+        priceComparison: expect.objectContaining({
+          plans: expect.objectContaining({
+            premium: expect.objectContaining({
+              minimumAmount: 800,
+              includedSpecialTrips: 1,
+              totalBeforeTax: 800,
+            }),
+          }),
+        }),
+        includedSpecialTrips: 1,
+        totalAmount: 800,
       }),
     );
   });

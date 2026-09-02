@@ -3,6 +3,7 @@ export {};
 const subscriptionId = 'a'.repeat(64);
 const mockSubscriptionRef = { id: subscriptionId, get: jest.fn() };
 const mockUserRef = { get: jest.fn() };
+const mockPlanCollectionGet = jest.fn();
 const mockTripRef = { id: 'trip_123' };
 const mockTransaction = {
   get: jest.fn(),
@@ -25,6 +26,7 @@ const mockDb = {
   batch: jest.fn(() => mockBatch),
   runTransaction: jest.fn((callback: (transaction: typeof mockTransaction) => Promise<unknown>) => callback(mockTransaction)),
   collection: jest.fn((name: string) => ({
+    ...(name === 'personal_driver_plans' ? { get: mockPlanCollectionGet } : {}),
     doc: name === 'personal_driver_subscriptions'
       ? mockSubscriptionDoc
       : name === 'personal_driver_subscription_locks'
@@ -118,6 +120,12 @@ function makeRequest(data: unknown, uid?: string) {
   } as never;
 }
 
+function configurePersonalDriverPlan(id: string, data: Record<string, unknown>) {
+  mockPlanCollectionGet.mockResolvedValue({
+    docs: [{ id, data: () => data }],
+  });
+}
+
 describe('createPersonalDriverSubscriptionPayment', () => {
   let transactionData: Record<string, unknown> | undefined;
   let lockDocuments: Map<string, Record<string, unknown>>;
@@ -132,6 +140,8 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     mockCallableOptions.length = 0;
     mockSubscriptionRef.get.mockReset();
     mockUserRef.get.mockReset();
+    mockPlanCollectionGet.mockReset();
+    mockPlanCollectionGet.mockResolvedValue({ docs: [] });
     mockTransaction.get.mockReset();
     mockTransaction.create.mockReset();
     mockTransaction.update.mockReset();
@@ -370,6 +380,85 @@ describe('createPersonalDriverSubscriptionPayment', () => {
     const subscriptionWrite = mockTransaction.update.mock.calls.find((call) => call[0] === mockSubscriptionRef)?.[1];
     expect(subscriptionWrite).not.toHaveProperty('priceComparison.recommendationReasons');
     expect(subscriptionWrite).toHaveProperty('priceComparison.plans.basic.totalBeforeTax', 300);
+  });
+
+  it('prices new Premium subscriptions from the configured plan snapshot', async () => {
+    configurePersonalDriverPlan('premium', {
+      minimumAmount: 800,
+      allowedWeekdays: [1, 2, 3, 4, 5],
+      includedSpecialTrips: 1,
+    });
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+
+    const result = await createPersonalDriverSubscriptionPayment(makeRequest({
+      ...validPayload,
+      selectedPlanId: 'premium',
+      selectedWeekdays: [1],
+    }, 'user_123'));
+
+    expect(result).toEqual(expect.objectContaining({
+      amount: 800,
+      quote: expect.objectContaining({
+        selectedPlanPrice: expect.objectContaining({
+          planId: 'premium',
+          minimumAmount: 800,
+          includedSpecialTrips: 1,
+          totalBeforeTax: 800,
+        }),
+        totalAmount: 800,
+      }),
+    }));
+    expect(mockPlanCollectionGet).toHaveBeenCalledTimes(1);
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 80000 }),
+      expect.any(Object),
+    );
+    expect(mockTransaction.update).toHaveBeenCalledWith(
+      mockSubscriptionRef,
+      expect.objectContaining({
+        selectedPlanId: 'premium',
+        selectedPlanPrice: expect.objectContaining({
+          minimumAmount: 800,
+          includedSpecialTrips: 1,
+          totalBeforeTax: 800,
+        }),
+        priceComparison: expect.objectContaining({
+          plans: expect.objectContaining({
+            premium: expect.objectContaining({
+              minimumAmount: 800,
+              includedSpecialTrips: 1,
+              totalBeforeTax: 800,
+            }),
+          }),
+        }),
+        includedSpecialTrips: 1,
+        totalAmount: 800,
+      }),
+    );
+  });
+
+  it('uses configured weekdays to decide selected plan eligibility', async () => {
+    configurePersonalDriverPlan('basic', {
+      allowedWeekdays: [1, 2, 3, 4, 5, 6],
+    });
+    const { createPersonalDriverSubscriptionPayment } = require('../createSubscriptionPayment');
+
+    await expect(createPersonalDriverSubscriptionPayment(makeRequest({
+      ...validPayload,
+      selectedPlanId: 'basic',
+      selectedWeekdays: [6],
+    }, 'user_123'))).resolves.toEqual(expect.objectContaining({
+      amount: 300,
+      quote: expect.objectContaining({
+        selectedPlanPrice: expect.objectContaining({
+          planId: 'basic',
+          isEligible: true,
+        }),
+      }),
+    }));
+
+    expect(mockPlanCollectionGet).toHaveBeenCalledTimes(1);
+    expect(mockStripe.paymentIntents.create).toHaveBeenCalledTimes(1);
   });
 
   it('uses server route distance and creates no trips before payment success', async () => {

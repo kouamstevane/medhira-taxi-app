@@ -389,6 +389,59 @@ describe('clientManagePersonalDriver', () => {
     }));
   });
 
+  it('reports remaining special trips from the stored entitlement snapshot for an existing operation', async () => {
+    const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');
+    mockTransaction.get.mockImplementation(async (ref: unknown) => {
+      if (ref == null || ref === mockSubscriptionRef) {
+        return {
+          exists: true,
+          data: () => ({
+            userId: 'client_1',
+            status: 'active',
+            selectedPlanId: 'classic',
+            includedSpecialTrips: 4,
+            specialTripsUsed: 0,
+            paymentStatus: 'succeeded',
+            periodStartAtUtc: new Date('2026-08-01T00:00:00.000Z'),
+            periodEndAtUtc: new Date('2026-09-01T00:00:00.000Z'),
+            serviceTimeZone: 'America/Toronto',
+            monthlyDistanceKm: 50,
+            monthlyDistanceKmRemaining: 50,
+            specialTripsDistanceUsedKm: 0,
+          }),
+        };
+      }
+      if (ref === mockNewTripRef) {
+        return {
+          exists: true,
+          data: () => ({
+            userId: 'client_1',
+            distanceKm: 8.2,
+          }),
+        };
+      }
+      throw new Error('Unexpected transaction read');
+    });
+
+    const result = await clientManagePersonalDriver(makeRequest({
+      action: 'requestSpecialTrip',
+      subscriptionId: 'sub_1',
+      pickupAddress: 'Clinique',
+      destinationAddress: 'Aeroport',
+      scheduledAtIso: '2026-08-12T09:30:00',
+      idempotencyKey: 'existing_special_1',
+    }, 'client_1'));
+
+    expect(result).toEqual(expect.objectContaining({
+      success: true,
+      tripId: 'special_1',
+      specialTripsRemaining: 4,
+      monthlyDistanceKmRemaining: 50,
+    }));
+    expect(mockTransaction.set).not.toHaveBeenCalled();
+    expect(mockTransaction.update).not.toHaveBeenCalled();
+  });
+
   it('rejects a special trip that is already in the past on the fixed service clock', async () => {
     jest.useFakeTimers().setSystemTime(Date.parse('2026-08-03T12:00:00.000Z'));
     const { clientManagePersonalDriver } = require('../clientManagePersonalDriver');

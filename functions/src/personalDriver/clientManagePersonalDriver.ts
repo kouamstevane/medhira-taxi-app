@@ -11,12 +11,6 @@ import { isPersonalDriverSubscriptionReadyForActivation } from './subscriptionAc
 
 type PersonalDriverPlanId = 'basic' | 'classic' | 'premium';
 
-const SPECIAL_TRIP_LIMITS: Record<PersonalDriverPlanId, number> = {
-  basic: 0,
-  classic: 2,
-  premium: 4,
-};
-
 function getDb(): FirebaseFirestore.Firestore {
   if (!admin.apps.length) admin.initializeApp();
   return admin.firestore();
@@ -252,9 +246,8 @@ export const clientManagePersonalDriver = onCall(
         if (existingTrip?.userId !== uid) {
           throw new HttpsError('permission-denied', 'Ce trajet ne vous appartient pas.');
         }
-        const planId = getPlanId(subscription || {});
-        const includedSpecialTrips = planId ? SPECIAL_TRIP_LIMITS[planId] : 0;
-        const specialTripsUsed = subscription?.specialTripsUsed ?? 0;
+        const includedSpecialTrips = subscription?.includedSpecialTrips;
+        const specialTripsUsed = subscription?.specialTripsUsed;
         const remainingDistance = subscription?.monthlyDistanceKmRemaining ?? 0;
 
         return {
@@ -262,7 +255,9 @@ export const clientManagePersonalDriver = onCall(
           success: true,
           tripId: tripRef.id,
           officialDistanceKm: existingTrip?.distanceKm ?? 0,
-          specialTripsRemaining: Math.max(0, includedSpecialTrips - specialTripsUsed),
+          specialTripsRemaining: isNonNegativeInteger(includedSpecialTrips) && isNonNegativeInteger(specialTripsUsed)
+            ? Math.max(0, includedSpecialTrips - specialTripsUsed)
+            : 0,
           monthlyDistanceKmRemaining: remainingDistance,
         };
       }
@@ -287,7 +282,6 @@ export const clientManagePersonalDriver = onCall(
       if (!planId) {
         throw new HttpsError('failed-precondition', 'La formule du forfait est invalide.');
       }
-      const includedSpecialTrips = SPECIAL_TRIP_LIMITS[planId];
       const persistedIncludedSpecialTrips = subscription.includedSpecialTrips;
       const specialTripsUsed = subscription.specialTripsUsed;
       const monthlyDistanceKm = subscription.monthlyDistanceKm;
@@ -295,7 +289,6 @@ export const clientManagePersonalDriver = onCall(
       const specialTripsDistanceUsedKm = subscription.specialTripsDistanceUsedKm;
       if (
         !isNonNegativeInteger(persistedIncludedSpecialTrips)
-        || persistedIncludedSpecialTrips !== includedSpecialTrips
         || !isNonNegativeInteger(specialTripsUsed)
         || specialTripsUsed > persistedIncludedSpecialTrips
         || !isFiniteNumber(monthlyDistanceKm)
