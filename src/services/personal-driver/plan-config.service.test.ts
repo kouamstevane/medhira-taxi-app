@@ -1,39 +1,63 @@
 import { PERSONAL_DRIVER_PLANS } from './plans';
 
-const mockCollection = jest.fn();
-const mockGetDocs = jest.fn();
+const mockDoc = jest.fn((...path: unknown[]) => ({ path }));
+const mockGetDoc = jest.fn();
 
 jest.mock('firebase/firestore', () => ({
-  collection: (...args: unknown[]) => mockCollection(...args),
-  getDocs: (...args: unknown[]) => mockGetDocs(...args),
+  doc: (...args: unknown[]) => mockDoc(...args),
+  getDoc: (...args: unknown[]) => mockGetDoc(...args),
 }));
 
 jest.mock('@/config/firebase', () => ({
-  db: {},
+  db: { app: 'mock-db' },
 }));
+
+function mockPlanSnapshot(id: string, data: Record<string, unknown>) {
+  return {
+    id,
+    exists: () => true,
+    data: () => data,
+  };
+}
+
+function mockMissingSnapshot(id: string) {
+  return {
+    id,
+    exists: () => false,
+    data: () => undefined,
+  };
+}
+
+function expectFixedPlanDocumentReads() {
+  expect(mockDoc).toHaveBeenCalledTimes(3);
+  expect(mockDoc).toHaveBeenNthCalledWith(1, { app: 'mock-db' }, 'personal_driver_plans', 'basic');
+  expect(mockDoc).toHaveBeenNthCalledWith(2, { app: 'mock-db' }, 'personal_driver_plans', 'classic');
+  expect(mockDoc).toHaveBeenNthCalledWith(3, { app: 'mock-db' }, 'personal_driver_plans', 'premium');
+
+  expect(mockGetDoc).toHaveBeenCalledTimes(3);
+  expect(mockGetDoc).toHaveBeenNthCalledWith(1, { path: [{ app: 'mock-db' }, 'personal_driver_plans', 'basic'] });
+  expect(mockGetDoc).toHaveBeenNthCalledWith(2, { path: [{ app: 'mock-db' }, 'personal_driver_plans', 'classic'] });
+  expect(mockGetDoc).toHaveBeenNthCalledWith(3, { path: [{ app: 'mock-db' }, 'personal_driver_plans', 'premium'] });
+}
 
 describe('personal driver plan catalogue loader', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('uses a Premium Firestore override and falls back to static defaults for missing plans', async () => {
-    mockGetDocs.mockResolvedValue({
-      docs: [
-        {
-          id: 'premium',
-          exists: () => true,
-          data: () => ({
-            name: 'Premium Plus',
-            minimumAmount: 800,
-          }),
-        },
-      ],
-    });
+  it('reads the fixed plan documents directly and falls back to static defaults for missing plans', async () => {
+    mockGetDoc
+      .mockResolvedValueOnce(mockMissingSnapshot('basic'))
+      .mockResolvedValueOnce(mockMissingSnapshot('classic'))
+      .mockResolvedValueOnce(mockPlanSnapshot('premium', {
+        name: 'Premium Plus',
+        minimumAmount: 800,
+      }));
 
     const { getPersonalDriverPlans } = await import('./plan-config.service');
     const result = await getPersonalDriverPlans();
 
+    expectFixedPlanDocumentReads();
     expect(result.source).toBe('firestore');
     expect(result.error).toBeNull();
     expect(result.plans.premium).toMatchObject({
@@ -46,18 +70,19 @@ describe('personal driver plan catalogue loader', () => {
   });
 
   it('keeps fallback plans and static defaults isolated from consumer mutation', async () => {
-    mockGetDocs.mockResolvedValue({
-      docs: [
-        {
-          id: 'premium',
-          exists: () => true,
-          data: () => ({
-            name: 'Premium Plus',
-            minimumAmount: 800,
-          }),
-        },
-      ],
-    });
+    mockGetDoc
+      .mockResolvedValueOnce(mockMissingSnapshot('basic'))
+      .mockResolvedValueOnce(mockMissingSnapshot('classic'))
+      .mockResolvedValueOnce(mockPlanSnapshot('premium', {
+        name: 'Premium Plus',
+        minimumAmount: 800,
+      }))
+      .mockResolvedValueOnce(mockMissingSnapshot('basic'))
+      .mockResolvedValueOnce(mockMissingSnapshot('classic'))
+      .mockResolvedValueOnce(mockPlanSnapshot('premium', {
+        name: 'Premium Plus',
+        minimumAmount: 800,
+      }));
 
     const { getPersonalDriverPlans } = await import('./plan-config.service');
     const firstResult = await getPersonalDriverPlans();
@@ -82,57 +107,41 @@ describe('personal driver plan catalogue loader', () => {
   });
 
   it('falls back to the corresponding static plan when Firestore data is invalid', async () => {
-    mockGetDocs.mockResolvedValue({
-      docs: [
-        {
-          id: 'basic',
-          exists: () => true,
-          data: () => ({
-            name: '',
-            pricePerKm: -1,
-            minimumBillableKm: 0,
-            minimumAmount: -10,
-            allowedWeekdays: [0, 0, 7],
-            includedRegularWaitMinutes: -3,
-            includedSpecialTrips: 0.5,
-            benefits: [''],
-          }),
-        },
-      ],
-    });
+    mockGetDoc
+      .mockResolvedValueOnce(mockPlanSnapshot('basic', {
+        name: '',
+        pricePerKm: -1,
+        minimumBillableKm: 0,
+        minimumAmount: -10,
+        allowedWeekdays: [0, 0, 7],
+        includedRegularWaitMinutes: -3,
+        includedSpecialTrips: 0.5,
+        benefits: [''],
+      }))
+      .mockResolvedValueOnce(mockMissingSnapshot('classic'))
+      .mockResolvedValueOnce(mockMissingSnapshot('premium'));
 
     const { getPersonalDriverPlans } = await import('./plan-config.service');
     const result = await getPersonalDriverPlans();
 
+    expectFixedPlanDocumentReads();
     expect(result.source).toBe('firestore');
     expect(result.error).toBeNull();
     expect(result.plans.basic).toEqual(PERSONAL_DRIVER_PLANS.basic);
   });
 
-  it('ignores extra Firestore document IDs that are not part of the fixed catalogue', async () => {
-    mockGetDocs.mockResolvedValue({
-      docs: [
-        {
-          id: 'classic',
-          exists: () => true,
-          data: () => ({
-            minimumAmount: 475,
-          }),
-        },
-        {
-          id: 'vip',
-          exists: () => true,
-          data: () => ({
-            name: 'Should be ignored',
-            minimumAmount: 999,
-          }),
-        },
-      ],
-    });
+  it('loads only the fixed catalogue IDs', async () => {
+    mockGetDoc
+      .mockResolvedValueOnce(mockMissingSnapshot('basic'))
+      .mockResolvedValueOnce(mockPlanSnapshot('classic', {
+        minimumAmount: 475,
+      }))
+      .mockResolvedValueOnce(mockMissingSnapshot('premium'));
 
     const { getPersonalDriverPlans } = await import('./plan-config.service');
     const result = await getPersonalDriverPlans();
 
+    expectFixedPlanDocumentReads();
     expect(Object.keys(result.plans)).toEqual(['basic', 'classic', 'premium']);
     expect((result.plans as Record<string, unknown>).vip).toBeUndefined();
     expect(result.plans.classic.minimumAmount).toBe(475);
@@ -142,11 +151,13 @@ describe('personal driver plan catalogue loader', () => {
 
   it('returns static plans, fallback source, and an error when the Firestore read fails', async () => {
     const firestoreError = new Error('permission denied');
-    mockGetDocs.mockRejectedValue(firestoreError);
+    mockGetDoc.mockRejectedValueOnce(firestoreError);
 
     const { getPersonalDriverPlans } = await import('./plan-config.service');
     const result = await getPersonalDriverPlans();
 
+    expect(mockDoc).toHaveBeenCalledTimes(3);
+    expect(mockGetDoc).toHaveBeenCalledTimes(3);
     expect(result.source).toBe('fallback');
     expect(result.error).toBe(firestoreError);
     expect(result.plans).toEqual(PERSONAL_DRIVER_PLANS);

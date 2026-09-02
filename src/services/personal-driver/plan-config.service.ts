@@ -1,4 +1,4 @@
-import { collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import type {
   PersonalDriverPlan,
@@ -141,14 +141,17 @@ export function normalizePersonalDriverPlan(
 
 export async function getPersonalDriverPlans(): Promise<PersonalDriverPlansResult> {
   try {
-    const snapshot = await getDocs(collection(db, PERSONAL_DRIVER_PLANS_COLLECTION));
     const docsById = new Map(
-      snapshot.docs
-        .filter((planDoc) => PERSONAL_DRIVER_PLAN_IDS.includes(planDoc.id as PersonalDriverPlanId))
-        .map((planDoc) => [
-          planDoc.id as PersonalDriverPlanId,
-          planDoc.data() as PersonalDriverPlanDocument,
-        ]),
+      await Promise.all(
+        PERSONAL_DRIVER_PLAN_IDS.map(async (planId) => {
+          const planDoc = await getDoc(doc(db, PERSONAL_DRIVER_PLANS_COLLECTION, planId));
+
+          return [
+            planId,
+            planDoc.exists() ? planDoc.data() as PersonalDriverPlanDocument : undefined,
+          ] as const;
+        }),
+      ),
     );
 
     const plans = PERSONAL_DRIVER_PLAN_IDS.reduce((result, planId) => {
