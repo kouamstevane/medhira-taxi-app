@@ -41,6 +41,25 @@ describe('personal driver backend plan config', () => {
     expect(plans.premium.includedSpecialTrips).toBe(DEFAULT_PERSONAL_DRIVER_PLANS.premium.includedSpecialTrips);
   });
 
+  it('falls back to defaults when a Firestore plan document is invalid', async () => {
+    mockGet.mockResolvedValue({
+      docs: [
+        {
+          id: 'premium',
+          data: () => ({
+            minimumAmount: 800,
+            pricePerKm: -1,
+          }),
+        },
+      ],
+    });
+
+    const { getConfiguredPersonalDriverPlans, DEFAULT_PERSONAL_DRIVER_PLANS } = require('../planConfig');
+    const plans = await getConfiguredPersonalDriverPlans();
+
+    expect(plans.premium).toEqual(DEFAULT_PERSONAL_DRIVER_PLANS.premium);
+  });
+
   it('includes the complete client-facing plan fields in backend defaults', async () => {
     const { DEFAULT_PERSONAL_DRIVER_PLANS } = require('../planConfig');
 

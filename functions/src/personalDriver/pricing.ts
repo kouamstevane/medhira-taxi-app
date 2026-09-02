@@ -43,24 +43,26 @@ export function calculatePersonalDriverPrices(input: {
   monthlyDistanceKm: number;
   requestedWeekdays: PersonalDriverWeekday[];
 }, configuredPlans: PersonalDriverPlans = DEFAULT_PERSONAL_DRIVER_PLANS): PersonalDriverPriceComparison {
+  const { monthlyDistanceKm } = input;
   const planPrices = PLAN_ORDER.reduce((result, planId) => {
     const plan: PersonalDriverPlanConfig = configuredPlans[planId];
-    const distanceAmount = input.monthlyDistanceKm * plan.pricePerKm;
-    const isBelowMinimumBillableDistance = input.monthlyDistanceKm < plan.minimumBillableKm;
-    const totalBeforeTax = isBelowMinimumBillableDistance
-      ? plan.minimumAmount
-      : Math.max(distanceAmount, plan.minimumAmount);
+    const {
+      minimumAmount,
+      pricePerKm,
+    } = plan;
+    const distanceAmount = monthlyDistanceKm * pricePerKm;
+    const totalBeforeTax = Math.max(minimumAmount, monthlyDistanceKm * pricePerKm);
 
     result[planId] = {
       planId,
       isEligible: input.requestedWeekdays.every((weekday) => plan.allowedWeekdays.includes(weekday)),
-      pricePerKm: plan.pricePerKm,
-      minimumAmount: plan.minimumAmount,
+      pricePerKm,
+      minimumAmount,
       minimumBillableKm: plan.minimumBillableKm,
       includedSpecialTrips: plan.includedSpecialTrips,
       distanceAmount,
       totalBeforeTax,
-      minimumApplied: isBelowMinimumBillableDistance || distanceAmount <= plan.minimumAmount,
+      minimumApplied: distanceAmount <= minimumAmount,
       savingsComparedToBasic: 0,
     };
     return result;
@@ -82,7 +84,7 @@ export function calculatePersonalDriverPrices(input: {
   });
 
   return {
-    monthlyDistanceKm: input.monthlyDistanceKm,
+    monthlyDistanceKm,
     plans: planPrices,
     recommendedPlanId,
   };
