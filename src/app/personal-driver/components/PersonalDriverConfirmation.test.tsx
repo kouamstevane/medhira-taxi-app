@@ -1,10 +1,17 @@
 import React from 'react';
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PersonalDriverConfirmation } from './PersonalDriverConfirmation';
+import { PersonalDriverPlansProvider } from '../PersonalDriverPlansProvider';
+import { getPersonalDriverPlans } from '@/services/personal-driver/plan-config.service';
+import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import {
   createPersonalDriverSubscriptionPayment,
   getPersonalDriverSubscriptionById,
 } from '@/services/personal-driver/subscription.service';
+
+jest.mock('@/services/personal-driver/plan-config.service', () => ({
+  getPersonalDriverPlans: jest.fn(),
+}));
 
 jest.mock('@/services/personal-driver/subscription.service', () => ({
   createPersonalDriverSubscriptionPayment: jest.fn(),
@@ -137,9 +144,24 @@ const authoritativePayment = {
   },
 };
 
+const livePlans = {
+  ...PERSONAL_DRIVER_PLANS,
+  premium: {
+    ...PERSONAL_DRIVER_PLANS.premium,
+    name: 'Premium Plus',
+    minimumAmount: 800,
+    benefits: ['Avantage Premium Plus dynamique'],
+  },
+};
+
 describe('PersonalDriverConfirmation Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (getPersonalDriverPlans as jest.Mock).mockResolvedValue({
+      plans: livePlans,
+      source: 'firestore',
+      error: null,
+    });
     mockSearchParams = new URLSearchParams();
     sessionStorage.clear();
     sessionStorage.setItem('medjira.personalDriver.config.v1', JSON.stringify(sampleConfig));
@@ -161,6 +183,18 @@ describe('PersonalDriverConfirmation Component', () => {
     expect(screen.getAllByText(/650(\.|,)00 \$/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Estimation indicative')).toBeVisible();
     expect(screen.getByRole('button', { name: /Préparer le paiement sécurisé/i })).toBeInTheDocument();
+  });
+
+  it('uses loaded plan details without recalculating the persisted checkout total', async () => {
+    render(
+      <PersonalDriverPlansProvider>
+        <PersonalDriverConfirmation />
+      </PersonalDriverPlansProvider>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'PREMIUM PLUS' })).toBeVisible();
+    expect(screen.getByText('Avantage Premium Plus dynamique')).toBeVisible();
+    expect(screen.getAllByText(/650(\.|,)00 \$/i).length).toBeGreaterThan(0);
   });
 
   it('replaces the browser estimate with the exact callable quote before rendering Stripe Elements', async () => {

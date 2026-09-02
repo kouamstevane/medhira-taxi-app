@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
+import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
 import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import {
   createPersonalDriverSubscriptionPayment,
@@ -162,6 +162,7 @@ function getPaymentPreparationErrorMessage(error: unknown): string {
 }
 
 export function PersonalDriverConfirmation() {
+  const { plans, error: plansError, reload: reloadPlans } = usePersonalDriverPlans();
   const { push, replace } = useRouter();
   const searchParams = useSearchParams();
   const [checkout, setCheckout] = useState<{ config: PersonalDriverConfiguration; estimate: PersonalDriverEstimateSession } | null>(null);
@@ -182,7 +183,7 @@ export function PersonalDriverConfirmation() {
   }, []);
 
   const selectedPlanId = checkout?.estimate.selectedPlanId;
-  const plan = selectedPlanId ? PERSONAL_DRIVER_PLANS[selectedPlanId] : null;
+  const plan = selectedPlanId ? plans[selectedPlanId] : null;
   const selectedPrice = selectedPlanId ? checkout?.estimate.comparison.plans[selectedPlanId] : null;
   const quote = payment?.quote;
   const displayedPrice = quote?.selectedPlanPrice ?? selectedPrice;
@@ -342,6 +343,14 @@ export function PersonalDriverConfirmation() {
         {error && (
           <div className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm leading-5 text-red-200" role="alert" aria-live="polite">
             {error}
+          </div>
+        )}
+        {plansError && (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm leading-5 text-amber-100" role="alert" aria-live="polite">
+            Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
+            <button type="button" onClick={() => void reloadPlans()} className="ml-3 font-bold underline underline-offset-4">
+              Réessayer
+            </button>
           </div>
         )}
       </div>

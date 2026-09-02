@@ -4,8 +4,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
+import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import { getUserFacingCallableError } from '@/utils/callable-error';
 import {
@@ -82,6 +82,7 @@ function isSubscriptionUsable(subscription: PersonalDriverSubscription): boolean
 
 export function PersonalDriverClientDashboard() {
   const { currentUser } = useAuth();
+  const { plans, error: plansError, reload: reloadPlans } = usePersonalDriverPlans();
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<PersonalDriverSubscription | null>(null);
   const [pendingRenewal, setPendingRenewal] = useState<PersonalDriverSubscription | null>(null);
@@ -355,7 +356,7 @@ export function PersonalDriverClientDashboard() {
   }
 
   const rawPlanId = subscription.planId || (subscription as unknown as { selectedPlanId: PersonalDriverPlanId }).selectedPlanId || 'classic';
-  const planInfo = PERSONAL_DRIVER_PLANS[rawPlanId] || PERSONAL_DRIVER_PLANS.classic;
+  const planInfo = plans[rawPlanId] || plans.classic;
   const activationStatus = subscription.activationStatus
     ?? (subscription.status === 'active' ? 'active' : 'pending_payment');
   const displayedStatus = subscription.paymentStatus === 'succeeded'
@@ -385,6 +386,14 @@ export function PersonalDriverClientDashboard() {
     <div className="mx-auto max-w-4xl space-y-6 pb-12 text-slate-100">
       {/* HEADER ABONNEMENT */}
       <div className="rounded-2xl border border-white/10 bg-card p-6 shadow-xl backdrop-blur-xl">
+        {plansError && (
+          <div role="alert" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+            Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
+            <button type="button" onClick={() => void reloadPlans()} className="ml-3 font-bold underline underline-offset-4">
+              Réessayer
+            </button>
+          </div>
+        )}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-primary">

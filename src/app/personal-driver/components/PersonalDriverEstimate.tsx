@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { PersonalDriverConfiguration } from './PersonalDriverConfigurator';
-import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
+import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
 import {
   calculatePersonalDriverPrices,
   formatPersonalDriverCurrency,
@@ -23,10 +23,11 @@ function formatKm(distanceKm: number): string {
 }
 
 export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDriverEstimateProps) {
+  const { plans, error, reload } = usePersonalDriverPlans();
   const comparison = calculatePersonalDriverPrices({
     monthlyDistanceKm: configuration.monthlyDistanceKm,
     requestedWeekdays: configuration.weekdays,
-  });
+  }, plans);
   const [selectedPlanId, setSelectedPlanId] = useState<PersonalDriverPlanId>(
     comparison.plans[configuration.planId].isEligible ? configuration.planId : comparison.recommendedPlanId,
   );
@@ -52,7 +53,15 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
   return (
     <div className="space-y-6">
       <section aria-label="Resume du trajet" className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
-        <p><span className="font-semibold text-white">Forfait initial :</span> {PERSONAL_DRIVER_PLANS[configuration.planId].name}</p>
+        {error && (
+          <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-amber-100">
+            Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
+            <button type="button" onClick={() => void reload()} className="ml-3 font-bold underline underline-offset-4">
+              Réessayer
+            </button>
+          </p>
+        )}
+        <p><span className="font-semibold text-white">Forfait initial :</span> {plans[configuration.planId].name}</p>
         <p><span className="font-semibold text-white">Aller :</span> {formatKm(configuration.distanceOneWayKm)} km</p>
         {configuration.tripType === 'round_trip' && configuration.distanceReturnKm !== undefined && (
           <p><span className="font-semibold text-white">Retour :</span> {formatKm(configuration.distanceReturnKm)} km</p>
@@ -71,7 +80,7 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
         <fieldset className="space-y-3">
           <legend className="sr-only">Forfaits disponibles</legend>
           {planIds.map((planId) => {
-            const plan = PERSONAL_DRIVER_PLANS[planId];
+            const plan = plans[planId];
             const price = comparison.plans[planId];
             const isRecommended = planId === comparison.recommendedPlanId;
 

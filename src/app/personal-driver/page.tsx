@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
-import type { PersonalDriverPlanId } from '@/types/personal-driver';
+import { PERSONAL_DRIVER_PLAN_IDS } from '@/services/personal-driver/plans';
+import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
+import type { PersonalDriverPlan, PersonalDriverPlanId, PersonalDriverWeekday } from '@/types/personal-driver';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { PersonalDriverPlanCard } from './components/PersonalDriverPlanCard';
 
@@ -15,20 +16,69 @@ const benefits = [
   { icon: 'support_agent', title: 'Suivi & Assistance', text: 'Notifications chauffeur et suivi dédié par l\'équipe Medjira.' },
 ];
 
-const comparisonRows = [
-  { label: 'Minimum mensuel', basic: `300 ${CURRENCY_CODE}`, classic: `450 ${CURRENCY_CODE}`, premium: `650 ${CURRENCY_CODE}` },
-  { label: 'Tarif kilométrique', basic: `1,50 ${CURRENCY_CODE} / km`, classic: `1,25 ${CURRENCY_CODE} / km`, premium: `1,10 ${CURRENCY_CODE} / km` },
-  { label: 'Semaine', basic: 'Oui', classic: 'Oui', premium: 'Oui' },
-  { label: 'Week-end', basic: 'Non', classic: 'Oui', premium: 'Oui' },
-  { label: 'Jours fériés', basic: 'Non', classic: 'Selon disponibilité', premium: 'Oui' },
-  { label: 'Trajets spéciaux', basic: '0', classic: '2 inclus', premium: '4 inclus' },
-  { label: 'Attente gratuite', basic: '3 min', classic: '5 min', premium: '10 min' },
-  { label: 'Priorité', basic: 'Standard', classic: 'Supérieure', premium: 'Maximale' },
-];
-
 type ChoiceNeed = 'week' | 'weekend' | 'priority';
 
+const WEEKDAY_LABELS: Record<PersonalDriverWeekday, string> = {
+  0: 'Dim.',
+  1: 'Lun.',
+  2: 'Mar.',
+  3: 'Mer.',
+  4: 'Jeu.',
+  5: 'Ven.',
+  6: 'Sam.',
+};
+
+type ComparisonRow = { label: string } & Record<PersonalDriverPlanId, string>;
+
+function formatAmount(amount: number): string {
+  return amount.toLocaleString('fr-FR');
+}
+
+function formatPricePerKm(amount: number): string {
+  return amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatWeekdays(weekdays: PersonalDriverWeekday[]): string {
+  return weekdays.map((weekday) => WEEKDAY_LABELS[weekday]).join(', ');
+}
+
+function buildComparisonRows(plans: Record<PersonalDriverPlanId, PersonalDriverPlan>): ComparisonRow[] {
+  return [
+    {
+      label: 'Minimum mensuel',
+      basic: `${formatAmount(plans.basic.minimumAmount)} ${CURRENCY_CODE}`,
+      classic: `${formatAmount(plans.classic.minimumAmount)} ${CURRENCY_CODE}`,
+      premium: `${formatAmount(plans.premium.minimumAmount)} ${CURRENCY_CODE}`,
+    },
+    {
+      label: 'Tarif kilométrique',
+      basic: `${formatPricePerKm(plans.basic.pricePerKm)} ${CURRENCY_CODE} / km`,
+      classic: `${formatPricePerKm(plans.classic.pricePerKm)} ${CURRENCY_CODE} / km`,
+      premium: `${formatPricePerKm(plans.premium.pricePerKm)} ${CURRENCY_CODE} / km`,
+    },
+    {
+      label: 'Jours autorisés',
+      basic: formatWeekdays(plans.basic.allowedWeekdays),
+      classic: formatWeekdays(plans.classic.allowedWeekdays),
+      premium: formatWeekdays(plans.premium.allowedWeekdays),
+    },
+    {
+      label: 'Trajets spéciaux',
+      basic: plans.basic.includedSpecialTrips === 0 ? '0' : `${plans.basic.includedSpecialTrips} inclus`,
+      classic: plans.classic.includedSpecialTrips === 0 ? '0' : `${plans.classic.includedSpecialTrips} inclus`,
+      premium: plans.premium.includedSpecialTrips === 0 ? '0' : `${plans.premium.includedSpecialTrips} inclus`,
+    },
+    {
+      label: 'Attente gratuite',
+      basic: `${plans.basic.includedRegularWaitMinutes} min`,
+      classic: `${plans.classic.includedRegularWaitMinutes} min`,
+      premium: `${plans.premium.includedRegularWaitMinutes} min`,
+    },
+  ];
+}
+
 export default function PersonalDriverPage() {
+  const { plans, error, reload } = usePersonalDriverPlans();
   const [showComparison, setShowComparison] = useState(false);
   const [showHelper, setShowHelper] = useState(false);
   const [need, setNeed] = useState<ChoiceNeed>('week');
@@ -51,7 +101,8 @@ export default function PersonalDriverPage() {
     return 'basic';
   }, [need]);
 
-  const recommendedPlan = PERSONAL_DRIVER_PLANS[recommendedPlanId];
+  const recommendedPlan = plans[recommendedPlanId];
+  const comparisonRows = useMemo(() => buildComparisonRows(plans), [plans]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-slate-950 to-background pb-16 text-slate-100 selection:bg-primary selection:text-black">
@@ -83,6 +134,15 @@ export default function PersonalDriverPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-6 sm:py-10 space-y-10">
+        {error && (
+          <div role="alert" className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+            Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
+            <button type="button" onClick={() => void reload()} className="ml-3 font-bold underline underline-offset-4">
+              Réessayer
+            </button>
+          </div>
+        )}
+
         {/* Hero Section */}
         <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-card/90 via-card/50 to-primary/5 p-6 sm:p-10 backdrop-blur-xl shadow-2xl">
           <div className="absolute -top-24 -right-24 size-72 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
@@ -298,13 +358,13 @@ export default function PersonalDriverPage() {
                   <thead className="bg-white/5 text-[11px] uppercase tracking-wider text-slate-400">
                     <tr>
                       <th scope="col" className="px-4 py-3 font-semibold">Critère</th>
-                      {(activeTab === 'all' || activeTab === 'basic') && <th scope="col" className="px-4 py-3 font-semibold text-slate-200">Basic</th>}
+                      {(activeTab === 'all' || activeTab === 'basic') && <th scope="col" className="px-4 py-3 font-semibold text-slate-200">{plans.basic.name}</th>}
                       {(activeTab === 'all' || activeTab === 'classic') && (
                         <th scope="col" className="px-4 py-3 font-semibold text-slate-200">
-                          Classic
+                          {plans.classic.name}
                         </th>
                       )}
-                      {(activeTab === 'all' || activeTab === 'premium') && <th scope="col" className="px-4 py-3 font-semibold text-slate-200">Premium</th>}
+                      {(activeTab === 'all' || activeTab === 'premium') && <th scope="col" className="px-4 py-3 font-semibold text-slate-200">{plans.premium.name}</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -340,9 +400,12 @@ export default function PersonalDriverPage() {
           </div>
 
           <div className="grid gap-6 md:grid-cols-3 lg:gap-8 items-stretch">
-            {Object.values(PERSONAL_DRIVER_PLANS).map((plan) => (
+            {PERSONAL_DRIVER_PLAN_IDS.map((planId) => {
+              const plan = plans[planId];
+              return (
               <PersonalDriverPlanCard key={plan.id} plan={plan} />
-            ))}
+              );
+            })}
           </div>
         </section>
       </main>

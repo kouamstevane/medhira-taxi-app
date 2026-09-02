@@ -4,9 +4,16 @@ import {
   PersonalDriverEstimate,
   PERSONAL_DRIVER_ESTIMATE_SESSION_KEY,
 } from './PersonalDriverEstimate';
+import { PersonalDriverPlansProvider } from '../PersonalDriverPlansProvider';
 import PersonalDriverEstimationPage from '../estimation/page';
 import { parsePersonalDriverConfiguration } from '../estimation/parsePersonalDriverConfiguration';
 import type { PersonalDriverConfiguration } from './PersonalDriverConfigurator';
+import { getPersonalDriverPlans } from '@/services/personal-driver/plan-config.service';
+import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
+
+jest.mock('@/services/personal-driver/plan-config.service', () => ({
+  getPersonalDriverPlans: jest.fn(),
+}));
 
 const configuration: PersonalDriverConfiguration = {
   version: 1,
@@ -26,8 +33,24 @@ const configuration: PersonalDriverConfiguration = {
   monthlyDistanceKm: 440,
 };
 
+const livePlans = {
+  ...PERSONAL_DRIVER_PLANS,
+  premium: {
+    ...PERSONAL_DRIVER_PLANS.premium,
+    name: 'Premium Plus',
+    pricePerKm: 1.05,
+    minimumAmount: 800,
+  },
+};
+
 describe('PersonalDriverEstimate', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
+    (getPersonalDriverPlans as jest.Mock).mockResolvedValue({
+      plans: livePlans,
+      source: 'firestore',
+      error: null,
+    });
     sessionStorage.clear();
   });
 
@@ -87,6 +110,21 @@ describe('PersonalDriverEstimate', () => {
 
     expect(screen.getByText(/660,90/)).toBeVisible();
     expect(screen.getByText(/550,75/)).toBeVisible();
+  });
+
+  it('uses the loaded plan map for live estimate calculations', async () => {
+    render(
+      <PersonalDriverPlansProvider>
+        <PersonalDriverEstimate
+          configuration={{ ...configuration, planId: 'premium', monthlyDistanceKm: 440 }}
+          onContinue={jest.fn()}
+        />
+      </PersonalDriverPlansProvider>,
+    );
+
+    expect(await screen.findByRole('radio', { name: 'Choisir Premium Plus' })).toBeVisible();
+    expect(screen.getAllByText('Premium Plus').length).toBeGreaterThan(0);
+    expect(screen.getByText(/800,00/)).toBeVisible();
   });
 
   it('uses one route heading and an inner estimate heading', () => {

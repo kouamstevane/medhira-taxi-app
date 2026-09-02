@@ -1,6 +1,9 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PersonalDriverClientDashboard } from './PersonalDriverClientDashboard';
+import { PersonalDriverPlansProvider } from '../PersonalDriverPlansProvider';
+import { getPersonalDriverPlans } from '@/services/personal-driver/plan-config.service';
+import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import {
   getCurrentPersonalDriverSubscription,
   getPendingPersonalDriverRenewal,
@@ -11,6 +14,10 @@ import {
   requestSpecialTrip,
   renewPersonalDriverSubscriptionPayment,
 } from '@/services/personal-driver/subscription.service';
+
+jest.mock('@/services/personal-driver/plan-config.service', () => ({
+  getPersonalDriverPlans: jest.fn(),
+}));
 
 jest.mock('@/services/personal-driver/subscription.service', () => ({
   getCurrentPersonalDriverSubscription: jest.fn(),
@@ -34,9 +41,26 @@ jest.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({ currentUser: { uid: 'user_123' } }),
 }));
 
+const livePlans = {
+  ...PERSONAL_DRIVER_PLANS,
+  premium: {
+    ...PERSONAL_DRIVER_PLANS.premium,
+    name: 'Premium Plus',
+    minimumAmount: 800,
+    includedRegularWaitMinutes: 12,
+    includedSpecialTrips: 6,
+    benefits: ['Avantage Premium Plus dynamique'],
+  },
+};
+
 describe('PersonalDriverClientDashboard Component', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    (getPersonalDriverPlans as jest.Mock).mockResolvedValue({
+      plans: livePlans,
+      source: 'firestore',
+      error: null,
+    });
     (getPendingPersonalDriverRenewal as jest.Mock).mockResolvedValue(null);
     (getPersonalDriverSubscriptionView as jest.Mock).mockImplementation(async () => {
       const [current, pending] = await Promise.all([
@@ -152,6 +176,37 @@ describe('PersonalDriverClientDashboard Component', () => {
     expect(getPersonalDriverTripsForSubscription).not.toHaveBeenCalled();
   });
 
+  it('uses loaded plan details for the client dashboard package view', async () => {
+    (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
+      id: 'sub_active',
+      userId: 'user_123',
+      selectedPlanId: 'premium',
+      status: 'active',
+      paymentStatus: 'succeeded',
+      monthlyDistanceKm: 440,
+      specialTripsUsed: 1,
+      periodStartDate: '2026-08-01',
+      periodEndDateExclusive: '2026-08-31',
+      periodStartAtUtc: '2026-08-01T04:00:00.000Z',
+      periodEndAtUtc: '2026-08-31T04:00:00.000Z',
+      pickupAddress: '100 rue Principale',
+      destinationAddress: '500 rue Universite',
+    });
+    (getPersonalDriverTripsForSubscription as jest.Mock).mockResolvedValue([]);
+
+    render(
+      <PersonalDriverPlansProvider>
+        <PersonalDriverClientDashboard />
+      </PersonalDriverPlansProvider>,
+    );
+
+    expect(await screen.findByText('Abonnement Forfait Premium Plus')).toBeVisible();
+    expect(screen.getByText('12 min / trajet')).toBeVisible();
+    expect(screen.getByText('Avantage Premium Plus dynamique')).toBeVisible();
+    expect(screen.getByText('Trajets Spéciaux Inclus (6 par période)')).toBeVisible();
+    expect(screen.getByText('1 / 6 utilisés')).toBeVisible();
+  });
+
   it('recovers a paid subscription whose activation marker is still pending', async () => {
     const staleSubscription = {
       id: 'sub_stale_activation',
@@ -243,6 +298,7 @@ describe('PersonalDriverClientDashboard Component', () => {
   });
 
   it('enables special trips only for an active paid package and shows exact persisted dates', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-15T12:00:00.000Z'));
     (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
       id: 'sub_active',
       userId: 'user_123',

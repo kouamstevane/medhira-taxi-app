@@ -14,7 +14,7 @@ const planLabels: Partial<Record<PersonalDriverPlan['id'], string>> = {
 
 export function PersonalDriverPlanCard({ plan }: PersonalDriverPlanCardProps) {
   const benefits = plan.benefits;
-  const badge = planLabels[plan.id];
+  const badge = (plan.badge ?? planLabels[plan.id])?.toLocaleUpperCase('fr-FR');
   const isClassic = plan.id === 'classic';
   const isPremium = plan.id === 'premium';
 

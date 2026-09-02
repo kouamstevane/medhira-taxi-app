@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { PersonalDriverConfigurator } from '@/app/personal-driver/components/PersonalDriverConfigurator';
-import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
+import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
 import type { PersonalDriverPlanId } from '@/types/personal-driver';
 
 function isPlanId(planId: string | null): planId is PersonalDriverPlanId {
@@ -13,9 +13,10 @@ function isPlanId(planId: string | null): planId is PersonalDriverPlanId {
 }
 
 function ConfigurerContent() {
+  const { plans, error, reload } = usePersonalDriverPlans();
   const searchParams = useSearchParams();
   const selectedPlanId = searchParams.get('plan');
-  const plan = PERSONAL_DRIVER_PLANS[isPlanId(selectedPlanId) ? selectedPlanId : 'basic'];
+  const plan = plans[isPlanId(selectedPlanId) ? selectedPlanId : 'basic'];
 
   return (
     <div className="min-h-screen bg-background pb-10 text-slate-100">
@@ -34,6 +35,14 @@ function ConfigurerContent() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-6">
+        {error && (
+          <div role="alert" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+            Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
+            <button type="button" onClick={() => void reload()} className="ml-3 font-bold underline underline-offset-4">
+              Réessayer
+            </button>
+          </div>
+        )}
         <p className="mb-6 text-sm leading-6 text-slate-400">
           Indiquez vos deplacements reguliers pour obtenir une estimation mensuelle adaptee a votre formule.
         </p>

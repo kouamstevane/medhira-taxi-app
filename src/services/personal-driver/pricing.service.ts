@@ -1,5 +1,6 @@
 import type {
   PersonalDriverPlanId,
+  PersonalDriverPlan,
   PersonalDriverPlanPrice,
   PersonalDriverPriceComparison,
   PersonalDriverPriceInput,
@@ -8,6 +9,7 @@ import { CURRENCY_CODE, CURRENCY_MAP, DEFAULT_LOCALE } from '@/utils/constants';
 import { PERSONAL_DRIVER_PLANS } from './plans';
 
 const PLAN_ORDER: PersonalDriverPlanId[] = ['basic', 'classic', 'premium'];
+type PersonalDriverPlanMap = Record<PersonalDriverPlanId, PersonalDriverPlan>;
 
 export function formatPersonalDriverCurrency(
   amount: number,
@@ -23,16 +25,18 @@ export function formatPersonalDriverCurrency(
 function isPlanEligible(
   planId: PersonalDriverPlanId,
   requestedWeekdays: PersonalDriverPriceInput['requestedWeekdays'],
+  plans: PersonalDriverPlanMap,
 ): boolean {
-  const allowedWeekdays = PERSONAL_DRIVER_PLANS[planId].allowedWeekdays;
+  const allowedWeekdays = plans[planId].allowedWeekdays;
   return requestedWeekdays.every((weekday) => allowedWeekdays.includes(weekday));
 }
 
 function calculatePlanPrice(
   planId: PersonalDriverPlanId,
   input: PersonalDriverPriceInput,
+  plans: PersonalDriverPlanMap,
 ): PersonalDriverPlanPrice {
-  const plan = PERSONAL_DRIVER_PLANS[planId];
+  const plan = plans[planId];
   const distanceAmount = input.monthlyDistanceKm * plan.pricePerKm;
   const isBelowMinimumBillableDistance = input.monthlyDistanceKm < plan.minimumBillableKm;
   const totalBeforeTax = isBelowMinimumBillableDistance
@@ -42,7 +46,7 @@ function calculatePlanPrice(
 
   return {
     planId,
-    isEligible: isPlanEligible(planId, input.requestedWeekdays),
+    isEligible: isPlanEligible(planId, input.requestedWeekdays, plans),
     pricePerKm: plan.pricePerKm,
     minimumAmount: plan.minimumAmount,
     minimumBillableKm: plan.minimumBillableKm,
@@ -55,9 +59,10 @@ function calculatePlanPrice(
 
 export function calculatePersonalDriverPrices(
   input: PersonalDriverPriceInput,
+  plansCatalogue: PersonalDriverPlanMap = PERSONAL_DRIVER_PLANS,
 ): PersonalDriverPriceComparison {
   const plans = PLAN_ORDER.reduce((result, planId) => {
-    result[planId] = calculatePlanPrice(planId, input);
+    result[planId] = calculatePlanPrice(planId, input, plansCatalogue);
     return result;
   }, {} as Record<PersonalDriverPlanId, PersonalDriverPlanPrice>);
 
@@ -80,7 +85,7 @@ export function calculatePersonalDriverPrices(
     monthlyDistanceKm: input.monthlyDistanceKm,
     plans,
     recommendedPlanId: recommendedPlan.planId,
-    recommendationReasons: [`${PERSONAL_DRIVER_PLANS[recommendedPlan.planId].name} offre le meilleur tarif pour votre besoin.`],
+    recommendationReasons: [`${plansCatalogue[recommendedPlan.planId].name} offre le meilleur tarif pour votre besoin.`],
   };
 }
 

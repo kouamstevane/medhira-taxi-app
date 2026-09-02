@@ -1,17 +1,26 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderToString } from 'react-dom/server';
+import PersonalDriverConfigurationPage from '../configurer/page';
+import { PersonalDriverPlansProvider } from '../PersonalDriverPlansProvider';
 import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import { PersonalDriverConfigurator } from './PersonalDriverConfigurator';
+import { getPersonalDriverPlans } from '@/services/personal-driver/plan-config.service';
 import {
   DISTANCE_ESTIMATE_ERROR_MESSAGE,
   estimateRoadDistanceKm,
 } from '@/services/personal-driver/distance.service';
 
 const mockPush = jest.fn();
+let mockSearchParams = new URLSearchParams();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => mockSearchParams,
+}));
+
+jest.mock('@/services/personal-driver/plan-config.service', () => ({
+  getPersonalDriverPlans: jest.fn(),
 }));
 
 jest.mock('@/app/taxi/components/AddressInput', () => ({
@@ -48,9 +57,25 @@ jest.mock('@/services/personal-driver/distance.service', () => ({
 
 const estimateRoadDistanceKmMock = jest.mocked(estimateRoadDistanceKm);
 
+const livePlans = {
+  ...PERSONAL_DRIVER_PLANS,
+  premium: {
+    ...PERSONAL_DRIVER_PLANS.premium,
+    name: 'Premium Plus',
+    minimumAmount: 800,
+    allowedWeekdays: [1, 2, 3, 4, 5] as const,
+  },
+};
+
 describe('PersonalDriverConfigurator', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSearchParams = new URLSearchParams();
+    (getPersonalDriverPlans as jest.Mock).mockResolvedValue({
+      plans: livePlans,
+      source: 'firestore',
+      error: null,
+    });
     sessionStorage.clear();
   });
 
@@ -77,6 +102,20 @@ describe('PersonalDriverConfigurator', () => {
   it('disables Saturday and Sunday for the Basic plan', () => {
     render(<PersonalDriverConfigurator plan={PERSONAL_DRIVER_PLANS.basic} />);
 
+    expect(screen.getByLabelText('Samedi')).toBeDisabled();
+    expect(screen.getByLabelText('Dimanche')).toBeDisabled();
+  });
+
+  it('uses the loaded plan on the configuration route', async () => {
+    mockSearchParams = new URLSearchParams('plan=premium');
+
+    render(
+      <PersonalDriverPlansProvider>
+        <PersonalDriverConfigurationPage />
+      </PersonalDriverPlansProvider>,
+    );
+
+    expect(await screen.findByText('FORMULE PREMIUM PLUS')).toBeVisible();
     expect(screen.getByLabelText('Samedi')).toBeDisabled();
     expect(screen.getByLabelText('Dimanche')).toBeDisabled();
   });
