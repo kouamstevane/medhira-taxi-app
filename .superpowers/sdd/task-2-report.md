@@ -3,236 +3,179 @@
 Status: complete
 
 Commit(s):
-- `de453a4118401be497d730d071ecef5c962d1a43` - `feat: add customer menu item customization UI`
+- `f90940e` - `feat: load personal driver plans in backend pricing`
 
-Files changed:
-- `src/components/food/CustomerMenuItemDetails.tsx`
-- `src/components/food/CustomerMenuItemCustomization.tsx`
-- `src/components/food/__tests__/CustomerMenuItemDetails.test.tsx`
-- `src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx`
+Changed files:
+- `functions/src/personalDriver/planConfig.ts`
+- `functions/src/personalDriver/__tests__/planConfig.test.ts`
+- `functions/src/personalDriver/pricing.ts`
+- `functions/src/personalDriver/__tests__/pricing.test.ts`
 
-Exact test commands and output:
+RED evidence:
 
-1. Red phase:
+1. Complete backend plan shape was missing.
 
-   Command:
+Command:
 
-   ```bash
-   npx jest src/components/food/__tests__/CustomerMenuItemDetails.test.tsx src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx --runInBand
-   ```
+```bash
+npm --prefix functions test -- --runInBand src/personalDriver/__tests__/planConfig.test.ts src/personalDriver/__tests__/pricing.test.ts
+```
 
-   Output:
+Output:
 
-   ```text
-   FAIL src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx
-     ● Test suite failed to run
+```text
+FAIL src/personalDriver/__tests__/planConfig.test.ts
+  personal driver backend plan config › includes the complete client-facing plan fields in backend defaults
 
-       Cannot find module '../CustomerMenuItemCustomization' from 'src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx'
+    expect(received).toMatchObject(expected)
 
-   FAIL src/components/food/__tests__/CustomerMenuItemDetails.test.tsx
-     ● Test suite failed to run
+    Expected object contained id/name/badge/promise/includedRegularWaitMinutes/benefits.
+    Received object only contained allowedWeekdays/includedSpecialTrips/minimumAmount/minimumBillableKm/pricePerKm.
 
-       Cannot find module '../CustomerMenuItemDetails' from 'src/components/food/__tests__/CustomerMenuItemDetails.test.tsx'
+Test Suites: 1 failed, 1 passed, 2 total
+Tests:       1 failed, 3 passed, 4 total
+Time:        15.318 s, estimated 17 s
+```
 
-   Test Suites: 2 failed, 2 total
-   Tests:       0 total
-   Snapshots:   0 total
-   Time:        4.893 s
-   Ran all test suites matching src/components/food/__tests__/CustomerMenuItemDetails.test.tsx|src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx.
-   ```
+2. Injected special-trip configuration was not exposed by backend price results.
 
-2. Green phase:
+Command:
 
-   Command:
+```bash
+npm --prefix functions test -- --runInBand src/personalDriver/__tests__/planConfig.test.ts src/personalDriver/__tests__/pricing.test.ts
+```
 
-   ```bash
-   npx jest src/components/food/__tests__/CustomerMenuItemDetails.test.tsx src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx --runInBand
-   ```
+Output:
 
-   Output:
+```text
+FAIL src/personalDriver/__tests__/pricing.test.ts
+  Test suite failed to run
 
-   ```text
-   Test Suites: 2 passed, 2 total
-   Tests:       3 passed, 3 total
-   Snapshots:   0 total
-   Time:        5.176 s
-   Ran all test suites matching src/components/food/__tests__/CustomerMenuItemDetails.test.tsx|src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx.
-   ```
+    src/personalDriver/__tests__/pricing.test.ts:39:33 - error TS2339:
+    Property 'includedSpecialTrips' does not exist on type 'PersonalDriverPlanPrice'.
+
+Test Suites: 1 failed, 1 passed, 2 total
+Tests:       2 passed, 2 total
+Time:        13.584 s, estimated 17 s
+```
+
+GREEN evidence:
+
+Command:
+
+```bash
+npm --prefix functions test -- --runInBand src/personalDriver/__tests__/planConfig.test.ts src/personalDriver/__tests__/pricing.test.ts
+```
+
+Output:
+
+```text
+Test Suites: 2 passed, 2 total
+Tests:       4 passed, 4 total
+Snapshots:   0 total
+Time:        15.806 s
+Ran all test suites matching src/personalDriver/__tests__/planConfig.test.ts|src/personalDriver/__tests__/pricing.test.ts.
+```
+
+Build evidence:
+
+Command:
+
+```bash
+npm --prefix functions run build
+```
+
+Output:
+
+```text
+> build
+> tsc
+```
+
+Result: exit code 0 in 29.1766 seconds.
 
 Self-review:
-- `CustomerMenuItemDetails` is a client-side details surface that loads the Task 1 contract on demand, shows the item image, description, allergen badges, optional nutrition, and keeps modifier groups visually separate from supplements.
-- `CustomerMenuItemCustomization` uses native radio and checkbox controls, enforces required-group completion plus multi-select maximums, and emits a normalized add-to-cart payload once the selection is valid.
-- The implementation stayed scoped to the four Task 2 component files so the V1 paginated catalog, current cart store, and unrelated worktree changes were not reworked.
+- Added `DEFAULT_PERSONAL_DRIVER_PLANS` with the full backend/client plan shape, including `id`, display text, included regular wait minutes, benefits, and `includedSpecialTrips`.
+- Added `getConfiguredPersonalDriverPlans(db)` to read fixed `personal_driver_plans` IDs through the Admin SDK, merge valid document fields over defaults, clone arrays, ignore unknown IDs, and fall back to defaults for missing, invalid, or failed reads.
+- Updated `calculatePersonalDriverPrices(input, plans)` so callers can inject a plan map and the returned plan price carries `includedSpecialTrips` from the selected configured plan.
+- Kept type re-exports from `pricing.ts` so existing backend imports continue to compile.
 
 Concerns:
-- The new details/customization components are not yet mounted from `MenuItemCard` or persisted into the existing cart store; this task delivered the focused UI building blocks and their tests, but not the next integration step.
-- The normalized payload currently fixes `quantity` at `1`, so Task 1 checkout rule metadata like `maxQuantity` is passed through for downstream validation but not enforced in this UI yet.
-- `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-5-report.md`, and `AGENTS.md` were already modified in the working tree before this task and were left untouched.
+- Existing create/renew subscription functions still import `SPECIAL_TRIP_LIMITS` from `pricing.ts`; this task was limited to the four owned files, so wiring those callable flows to fetch Firestore plans is not included here.
+- A repo-related Next dev server was visible during the final process check, but no hanging Jest, `tsc`, or `npm --prefix functions` test/build process was found.
+- Git reported CRLF normalization warnings while staging the four files.
 
----
-
-## Review Fix Follow-up (2026-08-19)
+## Task 2 Review Fix - 2026-09-02
 
 Status: complete
 
-Commit(s):
-- `5dd50eb851dc40ff5d4b97ac3e4a64ade3ed4c3e` - `fix: wire customer menu customization into cart flow`
+Reviewer finding fixed:
+- `functions/src/personalDriver/pricing.ts` now prices every configured plan with `Math.max(minimumAmount, monthlyDistanceKm * pricePerKm)` and no longer forces `minimumAmount` solely because `monthlyDistanceKm < minimumBillableKm`.
 
-Fixed review findings:
-- Wired `CustomerMenuItemDetails` into the live customer card flow through `MenuItemCard`, with legacy fallback back into the flat cart path when an item has no V2 metadata.
-- Reset customization state whenever the active item or loaded detail contract changes.
-- Carried `checkoutRules` through the customization payload, added quantity controls, enforced `maxQuantity`, and stored configured selections separately in the cart path.
+Changed files:
+- `functions/src/personalDriver/pricing.ts`
+- `functions/src/personalDriver/__tests__/pricing.test.ts`
+- `functions/src/personalDriver/__tests__/planConfig.test.ts`
+- `.superpowers/sdd/task-2-report.md`
 
-Files changed for the review-fix follow-up:
-- `src/components/food/MenuItemCard.tsx`
-- `src/components/food/CustomerMenuItemDetails.tsx`
-- `src/components/food/CustomerMenuItemCustomization.tsx`
-- `src/store/cartStore.ts`
-- `src/types/food-delivery.ts`
-- `src/components/food/__tests__/MenuItemCard.test.tsx`
-- `src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx`
-- `src/store/__tests__/cartStore.test.ts`
+RED evidence:
 
-Focused RED/GREEN evidence:
+Command:
 
-1. RED phase for the review-fix regressions
+```bash
+npm --prefix functions test -- --runInBand src/personalDriver/__tests__/planConfig.test.ts src/personalDriver/__tests__/pricing.test.ts
+```
 
-   Command:
+Output:
 
-   ```bash
-   npx jest src/components/food/__tests__/MenuItemCard.test.tsx src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx src/store/__tests__/cartStore.test.ts --runInBand
-   ```
+```text
+FAIL src/personalDriver/__tests__/pricing.test.ts
+  Personal Driver backend pricing › prices an injected plan from distance even when monthly distance is below minimum billable kilometers
 
-   Output:
+    Expected: 450
+    Received: 300
 
-   ```text
-   FAIL src/components/food/__tests__/MenuItemCard.test.tsx
-     ● MenuItemCard › opens the customer details flow and forwards customized selections into the cart path
-       Unable to find an element with the text: Détails de Burger signature.
+Test Suites: 1 failed, 1 passed, 2 total
+Tests:       1 failed, 5 passed, 6 total
+Time:        16.544 s
+```
 
-     ● MenuItemCard › falls back to the legacy add path for items without V2 metadata
-       Unable to find an accessible element with the role "button" and name "Ajouter en héritage"
+GREEN evidence:
 
-   FAIL src/store/__tests__/cartStore.test.ts
-     ● cartStore › keeps legacy items flat and stores configured selections with their checkout rules as separate cart lines
-       TypeError: useCartStore.getState(...).addCustomizedItem is not a function
+Command:
 
-   FAIL src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx
-     ● CustomerMenuItemCustomization › resets previous selections and validation when the active item changes
-       expect(element).not.toBeChecked()
+```bash
+npm --prefix functions test -- --runInBand src/personalDriver/__tests__/planConfig.test.ts src/personalDriver/__tests__/pricing.test.ts
+```
 
-     ● CustomerMenuItemCustomization › enforces checkout quantity rules and includes them in the add-to-cart payload
-       Unable to find an element with the text: Quantité maximale : 2.
+Output:
 
-   Test Suites: 3 failed, 3 total
-   Tests:       5 failed, 2 passed, 7 total
-   Snapshots:   0 total
-   Time:        5.869 s
-   Ran all test suites matching src/components/food/__tests__/MenuItemCard.test.tsx|src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx|src/store/__tests__/cartStore.test.ts.
-   ```
+```text
+Test Suites: 2 passed, 2 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+Time:        16.275 s
+```
 
-2. GREEN phase for the same focused regressions
+Build evidence:
 
-   Command:
+Command:
 
-   ```bash
-   npx jest src/components/food/__tests__/MenuItemCard.test.tsx src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx src/store/__tests__/cartStore.test.ts --runInBand
-   ```
+```bash
+npm --prefix functions run build
+```
 
-   Output:
+Output:
 
-   ```text
-   Test Suites: 3 passed, 3 total
-   Tests:       7 passed, 7 total
-   Snapshots:   0 total
-   Time:        7.155 s
-   Ran all test suites matching src/components/food/__tests__/MenuItemCard.test.tsx|src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx|src/store/__tests__/cartStore.test.ts.
-   ```
+```text
+> build
+> tsc
+```
 
-3. Supplemental safety pass on adjacent food-menu specs
+Result: exit code 0.
 
-   Command:
+Additional coverage:
+- Added a focused `planConfig` regression test where an invalid Premium Firestore document with `pricePerKm: -1` falls back to `DEFAULT_PERSONAL_DRIVER_PLANS.premium` instead of partially applying the override.
 
-   ```bash
-   npx jest src/components/food/__tests__/MenuItemCard.test.tsx src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx src/components/food/__tests__/CustomerMenuItemDetails.test.tsx src/components/food/__tests__/RestaurantMenuList.test.tsx src/store/__tests__/cartStore.test.ts --runInBand
-   ```
-
-   Output:
-
-   ```text
-   Test Suites: 5 passed, 5 total
-   Tests:       9 passed, 9 total
-   Snapshots:   0 total
-   Time:        7.774 s, estimated 8 s
-   Ran all test suites matching src/components/food/__tests__/MenuItemCard.test.tsx|src/components/food/__tests__/CustomerMenuItemCustomization.test.tsx|src/components/food/__tests__/CustomerMenuItemDetails.test.tsx|src/components/food/__tests__/RestaurantMenuList.test.tsx|src/store/__tests__/cartStore.test.ts.
-   ```
-
-Working tree note:
-- `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-5-report.md`, and `AGENTS.md` were already dirty before this follow-up and were intentionally left untouched.
-
----
-
-## Task 2 Legacy Cart Fix Follow-up (2026-08-19)
-
-Status: complete
-
-Commit(s):
-- `d9aec43411358f3a862ce1431b1530482f9f86d0` - `fix: handle duplicate legacy cart items`
-
-Fixed review finding:
-- Corrected the legacy-item branch in `src/store/cartStore.ts` so duplicate legacy menu items increment quantity instead of throwing on the non-matching cart line.
-
-Files changed for this follow-up:
-- `src/store/cartStore.ts`
-- `src/store/__tests__/cartStore.test.ts`
-
-Focused RED/GREEN evidence:
-
-1. RED phase
-
-   Command:
-
-   ```bash
-   npx jest src/store/__tests__/cartStore.test.ts --runInBand
-   ```
-
-   Output:
-
-   ```text
-   FAIL src/store/__tests__/cartStore.test.ts
-     ● cartStore › increments the quantity when the same legacy item is added twice
-
-       ReferenceError: i is not defined
-
-     at i (src/store/cartStore.ts:73:21)
-         at Array.map (<anonymous>)
-         at map (src/store/cartStore.ts:70:34)
-         at setState (node_modules/zustand/vanilla.js:7:55)
-         at node_modules/zustand/middleware.js:372:7
-         at Object.set [as addItem] (src/store/cartStore.ts:58:9)
-         at Object.addItem (src/store/__tests__/cartStore.test.ts:95:29)
-
-   Test Suites: 1 failed, 1 total
-   Tests:       1 failed, 1 passed, 2 total
-   ```
-
-2. GREEN phase
-
-   Command:
-
-   ```bash
-   npx jest src/store/__tests__/cartStore.test.ts src/components/food/__tests__/MenuItemCard.test.tsx src/components/food/__tests__/CartDrawer.test.tsx --runInBand
-   ```
-
-   Output:
-
-   ```text
-   Test Suites: 3 passed, 3 total
-   Tests:       6 passed, 6 total
-   Snapshots:   0 total
-   Time:        5.021 s
-   Ran all test suites matching src\store\__tests__\cartStore.test.ts|src\components\food\__tests__\MenuItemCard.test.tsx|src\components\food\__tests__\CartDrawer.test.tsx.
-   ```
-
-Working tree note:
-- `.superpowers/sdd/task-1-report.md`, `.superpowers/sdd/task-5-report.md`, and `AGENTS.md` were already dirty before this follow-up and were intentionally left untouched.
+Concerns:
+- None for this review fix.

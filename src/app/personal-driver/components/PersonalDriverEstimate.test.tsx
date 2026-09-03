@@ -138,6 +138,7 @@ describe('PersonalDriverEstimate', () => {
     expect(parsePersonalDriverConfiguration({ ...configuration, weekdays: [] })).toBeNull();
     expect(parsePersonalDriverConfiguration({ ...configuration, weekdays: [1, 7] })).toBeNull();
     expect(parsePersonalDriverConfiguration({ ...configuration, monthlyDistanceKm: 0 })).toBeNull();
+
     expect(parsePersonalDriverConfiguration({ ...configuration, tripType: 'round_trip', returnTime: '' })).toBeNull();
     expect(parsePersonalDriverConfiguration({ ...configuration, pickupAddress: 123 })).toBeNull();
     expect(parsePersonalDriverConfiguration({ ...configuration, planId: 'stale' })).toBeNull();
@@ -162,5 +163,23 @@ describe('PersonalDriverEstimate', () => {
 
     await waitFor(() => expect(sessionStorage.getItem('medjira.personalDriver.config.v1')).toBeNull());
     expect(screen.getByRole('heading', { name: 'Votre trajet est introuvable' })).toBeVisible();
+  });
+
+  it('renders the estimation after mounting when valid session configuration is present', async () => {
+    sessionStorage.setItem(
+      'medjira.personalDriver.config.v1',
+      JSON.stringify(configuration),
+    );
+
+    render(<PersonalDriverEstimationPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Votre estimation' })).toBeVisible();
+    expect(screen.getByText('Estimation indicative')).toBeVisible();
+  });
+
+  it('renders the missing trajectory screen after mounting when no session configuration exists', async () => {
+    render(<PersonalDriverEstimationPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Votre trajet est introuvable' })).toBeVisible();
   });
 });

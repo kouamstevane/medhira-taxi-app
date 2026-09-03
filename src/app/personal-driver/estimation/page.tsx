@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -11,26 +11,42 @@ import { PersonalDriverEstimate } from '@/app/personal-driver/components/Persona
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { parsePersonalDriverConfiguration } from './parsePersonalDriverConfiguration';
 
-function readStoredPersonalDriverConfiguration(): PersonalDriverConfiguration | null {
-  if (typeof window === 'undefined') return null;
+const emptySubscribe = () => () => {};
 
+function getStoredSnapshot(): string | null {
+  if (typeof window === 'undefined') return null;
   try {
-    const storedConfiguration = sessionStorage.getItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
-    const parsedConfiguration: unknown = storedConfiguration ? JSON.parse(storedConfiguration) : null;
-    const validConfiguration = parsePersonalDriverConfiguration(parsedConfiguration);
-    if (validConfiguration) return validConfiguration;
-    if (storedConfiguration) {
-      sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
-    }
+    return sessionStorage.getItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
   } catch {
-    sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+    return null;
   }
+}
+
+function getServerSnapshot(): null {
   return null;
 }
 
 export default function PersonalDriverEstimationPage() {
   const router = useRouter();
-  const [configuration] = useState<PersonalDriverConfiguration | null>(readStoredPersonalDriverConfiguration);
+  const rawStored = useSyncExternalStore(emptySubscribe, getStoredSnapshot, getServerSnapshot);
+
+  const configuration = useMemo<PersonalDriverConfiguration | null>(() => {
+    if (!rawStored) return null;
+    try {
+      const parsed: unknown = JSON.parse(rawStored);
+      const valid = parsePersonalDriverConfiguration(parsed);
+      if (valid) return valid;
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+      }
+      return null;
+    } catch {
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+      }
+      return null;
+    }
+  }, [rawStored]);
 
   if (!configuration) {
     return (
