@@ -170,16 +170,42 @@ export function PersonalDriverPlansEditor() {
   const [savingPlanId, setSavingPlanId] = useState<PersonalDriverPlanId | null>(null);
   const [errors, setErrors] = useState<Partial<Record<PersonalDriverPlanId, PlanErrors>>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  async function loadPlans(showLoading = true) {
+  async function loadPlans(
+    showLoading = true,
+    options?: {
+      preserveCurrentStateOnError?: boolean;
+      planId?: PersonalDriverPlanId;
+      normalizedPlan?: PersonalDriverPlan;
+    },
+  ) {
     if (showLoading) {
       setLoading(true);
     }
     setLoadError(null);
+    setSyncWarning(null);
 
     try {
       const result = await getPersonalDriverPlans();
+      if (result.error && options?.preserveCurrentStateOnError) {
+        const { planId, normalizedPlan } = options;
+        if (!planId || !normalizedPlan) {
+          return;
+        }
+
+        setDrafts((current) => ({
+          ...current,
+          [planId]: clonePlan(normalizedPlan),
+        }));
+        setSavedPlans((current) => ({
+          ...current,
+          [planId]: clonePlan(normalizedPlan),
+        }));
+        setSyncWarning('La synchronisation avec Firestore a échoué après l’enregistrement. Le forfait enregistré a été conservé.');
+        return;
+      }
       const nextPlans = clonePlans(result.plans);
       setDrafts(nextPlans);
       setSavedPlans(clonePlans(result.plans));
@@ -222,6 +248,7 @@ export function PersonalDriverPlansEditor() {
         form: undefined,
       },
     }));
+    setSyncWarning(null);
     setStatus(null);
   };
 
@@ -252,6 +279,7 @@ export function PersonalDriverPlansEditor() {
       [planId]: clonePlan(savedPlans[planId]),
     }));
     setErrors((current) => ({ ...current, [planId]: {} }));
+    setSyncWarning(null);
     setStatus(null);
   };
 
@@ -266,6 +294,7 @@ export function PersonalDriverPlansEditor() {
     const normalizedPlan = normalizePlan(plan);
     setSavingPlanId(planId);
     setErrors((current) => ({ ...current, [planId]: {} }));
+    setSyncWarning(null);
     setStatus(null);
 
     try {
@@ -274,7 +303,11 @@ export function PersonalDriverPlansEditor() {
         action: 'updatePlan',
         plan: normalizedPlan,
       });
-      await loadPlans(false);
+      await loadPlans(false, {
+        preserveCurrentStateOnError: true,
+        planId,
+        normalizedPlan,
+      });
       setStatus(`Forfait ${normalizedPlan.name} enregistré.`);
     } catch (error: unknown) {
       setErrors((current) => ({
@@ -312,6 +345,11 @@ export function PersonalDriverPlansEditor() {
       {status && (
         <div role="status" className="mb-4 rounded-lg border border-primary/30 bg-primary/10 p-3 text-xs font-semibold text-primary">
           {status}
+        </div>
+      )}
+      {syncWarning && (
+        <div role="status" className="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs font-semibold text-amber-100">
+          {syncWarning}
         </div>
       )}
 

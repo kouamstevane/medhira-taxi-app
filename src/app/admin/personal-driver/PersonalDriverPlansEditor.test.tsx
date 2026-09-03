@@ -125,6 +125,45 @@ describe('PersonalDriverPlansEditor', () => {
     expect(screen.queryByText('Mise à jour serveur')).not.toBeInTheDocument();
   });
 
+  it('keeps the saved Premium draft and audit metadata when a post-save reload falls back', async () => {
+    const user = userEvent.setup();
+    (getPersonalDriverPlans as jest.Mock)
+      .mockResolvedValueOnce({
+        plans: livePlans,
+        source: 'firestore',
+        error: null,
+        audit: {
+          premium: {
+            updatedAt: '2026-08-31T10:20:00.000Z',
+            updatedBy: 'admin_1',
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        plans: PERSONAL_DRIVER_PLANS,
+        source: 'fallback',
+        error: new Error('Firestore unavailable'),
+      });
+
+    render(<PersonalDriverPlansEditor />);
+
+    const premiumCard = within(await screen.findByRole('group', { name: 'Forfait Premium Plus' }));
+    const minimumAmount = premiumCard.getByRole('spinbutton', { name: 'Montant minimum' });
+    await user.clear(minimumAmount);
+    await user.type(minimumAmount, '800');
+    await user.click(premiumCard.getByRole('button', { name: 'Enregistrer Premium Plus' }));
+
+    await waitFor(() => expect(callableMock).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/synchronisation.*Firestore/i)).toBeVisible();
+    expect(minimumAmount).toHaveValue(800);
+    expect(premiumCard.getByText(/admin_1/i)).toBeVisible();
+    expect(premiumCard.getByText(/31\/08\/2026/i)).toBeVisible();
+
+    await user.clear(minimumAmount);
+    await user.type(minimumAmount, '801');
+    expect(premiumCard.getByRole('button', { name: 'Enregistrer Premium Plus' })).toBeEnabled();
+  });
+
   it('preserves the edited draft and shows a French alert when saving fails', async () => {
     callableMock.mockRejectedValueOnce({ code: 'functions/unavailable' });
     const user = userEvent.setup();
