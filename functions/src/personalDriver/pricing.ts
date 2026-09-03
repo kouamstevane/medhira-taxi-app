@@ -62,7 +62,7 @@ export function calculatePersonalDriverPrices(input: {
       includedSpecialTrips: plan.includedSpecialTrips,
       distanceAmount,
       totalBeforeTax,
-      minimumApplied: distanceAmount <= minimumAmount,
+      minimumApplied: distanceAmount < minimumAmount,
       savingsComparedToBasic: 0,
     };
     return result;

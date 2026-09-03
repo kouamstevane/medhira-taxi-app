@@ -63,4 +63,14 @@ describe('Personal Driver backend pricing', () => {
 
     expect(result.plans.premium.totalBeforeTax).toBe(450);
   });
+
+  it('does not mark the minimum as applied when distance equals the minimum amount', () => {
+    const result = calculatePersonalDriverPrices({
+      monthlyDistanceKm: 200,
+      requestedWeekdays: [1, 2, 3, 4, 5],
+    });
+
+    expect(result.plans.basic.totalBeforeTax).toBe(300);
+    expect(result.plans.basic.minimumApplied).toBe(false);
+  });
 });
