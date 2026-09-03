@@ -6,19 +6,18 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { functions } from '@/config/firebase';
 import { getPersonalDriverPlans } from '@/services/personal-driver/plan-config.service';
 import { PERSONAL_DRIVER_PLAN_IDS, PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
-import type { PersonalDriverPlan, PersonalDriverPlanId, PersonalDriverWeekday } from '@/types/personal-driver';
+import type {
+  PersonalDriverPlan,
+  PersonalDriverPlanAudit,
+  PersonalDriverPlanId,
+  PersonalDriverWeekday,
+} from '@/types/personal-driver';
 import { getUserFacingCallableError } from '@/utils/callable-error';
 
 type PlanDrafts = Record<PersonalDriverPlanId, PersonalDriverPlan>;
 type PlanErrors = Partial<Record<keyof PersonalDriverPlan | 'form', string>>;
-type PlanAudit = {
-  updatedAt?: string | Date | { toDate: () => Date };
-  updatedBy?: string;
-};
-type PlansAuditMap = Partial<Record<PersonalDriverPlanId, PlanAudit>>;
-type PlansLoaderResultWithAudit = Awaited<ReturnType<typeof getPersonalDriverPlans>> & {
-  audit?: PlansAuditMap;
-};
+type PlanAudit = PersonalDriverPlanAudit;
+type PlansAuditMap = Partial<Record<PersonalDriverPlanId, PersonalDriverPlanAudit>>;
 
 const weekdays: Array<{ id: PersonalDriverWeekday; label: string }> = [
   { id: 1, label: 'Lundi' },
@@ -60,14 +59,14 @@ function clonePlans(plans: PlanDrafts = PERSONAL_DRIVER_PLANS): PlanDrafts {
 }
 
 function getPlanAudit(plan: PersonalDriverPlan): PlanAudit {
-  const candidate = plan as PersonalDriverPlan & PlanAudit;
+  const candidate = plan as PersonalDriverPlan & PersonalDriverPlanAudit;
   return {
     updatedAt: candidate.updatedAt,
     updatedBy: candidate.updatedBy,
   };
 }
 
-function getAuditMap(result: PlansLoaderResultWithAudit): PlansAuditMap {
+function getAuditMap(result: Awaited<ReturnType<typeof getPersonalDriverPlans>>): PlansAuditMap {
   return PERSONAL_DRIVER_PLAN_IDS.reduce((audit, planId) => {
     audit[planId] = result.audit?.[planId] ?? getPlanAudit(result.plans[planId]);
     return audit;
@@ -137,6 +136,8 @@ function validatePlan(plan: PersonalDriverPlan): PlanErrors {
 
   if (plan.minimumBillableKm <= 0) {
     errors.minimumBillableKm = 'La distance minimum facturable doit être supérieure à 0.';
+  } else if (plan.minimumBillableKm > 100000) {
+    errors.minimumBillableKm = 'La distance minimum facturable doit rester inférieure ou égale à 100000.';
   }
   if (plan.pricePerKm > 1000) errors.pricePerKm = 'Le prix par km doit rester inférieur ou égal à 1000.';
   if (plan.minimumAmount > 1000000) errors.minimumAmount = 'Le montant minimum doit rester inférieur ou égal à 1000000.';
@@ -171,15 +172,14 @@ export function PersonalDriverPlansEditor() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadPlans() {
+  async function loadPlans(showLoading = true) {
+    if (showLoading) {
       setLoading(true);
-      setLoadError(null);
-      const result = await getPersonalDriverPlans() as PlansLoaderResultWithAudit;
-      if (!mounted) return;
+    }
+    setLoadError(null);
 
+    try {
+      const result = await getPersonalDriverPlans();
       const nextPlans = clonePlans(result.plans);
       setDrafts(nextPlans);
       setSavedPlans(clonePlans(result.plans));
@@ -187,18 +187,15 @@ export function PersonalDriverPlansEditor() {
       if (result.error) {
         setLoadError('Les forfaits par défaut sont affichés car le catalogue n’a pas pu être chargé.');
       }
+    } catch (error: unknown) {
+      setLoadError(`Impossible de charger les forfaits : ${getUserFacingCallableError(error)}`);
+    } finally {
       setLoading(false);
     }
+  }
 
-    void loadPlans().catch((error: unknown) => {
-      if (!mounted) return;
-      setLoadError(`Impossible de charger les forfaits : ${getUserFacingCallableError(error)}`);
-      setLoading(false);
-    });
-
-    return () => {
-      mounted = false;
-    };
+  useEffect(() => {
+    void loadPlans();
   }, []);
 
   const changedPlanIds = useMemo(() => PERSONAL_DRIVER_PLAN_IDS.filter(
@@ -277,15 +274,7 @@ export function PersonalDriverPlansEditor() {
         action: 'updatePlan',
         plan: normalizedPlan,
       });
-      setDrafts((current) => ({ ...current, [planId]: clonePlan(normalizedPlan) }));
-      setSavedPlans((current) => ({ ...current, [planId]: clonePlan(normalizedPlan) }));
-      setAudit((current) => ({
-        ...current,
-        [planId]: {
-          updatedAt: new Date(),
-          updatedBy: 'Mise à jour serveur',
-        },
-      }));
+      await loadPlans(false);
       setStatus(`Forfait ${normalizedPlan.name} enregistré.`);
     } catch (error: unknown) {
       setErrors((current) => ({

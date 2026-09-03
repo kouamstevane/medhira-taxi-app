@@ -1,6 +1,7 @@
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import type {
+  PersonalDriverPlanAudit,
   PersonalDriverPlan,
   PersonalDriverPlanDocument,
   PersonalDriverPlanId,
@@ -61,6 +62,16 @@ function clonePersonalDriverPlans(plans: Record<PersonalDriverPlanId, PersonalDr
     result[planId] = clonePersonalDriverPlan(plans[planId]);
     return result;
   }, {} as Record<PersonalDriverPlanId, PersonalDriverPlan>);
+}
+
+function readPlanAudit(raw: PersonalDriverPlanDocument | undefined): PersonalDriverPlanAudit | undefined {
+  if (!raw) return undefined;
+
+  const audit: PersonalDriverPlanAudit = {};
+  if ('updatedAt' in raw) audit.updatedAt = raw.updatedAt;
+  if ('updatedBy' in raw) audit.updatedBy = raw.updatedBy;
+
+  return Object.keys(audit).length > 0 ? audit : undefined;
 }
 
 function readPlanData(planId: PersonalDriverPlanId, raw: PersonalDriverPlanDocument | undefined): PersonalDriverPlan | null {
@@ -159,10 +170,19 @@ export async function getPersonalDriverPlans(): Promise<PersonalDriverPlansResul
       return result;
     }, {} as Record<PersonalDriverPlanId, PersonalDriverPlan>);
 
+    const audit = PERSONAL_DRIVER_PLAN_IDS.reduce((result, planId) => {
+      const planAudit = readPlanAudit(docsById.get(planId));
+      if (planAudit) {
+        result[planId] = planAudit;
+      }
+      return result;
+    }, {} as Partial<Record<PersonalDriverPlanId, PersonalDriverPlanAudit>>);
+
     return {
       plans: clonePersonalDriverPlans(plans),
       source: 'firestore',
       error: null,
+      audit: Object.keys(audit).length > 0 ? audit : undefined,
     };
   } catch (error) {
     return {

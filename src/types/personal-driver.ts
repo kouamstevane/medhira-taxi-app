@@ -59,10 +59,16 @@ export interface PersonalDriverPlanDocument {
   updatedBy?: string;
 }
 
+export interface PersonalDriverPlanAudit {
+  updatedAt?: string | Date | { toDate: () => Date };
+  updatedBy?: string;
+}
+
 export interface PersonalDriverPlansResult {
   plans: Record<PersonalDriverPlanId, PersonalDriverPlan>;
   source: 'firestore' | 'fallback';
   error: Error | null;
+  audit?: Partial<Record<PersonalDriverPlanId, PersonalDriverPlanAudit>>;
 }
 
 export interface PersonalDriverPriceInput {

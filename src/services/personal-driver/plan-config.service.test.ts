@@ -2,6 +2,10 @@ import { PERSONAL_DRIVER_PLANS } from './plans';
 
 const mockDoc = jest.fn((...path: unknown[]) => ({ path }));
 const mockGetDoc = jest.fn();
+type LoaderAudit = {
+  updatedAt?: string | Date | { toDate: () => Date };
+  updatedBy?: string;
+};
 
 jest.mock('firebase/firestore', () => ({
   doc: (...args: unknown[]) => mockDoc(...args),
@@ -147,6 +151,34 @@ describe('personal driver plan catalogue loader', () => {
     expect(result.plans.classic.minimumAmount).toBe(475);
     expect(result.plans.basic).toEqual(PERSONAL_DRIVER_PLANS.basic);
     expect(result.plans.premium).toEqual(PERSONAL_DRIVER_PLANS.premium);
+  });
+
+  it('preserves Firestore audit metadata on the returned catalogue result', async () => {
+    mockGetDoc
+      .mockResolvedValueOnce(mockMissingSnapshot('basic'))
+      .mockResolvedValueOnce(mockMissingSnapshot('classic'))
+      .mockResolvedValueOnce(mockPlanSnapshot('premium', {
+        name: 'Premium Plus',
+        minimumAmount: 800,
+        updatedAt: '2026-08-31T10:20:00.000Z',
+        updatedBy: 'admin_1',
+      }));
+
+    const { getPersonalDriverPlans } = await import('./plan-config.service');
+    const result = await getPersonalDriverPlans() as Awaited<ReturnType<typeof getPersonalDriverPlans>> & { audit?: Partial<Record<string, LoaderAudit>> };
+
+    expectFixedPlanDocumentReads();
+    expect(result.source).toBe('firestore');
+    expect(result.error).toBeNull();
+    expect(result.audit?.premium).toEqual({
+      updatedAt: '2026-08-31T10:20:00.000Z',
+      updatedBy: 'admin_1',
+    });
+    expect(result.plans.premium).toMatchObject({
+      ...PERSONAL_DRIVER_PLANS.premium,
+      name: 'Premium Plus',
+      minimumAmount: 800,
+    });
   });
 
   it('returns static plans, fallback source, and an error when the Firestore read fails', async () => {

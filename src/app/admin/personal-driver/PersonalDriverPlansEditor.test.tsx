@@ -73,6 +73,36 @@ describe('PersonalDriverPlansEditor', () => {
 
   it('saves the full edited Premium plan after changing its minimum amount', async () => {
     const user = userEvent.setup();
+    (getPersonalDriverPlans as jest.Mock)
+      .mockResolvedValueOnce({
+        plans: livePlans,
+        source: 'firestore',
+        error: null,
+        audit: {
+          premium: {
+            updatedAt: '2026-08-31T10:20:00.000Z',
+            updatedBy: 'admin_1',
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        plans: {
+          ...livePlans,
+          premium: {
+            ...livePlans.premium,
+            minimumAmount: 800,
+          },
+        },
+        source: 'firestore',
+        error: null,
+        audit: {
+          premium: {
+            updatedAt: '2026-09-01T09:45:00.000Z',
+            updatedBy: 'admin_server',
+          },
+        },
+      });
+
     render(<PersonalDriverPlansEditor />);
 
     const premiumCard = within(await screen.findByRole('group', { name: 'Forfait Premium Plus' }));
@@ -89,7 +119,10 @@ describe('PersonalDriverPlansEditor', () => {
         minimumAmount: 800,
       },
     });
-    expect(await screen.findByRole('status')).toHaveTextContent(/Forfait Premium Plus enregistré/i);
+    await waitFor(() => expect(getPersonalDriverPlans).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/01\/09\/2026/i)).toBeVisible();
+    expect(await screen.findByText(/admin_server/i)).toBeVisible();
+    expect(screen.queryByText('Mise à jour serveur')).not.toBeInTheDocument();
   });
 
   it('preserves the edited draft and shows a French alert when saving fails', async () => {
@@ -116,6 +149,19 @@ describe('PersonalDriverPlansEditor', () => {
     await user.click(basicCard.getByRole('button', { name: 'Enregistrer Basic' }));
 
     expect(await basicCard.findByRole('alert')).toHaveTextContent(/Le nom est obligatoire/i);
+    expect(callableMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a minimum billable distance above 100000 before calling the callable', async () => {
+    const user = userEvent.setup();
+    render(<PersonalDriverPlansEditor />);
+
+    const premiumCard = within(await screen.findByRole('group', { name: 'Forfait Premium Plus' }));
+    await user.clear(premiumCard.getByRole('spinbutton', { name: 'Distance minimum facturable' }));
+    await user.type(premiumCard.getByRole('spinbutton', { name: 'Distance minimum facturable' }), '100001');
+    await user.click(premiumCard.getByRole('button', { name: 'Enregistrer Premium Plus' }));
+
+    expect(await premiumCard.findByRole('alert')).toHaveTextContent(/100000/i);
     expect(callableMock).not.toHaveBeenCalled();
   });
 
