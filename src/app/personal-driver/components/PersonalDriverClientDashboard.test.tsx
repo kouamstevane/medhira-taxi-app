@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PersonalDriverClientDashboard } from './PersonalDriverClientDashboard';
 import { PersonalDriverPlansProvider } from '../PersonalDriverPlansProvider';
 import { getPersonalDriverPlans } from '@/services/personal-driver/plan-config.service';
@@ -55,6 +55,8 @@ const livePlans = {
 
 describe('PersonalDriverClientDashboard Component', () => {
   beforeEach(() => {
+    cleanup();
+    jest.useRealTimers();
     jest.resetAllMocks();
     (getPersonalDriverPlans as jest.Mock).mockResolvedValue({
       plans: livePlans,
@@ -412,7 +414,6 @@ describe('PersonalDriverClientDashboard Component', () => {
   });
 
   it('shows authoritative special-trip quotas and clears them before a later request', async () => {
-    jest.useFakeTimers().setSystemTime(new Date('2026-08-04T12:00:00.000Z'));
     (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
       id: 'sub_active',
       userId: 'user_123',
@@ -422,10 +423,10 @@ describe('PersonalDriverClientDashboard Component', () => {
       monthlyDistanceKm: 50,
       monthlyDistanceKmRemaining: 50,
       specialTripsUsed: 0,
-      periodStartDate: '2026-08-01',
-      periodEndDateExclusive: '2026-09-01',
-      periodStartAtUtc: '2026-08-01T00:00:00.000Z',
-      periodEndAtUtc: '2026-09-01T00:00:00.000Z',
+      periodStartDate: '2026-01-01',
+      periodEndDateExclusive: '2026-12-31',
+      periodStartAtUtc: '2026-01-01T00:00:00.000Z',
+      periodEndAtUtc: '2026-12-31T00:00:00.000Z',
       pickupAddress: '100 rue Principale',
       destinationAddress: '500 rue Universite',
     });
