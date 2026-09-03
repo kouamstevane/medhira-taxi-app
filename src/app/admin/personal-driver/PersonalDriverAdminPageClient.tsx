@@ -7,6 +7,7 @@ import { db, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { getUserFacingCallableError } from '@/utils/callable-error';
 import type { PersonalDriverSubscription, PersonalDriverTrip } from '@/types/personal-driver';
+import { PersonalDriverPlansEditor } from './PersonalDriverPlansEditor';
 
 type SubscriptionRow = Partial<PersonalDriverSubscription> & { id: string };
 type TripRow = Partial<PersonalDriverTrip> & { id: string };
@@ -151,6 +152,8 @@ export function PersonalDriverAdminPageClient() {
           Suivi des abonnements, affectations de la flotte et gestion des alertes d'urgence.
         </p>
       </div>
+
+      <PersonalDriverPlansEditor />
 
       {message && (
         <div className="rounded-xl border border-primary/30 bg-primary/10 p-4 text-xs font-semibold text-primary">
