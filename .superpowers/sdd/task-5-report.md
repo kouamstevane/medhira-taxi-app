@@ -84,3 +84,12 @@ These were not run because the user interrupted before the focused Jest suite wa
 - The dashboard test file has remaining order-sensitive failures. Affected tests pass in isolation but fail after earlier dashboard cases, which suggests a test cleanup or fake timer/mock leak still needs correction.
 - `src/services/personal-driver/pricing.service.ts` is not in the brief's explicit file list, but the brief also requires passing the live map to the pure estimate calculator. This small service signature change was necessary for live estimate calculations.
 - Lint and typecheck have not been run after implementation.
+
+## Pricing regression fix
+
+- Added a regression test in `src/services/personal-driver/pricing.service.test.ts` for an injected plan with `minimumAmount: 300`, `pricePerKm: 1.5`, `minimumBillableKm: 500`, and `monthlyDistanceKm: 300`.
+- The test failed first as expected: `totalBeforeTax` was `300` because the obsolete minimum-billable-distance branch still clamped the result.
+- Updated `src/services/personal-driver/pricing.service.ts` to use `Math.max(distanceAmount, minimumAmount)` directly and set `minimumApplied` from `distanceAmount < minimumAmount`.
+- Verified the focused pricing suite passed: `npx jest src/services/personal-driver/pricing.service.test.ts --runInBand`.
+- Ran the broader Personal Driver Jest scope: `npx jest src/app/personal-driver src/services/personal-driver --runInBand`.
+- Result: the pricing suite passed, but the broader scope still has 3 pre-existing `PersonalDriverClientDashboard` failures unrelated to this pricing change.
