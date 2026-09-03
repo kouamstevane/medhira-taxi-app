@@ -472,6 +472,7 @@ export const renewPersonalDriverSubscriptionPayment = onCall(
         userId,
         sourceSubscriptionId,
         selectedPlanId,
+        planSnapshot: selectedPlan,
         pickupAddress,
         destinationAddress,
         tripType,

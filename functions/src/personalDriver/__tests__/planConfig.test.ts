@@ -60,6 +60,48 @@ describe('personal driver backend plan config', () => {
     expect(plans.premium).toEqual(DEFAULT_PERSONAL_DRIVER_PLANS.premium);
   });
 
+  it.each([
+    ['name', { name: 'x'.repeat(81) }],
+    ['badge', { badge: 'x'.repeat(81) }],
+    ['promise', { promise: 'x'.repeat(201) }],
+    ['pricePerKm', { pricePerKm: 1000.01 }],
+    ['minimumBillableKm', { minimumBillableKm: 100001 }],
+    ['minimumAmount', { minimumAmount: 1000000.01 }],
+    ['includedRegularWaitMinutes', { includedRegularWaitMinutes: 1441 }],
+    ['includedSpecialTrips', { includedSpecialTrips: 101 }],
+    ['benefits', { benefits: ['x'.repeat(201)] }],
+  ])('falls back completely when %s exceeds the server bound', async (_field, invalidField) => {
+    mockGet.mockResolvedValue({ docs: [{ id: 'basic', data: () => invalidField }] });
+
+    const { getConfiguredPersonalDriverPlans, DEFAULT_PERSONAL_DRIVER_PLANS } = require('../planConfig');
+    const plans = await getConfiguredPersonalDriverPlans();
+
+    expect(plans.basic).toEqual(DEFAULT_PERSONAL_DRIVER_PLANS.basic);
+  });
+
+  it('allows an empty badge while trimming valid bounded values', async () => {
+    mockGet.mockResolvedValue({
+      docs: [{ id: 'basic', data: () => ({
+        name: '  Basic historique  ',
+        badge: '   ',
+        promise: '  Promesse  ',
+        allowedWeekdays: [1, 2],
+        benefits: ['  Avantage  '],
+      }) }],
+    });
+
+    const { getConfiguredPersonalDriverPlans } = require('../planConfig');
+    const plans = await getConfiguredPersonalDriverPlans();
+
+    expect(plans.basic).toMatchObject({
+      name: 'Basic historique',
+      badge: undefined,
+      promise: 'Promesse',
+      allowedWeekdays: [1, 2],
+      benefits: ['Avantage'],
+    });
+  });
+
   it('includes the complete client-facing plan fields in backend defaults', async () => {
     const { DEFAULT_PERSONAL_DRIVER_PLANS } = require('../planConfig');
 

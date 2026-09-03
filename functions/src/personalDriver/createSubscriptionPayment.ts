@@ -462,6 +462,7 @@ export const createPersonalDriverSubscriptionPayment = onCall(
           activationStatus: 'pending_payment',
           activationError: null,
           selectedPlanId,
+          planSnapshot: selectedPlan,
           pickupAddress: input.pickupAddress,
           destinationAddress: input.destinationAddress,
           tripType: input.tripType,

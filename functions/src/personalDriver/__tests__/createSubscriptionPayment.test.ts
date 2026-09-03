@@ -537,6 +537,18 @@ describe('createPersonalDriverSubscriptionPayment', () => {
         distanceOneWayKm: result.quote.distanceOneWayKm,
         distanceReturnKm: result.quote.distanceReturnKm,
         monthlyDistanceKm: result.quote.monthlyDistanceKm,
+        planSnapshot: expect.objectContaining({
+          id: 'basic',
+          name: 'Basic',
+          promise: 'La simplicité au quotidien',
+          includedRegularWaitMinutes: 3,
+          includedSpecialTrips: 0,
+          benefits: [
+            'Service du lundi au vendredi',
+            "3 min d'attente gratuites",
+            'Horaires fixes',
+          ],
+        }),
         taxAmount: result.quote.taxAmount,
         totalAmount: result.quote.totalAmount,
         currency: result.quote.currency,

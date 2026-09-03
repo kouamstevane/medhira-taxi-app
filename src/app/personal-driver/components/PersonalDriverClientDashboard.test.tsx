@@ -176,6 +176,45 @@ describe('PersonalDriverClientDashboard Component', () => {
     expect(getPersonalDriverTripsForSubscription).not.toHaveBeenCalled();
   });
 
+  it('renders persisted plan snapshot entitlements when the live catalogue differs', async () => {
+    (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
+      id: 'sub_snapshot',
+      userId: 'user_123',
+      selectedPlanId: 'premium',
+      status: 'pending_payment',
+      paymentStatus: 'pending',
+      monthlyDistanceKm: 440,
+      startDate: '2026-08-01',
+      pickupAddress: '100 rue Principale',
+      destinationAddress: '500 rue Universite',
+      includedSpecialTrips: 2,
+      specialTripsUsed: 0,
+      planSnapshot: {
+        id: 'premium',
+        name: 'Premium historique',
+        badge: 'Ancien badge',
+        promise: 'Ancienne promesse',
+        pricePerKm: 1.1,
+        minimumBillableKm: 591,
+        minimumAmount: 650,
+        allowedWeekdays: [1, 2, 3, 4, 5],
+        includedRegularWaitMinutes: 7,
+        includedSpecialTrips: 2,
+        benefits: ['Ancien avantage conservé'],
+      },
+    });
+
+    render(<PersonalDriverClientDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Abonnement Forfait Premium historique/i })).toBeInTheDocument();
+      expect(screen.getByText('7 min / trajet')).toBeInTheDocument();
+      expect(screen.getByText('Ancien avantage conservé')).toBeInTheDocument();
+      expect(screen.getByText(/Trajets Spéciaux Inclus \(2 par période\)/i)).toBeInTheDocument();
+      expect(screen.queryByText('Avantage Premium Plus dynamique')).not.toBeInTheDocument();
+    });
+  });
+
   it('uses loaded plan details for the client dashboard package view', async () => {
     (getCurrentPersonalDriverSubscription as jest.Mock).mockResolvedValue({
       id: 'sub_active',

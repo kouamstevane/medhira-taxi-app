@@ -240,4 +240,19 @@ describe('PersonalDriverPlansEditor', () => {
     expect(basicCard.getByRole('button', { name: 'Enregistrer Basic' })).toBeDisabled();
     expect(callableMock).not.toHaveBeenCalled();
   });
+
+  it('resets a changed plan to static defaults even when Firestore has overrides', async () => {
+    const user = userEvent.setup();
+    render(<PersonalDriverPlansEditor />);
+
+    const premiumCard = within(await screen.findByRole('group', { name: 'Forfait Premium Plus' }));
+    expect(premiumCard.getByRole('textbox', { name: 'Nom' })).toHaveValue('Premium Plus');
+    await user.clear(premiumCard.getByRole('textbox', { name: 'Nom' }));
+    await user.type(premiumCard.getByRole('textbox', { name: 'Nom' }), 'Nom temporaire');
+    await user.click(premiumCard.getByRole('button', { name: 'Réinitialiser Nom temporaire' }));
+
+    expect(premiumCard.getByRole('textbox', { name: 'Nom' })).toHaveValue('Premium');
+    expect(premiumCard.getByRole('textbox', { name: 'Badge' })).toHaveValue('Service prioritaire');
+    expect(callableMock).not.toHaveBeenCalled();
+  });
 });

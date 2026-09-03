@@ -303,6 +303,14 @@ describe('renewPersonalDriverSubscriptionPayment', () => {
       newRef,
       expect.objectContaining({
         selectedPlanId: 'premium',
+        planSnapshot: expect.objectContaining({
+          id: 'premium',
+          name: 'Premium',
+          promise: 'Un service privilégié, chaque jour',
+          includedRegularWaitMinutes: 10,
+          includedSpecialTrips: 1,
+          benefits: expect.any(Array),
+        }),
         selectedPlanPrice: expect.objectContaining({
           minimumAmount: 800,
           includedSpecialTrips: 1,

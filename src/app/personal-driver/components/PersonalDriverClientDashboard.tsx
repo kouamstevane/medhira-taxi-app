@@ -356,7 +356,13 @@ export function PersonalDriverClientDashboard() {
   }
 
   const rawPlanId = subscription.planId || (subscription as unknown as { selectedPlanId: PersonalDriverPlanId }).selectedPlanId || 'classic';
-  const planInfo = plans[rawPlanId] || plans.classic;
+  const cataloguePlan = plans[rawPlanId] || plans.classic;
+  const planInfo = subscription.planSnapshot ?? {
+    ...cataloguePlan,
+    ...(typeof subscription.includedSpecialTrips === 'number'
+      ? { includedSpecialTrips: subscription.includedSpecialTrips }
+      : {}),
+  };
   const activationStatus = subscription.activationStatus
     ?? (subscription.status === 'active' ? 'active' : 'pending_payment');
   const displayedStatus = subscription.paymentStatus === 'succeeded'

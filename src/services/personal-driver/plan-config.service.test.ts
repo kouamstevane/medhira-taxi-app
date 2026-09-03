@@ -134,6 +134,52 @@ describe('personal driver plan catalogue loader', () => {
     expect(result.plans.basic).toEqual(PERSONAL_DRIVER_PLANS.basic);
   });
 
+  it.each([
+    ['name', { name: 'x'.repeat(81) }],
+    ['badge', { badge: 'x'.repeat(81) }],
+    ['promise', { promise: 'x'.repeat(201) }],
+    ['pricePerKm', { pricePerKm: 1000.01 }],
+    ['minimumBillableKm', { minimumBillableKm: 100001 }],
+    ['minimumAmount', { minimumAmount: 1000000.01 }],
+    ['includedRegularWaitMinutes', { includedRegularWaitMinutes: 1441 }],
+    ['includedSpecialTrips', { includedSpecialTrips: 101 }],
+    ['benefits', { benefits: ['x'.repeat(201)] }],
+  ])('falls back completely when %s exceeds the server bound', async (_field, invalidField) => {
+    mockGetDoc
+      .mockResolvedValueOnce(mockPlanSnapshot('basic', invalidField))
+      .mockResolvedValueOnce(mockMissingSnapshot('classic'))
+      .mockResolvedValueOnce(mockMissingSnapshot('premium'));
+
+    const { getPersonalDriverPlans } = await import('./plan-config.service');
+    const result = await getPersonalDriverPlans();
+
+    expect(result.plans.basic).toEqual(PERSONAL_DRIVER_PLANS.basic);
+  });
+
+  it('allows an empty badge while trimming valid bounded values', async () => {
+    mockGetDoc
+      .mockResolvedValueOnce(mockPlanSnapshot('basic', {
+        name: '  Basic historique  ',
+        badge: '   ',
+        promise: '  Promesse  ',
+        allowedWeekdays: [1, 2],
+        benefits: ['  Avantage  '],
+      }))
+      .mockResolvedValueOnce(mockMissingSnapshot('classic'))
+      .mockResolvedValueOnce(mockMissingSnapshot('premium'));
+
+    const { getPersonalDriverPlans } = await import('./plan-config.service');
+    const result = await getPersonalDriverPlans();
+
+    expect(result.plans.basic).toMatchObject({
+      name: 'Basic historique',
+      badge: undefined,
+      promise: 'Promesse',
+      allowedWeekdays: [1, 2],
+      benefits: ['Avantage'],
+    });
+  });
+
   it('loads only the fixed catalogue IDs', async () => {
     mockGetDoc
       .mockResolvedValueOnce(mockMissingSnapshot('basic'))

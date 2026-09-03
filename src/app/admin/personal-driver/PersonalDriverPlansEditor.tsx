@@ -276,7 +276,7 @@ export function PersonalDriverPlansEditor() {
   const resetPlan = (planId: PersonalDriverPlanId) => {
     setDrafts((current) => ({
       ...current,
-      [planId]: clonePlan(savedPlans[planId]),
+      [planId]: clonePlan(PERSONAL_DRIVER_PLANS[planId]),
     }));
     setErrors((current) => ({ ...current, [planId]: {} }));
     setSyncWarning(null);

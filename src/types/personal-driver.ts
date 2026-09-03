@@ -119,6 +119,7 @@ export interface PersonalDriverSubscription {
   sourceSubscriptionId?: string;
   planId?: PersonalDriverPlanId;
   selectedPlanId: PersonalDriverPlanId;
+  planSnapshot?: PersonalDriverPlan;
   status: PersonalDriverSubscriptionStatus;
   paymentStatus?: PersonalDriverPaymentStatus;
   activationStatus?: PersonalDriverActivationStatus;

@@ -20,12 +20,18 @@ function isFiniteNonNegativeNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0;
+function isNumberInRange(value: unknown, min: number, max: number): value is number {
+  return isFiniteNonNegativeNumber(value) && value >= min && value <= max;
+}
+
+function isIntegerInRange(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
 }
 
 function isValidWeekdays(value: unknown): value is PersonalDriverWeekday[] {
   if (!Array.isArray(value)) return false;
+
+  if (value.length < 1 || value.length > 7) return false;
 
   const seen = new Set<number>();
   for (const weekday of value) {
@@ -42,7 +48,7 @@ function isValidBenefits(value: unknown): value is string[] {
   return Array.isArray(value)
     && value.length >= 1
     && value.length <= 12
-    && value.every(isNonEmptyText);
+    && value.every((benefit) => isNonEmptyText(benefit) && benefit.trim().length <= 200);
 }
 
 function normalizeText(value: string): string {
@@ -81,35 +87,33 @@ function readPlanData(planId: PersonalDriverPlanId, raw: PersonalDriverPlanDocum
   const overrides: Partial<PersonalDriverPlan> = {};
 
   if ('name' in raw) {
-    if (!isNonEmptyText(raw.name)) return null;
+    if (!isNonEmptyText(raw.name) || raw.name.trim().length > 80) return null;
     overrides.name = normalizeText(raw.name);
   }
 
   if ('badge' in raw) {
-    if (raw.badge == null) {
-      return null;
-    }
-    if (!isNonEmptyText(raw.badge)) return null;
-    overrides.badge = normalizeText(raw.badge);
+    if (raw.badge == null) return null;
+    if (typeof raw.badge !== 'string' || raw.badge.trim().length > 80) return null;
+    overrides.badge = normalizeText(raw.badge) || undefined;
   }
 
   if ('promise' in raw) {
-    if (!isNonEmptyText(raw.promise)) return null;
+    if (!isNonEmptyText(raw.promise) || raw.promise.trim().length > 200) return null;
     overrides.promise = normalizeText(raw.promise);
   }
 
   if ('pricePerKm' in raw) {
-    if (!isFiniteNonNegativeNumber(raw.pricePerKm)) return null;
+    if (!isNumberInRange(raw.pricePerKm, 0, 1000)) return null;
     overrides.pricePerKm = raw.pricePerKm;
   }
 
   if ('minimumBillableKm' in raw) {
-    if (!isPositiveInteger(raw.minimumBillableKm)) return null;
+    if (!isIntegerInRange(raw.minimumBillableKm, 1, 100000)) return null;
     overrides.minimumBillableKm = raw.minimumBillableKm;
   }
 
   if ('minimumAmount' in raw) {
-    if (!isFiniteNonNegativeNumber(raw.minimumAmount)) return null;
+    if (!isNumberInRange(raw.minimumAmount, 0, 1000000)) return null;
     overrides.minimumAmount = raw.minimumAmount;
   }
 
@@ -119,12 +123,12 @@ function readPlanData(planId: PersonalDriverPlanId, raw: PersonalDriverPlanDocum
   }
 
   if ('includedRegularWaitMinutes' in raw) {
-    if (!isFiniteNonNegativeNumber(raw.includedRegularWaitMinutes)) return null;
+    if (!isIntegerInRange(raw.includedRegularWaitMinutes, 0, 1440)) return null;
     overrides.includedRegularWaitMinutes = raw.includedRegularWaitMinutes;
   }
 
   if ('includedSpecialTrips' in raw) {
-    if (!isFiniteNonNegativeNumber(raw.includedSpecialTrips)) return null;
+    if (!isIntegerInRange(raw.includedSpecialTrips, 0, 100)) return null;
     overrides.includedSpecialTrips = raw.includedSpecialTrips;
   }
 
