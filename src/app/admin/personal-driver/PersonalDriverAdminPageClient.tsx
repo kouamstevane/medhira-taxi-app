@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -24,6 +24,7 @@ export function PersonalDriverAdminPageClient() {
   const [driverId, setDriverId] = useState('');
   const [vehicleId, setVehicleId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,14 +43,15 @@ export function PersonalDriverAdminPageClient() {
     setError(null);
     try {
       const [subscriptionSnap, tripSnap, driverSnap, vehicleSnap] = await Promise.all([
-        getDocs(query(collection(db, 'personal_driver_subscriptions'), orderBy('createdAt', 'desc'))),
+        getDocs(query(collection(db, 'personal_driver_subscriptions'), orderBy('createdAt', 'desc'), limit(50))),
         getDocs(query(
           collection(db, 'personal_driver_trips'),
           where('status', 'in', ['scheduled', 'driver_assigned', 'driver_en_route', 'driver_arrived']),
           orderBy('scheduledAtIso', 'asc'),
+          limit(50),
         )),
-        getDocs(query(collection(db, 'drivers'), where('status', '==', 'approved'), orderBy('name', 'asc'))),
-        getDocs(query(collection(db, 'vehicles'), where('status', '==', 'available'), orderBy('registration', 'asc'))),
+        getDocs(query(collection(db, 'drivers'), where('status', '==', 'approved'), orderBy('name', 'asc'), limit(50))),
+        getDocs(query(collection(db, 'vehicles'), where('status', '==', 'available'), orderBy('registration', 'asc'), limit(50))),
       ]);
 
       setSubscriptions(
@@ -112,6 +114,67 @@ export function PersonalDriverAdminPageClient() {
       setError(getUserFacingCallableError(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancelSubscription = async (subId: string) => {
+    setActionInProgressId(subId);
+    setError(null);
+    setMessage(null);
+    try {
+      const callable = httpsCallable(functions, 'adminManagePersonalDriver');
+      await callable({
+        action: 'cancelSubscription',
+        subscriptionId: subId,
+        reason: 'Refus administratif ou abandon avant paiement',
+      });
+      setMessage(`Abonnement ${subId} refusé et annulé avec succès.`);
+      void loadOperations();
+    } catch (err: unknown) {
+      setError(getUserFacingCallableError(err));
+    } finally {
+      setActionInProgressId(null);
+    }
+  };
+
+  const handleResolveOperationalReview = async (targetTripId: string, decision: 'approve' | 'reject') => {
+    setActionInProgressId(targetTripId);
+    setError(null);
+    setMessage(null);
+    try {
+      const callable = httpsCallable(functions, 'adminManagePersonalDriver');
+      await callable({
+        action: 'resolveOperationalReview',
+        tripId: targetTripId,
+        decision,
+        reason: decision === 'approve' ? 'Validé par examen administrateur' : 'Refusé par examen administrateur',
+      });
+      setMessage(`Examen opérationnel du trajet ${targetTripId} : ${decision === 'approve' ? 'Validé (Approuvé)' : 'Refusé (Rejeté)'}.`);
+      void loadOperations();
+    } catch (err: unknown) {
+      setError(getUserFacingCallableError(err));
+    } finally {
+      setActionInProgressId(null);
+    }
+  };
+
+  const handleCancelTrip = async (targetTripId: string) => {
+    setActionInProgressId(targetTripId);
+    setError(null);
+    setMessage(null);
+    try {
+      const callable = httpsCallable(functions, 'adminManagePersonalDriver');
+      await callable({
+        action: 'cancelTrip',
+        tripId: targetTripId,
+        reason: 'Annulé par l’administrateur',
+      });
+      setMessage(`Trajet ${targetTripId} annulé.`);
+      void loadOperations();
+    } catch (err: unknown) {
+      setError(getUserFacingCallableError(err));
+    } finally {
+      setActionInProgressId(null);
     }
   };
 
@@ -204,7 +267,7 @@ export function PersonalDriverAdminPageClient() {
               type="button"
               onClick={loadOperations}
               disabled={refreshing}
-              className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/10 px-4 text-xs font-semibold text-slate-300 hover:bg-white/5 disabled:opacity-50"
             >
               <MaterialIcon name="refresh" size="sm" />
               Actualiser
@@ -216,19 +279,38 @@ export function PersonalDriverAdminPageClient() {
                 Aucun abonnement récent à afficher.
               </p>
             ) : (
-              subscriptions.map((subscription) => (
-                <button
-                  key={subscription.id}
-                  type="button"
-                  onClick={() => setMessage(`Abonnement ${subscription.id}: ${subscription.status || 'statut inconnu'}.`)}
-                  className="w-full rounded-lg border border-white/10 bg-black/10 p-3 text-left transition hover:bg-white/5"
-                >
-                  <span className="block text-xs font-bold text-white">{subscription.id}</span>
-                  <span className="mt-1 block text-xs text-slate-400">
-                    {subscription.status || 'statut inconnu'} · {getSubscriptionPlanLabel(subscription)} · {subscription.pickupAddress || 'départ non renseigné'}
-                  </span>
-                </button>
-              ))
+              subscriptions.map((subscription) => {
+                const isPendingPayment = subscription.status === 'pending_payment';
+                return (
+                  <div
+                    key={subscription.id}
+                    className="w-full rounded-lg border border-white/10 bg-black/10 p-3 transition hover:bg-white/5 flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setMessage(`Abonnement ${subscription.id}: ${subscription.status || 'statut inconnu'}.`)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <span className="block text-xs font-bold text-white">{subscription.id}</span>
+                      <span className="mt-1 block text-xs text-slate-400">
+                        {subscription.status || 'statut inconnu'} · {getSubscriptionPlanLabel(subscription)} · {subscription.pickupAddress || 'départ non renseigné'}
+                      </span>
+                    </button>
+                    {isPendingPayment && (
+                      <button
+                        type="button"
+                        aria-label={`Refuser l'abonnement ${subscription.id}`}
+                        disabled={actionInProgressId === subscription.id || loading}
+                        onClick={() => void handleCancelSubscription(subscription.id)}
+                        className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-red-500/30 bg-red-500/10 px-3 text-xs font-semibold text-red-300 hover:bg-red-500/20 disabled:opacity-50 transition active:scale-95"
+                      >
+                        <MaterialIcon name="cancel" size="sm" />
+                        Refuser / Annuler
+                      </button>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -244,7 +326,7 @@ export function PersonalDriverAdminPageClient() {
               value={tripFilter}
               onChange={(event) => { setTripFilter(event.target.value); setTripPage(0); }}
               placeholder="Filtrer un trajet"
-              className="min-h-9 rounded-lg border border-white/10 bg-black/10 px-3 text-xs text-white"
+              className="min-h-11 rounded-lg border border-white/10 bg-black/10 px-3 text-xs text-white outline-none focus:border-primary"
             />
           </div>
           <div className="space-y-2">
@@ -253,33 +335,90 @@ export function PersonalDriverAdminPageClient() {
                 Aucun trajet récent à afficher.
               </p>
             ) : (
-              visibleTrips.map((trip) => (
-                <button
-                  key={trip.id}
-                  type="button"
-                  onClick={() => {
-                    setTripId(trip.id);
-                    if (trip.assignedDriverId) setDriverId(trip.assignedDriverId);
-                    if (trip.assignedVehicleId) setVehicleId(trip.assignedVehicleId);
-                  }}
-                  className="w-full rounded-lg border border-white/10 bg-black/10 p-3 text-left transition hover:bg-white/5"
-                >
-                  <span className="block text-xs font-bold text-white">{trip.id}</span>
-                  <span className="mt-1 block text-xs text-slate-400">
-                    {trip.status || 'statut inconnu'} · {trip.scheduledAtIso || 'horaire non renseigné'}
-                  </span>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    {trip.pickupAddress || 'départ'} → {trip.destinationAddress || 'destination'}
-                  </span>
-                </button>
-              ))
+              visibleTrips.map((trip) => {
+                const isSelected = tripId === trip.id;
+                return (
+                  <div
+                    key={trip.id}
+                    className={`w-full rounded-lg border p-3 transition ${
+                      isSelected ? 'border-primary bg-primary/10' : 'border-white/10 bg-black/10 hover:bg-white/5'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTripId(trip.id);
+                        if (trip.assignedDriverId) setDriverId(trip.assignedDriverId);
+                        if (trip.assignedVehicleId) setVehicleId(trip.assignedVehicleId);
+                      }}
+                      className="w-full text-left"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="block text-xs font-bold text-white">{trip.id}</span>
+                        <span className="text-xs text-slate-400">{trip.status || 'statut inconnu'}</span>
+                      </div>
+                      <span className="mt-1 block text-xs text-slate-400">
+                        {trip.scheduledAtIso || 'horaire non renseigné'}
+                      </span>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {trip.pickupAddress || 'départ'} → {trip.destinationAddress || 'destination'}
+                      </span>
+                    </button>
+
+                    {trip.operationalReviewRequired && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-amber-500/30 pt-3">
+                        <span className="flex items-center gap-1 text-xs font-bold text-amber-300">
+                          <MaterialIcon name="warning" size="sm" className="animate-pulse" />
+                          Examen opérationnel requis
+                        </span>
+                        <div className="ml-auto flex items-center gap-2">
+                          <button
+                            type="button"
+                            aria-label={`Valider le trajet ${trip.id}`}
+                            disabled={actionInProgressId === trip.id || loading}
+                            onClick={() => void handleResolveOperationalReview(trip.id, 'approve')}
+                            className="inline-flex min-h-11 items-center gap-1 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50 transition active:scale-95"
+                          >
+                            <MaterialIcon name="check" size="sm" />
+                            Valider (Approuver)
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Refuser le trajet ${trip.id}`}
+                            disabled={actionInProgressId === trip.id || loading}
+                            onClick={() => void handleResolveOperationalReview(trip.id, 'reject')}
+                            className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-red-500/40 bg-red-500/20 px-3 text-xs font-bold text-red-200 hover:bg-red-500/30 disabled:opacity-50 transition active:scale-95"
+                          >
+                            <MaterialIcon name="close" size="sm" />
+                            Refuser (Rejeter)
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
           {trips.length > OPERATION_PAGE_SIZE && (
             <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400">
-              <button type="button" disabled={!hasPreviousTripPage} onClick={() => setTripPage((page) => page - 1)} className="disabled:opacity-50">Précédent</button>
+              <button
+                type="button"
+                disabled={!hasPreviousTripPage}
+                onClick={() => setTripPage((page) => page - 1)}
+                className="inline-flex min-h-11 items-center px-3 font-semibold disabled:opacity-50"
+              >
+                Précédent
+              </button>
               <span>Page {tripPage + 1}</span>
-              <button type="button" disabled={!hasNextTripPage} onClick={() => setTripPage((page) => page + 1)} className="disabled:opacity-50">Suivant</button>
+              <button
+                type="button"
+                disabled={!hasNextTripPage}
+                onClick={() => setTripPage((page) => page + 1)}
+                className="inline-flex min-h-11 items-center px-3 font-semibold disabled:opacity-50"
+              >
+                Suivant
+              </button>
             </div>
           )}
         </div>
@@ -313,13 +452,27 @@ export function PersonalDriverAdminPageClient() {
             </select>
           </label>
         </div>
-        <button
-          type="submit"
-          disabled={loading || !tripId.trim() || !driverId.trim() || !vehicleId.trim()}
-          className="min-h-11 rounded-xl bg-primary px-6 text-xs font-bold text-white hover:bg-primary/90 disabled:opacity-50 transition"
-        >
-          Affecter la mission
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            disabled={loading || !tripId.trim() || !driverId.trim() || !vehicleId.trim()}
+            className="min-h-11 rounded-xl bg-primary px-6 text-xs font-bold text-white hover:bg-primary/90 disabled:opacity-50 transition active:scale-95"
+          >
+            Affecter la mission
+          </button>
+          {tripId && (
+            <button
+              type="button"
+              aria-label={`Annuler le trajet ${tripId}`}
+              disabled={loading || actionInProgressId === tripId}
+              onClick={() => void handleCancelTrip(tripId)}
+              className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-red-500/30 bg-red-500/10 px-4 text-xs font-semibold text-red-300 hover:bg-red-500/20 disabled:opacity-50 transition active:scale-95"
+            >
+              <MaterialIcon name="cancel" size="sm" />
+              Annuler ce trajet
+            </button>
+          )}
+        </div>
       </form>
 
       {showUrgentModal && (

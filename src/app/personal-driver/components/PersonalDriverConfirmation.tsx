@@ -113,12 +113,45 @@ function formatKm(distanceKm: number): string {
 }
 
 function getStoredCheckout(): { config: PersonalDriverConfiguration; estimate: PersonalDriverEstimateSession } | null {
-  const rawConfig = sessionStorage.getItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
-  const rawEstimate = sessionStorage.getItem(PERSONAL_DRIVER_ESTIMATE_SESSION_KEY);
-  const config = parseConfiguration(rawConfig ? JSON.parse(rawConfig) : null);
-  const estimate = parseEstimate(rawEstimate ? JSON.parse(rawEstimate) : null);
-  if (!config || !estimate || config.requestId !== estimate.requestId) return null;
-  return { config, estimate };
+  if (typeof window === 'undefined') return null;
+  try {
+    const rawConfig = sessionStorage.getItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+    const rawEstimate = sessionStorage.getItem(PERSONAL_DRIVER_ESTIMATE_SESSION_KEY);
+    if (!rawConfig || !rawEstimate) return null;
+
+    let parsedConfig: unknown = null;
+    let parsedEstimate: unknown = null;
+    try {
+      parsedConfig = JSON.parse(rawConfig);
+    } catch {
+      sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+      sessionStorage.removeItem(PERSONAL_DRIVER_ESTIMATE_SESSION_KEY);
+      return null;
+    }
+
+    try {
+      parsedEstimate = JSON.parse(rawEstimate);
+    } catch {
+      sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+      sessionStorage.removeItem(PERSONAL_DRIVER_ESTIMATE_SESSION_KEY);
+      return null;
+    }
+
+    const config = parseConfiguration(parsedConfig);
+    const estimate = parseEstimate(parsedEstimate);
+    if (!config || !estimate || config.requestId !== estimate.requestId) {
+      sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+      sessionStorage.removeItem(PERSONAL_DRIVER_ESTIMATE_SESSION_KEY);
+      return null;
+    }
+    return { config, estimate };
+  } catch {
+    try {
+      sessionStorage.removeItem(PERSONAL_DRIVER_CONFIG_SESSION_KEY);
+      sessionStorage.removeItem(PERSONAL_DRIVER_ESTIMATE_SESSION_KEY);
+    } catch {}
+    return null;
+  }
 }
 
 function getSubmittedSubscriptionId(searchParams: URLSearchParams): string | null {
@@ -166,6 +199,7 @@ export function PersonalDriverConfirmation() {
   const { push, replace } = useRouter();
   const searchParams = useSearchParams();
   const [checkout, setCheckout] = useState<{ config: PersonalDriverConfiguration; estimate: PersonalDriverEstimateSession } | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
   const [payment, setPayment] = useState<CreatePersonalDriverSubscriptionPaymentResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,6 +213,8 @@ export function PersonalDriverConfirmation() {
       setCheckout(getStoredCheckout());
     } catch {
       setCheckout(null);
+    } finally {
+      setIsLoaded(true);
     }
   }, []);
 
@@ -280,7 +316,7 @@ export function PersonalDriverConfirmation() {
       <button
         type="button"
         onClick={() => activationSubscriptionId && beginActivationPolling(activationSubscriptionId)}
-        className="min-h-10 rounded-lg border border-red-400/40 px-4 font-bold text-red-100"
+        className="min-h-11 rounded-lg border border-red-400/40 px-4 font-bold text-red-100"
       >
         Réessayer la vérification
       </button>
@@ -291,12 +327,20 @@ export function PersonalDriverConfirmation() {
       <button
         type="button"
         onClick={() => activationSubscriptionId && beginActivationPolling(activationSubscriptionId)}
-        className="min-h-10 rounded-lg border border-amber-400/40 px-4 font-bold text-amber-100"
+        className="min-h-11 rounded-lg border border-amber-400/40 px-4 font-bold text-amber-100"
       >
         Réessayer la vérification
       </button>
     </div>
   ) : null;
+
+  if (!isLoaded) {
+    return (
+      <main className="mx-auto flex min-h-[60vh] max-w-2xl items-center justify-center px-4 text-slate-100">
+        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </main>
+    );
+  }
 
   if (!checkout || !plan || !selectedPrice || !displayedPrice) {
     if (activationPanel) {

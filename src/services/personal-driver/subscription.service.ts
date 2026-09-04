@@ -9,7 +9,7 @@ import {
   limit,
   orderBy,
 } from 'firebase/firestore';
-import { db, functions } from '@/config/firebase';
+import { auth, db, functions } from '@/config/firebase';
 import type {
   PersonalDriverPlanId,
   PersonalDriverAuthoritativeQuote,
@@ -153,6 +153,7 @@ export async function getPersonalDriverSubscriptionView(userId: string): Promise
     where('userId', '==', userId),
     where('status', 'in', ['active', 'pending_payment']),
     orderBy('createdAt', 'desc'),
+    limit(20),
   );
   const snapshot = await getDocs(subscriptionsQuery);
   const subscriptions = snapshot.docs.map((subscriptionDoc) => ({
@@ -207,6 +208,7 @@ export async function getPendingPersonalDriverRenewal(
     where('userId', '==', userId),
     where('status', '==', 'pending_payment'),
     orderBy('createdAt', 'desc'),
+    limit(20),
   );
   const snapshot = await getDocs(subscriptionsQuery);
   return snapshot.docs
@@ -219,8 +221,23 @@ export async function getPendingPersonalDriverRenewal(
 
 export async function getPersonalDriverTripsForSubscription(
   subscriptionId: string,
+  userId?: string,
 ): Promise<PersonalDriverTrip[]> {
   if (!subscriptionId) return [];
+
+  const currentUserId = userId || auth.currentUser?.uid;
+  if (currentUserId) {
+    const q = query(
+      collection(db, 'personal_driver_trips'),
+      where('userId', '==', currentUserId),
+      orderBy('scheduledAtIso', 'asc'),
+      limit(100),
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }) as PersonalDriverTrip)
+      .filter((trip) => !subscriptionId || trip.subscriptionId === subscriptionId);
+  }
 
   const q = query(
     collection(db, 'personal_driver_trips'),

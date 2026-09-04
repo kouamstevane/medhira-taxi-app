@@ -195,9 +195,9 @@ export function PersonalDriverDriverPageClient() {
           className="mb-3 min-h-[44px] w-full rounded-lg border border-white/10 bg-black/10 px-3 text-xs text-white"
         />
         <div className="space-y-2">
-          {assignedTrips.length === 0 ? (
+          {visibleTrips.length === 0 ? (
             <p className="rounded-lg border border-white/5 bg-black/10 p-3 text-xs text-slate-400">
-              Aucune mission active attribuée pour le moment.
+              {tripFilter ? 'Aucune mission ne correspond à votre recherche.' : 'Aucune mission active attribuée pour le moment.'}
             </p>
           ) : (
             visibleTrips.map((trip) => (

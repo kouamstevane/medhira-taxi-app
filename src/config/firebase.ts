@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
-import { connectAuthEmulator, getAuth, Auth } from "firebase/auth";
+import { connectAuthEmulator, getAuth, Auth, signInWithCustomToken, signOut } from "firebase/auth";
 import {
   connectFirestoreEmulator,
   getFirestore,
@@ -66,6 +66,8 @@ export const functions: Functions = getFunctions(app, 'europe-west1');
 if (useEmulators) {
   const globalState = globalThis as typeof globalThis & {
     __medjiraFirebaseEmulatorsConnected?: boolean;
+    __medjiraSignInWithCustomToken?: (token: string) => Promise<unknown>;
+    __medjiraSignOut?: () => Promise<void>;
   };
   if (!globalState.__medjiraFirebaseEmulatorsConnected) {
     connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
@@ -73,6 +75,8 @@ if (useEmulators) {
     connectFunctionsEmulator(functions, '127.0.0.1', 5001);
     globalState.__medjiraFirebaseEmulatorsConnected = true;
   }
+  globalState.__medjiraSignInWithCustomToken = (token: string) => signInWithCustomToken(auth, token);
+  globalState.__medjiraSignOut = () => signOut(auth);
 }
 
 let _storage: FirebaseStorage | undefined;

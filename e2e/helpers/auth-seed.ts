@@ -22,15 +22,43 @@ export async function seedAuthUser(input: SeedAuthUserInput): Promise<void> {
     getApps().find((a) => a.name === 'p5-auth-seed') ??
     initializeApp({ projectId: PROJECT_ID }, 'p5-auth-seed');
   const auth = getAuth(app);
-  await auth.createUser({
-    uid: input.uid,
-    email: input.email,
-    password: input.password ?? 'password123',
-    emailVerified: input.emailVerified ?? true,
-    displayName: input.displayName,
-  });
+  try {
+    await auth.createUser({
+      uid: input.uid,
+      email: input.email,
+      password: input.password ?? 'password123',
+      emailVerified: input.emailVerified ?? true,
+      displayName: input.displayName,
+    });
+  } catch (err: unknown) {
+    const error = err as { code?: string };
+    if (error.code === 'auth/uid-already-exists' || error.code === 'auth/email-already-exists') {
+      await auth.updateUser(input.uid, {
+        email: input.email,
+        password: input.password ?? 'password123',
+        emailVerified: input.emailVerified ?? true,
+        displayName: input.displayName,
+      });
+    } else {
+      throw err;
+    }
+  }
   if (input.customClaims)
     await auth.setCustomUserClaims(input.uid, input.customClaims);
+}
+
+export async function createCustomTokenForUser(uid: string): Promise<string> {
+  if (!process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+    process.env.FIREBASE_AUTH_EMULATOR_HOST = AUTH_HOST;
+  }
+
+  const { initializeApp, getApps } = await import('firebase-admin/app');
+  const { getAuth } = await import('firebase-admin/auth');
+  const app =
+    getApps().find((a) => a.name === 'p5-auth-seed') ??
+    initializeApp({ projectId: PROJECT_ID }, 'p5-auth-seed');
+  const auth = getAuth(app);
+  return auth.createCustomToken(uid);
 }
 
 export async function clearAuthEmulator(): Promise<void> {

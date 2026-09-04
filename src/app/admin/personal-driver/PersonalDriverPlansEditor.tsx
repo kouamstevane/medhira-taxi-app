@@ -391,7 +391,7 @@ export function PersonalDriverPlansEditor() {
                       aria-label={field.label}
                       value={plan[field.key] ?? ''}
                       onChange={(event) => updatePlan(planId, field.key, event.target.value)}
-                      className="mt-1 min-h-10 w-full rounded-lg border border-white/10 bg-card px-3 text-xs text-white outline-none focus:border-primary"
+                      className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-card px-3 text-xs text-white outline-none focus:border-primary"
                     />
                     {planErrors[field.key] && (
                       <span role="alert" className="mt-1 block text-[11px] text-red-200">{planErrors[field.key]}</span>
@@ -416,7 +416,7 @@ export function PersonalDriverPlansEditor() {
                             field.key,
                             event.target.value === '' ? Number.NaN : Number(event.target.value),
                           )}
-                          className="mt-1 min-h-10 w-full rounded-lg border border-white/10 bg-card px-3 text-xs text-white outline-none focus:border-primary"
+                          className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-card px-3 text-xs text-white outline-none focus:border-primary"
                         />
                         {planErrors[field.key] && (
                           <span role="alert" className="mt-1 block text-[11px] text-red-200">{planErrors[field.key]}</span>
@@ -455,13 +455,13 @@ export function PersonalDriverPlansEditor() {
                           aria-label={`Avantage ${index + 1}`}
                           value={benefit}
                           onChange={(event) => updateBenefit(planId, index, event.target.value)}
-                          className="min-h-10 w-full rounded-lg border border-white/10 bg-card px-3 text-xs text-white outline-none focus:border-primary"
+                          className="min-h-11 w-full rounded-lg border border-white/10 bg-card px-3 text-xs text-white outline-none focus:border-primary"
                         />
                         <button
                           type="button"
                           onClick={() => removeBenefit(planId, index)}
                           disabled={plan.benefits.length <= 1}
-                          className="inline-flex min-h-10 shrink-0 items-center rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
+                          className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
                         >
                           Supprimer l’avantage {index + 1}
                         </button>
@@ -475,7 +475,7 @@ export function PersonalDriverPlansEditor() {
                     type="button"
                     onClick={() => addBenefit(planId)}
                     disabled={plan.benefits.length >= 12}
-                    className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
+                    className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
                   >
                     <MaterialIcon name="add" size="sm" />
                     Ajouter un avantage {plan.name || savedPlans[planId].name}
@@ -492,7 +492,7 @@ export function PersonalDriverPlansEditor() {
                     type="button"
                     onClick={() => resetPlan(planId)}
                     disabled={!isChanged || isSaving}
-                    className="min-h-10 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
+                    className="min-h-11 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
                   >
                     Réinitialiser {plan.name || savedPlans[planId].name}
                   </button>
@@ -500,7 +500,7 @@ export function PersonalDriverPlansEditor() {
                     type="button"
                     onClick={() => void savePlan(planId)}
                     disabled={!isChanged || isSaving}
-                    className="min-h-10 rounded-lg bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
+                    className="min-h-11 rounded-lg bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
                   >
                     {isSaving ? 'Enregistrement...' : `Enregistrer ${plan.name || savedPlans[planId].name}`}
                   </button>

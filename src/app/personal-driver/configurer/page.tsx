@@ -24,7 +24,7 @@ function ConfigurerContent() {
         <Link
           href="/personal-driver"
           aria-label="Retour aux formules Personal Driver"
-          className="flex size-10 items-center justify-center rounded-full bg-card text-white active:scale-95 transition-transform"
+          className="flex size-11 items-center justify-center rounded-full bg-card text-white active:scale-95 transition-transform"
         >
           <MaterialIcon name="arrow_back" size="md" />
         </Link>
@@ -38,7 +38,7 @@ function ConfigurerContent() {
         {error && (
           <div role="alert" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100">
             Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
-            <button type="button" onClick={() => void reload()} className="ml-3 font-bold underline underline-offset-4">
+            <button type="button" onClick={() => void reload()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">
               Réessayer
             </button>
           </div>

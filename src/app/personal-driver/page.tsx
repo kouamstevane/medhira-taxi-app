@@ -137,7 +137,7 @@ export default function PersonalDriverPage() {
         {error && (
           <div role="alert" className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
             Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
-            <button type="button" onClick={() => void reload()} className="ml-3 font-bold underline underline-offset-4">
+            <button type="button" onClick={() => void reload()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">
               Réessayer
             </button>
           </div>

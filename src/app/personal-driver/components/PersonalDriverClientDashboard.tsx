@@ -342,7 +342,7 @@ export function PersonalDriverClientDashboard() {
         {reloadError && (
           <div role="alert" className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
             {reloadError}
-            <button type="button" onClick={() => void reloadData()} className="ml-3 underline">Réessayer</button>
+            <button type="button" onClick={() => void reloadData()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">Réessayer</button>
           </div>
         )}
         <Link
@@ -395,7 +395,7 @@ export function PersonalDriverClientDashboard() {
         {plansError && (
           <div role="alert" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
             Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
-            <button type="button" onClick={() => void reloadPlans()} className="ml-3 font-bold underline underline-offset-4">
+            <button type="button" onClick={() => void reloadPlans()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">
               Réessayer
             </button>
           </div>
@@ -458,7 +458,7 @@ export function PersonalDriverClientDashboard() {
             type="button"
             onClick={handleRenewal}
             disabled={renewalLoading || !!renewalPayment || !!pendingRenewal}
-            className="min-h-10 rounded-lg bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
+            className="min-h-11 rounded-lg bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
           >
             {renewalLoading ? 'Préparation...' : 'Renouveler'}
           </button>
@@ -485,7 +485,7 @@ export function PersonalDriverClientDashboard() {
             <button
               type="button"
               onClick={() => renewalActivationSubscriptionId && beginRenewalActivationPolling(renewalActivationSubscriptionId)}
-              className="min-h-10 rounded-lg border border-amber-400/40 px-4 font-bold text-amber-100"
+              className="min-h-11 rounded-lg border border-amber-400/40 px-4 font-bold text-amber-100"
             >
               Réessayer la vérification
             </button>
@@ -530,7 +530,7 @@ export function PersonalDriverClientDashboard() {
       {(actionError || reloadError) && (
         <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs font-semibold text-red-200">
           {actionError || reloadError}
-          <button type="button" onClick={() => void reloadData()} className="ml-3 underline">Réessayer</button>
+          <button type="button" onClick={() => void reloadData()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">Réessayer</button>
         </div>
       )}
 
@@ -619,7 +619,7 @@ export function PersonalDriverClientDashboard() {
               <button
                 type="button"
                 onClick={() => beginRenewalActivationPolling(subscription.id)}
-                className="min-h-10 rounded-lg border border-red-400/40 px-4 font-bold text-red-100"
+                className="min-h-11 rounded-lg border border-red-400/40 px-4 font-bold text-red-100"
               >
                 Réessayer la vérification
               </button>
@@ -674,7 +674,7 @@ export function PersonalDriverClientDashboard() {
                     <button
                       type="button"
                       onClick={() => setSelectedTripToCancel(trip)}
-                      className="min-h-9 rounded-lg border border-red-500/30 bg-red-500/10 px-3 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 active:scale-95"
+                      className="min-h-11 rounded-lg border border-red-500/30 bg-red-500/10 px-3 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 active:scale-95"
                     >
                       Annuler ce trajet
                     </button>
@@ -747,7 +747,8 @@ export function PersonalDriverClientDashboard() {
               <button
                 type="button"
                 onClick={() => setShowSpecialTripModal(false)}
-                className="text-slate-400 hover:text-white"
+                aria-label="Fermer"
+                className="flex size-11 items-center justify-center rounded-lg text-slate-400 hover:text-white"
               >
                 <MaterialIcon name="close" size="md" />
               </button>
