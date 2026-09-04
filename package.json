@@ -59,7 +59,6 @@
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/push-notifications": "^8.0.2",
     "@capgo/capacitor-social-login": "^8.3.8",
-    "@gannonh/firebase-mcp": "^1.4.9",
     "@hookform/resolvers": "^5.2.2",
     "@react-google-maps/api": "^2.20.8",
     "@stripe/react-stripe-js": "^6.1.0",
@@ -118,7 +117,11 @@
     "typescript": "^5"
   },
   "overrides": {
-    "protobufjs": "^7.5.5"
+    "protobufjs": "^7.6.6",
+    "qs": "^6.16.0",
+    "uuid": "^11.1.1",
+    "@opentelemetry/core": "^2.8.0",
+    "stream-json": "^3.6.0"
   },
   "description": "Application moderne de réservation de taxis et de livraison construite avec **Next.js 15**, **TypeScript**, **Firebase** et **Tailwind CSS**.",
   "keywords": [],
