@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,8 +9,9 @@ import { getEffectiveRoleStatuses, getRouteForAuthenticatedProfile } from '@/ser
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 import { redirectWithFallback } from '@/utils/navigation';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
+import Loading from './loading';
 
-export default function HomePage() {
+function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { currentUser, loading, userData } = useAuth();
@@ -140,5 +141,13 @@ export default function HomePage() {
 
       </div>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <HomeContent />
+    </Suspense>
   );
 }
