@@ -9,6 +9,8 @@ import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { NetworkErrorView } from '@/components/ui';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { downloadInvoiceFromBooking } from '@/services/invoice.service';
 import { Booking } from '@/types/booking';
 import { formatCurrencyWithCode } from '@/utils/format';
@@ -33,6 +35,7 @@ const FILTER_OPTIONS: { value: FilterPeriod; label: string }[] = [
 export default function HistoriquePage() {
   const [history, setHistory] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
+  const [isNetworkError, setIsNetworkError] = useState(false);
   const [filter, setFilter] = useState<FilterPeriod>('today');
   const router = useRouter();
   const { showError, toasts, removeToast } = useToast();
@@ -49,8 +52,16 @@ export default function HistoriquePage() {
     return () => unsubscribe();
   }, [router, filter]);
 
+  const handleRetry = () => {
+    const user = auth.currentUser;
+    if (user) {
+      void fetchHistory(user.uid, filter);
+    }
+  };
+
   const fetchHistory = async (userId: string, period: FilterPeriod) => {
     setLoading(true);
+    setIsNetworkError(false);
     try {
       const now = new Date();
       let startDate: Date;
@@ -132,6 +143,13 @@ export default function HistoriquePage() {
       setHistory(combinedHistory);
     } catch (error) {
       console.error("Erreur chargement historique:", error);
+      if (
+        isFirestoreNetworkError(error) ||
+        (error as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -190,11 +208,24 @@ export default function HistoriquePage() {
       <div className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
         {/* Header */}
         <div className="flex items-center mb-6">
-          <Link href="/dashboard" className="mr-4 p-2 rounded-full hover:bg-white/5 transition">
+          <Link
+            href="/dashboard"
+            className="mr-4 p-2 rounded-full hover:bg-white/5 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Retour au tableau de bord"
+          >
             <MaterialIcon name="arrow_back" className="text-white" />
           </Link>
           <h1 className="text-2xl font-bold text-white">Historique des commandes</h1>
         </div>
+
+        {isNetworkError && history.length === 0 ? (
+          <NetworkErrorView
+            title="Oops !"
+            message="Impossible de charger votre historique. Veuillez vérifier votre connexion internet et réessayer."
+            onRetry={handleRetry}
+          />
+        ) : (
+          <>
 
         {/* Hero card */}
         <div className="relative overflow-hidden glass-card p-5 rounded-3xl border border-primary/20 mb-6">
@@ -229,7 +260,7 @@ export default function HistoriquePage() {
                 <button
                   key={opt.value}
                   onClick={() => setFilter(opt.value)}
-                  className={`px-4 py-2 rounded-xl font-medium transition-all text-sm ${
+                  className={`px-4 py-2.5 min-h-[44px] inline-flex items-center justify-center rounded-xl font-medium transition-all text-sm touch-manipulation ${
                     filter === opt.value
                       ? 'bg-primary/20 text-primary border border-primary/40'
                       : 'border border-white/10 text-slate-400 hover:bg-white/5 hover:text-slate-200'
@@ -393,6 +424,8 @@ export default function HistoriquePage() {
               {filter === 'all' && "Votre historique est vide"}
             </p>
           </GlassCard>
+        )}
+          </>
         )}
       </div>
       </div>

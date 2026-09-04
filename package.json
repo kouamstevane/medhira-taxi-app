@@ -8,7 +8,7 @@
     "dev:mobile": "next dev --turbopack -H 0.0.0.0",
     "mobile:setup": "node scripts/setup-mobile-dev.js",
     "mobile:dev": "node scripts/dev-mobile.js",
-    "build": "node scripts/clean-next-dev-cache.mjs && next build",
+    "build": "node scripts/clean-next-dev-cache.mjs && next build --webpack",
     "mobile:build": "node scripts/mobile-build.js",
     "mobile:sync": "npx cap sync",
     "mobile:open:android": "npx cap open android",

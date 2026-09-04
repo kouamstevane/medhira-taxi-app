@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { auth } from '@/config/firebase';
@@ -13,12 +13,16 @@ import Link from 'next/link';
 import { type Transaction, TRANSACTION_ICONS } from './_shared';
 import { timestampToDate } from '@/lib/firebase-helpers';
 import { useNotifications } from '@/hooks/useNotifications';
+import { NetworkErrorView } from '@/components/ui/NetworkErrorView';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 
 export default function WalletPage() {
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isNetworkError, setIsNetworkError] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { unreadCount } = useNotifications();
@@ -46,9 +50,12 @@ export default function WalletPage() {
             ...t,
             date: timestampToDate(t.createdAt),
           } as Transaction)));
+          setIsNetworkError(false);
         })
-        .catch(() => {
-          // Ignorer les erreurs silencieusement
+        .catch(txErr => {
+          if (isFirestoreNetworkError(txErr) || (txErr as Error)?.message?.includes('offline')) {
+            setIsNetworkError(true);
+          }
         });
 
       // S'abonner au wallet en temps réel
@@ -57,11 +64,14 @@ export default function WalletPage() {
         user.uid,
         (wallet) => {
           setBalance(wallet.balance || 0);
+          setIsNetworkError(false);
           setLoading(false);
         },
         (err) => {
-          const errMsg = err.message;
-          if (!errMsg.includes('offline') && !errMsg.includes('permission')) {
+          const errMsg = err.message || '';
+          if (isFirestoreNetworkError(err) || errMsg.includes('offline')) {
+            setIsNetworkError(true);
+          } else if (!errMsg.includes('permission')) {
             setError('Erreur lors du chargement du portefeuille');
           }
           setLoading(false);
@@ -73,7 +83,7 @@ export default function WalletPage() {
       unsubscribeAuth();
       if (unsubscribeWallet) unsubscribeWallet();
     };
-  }, [router]);
+  }, [router, refreshKey]);
 
   const formatDate = (date: Date) =>
     date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
@@ -96,13 +106,26 @@ export default function WalletPage() {
       </header>
 
       <main className="px-4 py-6 space-y-6">
-        {/* Error */}
-        {error && (
-          <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-center gap-2">
-            <MaterialIcon name="error" size="sm" className="text-destructive" />
-            <span className="text-destructive text-sm">{error}</span>
-          </div>
-        )}
+        {/* Network Error State (Oops!) */}
+        {isNetworkError && !balance && transactions.length === 0 ? (
+          <NetworkErrorView
+            title="Oops !"
+            message="Impossible de charger les données de votre portefeuille. Veuillez vérifier votre connexion internet et réessayer."
+            onRetry={() => {
+              setIsNetworkError(false);
+              setLoading(true);
+              setRefreshKey((k) => k + 1);
+            }}
+          />
+        ) : (
+          <>
+            {/* Error */}
+            {error && (
+              <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-xl flex items-center gap-2">
+                <MaterialIcon name="error" size="sm" className="text-destructive" />
+                <span className="text-destructive text-sm">{error}</span>
+              </div>
+            )}
 
         {/* Hero Balance Card */}
         <div className="relative overflow-hidden glass-card p-6 rounded-3xl border border-primary/20">
@@ -197,6 +220,8 @@ export default function WalletPage() {
             )}
           </div>
         </div>
+        </>
+        )}
       </main>
 
       <BottomNav />

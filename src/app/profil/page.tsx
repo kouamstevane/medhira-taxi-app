@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { auth, db, functions, getFirebaseStorage } from '@/config/firebase';
@@ -12,11 +12,12 @@ import { httpsCallable } from 'firebase/functions';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { NetworkErrorView } from '@/components/ui';
 import { InputField } from '@/components/forms/InputField';
 import { SelectField } from '@/components/forms/SelectField';
 import { useToast } from '@/hooks/useToast';
 import { Controller, useForm } from 'react-hook-form';
-import { getFirestoreErrorMessage, logFirestoreError } from '@/utils/firestore-error-handler';
+import { getFirestoreErrorMessage, isFirestoreNetworkError, logFirestoreError } from '@/utils/firestore-error-handler';
 import { CURRENCY_CODE, DEFAULT_LOCALE } from '@/utils/constants';
 import { shouldOpenAddressEditor } from './profile-navigation';
 import { ProfileAddressField } from './ProfileAddressField';
@@ -80,6 +81,7 @@ export default function ProfilPage() {
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState('');
   const [loading, setLoading] = useState(true);
+  const [isNetworkError, setIsNetworkError] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<Array<Record<string, unknown>>>([]);
@@ -127,9 +129,11 @@ export default function ProfilPage() {
 
   // Reliance on AuthContext for authentication and document existence check.
   // AuthContext now handles signing out if the Firestore document is deleted.
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (currentUser) {
+  const fetchUserData = useCallback(async () => {
+    if (currentUser) {
+      setLoading(true);
+      setIsNetworkError(false);
+      try {
         const userDocRef = doc(db, 'users', currentUser.uid);
         const userDocSnap = await getDoc(userDocRef);
 
@@ -147,20 +151,37 @@ export default function ProfilPage() {
             bio: data.bio || ''
           });
           setProfileImageUrl(data.profileImageUrl || '');
-          fetchHistory(currentUser.uid);
+          void fetchHistory(currentUser.uid);
         } else {
           // Document does not exist, AuthContext should handle sign out
           // and redirection. For safety, we can also redirect here.
           router.replace("/login");
         }
-      } else if (!currentUser && !loading) {
-        router.replace("/login");
+      } catch (err) {
+        console.error("Erreur chargement profil:", err);
+        if (
+          isFirestoreNetworkError(err) ||
+          (err as Error)?.message?.toLowerCase().includes('offline') ||
+          (typeof navigator !== 'undefined' && !navigator.onLine)
+        ) {
+          setIsNetworkError(true);
+        }
+      } finally {
+        setLoading(false);
       }
+    } else if (!currentUser && !loading) {
+      router.replace("/login");
       setLoading(false);
-    };
-
-    fetchUserData();
+    }
   }, [currentUser, router, loading]);
+
+  useEffect(() => {
+    void fetchUserData();
+  }, [fetchUserData]);
+
+  const handleRetry = useCallback(() => {
+    void fetchUserData();
+  }, [fetchUserData]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -256,7 +277,13 @@ export default function ProfilPage() {
       setHistory(combinedHistory.slice(0, 5));
     } catch (error) {
       console.error("Erreur chargement historique:", error);
-      // Ne pas bloquer l'affichage du profil si l'historique échoue
+      if (
+        isFirestoreNetworkError(error) ||
+        (error as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true);
+      }
     }
   };
 
@@ -311,11 +338,24 @@ export default function ProfilPage() {
       <div className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
         {/* Header */}
         <div className="flex items-center mb-6">
-          <Link href="/dashboard" className="mr-4 p-2 rounded-full hover:bg-white/5 transition">
+          <Link
+            href="/dashboard"
+            className="mr-4 p-2 rounded-full hover:bg-white/5 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Retour au tableau de bord"
+          >
             <MaterialIcon name="arrow_back" className="text-white" />
           </Link>
           <h1 className="text-2xl font-bold text-white">Mon Profil</h1>
         </div>
+
+        {isNetworkError && !userData.email && !userData.firstName ? (
+          <NetworkErrorView
+            title="Oops !"
+            message="Impossible de charger votre profil. Veuillez vérifier votre connexion internet et réessayer."
+            onRetry={handleRetry}
+          />
+        ) : (
+          <>
 
         {/* Error */}
         {error && (
@@ -324,7 +364,8 @@ export default function ProfilPage() {
               <p>{error}</p>
               <button
                 onClick={() => setError(null)}
-                className="text-destructive hover:text-red-300 font-bold"
+                className="text-destructive hover:text-red-300 font-bold min-w-[44px] min-h-[44px] flex items-center justify-center"
+                aria-label="Fermer le message d'erreur"
               >
                 <MaterialIcon name="close" size="sm" />
               </button>
@@ -667,6 +708,8 @@ export default function ProfilPage() {
             </button>
           </GlassCard>
         </div>
+          </>
+        )}
       </div>
 
       {/* Bottom Navigation */}

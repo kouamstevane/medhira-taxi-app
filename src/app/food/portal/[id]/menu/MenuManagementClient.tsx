@@ -18,6 +18,8 @@ import { StoreConnectorModal } from '@/components/food/StoreConnectorModal';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { NetworkErrorView } from '@/components/ui';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ERROR_MESSAGES, CURRENCY_CODE } from '@/utils/constants';
@@ -64,9 +66,17 @@ export default function MenuManagementClient() {
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<MenuItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isNetworkError, setIsNetworkError] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const catalog = useMenuCatalogQuery(restaurantId);
   const menuItems = catalog.items;
+
+  const recharger = useCallback(() => {
+    setIsNetworkError(false);
+    catalog.retry();
+    setRefreshKey((k) => k + 1);
+  }, [catalog]);
 
   // Dynamic Categories calculation
   const dynamicCategories = useMemo(
@@ -128,16 +138,24 @@ export default function MenuManagementClient() {
           router.push('/dashboard');
           return;
         }
+        setIsNetworkError(false);
         setLoading(false);
       } catch (error) {
         console.error('Error loading restaurant:', error);
+        if (
+          isFirestoreNetworkError(error) ||
+          (error as Error)?.message?.toLowerCase().includes('offline') ||
+          (typeof navigator !== 'undefined' && !navigator.onLine)
+        ) {
+          setIsNetworkError(true);
+        }
         showError('Erreur lors du chargement du restaurant');
         setLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [id, router, showError]);
+  }, [id, router, refreshKey]);
 
   // Révoquer l'ObjectURL de prévisualisation au démontage ou remplacement
   const cleanupPreview = useCallback(() => {
@@ -463,6 +481,30 @@ export default function MenuManagementClient() {
     }
   };
 
+  if (isNetworkError && (loading || !id)) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
+          <button
+            onClick={() => router.push(id ? getRestaurantPortalPath(id) : '/restaurant/dashboard')}
+            className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Retour"
+          >
+            <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
+          </button>
+          <h1 className="text-xl font-bold text-white">Gestion du Menu</h1>
+          <div className="w-10"></div>
+        </header>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <NetworkErrorView
+            message="Impossible de charger les informations du restaurant. Veuillez vérifier votre connexion internet et réessayer."
+            onRetry={recharger}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (loading || !id) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -491,7 +533,8 @@ export default function MenuManagementClient() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push(getRestaurantPortalPath(restaurantId))}
-            className="p-2 hover:bg-white/10 rounded-full transition"
+            className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Retour"
           >
             <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
           </button>
@@ -546,7 +589,7 @@ export default function MenuManagementClient() {
           onClearFilters={catalog.clearFilters}
         />
 
-        {catalog.error && (
+        {catalog.error && !catalog.isNetworkError && (
           <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-200">
             <span>{catalog.error}</span>
             <button type="button" onClick={catalog.retry} className="min-h-11 rounded-xl px-3 font-bold hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Réessayer</button>
@@ -575,7 +618,16 @@ export default function MenuManagementClient() {
           />
         )}
 
-        {!catalog.isLoading && catalog.items.length === 0 && catalog.totalCount === 0 && (
+        {!catalog.isLoading && (isNetworkError || catalog.isNetworkError) && catalog.items.length === 0 && (
+          <div className="py-12">
+            <NetworkErrorView
+              message="Impossible de charger le catalogue de votre menu. Veuillez vérifier votre connexion internet et réessayer."
+              onRetry={recharger}
+            />
+          </div>
+        )}
+
+        {!catalog.isLoading && !isNetworkError && !catalog.isNetworkError && catalog.items.length === 0 && catalog.totalCount === 0 && (
           <div className="py-20 text-center">
             <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
               <MaterialIcon name="menu_book" size="xl" className="text-slate-500" />

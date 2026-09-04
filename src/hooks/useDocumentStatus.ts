@@ -14,11 +14,17 @@ import {
 export type { DocStatus }
 export type DocumentStatusEntry = DriverDocumentStatusEntry
 
-export function useDocumentStatus(uid: string | null) {
+export interface UseDocumentStatusOptions {
+  refreshKey?: number
+  onError?: (error: unknown) => void
+}
+
+export function useDocumentStatus(uid: string | null, options?: UseDocumentStatusOptions) {
   const [documents, setDocuments] = useState<DocumentStatusEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [globalStatus, setGlobalStatus] = useState<'all_approved' | 'has_rejected' | 'pending'>('pending')
+  const { refreshKey, onError } = options ?? {}
 
   useEffect(() => {
     if (!uid) return
@@ -52,6 +58,7 @@ export function useDocumentStatus(uid: string | null) {
         console.error('[useDocumentStatus] Sync error:', snapshotError)
         setError('Erreur de connexion aux données')
         setLoading(false)
+        onError?.(snapshotError)
       },
     )
 
@@ -59,7 +66,7 @@ export function useDocumentStatus(uid: string | null) {
       mounted = false
       unsubscribe()
     }
-  }, [uid])
+  }, [uid, refreshKey, onError])
 
   return uid
     ? { documents, loading, error, globalStatus }

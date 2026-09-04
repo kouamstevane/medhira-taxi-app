@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import FoodHomePage from '@/app/food/page';
+import { FoodDeliveryService } from '@/services/food-delivery.service';
 
 jest.mock('@/services/food-delivery.service', () => ({
   FoodDeliveryService: {
@@ -27,5 +28,18 @@ describe('FoodHomePage order tracking entry point', () => {
 
     expect(trackingLink).toHaveAttribute('href', '/food/orders');
     expect(screen.getByTestId('material-icon-delivery_dining')).toBeInTheDocument();
+  });
+
+  it('renders NetworkErrorView when fetch fails with a network error', async () => {
+    const mockGetApproved = FoodDeliveryService.getApprovedRestaurants as jest.Mock;
+    mockGetApproved.mockRejectedValueOnce(new Error('Failed to fetch (offline)'));
+
+    render(<FoodHomePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/impossible de charger les restaurants/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: /réessayer/i })).toBeInTheDocument();
   });
 });

@@ -1,10 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { auth } from '@/config/firebase'
 import { onAuthStateChanged } from 'firebase/auth'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { BottomNav, driverNavItems } from '@/components/ui/BottomNav'
+import { NetworkErrorView } from '@/components/ui'
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler'
 import { useDriverStore } from '@/store/driverStore'
 import { useDriverActivity, type ActivityRecord } from '@/hooks/useDriverActivity'
 import { EvaluationsTab } from './components/EvaluationsTab'
@@ -35,7 +37,51 @@ export default function DriverActivitePage() {
   const [uid, setUid] = useState<string | null>(null)
   const [tab, setTab] = useState<ActivityTab>(() => getInitialActivityTab(searchParams.get('tab')))
   const { driver } = useDriverStore()
-  const { records, totals, loading } = useDriverActivity(uid ?? '')
+  const [isNetworkError, setIsNetworkError] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const handleLoadingError = useCallback((error: unknown) => {
+    try {
+      throw error
+    } catch (err) {
+      if (
+        isFirestoreNetworkError(err) ||
+        (err as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true)
+      }
+    }
+  }, [])
+
+  const recharger = useCallback(async () => {
+    setIsNetworkError(false)
+    try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('offline')
+      }
+      setRefreshKey((k) => k + 1)
+    } catch (error) {
+      if (
+        isFirestoreNetworkError(error) ||
+        (error as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true)
+      }
+    }
+  }, [])
+
+  const { records, totals, loading } = useDriverActivity(uid ?? '', {
+    refreshKey,
+    onError: handleLoadingError,
+  })
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setIsNetworkError(true)
+    }
+  }, [uid])
 
   useEffect(() => {
     setTab(getInitialActivityTab(searchParams.get('tab')))
@@ -68,7 +114,7 @@ export default function DriverActivitePage() {
         <div className="flex gap-1 mb-6 bg-white/5 rounded-2xl p-1">
           {TABS.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={['flex-1 h-10 rounded-xl text-xs font-medium capitalize transition-all flex items-center justify-center gap-1',
+              className={['flex-1 min-h-[44px] h-11 rounded-xl text-xs font-medium capitalize transition-all flex items-center justify-center gap-1',
                 tab === t.key ? 'bg-primary text-white' : 'text-slate-400'].join(' ')}>
               <MaterialIcon name={t.icon} className="text-[14px]" />
               {t.label}
@@ -76,7 +122,9 @@ export default function DriverActivitePage() {
           ))}
         </div>
 
-        {tab === 'evaluations' && uid ? (
+        {isNetworkError && records.length === 0 ? (
+          <NetworkErrorView onRetry={recharger} />
+        ) : tab === 'evaluations' && uid ? (
           <EvaluationsTab
             uid={uid}
             totalRatings={driver?.ratingsCount}

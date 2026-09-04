@@ -106,7 +106,11 @@ async function runBuild() {
             fs.rmSync(nextCacheDir, { recursive: true, force: true });
         }
         if (fs.existsSync(defaultNextCacheDir)) {
-            fs.rmSync(defaultNextCacheDir, { recursive: true, force: true });
+            try {
+                fs.rmSync(defaultNextCacheDir, { recursive: true, force: true, maxRetries: 3 });
+            } catch {
+                // Ignorer si un processus concurrent (ex: dev server) verrouille .next/dev
+            }
         }
 
         const staticOutputDir = path.join(__dirname, '../out');

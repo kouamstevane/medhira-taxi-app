@@ -9,8 +9,10 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui';
+import { NetworkErrorView } from '@/components/ui/NetworkErrorView';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 
 interface ErrorProps {
   error: Error & { digest?: string };
@@ -22,6 +24,34 @@ export default function Error({ error, reset }: ErrorProps) {
     // Log l'erreur vers un service de monitoring (ex: Sentry)
     console.error('Application Error:', error);
   }, [error]);
+
+  const isNetworkIssue = useMemo(() => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return true;
+    }
+    if (isFirestoreNetworkError(error)) {
+      return true;
+    }
+    const msg = (error?.message || '').toLowerCase();
+    return (
+      msg.includes('client is offline') ||
+      msg.includes("backend didn't respond") ||
+      msg.includes('failed to fetch') ||
+      msg.includes('network error')
+    );
+  }, [error]);
+
+  if (isNetworkIssue) {
+    return (
+      <NetworkErrorView
+        fullScreen
+        title="Oops !"
+        message="Échec du chargement des données. Veuillez vérifier votre connexion internet et réessayer."
+        onRetry={reset}
+        showHomeButton
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0F0F0F] flex items-center justify-center px-4">

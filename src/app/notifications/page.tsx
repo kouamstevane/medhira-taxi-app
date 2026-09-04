@@ -8,9 +8,10 @@ import { useDocumentStatus } from '@/hooks/useDocumentStatus';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
-import { useNotifications } from "@/hooks/useNotifications";
+import { NetworkErrorView } from '@/components/ui';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { useAuth } from "@/hooks/useAuth";
-import { NotificationCollection } from "@/services/notification.service";
+import { notificationService, NotificationCollection } from "@/services/notification.service";
 import { driverNavItems, adminNavItems } from "@/components/ui/BottomNav";
 import { getFoodOrderDetailPath } from '@/utils/entity-route-paths';
 
@@ -32,8 +33,65 @@ interface DriverNotificationData {
 export default function NotificationsPage() {
   const router = useRouter();
   const { userData, currentUser } = useAuth();
-  const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications();
+  const [notifications, setNotifications] = useState<NotificationCollection[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isNetworkError, setIsNetworkError] = useState<boolean>(false);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
+  const fetchNotifications = useCallback(async (userId: string) => {
+    setIsLoading(true);
+    setIsNetworkError(false);
+    try {
+      const data = await notificationService.getNotifications(userId, 30);
+      setNotifications(data);
+    } catch (error) {
+      console.error('[NOTIFICATIONS] Erreur chargement notifications:', error);
+      if (
+        isFirestoreNetworkError(error) ||
+        (error as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const markAsRead = useCallback(async (notificationId: string) => {
+    await notificationService.markAsRead(notificationId);
+    setNotifications((prev) =>
+      prev.map((n) => (n.notificationId === notificationId ? { ...n, read: true } : n))
+    );
+  }, []);
+
+  const markAllAsRead = useCallback(async () => {
+    const hasUnread = notifications.some((n) => !n.read);
+    if (!hasUnread) return;
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await notificationService.markAllAsRead(notifications);
+    } catch (error) {
+      console.error('[NOTIFICATIONS] Erreur marquage lu:', error);
+      if (currentUser) {
+        void fetchNotifications(currentUser.uid);
+      }
+    }
+  }, [notifications, currentUser, fetchNotifications]);
+
+  useEffect(() => {
+    if (currentUser) {
+      void fetchNotifications(currentUser.uid);
+    } else {
+      setIsLoading(false);
+    }
+  }, [currentUser, fetchNotifications]);
+
+  const handleRetry = useCallback(() => {
+    if (currentUser) {
+      void fetchNotifications(currentUser.uid);
+    }
+  }, [currentUser, fetchNotifications]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -41,7 +99,14 @@ export default function NotificationsPage() {
       try {
         const adminDoc = await getDoc(doc(db, 'admins', currentUser.uid));
         setIsAdmin(adminDoc.exists());
-      } catch {
+      } catch (err) {
+        if (
+          isFirestoreNetworkError(err) ||
+          (err as Error)?.message?.toLowerCase().includes('offline') ||
+          (typeof navigator !== 'undefined' && !navigator.onLine)
+        ) {
+          setIsNetworkError(true);
+        }
         setIsAdmin(false);
       }
     };
@@ -52,8 +117,7 @@ export default function NotificationsPage() {
   const isDriver = userData?.roles?.driver != null;
   const navItems = isDriver ? driverNavItems : isAdmin ? adminNavItems : undefined;
 
-  const { documents: driverDocs } = useDocumentStatus(isDriver ? (currentUser?.uid ?? null) : null);
-  const approvedDocsCount = driverDocs.filter(d => d.status === 'approved').length;
+  useDocumentStatus(isDriver ? (currentUser?.uid ?? null) : null);
   const [driverData, setDriverData] = useState<DriverNotificationData | null>(null);
 
   useEffect(() => {
@@ -64,6 +128,13 @@ export default function NotificationsPage() {
       }
     }, (err) => {
       console.error('[NOTIFICATIONS] Error listening to driver:', err);
+      if (
+        isFirestoreNetworkError(err) ||
+        (err as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true);
+      }
     });
     return () => unsub();
   }, [currentUser, isDriver]);
@@ -277,7 +348,7 @@ export default function NotificationsPage() {
           <div className="flex items-center">
             <button
               onClick={() => router.back()}
-              className="p-2 mr-2 rounded-full hover:bg-white/5 transition touch-manipulation"
+              className="p-2 mr-2 rounded-full hover:bg-white/5 transition touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Retour"
             >
               <MaterialIcon name="arrow_back" className="text-white" />
@@ -287,7 +358,7 @@ export default function NotificationsPage() {
           {hasUnread && (
             <button
               onClick={markAllAsRead}
-              className="text-sm font-medium text-primary hover:text-[#ffae33] px-3 py-2 rounded-lg touch-manipulation transition"
+              className="text-sm font-medium text-primary hover:text-[#ffae33] px-3 py-2 rounded-lg touch-manipulation transition min-h-[44px] flex items-center justify-center"
             >
               Tout marquer lu
             </button>
@@ -297,7 +368,13 @@ export default function NotificationsPage() {
 
       {/* Main Content */}
       <main className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
-        {isLoading ? (
+        {isNetworkError && allNotifications.length === 0 ? (
+          <NetworkErrorView
+            title="Oops !"
+            message="Impossible de charger vos notifications. Veuillez vérifier votre connexion internet et réessayer."
+            onRetry={handleRetry}
+          />
+        ) : isLoading ? (
           <div className="flex justify-center items-center py-20">
             <MaterialIcon name="refresh" className="animate-spin text-primary text-[40px]" />
           </div>

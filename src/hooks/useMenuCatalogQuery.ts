@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import type { MenuItem } from '@/types';
 import type { MenuCatalogAvailability, MenuCatalogQuery, MenuCatalogSort } from '@/utils/menu-catalog';
 
@@ -19,6 +20,7 @@ interface MenuCatalogState {
   isLoading: boolean;
   isLoadingPage: boolean;
   error: string | null;
+  isNetworkError: boolean;
   selectedIds: string[];
 }
 
@@ -45,7 +47,7 @@ export function useMenuCatalogQuery(restaurantId: string) {
   const [categories, setCategories] = useState<string[]>([]);
   const [state, setState] = useState<MenuCatalogState>({
     items: [], totalCount: 0, availableCount: 0, pageIndex: 0, hasNextPage: false,
-    hasPreviousPage: false, isLoading: true, isLoadingPage: false, error: null, selectedIds: [],
+    hasPreviousPage: false, isLoading: true, isLoadingPage: false, error: null, isNetworkError: false, selectedIds: [],
   });
   const cursorByPageRef = useRef<Array<QueryDocumentSnapshot<DocumentData> | null>>([null]);
   const requestIdRef = useRef(0);
@@ -67,7 +69,7 @@ export function useMenuCatalogQuery(restaurantId: string) {
   const fetchPage = useCallback(async (queryOptions: MenuCatalogQuery, pageIndex: number, cursor: QueryDocumentSnapshot<DocumentData> | null) => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    setState((previous) => ({ ...previous, isLoading: pageIndex === 0, isLoadingPage: true, error: null }));
+    setState((previous) => ({ ...previous, isLoading: pageIndex === 0, isLoadingPage: true, error: null, isNetworkError: false }));
     try {
       const page = await FoodDeliveryService.getRestaurantMenuPaginated(restaurantId, { ...queryOptions, cursor });
       if (requestId !== requestIdRef.current) return;
@@ -84,11 +86,21 @@ export function useMenuCatalogQuery(restaurantId: string) {
         isLoading: false,
         isLoadingPage: false,
         error: null,
+        isNetworkError: false,
         selectedIds: [],
       }));
-    } catch {
+    } catch (error) {
       if (requestId !== requestIdRef.current) return;
-      setState((previous) => ({ ...previous, isLoading: false, isLoadingPage: false, error: 'Impossible de charger le catalogue.' }));
+      const isNet = isFirestoreNetworkError(error) ||
+        (error as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine);
+      setState((previous) => ({
+        ...previous,
+        isLoading: false,
+        isLoadingPage: false,
+        error: 'Impossible de charger le catalogue.',
+        isNetworkError: isNet,
+      }));
     }
   }, [restaurantId]);
 
@@ -104,9 +116,11 @@ export function useMenuCatalogQuery(restaurantId: string) {
   useEffect(() => {
     let cancelled = false;
     if (!restaurantId) return () => { cancelled = true; };
-    void FoodDeliveryService.getRestaurantMenuCategories(restaurantId)
-      .then((values) => { if (!cancelled) setCategories(values); })
-      .catch(() => { if (!cancelled) setCategories([]); });
+    if (typeof FoodDeliveryService?.getRestaurantMenuCategories === 'function') {
+      void FoodDeliveryService.getRestaurantMenuCategories(restaurantId)
+        .then((values) => { if (!cancelled) setCategories(values); })
+        .catch(() => { if (!cancelled) setCategories([]); });
+    }
     return () => { cancelled = true; };
   }, [restaurantId]);
 

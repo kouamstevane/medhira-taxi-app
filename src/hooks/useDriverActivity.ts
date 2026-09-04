@@ -23,13 +23,22 @@ export function getTaxiActivityAmount(data: { fare?: unknown; price?: unknown })
   return 0
 }
 
-export function useDriverActivity(uid: string): {
+export interface UseDriverActivityOptions {
+  refreshKey?: number
+  onError?: (error: unknown) => void
+}
+
+export function useDriverActivity(
+  uid: string,
+  options?: UseDriverActivityOptions
+): {
   records: ActivityRecord[]
   totals: ActivityTotals
   loading: boolean
 } {
   const [records, setRecords] = useState<ActivityRecord[]>([])
   const [snapshotLoading, setSnapshotLoading] = useState(true)
+  const { refreshKey, onError } = options ?? {}
 
   useEffect(() => {
     if (!uid) return
@@ -79,6 +88,7 @@ export function useDriverActivity(uid: string): {
     }, (error) => {
       console.error('Driver activity snapshot error:', error)
       setSnapshotLoading(false)
+      onError?.(error)
     })
 
     const deliveryQuery = query(
@@ -109,13 +119,14 @@ export function useDriverActivity(uid: string): {
     }, (error) => {
       console.error('Driver activity snapshot error:', error)
       setSnapshotLoading(false)
+      onError?.(error)
     })
 
     return () => {
       unsubTaxi()
       unsubDelivery()
     }
-  }, [uid])
+  }, [uid, refreshKey, onError])
 
   const totals = useMemo<ActivityTotals>(() => {
     let total = 0

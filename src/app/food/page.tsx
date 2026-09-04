@@ -7,6 +7,8 @@ import { Restaurant, RestaurantFilters } from '@/types/food-delivery';
 import { RestaurantCard } from '@/components/food/RestaurantCard';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { NetworkErrorView } from '@/components/ui';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import Link from 'next/link';
 
 export default function FoodHomePage() {
@@ -17,6 +19,8 @@ export default function FoodHomePage() {
   const [hasMore, setHasMore] = useState(true);
   const [filters, setFilters] = useState<RestaurantFilters>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [isNetworkError, setIsNetworkError] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const CUISINES = ['Tous', 'Africain', 'Européen', 'Fast Food', 'Healthy', 'Asiatique', 'Pâtisserie'];
 
@@ -37,6 +41,7 @@ export default function FoodHomePage() {
     let isMounted = true;
 
     const fetchRestaurants = async () => {
+      setIsNetworkError(false);
       setLoading(true);
       try {
         const { restaurants: newRestaurants, lastDoc } = await FoodDeliveryService.getApprovedRestaurants(
@@ -51,7 +56,16 @@ export default function FoodHomePage() {
           setHasMore(newRestaurants.length === 20);
         }
       } catch (error) {
-        if (isMounted) console.error('Erreur chargement restaurants:', error);
+        if (isMounted) {
+          console.error('Erreur chargement restaurants:', error);
+          if (
+            isFirestoreNetworkError(error) ||
+            (error as Error)?.message?.toLowerCase().includes('offline') ||
+            (typeof navigator !== 'undefined' && !navigator.onLine)
+          ) {
+            setIsNetworkError(true);
+          }
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -62,9 +76,10 @@ export default function FoodHomePage() {
     return () => {
       isMounted = false;
     };
-  }, [filters.cuisineType, filters.searchQuery]);
+  }, [filters.cuisineType, filters.searchQuery, refreshKey]);
 
   const loadMoreRestaurants = async () => {
+    setIsNetworkError(false);
     setLoadingMore(true);
 
     try {
@@ -79,6 +94,13 @@ export default function FoodHomePage() {
       setHasMore(newRestaurants.length === 20);
     } catch (error) {
       console.error('Erreur chargement plus de restaurants:', error);
+      if (
+        isFirestoreNetworkError(error) ||
+        (error as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true);
+      }
     } finally {
       setLoadingMore(false);
     }
@@ -98,6 +120,11 @@ export default function FoodHomePage() {
     }
   };
 
+  const recharger = () => {
+    setIsNetworkError(false);
+    setLoading(true);
+    setRefreshKey(prev => prev + 1);
+  };
 
   return (
     <div className="min-h-screen bg-background pb-28 max-w-[430px] mx-auto">
@@ -172,6 +199,13 @@ export default function FoodHomePage() {
             <MaterialIcon name="progress_activity" size="xl" className="animate-spin text-primary" />
             <p className="text-slate-400 font-medium">Recherche des meilleurs restaurants...</p>
           </div>
+        ) : isNetworkError && restaurants.length === 0 ? (
+          <div className="py-8">
+            <NetworkErrorView
+              message="Impossible de charger les restaurants. Veuillez vérifier votre connexion internet et réessayer."
+              onRetry={recharger}
+            />
+          </div>
         ) : restaurants.length === 0 ? (
           <div className="glass-card rounded-3xl p-10 text-center border border-white/5 mt-4">
             <div className="flex justify-center mb-6">
@@ -197,7 +231,7 @@ export default function FoodHomePage() {
                 <button
                   onClick={loadMoreRestaurants}
                   disabled={loadingMore}
-                  className="bg-primary/10 text-primary font-bold py-3 px-8 rounded-full hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  className="bg-primary/10 text-primary font-bold py-3 px-8 rounded-full hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-2 min-h-[44px]"
                 >
                   {loadingMore ? <MaterialIcon name="progress_activity" size="md" className="animate-spin" /> : 'Charger plus'}
                 </button>

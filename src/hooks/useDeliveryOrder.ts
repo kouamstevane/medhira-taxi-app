@@ -24,7 +24,12 @@ export async function refreshDeliveryUploadClaims(
   await user?.getIdToken(true)
 }
 
-export function useDeliveryOrder(orderId: string) {
+export interface UseDeliveryOrderOptions {
+  refreshKey?: number
+  onError?: (error: unknown) => void
+}
+
+export function useDeliveryOrder(orderId: string, options?: UseDeliveryOrderOptions) {
   const [order, setOrder] = useState<FoodDeliveryOrder | null>(null)
   const [loading, setLoading] = useState(true)
   const [localStatus, setLocalStatus] = useState<DeliveryStatus | null>(null)
@@ -36,6 +41,7 @@ export function useDeliveryOrder(orderId: string) {
   const lastEmitTimeRef = useRef<number>(0)
 
   const [error, setError] = useState<string | null>(null)
+  const { refreshKey, onError } = options ?? {}
 
   useEffect(() => {
     if (!orderId) return
@@ -48,9 +54,10 @@ export function useDeliveryOrder(orderId: string) {
       console.error('[useDeliveryOrder] Erreur de synchronisation:', err)
       setError('Erreur de connexion aux données')
       setLoading(false)
+      onError?.(err)
     })
     return () => unsub()
-  }, [orderId])
+  }, [orderId, refreshKey, onError])
 
   // GPS RTDB emission — throttled 1Hz — active during delivery
   useEffect(() => {

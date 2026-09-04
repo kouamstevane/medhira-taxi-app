@@ -16,6 +16,8 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { NetworkErrorView } from '@/components/ui';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
 import {
@@ -130,6 +132,7 @@ export default function ClientOrdersPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<UnifiedOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isNetworkError, setIsNetworkError] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<OrderType>('all');
   const [userId, setUserId] = useState<string | null>(null);
@@ -148,6 +151,7 @@ export default function ClientOrdersPage() {
   const fetchOrders = useCallback(async (uid: string) => {
     setLoading(true);
     setFetchError(null);
+    setIsNetworkError(false);
     try {
       const [bookingsSnapshot, foodSnapshot, parcelsSnapshot] = await Promise.all([
         getDocs(
@@ -243,11 +247,25 @@ export default function ClientOrdersPage() {
       setOrders(combined);
     } catch (error) {
       console.error('Erreur chargement commandes:', error);
-      setFetchError('Impossible de charger vos commandes. Veuillez réessayer.');
+      if (
+        isFirestoreNetworkError(error) ||
+        (error as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true);
+      } else {
+        setFetchError('Impossible de charger vos commandes. Veuillez réessayer.');
+      }
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const handleRetry = useCallback(() => {
+    if (userId) {
+      void fetchOrders(userId);
+    }
+  }, [userId, fetchOrders]);
 
   useEffect(() => {
     if (userId) {
@@ -279,6 +297,7 @@ export default function ClientOrdersPage() {
           <button
             onClick={() => router.push('/dashboard')}
             className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10 min-w-[44px] min-h-[44px] flex items-center justify-center"
+            aria-label="Retour au tableau de bord"
           >
             <MaterialIcon name="arrow_back" size="lg" />
           </button>
@@ -286,7 +305,17 @@ export default function ClientOrdersPage() {
           <div className="w-10" />
         </div>
 
-        <div className="p-4">
+        {isNetworkError && orders.length === 0 ? (
+          <div className="p-4">
+            <NetworkErrorView
+              title="Oops !"
+              message="Impossible de charger vos commandes. Veuillez vérifier votre connexion internet et réessayer."
+              onRetry={handleRetry}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="p-4">
           <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
             {TAB_OPTIONS.map((tab) => (
               <button
@@ -404,6 +433,8 @@ export default function ClientOrdersPage() {
             ))
           )}
         </div>
+          </>
+        )}
       </div>
 
       <BottomNav />

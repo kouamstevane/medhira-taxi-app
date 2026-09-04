@@ -18,3 +18,6 @@ export { MapFallback } from './MapFallback';
 export { FloatingActionButton } from './FloatingActionButton';
 
 export { WalletPreview } from './WalletPreview';
+
+export { NetworkErrorView, DisconnectedCableIllustration } from './NetworkErrorView';
+export type { NetworkErrorViewProps } from './NetworkErrorView';

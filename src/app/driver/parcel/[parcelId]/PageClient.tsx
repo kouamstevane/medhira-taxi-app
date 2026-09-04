@@ -1,9 +1,11 @@
 'use client'
 
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
 import { useParcelDelivery, type ParcelStatus } from '@/hooks/useParcelDelivery'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
+import { NetworkErrorView } from '@/components/ui'
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler'
 
 const STATUS_LABEL: Record<ParcelStatus, string> = {
   pending: 'En attente',
@@ -18,10 +20,70 @@ export default function DriverParcelPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const parcelId = searchParams.get('parcelId')?.trim() || (params.parcelId as string) || ''
-  const { parcel, loading, error, updateStatus } = useParcelDelivery(parcelId)
+  const parcelId = searchParams.get('parcelId')?.trim() || (params?.parcelId as string) || ''
+  const [isNetworkError, setIsNetworkError] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const handleLoadingError = useCallback((error: unknown) => {
+    try {
+      throw error
+    } catch (err) {
+      if (
+        isFirestoreNetworkError(err) ||
+        (err as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true)
+      }
+    }
+  }, [])
+
+  const recharger = useCallback(async () => {
+    setIsNetworkError(false)
+    try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        throw new Error('offline')
+      }
+      setRefreshKey((k) => k + 1)
+    } catch (error) {
+      if (
+        isFirestoreNetworkError(error) ||
+        (error as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true)
+      }
+    }
+  }, [])
+
+  const { parcel, loading, error, updateStatus } = useParcelDelivery(parcelId, {
+    refreshKey,
+    onError: handleLoadingError,
+  })
   const [actionError, setActionError] = useState<string | null>(null)
   const [actioning, setActioning] = useState(false)
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setIsNetworkError(true)
+    }
+  }, [parcelId])
+
+  useEffect(() => {
+    if (error) {
+      try {
+        throw new Error(error)
+      } catch (err) {
+        if (
+          isFirestoreNetworkError(err) ||
+          (err as Error)?.message?.toLowerCase().includes('offline') ||
+          (typeof navigator !== 'undefined' && !navigator.onLine)
+        ) {
+          setIsNetworkError(true)
+        }
+      }
+    }
+  }, [error])
 
   useEffect(() => {
     if (!loading && parcel?.status === 'delivered') {
@@ -29,6 +91,26 @@ export default function DriverParcelPage() {
       return () => clearTimeout(t)
     }
   }, [loading, parcel?.status, router])
+
+  if (isNetworkError && !parcel) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col font-sans text-slate-100 antialiased">
+        <header className="sticky top-0 z-20 flex items-center p-4 bg-background/80 backdrop-blur-xl border-b border-white/5">
+          <button
+            onClick={() => router.replace('/driver/dashboard')}
+            className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full glass-card text-white active:scale-95 transition-transform"
+            aria-label="Retour au tableau de bord"
+          >
+            <MaterialIcon name="arrow_back" size="md" />
+          </button>
+          <h1 className="flex-1 text-center text-lg font-bold text-white pr-11">Transport de colis</h1>
+        </header>
+        <main className="flex-1 flex items-center justify-center p-4">
+          <NetworkErrorView onRetry={recharger} />
+        </main>
+      </div>
+    )
+  }
 
   if (loading || !parcel) {
     return (
@@ -38,7 +120,10 @@ export default function DriverParcelPage() {
             <MaterialIcon name="error_outline" className="text-red-400 text-[48px] mb-3" />
             <p className="text-white font-bold mb-2">Erreur</p>
             <p className="text-slate-400 text-sm mb-4">{error}</p>
-            <button onClick={() => router.back()} className="w-full h-12 bg-primary text-white font-bold rounded-xl">
+            <button
+              onClick={() => router.back()}
+              className="w-full min-h-[44px] h-12 bg-primary text-white font-bold rounded-xl flex items-center justify-center"
+            >
               Retour
             </button>
           </div>
@@ -213,7 +298,7 @@ export default function DriverParcelPage() {
               <span className="text-slate-400">Téléphone</span>
               <a
                 href={`tel:${parcel.recipientPhone}`}
-                className="text-primary font-medium flex items-center gap-1"
+                className="text-primary font-medium flex items-center gap-1 min-h-[44px] px-2"
               >
                 <MaterialIcon name="phone" size="sm" />
                 {parcel.recipientPhone}

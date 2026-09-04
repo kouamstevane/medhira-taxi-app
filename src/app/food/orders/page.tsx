@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { FoodOrder } from '@/types/food-delivery';
 import { OrderStatusBadge } from '@/components/food/OrderStatusBadge';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { NetworkErrorView } from '@/components/ui';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { useAuth } from '@/hooks/useAuth';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { getFoodOrderDetailPath } from '@/utils/entity-route-paths';
@@ -16,23 +18,34 @@ export default function OrdersHistoryPage() {
   const { currentUser: user } = useAuth();
   const [orders, setOrders] = useState<FoodOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isNetworkError, setIsNetworkError] = useState(false);
 
-  useEffect(() => {
-    if (user?.uid) {
-      loadOrders();
-    }
-  }, [user]);
-
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
+    if (!user?.uid) return;
+    setIsNetworkError(false);
+    setLoading(true);
     try {
-      const data = await FoodDeliveryService.getUserFoodOrders(user!.uid);
+      const data = await FoodDeliveryService.getUserFoodOrders(user.uid);
       setOrders(data);
     } catch (error) {
       console.error('Erreur chargement commandes:', error);
+      if (
+        isFirestoreNetworkError(error) ||
+        (error as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (user?.uid) {
+      void loadOrders();
+    }
+  }, [user?.uid, loadOrders]);
 
   const formatDate = (timestamp: { toDate?: () => Date } | Date | string | number | null | undefined) => {
     if (!timestamp) return '';
@@ -46,7 +59,11 @@ export default function OrdersHistoryPage() {
     <div className="min-h-screen bg-background pb-20 max-w-[430px] mx-auto">
       {/* Header */}
       <div className="bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-20 flex items-center justify-between">
-        <button onClick={() => router.push('/food')} className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10">
+        <button
+          onClick={() => router.push('/food')}
+          className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center"
+          aria-label="Retour"
+        >
           <MaterialIcon name="arrow_back" size="lg" />
         </button>
         <h1 className="text-xl font-bold text-white">Mes Commandes</h1>
@@ -57,6 +74,13 @@ export default function OrdersHistoryPage() {
         {loading ? (
           <div className="flex justify-center items-center py-20">
             <MaterialIcon name="progress_activity" size="xl" className="animate-spin text-primary" />
+          </div>
+        ) : isNetworkError && orders.length === 0 ? (
+          <div className="py-8">
+            <NetworkErrorView
+              message="Impossible de charger l'historique de vos commandes. Veuillez vérifier votre connexion internet et réessayer."
+              onRetry={loadOrders}
+            />
           </div>
         ) : orders.length === 0 ? (
           <div className="glass-card rounded-2xl p-10 text-center border border-white/5 mt-10">
@@ -69,7 +93,7 @@ export default function OrdersHistoryPage() {
             <p className="text-slate-400 text-sm mb-6">Vous n'avez pas encore passé de commande.</p>
             <button
               onClick={() => router.push('/food')}
-              className="bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold px-6 py-3 rounded-xl"
+              className="bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold px-6 py-3 rounded-xl min-h-[44px]"
             >
               Découvrir les restaurants
             </button>

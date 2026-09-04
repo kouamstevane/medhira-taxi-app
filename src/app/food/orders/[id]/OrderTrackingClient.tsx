@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -9,6 +9,8 @@ import { FoodOrder, FoodOrderStatus } from '@/types/food-delivery';
 
 import { OrderStatusBadge } from '@/components/food/OrderStatusBadge';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { NetworkErrorView } from '@/components/ui';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { BottomNav } from '@/components/ui/BottomNav';
@@ -68,9 +70,9 @@ export const resolveRestaurantConversationUid = async (
 };
 
 export default function OrderTrackingClient() {
-  const params = useParams()
-  const searchParams = useSearchParams()
-  const orderId = searchParams.get('id')?.trim() || (params.id as string) || ''
+  const params = useParams();
+  const searchParams = useSearchParams();
+  const orderId = searchParams.get('id')?.trim() || (params.id as string) || '';
   const router = useRouter();
   const { showError, toasts, removeToast } = useToast();
   const { currentUser, userData } = useAuth();
@@ -79,6 +81,8 @@ export default function OrderTrackingClient() {
   const [restaurantConversationUid, setRestaurantConversationUid] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isNetworkError, setIsNetworkError] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Review states
   const [restaurantRating, setRestaurantRating] = useState(0);
@@ -95,6 +99,9 @@ export default function OrderTrackingClient() {
       return;
     }
 
+    setIsNetworkError(false);
+    setLoading(true);
+
     const orderRef = doc(db, FIRESTORE_COLLECTIONS.FOOD_ORDERS, orderId);
 
     // Écoute en temps réel des changements de statut (Règle 8 logic-brief.md)
@@ -110,6 +117,7 @@ export default function OrderTrackingClient() {
             createdAt: data.createdAt as Timestamp,
             updatedAt: data.updatedAt as Timestamp,
           });
+          setIsNetworkError(false);
         } else {
           setError('Commande introuvable');
         }
@@ -117,13 +125,20 @@ export default function OrderTrackingClient() {
       },
       (err) => {
         console.error('Erreur écoute commande:', err);
+        if (
+          isFirestoreNetworkError(err) ||
+          err?.message?.toLowerCase().includes('offline') ||
+          (typeof navigator !== 'undefined' && !navigator.onLine)
+        ) {
+          setIsNetworkError(true);
+        }
         setError('Erreur lors du chargement de la commande');
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [orderId]);
+  }, [orderId, refreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,6 +164,12 @@ export default function OrderTrackingClient() {
 
   const currentStepIndex = getFoodOrderStepIndex(order?.status);
 
+  const recharger = useCallback(() => {
+    setIsNetworkError(false);
+    setError('');
+    setLoading(true);
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   const handleSubmitReview = async () => {
     if (!order || restaurantRating === 0) {
@@ -164,7 +185,7 @@ export default function OrderTrackingClient() {
         restaurantId: order.restaurantId,
         userId: order.userId,
         rating: restaurantRating,
-        comment: restaurantComment
+        comment: restaurantComment,
       });
 
       // 2. Soumettre avis livreur si applicable
@@ -174,7 +195,7 @@ export default function OrderTrackingClient() {
           driverId: order.driverId,
           userId: order.userId,
           rating: driverRating,
-          comment: driverComment
+          comment: driverComment,
         });
       }
 
@@ -195,6 +216,31 @@ export default function OrderTrackingClient() {
     );
   }
 
+  if (isNetworkError && !order) {
+    return (
+      <div className="min-h-screen bg-background pb-20 max-w-[430px] mx-auto flex flex-col">
+        <div className="bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-20 flex items-center justify-between">
+          <button
+            onClick={() => router.push('/food/orders')}
+            className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Retour aux commandes"
+          >
+            <MaterialIcon name="arrow_back" size="lg" />
+          </button>
+          <h1 className="text-xl font-bold text-white">Détail commande</h1>
+          <div className="w-10"></div>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <NetworkErrorView
+            message="Impossible de charger les détails de votre commande. Veuillez vérifier votre connexion internet et réessayer."
+            onRetry={recharger}
+          />
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
+
   if (error || !order) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
@@ -202,7 +248,7 @@ export default function OrderTrackingClient() {
         <p className="text-slate-400 mb-6">{error || 'Commande introuvable'}</p>
         <button
           onClick={() => router.push('/food/orders')}
-          className="bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold px-6 py-3 rounded-xl"
+          className="bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold px-6 py-3 rounded-xl min-h-[44px]"
         >
           Retour aux commandes
         </button>
@@ -255,173 +301,176 @@ export default function OrderTrackingClient() {
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <div className="min-h-screen bg-background pb-20 max-w-[430px] mx-auto">
-      {/* Header */}
-      <div className="bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-20 flex items-center justify-between">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10">
-          <MaterialIcon name="arrow_back" size="lg" />
-        </button>
-        <h1 className="text-xl font-bold text-white">Suivi Commande</h1>
-        <div className="w-10"></div>
-      </div>
+        {/* Header */}
+        <div className="bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-20 flex items-center justify-between">
+          <button
+            onClick={() => router.back()}
+            className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Retour"
+          >
+            <MaterialIcon name="arrow_back" size="lg" />
+          </button>
+          <h1 className="text-xl font-bold text-white">Suivi Commande</h1>
+          <div className="w-10"></div>
+        </div>
 
-      <div className="p-4 max-w-lg mx-auto space-y-6">
-        {/* En-tête de la commande */}
-        <section className="glass-card p-5 rounded-2xl border border-white/5 text-center">
-          <h2 className="text-2xl font-bold text-white mb-1">{order.restaurantName}</h2>
-          <p className="text-slate-400 text-sm mb-4">Commande n° {order.id?.slice(-6).toUpperCase()}</p>
-          <OrderStatusBadge status={order.status} className="mx-auto" />
-        </section>
+        <div className="p-4 max-w-lg mx-auto space-y-6">
+          {/* En-tête de la commande */}
+          <section className="glass-card p-5 rounded-2xl border border-white/5 text-center">
+            <h2 className="text-2xl font-bold text-white mb-1">{order.restaurantName}</h2>
+            <p className="text-slate-400 text-sm mb-4">Commande n° {order.id?.slice(-6).toUpperCase()}</p>
+            <OrderStatusBadge status={order.status} className="mx-auto" />
+          </section>
 
-        {/* Contacts (chat + appel) - visible tant que la commande est active */}
-        {isOrderActive && currentUser && (
-          <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
-            <h3 className="font-bold text-white">Contacter</h3>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-white">Restaurant</p>
-                <p className="text-xs text-slate-400">{order.restaurantName || 'Restaurant'}</p>
-              </div>
-              <ConversationLauncher
-                context={restaurantContext}
-                currentUserUid={clientUid}
-                variant="icon-only"
-              />
-            </div>
-            {driverContext && (
-              <div className="flex items-center justify-between pt-3 border-t border-white/5">
+          {/* Contacts (chat + appel) - visible tant que la commande est active */}
+          {isOrderActive && currentUser && (
+            <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
+              <h3 className="font-bold text-white">Contacter</h3>
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-white">Livreur</p>
-                  <p className="text-xs text-slate-400">{order.driverName || 'Livreur assigné'}</p>
+                  <p className="text-sm font-semibold text-white">Restaurant</p>
+                  <p className="text-xs text-slate-400">{order.restaurantName || 'Restaurant'}</p>
                 </div>
                 <ConversationLauncher
-                  context={driverContext}
+                  context={restaurantContext}
                   currentUserUid={clientUid}
                   variant="icon-only"
                 />
               </div>
-            )}
-          </section>
-        )}
-
-        {/* Timeline de suivi (Optimistic UI pour le tracking) */}
-        {!isCancelled && (
-          <section className="glass-card p-5 rounded-2xl border border-white/5">
-            <h3 className="font-bold text-white mb-6">État d'avancement</h3>
-            <div className="space-y-6 relative before:absolute before:inset-0 before:ml-[1.4rem] before:w-0.5 before:bg-white/5 before:-z-10">
-              {STATUS_STEPS.map((step) => {
-                const isCompleted = currentStepIndex >= 0 && step.step <= currentStepIndex;
-                const isCurrent = step.step === currentStepIndex;
-
-                return (
-                  <div key={step.step} className="flex gap-4 items-start relative z-10">
-                    <div className={`p-2 rounded-full shrink-0 ${isCompleted ? 'bg-primary text-white' : 'bg-white/5 text-slate-500'}`}>
-                      <MaterialIcon name={step.icon} size="md" />
-                    </div>
-                    <div className="pt-1.5">
-                      <p className={`font-semibold ${isCurrent ? 'text-primary font-bold' : isCompleted ? 'text-white' : 'text-slate-500'}`}>
-                        {step.label}
-                      </p>
-                    </div>
+              {driverContext && (
+                <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                  <div>
+                    <p className="text-sm font-semibold text-white">Livreur</p>
+                    <p className="text-xs text-slate-400">{order.driverName || 'Livreur assigné'}</p>
                   </div>
-                );
-              })}
-            </div>
-
-          </section>
-        )}
-
-        {/* Détails de la commande */}
-        <section className="glass-card p-5 rounded-2xl border border-white/5">
-          <h3 className="font-bold text-white mb-4">Détails de la commande</h3>
-          <div className="space-y-3 mb-4">
-            {order.orderItems.map((item, idx) => (
-              <div key={idx} className="flex justify-between text-sm">
-                <span className="text-slate-300">
-                  <span className="font-bold text-white mr-2">{item.itemQuantity}x</span>
-                  {item.itemName}
-                </span>
-                <span className="font-medium text-white">{(item.itemPrice * item.itemQuantity).toFixed(2)} {CURRENCY_CODE}</span>
-              </div>
-            ))}
-          </div>
-          <div className="border-t border-white/5 pt-4 flex justify-between items-center font-bold text-lg text-white">
-            <span>Total Payé</span>
-            <span>{order.totalOrderPrice.toFixed(2)} {CURRENCY_CODE}</span>
-          </div>
-        </section>
-
-        {/* Section Avis (visible uniquement si livrée et pas encore notée) */}
-        {isDelivered && !reviewSubmitted && (
-          <section className="glass-card p-5 rounded-2xl border border-primary/20">
-            <h3 className="font-bold text-white mb-2">Comment s'est passée votre commande ?</h3>
-            <p className="text-sm text-slate-400 mb-6">Votre avis aide les autres utilisateurs et les restaurants.</p>
-
-            <div className="space-y-4">
-              {/* Avis Restaurant */}
-              <div>
-                <p className="text-sm font-semibold text-slate-300 mb-2">Noter {order.restaurantName}</p>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4, 5].map(star => (
-                    <button key={star} onClick={() => setRestaurantRating(star)} className={`p-1 ${restaurantRating >= star ? 'text-yellow-400' : 'text-slate-600'}`}>
-                      <MaterialIcon name="star" size="xl" filled={restaurantRating >= star} />
-                    </button>
-                  ))}
-                </div>
-                {restaurantRating > 0 && (
-                  <textarea
-                    value={restaurantComment}
-                    onChange={(e) => setRestaurantComment(e.target.value)}
-                    placeholder="Qu'avez-vous pensé du repas ? (Optionnel)"
-                    className="w-full mt-3 p-3 text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-white"
-                    rows={2}
+                  <ConversationLauncher
+                    context={driverContext}
+                    currentUserUid={clientUid}
+                    variant="icon-only"
                   />
-                )}
-              </div>
+                </div>
+              )}
+            </section>
+          )}
 
-              {/* Avis Livreur */}
-              {order.driverId && (
-                <div className="pt-4 border-t border-white/5">
-                  <p className="text-sm font-semibold text-slate-300 mb-2">Noter le livreur</p>
+          {/* Timeline de suivi (Optimistic UI pour le tracking) */}
+          {!isCancelled && (
+            <section className="glass-card p-5 rounded-2xl border border-white/5">
+              <h3 className="font-bold text-white mb-6">État d'avancement</h3>
+              <div className="space-y-6 relative before:absolute before:inset-0 before:ml-[1.4rem] before:w-0.5 before:bg-white/5 before:-z-10">
+                {STATUS_STEPS.map((step) => {
+                  const isCompleted = currentStepIndex >= 0 && step.step <= currentStepIndex;
+                  const isCurrent = step.step === currentStepIndex;
+
+                  return (
+                    <div key={step.step} className="flex gap-4 items-start relative z-10">
+                      <div className={`p-2 rounded-full shrink-0 ${isCompleted ? 'bg-primary text-white' : 'bg-white/5 text-slate-500'}`}>
+                        <MaterialIcon name={step.icon} size="md" />
+                      </div>
+                      <div className="pt-1.5">
+                        <p className={`font-semibold ${isCurrent ? 'text-primary font-bold' : isCompleted ? 'text-white' : 'text-slate-500'}`}>
+                          {step.label}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Détails de la commande */}
+          <section className="glass-card p-5 rounded-2xl border border-white/5">
+            <h3 className="font-bold text-white mb-4">Détails de la commande</h3>
+            <div className="space-y-3 mb-4">
+              {order.orderItems.map((item, idx) => (
+                <div key={idx} className="flex justify-between text-sm">
+                  <span className="text-slate-300">
+                    <span className="font-bold text-white mr-2">{item.itemQuantity}x</span>
+                    {item.itemName}
+                  </span>
+                  <span className="font-medium text-white">{(item.itemPrice * item.itemQuantity).toFixed(2)} {CURRENCY_CODE}</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-white/5 pt-4 flex justify-between items-center font-bold text-lg text-white">
+              <span>Total Payé</span>
+              <span>{order.totalOrderPrice.toFixed(2)} {CURRENCY_CODE}</span>
+            </div>
+          </section>
+
+          {/* Section Avis (visible uniquement si livrée et pas encore notée) */}
+          {isDelivered && !reviewSubmitted && (
+            <section className="glass-card p-5 rounded-2xl border border-primary/20">
+              <h3 className="font-bold text-white mb-2">Comment s'est passée votre commande ?</h3>
+              <p className="text-sm text-slate-400 mb-6">Votre avis aide les autres utilisateurs et les restaurants.</p>
+
+              <div className="space-y-4">
+                {/* Avis Restaurant */}
+                <div>
+                  <p className="text-sm font-semibold text-slate-300 mb-2">Noter {order.restaurantName}</p>
                   <div className="flex gap-2">
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <button key={star} onClick={() => setDriverRating(star)} className={`p-1 ${driverRating >= star ? 'text-yellow-400' : 'text-slate-600'}`}>
-                        <MaterialIcon name="star" size="xl" filled={driverRating >= star} />
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button key={star} onClick={() => setRestaurantRating(star)} className={`p-1 min-h-[44px] min-w-[44px] flex items-center justify-center ${restaurantRating >= star ? 'text-yellow-400' : 'text-slate-600'}`}>
+                        <MaterialIcon name="star" size="xl" filled={restaurantRating >= star} />
                       </button>
                     ))}
                   </div>
-                  {driverRating > 0 && (
+                  {restaurantRating > 0 && (
                     <textarea
-                      value={driverComment}
-                      onChange={(e) => setDriverComment(e.target.value)}
-                      placeholder="Comment s'est passée la livraison ? (Optionnel)"
+                      value={restaurantComment}
+                      onChange={(e) => setRestaurantComment(e.target.value)}
+                      placeholder="Qu'avez-vous pensé du repas ? (Optionnel)"
                       className="w-full mt-3 p-3 text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-white"
                       rows={2}
                     />
                   )}
                 </div>
-              )}
 
-              <button
-                onClick={handleSubmitReview}
-                disabled={submittingReview || restaurantRating === 0}
-                className="w-full mt-4 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-3 rounded-xl disabled:opacity-50 flex justify-center items-center gap-2"
-              >
-                {submittingReview ? <MaterialIcon name="progress_activity" size="md" className="animate-spin" /> : 'Envoyer mon avis'}
-              </button>
-            </div>
-          </section>
-        )}
+                {/* Avis Livreur */}
+                {order.driverId && (
+                  <div className="pt-4 border-t border-white/5">
+                    <p className="text-sm font-semibold text-slate-300 mb-2">Noter le livreur</p>
+                    <div className="flex gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button key={star} onClick={() => setDriverRating(star)} className={`p-1 min-h-[44px] min-w-[44px] flex items-center justify-center ${driverRating >= star ? 'text-yellow-400' : 'text-slate-600'}`}>
+                          <MaterialIcon name="star" size="xl" filled={driverRating >= star} />
+                        </button>
+                      ))}
+                    </div>
+                    {driverRating > 0 && (
+                      <textarea
+                        value={driverComment}
+                        onChange={(e) => setDriverComment(e.target.value)}
+                        placeholder="Comment s'est passée la livraison ? (Optionnel)"
+                        className="w-full mt-3 p-3 text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-white"
+                        rows={2}
+                      />
+                    )}
+                  </div>
+                )}
 
-        {reviewSubmitted && (
-          <section className="bg-green-500/10 p-5 rounded-2xl border border-green-500/20 text-center">
-            <div className="bg-green-500/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-              <MaterialIcon name="check_circle" size="lg" className="text-green-400" />
-            </div>
-            <h3 className="font-bold text-green-400 mb-1">Merci pour votre avis !</h3>
-            <p className="text-sm text-green-400/80">Votre retour est précieux.</p>
-          </section>
-        )}
-      </div>
+                <button
+                  onClick={handleSubmitReview}
+                  disabled={submittingReview || restaurantRating === 0}
+                  className="w-full mt-4 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-3 rounded-xl disabled:opacity-50 flex justify-center items-center gap-2 min-h-[44px]"
+                >
+                  {submittingReview ? <MaterialIcon name="progress_activity" size="md" className="animate-spin" /> : 'Envoyer mon avis'}
+                </button>
+              </div>
+            </section>
+          )}
+
+          {reviewSubmitted && (
+            <section className="bg-green-500/10 p-5 rounded-2xl border border-green-500/20 text-center">
+              <div className="bg-green-500/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                <MaterialIcon name="check_circle" size="lg" className="text-green-400" />
+              </div>
+              <h3 className="font-bold text-green-400 mb-1">Merci pour votre avis !</h3>
+              <p className="text-sm text-green-400/80">Votre retour est précieux.</p>
+            </section>
+          )}
+        </div>
       </div>
       <BottomNav />
     </>

@@ -41,13 +41,19 @@ export interface ParcelDoc {
 
 export const ACTIVE_PARCEL_STATUSES: readonly ParcelStatus[] = ['accepted', 'in_transit']
 
-export function useParcelDelivery(parcelId: string) {
+export interface UseParcelDeliveryOptions {
+  refreshKey?: number
+  onError?: (error: unknown) => void
+}
+
+export function useParcelDelivery(parcelId: string, options?: UseParcelDeliveryOptions) {
   const [parcel, setParcel] = useState<ParcelDoc | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [localStatus, setLocalStatus] = useState<ParcelStatus | null>(null)
   const localStatusRef = useRef<ParcelStatus | null>(null)
   useEffect(() => { localStatusRef.current = localStatus }, [localStatus])
+  const { refreshKey, onError } = options ?? {}
 
   const gpsWatchIdRef = useRef<number | null>(null)
   const lastEmitRef = useRef<number>(0)
@@ -70,10 +76,11 @@ export function useParcelDelivery(parcelId: string) {
         console.error('[useParcelDelivery] sync error:', err)
         setError('Erreur de connexion aux données')
         setLoading(false)
+        onError?.(err)
       }
     )
     return () => unsub()
-  }, [parcelId])
+  }, [parcelId, refreshKey, onError])
 
   // Emit driver GPS to RTDB while parcel is active (accepted | in_transit)
   useEffect(() => {
