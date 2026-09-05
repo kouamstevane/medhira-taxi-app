@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { auth, db, functions, getFirebaseStorage } from '@/config/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
@@ -18,12 +18,12 @@ import { SelectField } from '@/components/forms/SelectField';
 import { useToast } from '@/hooks/useToast';
 import { Controller, useForm } from 'react-hook-form';
 import { getFirestoreErrorMessage, isFirestoreNetworkError, logFirestoreError } from '@/utils/firestore-error-handler';
-import { CURRENCY_CODE, DEFAULT_LOCALE } from '@/utils/constants';
 import { shouldOpenAddressEditor } from './profile-navigation';
 import { ProfileAddressField } from './ProfileAddressField';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import type { PlaceSuggestion } from '@/types';
 import { buildProfileUpdate, persistProfileUpdate } from './profile-update';
+import { ProtectedPageGuard } from '@/components/auth/ProtectedPageGuard';
 
 interface ProfileFormData {
   firstName: string;
@@ -66,31 +66,30 @@ function InfoRow({ label, value, emptyLabel = 'Non renseigné' }: InfoRowProps) 
   );
 }
 
-export default function ProfilPage() {
+function ProfilPageContent() {
+  const { currentUser, userData: authUserData, reloadUser } = useAuth();
   const [userData, setUserData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
-    country: 'Canada',
-    bio: ''
+    firstName: authUserData?.firstName || '',
+    lastName: authUserData?.lastName || '',
+    email: currentUser?.email || authUserData?.email || '',
+    phone: authUserData?.phoneNumber || '',
+    address: authUserData?.address || '',
+    city: authUserData?.city || '',
+    country: authUserData?.country || 'Canada',
+    bio: authUserData?.bio || ''
   });
   const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
   const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [profileImageUrl, setProfileImageUrl] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [profileImageUrl, setProfileImageUrl] = useState(authUserData?.profileImageUrl || '');
+  const [loading, setLoading] = useState(!authUserData);
   const [isNetworkError, setIsNetworkError] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [history, setHistory] = useState<Array<Record<string, unknown>>>([]);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
-  const { currentUser, reloadUser } = useAuth();
   const { autocompleteService } = useGoogleMaps();
 
   // Initialize form with default values
@@ -127,53 +126,66 @@ export default function ProfilPage() {
     }
   }, []);
 
-  // Reliance on AuthContext for authentication and document existence check.
-  // AuthContext now handles signing out if the Firestore document is deleted.
-  const fetchUserData = useCallback(async () => {
-    if (currentUser) {
-      setLoading(true);
-      setIsNetworkError(false);
-      try {
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const data = userDocSnap.data();
-          setHasPaymentMethod(Boolean(data.defaultPaymentMethodId));
-          setUserData({
-            firstName: data.firstName || '',
-            lastName: data.lastName || '',
-            email: currentUser.email || '',
-            phone: data.phone || data.phoneNumber || '',
-            address: data.address || '',
-            city: data.city || '',
-            country: data.country || 'Canada',
-            bio: data.bio || ''
-          });
-          setProfileImageUrl(data.profileImageUrl || '');
-          void fetchHistory(currentUser.uid);
-        } else {
-          // Document does not exist, AuthContext should handle sign out
-          // and redirection. For safety, we can also redirect here.
-          router.replace("/login");
-        }
-      } catch (err) {
-        console.error("Erreur chargement profil:", err);
-        if (
-          isFirestoreNetworkError(err) ||
-          (err as Error)?.message?.toLowerCase().includes('offline') ||
-          (typeof navigator !== 'undefined' && !navigator.onLine)
-        ) {
-          setIsNetworkError(true);
-        }
-      } finally {
-        setLoading(false);
+  // Sync with AuthContext data when available
+  useEffect(() => {
+    if (authUserData && !editing) {
+      setUserData(prev => ({
+        firstName: authUserData.firstName || prev.firstName,
+        lastName: authUserData.lastName || prev.lastName,
+        email: currentUser?.email || authUserData.email || prev.email,
+        phone: authUserData.phoneNumber || prev.phone,
+        address: authUserData.address || prev.address,
+        city: authUserData.city || prev.city,
+        country: authUserData.country || prev.country,
+        bio: authUserData.bio || prev.bio,
+      }));
+      if (authUserData.profileImageUrl) {
+        setProfileImageUrl(authUserData.profileImageUrl);
       }
-    } else if (!currentUser && !loading) {
-      router.replace("/login");
+    }
+  }, [authUserData, currentUser, editing]);
+
+  const fetchUserData = useCallback(async () => {
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
+
+    setIsNetworkError(false);
+    try {
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (userDocSnap.exists()) {
+        const data = userDocSnap.data();
+        setHasPaymentMethod(Boolean(data.defaultPaymentMethodId));
+        setUserData({
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          email: currentUser.email || data.email || '',
+          phone: data.phone || data.phoneNumber || '',
+          address: data.address || '',
+          city: data.city || '',
+          country: data.country || 'Canada',
+          bio: data.bio || ''
+        });
+        setProfileImageUrl(data.profileImageUrl || '');
+      } else {
+        router.replace("/login");
+      }
+    } catch (err) {
+      console.error("Erreur chargement profil:", err);
+      if (
+        isFirestoreNetworkError(err) ||
+        (err as Error)?.message?.toLowerCase().includes('offline') ||
+        (typeof navigator !== 'undefined' && !navigator.onLine)
+      ) {
+        setIsNetworkError(true);
+      }
+    } finally {
       setLoading(false);
     }
-  }, [currentUser, router, loading]);
+  }, [currentUser, router]);
 
   useEffect(() => {
     void fetchUserData();
@@ -234,56 +246,6 @@ export default function ProfilPage() {
       setError(errorMessage);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchHistory = async (userId: string) => {
-    try {
-      // Obtenir la date du début de la journée (00:00:00)
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-
-      const bookingsQuery = query(
-        collection(db, 'bookings'),
-        where('userId', '==', userId),
-        where('createdAt', '>=', Timestamp.fromDate(todayStart)),
-        orderBy('createdAt', 'desc'),
-        limit(5)
-      );
-      const parcelsQuery = query(
-        collection(db, 'parcels'),
-        where('senderId', '==', userId),
-        where('createdAt', '>=', Timestamp.fromDate(todayStart)),
-        orderBy('createdAt', 'desc'),
-        limit(5)
-      );
-
-      const [bookingsSnapshot, parcelsSnapshot] = await Promise.all([
-        getDocs(bookingsQuery),
-        getDocs(parcelsQuery),
-      ]);
-
-      const bookings = bookingsSnapshot.docs.map(doc => ({ id: doc.id, type: 'Taxi', ...doc.data() }));
-      const parcels = parcelsSnapshot.docs.map(doc => ({ id: doc.id, type: 'Livraison', ...doc.data() }));
-
-      const combinedHistory = [...bookings, ...parcels].sort((a, b) => {
-        const aCreatedAt = (a as Record<string, unknown>).createdAt as { toMillis?: () => number; seconds?: number } | undefined;
-        const bCreatedAt = (b as Record<string, unknown>).createdAt as { toMillis?: () => number; seconds?: number } | undefined;
-        const aTime = aCreatedAt?.toMillis ? aCreatedAt.toMillis() : (aCreatedAt?.seconds ? aCreatedAt.seconds * 1000 : 0);
-        const bTime = bCreatedAt?.toMillis ? bCreatedAt.toMillis() : (bCreatedAt?.seconds ? bCreatedAt.seconds * 1000 : 0);
-        return bTime - aTime;
-      });
-
-      setHistory(combinedHistory.slice(0, 5));
-    } catch (error) {
-      console.error("Erreur chargement historique:", error);
-      if (
-        isFirestoreNetworkError(error) ||
-        (error as Error)?.message?.toLowerCase().includes('offline') ||
-        (typeof navigator !== 'undefined' && !navigator.onLine)
-      ) {
-        setIsNetworkError(true);
-      }
     }
   };
 
@@ -631,50 +593,6 @@ export default function ProfilPage() {
           </div>
         )}
 
-        {/* Section Dernières commandes */}
-        <div className="mt-8">
-          <h2 className="text-xl font-bold text-white mb-4">Commandes du jour</h2>
-          <div className="space-y-3">
-            {history.length > 0 ? (
-              history.map(item => {
-                const createdAt = item.createdAt as { seconds?: number; toMillis?: () => number } | undefined;
-                const timestamp = createdAt?.seconds ? createdAt.seconds * 1000 : (createdAt?.toMillis ? createdAt.toMillis() : Date.now());
-                const destination = item.destination as string | undefined;
-                const description = item.description as string | undefined;
-                const price = item.price as number | undefined;
-                const status = item.status as string | undefined;
-                const type = item.type as string | undefined;
-                const id = item.id as string | undefined;
-
-                return (
-                  <GlassCard key={id} className="p-4 flex justify-between items-center">
-                    <div>
-                      <p className="font-semibold text-white">{type} - {destination || description}</p>
-                      <p className="text-sm text-slate-400">
-                        {new Date(timestamp).toLocaleDateString(DEFAULT_LOCALE, { day: '2-digit', month: '2-digit', year: 'numeric' })} à {new Date(timestamp).toLocaleTimeString(DEFAULT_LOCALE, { hour: '2-digit', minute: '2-digit' })} • {price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
-                      </p>
-                    </div>
-                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                      status === 'completed' || status === 'delivered'
-                        ? 'bg-green-500/10 text-green-400'
-                        : 'bg-blue-500/10 text-blue-400'
-                    }`}>
-                      {status}
-                    </span>
-                  </GlassCard>
-                );
-              })
-            ) : (
-              <GlassCard className="p-8 text-center">
-                <p className="text-slate-400">Aucune commande aujourd&apos;hui.</p>
-                <Link href="/historique" className="text-sm text-primary hover:text-[#ffae33] mt-2 inline-block transition">
-                  Voir l&apos;historique complet
-                </Link>
-              </GlassCard>
-            )}
-          </div>
-        </div>
-
         <div className="mt-8">
           <SectionTitle icon="shield">Compte et sécurité</SectionTitle>
           <GlassCard className="divide-y divide-white/[0.04] rounded-2xl">
@@ -718,3 +636,10 @@ export default function ProfilPage() {
   );
 }
 
+export default function ProfilPage() {
+  return (
+    <ProtectedPageGuard redirectTo="/login">
+      <ProfilPageContent />
+    </ProtectedPageGuard>
+  );
+}

@@ -332,7 +332,13 @@ export function useDriverRegistration() {
       }));
       setCurrentStep(2);
     } catch (err: unknown) {
-      setError('Erreur : ' + (err as Error).message);
+      const code = (err as { code?: string })?.code;
+      if (code === 'auth/unauthorized-domain') {
+        console.error("[Auth] Domaine non autorisé dans Firebase Auth (auth/unauthorized-domain). Ajoutez ce domaine dans Firebase Console > Authentication > Paramètres > Domaines autorisés.");
+        setError("Connexion temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.");
+      } else {
+        setError('Erreur : ' + (err as Error).message);
+      }
     } finally {
       setLoading(false);
     }

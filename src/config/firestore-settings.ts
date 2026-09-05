@@ -1,4 +1,3 @@
 export const firestoreSettings = {
-  experimentalForceLongPolling: true,
-  experimentalAutoDetectLongPolling: false,
+  experimentalAutoDetectLongPolling: true,
 } as const;

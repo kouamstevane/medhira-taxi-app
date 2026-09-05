@@ -83,6 +83,8 @@ export interface UserData {
 
   country?: string;
   address?: string;
+  city?: string;
+  bio?: string;
   stripeCustomerId?: string;
   defaultPaymentMethodId?: string;
   setupIntentId?: string;

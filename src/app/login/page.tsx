@@ -227,6 +227,10 @@ export default function LoginPage() {
       case 'auth/popup-closed-by-user':
         errorMessage = "Connexion Google annulée";
         break;
+      case 'auth/unauthorized-domain':
+        console.error("[Auth] Domaine non autorisé dans Firebase Auth (auth/unauthorized-domain). Ajoutez ce domaine dans Firebase Console > Authentication > Paramètres > Domaines autorisés.");
+        errorMessage = "Connexion temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.";
+        break;
       case 'functions/internal':
         errorMessage = "Le service SMS est temporairement indisponible. Réessayez.";
         break;

@@ -12,10 +12,11 @@ import {
   limit 
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { CallStatus, CallParticipant } from '@/types/voip';
+import { CallParticipant } from '@/types/voip';
 import { pushNotifications } from '@/services/pushNotifications.service';
 import { IncomingCallOverlay } from '@/components/IncomingCallOverlay';
 import { ActiveCallOverlay } from '@/components/ActiveCallOverlay';
+import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 
 type VoipContextType = Record<string, never>;
 
@@ -23,7 +24,7 @@ const VoipContext = createContext<VoipContextType | null>(null);
 
 export function VoipCallProvider({ children }: { children: ReactNode }) {
   const { currentUser } = useAuth();
-  const { callState } = useVoipCall();
+  useVoipCall();
 
   // Le moteur VoIP est initialisé paresseusement (au démarrage d'un appel
   // sortant ou lors d'un appel entrant) pour éviter d'ouvrir un WebSocket
@@ -65,6 +66,12 @@ export function VoipCallProvider({ children }: { children: ReactNode }) {
           caller,
           currentUser.uid
         );
+      }
+    }, (error) => {
+      if (isFirestoreNetworkError(error)) {
+        console.warn('[VoipCallProvider] Incoming call listener temporarily unavailable:', error);
+      } else {
+        console.error('[VoipCallProvider] Incoming call listener failed:', error);
       }
     });
 

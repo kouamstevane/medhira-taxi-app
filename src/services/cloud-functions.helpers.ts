@@ -26,6 +26,8 @@ export function mapHttpsError(error: unknown): MappedError {
       return { message: 'Élément introuvable.', code: err.code };
     case 'internal':
       return { message: 'Erreur technique. Réessayez ou contactez le support.', code: err.code };
+    case 'auth/unauthorized-domain':
+      return { message: "Connexion temporairement indisponible. Veuillez contacter le support.", code: err.code };
     default:
       return { message: err.message || 'Erreur inconnue.', code: err.code };
   }

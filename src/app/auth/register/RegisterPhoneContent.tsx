@@ -207,7 +207,11 @@ export default function RegisterPhoneContent() {
         errorMessage = ERROR_MESSAGES.NETWORK_ERROR;
         break;
       case 'functions/internal':
-        errorMessage = "Le service SMS est temporairement indisponible. Vérifiez la configuration Twilio et réessayez.";
+        errorMessage = "Le service SMS est temporairement indisponible. Veuillez réessayer plus tard.";
+        break;
+      case 'auth/unauthorized-domain':
+        console.error("[Auth] Domaine non autorisé dans Firebase Auth (auth/unauthorized-domain). Ajoutez ce domaine dans Firebase Console > Authentication > Paramètres > Domaines autorisés.");
+        errorMessage = "Connexion temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.";
         break;
       default:
         if (errorMsg && !errorMsg.includes('Firebase')) {
