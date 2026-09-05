@@ -5,6 +5,10 @@ export type DriverApplicationValidationMessage = {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+export function getDriverApplicationSuccessMessage(): string {
+  return 'Votre candidature a bien été enregistrée. Notre équipe va l’étudier et vous contactera par e-mail si votre profil est retenu.';
+}
+
 export function validateDriverApplicationForm(email: string, cv: File | null): DriverApplicationValidationMessage | null {
   if (!email.trim() && !cv) {
     return { type: 'error', text: 'Renseignez votre adresse e-mail et joignez votre CV.' };

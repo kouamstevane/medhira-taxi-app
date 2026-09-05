@@ -9,7 +9,7 @@ import { getDriverApplicationFirebaseClients } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { InputField } from '@/components/forms';
 import { driverPrimaryButtonClassName, driverUploadEmptyClassName } from '@/app/driver/register/components/driverOnboardingStyles';
-import { getDriverApplicationErrorMessage, validateDriverApplicationForm } from './validation';
+import { getDriverApplicationErrorMessage, getDriverApplicationSuccessMessage, validateDriverApplicationForm } from './validation';
 
 const APPLICATION_EMAIL = 'medjiraservices@gmail.com';
 const MAX_CV_SIZE = 5 * 1024 * 1024;
@@ -54,7 +54,7 @@ export default function DriverApplicationPage() {
       await uploadBytes(ref(applicationStorage, storagePath(currentUser.uid, applicationId, cv.name)), cv, { contentType: cv.type });
       const submitApplication = httpsCallable(applicationFunctions, 'submitDriverApplicationWithCv');
       await submitApplication({ applicationId, email, fileName: safeFileName(cv.name), contentType: cv.type, size: cv.size });
-      setMessage({ type: 'success', text: 'Votre candidature a bien été envoyée. Notre équipe va l’étudier et vous contactera par e-mail si votre profil est retenu.' });
+      setMessage({ type: 'success', text: getDriverApplicationSuccessMessage() });
       setEmail(''); setCv(null);
       const fileInput = document.getElementById('cv-file') as HTMLInputElement | null;
       if (fileInput) fileInput.value = '';

@@ -373,7 +373,7 @@ export const encryptSensitiveData = onCall(
 );
 
 export { submitDriverApplication, createDriverProfile } from './driver/submitDriverApplication.js';
-export { createDriverApplicationUpload, submitDriverApplicationWithCv, adminGetDriverApplicationCv } from './driver/driverApplication.js';
+export { createDriverApplicationUpload, submitDriverApplicationWithCv, notifyDriverApplicationOnCreate, adminGetDriverApplicationCv } from './driver/driverApplication.js';
 export { submitRestaurantApplication } from './restaurant/submitRestaurantApplication.js';
 export { deleteRestaurant } from './restaurant/deleteRestaurant.js';
 export { restaurantManageFoodOrderStatus } from './restaurant/manageFoodOrderStatus.js';

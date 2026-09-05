@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { onCall, CallableRequest, HttpsError } from 'firebase-functions/v2/https';
+import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import { z } from 'zod';
 import { enforceRateLimit } from '../utils/rateLimiter.js';
 import { sendDriverApplicationNotification } from '../email-service.js';
 import { requireAdmin } from '../admin/_shared.js';
+import { processDriverApplicationNotification, DriverApplicationNotificationRecord } from './driverApplicationNotification.js';
 
 const resendApiKey = defineSecret('RESEND_API_KEY');
 const APPLICATION_EMAIL = 'medjiraservices@gmail.com';
@@ -43,6 +45,7 @@ export function buildDriverApplicationRecord(
     ...(input.city !== undefined && { city: input.city }),
     ...(input.role !== undefined && { role: input.role }),
     status: 'pending_review',
+    notificationStatus: 'pending',
     cv: {
       path: storagePath,
       fileName: sanitizeFileName(input.fileName),
@@ -83,7 +86,7 @@ export const createDriverApplicationUpload = onCall(
 );
 
 export const submitDriverApplicationWithCv = onCall(
-  { ...DRIVER_APPLICATION_CALLABLE_OPTIONS, secrets: [resendApiKey] },
+  DRIVER_APPLICATION_CALLABLE_OPTIONS,
   async (request: CallableRequest) => {
     const uid = requireAnonymousApplicant(request);
     await enforceRateLimit({ identifier: uid, bucket: 'driver:application-submit', limit: 3, windowSec: 3600 });
@@ -98,14 +101,12 @@ export const submitDriverApplicationWithCv = onCall(
     const storagePath = buildDriverApplicationStoragePath(uid, input.applicationId, input.fileName);
     const file = admin.storage().bucket().file(storagePath);
     let metadata: { size?: string | number; contentType?: string };
-    let cvBuffer: Buffer;
     try {
       const [fileMetadata] = await file.getMetadata();
       metadata = fileMetadata;
       if (Number(metadata.size ?? 0) !== input.size || metadata.contentType !== input.contentType) {
         throw new HttpsError('invalid-argument', 'Les caractéristiques du fichier ne correspondent pas.');
       }
-      [cvBuffer] = await file.download();
     } catch (error) {
       if (error instanceof HttpsError) throw error;
       throw new HttpsError('failed-precondition', 'Le CV doit être téléversé avant l’envoi de la candidature.');
@@ -120,27 +121,37 @@ export const submitDriverApplicationWithCv = onCall(
       ...buildDriverApplicationRecord(uid, input, storagePath, metadata),
     });
 
-    try {
-      await sendDriverApplicationNotification({
-        to: APPLICATION_EMAIL,
-        applicationId: input.applicationId,
-        fullName: input.fullName,
-        email: input.email.toLowerCase(),
-        phone: input.phone,
-        city: input.city,
-        role: input.role,
-        fileName: sanitizeFileName(input.fileName),
-        cvBuffer,
-        apiKey: resendApiKey.value(),
-      });
-      await applicationRef.update({ notificationStatus: 'sent', updatedAt: admin.firestore.Timestamp.now() });
-    } catch (error) {
-      console.error('[submitDriverApplicationWithCv] notification failed', error);
-      await applicationRef.update({ notificationStatus: 'failed', updatedAt: admin.firestore.Timestamp.now() });
-      throw new HttpsError('internal', 'La candidature a été enregistrée, mais la notification n’a pas pu être envoyée.');
-    }
-
     return { success: true, status: 'pending_review' as const };
+  },
+);
+
+export const notifyDriverApplicationOnCreate = onDocumentCreated(
+  { document: 'driverApplications/{applicationId}', region: 'europe-west1', retry: true, secrets: [resendApiKey] },
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const applicationId = event.params.applicationId;
+    const record = snapshot.data() as DriverApplicationNotificationRecord;
+    const applicationRef = snapshot.ref;
+
+    await processDriverApplicationNotification({
+      applicationId,
+      record,
+      downloadCv: async (path) => {
+        const [buffer] = await admin.storage().bucket().file(path).download();
+        return buffer;
+      },
+      sendNotification: (input) => sendDriverApplicationNotification({ ...input, apiKey: resendApiKey.value() }),
+      updateStatus: async (status, details) => {
+        await applicationRef.update({
+          notificationStatus: status,
+          ...(details.messageId ? { notificationMessageId: details.messageId } : {}),
+          ...(details.error ? { notificationError: details.error } : {}),
+          updatedAt: admin.firestore.Timestamp.now(),
+        });
+      },
+    });
   },
 );
 

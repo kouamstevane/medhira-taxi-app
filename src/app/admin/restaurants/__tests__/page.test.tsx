@@ -46,7 +46,7 @@ jest.mock('@/components/ui/BottomNav', () => ({
 }));
 
 jest.mock('@/components/ui/MaterialIcon', () => ({
-  MaterialIcon: ({ name }: { name: string }) => <span>{name}</span>,
+  MaterialIcon: ({ name }: { name: string }) => <span aria-hidden="true">{name}</span>,
 }));
 
 jest.mock('next/image', () => ({
@@ -80,6 +80,21 @@ describe('AdminRestaurantsPage commission editor', () => {
     jest.clearAllMocks();
     mockGetPendingRestaurants.mockResolvedValue([restaurant]);
     mockCallable.mockResolvedValue({ data: { success: true, commissionRate: 10 } });
+  });
+
+  it('renders restaurant statuses as a compact segmented control', async () => {
+    const { default: AdminRestaurantsPage } = await import('../page');
+    render(<AdminRestaurantsPage />);
+
+    const tablist = screen.getByRole('tablist', { name: 'Filtres restaurants' });
+
+    expect(tablist).toBeInTheDocument();
+    expect(tablist).toHaveClass('bg-[#151a26]');
+    expect(tablist).toHaveClass('border-white/10');
+    expect(screen.getByRole('tab', { name: 'En attente' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Actifs' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Refusés' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Tous' })).toBeInTheDocument();
   });
 
   it('allows an administrator to save a restaurant commission rate', async () => {

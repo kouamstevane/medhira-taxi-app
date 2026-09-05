@@ -38,6 +38,12 @@ function arrangeCatalogue() {
   (httpsCallable as jest.Mock).mockReturnValue(callableMock);
 }
 
+async function openPlan(user: ReturnType<typeof userEvent.setup>, planName: string) {
+  const card = within(await screen.findByRole('group', { name: `Forfait ${planName}` }));
+  await user.click(card.getByRole('button', { name: `Modifier le forfait ${planName}` }));
+  return card;
+}
+
 describe('PersonalDriverPlansEditor', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -47,9 +53,11 @@ describe('PersonalDriverPlansEditor', () => {
 
   it('renders every editable field for the three loaded plan cards with audit metadata', async () => {
     render(<PersonalDriverPlansEditor />);
+    const user = userEvent.setup();
 
     for (const planName of ['Basic', 'Classic', 'Premium Plus']) {
       const card = within(await screen.findByRole('group', { name: `Forfait ${planName}` }));
+      await user.click(card.getByRole('button', { name: `Modifier le forfait ${planName}` }));
 
       expect(card.getByRole('textbox', { name: 'Nom' })).toBeVisible();
       expect(card.getByRole('textbox', { name: 'Badge' })).toBeVisible();
@@ -69,6 +77,25 @@ describe('PersonalDriverPlansEditor', () => {
     const premiumCard = within(screen.getByRole('group', { name: 'Forfait Premium Plus' }));
     expect(premiumCard.getByText(/admin_1/i)).toBeVisible();
     expect(premiumCard.getByText(/31\/08\/2026/i)).toBeVisible();
+  });
+
+  it('keeps plan cards compact and opens only the selected plan editor', async () => {
+    const user = userEvent.setup();
+    render(<PersonalDriverPlansEditor />);
+
+    const basicCard = within(await screen.findByRole('group', { name: 'Forfait Basic' }));
+    const classicCard = within(screen.getByRole('group', { name: 'Forfait Classic' }));
+
+    expect(basicCard.queryByRole('textbox', { name: 'Nom' })).not.toBeInTheDocument();
+    expect(classicCard.queryByRole('textbox', { name: 'Nom' })).not.toBeInTheDocument();
+
+    await user.click(basicCard.getByRole('button', { name: 'Modifier le forfait Basic' }));
+    expect(basicCard.getByRole('textbox', { name: 'Nom' })).toBeVisible();
+    expect(classicCard.queryByRole('textbox', { name: 'Nom' })).not.toBeInTheDocument();
+
+    await user.click(classicCard.getByRole('button', { name: 'Modifier le forfait Classic' }));
+    expect(classicCard.getByRole('textbox', { name: 'Nom' })).toBeVisible();
+    expect(basicCard.queryByRole('textbox', { name: 'Nom' })).not.toBeInTheDocument();
   });
 
   it('saves the full edited Premium plan after changing its minimum amount', async () => {
@@ -105,7 +132,7 @@ describe('PersonalDriverPlansEditor', () => {
 
     render(<PersonalDriverPlansEditor />);
 
-    const premiumCard = within(await screen.findByRole('group', { name: 'Forfait Premium Plus' }));
+    const premiumCard = await openPlan(user, 'Premium Plus');
     await user.clear(premiumCard.getByRole('spinbutton', { name: 'Montant minimum' }));
     await user.type(premiumCard.getByRole('spinbutton', { name: 'Montant minimum' }), '800');
     await user.click(premiumCard.getByRole('button', { name: 'Enregistrer Premium Plus' }));
@@ -147,7 +174,7 @@ describe('PersonalDriverPlansEditor', () => {
 
     render(<PersonalDriverPlansEditor />);
 
-    const premiumCard = within(await screen.findByRole('group', { name: 'Forfait Premium Plus' }));
+    const premiumCard = await openPlan(user, 'Premium Plus');
     const minimumAmount = premiumCard.getByRole('spinbutton', { name: 'Montant minimum' });
     await user.clear(minimumAmount);
     await user.type(minimumAmount, '800');
@@ -169,7 +196,7 @@ describe('PersonalDriverPlansEditor', () => {
     const user = userEvent.setup();
     render(<PersonalDriverPlansEditor />);
 
-    const premiumCard = within(await screen.findByRole('group', { name: 'Forfait Premium Plus' }));
+    const premiumCard = await openPlan(user, 'Premium Plus');
     await user.clear(premiumCard.getByRole('spinbutton', { name: 'Montant minimum' }));
     await user.type(premiumCard.getByRole('spinbutton', { name: 'Montant minimum' }), '800');
     await user.click(premiumCard.getByRole('button', { name: 'Enregistrer Premium Plus' }));
@@ -183,7 +210,7 @@ describe('PersonalDriverPlansEditor', () => {
     const user = userEvent.setup();
     render(<PersonalDriverPlansEditor />);
 
-    const basicCard = within(await screen.findByRole('group', { name: 'Forfait Basic' }));
+    const basicCard = await openPlan(user, 'Basic');
     await user.clear(basicCard.getByRole('textbox', { name: 'Nom' }));
     await user.click(basicCard.getByRole('button', { name: 'Enregistrer Basic' }));
 
@@ -195,7 +222,7 @@ describe('PersonalDriverPlansEditor', () => {
     const user = userEvent.setup();
     render(<PersonalDriverPlansEditor />);
 
-    const premiumCard = within(await screen.findByRole('group', { name: 'Forfait Premium Plus' }));
+    const premiumCard = await openPlan(user, 'Premium Plus');
     await user.clear(premiumCard.getByRole('spinbutton', { name: 'Distance minimum facturable' }));
     await user.type(premiumCard.getByRole('spinbutton', { name: 'Distance minimum facturable' }), '100001');
     await user.click(premiumCard.getByRole('button', { name: 'Enregistrer Premium Plus' }));
@@ -208,7 +235,7 @@ describe('PersonalDriverPlansEditor', () => {
     const user = userEvent.setup();
     render(<PersonalDriverPlansEditor />);
 
-    const basicCard = within(await screen.findByRole('group', { name: 'Forfait Basic' }));
+    const basicCard = await openPlan(user, 'Basic');
     await user.click(basicCard.getByRole('checkbox', { name: 'Dimanche' }));
     await user.click(basicCard.getByRole('button', { name: 'Ajouter un avantage Basic' }));
     await user.type(basicCard.getByRole('textbox', { name: 'Avantage 4' }), 'Support prioritaire');
@@ -229,7 +256,7 @@ describe('PersonalDriverPlansEditor', () => {
     const user = userEvent.setup();
     render(<PersonalDriverPlansEditor />);
 
-    const basicCard = within(await screen.findByRole('group', { name: 'Forfait Basic' }));
+    const basicCard = await openPlan(user, 'Basic');
     await user.clear(basicCard.getByRole('textbox', { name: 'Nom' }));
     await user.type(basicCard.getByRole('textbox', { name: 'Nom' }), 'Basic modifié');
 
@@ -245,7 +272,7 @@ describe('PersonalDriverPlansEditor', () => {
     const user = userEvent.setup();
     render(<PersonalDriverPlansEditor />);
 
-    const premiumCard = within(await screen.findByRole('group', { name: 'Forfait Premium Plus' }));
+    const premiumCard = await openPlan(user, 'Premium Plus');
     expect(premiumCard.getByRole('textbox', { name: 'Nom' })).toHaveValue('Premium Plus');
     await user.clear(premiumCard.getByRole('textbox', { name: 'Nom' }));
     await user.type(premiumCard.getByRole('textbox', { name: 'Nom' }), 'Nom temporaire');

@@ -43,6 +43,7 @@ export const adminNavItems: NavItem[] = [
   { href: '/admin/users', icon: 'people', label: 'Utilisateurs' },
   { href: '/admin/drivers', icon: 'drive_eta', label: 'Chauffeurs' },
   { href: '/admin/restaurants', icon: 'restaurant', label: 'Restaurants' },
+  { href: '/admin/personal-driver', icon: 'person', label: 'Personal Driver' },
 ];
 
 export function BottomNav({ items = defaultUserItems, className, hidden = false }: BottomNavProps) {

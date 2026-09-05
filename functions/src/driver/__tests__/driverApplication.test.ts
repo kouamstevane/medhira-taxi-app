@@ -3,11 +3,16 @@ import {
   DRIVER_APPLICATION_CALLABLE_OPTIONS,
   buildDriverApplicationStoragePath,
   buildDriverApplicationRecord,
+  notifyDriverApplicationOnCreate,
 } from '../driverApplication';
 
 describe('driver application intake', () => {
   test('allows browser callable requests from the public application', () => {
     expect(DRIVER_APPLICATION_CALLABLE_OPTIONS.cors).toBe(true);
+  });
+
+  test('exports the asynchronous notification trigger', () => {
+    expect(notifyDriverApplicationOnCreate).toBeDefined();
   });
 
   test('builds a private storage path scoped to the anonymous applicant', () => {
@@ -84,6 +89,7 @@ describe('driver application intake', () => {
     expect(record).not.toHaveProperty('phone');
     expect(record).not.toHaveProperty('city');
     expect(record).not.toHaveProperty('role');
+    expect(record).toHaveProperty('notificationStatus', 'pending');
   });
 
   test('rejects unsupported CV formats and oversized files', () => {

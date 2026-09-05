@@ -172,6 +172,7 @@ export function PersonalDriverPlansEditor() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [syncWarning, setSyncWarning] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [openPlanId, setOpenPlanId] = useState<PersonalDriverPlanId | null>(null);
 
   async function loadPlans(
     showLoading = true,
@@ -323,8 +324,8 @@ export function PersonalDriverPlansEditor() {
   };
 
   return (
-    <section className="rounded-xl border border-white/10 bg-white/5 p-5" aria-labelledby="personal-driver-plans-editor-title">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+    <section className="space-y-4" aria-labelledby="personal-driver-plans-editor-title">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="personal-driver-plans-editor-title" className="flex items-center gap-2 text-sm font-bold text-white">
             <MaterialIcon name="edit_note" size="sm" className="text-primary" />
@@ -338,174 +339,213 @@ export function PersonalDriverPlansEditor() {
       </div>
 
       {loadError && (
-        <div role="alert" className="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs font-semibold text-amber-100">
+        <div role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs font-semibold text-amber-100">
           {loadError}
         </div>
       )}
       {status && (
-        <div role="status" className="mb-4 rounded-lg border border-primary/30 bg-primary/10 p-3 text-xs font-semibold text-primary">
+        <div role="status" className="rounded-lg border border-primary/30 bg-primary/10 p-3 text-xs font-semibold text-primary">
           {status}
         </div>
       )}
       {syncWarning && (
-        <div role="status" className="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs font-semibold text-amber-100">
+        <div role="status" className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs font-semibold text-amber-100">
           {syncWarning}
         </div>
       )}
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-3">
         {PERSONAL_DRIVER_PLAN_IDS.map((planId) => {
           const plan = drafts[planId];
           const planErrors = errors[planId] ?? {};
           const isSaving = savingPlanId === planId;
           const isChanged = changedPlanIds.includes(planId);
+          const isOpen = openPlanId === planId;
+          const planName = plan.name || savedPlans[planId].name;
+          const priceSummary = Number.isFinite(plan.pricePerKm) ? `${plan.pricePerKm.toLocaleString('fr-FR')} / km` : 'Prix —';
+          const minimumSummary = Number.isFinite(plan.minimumAmount) ? `Minimum ${plan.minimumAmount.toLocaleString('fr-FR')}` : 'Minimum —';
 
           return (
             <article
               key={planId}
               role="group"
-              aria-label={`Forfait ${plan.name || savedPlans[planId].name}`}
-              className="rounded-xl border border-white/10 bg-black/10 p-4"
+              aria-label={`Forfait ${planName}`}
+              className={`rounded-2xl border bg-card/70 p-3 transition-colors sm:p-4 ${isOpen ? 'border-primary/50 shadow-lg shadow-primary/5' : 'border-white/10'}`}
             >
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-black text-white">{plan.name || savedPlans[planId].name}</h3>
-                  <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{planId}</p>
+              <button
+                type="button"
+                aria-label={`Modifier le forfait ${planName}`}
+                aria-expanded={isOpen}
+                aria-controls={`personal-driver-plan-${planId}-details`}
+                onClick={() => setOpenPlanId(isOpen ? null : planId)}
+                className="group w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base font-black text-white">{planName}</h3>
+                      <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{planId}</span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-400">{plan.promise}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${isChanged ? 'bg-amber-400/15 text-amber-200' : 'bg-emerald-400/10 text-emerald-200'}`}>
+                    {isChanged ? 'Brouillon' : 'Publié'}
+                  </span>
                 </div>
-                <span className="rounded-md border border-white/10 px-2 py-1 text-[11px] font-semibold text-slate-300">
-                  {isChanged ? 'Brouillon' : 'Publié'}
-                </span>
-              </div>
-
-              {planErrors.form && (
-                <div role="alert" className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs font-semibold text-red-200">
-                  {planErrors.form}
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
+                  <span className="rounded-full bg-white/5 px-2.5 py-1">{priceSummary}</span>
+                  <span className="rounded-full bg-white/5 px-2.5 py-1">{minimumSummary}</span>
+                  {plan.badge && <span className="rounded-full bg-primary/10 px-2.5 py-1 text-primary">{plan.badge}</span>}
+                  <span className="ml-auto inline-flex items-center gap-1 text-primary">
+                    {isOpen ? 'Fermer' : 'Modifier'}
+                    <MaterialIcon name={isOpen ? 'expand_less' : 'expand_more'} size="sm" />
+                  </span>
                 </div>
-              )}
+              </button>
 
-              <div className="space-y-3">
-                {textFields.map((field) => (
-                  <label key={field.key} className="block text-xs font-semibold text-slate-300">
-                    {field.label}
-                    <input
-                      aria-label={field.label}
-                      value={plan[field.key] ?? ''}
-                      onChange={(event) => updatePlan(planId, field.key, event.target.value)}
-                      className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-card px-3 text-xs text-white outline-none focus:border-primary"
-                    />
-                    {planErrors[field.key] && (
-                      <span role="alert" className="mt-1 block text-[11px] text-red-200">{planErrors[field.key]}</span>
-                    )}
-                  </label>
-                ))}
+              {isOpen && (
+                <div id={`personal-driver-plan-${planId}-details`} className="mt-4 border-t border-white/10 pt-4">
+                  {planErrors.form && (
+                    <div role="alert" className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs font-semibold text-red-200">
+                      {planErrors.form}
+                    </div>
+                  )}
 
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                  {numberFields.map((field) => {
-                    const value = plan[field.key];
-                    return (
+                  <div className="space-y-3">
+                    {textFields.map((field) => (
                       <label key={field.key} className="block text-xs font-semibold text-slate-300">
                         {field.label}
                         <input
                           aria-label={field.label}
-                          type="number"
-                          step={field.step}
-                          min="0"
-                          value={Number.isNaN(value) ? '' : value}
-                          onChange={(event) => updatePlan(
-                            planId,
-                            field.key,
-                            event.target.value === '' ? Number.NaN : Number(event.target.value),
-                          )}
-                          className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-card px-3 text-xs text-white outline-none focus:border-primary"
+                          value={plan[field.key] ?? ''}
+                          onChange={(event) => updatePlan(planId, field.key, event.target.value)}
+                          className="mt-1 min-h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-primary"
                         />
                         {planErrors[field.key] && (
                           <span role="alert" className="mt-1 block text-[11px] text-red-200">{planErrors[field.key]}</span>
                         )}
                       </label>
-                    );
-                  })}
-                </div>
-
-                <fieldset className="rounded-lg border border-white/10 p-3">
-                  <legend className="px-1 text-xs font-semibold text-slate-300">Jours autorisés</legend>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {weekdays.map((weekday) => (
-                      <label key={weekday.id} className="flex min-h-8 items-center gap-2 text-xs text-slate-300">
-                        <input
-                          type="checkbox"
-                          checked={plan.allowedWeekdays.includes(weekday.id)}
-                          onChange={() => toggleWeekday(planId, weekday.id)}
-                          className="h-4 w-4 rounded border-white/20 bg-card text-primary"
-                        />
-                        {weekday.label}
-                      </label>
                     ))}
-                  </div>
-                  {planErrors.allowedWeekdays && (
-                    <p role="alert" className="mt-2 text-[11px] text-red-200">{planErrors.allowedWeekdays}</p>
-                  )}
-                </fieldset>
 
-                <fieldset className="rounded-lg border border-white/10 p-3">
-                  <legend className="px-1 text-xs font-semibold text-slate-300">Avantages</legend>
-                  <div className="mt-2 space-y-2">
-                    {plan.benefits.map((benefit, index) => (
-                      <div key={`${planId}-benefit-${index}`} className="flex items-center gap-2">
-                        <input
-                          aria-label={`Avantage ${index + 1}`}
-                          value={benefit}
-                          onChange={(event) => updateBenefit(planId, index, event.target.value)}
-                          className="min-h-11 w-full rounded-lg border border-white/10 bg-card px-3 text-xs text-white outline-none focus:border-primary"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeBenefit(planId, index)}
-                          disabled={plan.benefits.length <= 1}
-                          className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
-                        >
-                          Supprimer l’avantage {index + 1}
-                        </button>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {numberFields.map((field) => {
+                        const value = plan[field.key];
+                        return (
+                          <label key={field.key} className="block text-xs font-semibold text-slate-300">
+                            {field.label}
+                            <input
+                              aria-label={field.label}
+                              type="number"
+                              step={field.step}
+                              min="0"
+                              value={Number.isNaN(value) ? '' : value}
+                              onChange={(event) => updatePlan(
+                                planId,
+                                field.key,
+                                event.target.value === '' ? Number.NaN : Number(event.target.value),
+                              )}
+                              className="mt-1 min-h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-primary"
+                            />
+                            {planErrors[field.key] && (
+                              <span role="alert" className="mt-1 block text-[11px] text-red-200">{planErrors[field.key]}</span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    <fieldset className="pt-1">
+                      <legend className="text-xs font-semibold text-slate-300">Jours autorisés</legend>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {weekdays.map((weekday) => {
+                          const isAllowed = plan.allowedWeekdays.includes(weekday.id);
+                          return (
+                            <label key={weekday.id} className={`cursor-pointer rounded-full border px-3 py-2 text-[11px] font-semibold transition ${isAllowed ? 'border-primary/60 bg-primary/15 text-primary' : 'border-white/10 bg-white/5 text-slate-400'}`}>
+                              <input
+                                type="checkbox"
+                                checked={isAllowed}
+                                onChange={() => toggleWeekday(planId, weekday.id)}
+                                className="sr-only"
+                              />
+                              <span aria-hidden="true">{weekday.label.slice(0, 3)}</span>
+                              <span className="sr-only">{weekday.label}</span>
+                            </label>
+                          );
+                        })}
                       </div>
-                    ))}
+                      {planErrors.allowedWeekdays && (
+                        <p role="alert" className="mt-2 text-[11px] text-red-200">{planErrors.allowedWeekdays}</p>
+                      )}
+                    </fieldset>
+
+                    <fieldset className="pt-1">
+                      <legend className="text-xs font-semibold text-slate-300">Avantages</legend>
+                      <div className="mt-2 space-y-2">
+                        {plan.benefits.map((benefit, index) => (
+                          <div key={`${planId}-benefit-${index}`} className="flex items-center gap-2">
+                            <input
+                              aria-label={`Avantage ${index + 1}`}
+                              value={benefit}
+                              onChange={(event) => updateBenefit(planId, index, event.target.value)}
+                              className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 text-xs text-white outline-none focus:border-primary"
+                            />
+                            <button
+                              type="button"
+                              aria-label={`Supprimer l’avantage ${index + 1}`}
+                              title="Supprimer l’avantage"
+                              onClick={() => removeBenefit(planId, index)}
+                              disabled={plan.benefits.length <= 1}
+                              className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 text-slate-300 transition hover:border-red-400/40 hover:text-red-200 disabled:opacity-50"
+                            >
+                              <MaterialIcon name="delete" size="sm" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      {planErrors.benefits && (
+                        <p role="alert" className="mt-2 text-[11px] text-red-200">{planErrors.benefits}</p>
+                      )}
+                      <button
+                        type="button"
+                        aria-label={`Ajouter un avantage ${planName}`}
+                        onClick={() => addBenefit(planId)}
+                        disabled={plan.benefits.length >= 12}
+                        className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 px-3 text-xs font-semibold text-slate-300 transition hover:border-primary/40 hover:text-primary disabled:opacity-50"
+                      >
+                        <MaterialIcon name="add" size="sm" />
+                        <span className="sm:hidden">Ajouter</span>
+                        <span className="hidden sm:inline">Ajouter un avantage</span>
+                      </button>
+                    </fieldset>
+
+                    <div className="text-[11px] text-slate-500">
+                      <p>Dernière modification : <span className="font-semibold text-slate-300">{formatAuditDate(audit[planId]?.updatedAt)}</span></p>
+                      <p className="mt-1">Modifié par : <span className="font-semibold text-slate-300">{audit[planId]?.updatedBy || 'Non renseigné'}</span></p>
+                    </div>
+
+                    <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        aria-label={`Réinitialiser ${planName}`}
+                        onClick={() => resetPlan(planId)}
+                        disabled={!isChanged || isSaving}
+                        className="min-h-11 rounded-xl border border-white/10 px-3 text-xs font-semibold text-slate-300 transition hover:bg-white/5 disabled:opacity-50"
+                      >
+                        Réinitialiser
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={isSaving ? `Enregistrement ${planName} en cours` : `Enregistrer ${planName}`}
+                        onClick={() => void savePlan(planId)}
+                        disabled={!isChanged || isSaving}
+                        className="min-h-11 rounded-xl bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {isSaving ? 'Enregistrement...' : 'Enregistrer'}
+                      </button>
+                    </div>
                   </div>
-                  {planErrors.benefits && (
-                    <p role="alert" className="mt-2 text-[11px] text-red-200">{planErrors.benefits}</p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => addBenefit(planId)}
-                    disabled={plan.benefits.length >= 12}
-                    className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
-                  >
-                    <MaterialIcon name="add" size="sm" />
-                    Ajouter un avantage {plan.name || savedPlans[planId].name}
-                  </button>
-                </fieldset>
-
-                <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-[11px] text-slate-400">
-                  <p>Dernière modification : <span className="font-semibold text-slate-200">{formatAuditDate(audit[planId]?.updatedAt)}</span></p>
-                  <p className="mt-1">Modifié par : <span className="font-semibold text-slate-200">{audit[planId]?.updatedBy || 'Non renseigné'}</span></p>
                 </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => resetPlan(planId)}
-                    disabled={!isChanged || isSaving}
-                    className="min-h-11 rounded-lg border border-white/10 px-3 text-xs font-semibold text-slate-300 disabled:opacity-50"
-                  >
-                    Réinitialiser {plan.name || savedPlans[planId].name}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void savePlan(planId)}
-                    disabled={!isChanged || isSaving}
-                    className="min-h-11 rounded-lg bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    {isSaving ? 'Enregistrement...' : `Enregistrer ${plan.name || savedPlans[planId].name}`}
-                  </button>
-                </div>
-              </div>
+              )}
             </article>
           );
         })}

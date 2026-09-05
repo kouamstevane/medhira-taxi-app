@@ -207,30 +207,23 @@ export default function AdminRestaurantsPage() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Quick Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          {(['pending_approval', 'approved', 'rejected', 'all'] as const).map((f) => (
+        <div role="tablist" aria-label="Filtres restaurants" className="mb-6 grid grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-[#151a26] p-1">
+          {([
+            ['pending_approval', 'schedule', 'En attente'],
+            ['approved', 'check_circle', 'Actifs'],
+            ['rejected', 'cancel', 'Refusés'],
+            ['all', 'store', 'Tous'],
+          ] as const).map(([value, icon, label]) => (
             <button
-              key={f}
-              onClick={() => {
-                setFilter(f);
-                // In a real app, we'd trigger a new fetch here or filter locally
-              }}
-              className={`relative overflow-hidden group p-4 rounded-2xl border transition-all duration-300 ${
-                filter === f
-                  ? 'bg-primary/10 border-primary/30'
-                  : 'glass-card border-white/5 hover:border-white/10'
-              }`}
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={filter === value}
+              onClick={() => setFilter(value)}
+              className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-2 text-[11px] font-bold transition ${filter === value ? 'bg-card text-primary shadow-sm' : 'text-slate-400 hover:text-white'}`}
             >
-              <div className="flex items-center justify-between">
-                <span className={`text-sm font-semibold capitalize ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
-                  {f === 'all' ? 'Tous' : f === 'pending_approval' ? 'En attente' : f === 'approved' ? 'Actifs' : 'Refusés'}
-                </span>
-                <div className={`p-2 rounded-lg ${filter === f ? 'bg-primary text-black' : 'bg-white/5 text-slate-400'}`}>
-                  {f === 'all' ? <MaterialIcon name="store" size="sm" /> : f === 'pending_approval' ? <MaterialIcon name="schedule" size="sm" /> : f === 'approved' ? <MaterialIcon name="check_circle" size="sm" /> : <MaterialIcon name="cancel" size="sm" />}
-                </div>
-              </div>
-              {filter === f && <div className="absolute bottom-0 left-0 h-1 w-full bg-primary" />}
+              <MaterialIcon name={icon} size="sm" />
+              {label}
             </button>
           ))}
         </div>

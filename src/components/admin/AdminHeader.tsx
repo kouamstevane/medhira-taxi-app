@@ -1,9 +1,8 @@
 'use client';
 
 import React from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { getAdminHeaderNavItemClassName } from './adminHeaderUi';
 
 interface AdminHeaderProps {
   title: string;
@@ -12,51 +11,28 @@ interface AdminHeaderProps {
 
 export default function AdminHeader({ title, subtitle }: AdminHeaderProps) {
   const router = useRouter();
-  const pathname = usePathname();
-
-  const navItems = [
-    { label: 'Utilisateurs', href: '/admin/users', icon: 'group' },
-    { label: 'Chauffeurs', href: '/admin/drivers', icon: 'directions_car' },
-    { label: 'Restaurants', href: '/admin/restaurants', icon: 'store' },
-  ];
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-background/80 backdrop-blur-xl">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+    <header className="sticky top-0 z-40 w-full bg-background/90 backdrop-blur-xl">
+      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="flex items-center gap-2 text-xl font-bold leading-tight tracking-tight text-white sm:text-2xl">
               <MaterialIcon name="admin_panel_settings" className="text-primary text-[24px]" />
               {title}
             </h1>
-            <p className="text-slate-500 text-xs font-medium uppercase tracking-wider mt-1">{subtitle}</p>
+            <p className="mt-1 max-w-full break-words text-[11px] font-medium leading-4 text-slate-300 sm:text-xs">{subtitle}</p>
           </div>
 
-          <div className="flex min-w-0 items-center gap-2">
-            <button
-              onClick={() => router.push('/dashboard')}
-              aria-label="Retourner au dashboard client"
-              className="group flex shrink-0 items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-slate-300 glass-card transition-all duration-300 hover:bg-white/5"
-            >
-              <MaterialIcon name="home" size="sm" className="group-hover:-translate-y-0.5 transition-transform" />
-              <span className="text-sm font-medium">Dashboard</span>
-            </button>
-            <div data-testid="admin-navigation-scroll" className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-2 no-scrollbar md:pb-0">
-              {navItems.map((item) => {
-                const isActive = pathname === item.href;
-                return (
-                  <button
-                    key={item.href}
-                    onClick={() => router.push(item.href)}
-                    className={getAdminHeaderNavItemClassName(isActive)}
-                  >
-                    <MaterialIcon name={item.icon} size="sm" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <button
+            onClick={() => router.push('/dashboard')}
+            aria-label="Retourner au dashboard client"
+            title="Retourner au dashboard client"
+            className="group inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-slate-300 transition-all duration-300 hover:border-primary/40 hover:bg-white/10 hover:text-white"
+          >
+            <MaterialIcon name="home" size="sm" className="transition-transform group-hover:-translate-y-0.5" />
+            <span className="hidden text-sm font-medium sm:inline">Dashboard</span>
+          </button>
         </div>
       </div>
     </header>

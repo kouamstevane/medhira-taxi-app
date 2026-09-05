@@ -31,6 +31,14 @@ describe('BottomNav', () => {
     expect(screen.getByTestId('bottom-nav-spacer')).toHaveClass('h-20');
   });
 
+  it('exposes Personal Driver in the admin navigation', () => {
+    expect(adminNavItems).toContainEqual({
+      href: '/admin/personal-driver',
+      icon: 'person',
+      label: 'Personal Driver',
+    });
+  });
+
   it('adds Paramètres as the fourth portal destination', () => {
     expect(portalNavItems('restaurant-1').at(-1)).toEqual({
       href: '/food/portal/settings?restaurantId=restaurant-1',

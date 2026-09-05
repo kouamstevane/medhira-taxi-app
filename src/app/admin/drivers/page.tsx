@@ -406,15 +406,15 @@ export default function AdminDriversPage() {
         subtitle="Étude des candidatures et suivi des conducteurs"
       />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <section className="mb-6 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 sm:p-5">
-          <div className="mb-4 flex items-start justify-between gap-3">
+      <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+        <section className="mb-5 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-3.5 sm:mb-6 sm:p-5">
+          <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
             <div>
               <h2 className="text-base font-semibold text-white">Candidatures à étudier</h2>
               <p className="mt-1 text-xs text-slate-400">
                 {applicationsLoading ? 'Recherche des nouveaux dossiers…' : getPendingApplicationsSummary(visibleApplications.length)}.
               </p>
-              <p className="mt-1 text-[11px] text-slate-500">Les CV sont privés et accessibles uniquement aux administrateurs.</p>
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">CV privés, accessibles uniquement aux administrateurs.</p>
             </div>
             <span className="min-w-8 rounded-full bg-primary px-2 py-1 text-center text-xs font-bold text-black">
               {applicationsLoading ? '…' : visibleApplications.length}
@@ -427,17 +427,17 @@ export default function AdminDriversPage() {
           ) : visibleApplications.length === 0 ? (
             <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">Aucune candidature en attente pour le moment.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
               {visibleApplications.map((application) => (
-                <div key={application.id} className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div key={application.id} className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3.5 sm:p-4">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-white">{application.fullName ?? 'Postulant'} <span className="text-xs font-normal text-primary">{application.role ? `(${application.role})` : ''}</span></p>
                     <p className="truncate text-xs text-slate-400">{application.email}</p>
                     <p className="mt-1 truncate text-[11px] text-slate-500">{application.cv?.fileName ?? 'CV joint'} · Réf. {application.id}</p>
                   </div>
                   <div className={getApplicationActionsClassName()}>
-                    <button type="button" onClick={() => handleDownloadApplicationCv(application.id)} className="w-full rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/10 sm:w-auto">Voir le CV</button>
-                    <button type="button" onClick={() => handleApplicationForInvitation(application)} className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white sm:w-auto">Préremplir l’invitation</button>
+                    <button type="button" onClick={() => handleDownloadApplicationCv(application.id)} className="min-w-0 rounded-lg border border-white/10 px-2 py-2 text-xs text-slate-300 transition-colors hover:bg-white/10 sm:px-3">Voir le CV</button>
+                    <button type="button" onClick={() => handleApplicationForInvitation(application)} className="min-w-0 rounded-lg bg-primary px-2 py-2 text-xs font-semibold text-white transition-colors hover:bg-primary/90 sm:px-3">Préremplir</button>
                   </div>
                 </div>
               ))}
@@ -445,63 +445,43 @@ export default function AdminDriversPage() {
           )}
         </section>
 
-        {/* Statistics or Quick Filters Card */}
-        <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        <section className="mb-5 rounded-2xl border border-white/10 bg-[#151a26] p-2 sm:mb-6 sm:p-3">
+          <div role="tablist" aria-label="Filtres chauffeurs" className="grid grid-cols-4 gap-1">
           {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
             <button
               key={f}
+              type="button"
+              role="tab"
+              aria-selected={filter === f}
               onClick={() => setFilter(f)}
-              className={`relative min-h-20 overflow-hidden rounded-2xl border p-3 text-left transition-all duration-300 group md:p-4 ${
+              className={`flex min-h-12 min-w-0 items-center justify-between gap-1 rounded-xl px-2 py-2 text-left transition-colors sm:min-h-14 sm:px-3 ${
                 filter === f
-                  ? 'bg-primary/10 border-primary/30'
-                  : 'glass-card border-white/5 hover:border-white/10'
+                  ? 'bg-card text-primary shadow-sm'
+                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className={`text-xs font-semibold capitalize transition-colors md:text-sm ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
+              <span className={`truncate text-[10px] font-semibold transition-colors sm:text-xs ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
                   {f === 'all' ? 'Tous' : f === 'pending' ? 'En attente' : f === 'approved' ? 'Approuvés' : 'Refusés'}
-                </span>
-                <div className={`rounded-lg p-1.5 transition-colors md:p-2 ${filter === f ? 'bg-primary text-black' : 'bg-white/5 text-slate-400'}`}>
-                  {f === 'all' ? <MaterialIcon name="verified_user" size="sm" /> : f === 'pending' ? <MaterialIcon name="warning" size="sm" /> : f === 'approved' ? <MaterialIcon name="check_circle" size="sm" /> : <MaterialIcon name="cancel" size="sm" />}
-                </div>
-              </div>
-              <span className={`mt-2 block text-lg font-bold ${filter === f ? 'text-primary' : 'text-slate-300'}`}>
+              </span>
+              <span className={`shrink-0 text-sm font-bold ${filter === f ? 'text-primary' : 'text-slate-300'}`}>
                 {countsByFilter[f]}
               </span>
-              {filter === f && <div className="absolute bottom-0 left-0 h-1 w-full bg-primary" />}
             </button>
           ))}
-        </div>
-
-        {/* Driver Type Filter */}
-        <div className="flex gap-2 mb-6">
-          {(['all', 'chauffeur', 'livreur', 'les_deux'] as const).map((t) => (
-            <button key={t} onClick={() => setDriverTypeFilter(t)}
-              className={['px-4 h-8 rounded-xl text-xs font-medium transition-all',
-                driverTypeFilter === t ? 'bg-primary text-white' : 'bg-white/5 text-slate-400'].join(' ')}>
-              {t === 'all' ? 'Tous types' : t === 'les_deux' ? 'Les deux' : t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        <form ref={invitationFormRef} id="driver-invitation-form" onSubmit={handleCreateInvitation} className="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
-          <div className="mb-4">
-            <h2 className="text-base font-semibold text-white">Inviter un nouveau postulant</h2>
-            <p className="mt-1 text-xs text-slate-400">Le code envoyé par email sera valable 48 heures.</p>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <input required type="email" value={invitationEmail} onChange={(e) => setInvitationEmail(e.target.value)} placeholder="Email du postulant" className="glass-input rounded-xl px-3 py-2 text-sm" />
-            <select value={invitationRole} onChange={(e) => setInvitationRole(e.target.value as typeof invitationRole)} className="glass-input rounded-xl px-3 py-2 text-sm">
-              <option value="chauffeur">Chauffeur</option>
-              <option value="livreur">Livreur</option>
-              <option value="les_deux">Chauffeur / Livreur</option>
-            </select>
-            <button disabled={invitationLoading} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{invitationLoading ? 'Envoi…' : 'Générer et envoyer'}</button>
+
+          <div role="tablist" aria-label="Types de profil" className="mt-2 flex gap-1 overflow-x-auto border-t border-white/10 pt-2">
+            {(['all', 'chauffeur', 'livreur', 'les_deux'] as const).map((t) => (
+              <button key={t} type="button" role="tab" aria-selected={driverTypeFilter === t} onClick={() => setDriverTypeFilter(t)}
+                className={`shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors ${driverTypeFilter === t ? 'bg-primary text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
+                {t === 'all' ? 'Tous types' : t === 'les_deux' ? 'Les deux' : t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
           </div>
-        </form>
+        </section>
 
         {/* Search & Action Bar */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6 items-center justify-between">
+        <div className="mb-5 flex flex-col items-center justify-between gap-3 sm:mb-6 md:flex-row">
           <div className="relative w-full md:w-96">
             <MaterialIcon name="search" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -646,6 +626,22 @@ export default function AdminDriversPage() {
             </div>
           )}
         </div>
+
+        <form ref={invitationFormRef} id="driver-invitation-form" onSubmit={handleCreateInvitation} className="mt-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:mt-6 sm:p-5">
+          <div className="mb-3 sm:mb-4">
+            <h2 className="text-base font-semibold text-white">Inviter un nouveau postulant</h2>
+            <p className="mt-1 text-xs text-slate-400">Le code envoyé par email sera valable 48 heures.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <input required type="email" value={invitationEmail} onChange={(e) => setInvitationEmail(e.target.value)} placeholder="Email du postulant" className="glass-input rounded-xl px-3 py-2 text-sm" />
+            <select value={invitationRole} onChange={(e) => setInvitationRole(e.target.value as typeof invitationRole)} className="glass-input rounded-xl px-3 py-2 text-sm">
+              <option value="chauffeur">Chauffeur</option>
+              <option value="livreur">Livreur</option>
+              <option value="les_deux">Chauffeur / Livreur</option>
+            </select>
+            <button disabled={invitationLoading} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{invitationLoading ? 'Envoi…' : 'Générer et envoyer'}</button>
+          </div>
+        </form>
       </main>
 
       {selectedDriver && (

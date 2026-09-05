@@ -43,6 +43,7 @@ describe('PersonalDriverAdminPageClient', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/service est momentanément indisponible/i);
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Trajets' }));
     expect(await screen.findByText('Aucun trajet récent à afficher.')).toBeInTheDocument();
   });
 
@@ -54,8 +55,22 @@ describe('PersonalDriverAdminPageClient', () => {
 
     expect(screen.getByRole('heading', { name: /Administration — Personal Driver Medjira/i })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Forfaits Personal Driver' })).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Trajets' }));
     expect(screen.getByRole('button', { name: 'Affecter la mission' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('tab', { name: 'Urgences' }));
     expect(screen.getByRole('button', { name: /Réaffecter un chauffeur d'urgence/i })).toBeDisabled();
+  });
+
+  it('exposes compact operation views for subscriptions, trips, and emergencies', () => {
+    mockGetDocs.mockResolvedValue({ docs: [] });
+    const { PersonalDriverAdminPageClient } = require('./PersonalDriverAdminPageClient');
+
+    render(<PersonalDriverAdminPageClient />);
+
+    expect(screen.getByRole('tablist', { name: 'Vues opérationnelles' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Abonnements' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Trajets' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Urgences' })).toBeInTheDocument();
   });
 
   it('allows admin to refuse/cancel an unpaid pending subscription', async () => {
@@ -112,6 +127,7 @@ describe('PersonalDriverAdminPageClient', () => {
     const { PersonalDriverAdminPageClient } = require('./PersonalDriverAdminPageClient');
     render(<PersonalDriverAdminPageClient />);
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Trajets' }));
     const approveBtn = await screen.findByRole('button', { name: /Valider le trajet trip_review_1/i });
     expect(approveBtn).toBeInTheDocument();
 
@@ -147,6 +163,7 @@ describe('PersonalDriverAdminPageClient', () => {
     const { PersonalDriverAdminPageClient } = require('./PersonalDriverAdminPageClient');
     render(<PersonalDriverAdminPageClient />);
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Trajets' }));
     const rejectBtn = await screen.findByRole('button', { name: /Refuser le trajet trip_review_2/i });
     expect(rejectBtn).toBeInTheDocument();
 

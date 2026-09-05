@@ -7,8 +7,8 @@ describe('getInvitationPreparedMessage', () => {
 });
 
 describe('getApplicationActionsClassName', () => {
-  it('keeps application actions inside the card on mobile', () => {
-    expect(getApplicationActionsClassName()).toContain('flex-col');
+  it('keeps application actions compact and usable on mobile', () => {
+    expect(getApplicationActionsClassName()).toContain('grid-cols-2');
     expect(getApplicationActionsClassName()).toContain('sm:flex-row');
   });
 });
