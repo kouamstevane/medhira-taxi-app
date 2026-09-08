@@ -59,6 +59,8 @@ describe('DriverDetailsDrawer', () => {
   it('renders a compact summary and all available document thumbnails', () => {
     render(<DriverDetailsDrawer {...makeProps()} />);
 
+    expect(screen.getByText('Chauffeur · Douala')).toBeInTheDocument();
+    expect(screen.queryByText(/ID:/)).not.toBeInTheDocument();
     expect(screen.getByText('Documents disponibles')).toBeInTheDocument();
     expect(screen.getByText('2 pièces')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Photo de profil Agrandir' })).toHaveAttribute('href', photoUrl);

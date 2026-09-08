@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   collection,
   query,
@@ -23,6 +23,8 @@ import type { DriverDeletionResult } from '@/utils/driver-deletion.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import DeleteDriverModal from '@/components/admin/DeleteDriverModal';
 import { DriverDetailsDrawer } from '@/components/admin/DriverDetailsDrawer';
+import { DriverInviteModal } from '@/components/admin/DriverInviteModal';
+import { DriverMobileCard } from '@/components/admin/DriverMobileCard';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
 import {
@@ -30,7 +32,7 @@ import {
   filterAdminDrivers,
   hideReviewedDriverApplications,
 } from './adminDriversData';
-import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendingApplicationsSummary } from './adminDriversUi';
+import { getApplicationActionsClassName, getInvitationPreparedMessage } from './adminDriversUi';
 import { buildAdminDriverActionPayload } from './adminDriversActions';
 
 export interface Driver {
@@ -106,13 +108,14 @@ export default function AdminDriversPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const isAdmin = useAdminAuth();
+  const [activeTab, setActiveTab] = useState<'drivers' | 'applications'>('drivers');
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [invitationEmail, setInvitationEmail] = useState('');
   const [invitationRole, setInvitationRole] = useState<'chauffeur' | 'livreur' | 'les_deux'>('chauffeur');
   const [invitationLoading, setInvitationLoading] = useState(false);
   const [applications, setApplications] = useState<DriverApplication[]>([]);
   const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
-  const invitationFormRef = useRef<HTMLFormElement>(null);
   const { showError, showSuccess } = useToast();
 
   const PAGE_SIZE = 25;
@@ -259,6 +262,7 @@ export default function AdminDriversPage() {
       const expiry = new Date(data.expiresAt).toLocaleString('fr-FR');
       showSuccess(`Invitation envoyée. Code : ${data.code} — expiration : ${expiry}`);
       setInvitationEmail('');
+      setIsInviteModalOpen(false);
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Impossible de créer l’invitation');
     } finally {
@@ -279,10 +283,8 @@ export default function AdminDriversPage() {
   const handleApplicationForInvitation = (application: DriverApplication) => {
     setInvitationEmail(application.email);
     if (application.role) setInvitationRole(application.role);
+    setIsInviteModalOpen(true);
     showSuccess(getInvitationPreparedMessage(application.email));
-    requestAnimationFrame(() => {
-      invitationFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
   };
 
 
@@ -407,242 +409,360 @@ export default function AdminDriversPage() {
       />
 
       <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
-        <section className="mb-5 rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] p-3.5 sm:mb-6 sm:p-5">
-          <div className="mb-3 flex items-start justify-between gap-3 sm:mb-4">
-            <div>
-              <h2 className="text-base font-semibold text-white">Candidatures à étudier</h2>
-              <p className="mt-1 text-xs text-slate-400">
-                {applicationsLoading ? 'Recherche des nouveaux dossiers…' : getPendingApplicationsSummary(visibleApplications.length)}.
-              </p>
-              <p className="mt-1 text-[11px] leading-4 text-slate-500">CV privés, accessibles uniquement aux administrateurs.</p>
-            </div>
-            <span className="min-w-8 rounded-full bg-primary px-2 py-1 text-center text-xs font-bold text-black">
-              {applicationsLoading ? '…' : visibleApplications.length}
-            </span>
-          </div>
-          {applicationsLoading ? (
-            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">Chargement des candidatures...</p>
-          ) : applicationsError ? (
-            <p className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">{applicationsError}</p>
-          ) : visibleApplications.length === 0 ? (
-            <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-400">Aucune candidature en attente pour le moment.</p>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {visibleApplications.map((application) => (
-                <div key={application.id} className="flex min-w-0 flex-col justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3.5 sm:p-4">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-white">{application.fullName ?? 'Postulant'} <span className="text-xs font-normal text-primary">{application.role ? `(${application.role})` : ''}</span></p>
-                    <p className="truncate text-xs text-slate-400">{application.email}</p>
-                    <p className="mt-1 truncate text-[11px] text-slate-500">{application.cv?.fileName ?? 'CV joint'} · Réf. {application.id}</p>
-                  </div>
-                  <div className={getApplicationActionsClassName()}>
-                    <button type="button" onClick={() => handleDownloadApplicationCv(application.id)} className="min-w-0 rounded-lg border border-white/10 px-2 py-2 text-xs text-slate-300 transition-colors hover:bg-white/10 sm:px-3">Voir le CV</button>
-                    <button type="button" onClick={() => handleApplicationForInvitation(application)} className="min-w-0 rounded-lg bg-primary px-2 py-2 text-xs font-semibold text-white transition-colors hover:bg-primary/90 sm:px-3">Préremplir</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="mb-5 rounded-2xl border border-white/10 bg-[#151a26] p-2 sm:mb-6 sm:p-3">
-          <div role="tablist" aria-label="Filtres chauffeurs" className="grid grid-cols-4 gap-1">
-          {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
+        {/* Top bar with Navigation Tabs and "+ Inviter" action */}
+        <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+          <div role="tablist" aria-label="Navigation principale" className="flex w-full items-center gap-1 rounded-xl bg-white/[0.03] p-1 sm:w-auto">
             <button
-              key={f}
               type="button"
               role="tab"
-              aria-selected={filter === f}
-              onClick={() => setFilter(f)}
-              className={`flex min-h-12 min-w-0 items-center justify-between gap-1 rounded-xl px-2 py-2 text-left transition-colors sm:min-h-14 sm:px-3 ${
-                filter === f
-                  ? 'bg-card text-primary shadow-sm'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              aria-selected={activeTab === 'drivers'}
+              onClick={() => setActiveTab('drivers')}
+              className={`flex min-h-[44px] flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                activeTab === 'drivers'
+                  ? 'bg-white/[0.09] text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
               }`}
             >
-              <span className={`truncate text-[10px] font-semibold transition-colors sm:text-xs ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
-                  {f === 'all' ? 'Tous' : f === 'pending' ? 'En attente' : f === 'approved' ? 'Approuvés' : 'Refusés'}
-              </span>
-              <span className={`shrink-0 text-sm font-bold ${filter === f ? 'text-primary' : 'text-slate-300'}`}>
-                {countsByFilter[f]}
+              <MaterialIcon name="directions_car" size="sm" className={activeTab === 'drivers' ? 'text-primary' : 'text-slate-400'} />
+              <span>Chauffeurs</span>
+              <span className="ml-1 rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-300 font-bold">
+                {driverCounts.all}
               </span>
             </button>
-          ))}
-          </div>
 
-          <div role="tablist" aria-label="Types de profil" className="mt-2 flex gap-1 overflow-x-auto border-t border-white/10 pt-2">
-            {(['all', 'chauffeur', 'livreur', 'les_deux'] as const).map((t) => (
-              <button key={t} type="button" role="tab" aria-selected={driverTypeFilter === t} onClick={() => setDriverTypeFilter(t)}
-                className={`shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors ${driverTypeFilter === t ? 'bg-primary text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
-                {t === 'all' ? 'Tous types' : t === 'les_deux' ? 'Les deux' : t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* Search & Action Bar */}
-        <div className="mb-5 flex flex-col items-center justify-between gap-3 sm:mb-6 md:flex-row">
-          <div className="relative w-full md:w-96">
-            <MaterialIcon name="search" size="sm" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              aria-label="Rechercher un chauffeur"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Rechercher un chauffeur..."
-              className="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl text-sm"
-            />
-          </div>
-        </div>
-
-        {/* Liste des chauffeurs */}
-        <div className="glass-card border border-white/5 rounded-3xl overflow-hidden">
-          {loading ? (
-            <DriverSkeleton />
-          ) : filteredDrivers.length === 0 ? (
-            <div className="py-24 text-center">
-              <div className="inline-flex p-4 rounded-full bg-white/5 mb-4 text-slate-500">
-                <MaterialIcon name="person" size="xl" />
-              </div>
-              <h3 className="text-lg font-semibold text-white">Aucun chauffeur trouvé</h3>
-              <p className="text-slate-400 text-sm mt-1 max-w-xs mx-auto">
-                Il n&apos;y a aucun profil correspondant à votre filtre &quot;{filter}&quot; pour le moment.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-white/5">
-                <thead className="bg-white/[0.03]">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Chauffeur</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Contact</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Véhicule</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Statut</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Date</th>
-                    <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-500 uppercase tracking-widest">Détails</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {paginatedDrivers.map((driver) => (
-                    <tr key={driver.id} className="group hover:bg-white/5 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-4">
-                          <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold">
-                            {(driver.firstName || 'U').charAt(0).toUpperCase()}
-                            {(driver.lastName || '').charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div
-                              className="text-sm font-semibold text-white group-hover:text-primary transition-colors cursor-pointer"
-                              onClick={() => setSelectedDriver(driver)}
-                            >
-                              {driver.firstName || 'Utilisateur'} {driver.lastName || ''}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-slate-500 font-medium">Permis: {driver.licenseNumber || 'N/A'}</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                driver.driverType === 'livreur' ? 'bg-amber-500/10 text-amber-400' :
-                                driver.driverType === 'les_deux' ? 'bg-purple-500/10 text-purple-400' :
-                                'bg-primary/10 text-primary'}`}>
-                                {driver.driverType === 'livreur' ? 'Livreur' : driver.driverType === 'les_deux' ? 'Les deux' : 'Chauffeur'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-slate-300">{driver.email}</div>
-                        <div className="text-[11px] text-slate-500">{driver.phone || driver.phoneNumber}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <MaterialIcon name="directions_car" size="sm" className="text-primary" />
-                          <div className="text-sm text-slate-300 font-medium">{driver.car?.model || driver.carModel || 'N/A'}</div>
-                        </div>
-                        <div className="text-[11px] text-slate-500 uppercase tracking-tighter opacity-70">
-                          {driver.car?.plate || driver.carPlate || 'N/A'} • {driver.car?.color || driver.carColor || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1.5">
-                          {getStatusBadge(driver.status)}
-                          {driver.isSuspended && (
-                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20 uppercase tracking-tighter w-fit">
-                              <span className="h-1 w-1 rounded-full bg-orange-400 animate-pulse" /> Suspendu
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-[11px] font-medium text-slate-500">
-                        {driver.createdAt instanceof Timestamp
-                          ? driver.createdAt.toDate().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : new Date(driver.createdAt as number).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => setSelectedDriver(driver)}
-                          className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
-                        >
-                          <MaterialIcon name="chevron_right" size="md" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* Pagination controls */}
-              <div className="flex items-center justify-between px-6 py-4 border-t border-white/5">
-                <span className="text-xs text-slate-500">
-                  {filteredDrivers.length} chauffeur{filteredDrivers.length !== 1 ? 's' : ''} affiché{filteredDrivers.length !== 1 ? 's' : ''}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'applications'}
+              onClick={() => setActiveTab('applications')}
+              className={`flex min-h-[44px] flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                activeTab === 'applications'
+                  ? 'bg-white/[0.09] text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <MaterialIcon name="assignment" size="sm" className={activeTab === 'applications' ? 'text-amber-400' : 'text-slate-400'} />
+              <span>Candidatures</span>
+              {visibleApplications.length > 0 ? (
+                <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-white">
+                  {visibleApplications.length}
                 </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                    disabled={safeCurrentPage === 0}
-                    className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                    title="Page précédente"
-                  >
-                    <MaterialIcon name="chevron_left" size="sm" />
-                  </button>
-                  <span className="text-xs text-slate-400 px-2">
-                    {safeCurrentPage + 1} / {totalPages}
-                  </span>
-                  {safeCurrentPage + 1 < totalPages ? (
-                    <button
-                      onClick={() => setCurrentPage(p => p + 1)}
-                      className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 transition-all"
-                      title="Page suivante"
-                    >
-                      <MaterialIcon name="chevron_right" size="sm" />
-                    </button>
-                  ) : (
-                    <button disabled className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 opacity-30 cursor-not-allowed">
-                      <MaterialIcon name="chevron_right" size="sm" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+              ) : (
+                <span className="ml-1 rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-400 font-bold">
+                  0
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Action button "+ Inviter" */}
+          <button
+            type="button"
+            onClick={() => setIsInviteModalOpen(true)}
+            className="flex min-h-[44px] w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-[0.99]"
+          >
+            <MaterialIcon name="person_add" size="sm" />
+            <span>Inviter un chauffeur</span>
+          </button>
         </div>
 
-        <form ref={invitationFormRef} id="driver-invitation-form" onSubmit={handleCreateInvitation} className="mt-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:mt-6 sm:p-5">
-          <div className="mb-3 sm:mb-4">
-            <h2 className="text-base font-semibold text-white">Inviter un nouveau postulant</h2>
-            <p className="mt-1 text-xs text-slate-400">Le code envoyé par email sera valable 48 heures.</p>
+        {/* Candidatures Section */}
+        {activeTab === 'applications' && (
+          <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 sm:p-6">
+            <div className="mb-5">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+                  <MaterialIcon name="assignment" className="text-primary" />
+                  Candidatures à étudier
+                </h2>
+                <p className="mt-1 text-[11px] text-slate-500">CV privés, accessibles uniquement aux administrateurs autorisés.</p>
+              </div>
+            </div>
+
+            {applicationsLoading ? (
+              <div className="py-12 text-center text-sm text-slate-400">
+                <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                Chargement des candidatures en cours...
+              </div>
+            ) : applicationsError ? (
+              <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5 text-sm text-rose-300">
+                {applicationsError}
+              </div>
+            ) : visibleApplications.length === 0 ? (
+              <div className="py-16 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white/5 text-slate-500">
+                  <MaterialIcon name="check_circle" size="lg" className="text-emerald-400" />
+                </div>
+                <h3 className="text-base font-semibold text-white">Toutes les candidatures ont été traitées</h3>
+                <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto">
+                  Aucun nouveau dossier en attente. Les candidatures validées apparaissent dans la liste des chauffeurs.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {visibleApplications.map((application) => (
+                  <div key={application.id} className="flex min-w-0 flex-col justify-between gap-4 rounded-xl border border-white/[0.08] bg-[#151515] p-4 transition-colors hover:border-white/[0.16] sm:p-5">
+                    <div className="min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-base font-semibold text-white">
+                          {application.fullName ?? 'Postulant'}
+                        </p>
+                        {application.role && (
+                            <span className="shrink-0 rounded-full bg-white/[0.07] px-2 py-0.5 text-[10px] font-semibold text-slate-300 capitalize">
+                            {application.role}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 truncate text-xs text-slate-400">{application.email}</p>
+                      <p className="mt-2 truncate text-[11px] text-slate-500">
+                        {application.cv?.fileName ?? 'CV joint'} · Réf. {application.id}
+                      </p>
+                    </div>
+                    <div className={getApplicationActionsClassName()}>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadApplicationCv(application.id)}
+                        className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 transition-colors hover:bg-white/10"
+                      >
+                        <MaterialIcon name="visibility" size="sm" />
+                        <span>Voir le CV</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApplicationForInvitation(application)}
+                        className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-primary/90"
+                      >
+                        <MaterialIcon name="send" size="sm" />
+                        <span>Préparer l’invitation</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Drivers Section */}
+        {activeTab === 'drivers' && (
+          <div className="space-y-5 sm:space-y-6">
+            {/* 4-column Segmented Controls for Status */}
+            <section className="rounded-xl bg-white/[0.03] p-1.5 sm:p-2">
+              <div role="tablist" aria-label="Filtres statut chauffeurs" className="grid grid-cols-4 gap-1.5">
+                {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === f}
+                    onClick={() => setFilter(f)}
+                    className={`flex min-h-[44px] sm:min-h-14 min-w-0 items-center justify-start gap-1.5 rounded-xl px-2.5 py-2 text-left transition-colors sm:px-3.5 ${
+                      filter === f
+                        ? 'bg-white/[0.09] text-white shadow-sm'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    <span className={`truncate text-[11px] font-semibold transition-colors sm:text-xs ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
+                      {f === 'all' ? 'Tous' : f === 'pending' ? 'En attente' : f === 'approved' ? 'Approuvés' : 'Refusés'}
+                    </span>
+                    <span className={`inline-flex min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold sm:text-xs ${filter === f ? 'bg-primary text-white' : 'bg-white/10 text-slate-300'}`}>
+                      {countsByFilter[f]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Profile Type filter pills */}
+              <div role="tablist" aria-label="Types de profil" className="mt-1 flex gap-1.5 overflow-x-auto pt-1">
+                {(['all', 'chauffeur', 'livreur', 'les_deux'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="tab"
+                    aria-selected={driverTypeFilter === t}
+                    onClick={() => setDriverTypeFilter(t)}
+                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors min-h-[36px] flex items-center ${
+                      driverTypeFilter === t
+                        ? 'bg-white/[0.09] text-white shadow-sm'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                    }`}
+                  >
+                    {t === 'all' ? 'Tous types' : t === 'les_deux' ? 'Les deux' : t.charAt(0).toUpperCase() + t.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {/* Search Bar */}
+            <div className="relative w-full">
+              <MaterialIcon name="search" size="sm" className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                aria-label="Rechercher un chauffeur"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Rechercher un chauffeur..."
+                className="glass-input w-full pl-10 pr-4 py-2.5 rounded-xl text-sm min-h-[44px]"
+              />
+            </div>
+
+            {/* Drivers List: Mobile Cards + Desktop Table */}
+            <div className="glass-card border border-white/5 rounded-3xl overflow-hidden p-3 sm:p-0">
+              {loading ? (
+                <DriverSkeleton />
+              ) : filteredDrivers.length === 0 ? (
+                <div className="py-20 text-center">
+                  <div className="inline-flex p-4 rounded-full bg-white/5 mb-4 text-slate-500">
+                    <MaterialIcon name="person" size="xl" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">Aucun chauffeur trouvé</h3>
+                  <p className="text-slate-400 text-sm mt-1 max-w-xs mx-auto">
+                    Il n&apos;y a aucun profil correspondant à votre filtre &quot;{filter}&quot; pour le moment.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Mobile Card View (block md:hidden) - NO horizontal scrollbar! */}
+                  <div className="block md:hidden space-y-3">
+                    {paginatedDrivers.map((driver) => (
+                      <DriverMobileCard
+                        key={driver.id}
+                        driver={driver}
+                        onSelect={setSelectedDriver}
+                        statusBadge={getStatusBadge(driver.status)}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Desktop Table View (hidden md:block) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="min-w-full divide-y divide-white/5">
+                      <thead className="bg-white/[0.03]">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Chauffeur</th>
+                          <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Contact</th>
+                          <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Véhicule</th>
+                          <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Statut</th>
+                          <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Date</th>
+                          <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-500 uppercase tracking-widest">Détails</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {paginatedDrivers.map((driver) => (
+                          <tr key={driver.id} className="group hover:bg-white/5 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-4">
+                                <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold">
+                                  {(driver.firstName || 'U').charAt(0).toUpperCase()}
+                                  {(driver.lastName || '').charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div
+                                    className="text-sm font-semibold text-white group-hover:text-primary transition-colors cursor-pointer"
+                                    onClick={() => setSelectedDriver(driver)}
+                                  >
+                                    {driver.firstName || 'Utilisateur'} {driver.lastName || ''}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[11px] text-slate-500 font-medium">Permis: {driver.licenseNumber || 'N/A'}</span>
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                      driver.driverType === 'livreur' ? 'bg-amber-500/10 text-amber-400' :
+                                      driver.driverType === 'les_deux' ? 'bg-purple-500/10 text-purple-400' :
+                                      'bg-primary/10 text-primary'}`}>
+                                      {driver.driverType === 'livreur' ? 'Livreur' : driver.driverType === 'les_deux' ? 'Les deux' : 'Chauffeur'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-slate-300">{driver.email}</div>
+                              <div className="text-[11px] text-slate-500">{driver.phone || driver.phoneNumber}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <MaterialIcon name="directions_car" size="sm" className="text-primary" />
+                                <div className="text-sm text-slate-300 font-medium">{driver.car?.model || driver.carModel || 'N/A'}</div>
+                              </div>
+                              <div className="text-[11px] text-slate-500 uppercase tracking-tighter opacity-70">
+                                {driver.car?.plate || driver.carPlate || 'N/A'} • {driver.car?.color || driver.carColor || 'N/A'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex flex-col gap-1.5">
+                                {getStatusBadge(driver.status)}
+                                {driver.isSuspended && (
+                                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20 uppercase tracking-tighter w-fit">
+                                    <span className="h-1 w-1 rounded-full bg-orange-400 animate-pulse" /> Suspendu
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-[11px] font-medium text-slate-500">
+                              {driver.createdAt instanceof Timestamp
+                                ? driver.createdAt.toDate().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+                                : new Date(driver.createdAt as number).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                              <button
+                                onClick={() => setSelectedDriver(driver)}
+                                className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-white"
+                                aria-label="Voir le profil du chauffeur"
+                              >
+                                <MaterialIcon name="chevron_right" size="md" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination controls */}
+                  <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-t border-white/5">
+                    <span className="text-xs text-slate-400">
+                      {filteredDrivers.length} chauffeur{filteredDrivers.length !== 1 ? 's' : ''} affiché{filteredDrivers.length !== 1 ? 's' : ''}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                        disabled={safeCurrentPage === 0}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        title="Page précédente"
+                      >
+                        <MaterialIcon name="chevron_left" size="sm" />
+                      </button>
+                      <span className="text-xs text-slate-300 font-medium px-2">
+                        {safeCurrentPage + 1} / {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(p => p + 1)}
+                        disabled={safeCurrentPage + 1 >= totalPages}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                        title="Page suivante"
+                      >
+                        <MaterialIcon name="chevron_right" size="sm" />
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <input required type="email" value={invitationEmail} onChange={(e) => setInvitationEmail(e.target.value)} placeholder="Email du postulant" className="glass-input rounded-xl px-3 py-2 text-sm" />
-            <select value={invitationRole} onChange={(e) => setInvitationRole(e.target.value as typeof invitationRole)} className="glass-input rounded-xl px-3 py-2 text-sm">
-              <option value="chauffeur">Chauffeur</option>
-              <option value="livreur">Livreur</option>
-              <option value="les_deux">Chauffeur / Livreur</option>
-            </select>
-            <button disabled={invitationLoading} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{invitationLoading ? 'Envoi…' : 'Générer et envoyer'}</button>
-          </div>
-        </form>
+        )}
       </main>
+
+      {/* Driver Invitation Modal (replaces bottom static form) */}
+      <DriverInviteModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        email={invitationEmail}
+        onEmailChange={setInvitationEmail}
+        role={invitationRole}
+        onRoleChange={setInvitationRole}
+        onSubmit={handleCreateInvitation}
+        isLoading={invitationLoading}
+      />
 
       {selectedDriver && (
         <DriverDetailsDrawer

@@ -2,7 +2,9 @@ import { getApplicationActionsClassName, getInvitationPreparedMessage, getPendin
 
 describe('getInvitationPreparedMessage', () => {
   it('confirms which applicant is ready for invitation', () => {
-    expect(getInvitationPreparedMessage('candidate@example.com')).toBe('Formulaire d’invitation prérempli pour candidate@example.com.');
+    expect(getInvitationPreparedMessage('candidate@example.com')).toBe(
+      'Invitation préparée pour candidate@example.com. Aucun e-mail n’a été envoyé.',
+    );
   });
 });
 

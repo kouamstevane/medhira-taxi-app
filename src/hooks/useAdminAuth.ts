@@ -8,6 +8,38 @@ import { db, auth } from '@/config/firebase';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('AdminAuth');
+const adminStatusCache = new Map<string, boolean>();
+const adminStatusChecks = new Map<string, Promise<boolean>>();
+
+async function resolveAdminStatus(user: User): Promise<boolean> {
+  const cachedStatus = adminStatusCache.get(user.uid);
+  if (cachedStatus !== undefined) return cachedStatus;
+
+  const existingCheck = adminStatusChecks.get(user.uid);
+  if (existingCheck) return existingCheck;
+
+  const check = (async () => {
+    const adminDoc = await getDoc(doc(db, 'admins', user.uid));
+    if (adminDoc.exists()) return true;
+
+    const adminQuery = query(
+      collection(db, 'admins'),
+      where('userId', '==', user.uid),
+      limit(1)
+    );
+    const adminSnapshot = await getDocs(adminQuery);
+    return !adminSnapshot.empty;
+  })();
+
+  adminStatusChecks.set(user.uid, check);
+  try {
+    const status = await check;
+    adminStatusCache.set(user.uid, status);
+    return status;
+  } finally {
+    adminStatusChecks.delete(user.uid);
+  }
+}
 
 /**
  * Hook pour vérifier les droits administrateur.
@@ -22,46 +54,27 @@ export function useAdminAuth(): boolean | null {
   useEffect(() => {
     let isMounted = true;
 
-    // On attend l'hydratation de l'état d'auth Firebase (IndexedDB) avant de décider.
-    // Lire `auth.currentUser` de façon synchrone au montage provoque un faux
-    // redirect vers /login lorsque le SDK n'a pas encore restauré la session.
-    const checkAdmin = async (user: User) => {
-      try {
-        const adminDoc = await getDoc(doc(db, 'admins', user.uid));
-        if (adminDoc.exists()) {
-          if (isMounted) setIsAdmin(true);
-          return;
-        }
-
-        const adminQuery = query(
-          collection(db, 'admins'),
-          where('userId', '==', user.uid),
-          limit(1) // Règle Section 4.1 : limit() obligatoire
-        );
-        const adminSnapshot = await getDocs(adminQuery);
-
-        if (!isMounted) return;
-
-        if (!adminSnapshot.empty) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-          router.push('/dashboard');
-        }
-      } catch (err) {
-        logger.error('Erreur vérification admin', err instanceof Error ? err : new Error(String(err)));
-        if (isMounted) setIsAdmin(false);
-      }
-    };
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!isMounted) return;
       if (!user) {
+        adminStatusCache.clear();
+        adminStatusChecks.clear();
         setIsAdmin(false);
         router.push('/login');
         return;
       }
-      void checkAdmin(user);
+
+      setIsAdmin(null);
+      void resolveAdminStatus(user)
+        .then((adminStatus) => {
+          if (!isMounted) return;
+          setIsAdmin(adminStatus);
+          if (!adminStatus) router.push('/dashboard');
+        })
+        .catch((err) => {
+          logger.error('Erreur vérification admin', err instanceof Error ? err : new Error(String(err)));
+          if (isMounted) setIsAdmin(false);
+        });
     });
 
     return () => {

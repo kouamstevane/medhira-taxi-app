@@ -9,6 +9,8 @@ import {
   orderBy,
   startAfter,
   getDocs,
+  getDoc,
+  doc,
   DocumentSnapshot,
 } from 'firebase/firestore';
 
@@ -16,11 +18,20 @@ const PAGE_SIZE = 25;
 import { httpsCallable } from 'firebase/functions';
 import { db, auth, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { UserMobileCard } from '@/components/admin/UserMobileCard';
+import { UserDetailsDrawer, type AdminUserDriverProfile, type AdminUserRestaurantProfile } from '@/components/admin/UserDetailsDrawer';
+import type { DriverPrivate } from '@/types/firestore-collections';
 import { toast } from 'react-hot-toast';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { createLogger } from '@/utils/logger';
+import {
+  buildAdminManageUserPayload,
+  groupUsersByIdentity,
+  type AdminManageableRole,
+  type AdminUserRole,
+} from './adminUsersUi';
 
 const logger = createLogger('AdminUsers');
 
@@ -37,16 +48,20 @@ interface UserData {
   lastName: string;
   email: string;
   phoneNumber?: string;
+  profileImageUrl?: string;
+  profileImage?: string;
+  photoURL?: string;
+  emailVerified?: boolean;
   roles?: UserRolesShape;
   activeRole?: 'client' | 'driver' | 'restaurant';
+  lastActiveRole?: 'client' | 'driver' | 'restaurant';
+  accountState?: string;
+  country?: string;
+  address?: string;
+  city?: string;
+  bio?: string;
   createdAt: unknown;
-}
-
-function primaryRoleLabel(user: UserData): 'restaurateur' | 'chauffeur' | 'client' {
-  // « Type principal » affiché : la plus haute capacité présente. roles.restaurant > driver > client.
-  if (user.roles?.restaurant != null) return 'restaurateur';
-  if (user.roles?.driver != null) return 'chauffeur';
-  return 'client';
+  updatedAt?: unknown;
 }
 
 const UserSkeleton = () => (
@@ -75,6 +90,10 @@ export default function AdminUsersPage() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
+  const [selectedUser, setSelectedUser] = useState<ReturnType<typeof groupUsersByIdentity>[number] | null>(null);
+  const [selectedDriverProfile, setSelectedDriverProfile] = useState<AdminUserDriverProfile | null>(null);
+  const [selectedDriverPrivate, setSelectedDriverPrivate] = useState<DriverPrivate | null>(null);
+  const [selectedRestaurantProfile, setSelectedRestaurantProfile] = useState<AdminUserRestaurantProfile | null>(null);
   const isAdmin = useAdminAuth();
 
   useEffect(() => {
@@ -126,26 +145,27 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleUpdateRole = async (userId: string, newRole: string) => {
+  const handleRemoveRole = async (userId: string, role: AdminManageableRole) => {
     if (!auth.currentUser) return;
 
     setProcessing(userId);
     try {
       const adminManageUser = httpsCallable(functions, 'adminManageUser');
-      const result = await adminManageUser({ userId, role: newRole });
+      const result = await adminManageUser(buildAdminManageUserPayload(userId, role));
       const data = result.data as { success: boolean; message: string };
 
       toast.success(data.message || 'Rôle mis à jour');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erreur de mise à jour';
-      logger.error('Mise à jour du rôle', err instanceof Error ? err : new Error(String(err)));
+      logger.error(`Retrait du rôle ${role}`, err instanceof Error ? err : new Error(String(err)));
       toast.error(message);
     } finally {
       setProcessing(null);
     }
   };
 
-  const filteredUsers = users.filter(user =>
+  const groupedUsers = groupUsersByIdentity(users);
+  const filteredUsers = groupedUsers.filter(user =>
     user.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.lastName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -155,11 +175,65 @@ export default function AdminUsersPage() {
   const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
   const pagedUsers = filteredUsers.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
-  const getRoleIcon = (role: string) => {
+  const getRoleIcon = (role: AdminUserRole) => {
     switch(role) {
-      case 'restaurateur': return <MaterialIcon name="restaurant" size="sm" />;
-      case 'chauffeur': return <MaterialIcon name="directions_car" size="sm" />;
+      case 'restaurant': return <MaterialIcon name="restaurant" size="sm" />;
+      case 'driver': return <MaterialIcon name="directions_car" size="sm" />;
       default: return <MaterialIcon name="person" size="sm" />;
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setSelectedDriverProfile(null);
+      setSelectedDriverPrivate(null);
+      setSelectedRestaurantProfile(null);
+      return;
+    }
+
+    const driverId = selectedUser.roleUserIds.driver;
+    if (!driverId) {
+      setSelectedDriverProfile(null);
+      setSelectedDriverPrivate(null);
+    }
+
+    const restaurantId = selectedUser.roleDetails.restaurant?.restaurantId;
+    if (!driverId && !restaurantId) {
+      setSelectedRestaurantProfile(null);
+      return;
+    }
+
+    let cancelled = false;
+    const driverRequests = driverId
+      ? Promise.all([getDoc(doc(db, 'drivers', driverId)), getDoc(doc(db, 'drivers', driverId, 'private', 'personal'))])
+      : Promise.resolve(null);
+    const restaurantRequest = restaurantId
+      ? getDoc(doc(db, 'restaurants', restaurantId))
+      : Promise.resolve(null);
+
+    void Promise.all([driverRequests, restaurantRequest]).then(([driverResult, restaurantSnapshot]) => {
+      if (cancelled) return;
+      if (driverResult) {
+        const [driverSnapshot, privateSnapshot] = driverResult;
+        setSelectedDriverProfile(driverSnapshot.exists() ? driverSnapshot.data() as AdminUserDriverProfile : null);
+        setSelectedDriverPrivate(privateSnapshot.exists() ? privateSnapshot.data() as DriverPrivate : null);
+      }
+      setSelectedRestaurantProfile(restaurantSnapshot?.exists() ? restaurantSnapshot.data() as AdminUserRestaurantProfile : null);
+    }).catch(() => {
+      if (cancelled) return;
+      setSelectedDriverProfile(null);
+      setSelectedDriverPrivate(null);
+      setSelectedRestaurantProfile(null);
+    });
+
+    return () => { cancelled = true; };
+  }, [selectedUser]);
+
+  const getRoleLabel = (role: AdminUserRole) => {
+    switch (role) {
+      case 'restaurant': return 'Restaurateur';
+      case 'driver': return 'Chauffeur';
+      default: return 'Client';
     }
   };
 
@@ -205,19 +279,35 @@ export default function AdminUsersPage() {
               <h3 className="text-lg font-semibold text-white">Aucun utilisateur trouvé</h3>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div>
+              <div className="block space-y-1.5 p-2.5 md:hidden">
+                {pagedUsers.map((user) => (
+                    <UserMobileCard
+                      key={user.id}
+                      user={user}
+                      isProcessing={processing === user.roleUserIds.restaurant || processing === user.roleUserIds.driver}
+                      isDisabled={!!processing}
+                      onRemoveRole={handleRemoveRole}
+                      onSelect={() => setSelectedUser(user)}
+                    />
+                ))}
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full divide-y divide-white/5">
                 <thead className="bg-white/[0.03]">
                   <tr>
                     <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Utilisateur</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Type Actuel</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Rôles actifs</th>
                     <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {pagedUsers.map((user) => {
-                    const primary = primaryRoleLabel(user);
-                    const hasRestaurantRole = user.roles?.restaurant != null;
+                    const hasRestaurantRole = user.roles.includes('restaurant');
+                    const manageableRoles = user.roles.filter(
+                      (role): role is AdminManageableRole => role === 'restaurant' || role === 'driver',
+                    );
                     return (
                     <tr key={user.id} className="hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4">
@@ -226,42 +316,62 @@ export default function AdminUsersPage() {
                             {user.firstName?.[0]}{user.lastName?.[0]}
                           </div>
                           <div>
-                            <div className="text-sm font-semibold text-white">{user.firstName} {user.lastName}</div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUser(user)}
+                              className="text-left text-sm font-semibold text-white transition-colors hover:text-primary"
+                            >
+                              {user.firstName} {user.lastName}
+                            </button>
                             <div className="text-[11px] text-slate-500">{user.email}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase border ${
-                          primary === 'restaurateur' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                          primary === 'chauffeur' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                          'bg-white/5 text-slate-400 border-white/10'
-                        }`}>
-                          {getRoleIcon(primary)}
-                          {primary}
-                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {user.roles.map((role) => (
+                            <span key={role} className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-bold uppercase ${
+                              role === 'restaurant' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                              role === 'driver' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                              'bg-white/5 text-slate-400 border-white/10'
+                            }`}>
+                              {getRoleIcon(role)}
+                              {getRoleLabel(role)}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          {!hasRestaurantRole ? (
-                            <button
-                              onClick={() => handleUpdateRole(user.id, 'restaurateur')}
-                              disabled={!!processing}
-                              className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-xs font-bold text-slate-300 hover:bg-white/10 transition-all disabled:opacity-50"
+                          {hasRestaurantRole && (
+                            <a
+                              href="/admin/restaurants/"
+                              className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-300 transition-all hover:bg-white/10"
                             >
-                              <MaterialIcon name="restaurant" size="sm" />
-                              Promouvoir Restaurateur
-                            </button>
-                          ) : (
+                              <MaterialIcon name="store" size="sm" />
+                              Gérer dans Restaurants
+                            </a>
+                          )}
+                          {manageableRoles.map((role) => (
                             <button
-                              onClick={() => handleUpdateRole(user.id, 'client')}
+                              key={role}
+                              onClick={() => handleRemoveRole(user.roleUserIds[role] ?? user.id, role)}
                               disabled={!!processing}
-                              className="flex items-center gap-2 px-3 py-1.5 bg-destructive/10 border border-destructive/20 rounded-lg text-xs font-bold text-destructive hover:bg-destructive/20 transition-all disabled:opacity-50"
+                              className="flex items-center gap-2 rounded-lg bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive transition-all hover:bg-destructive/20 disabled:opacity-50"
                             >
                               <MaterialIcon name="person_remove" size="sm" />
-                              Retirer accès
+                              Retirer accès {role === 'restaurant' ? 'restaurateur' : 'chauffeur'}
                             </button>
-                          )}
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedUser(user)}
+                            className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-300 transition-all hover:bg-white/10"
+                            aria-label={`Voir la fiche de ${user.firstName} ${user.lastName}`}
+                          >
+                            <MaterialIcon name="chevron_right" size="sm" />
+                            Fiche complète
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -269,11 +379,12 @@ export default function AdminUsersPage() {
                   })}
                 </tbody>
               </table>
+              </div>
 
               {/* Pagination controls */}
-              <div className="flex items-center justify-between px-6 py-4 border-t border-white/5">
+              <div className="flex items-center justify-between border-t border-white/5 px-4 py-4 sm:px-6">
                 <span className="text-xs text-slate-500">
-                  {filteredUsers.length} utilisateur{filteredUsers.length !== 1 ? 's' : ''}
+                  {filteredUsers.length} identité{filteredUsers.length !== 1 ? 's' : ''}
                   {searchQuery ? ' trouvés' : ' chargés'}
                 </span>
                 <div className="flex items-center gap-2">
@@ -318,6 +429,15 @@ export default function AdminUsersPage() {
           )}
         </div>
       </main>
+      {selectedUser && (
+        <UserDetailsDrawer
+          user={selectedUser}
+          driverProfile={selectedDriverProfile}
+          driverPrivate={selectedDriverPrivate}
+          restaurantProfile={selectedRestaurantProfile}
+          onClose={() => setSelectedUser(null)}
+        />
+      )}
       <BottomNav items={adminNavItems} />
     </div>
   );

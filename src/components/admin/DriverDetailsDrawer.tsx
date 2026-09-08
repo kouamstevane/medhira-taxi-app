@@ -124,6 +124,7 @@ export function DriverDetailsDrawer({
     : driver.driverType === 'les_deux'
       ? 'Chauffeur / Livreur'
       : 'Chauffeur';
+  const headerContext = [profileType, driver.city].filter(Boolean).join(' · ');
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-end" role="dialog" aria-modal="true" aria-labelledby="driver-details-title">
@@ -139,7 +140,7 @@ export function DriverDetailsDrawer({
               <h2 id="driver-details-title" className="truncate text-lg font-bold text-white sm:text-xl">{driver.firstName} {driver.lastName}</h2>
               <div className="flex min-w-0 items-center gap-2">
                 {getStatusBadge(driver.status)}
-                <span className="truncate text-[10px] font-mono text-slate-500">ID: {driver.id.substring(0, 8)}...</span>
+                <span className="truncate text-[10px] font-medium text-slate-400">{headerContext}</span>
               </div>
             </div>
           </div>

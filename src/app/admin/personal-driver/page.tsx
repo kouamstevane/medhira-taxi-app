@@ -11,7 +11,7 @@ export default function AdminPersonalDriverPage() {
 
   if (isAdmin === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950 text-slate-300">
+      <div className="flex min-h-screen items-center justify-center bg-background text-slate-300">
         <p className="text-sm font-medium">Vérification des accès en cours...</p>
       </div>
     );
@@ -20,7 +20,7 @@ export default function AdminPersonalDriverPage() {
   if (!isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-background text-white">
       <AdminHeader
         title="Administration Personal Driver"
         subtitle="Gestion des forfaits et opérations Personal Driver"

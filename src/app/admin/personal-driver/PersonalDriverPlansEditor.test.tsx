@@ -98,6 +98,35 @@ describe('PersonalDriverPlansEditor', () => {
     expect(basicCard.queryByRole('textbox', { name: 'Nom' })).not.toBeInTheDocument();
   });
 
+  it('explains the fallback catalogue in plain language when the custom catalogue is unavailable', async () => {
+    (getPersonalDriverPlans as jest.Mock).mockResolvedValueOnce({
+      plans: PERSONAL_DRIVER_PLANS,
+      source: 'fallback',
+      error: new Error('Firestore unavailable'),
+    });
+
+    render(<PersonalDriverPlansEditor />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/catalogue personnalisé est temporairement indisponible/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/forfaits standards restent affichés/i);
+    expect(screen.getByRole('alert')).toHaveTextContent(/réessayer plus tard/i);
+  });
+
+  it('offers a retry action when the custom catalogue is unavailable', async () => {
+    (getPersonalDriverPlans as jest.Mock).mockResolvedValueOnce({
+      plans: PERSONAL_DRIVER_PLANS,
+      source: 'fallback',
+      error: new Error('Firestore unavailable'),
+    });
+    const user = userEvent.setup();
+
+    render(<PersonalDriverPlansEditor />);
+
+    const retryButton = await screen.findByRole('button', { name: 'Réessayer' });
+    await user.click(retryButton);
+    await waitFor(() => expect(getPersonalDriverPlans).toHaveBeenCalledTimes(2));
+  });
+
   it('saves the full edited Premium plan after changing its minimum amount', async () => {
     const user = userEvent.setup();
     (getPersonalDriverPlans as jest.Mock)

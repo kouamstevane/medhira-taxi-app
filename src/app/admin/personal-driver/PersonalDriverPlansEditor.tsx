@@ -212,7 +212,7 @@ export function PersonalDriverPlansEditor() {
       setSavedPlans(clonePlans(result.plans));
       setAudit(getAuditMap(result));
       if (result.error) {
-        setLoadError('Les forfaits par défaut sont affichés car le catalogue n’a pas pu être chargé.');
+        setLoadError('Le catalogue personnalisé est temporairement indisponible. Les forfaits standards restent affichés afin que la page reste utilisable. Vous pouvez réessayer plus tard.');
       }
     } catch (error: unknown) {
       setLoadError(`Impossible de charger les forfaits : ${getUserFacingCallableError(error)}`);
@@ -339,8 +339,13 @@ export function PersonalDriverPlansEditor() {
       </div>
 
       {loadError && (
-        <div role="alert" className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs font-semibold text-amber-100">
-          {loadError}
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs font-semibold text-amber-100">
+          <p className="min-w-0 flex-1">{loadError}</p>
+          {loadError.startsWith('Le catalogue personnalisé') && (
+            <button type="button" onClick={() => void loadPlans()} disabled={loading} className="min-h-9 rounded-full border border-amber-300/30 px-3 text-[11px] font-bold text-amber-100 transition hover:bg-amber-300/10 disabled:opacity-50">
+              Réessayer
+            </button>
+          )}
         </div>
       )}
       {status && (

@@ -3,7 +3,7 @@ export function getApplicationActionsClassName(): string {
 }
 
 export function getInvitationPreparedMessage(email: string): string {
-  return `Formulaire d’invitation prérempli pour ${email}.`;
+  return `Invitation préparée pour ${email}. Aucun e-mail n’a été envoyé.`;
 }
 
 export function getPendingApplicationsSummary(count: number): string {
