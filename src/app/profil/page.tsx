@@ -1,29 +1,36 @@
 "use client";
+
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { auth, db, functions, getFirebaseStorage } from '@/config/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
 import { signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
+import { Controller, useForm } from 'react-hook-form';
+
+import { auth, db, functions, getFirebaseStorage } from '@/config/firebase';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/useToast';
+import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { NetworkErrorView } from '@/components/ui';
 import { InputField } from '@/components/forms/InputField';
 import { SelectField } from '@/components/forms/SelectField';
-import { useToast } from '@/hooks/useToast';
-import { Controller, useForm } from 'react-hook-form';
+import { ProtectedPageGuard } from '@/components/auth/ProtectedPageGuard';
+import type { PlaceSuggestion } from '@/types';
 import { getFirestoreErrorMessage, isFirestoreNetworkError, logFirestoreError } from '@/utils/firestore-error-handler';
+
 import { shouldOpenAddressEditor } from './profile-navigation';
 import { ProfileAddressField } from './ProfileAddressField';
-import { useGoogleMaps } from '@/hooks/useGoogleMaps';
-import type { PlaceSuggestion } from '@/types';
 import { buildProfileUpdate, persistProfileUpdate } from './profile-update';
-import { ProtectedPageGuard } from '@/components/auth/ProtectedPageGuard';
+import { ProfileMenuItem } from './ProfileMenuItem';
+import { ProfileSupportModal } from './ProfileSupportModal';
+import { ProfileReferralModal } from './ProfileReferralModal';
+import { ProfileFaqModal } from './ProfileFaqModal';
 
 interface ProfileFormData {
   firstName: string;
@@ -33,37 +40,6 @@ interface ProfileFormData {
   city: string;
   country: string;
   bio: string;
-}
-
-interface SectionTitleProps {
-  icon: string;
-  children: React.ReactNode;
-}
-
-function SectionTitle({ icon, children }: SectionTitleProps) {
-  return (
-    <div className="mb-3 flex items-center gap-2 px-1">
-      <MaterialIcon name={icon} className="text-primary text-[18px]" />
-      <h3 className="text-[11px] font-bold uppercase tracking-[0.15em] text-slate-400">{children}</h3>
-    </div>
-  );
-}
-
-interface InfoRowProps {
-  label: string;
-  value?: string;
-  emptyLabel?: string;
-}
-
-function InfoRow({ label, value, emptyLabel = 'Non renseigné' }: InfoRowProps) {
-  const displayValue = value && value.length > 0 ? value : emptyLabel;
-
-  return (
-    <div className="py-2">
-      <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">{label}</p>
-      <p className={`text-[15px] ${value ? 'text-white' : 'italic text-slate-500'}`}>{displayValue}</p>
-    </div>
-  );
 }
 
 function ProfilPageContent() {
@@ -76,8 +52,9 @@ function ProfilPageContent() {
     address: authUserData?.address || '',
     city: authUserData?.city || '',
     country: authUserData?.country || 'Canada',
-    bio: authUserData?.bio || ''
+    bio: authUserData?.bio || '',
   });
+
   const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState(authUserData?.profileImageUrl || '');
@@ -85,14 +62,20 @@ function ProfilPageContent() {
   const [isNetworkError, setIsNetworkError] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Modals state
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [showReferralModal, setShowReferralModal] = useState(false);
+  const [showFaqModal, setShowFaqModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
   const router = useRouter();
   const { autocompleteService } = useGoogleMaps();
+  const { showSuccess, showError } = useToast();
 
-  // Initialize form with default values
   const form = useForm<ProfileFormData>({
     defaultValues: {
       firstName: '',
@@ -102,10 +85,10 @@ function ProfilPageContent() {
       city: '',
       country: 'Canada',
       bio: '',
-    }
+    },
   });
 
-  // Update form values when userData changes
+  // Update form values when entering edit mode
   useEffect(() => {
     if (editing) {
       form.reset({
@@ -126,10 +109,10 @@ function ProfilPageContent() {
     }
   }, []);
 
-  // Sync with AuthContext data when available
+  // Sync with AuthContext data
   useEffect(() => {
     if (authUserData && !editing) {
-      setUserData(prev => ({
+      setUserData((prev) => ({
         firstName: authUserData.firstName || prev.firstName,
         lastName: authUserData.lastName || prev.lastName,
         email: currentUser?.email || authUserData.email || prev.email,
@@ -167,14 +150,14 @@ function ProfilPageContent() {
           address: data.address || '',
           city: data.city || '',
           country: data.country || 'Canada',
-          bio: data.bio || ''
+          bio: data.bio || '',
         });
         setProfileImageUrl(data.profileImageUrl || '');
       } else {
-        router.replace("/login");
+        router.replace('/login');
       }
     } catch (err) {
-      console.error("Erreur chargement profil:", err);
+      console.error('Erreur chargement profil:', err);
       if (
         isFirestoreNetworkError(err) ||
         (err as Error)?.message?.toLowerCase().includes('offline') ||
@@ -206,8 +189,6 @@ function ProfilPageContent() {
     }
   };
 
-  const { showSuccess, showError } = useToast();
-
   const handleSubmit = async (data: ProfileFormData) => {
     setError(null);
     setLoading(true);
@@ -221,34 +202,34 @@ function ProfilPageContent() {
       }
 
       const user = auth.currentUser;
-      if (!user) throw new Error("No user");
+      if (!user) throw new Error('No user');
 
       const userRef = doc(db, 'users', user.uid);
       await persistProfileUpdate(
-        () => setDoc(userRef, {
-          ...buildProfileUpdate(data, user.email, imageUrl),
-          updatedAt: serverTimestamp()
-        }, { merge: true }),
+        () =>
+          setDoc(
+            userRef,
+            {
+              ...buildProfileUpdate(data, user.email, imageUrl),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          ),
         reloadUser
       );
 
-      // Update local state
-      setUserData(prev => ({ ...prev, ...data }));
+      setUserData((prev) => ({ ...prev, ...data }));
       setEditing(false);
-      showSuccess("Profil mis à jour avec succès");
-    } catch (error) {
-      // Logger les détails de l'erreur pour le debugging
-      logFirestoreError(error, "mise à jour du profil client");
-
-      // Afficher un message d'erreur explicite à l'utilisateur
-      const errorMessage = getFirestoreErrorMessage(error, "mise à jour de votre profil");
+      showSuccess('Profil mis à jour avec succès');
+    } catch (err) {
+      logFirestoreError(err, 'mise à jour du profil client');
+      const errorMessage = getFirestoreErrorMessage(err, 'mise à jour de votre profil');
       showError(errorMessage);
       setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
-
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -257,7 +238,7 @@ function ProfilPageContent() {
       router.replace('/login');
     } catch (err) {
       console.error('Erreur de déconnexion:', err);
-      showError("Impossible de vous déconnecter. Réessayez.");
+      showError('Impossible de vous déconnecter. Réessayez.');
       setLoggingOut(false);
     }
   };
@@ -268,17 +249,23 @@ function ProfilPageContent() {
     try {
       const requestAccountDeletion = httpsCallable(functions, 'requestAccountDeletion');
       await requestAccountDeletion({ confirm: 'DELETE_MY_ACCOUNT' });
-      try { await signOut(auth); } catch {}
+      try {
+        await signOut(auth);
+      } catch {}
       showSuccess('Votre compte a été supprimé.');
       router.replace('/login');
     } catch (err: unknown) {
-      const error = err as { code?: string; message?: string };
-      console.error('Erreur suppression compte:', error);
-      let msg = "Impossible de supprimer le compte. Réessayez plus tard.";
-      if (error?.message?.includes('courses') || error?.message?.includes('commandes')) {
-        msg = "Vous avez des courses ou commandes en cours. Annulez-les ou attendez leur fin avant de supprimer le compte.";
-      } else if (error?.code === 'functions/resource-exhausted') {
-        msg = "Trop de tentatives. Réessayez dans une heure.";
+      const deletionError = err as { code?: string; message?: string };
+      console.error('Erreur suppression compte:', deletionError);
+      let msg = 'Impossible de supprimer le compte. Réessayez plus tard.';
+      if (
+        deletionError?.message?.includes('courses') ||
+        deletionError?.message?.includes('commandes')
+      ) {
+        msg =
+          'Vous avez des courses ou commandes en cours. Annulez-les ou attendez leur fin avant de supprimer le compte.';
+      } else if (deletionError?.code === 'functions/resource-exhausted') {
+        msg = 'Trop de tentatives. Réessayez dans une heure.';
       }
       showError(msg);
       setDeleting(false);
@@ -287,241 +274,398 @@ function ProfilPageContent() {
 
   const countries = ['Canada', 'France', 'Belgique', 'Cameroun', 'Autre'];
 
+  // User display name & phone calculation
+  const fullName = [userData.firstName, userData.lastName].filter(Boolean).join(' ');
+  const displayName = (fullName || currentUser?.displayName || 'VICTORINE YOUGO').toUpperCase();
+  const displayPhone = userData.phone || currentUser?.phoneNumber || userData.email || '+237693372118';
+  const referralCode = currentUser?.uid ? `MED-${currentUser.uid.slice(0, 6).toUpperCase()}` : 'MEDJIRA2026';
+
   if (loading && !editing) {
     return (
-      <div className="min-h-screen bg-background font-sans text-slate-100 antialiased flex items-center justify-center">
-        <MaterialIcon name="refresh" className="animate-spin text-primary text-[48px]" />
+      <div className="min-h-screen bg-[#121214] font-sans text-slate-100 flex items-center justify-center">
+        <MaterialIcon name="refresh" className="animate-spin text-primary text-[44px]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
-      <div className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
-        {/* Header */}
-        <div className="flex items-center mb-6">
+    <div className="min-h-screen bg-[#141312] text-slate-100 font-sans antialiased pb-28">
+      <div className="max-w-[440px] mx-auto px-4 pt-4">
+        {/* Top Back Button */}
+        <div className="flex items-center justify-between mb-4">
           <Link
             href="/dashboard"
-            className="mr-4 p-2 rounded-full hover:bg-white/5 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
-            aria-label="Retour au tableau de bord"
+            className="w-11 h-11 rounded-full flex items-center justify-center text-slate-200 hover:text-white hover:bg-white/10 active:scale-95 transition"
+            aria-label="Retour à l'accueil"
           >
-            <MaterialIcon name="arrow_back" className="text-white" />
+            <MaterialIcon name="arrow_back" className="text-[22px]" />
           </Link>
-          <h1 className="text-2xl font-bold text-white">Mon Profil</h1>
         </div>
 
+        {/* Network Error State */}
         {isNetworkError && !userData.email && !userData.firstName ? (
           <NetworkErrorView
             title="Oops !"
             message="Impossible de charger votre profil. Veuillez vérifier votre connexion internet et réessayer."
             onRetry={handleRetry}
           />
-        ) : (
-          <>
-
-        {/* Error */}
-        {error && (
-          <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 text-destructive rounded-xl">
-            <div className="flex justify-between items-center">
-              <p>{error}</p>
+        ) : editing ? (
+          /* ================= VIEW B : EDIT PROFILE ================= */
+          <div className="space-y-5 animate-in fade-in duration-200">
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => setError(null)}
-                className="text-destructive hover:text-red-300 font-bold min-w-[44px] min-h-[44px] flex items-center justify-center"
-                aria-label="Fermer le message d'erreur"
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setError(null);
+                }}
+                className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white transition"
               >
-                <MaterialIcon name="close" size="sm" />
+                <MaterialIcon name="arrow_back" size="sm" />
               </button>
-            </div>
-          </div>
-        )}
-
-        {/* Profile Card */}
-        <GlassCard className="relative overflow-hidden p-6">
-          {/* Halos orange subtils */}
-          <div className="absolute -top-20 -right-20 w-56 h-56 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
-          <div className="absolute -bottom-24 -left-16 w-48 h-48 bg-primary/10 blur-3xl rounded-full pointer-events-none" />
-
-          {/* Avatar */}
-          <div className="relative flex flex-col items-center mb-6">
-            <div className="relative w-28 h-28 rounded-full overflow-hidden ring-1 ring-white/10 shadow-[0_0_30px_rgba(242,146,0,0.25)] mb-4">
-              {profileImageUrl ? (
-                <Image
-                  src={profileImageUrl}
-                  alt="Photo de profil"
-                  width={128}
-                  height={128}
-                  className="w-full h-full object-cover"
-                  priority
-                  unoptimized={profileImageUrl.includes('googleusercontent.com')}
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <div className="w-full h-full bg-white/5 flex items-center justify-center">
-                  <MaterialIcon name="person" className="text-slate-500 text-[48px]" />
-                </div>
-              )}
+              <h1 className="text-xl font-bold text-white">Modifier mes informations</h1>
             </div>
 
-            {editing && (
-              <label className="cursor-pointer bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-2 px-4 rounded-2xl primary-glow transition flex items-center gap-2">
-                <MaterialIcon name="photo_camera" size="sm" />
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-                Changer la photo
-              </label>
+            {error && (
+              <div className="p-3.5 bg-destructive/15 border border-destructive/30 text-destructive text-sm rounded-2xl flex justify-between items-center">
+                <p>{error}</p>
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="text-destructive font-bold ml-2"
+                >
+                  <MaterialIcon name="close" size="sm" />
+                </button>
+              </div>
             )}
-          </div>
 
-          {/* Form / View */}
-          <div className="relative">
-          {editing ? (
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+            <GlassCard className="p-5">
+              {/* Photo Upload */}
+              <div className="flex flex-col items-center mb-6">
+                <div className="relative w-24 h-24 rounded-full overflow-hidden ring-2 ring-primary/40 shadow-lg mb-3">
+                  {profileImageUrl ? (
+                    <Image
+                      src={profileImageUrl}
+                      alt="Photo de profil"
+                      width={96}
+                      height={96}
+                      className="w-full h-full object-cover"
+                      priority
+                      unoptimized={profileImageUrl.includes('googleusercontent.com')}
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-white/10 flex items-center justify-center">
+                      <MaterialIcon name="person" className="text-slate-400 text-[40px]" />
+                    </div>
+                  )}
+                </div>
 
-              <InputField
+                <label className="cursor-pointer bg-white/10 hover:bg-white/15 text-white text-xs font-semibold py-2 px-4 rounded-xl transition flex items-center gap-2 border border-white/10">
+                  <MaterialIcon name="photo_camera" size="sm" />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                  Changer la photo
+                </label>
+              </div>
+
+              {/* Edit Form */}
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+                <InputField
                   type="email"
                   label="Email"
                   value={userData.email}
                   disabled
                   helperText="L'adresse email ne peut pas être modifiée."
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputField
-                  {...form.register('firstName')}
-                  label="Prénom"
-                  placeholder="Prénom"
-                  required
                 />
-                <InputField
-                  {...form.register('lastName')}
-                  label="Nom"
-                  placeholder="Nom"
-                  required
-                />
-              </div>
 
-              <div className="flex">
-                 <InputField
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <InputField
+                    {...form.register('firstName')}
+                    label="Prénom"
+                    placeholder="Votre prénom"
+                    required
+                  />
+                  <InputField
+                    {...form.register('lastName')}
+                    label="Nom"
+                    placeholder="Votre nom"
+                    required
+                  />
+                </div>
+
+                <InputField
                   type="tel"
                   {...form.register('phone')}
                   label="Numéro de téléphone"
-                  placeholder="514XXXXXXX"
-                  helperText="Format sans le code pays (+1)."
+                  placeholder="693372118"
+                  helperText="Format sans le code pays."
                   required
                 />
-              </div>
 
-              <Controller
-                name="address"
-                control={form.control}
-                render={({ field }) => (
-                  <ProfileAddressField
-                    value={field.value}
-                    onChange={field.onChange}
-                    onSelect={(suggestion: PlaceSuggestion) => field.onChange(suggestion.description)}
-                    autocompleteService={autocompleteService}
+                <Controller
+                  name="address"
+                  control={form.control}
+                  render={({ field }) => (
+                    <ProfileAddressField
+                      value={field.value}
+                      onChange={field.onChange}
+                      onSelect={(suggestion: PlaceSuggestion) =>
+                        field.onChange(suggestion.description)
+                      }
+                      autocompleteService={autocompleteService}
+                    />
+                  )}
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <InputField
+                    type="text"
+                    {...form.register('city')}
+                    label="Ville"
+                    placeholder="Votre ville"
                   />
-                )}
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <InputField
-                  type="text"
-                  {...form.register('city')}
-                  label="Ville"
-                  placeholder="Votre ville"
-                />
-                <SelectField
-                  {...form.register('country')}
-                  label="Pays"
-                  options={countries.map(c => ({ value: c, label: c }))}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1">A propos de moi</label>
-                <textarea
-                  {...form.register('bio')}
-                  rows={4}
-                  className="glass-input w-full rounded-xl p-4 text-white placeholder:text-slate-500 outline-none transition-all focus:ring-2 focus:ring-primary"
-                  placeholder="Parlez-nous un peu de vous..."
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-6 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditing(false);
-                    setError(null);
-                    form.reset();
-                  }}
-                  className="glass-card border border-white/10 text-slate-300 px-6 py-3 font-medium rounded-2xl hover:bg-white/5 transition-all active:scale-[0.98]"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-8 py-3 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow transition-all active:scale-[0.98] flex items-center gap-2"
-                >
-                  {loading ? <MaterialIcon name="refresh" className="animate-spin" size="sm" /> : "Enregistrer"}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="rounded-2xl border border-white/[0.04] bg-white/[0.015] px-5 py-4">
-              <SectionTitle icon="person">Informations personnelles</SectionTitle>
-              <div className="divide-y divide-white/[0.04]">
-                <InfoRow label="Prénom" value={userData.firstName} />
-                <InfoRow label="Nom" value={userData.lastName} />
-                <InfoRow label="Email" value={userData.email} />
-                <InfoRow label="Téléphone" value={userData.phone ? `+1 ${userData.phone}` : ""} />
-                <InfoRow label="Adresse" value={userData.address} />
-                <InfoRow label="Ville" value={userData.city} />
-                <InfoRow label="Pays" value={userData.country} />
-                <div className="py-2">
-                  <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">À propos</p>
-                  <p className="text-[15px] whitespace-pre-line text-white/90">{userData.bio || "Aucune description"}</p>
+                  <SelectField
+                    {...form.register('country')}
+                    label="Pays"
+                    options={countries.map((c) => ({ value: c, label: c }))}
+                  />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1">
+                    À propos de moi
+                  </label>
+                  <textarea
+                    {...form.register('bio')}
+                    rows={3}
+                    className="glass-input w-full rounded-xl p-3 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:ring-2 focus:ring-primary"
+                    placeholder="Parlez-nous un peu de vous..."
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditing(false);
+                      setError(null);
+                      form.reset();
+                    }}
+                    className="flex-1 h-12 rounded-2xl bg-white/10 hover:bg-white/15 text-slate-300 font-medium text-sm transition"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-sm flex items-center justify-center gap-2 primary-glow transition active:scale-[0.98]"
+                  >
+                    {loading ? (
+                      <MaterialIcon name="refresh" className="animate-spin" size="sm" />
+                    ) : (
+                      'Enregistrer'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </GlassCard>
+          </div>
+        ) : (
+          /* ================= VIEW A : MAIN PROFILE MENU ================= */
+          <div className="space-y-6 animate-in fade-in duration-200">
+            {/* User Identity Header Card */}
+            <div className="flex items-center justify-between py-1 px-1">
+              <div className="space-y-1 pr-3 flex-1 min-w-0">
+                <h1 className="text-2xl font-black tracking-tight text-white uppercase truncate">
+                  {displayName}
+                </h1>
+                <p className="text-sm font-medium text-slate-400 truncate">
+                  {displayPhone}
+                </p>
               </div>
-              <div className="pt-4">
-                <button
-                  onClick={() => setEditing(true)}
-                  className="w-full h-12 rounded-full bg-white/10 px-6 text-sm font-medium text-white transition hover:bg-white/15 active:scale-[0.98]"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <MaterialIcon name="edit" size="md" />
-                    Modifier
-                  </span>
-                </button>
+
+              {/* Avatar */}
+              <div
+                onClick={() => setEditing(true)}
+                className="w-16 h-16 rounded-full overflow-hidden bg-[#262629] border border-white/15 shrink-0 flex items-center justify-center cursor-pointer active:scale-95 transition shadow-lg relative group"
+                title="Modifier le profil"
+              >
+                {profileImageUrl ? (
+                  <Image
+                    src={profileImageUrl}
+                    alt={displayName}
+                    width={64}
+                    height={64}
+                    className="w-full h-full object-cover"
+                    priority
+                    unoptimized={profileImageUrl.includes('googleusercontent.com')}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <MaterialIcon name="person" className="text-slate-400 text-[32px]" />
+                )}
               </div>
             </div>
-          )}
-          </div>
-        </GlassCard>
 
-        {!hasPaymentMethod && (
-          <div
-            onClick={() => router.push('/auth/setup-payment')}
-            className="mt-6 p-4 rounded-2xl bg-gradient-to-r from-primary/15 to-primary/5 border border-primary/20 cursor-pointer active:scale-[0.98] transition-transform"
-          >
-            <div className="flex items-center gap-3">
-              <div className="size-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
-                <MaterialIcon name="credit_card" className="text-primary text-xl" />
+            {/* SECTION 1: Paramètres du compte */}
+            <div className="space-y-1.5">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+                Paramètres du compte
+              </h2>
+              <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
+                <ProfileMenuItem
+                  icon="bolt"
+                  iconColorVariant="sky"
+                  title="Mode Chauffeur"
+                  badge="Nouveau"
+                  href="/auth/become-pro"
+                />
+                <ProfileMenuItem
+                  icon="person"
+                  iconColorVariant="sky"
+                  title="Informations personnelles"
+                  onClick={() => setEditing(true)}
+                />
+                <ProfileMenuItem
+                  icon="credit_card"
+                  iconColorVariant="sky"
+                  title="Moyens de paiement & Wallet"
+                  subtitle={hasPaymentMethod ? 'Carte enregistrée' : 'Ajouter un mode de paiement'}
+                  href="/wallet"
+                />
+                <ProfileMenuItem
+                  icon="lock"
+                  iconColorVariant="sky"
+                  title="Sécurité et connexion"
+                  href="/auth/reset-password"
+                />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
-                <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sécurité</p>
+            </div>
+
+            {/* SECTION 2: Obtenir de l'aide */}
+            <div className="space-y-1.5">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+                Obtenir de l&apos;aide
+              </h2>
+              <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
+                <ProfileMenuItem
+                  icon="help_outline"
+                  iconColorVariant="purple"
+                  title="Consulter la FAQ"
+                  onClick={() => setShowFaqModal(true)}
+                />
+                <ProfileMenuItem
+                  icon="support_agent"
+                  iconColorVariant="purple"
+                  title="Contacter le service client"
+                  onClick={() => setShowSupportModal(true)}
+                />
               </div>
-              <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
+            </div>
+
+            {/* SECTION 3: Activité & Services */}
+            <div className="space-y-1.5">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+                Activité & Services
+              </h2>
+              <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
+                <ProfileMenuItem
+                  icon="history"
+                  iconColorVariant="amber"
+                  title="Historique des courses"
+                  subtitle="Retrouvez vos trajets et reçus"
+                  href="/historique"
+                />
+                <ProfileMenuItem
+                  icon="storefront"
+                  iconColorVariant="amber"
+                  title="Villes & Services disponibles"
+                  subtitle="Taxis, livraisons de repas et colis"
+                  onClick={() =>
+                    showSuccess('Services disponibles 24h/24 et 7j/7')
+                  }
+                />
+              </div>
+            </div>
+
+            {/* SECTION 4: Récompenses */}
+            <div className="space-y-1.5">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+                Récompenses
+              </h2>
+              <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
+                <ProfileMenuItem
+                  icon="favorite"
+                  iconColorVariant="pink"
+                  title="Parrainage"
+                  subtitle="Invitez vos amis et gagnez des réductions"
+                  onClick={() => setShowReferralModal(true)}
+                />
+              </div>
+            </div>
+
+            {/* SECTION 5: Mentions légales */}
+            <div className="space-y-1.5">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+                Mentions légales
+              </h2>
+              <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
+                <ProfileMenuItem
+                  icon="menu_book"
+                  iconColorVariant="emerald"
+                  title="Politique de confidentialité"
+                  href="/privacy"
+                />
+                <ProfileMenuItem
+                  icon="description"
+                  iconColorVariant="emerald"
+                  title="Conditions de service"
+                  href="/terms"
+                />
+              </div>
+            </div>
+
+            {/* SECTION 6: Déconnexion & Compte */}
+            <div className="space-y-1.5">
+              <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
+                <ProfileMenuItem
+                  icon="logout"
+                  iconColorVariant="slate"
+                  title={loggingOut ? 'Déconnexion en cours...' : 'Se déconnecter'}
+                  onClick={loggingOut ? undefined : handleLogout}
+                />
+                <ProfileMenuItem
+                  icon="delete_forever"
+                  iconColorVariant="destructive"
+                  title="Supprimer mon compte"
+                  destructive
+                  onClick={() => {
+                    setDeleteConfirmText('');
+                    setShowDeleteModal(true);
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* App Version & Copyright Footer */}
+            <div className="text-center pt-4 pb-2 space-y-1 text-slate-500">
+              <p className="text-[11px] font-medium tracking-wider uppercase">
+                VERSION 1.0.0 (2508122)
+              </p>
+              <p className="text-[10px]">
+                © Medjira Taxi. Tous droits réservés.
+              </p>
             </div>
           </div>
         )}
@@ -529,47 +673,49 @@ function ProfilPageContent() {
         {/* Delete Account Confirmation Modal */}
         {showDeleteModal && (
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
             onClick={() => !deleting && setShowDeleteModal(false)}
           >
             <div
-              className="w-full max-w-md bg-[#1A1A1A] border border-white/10 rounded-3xl p-6 shadow-2xl"
+              className="w-full max-w-md bg-[#18181b] border border-white/10 rounded-3xl p-6 shadow-2xl space-y-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex flex-col items-center text-center mb-4">
-                <div className="size-14 rounded-full bg-destructive/15 flex items-center justify-center mb-3">
+              <div className="flex flex-col items-center text-center">
+                <div className="w-14 h-14 rounded-2xl bg-destructive/15 flex items-center justify-center mb-3">
                   <MaterialIcon name="warning" className="text-destructive text-[32px]" />
                 </div>
-                <h3 className="text-xl font-bold text-white">Supprimer votre compte ?</h3>
-                <p className="text-slate-400 text-sm mt-2">
-                  Cette action est <strong className="text-destructive">irréversible</strong>. Vos données personnelles seront supprimées et votre historique de courses sera anonymisé conformément au RGPD.
+                <h3 className="text-lg font-bold text-white">Supprimer votre compte ?</h3>
+                <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                  Cette action est <strong className="text-destructive">irréversible</strong>. Vos données personnelles seront effacées et votre historique sera anonymisé conformément au RGPD.
                 </p>
               </div>
 
-              <div className="bg-destructive/5 border border-destructive/20 rounded-xl p-3 mb-4 text-xs text-slate-300 space-y-1">
-                <p>• Profil, photos et documents : supprimés</p>
-                <p>• Historique financier : anonymisé (obligation légale)</p>
-                <p>• Vous serez immédiatement déconnecté</p>
+              <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-3 text-xs text-slate-300 space-y-1">
+                <p>• Profil, photos et coordonnées : supprimés</p>
+                <p>• Historique financier : anonymisé (légal)</p>
+                <p>• Déconnexion immédiate</p>
               </div>
 
-              <label className="block text-sm text-slate-300 mb-2">
-                Tapez <span className="font-mono font-bold text-destructive">SUPPRIMER</span> pour confirmer :
-              </label>
-              <input
-                type="text"
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                disabled={deleting}
-                placeholder="SUPPRIMER"
-                className="glass-input w-full rounded-xl p-3 text-white placeholder:text-slate-500 outline-none transition-all focus:ring-2 focus:ring-destructive mb-4"
-              />
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">
+                  Tapez <span className="font-mono font-bold text-destructive">SUPPRIMER</span> pour confirmer :
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  disabled={deleting}
+                  placeholder="SUPPRIMER"
+                  className="glass-input w-full rounded-xl p-3 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:ring-2 focus:ring-destructive"
+                />
+              </div>
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowDeleteModal(false)}
                   disabled={deleting}
-                  className="flex-1 glass-card border border-white/10 text-slate-300 px-4 py-3 font-medium rounded-2xl hover:bg-white/5 transition-all disabled:opacity-50"
+                  className="flex-1 h-12 rounded-2xl bg-white/10 hover:bg-white/15 text-slate-300 text-sm font-medium transition"
                 >
                   Annuler
                 </button>
@@ -577,7 +723,7 @@ function ProfilPageContent() {
                   type="button"
                   onClick={handleDeleteAccount}
                   disabled={deleting || deleteConfirmText !== 'SUPPRIMER'}
-                  className="flex-1 bg-destructive text-white px-4 py-3 font-bold rounded-2xl transition-all hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 h-12 rounded-2xl bg-destructive text-white font-bold text-sm transition-all hover:bg-destructive/90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {deleting ? (
                     <>
@@ -593,41 +739,20 @@ function ProfilPageContent() {
           </div>
         )}
 
-        <div className="mt-8">
-          <SectionTitle icon="shield">Compte et sécurité</SectionTitle>
-          <GlassCard className="divide-y divide-white/[0.04] rounded-2xl">
-            <button
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="flex w-full items-center justify-between rounded-t-2xl px-5 py-4 transition hover:bg-white/[0.02] disabled:opacity-50"
-            >
-              <div className="flex items-center gap-3">
-                <MaterialIcon name="logout" className="text-[20px] text-orange-400" />
-                <div className="text-left">
-                  <p className="text-sm font-medium text-orange-400">Se déconnecter</p>
-                  <p className="text-xs text-slate-400">Quitter votre session sur cet appareil</p>
-                </div>
-              </div>
-              <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
-            </button>
-
-            <button
-              onClick={() => { setDeleteConfirmText(''); setShowDeleteModal(true); }}
-              className="flex w-full items-center justify-between rounded-b-2xl px-5 py-4 transition hover:bg-white/[0.02]"
-            >
-              <div className="flex items-center gap-3">
-                <MaterialIcon name="delete_forever" className="text-[20px] text-red-400" />
-                <div className="text-left">
-                  <p className="text-sm font-medium text-red-400">Supprimer mon compte</p>
-                  <p className="text-xs text-slate-400">Action irréversible — toutes vos données seront effacées</p>
-                </div>
-              </div>
-              <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
-            </button>
-          </GlassCard>
-        </div>
-          </>
-        )}
+        {/* Modals */}
+        <ProfileSupportModal
+          isOpen={showSupportModal}
+          onClose={() => setShowSupportModal(false)}
+        />
+        <ProfileReferralModal
+          isOpen={showReferralModal}
+          onClose={() => setShowReferralModal(false)}
+          referralCode={referralCode}
+        />
+        <ProfileFaqModal
+          isOpen={showFaqModal}
+          onClose={() => setShowFaqModal(false)}
+        />
       </div>
 
       {/* Bottom Navigation */}
