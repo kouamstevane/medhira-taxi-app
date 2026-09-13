@@ -32,8 +32,9 @@ const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePay
 import { logger } from '@/utils/logger';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
+import { useTranslation } from '@/hooks/useTranslation';
 import type { BookingStatus } from '@/types/booking';
-import type { StripePaymentMethod } from '@/types/stripe';
+import type { StripePaymentMethod, PaymentStatus } from '@/types/stripe';
 
 //  Schéma Zod de validation pour la création de course (medJira.md #85)
 const BookingSchema = z.object({
@@ -76,6 +77,7 @@ interface NewRideFormProps {
 }
 
 export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormProps) => {
+  const { t } = useTranslation();
   //  Fonction pour déclencher le haptic feedback (medJira.md #93)
   const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Light) => {
     if (Capacitor.isNativePlatform()) {
@@ -240,10 +242,10 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     setPickupLocation(preciseLocation);
 
     const accuracyText =
-      preciseLocation.accuracy <= 20 ? '📍 Précis' :
+      preciseLocation.accuracy <= 20 ? t('taxi.accuracyPrecise') :
       preciseLocation.accuracy <= 50 ? '📍 OK' :
-      'Imprécis';
-    setPickupAddress(`${accuracyText} Ma position (±${Math.round(preciseLocation.accuracy)}m)`);
+      t('taxi.accuracyImprecise');
+    setPickupAddress(`${accuracyText} ${t('taxi.currentLocation')} (±${Math.round(preciseLocation.accuracy)}m)`);
     console.log(`📍 [GPS] Précision: ${preciseLocation.accuracy.toFixed(1)}m`);
 
     let cancelled = false;
@@ -281,7 +283,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
         }
       } catch (err: unknown) {
         logger.error('Erreur chargement types véhicules', { error: err });
-        setError('Impossible de charger les types de véhicules');
+        setError(t('taxi.failedLoadingVehicleTypes'));
       }
     };
     loadCarTypes();
@@ -391,31 +393,31 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     }
 
     if (!currentUser) {
-      setError('Veuillez vous connecter pour demander une course');
+      setError(t('taxi.loginRequiredForRide'));
       return;
     }
 
     if (rideMode === 'scheduled') {
       const scheduledAt = buildScheduledAt();
       if (!scheduledDate || !scheduledTime || !scheduledAt) {
-        setError('Veuillez choisir une date et une heure de départ');
+        setError(t('taxi.selectDepartureTime'));
         return;
       }
 
       const earliestAllowed = new Date(Date.now() + 5 * 60 * 1000);
       if (scheduledAt < earliestAllowed) {
-        setError('La réservation doit être programmée au moins 5 minutes à l\'avance');
+        setError(t('taxi.minScheduleAdvanceNotice'));
         return;
       }
     }
 
     if (bookForSomeoneElse) {
       if (!passengerName.trim()) {
-        setError('Veuillez entrer le nom du passager');
+        setError(t('taxi.enterPassengerName'));
         return;
       }
       if (!passengerPhone.trim() || passengerPhone.trim().length < 8) {
-        setError('Veuillez entrer un numéro de téléphone valide pour le passager');
+        setError(t('taxi.invalidPassengerPhone'));
         return;
       }
     }
@@ -483,8 +485,8 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
       const raw = err instanceof Error ? err.message : '';
       const isConnectionErr = /connection to Stripe|retried\s+\d+\s+times|ECONNRESET|ETIMEDOUT|network/i.test(raw);
       const msg = isConnectionErr
-        ? 'Impossible de joindre Stripe pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.'
-        : raw || 'Erreur lors de la configuration du paiement';
+        ? t('taxi.stripeConnectionError')
+        : raw || t('taxi.rideCreationError');
       setError(msg);
     } finally {
       setLoading(false);
@@ -507,45 +509,44 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
         scheduledAt: rideMode === 'scheduled' ? buildScheduledAt() : null,
       });
     }
-    if (rideMode === 'immediate' && onSearchDriver) onSearchDriver();
   };
 
-  // Crée la réservation Firestore avec la méthode de paiement choisie
+  // Logique interne commune pour créer le booking Firestore
   const createBookingInternal = async (paymentMethod: StripePaymentMethod): Promise<string | null> => {
+    if (!currentUser || !pickupAddress || !destinationAddress || !selectedCarType || !estimate) {
+      return null;
+    }
+
     try {
-      const bookingStatus: BookingStatus = rideMode === 'scheduled' ? 'scheduled' : 'pending';
+      const scheduledAt = rideMode === 'scheduled' ? (buildScheduledAt() ?? undefined) : undefined;
       const bookingData = {
-        userId: currentUser!.uid,
-        userEmail: currentUser!.email,
+        userId: currentUser.uid,
+        userEmail: currentUser.email,
         rideMode,
         pickup: pickupAddress,
         destination: destinationAddress,
-        pickupLocation: pickupLocation || undefined,
-        pickupLocationAccuracy: pickupAccuracy || undefined,
-        destinationLocation: destinationLocation || undefined,
-        distance: estimate!.distance,
-        duration: estimate!.duration,
-        price: estimate!.price,
-        carType: selectedCarType!.name,
-        status: bookingStatus,
-        scheduledAt: rideMode === 'scheduled' ? buildScheduledAt() || undefined : undefined,
+        pickupLocation: pickupLocation ? { lat: pickupLocation.lat, lng: pickupLocation.lng } : undefined,
+        pickupLocationAccuracy: pickupAccuracy ?? undefined,
+        destinationLocation: destinationLocation ? { lat: destinationLocation.lat, lng: destinationLocation.lng } : undefined,
+        distance: estimate.distance,
+        duration: estimate.duration,
+        price: estimate.price,
+        carType: selectedCarType.id,
+        scheduledAt,
+        bonus: rideMode === 'immediate' ? bonus : 0,
+        status: (rideMode === 'scheduled' ? 'scheduled' : 'pending') as BookingStatus,
+        bookedForSomeoneElse: bookForSomeoneElse,
+        passengerName: bookForSomeoneElse ? passengerName.trim() : undefined,
+        passengerPhone: bookForSomeoneElse ? passengerPhone.trim() : undefined,
+        passengerNotes: bookForSomeoneElse && passengerNotes.trim() ? passengerNotes.trim() : undefined,
         paymentMethod,
-        ...(bonus > 0 && { bonus }),
-        ...(rideMode === 'immediate' && autoSearchEnabled && {
-          automaticSearch: { enabled: true, intervalSeconds: 60, attemptCount: 0, maxAttempts: 10 },
-        }),
-        ...(bookForSomeoneElse && {
-          bookedForSomeoneElse: true,
-          passengerName: passengerName.trim(),
-          passengerPhone: passengerPhone.trim(),
-          passengerNotes: passengerNotes.trim() || undefined,
-        }),
+        paymentStatus: 'pending' as PaymentStatus,
       };
       BookingSchema.parse(bookingData);
       return await createBooking(bookingData);
     } catch (err) {
       logger.error('Erreur création réservation', { error: err });
-      setError(err instanceof Error ? err.message : 'Erreur lors de la création de la course');
+      setError(err instanceof Error ? err.message : t('taxi.rideCreationError'));
       setLoading(false);
       return null;
     }
@@ -593,7 +594,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
       }
     } catch (err: unknown) {
       logger.error('Erreur création course', { error: err });
-      const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la création de la course';
+      const errorMessage = err instanceof Error ? err.message : t('taxi.rideCreationError');
       setError(errorMessage);
 
       if (Capacitor.isNativePlatform()) {
@@ -623,14 +624,14 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
               </div>
               <div className="ml-3 flex-1">
                 <h3 className="text-sm font-medium text-[#f29200]">
-                  Impossible de détecter votre position
+                  {t('taxi.locationDetectionFailed')}
                 </h3>
                 <div className="mt-2 text-sm text-[#f29200]">
-                  <p>Le signal GPS est trop faible. Pour une meilleure précision :</p>
+                  <p>{t('taxi.gpsSignalTooWeak')}</p>
                   <ul className="list-disc list-inside mt-1 space-y-1">
-                    <li>Sortez à l&apos;extérieur (ciel dégagé)</li>
-                    <li>Éloignez-vous des immeubles</li>
-                    <li>Vérifiez que le GPS est activé sur votre téléphone</li>
+                    <li>{t('taxi.gpsTipOutside')}</li>
+                    <li>{t('taxi.gpsTipBuildings')}</li>
+                    <li>{t('taxi.gpsTipEnabled')}</li>
                   </ul>
                 </div>
                 <div className="mt-4">
@@ -642,7 +643,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                     <svg className="mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
-                    Réessayer
+                    {t('common.retry')}
                   </button>
                 </div>
               </div>
@@ -652,11 +653,11 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
 
         {/* Point de départ */}
         <AddressInput
-          label="Point de départ"
+          label={t('taxi.pickup')}
           value={pickupAddress}
           onChange={setPickupAddress}
           onSelect={handlePickupSelect}
-          placeholder="Où êtes-vous ?"
+          placeholder={t('taxi.pickupPlaceholder')}
           autocompleteService={autocompleteService}
           location={currentLocation}
           required
@@ -673,11 +674,11 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
 
         {/* Destination */}
         <AddressInput
-          label="Destination"
+          label={t('taxi.dropoff')}
           value={destinationAddress}
           onChange={setDestinationAddress}
           onSelect={handleDestinationSelect}
-          placeholder="Où allez-vous ?"
+          placeholder={t('taxi.dropoffPlaceholder')}
           autocompleteService={autocompleteService}
           location={currentLocation}
           required
@@ -687,15 +688,15 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
         {/* Types de véhicules */}
         <div>
           <label className="block text-sm font-medium text-[#9CA3AF] mb-3">
-            Type de véhicule
+            {t('taxi.vehicleTypeRequired')}
             <span className="text-red-500 ml-1">*</span>
           </label>
           {carTypes.length === 0 ? (
             <div className="p-4 border-2 border-dashed border-white/[0.08] rounded-lg text-center">
               <p className="text-[#9CA3AF] text-sm">
-                {error && error.includes('types de véhicules')
-                  ? 'Impossible de charger les types de véhicules. Veuillez rafraîchir la page.'
-                  : 'Chargement des types de véhicules...'}
+                {error && (error === t('taxi.failedLoadingVehicleTypes') || error.includes('types de véhicules'))
+                  ? t('taxi.failedLoadingVehicleTypes')
+                  : t('taxi.loadingVehicleTypes')}
               </p>
             </div>
           ) : (
@@ -750,7 +751,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
               onClick={() => setShowBonus(!showBonus)}
               className="text-sm font-medium text-[#f29200] hover:text-[#d67a00] flex items-center gap-1 transition-colors"
             >
-              {showBonus ? '− Masquer les options de motivation' : '+ Ajouter un bonus pour le chauffeur'}
+              {showBonus ? t('taxi.hideDriverBonus') : t('taxi.addDriverBonus')}
             </button>
 
             {showBonus && (
@@ -777,10 +778,10 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
             </div>
             <div className="flex-1">
               <label htmlFor="auto-search" className="text-sm font-medium text-white cursor-pointer">
-                Recherche automatique
+                {t('taxi.autoSearchLabel')}
               </label>
               <p className="text-xs text-[#9CA3AF]">
-                Réessayer automatiquement si aucun chauffeur n&apos;est trouvé immédiatement.
+                {t('taxi.autoSearchDesc')}
               </p>
             </div>
           </div>
@@ -800,10 +801,10 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
               </div>
               <div className="flex-1">
                 <label htmlFor="book-someone-else" className="text-sm font-medium text-white cursor-pointer">
-                  Cette course est pour quelqu&apos;un d&apos;autre
+                  {t('taxi.bookForSomeoneElseLabel')}
                 </label>
                 <p className="text-xs text-[#9CA3AF]">
-                  Le passager recevra les informations du chauffeur par SMS.
+                  {t('taxi.bookForSomeoneElseDesc')}
                 </p>
               </div>
             </div>
@@ -812,21 +813,21 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
               <div className="mt-2.5 p-3.5 bg-[#1A1A1A] rounded-xl border border-[#f29200]/20 space-y-2.5">
                 <div>
                   <label htmlFor="passenger-name" className="block text-sm font-medium text-[#9CA3AF] mb-1">
-                    Nom du passager <span className="text-red-500">*</span>
+                    {t('taxi.passengerNameLabel')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="passenger-name"
                     type="text"
                     value={passengerName}
                     onChange={(e) => setPassengerName(e.target.value)}
-                    placeholder="Ex: Jean Dupont"
+                    placeholder={t('taxi.passengerNamePlaceholder')}
                     className="w-full px-4 py-3 bg-[#0F0F0F] border border-white/[0.08] rounded-lg text-white placeholder:text-[#555] focus:outline-none focus:ring-2 focus:ring-[#f29200]/50 focus:border-[#f29200]/50 transition"
                     required
                   />
                 </div>
                 <div>
                   <label htmlFor="passenger-phone" className="block text-sm font-medium text-[#9CA3AF] mb-1">
-                    Téléphone du passager <span className="text-red-500">*</span>
+                    {t('taxi.passengerPhoneLabel')} <span className="text-red-500">*</span>
                   </label>
                   <input
                     id="passenger-phone"
@@ -840,13 +841,13 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                 </div>
                 <div>
                   <label htmlFor="passenger-notes" className="block text-sm font-medium text-[#9CA3AF] mb-1">
-                    Notes pour le chauffeur <span className="text-[#555]">(optionnel)</span>
+                    {t('taxi.passengerNotesLabel')} <span className="text-[#555]">({t('common.optional').toLowerCase()})</span>
                   </label>
                   <textarea
                     id="passenger-notes"
                     value={passengerNotes}
                     onChange={(e) => setPassengerNotes(e.target.value)}
-                    placeholder="Ex: Porte rouge, 3e étage..."
+                    placeholder={t('taxi.passengerNotesPlaceholder')}
                     rows={2}
                     className="w-full px-4 py-3 bg-[#0F0F0F] border border-white/[0.08] rounded-lg text-white placeholder:text-[#555] focus:outline-none focus:ring-2 focus:ring-[#f29200]/50 focus:border-[#f29200]/50 transition resize-none"
                   />
@@ -874,7 +875,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
           className="w-full bg-gradient-to-r from-[#f29200] to-[#ffae33] active:scale-[0.98] text-white font-bold py-4 px-6 rounded-2xl transition-transform disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation text-base sm:text-lg primary-glow"
           style={{ minHeight: '48px' }}
         >
-          {loading ? 'Création en cours...' : 'Demander une course'}
+          {loading ? t('taxi.creatingRide') : t('taxi.requestRide')}
         </button>
       </div>
 
@@ -899,8 +900,8 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                   <span className="text-primary text-xl">🚕</span>
                 </div>
                 <div>
-                  <h2 className="text-lg sm:text-xl font-bold text-white">Confirmer la course</h2>
-                  <p className="text-xs text-slate-400">Vérifiez les détails avant de confirmer</p>
+                  <h2 className="text-lg sm:text-xl font-bold text-white">{t('taxi.confirmRide')}</h2>
+                  <p className="text-xs text-slate-400">{t('taxi.confirmRideSubtitle')}</p>
                 </div>
               </div>
             </div>
@@ -909,28 +910,28 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
               <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
                 {/* Point de départ */}
                 <div className="border-b border-white/[0.06] pb-3 sm:pb-4">
-                  <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">De</p>
+                  <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">{t('taxi.fromLabel')}</p>
                   <p className="text-sm sm:text-base font-semibold text-white leading-tight break-words">{pickupAddress}</p>
                 </div>
 
                 {/* Destination */}
                 <div className="border-b border-white/[0.06] pb-3 sm:pb-4">
-                  <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">À</p>
+                  <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">{t('taxi.toLabel')}</p>
                   <p className="text-sm sm:text-base font-semibold text-white leading-tight break-words">{destinationAddress}</p>
                 </div>
 
                 {/* Informations de la course */}
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-white/[0.06]">
                   <div>
-                    <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">Véhicule</p>
+                    <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">{t('taxi.vehicleLabel')}</p>
                     <p className="text-sm sm:text-base font-semibold text-white">{selectedCarType.name}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">Distance</p>
+                    <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">{t('common.distance')}</p>
                     <p className="text-sm sm:text-base font-semibold text-white">{estimate.distance.toFixed(1)} km</p>
                   </div>
                   <div className="col-span-2">
-                    <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">Durée</p>
+                    <p className="text-xs font-semibold text-[#9CA3AF] uppercase tracking-wide mb-1">{t('common.duration')}</p>
                     <p className="text-sm sm:text-base font-semibold text-white">~{estimate.duration} min</p>
                   </div>
                 </div>
@@ -939,18 +940,18 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                 <div className="relative overflow-hidden glass-card p-4 sm:p-5 rounded-2xl border border-primary/20">
                   <div className="absolute -top-12 -right-12 w-32 h-32 bg-primary/25 blur-3xl rounded-full pointer-events-none" />
                   <div className="relative flex items-center justify-between mb-1">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Prix estimé</p>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{t('taxi.estimatedFare')}</p>
                     <p className="text-2xl sm:text-3xl font-bold text-primary">
                       {estimate.price ? formatCurrencyWithCode(estimate.price) : `0 ${CURRENCY_CODE}`}
                     </p>
                   </div>
                   {bonus > 0 && (
                     <div className="relative mt-2 pt-2 border-t border-white/[0.06] flex justify-between items-center text-slate-300 text-sm">
-                      <span>+ Bonus chauffeur</span>
+                      <span>{t('taxi.driverBonus')}</span>
                       <span className="font-bold text-primary">+{formatCurrencyWithCode(bonus)}</span>
                     </div>
                   )}
-                  <p className="relative text-xs text-slate-500 mt-2">* Le prix final peut varier selon le trafic</p>
+                  <p className="relative text-xs text-slate-500 mt-2">{t('taxi.trafficDisclaimer')}</p>
                 </div>
               </div>
 
@@ -963,7 +964,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                     disabled={loading}
                     style={{ minHeight: '48px' }}
                   >
-                    Annuler
+                    {t('common.cancel')}
                   </button>
                   <button
                     onClick={handleProceedToPayment}
@@ -971,7 +972,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                     className="flex-1 bg-[#f29200] active:bg-[#d67a00] hover:bg-[#e68600] text-white font-bold py-3 px-4 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg touch-manipulation"
                     style={{ minHeight: '48px' }}
                   >
-                    {walletLoading ? 'Chargement...' : 'Continuer →'}
+                    {walletLoading ? t('common.loading') : t('taxi.continueButton')}
                   </button>
                 </div>
               )}
@@ -999,7 +1000,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                       disabled={loading}
                       style={{ minHeight: '48px' }}
                     >
-                      ← Retour
+                      ← {t('common.back')}
                     </button>
                     <button
                       onClick={selectedPaymentMethod === 'wallet' ? handleWalletBooking : handleCardPaymentSetup}
@@ -1013,9 +1014,9 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                           </svg>
-                          En cours...
+                          {t('common.loading')}
                         </span>
-                      ) : selectedPaymentMethod === 'wallet' ? 'Confirmer (Wallet)' : 'Payer par carte →'}
+                      ) : selectedPaymentMethod === 'wallet' ? t('taxi.confirmWallet') : t('taxi.payWithCard')}
                     </button>
                   </div>
                 </div>
@@ -1030,13 +1031,13 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
                     currency={walletCurrency}
                     onSuccess={handleCardAuthorized}
                     onError={(msg) => setError(msg)}
-                    submitLabel="Autoriser le paiement"
+                    submitLabel={t('taxi.authorizePayment')}
                   />
                   <button
                     onClick={() => setModalStep('payment')}
                     className="w-full px-4 py-2 text-sm text-[#9CA3AF] underline"
                   >
-                    ← Changer de méthode de paiement
+                    {t('taxi.changePaymentMethod')}
                   </button>
                 </div>
               )}

@@ -7,6 +7,7 @@ import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 import type { Trip } from '@/types/trip';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 import type { ConversationContext } from '@/types/conversation';
 
 const MapView = dynamic(() => import('@/components/ui').then(mod => ({ default: mod.MapView })), { ssr: false, loading: () => <div className="w-full h-56 bg-gray-100 animate-pulse rounded-xl" /> })
@@ -25,6 +26,7 @@ export function CurrentTripCard({
   onCompleteTrip,
 }: CurrentTripCardProps) {
   const { currentUser, userData } = useAuth();
+  const { t } = useTranslation();
   const [showChat, setShowChat] = useState(false);
 
   const passengerPosition = useMemo(() => {
@@ -56,7 +58,7 @@ export function CurrentTripCard({
       markers.push({
         id: 'passenger',
         position: passengerPosition,
-        title: 'Client',
+        title: t('driver.client'),
         icon: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
       });
     }
@@ -65,24 +67,24 @@ export function CurrentTripCard({
       markers.push({
         id: 'destination',
         position: destinationPosition,
-        title: 'Destination',
+        title: t('driver.destination'),
         icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
       });
     }
 
     return markers;
-  }, [passengerPosition, destinationPosition]);
+  }, [passengerPosition, destinationPosition, t]);
 
   const mapCenter = passengerPosition || destinationPosition || undefined;
 
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'accepted':
-        return 'Acceptée';
+        return t('driver.tripStatusAccepted');
       case 'driver_arrived':
-        return 'Arrivé';
+        return t('driver.tripStatusArrived');
       case 'in_progress':
-        return 'En cours';
+        return t('driver.tripStatusInProgress');
       default:
         return status;
     }
@@ -91,7 +93,7 @@ export function CurrentTripCard({
   return (
     <div className="lg:col-span-2">
       <div className="glass-card rounded-2xl p-4 sm:p-6 border border-white/5">
-        <h2 className="text-xl font-bold text-white mb-4">Course en cours</h2>
+        <h2 className="text-xl font-bold text-white mb-4">{t('driver.currentTrip')}</h2>
         {mapCenter && (
           <div className="mb-4 h-56 rounded-xl overflow-hidden">
             <MapView
@@ -110,13 +112,13 @@ export function CurrentTripCard({
               <div className="flex items-center gap-2 mb-1">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30">
                   <MaterialIcon name="person" size="sm" />
-                  Pour un tiers
+                  {t('driver.forThirdParty')}
                 </span>
               </div>
               <div className="flex items-center gap-4 mt-2">
                 <div className="flex items-center gap-1">
                   <MaterialIcon name="person" size="sm" className="text-amber-400" />
-                  <span className="text-sm text-white font-medium">{trip.passengerName || 'Passager'}</span>
+                  <span className="text-sm text-white font-medium">{trip.passengerName || t('driver.passenger')}</span>
                 </div>
                 {trip.passengerPhone && (
                   <a
@@ -139,7 +141,7 @@ export function CurrentTripCard({
 
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="font-semibold text-white">Client</p>
+              <p className="font-semibold text-white">{t('driver.client')}</p>
               <p className="text-sm text-slate-300 truncate">{trip.pickup}</p>
               <p className="text-sm text-slate-300">&rarr; {trip.destination}</p>
             </div>
@@ -163,9 +165,9 @@ export function CurrentTripCard({
                           : 'text-orange-400'
                     }`}>
                       <MaterialIcon name="navigation" size="sm" className="text-inherit" />
-                      GPS {(trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 20 ? 'Très précis' :
-                           (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 50 ? 'Précis' :
-                           'Approximatif'}
+                      GPS {(trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 20 ? t('driver.gpsVeryAccurate') :
+                           (trip.pickupLocationAccuracy || trip.pickupLocation.accuracy || 0) <= 50 ? t('driver.gpsAccurate') :
+                           t('driver.gpsApproximate')}
                       {trip.pickupLocationAccuracy && ` (±${Math.round(trip.pickupLocationAccuracy)}m)`}
                     </span>
                   )}
@@ -190,7 +192,7 @@ export function CurrentTripCard({
                   className="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center ml-2 transition-all"
                 >
                   <MaterialIcon name="navigation" size="sm" className="mr-1" />
-                  <span>Naviguer</span>
+                  <span>{t('driver.navigate')}</span>
                 </button>
               )}
             </div>
@@ -209,7 +211,7 @@ export function CurrentTripCard({
                     }}
                     className="text-blue-400 hover:text-blue-300 text-sm font-medium flex items-center"
                   >
-                    <span className="mr-1">Naviguer</span>
+                    <span className="mr-1">{t('driver.navigate')}</span>
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                   </button>
                 )}
@@ -218,7 +220,7 @@ export function CurrentTripCard({
                   className="text-primary hover:text-[#ffae33] text-sm font-medium flex items-center relative"
                 >
                   <MaterialIcon name="chat" size="sm" className="mr-1" />
-                  <span>Chat</span>
+                  <span>{t('driver.chat')}</span>
                   {(trip.unreadMessages?.driver || 0) > 0 && (
                     <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-background">
                       {trip.unreadMessages?.driver}
@@ -238,7 +240,7 @@ export function CurrentTripCard({
                   style={{ minHeight: '44px' }}
                 >
                   <MaterialIcon name="check_circle" size="sm" />
-                  <span>Je suis arrivé</span>
+                  <span>{t('driver.iHaveArrived')}</span>
                 </button>
               )}
               {trip.status === 'driver_arrived' && (
@@ -248,7 +250,7 @@ export function CurrentTripCard({
                   style={{ minHeight: '44px' }}
                 >
                   <MaterialIcon name="play_arrow" size="sm" />
-                  <span>Démarrer</span>
+                  <span>{t('driver.start')}</span>
                 </button>
               )}
               {trip.status === 'in_progress' && (
@@ -258,7 +260,7 @@ export function CurrentTripCard({
                   style={{ minHeight: '44px' }}
                 >
                   <MaterialIcon name="check_circle" size="sm" />
-                  <span>Terminer</span>
+                  <span>{t('driver.finish')}</span>
                 </button>
               )}
             </div>
@@ -274,13 +276,13 @@ export function CurrentTripCard({
             name:
               [userData?.firstName, userData?.lastName].filter(Boolean).join(' ').trim() ||
               currentUser.displayName ||
-              'Chauffeur',
+              t('taxi.driver'),
             role: 'chauffeur',
             avatar: userData?.profileImageUrl || currentUser.photoURL || null,
           },
           participantB: {
             uid: trip.userId,
-            name: trip.passengerName || 'Client',
+            name: trip.passengerName || t('driver.client'),
             role: 'client',
             avatar: null,
           },

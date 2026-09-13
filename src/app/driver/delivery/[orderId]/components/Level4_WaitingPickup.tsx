@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
+import { useTranslation } from '@/hooks/useTranslation'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
 import DriverFoodContacts from './DriverFoodContacts'
 
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export default function Level4_WaitingPickup({ order, updateStatus, confirmPickup, reportNotReady }: Props) {
+  const { t } = useTranslation('driver')
   const [loading, setLoading] = useState(false)
   const [reporting, setReporting] = useState(false)
   const [pickupCode, setPickupCode] = useState('')
@@ -21,7 +23,7 @@ export default function Level4_WaitingPickup({ order, updateStatus, confirmPicku
       <div className="flex-1 flex flex-col items-center justify-center space-y-6">
         <MaterialIcon name="hourglass_empty" className="text-amber-400 text-[64px]" />
         <div className="text-center">
-          <h2 className="text-xl font-bold">En attente de la commande</h2>
+          <h2 className="text-xl font-bold">{t('waitingForOrderBtn')}</h2>
           <p className="text-slate-400 mt-1">{order.restaurantName}</p>
         </div>
         <DriverFoodContacts order={order} target="restaurant" />
@@ -33,7 +35,7 @@ export default function Level4_WaitingPickup({ order, updateStatus, confirmPicku
             setPickupCode(event.target.value.toUpperCase().slice(0, 12))
             setError(null)
           }}
-          placeholder="Code de récupération"
+          placeholder={t('pickupCodePlaceholder')}
           className="w-full h-12 text-center font-mono bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:border-primary"
         />
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
@@ -42,19 +44,19 @@ export default function Level4_WaitingPickup({ order, updateStatus, confirmPicku
           disabled={reporting || loading}
           className="w-full h-12 border border-amber-500/30 text-amber-400 rounded-2xl text-sm"
         >
-          {reporting ? '...' : 'Commande pas encore prête'}
+          {reporting ? '...' : t('orderNotReadyYet')}
         </button>
         <button
           onClick={async () => {
             if (pickupCode.trim().length < 4) {
-              setError('Saisissez le code fourni par le restaurant')
+              setError(t('enterPickupCodeRequired'))
               return
             }
             setLoading(true)
             try {
               await confirmPickup(pickupCode.trim())
             } catch {
-              setError('Code de récupération incorrect')
+              setError(t('incorrectPickupCode'))
             } finally {
               setLoading(false)
             }
@@ -62,7 +64,7 @@ export default function Level4_WaitingPickup({ order, updateStatus, confirmPicku
           disabled={loading || reporting || pickupCode.trim().length < 4}
           className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
         >
-          {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" /> : "J'ai récupéré la commande"}
+          {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" /> : t('iPickedUpOrder')}
         </button>
       </div>
     </div>

@@ -19,6 +19,7 @@ import { useCapacitorGeolocation } from '@/hooks/useCapacitorGeolocation';
 import { CURRENCY_CODE, DEFAULT_PRICING, DEFAULT_LOCALE } from '@/utils/constants';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type GoogleMapsApi = typeof import('@react-google-maps/api');
 
@@ -38,6 +39,7 @@ const defaultCenter = {
 };
 
 export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps) {
+  const { t, locale } = useTranslation();
   const { currentUser, userData } = useAuth();
   const [booking, setBooking] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
@@ -233,7 +235,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       const bookingSnap = await getDoc(bookingRef);
 
       if (!bookingSnap.exists()) {
-        showError('Réservation introuvable.');
+        showError(t('taxi.rideNotFound'));
         return;
       }
 
@@ -251,7 +253,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       await executeCancel(bookingData, 0);
     } catch (error) {
       logger.error('Erreur lors de l\'annulation', { error, bookingId });
-      showError('Erreur lors de l\'annulation. Veuillez réessayer.');
+      showError(t('taxi.cancellationError'));
     } finally {
       setCancelling(false);
     }
@@ -279,15 +281,17 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       setShowCancelConfirm(false);
 
       if (fee > 0) {
-        showError(`Course annulée.\n\nDes frais d'annulation de ${fee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE} ont été débités de votre portefeuille.`);
+        showError(t('taxi.rideCancelledWithFee', {
+          fee: `${fee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`,
+        }));
       } else {
-        showSuccess('Commande annulée avec succès.');
+        showSuccess(t('taxi.rideCancelledSuccess'));
       }
 
       onComplete();
     } catch (error) {
       logger.error('Erreur lors de l\'annulation', { error, bookingId });
-      showError('Erreur lors de l\'annulation. Veuillez réessayer.');
+      showError(t('taxi.cancellationError'));
     } finally {
       setCancelling(false);
     }
@@ -302,10 +306,10 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       setShowEditDestModal(false);
       setNewDestination('');
       setNewDestLocation(null);
-      showSuccess('Destination mise à jour avec succès ! Le prix a été recalculé.');
+      showSuccess(t('taxi.destinationUpdatedSuccess'));
     } catch (error) {
       console.error('Erreur mise à jour destination:', error);
-      showError('Erreur lors de la mise à jour de la destination.');
+      showError(t('taxi.destinationUpdateError'));
     } finally {
       setUpdatingDest(false);
     }
@@ -386,7 +390,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
     return (
       <div className="bg-[#0F0F0F] rounded-lg shadow-md p-8 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#f29200] mx-auto mb-4"></div>
-        <p className="text-[#9CA3AF]">Chargement du suivi...</p>
+        <p className="text-[#9CA3AF]">{t('common.loading')}</p>
       </div>
     );
   }
@@ -400,10 +404,10 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
 
   const getStatusMessage = () => {
     switch (booking.status) {
-      case 'accepted': return 'Chauffeur en route';
-      case 'driver_arrived': return 'Chauffeur arrivé !';
-      case 'in_progress': return 'En route vers destination';
-      default: return 'Statut inconnu';
+      case 'accepted': return t('taxi.driverHeading');
+      case 'driver_arrived': return t('taxi.driverArrivedNotice');
+      case 'in_progress': return t('taxi.enRouteBadge');
+      default: return t('common.unknown');
     }
   };
 
@@ -488,7 +492,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
           </GoogleMap>
         ) : (
           <div className="flex items-center justify-center h-full">
-            <p>Chargement de la carte...</p>
+            <p>{t('taxi.loadingMap')}</p>
           </div>
         )}
         
@@ -505,7 +509,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
           <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2">
             <span className="text-lg">👤</span>
             <p className="text-sm text-amber-300">
-              Course réservée pour <span className="font-bold text-white">{booking.passengerName}</span>
+              {t('taxi.bookedForPassenger', { name: booking.passengerName })}
             </p>
           </div>
         )}
@@ -533,7 +537,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
             <button 
               onClick={() => setShowChat(true)}
               className="p-3 bg-[#3B82F6]/20 text-[#3B82F6] rounded-full hover:bg-[#3B82F6]/30 transition relative"
-              title="Messagerie"
+              title={t('taxi.messaging')}
             >
               <MessageSquare className="w-5 h-5" />
               {/* Indicateur de message non lu */}
@@ -556,18 +560,18 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
             </div>
             <div className="flex-1 space-y-6">
               <div>
-                <p className="text-xs text-gray-500 uppercase">Départ</p>
+                <p className="text-xs text-gray-500 uppercase">{t('taxi.fromLabel')}</p>
                 <p className="font-medium text-white">{booking.pickup}</p>
               </div>
               <div>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500 uppercase">Destination</p>
+                  <p className="text-xs text-gray-500 uppercase">{t('taxi.toLabel')}</p>
                   {booking.status === 'in_progress' && (
                     <button 
                       onClick={() => setShowEditDestModal(true)}
                       className="text-xs text-[#f29200] font-medium flex items-center hover:underline"
                     >
-                      <Pencil className="w-4 h-4 mr-1" /> Modifier
+                      <Pencil className="w-4 h-4 mr-1" /> {t('common.edit')}
                     </button>
                   )}
                 </div>
@@ -584,20 +588,20 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Suivi en temps réel
+              {t('taxi.realtimeTracking')}
             </h4>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-[#1A1A1A] border border-white/[0.06] rounded-lg p-3 shadow-sm">
-                <p className="text-xs text-[#9CA3AF] mb-1">Distance restante</p>
+                <p className="text-xs text-[#9CA3AF] mb-1">{t('taxi.remainingDistance')}</p>
                 <p className="text-lg font-bold text-white">{realTimeDistance.toFixed(1)} km</p>
               </div>
               <div className="bg-[#1A1A1A] border border-white/[0.06] rounded-lg p-3 shadow-sm">
-                <p className="text-xs text-[#9CA3AF] mb-1">Temps estimé</p>
+                <p className="text-xs text-[#9CA3AF] mb-1">{t('taxi.estimatedTime')}</p>
                 <p className="text-lg font-bold text-white">{realTimeDuration} min</p>
               </div>
             </div>
             <div className="mt-3 bg-[#1A1A1A] border border-white/[0.06] rounded-lg p-3 shadow-sm">
-              <p className="text-xs text-[#9CA3AF] mb-1">Estimation tarifaire</p>
+              <p className="text-xs text-[#9CA3AF] mb-1">{t('taxi.estimatedFare')}</p>
               <p className="text-xl font-bold text-green-600">
                 {(() => {
                   // Convertir Timestamp Firestore correctement
@@ -624,7 +628,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                 })()}
               </p>
               <p className="text-xs text-[#9CA3AF] mt-1">
-                Estimation basée sur le trajet en cours
+                {t('taxi.fareEstimateBasedOnTrip')}
               </p>
             </div>
           </div>
@@ -637,12 +641,12 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
               onClick={() => setShowCancelModal(true)}
               className="w-full py-3 text-[#EF4444] font-medium hover:bg-[#EF4444]/10 rounded-lg transition"
             >
-              Annuler la course
+              {t('taxi.cancelRide')}
             </button>
            )}
            {booking.status === 'in_progress' && (
              <p className="text-center text-sm text-[#9CA3AF] italic">
-               Course en cours... Détendez-vous ! 🎵
+               {t('taxi.inProgressRelax')}
              </p>
            )}
         </div>
@@ -652,9 +656,9 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       {showCancelModal && !showCancelConfirm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#1A1A1A] border border-white/[0.05] rounded-2xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-white mb-2 text-center">Annuler ?</h3>
+            <h3 className="text-xl font-bold text-white mb-2 text-center">{t('taxi.cancelPromptTitle')}</h3>
             <p className="text-[#9CA3AF] text-sm text-center mb-6">
-              Le chauffeur est déjà en route. Des frais peuvent s&apos;appliquer.
+              {t('taxi.cancelPromptDesc')}
             </p>
             <div className="space-y-3">
               <button
@@ -662,13 +666,13 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                 disabled={cancelling}
                 className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg"
               >
-                {cancelling ? '...' : 'Oui, annuler'}
+                {cancelling ? '...' : t('taxi.yesCancel')}
               </button>
               <button
                 onClick={() => setShowCancelModal(false)}
                 className="w-full bg-[#242424] hover:bg-white/10 text-white font-medium py-3 px-4 rounded-lg"
               >
-                Non, retour
+                {t('taxi.noGoBack')}
               </button>
             </div>
           </div>
@@ -684,12 +688,12 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2 text-center">Annulation en cours</h3>
+            <h3 className="text-xl font-bold text-white mb-2 text-center">{t('taxi.cancelInProgressTitle')}</h3>
             <p className="text-[#9CA3AF] text-sm text-center mb-4">
-              Vous annulez une course en cours. Des frais s&apos;appliquent.
+              {t('taxi.cancelInProgressDesc')}
             </p>
             <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6 text-center">
-              <p className="text-xs text-red-400 uppercase font-semibold mb-1">Frais d&apos;annulation</p>
+              <p className="text-xs text-red-400 uppercase font-semibold mb-1">{t('taxi.cancellationFeeLabel')}</p>
               <p className="text-2xl font-bold text-red-400">
                 {cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
               </p>
@@ -702,25 +706,25 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                     if (snap.exists()) {
                       executeCancel(snap.data(), cancellationFee);
                     } else {
-                      showError('Réservation introuvable. Veuillez réessayer.');
+                      showError(t('taxi.rideNotFound'));
                       setShowCancelConfirm(false);
                     }
                   }).catch((err) => {
                     logger.error('Erreur lors de la vérification de la réservation', { error: err, bookingId });
-                    showError('Erreur réseau. Veuillez réessayer.');
+                    showError(t('common.errorOccurred'));
                     setShowCancelConfirm(false);
                   });
                 }}
                 disabled={cancelling}
                 className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg"
               >
-                {cancelling ? 'Annulation...' : `Confirmer (${cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE})`}
+                {cancelling ? t('common.loading') : t('taxi.confirmCancellationWithFee', { amount: `${cancellationFee.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}` })}
               </button>
               <button
                 onClick={() => { setShowCancelConfirm(false); setShowCancelModal(false); }}
                 className="w-full bg-[#242424] hover:bg-white/10 text-white font-medium py-3 px-4 rounded-lg"
               >
-                Non, garder la course
+                {t('taxi.keepRide')}
               </button>
             </div>
           </div>
@@ -731,20 +735,20 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
       {showEditDestModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#1A1A1A] border border-white/[0.05] rounded-2xl shadow-2xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-white mb-4">Modifier la destination</h3>
+            <h3 className="text-xl font-bold text-white mb-4">{t('taxi.editDestinationTitle')}</h3>
             
             <div className="mb-6">
               <AddressInput
-                label="Nouvelle adresse"
+                label={t('taxi.newAddressLabel')}
                 value={newDestination}
                 onChange={setNewDestination}
                 onSelect={handleDestinationSelect}
-                placeholder="Où voulez-vous aller ?"
+                placeholder={t('taxi.newAddressPlaceholder')}
                 autocompleteService={autocompleteService}
                 required
               />
               <p className="text-xs text-[#9CA3AF] mt-2">
-                Le prix sera recalculé en fonction de la nouvelle destination.
+                {t('taxi.editDestinationPriceNote')}
               </p>
             </div>
 
@@ -754,13 +758,13 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
                 disabled={updatingDest || !newDestination}
                 className="w-full bg-[#f29200] hover:bg-[#e68600] text-white font-bold py-3 px-4 rounded-lg disabled:opacity-50"
               >
-                {updatingDest ? 'Mise à jour...' : 'Confirmer la nouvelle destination'}
+                {updatingDest ? t('taxi.updating') : t('taxi.confirmNewDestination')}
               </button>
               <button
                 onClick={() => setShowEditDestModal(false)}
                 className="w-full bg-[#242424] hover:bg-white/10 text-white font-medium py-3 px-4 rounded-lg"
               >
-                Annuler
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -782,7 +786,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
           },
           participantB: {
             uid: booking.driverId,
-            name: booking.driverName || 'Chauffeur',
+            name: booking.driverName || t('taxi.driver'),
             role: 'chauffeur',
             avatar: null,
           },

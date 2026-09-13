@@ -15,8 +15,10 @@ import { timestampToDate } from '@/lib/firebase-helpers';
 import { useNotifications } from '@/hooks/useNotifications';
 import { NetworkErrorView } from '@/components/ui/NetworkErrorView';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function WalletPage() {
+  const { t } = useTranslation();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,7 +136,7 @@ export default function WalletPage() {
           <div className="absolute -bottom-20 -left-10 w-40 h-40 bg-primary/10 blur-3xl rounded-full pointer-events-none" />
 
           <div className="relative flex items-center justify-between mb-3">
-            <p className="text-slate-400 text-sm font-medium">Solde disponible</p>
+            <p className="text-slate-400 text-sm font-medium">{t('wallet.balance')}</p>
             <MaterialIcon name="account_balance_wallet" size="md" className="text-primary/70" />
           </div>
 
@@ -151,9 +153,9 @@ export default function WalletPage() {
         {/* Quick Actions */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Recharger',  icon: 'add_card', href: '/wallet/recharger', primary: true },
-            { label: 'Historique', icon: 'history',   href: '/wallet/historique' },
-            { label: 'Notifications', icon: 'notifications', href: '/notifications', showBadge: true },
+            { label: t('wallet.topUp'),  icon: 'add_card', href: '/wallet/recharger', primary: true },
+            { label: t('common.activity'), icon: 'history',   href: '/wallet/historique' },
+            { label: t('common.notifications'), icon: 'notifications', href: '/notifications', showBadge: true },
           ].map(({ label, icon, href, primary }) => (
             <Link
               key={label}
@@ -174,8 +176,8 @@ export default function WalletPage() {
         {/* Recent Transactions */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-bold text-white">Dernières transactions</h2>
-            <Link href="/wallet/historique" className="text-primary text-sm font-semibold">Voir tout</Link>
+            <h2 className="text-base font-bold text-white">{t('wallet.recentTransactions')}</h2>
+            <Link href="/wallet/historique" className="text-primary text-sm font-semibold">{t('common.seeAll')}</Link>
           </div>
 
           <div className="glass-card rounded-2xl border border-white/5 divide-y divide-white/5 overflow-hidden">
@@ -193,26 +195,26 @@ export default function WalletPage() {
             ) : transactions.length === 0 ? (
               <div className="p-10 text-center">
                 <MaterialIcon name="receipt_long" size="xl" className="text-slate-600 mx-auto mb-3" />
-                <p className="text-slate-400 text-sm">Aucune transaction récente</p>
+                <p className="text-slate-400 text-sm">{t('wallet.noTransactions')}</p>
               </div>
             ) : (
-              transactions.map((t) => {
-                const style = TRANSACTION_ICONS[t.type] ?? TRANSACTION_ICONS.payment;
-                const isCredit = t.type === 'deposit' || t.type === 'refund';
+              transactions.map((tx) => {
+                const style = TRANSACTION_ICONS[tx.type] ?? TRANSACTION_ICONS.payment;
+                const isCredit = tx.type === 'deposit' || tx.type === 'refund';
                 return (
-                  <div key={t.id} className="p-4 flex items-center gap-3">
+                  <div key={tx.id} className="p-4 flex items-center gap-3">
                     <div className={`size-10 rounded-full flex items-center justify-center shrink-0 ${style.bg}`}>
                       <MaterialIcon name={style.icon} size="sm" className={style.color} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-white truncate">
-                        {t.method || (isCredit ? 'Recharge' : 'Paiement')}
-                        {t.type === 'deposit' ? ' — Dépôt' : ''}
+                        {tx.method || (isCredit ? t('wallet.topUp') : t('wallet.payment'))}
+                        {tx.type === 'deposit' ? ` — ${t('wallet.deposit')}` : ''}
                       </p>
-                      <p className="text-xs text-slate-500">{formatDate(t.date)}</p>
+                      <p className="text-xs text-slate-500">{formatDate(tx.date)}</p>
                     </div>
                     <span className={`font-bold text-sm shrink-0 ${isCredit ? 'text-green-400' : 'text-red-400'}`}>
-                      {isCredit ? '+' : '-'}{formatCurrencyWithCode(t.netAmount ?? t.amount)}
+                      {isCredit ? '+' : '-'}{formatCurrencyWithCode(tx.netAmount ?? tx.amount)}
                     </span>
                   </div>
                 );

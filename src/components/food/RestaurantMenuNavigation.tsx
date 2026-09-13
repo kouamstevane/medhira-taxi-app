@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import type { CustomerRestaurantMenuCategory } from '@/services/food-delivery.service';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface RestaurantMenuNavigationProps {
   search: string;
@@ -23,22 +24,23 @@ export function RestaurantMenuNavigation({
   onCategoryChange,
   onClearFilters,
 }: RestaurantMenuNavigationProps) {
+  const { t } = useTranslation('food');
   const hasActiveFilters = Boolean(search.trim()) || Boolean(category);
   const isAllActive = category === null;
 
   return (
     <section
-      aria-label="Navigation du menu"
+      aria-label={t('menuNavigationLabel')}
       className="sticky top-0 z-30 -mx-4 overflow-x-clip border-b border-white/10 bg-[#091018]/90 px-4 py-4 backdrop-blur-2xl supports-[backdrop-filter]:bg-[#091018]/80"
     >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
         <div className="flex items-end justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#F2C87D]">
-              Menu du restaurant
+              {t('restaurantMenu')}
             </p>
             <h2 className="mt-1 text-lg font-semibold text-white">
-              Rechercher un plat
+              {t('searchDish')}
             </h2>
           </div>
 
@@ -50,7 +52,7 @@ export function RestaurantMenuNavigation({
               onClick={onClearFilters}
             >
               <MaterialIcon name="refresh" size="sm" className="mr-1.5" />
-              Réinitialiser
+              {t('resetFilters')}
             </Button>
           ) : null}
         </div>
@@ -62,21 +64,21 @@ export function RestaurantMenuNavigation({
             className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
           />
           <label htmlFor="restaurant-menu-search" className="sr-only">
-            Rechercher un plat
+            {t('searchDish')}
           </label>
           <Input
             id="restaurant-menu-search"
             type="search"
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Rechercher un plat…"
+            placeholder={t('searchDishPlaceholder')}
             className="h-11 rounded-full border-white/10 bg-white/[0.04] pl-11 pr-4 text-[15px] text-white placeholder:text-slate-500 focus-visible:border-[#F2C87D]/50 focus-visible:ring-[#F2C87D]/20"
           />
         </div>
 
         <div
           className="flex max-w-full gap-2 overflow-x-auto pb-1 pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-          aria-label="Catégories"
+          aria-label={t('categoriesLabel')}
         >
           <Button
             type="button"
@@ -90,7 +92,7 @@ export function RestaurantMenuNavigation({
             )}
             onClick={() => onCategoryChange(null)}
           >
-            Tout
+            {t('allCategories')}
           </Button>
 
           {categories.map((item) => {

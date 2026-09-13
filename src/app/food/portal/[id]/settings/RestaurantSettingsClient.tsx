@@ -31,6 +31,7 @@ import {
   getRestaurantImageStorageErrorMessage,
   uploadRestaurantImage,
 } from '@/services/restaurant-image.service';
+import { useTranslation } from '@/hooks/useTranslation';
 
 function cloneOpeningHours(hours: RestaurantOpeningHours): RestaurantOpeningHours {
   return Object.fromEntries(
@@ -39,6 +40,7 @@ function cloneOpeningHours(hours: RestaurantOpeningHours): RestaurantOpeningHour
 }
 
 export default function RestaurantSettingsClient() {
+  const { t } = useTranslation('restaurant');
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('restaurantId')?.trim() || null;
@@ -82,13 +84,13 @@ export default function RestaurantSettingsClient() {
         const result = await FoodDeliveryService.getRestaurantById(id);
 
         if (!result) {
-          showError('Restaurant introuvable.');
+          showError(t('restaurantNotFound'));
           router.push('/dashboard');
           return;
         }
 
         if (result.ownerId !== user.uid) {
-          showError('Accès non autorisé.');
+          showError(t('unauthorizedAccess'));
           router.push('/dashboard');
           return;
         }
@@ -103,7 +105,7 @@ export default function RestaurantSettingsClient() {
         setSavedLogoUrl(result.logoUrl ?? null);
         setSavedCoverImageUrl(result.coverImageUrl ?? result.imageUrl ?? null);
       } catch {
-        const message = 'Erreur lors du chargement des paramètres.';
+        const message = t('settingsLoadError');
         setLoadError(message);
         showError(message);
       } finally {
@@ -112,7 +114,7 @@ export default function RestaurantSettingsClient() {
     });
 
     return () => unsubscribe();
-  }, [id, router, showError]);
+  }, [id, router, showError, t]);
 
   const isDirty = useMemo(
     () => Boolean(hours && savedHours && JSON.stringify(hours) !== JSON.stringify(savedHours)),
@@ -150,9 +152,9 @@ export default function RestaurantSettingsClient() {
     try {
       await FoodDeliveryService.updateRestaurantOpeningHours(id, hours);
       setSavedHours(cloneOpeningHours(hours));
-      showSuccess('Horaires enregistrés.');
+      showSuccess(t('hoursSaved'));
     } catch {
-      const saveError = 'Impossible d’enregistrer les horaires. Réessayez.';
+      const saveError = t('hoursSaveError');
       setValidationError(saveError);
       showError(saveError);
     } finally {
@@ -209,7 +211,7 @@ export default function RestaurantSettingsClient() {
       setLogoRemoved(false);
       setCoverRemoved(false);
       setVisualRefreshKey((value) => value + 1);
-      showSuccess('Visuels enregistrés.');
+      showSuccess(t('visualsSaved'));
     } catch (visualError) {
       await Promise.all(uploadedPaths.map((path) => deleteRestaurantImage(path).catch(() => undefined)));
       const message = visualError instanceof Error && visualError.message.startsWith('Le ')
@@ -229,7 +231,7 @@ export default function RestaurantSettingsClient() {
       await FoodDeliveryService.deleteRestaurant(id);
       router.replace('/dashboard');
     } catch {
-      showError('Impossible de supprimer complètement le restaurant. Réessayez.');
+      showError(t('deleteRestaurantWarning'));
       setIsDeleting(false);
     }
   };
@@ -269,16 +271,16 @@ export default function RestaurantSettingsClient() {
       <main className="mx-auto max-w-3xl p-4 sm:p-8">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">Réglages du restaurant</p>
-            <h1 className="text-3xl font-bold text-white">Paramètres</h1>
-            <p className="mt-2 text-sm text-slate-400">Gérez les horaires de votre restaurant.</p>
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">{t('restaurantSettingsSubtitle')}</p>
+            <h1 className="text-3xl font-bold text-white">{t('settingsTitle')}</h1>
+            <p className="mt-2 text-sm text-slate-400">{t('settingsSubtitle')}</p>
           </div>
           <Link
             href={getRestaurantPortalPath(id)}
             className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-slate-300 transition hover:border-primary/50 hover:text-primary"
           >
             <MaterialIcon name="arrow_back" size="sm" />
-            <span className="hidden sm:inline">Tableau de bord</span>
+            <span className="hidden sm:inline">{t('backToDashboard')}</span>
           </Link>
         </div>
 
@@ -288,9 +290,9 @@ export default function RestaurantSettingsClient() {
               <MaterialIcon name="photo_library" size="lg" className="text-primary" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">Identité visuelle</h3>
+              <h3 className="text-xl font-bold text-white">{t('visualIdentity')}</h3>
               <p className="mt-1 text-sm leading-6 text-slate-400">
-                Ajoutez un logo carré et une couverture horizontale pour présenter votre restaurant.
+                {t('visualIdentityDesc')}
               </p>
             </div>
           </div>
@@ -326,7 +328,7 @@ export default function RestaurantSettingsClient() {
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-6 py-3.5 font-bold text-white primary-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
             >
               {isSaving && <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
-              {isSaving ? 'Enregistrement…' : 'Enregistrer les visuels'}
+              {isSaving ? t('savingSettings') : t('saveVisuals')}
             </button>
           </div>
         </section>
@@ -337,9 +339,9 @@ export default function RestaurantSettingsClient() {
               <MaterialIcon name="schedule" size="lg" className="text-primary" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white">Horaires d’ouverture</h3>
+              <h3 className="text-xl font-bold text-white">{t('step4Title')}</h3>
               <p className="mt-1 text-sm leading-6 text-slate-400">
-                Définissez les heures auxquelles les clients peuvent passer commande.
+                {t('ordersFollowSchedule')}
               </p>
             </div>
           </div>
@@ -347,7 +349,7 @@ export default function RestaurantSettingsClient() {
           <div className="mb-6 flex items-center gap-3 rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3">
             <MaterialIcon name="today" className="text-primary" />
             <p className="text-sm text-slate-300">
-              Aujourd’hui : <span className="font-bold text-white">{today.closed ? 'Fermé' : `${today.open} – ${today.close}`}</span>
+              {t('openingHoursToday')} : <span className="font-bold text-white">{today.closed ? t('closedDay') : `${today.open} – ${today.close}`}</span>
             </p>
           </div>
 
@@ -366,10 +368,10 @@ export default function RestaurantSettingsClient() {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <p className="font-semibold text-white">{label}</p>
-                      <p className="mt-1 text-xs text-slate-500">{day.closed ? 'Fermé' : `${day.open} – ${day.close}`}</p>
+                      <p className="mt-1 text-xs text-slate-500">{day.closed ? t('closedDay') : `${day.open} – ${day.close}`}</p>
                     </div>
                     <label className="flex shrink-0 cursor-pointer items-center gap-3">
-                      <span className="text-xs font-semibold text-slate-400">{day.closed ? 'Fermé' : 'Ouvert'}</span>
+                      <span className="text-xs font-semibold text-slate-400">{day.closed ? t('closedDay') : t('openDay')}</span>
                       <input
                         type="checkbox"
                         checked={!day.closed}
@@ -387,7 +389,7 @@ export default function RestaurantSettingsClient() {
                   {!day.closed && (
                     <div className="mt-4 grid grid-cols-1 gap-3 border-t border-white/5 pt-4 sm:grid-cols-2">
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Ouverture
+                        {t('openDay')}
                         <input
                           type="time"
                           disabled={isDeleting}
@@ -398,7 +400,7 @@ export default function RestaurantSettingsClient() {
                         />
                       </label>
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        Fermeture
+                        {t('closedDay')}
                         <input
                           type="time"
                           disabled={isDeleting}
@@ -421,7 +423,7 @@ export default function RestaurantSettingsClient() {
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-6 py-3.5 font-bold text-white primary-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
               >
                 {isSaving && <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
-                {isSaving ? 'Enregistrement…' : 'Enregistrer les horaires'}
+                {isSaving ? t('savingSettings') : t('saveHours')}
               </button>
             </div>
           </form>
@@ -433,10 +435,9 @@ export default function RestaurantSettingsClient() {
               <MaterialIcon name="delete_forever" size="lg" className="text-red-300" />
             </div>
             <div className="flex-1">
-              <h3 className="text-xl font-bold text-white">Zone dangereuse</h3>
+              <h3 className="text-xl font-bold text-white">{t('dangerZone')}</h3>
               <p className="mt-1 text-sm leading-6 text-slate-400">
-                Supprimer ce restaurant efface définitivement sa fiche, son menu, ses imports et ses images.
-                Cette action est irréversible.
+                {t('deleteRestaurantWarning')}
               </p>
 
               {!showDeleteConfirmation ? (
@@ -446,13 +447,13 @@ export default function RestaurantSettingsClient() {
                   onClick={() => setShowDeleteConfirmation(true)}
                   className="mt-5 rounded-xl border border-red-500/40 px-4 py-3 text-sm font-bold text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Supprimer ce restaurant
+                  {t('deleteThisRestaurant')}
                 </button>
               ) : (
                 <div className="mt-5 rounded-2xl border border-red-500/30 bg-black/20 p-4">
-                  <p className="text-sm font-semibold text-red-100">Confirmation de suppression définitive</p>
+                  <p className="text-sm font-semibold text-red-100">{t('confirmDeletePermanently')}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-400">
-                    Le restaurant et toutes ses données seront supprimés du compte et de Firebase Storage.
+                    {t('deleteRestaurantConfirmPrompt')}
                   </p>
                   <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end">
                     <button
@@ -461,7 +462,7 @@ export default function RestaurantSettingsClient() {
                       onClick={() => setShowDeleteConfirmation(false)}
                       className="rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-slate-300 transition hover:border-white/20 disabled:opacity-40"
                     >
-                      Annuler
+                      {t('cancel')}
                     </button>
                     <button
                       type="button"
@@ -469,7 +470,7 @@ export default function RestaurantSettingsClient() {
                       onClick={handleDeleteRestaurant}
                       className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {isDeleting ? 'Suppression…' : 'Supprimer définitivement'}
+                      {isDeleting ? t('submittingFile') : t('deletePermanently')}
                     </button>
                   </div>
                 </div>

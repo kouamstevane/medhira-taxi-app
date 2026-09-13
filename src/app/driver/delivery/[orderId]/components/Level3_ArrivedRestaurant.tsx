@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
+import { useTranslation } from '@/hooks/useTranslation'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
 import DriverFoodContacts from './DriverFoodContacts'
 
@@ -10,14 +11,15 @@ interface Props {
 }
 
 export default function Level3_ArrivedRestaurant({ order, updateStatus }: Props) {
+  const { t } = useTranslation('driver')
   const [loading, setLoading] = useState(false)
   return (
     <div className="min-h-screen bg-background text-white flex flex-col p-4">
       <div className="flex-1 flex flex-col items-center justify-center space-y-6">
         <MaterialIcon name="store" className="text-primary text-[64px]" />
         <div className="text-center">
-          <h2 className="text-xl font-bold">Arrivé au restaurant</h2>
-          <p className="text-slate-400 mt-1">Commande {order.orderNumber}</p>
+          <h2 className="text-xl font-bold">{t('arrivedAtRestaurantTitle')}</h2>
+          <p className="text-slate-400 mt-1">{t('orderNumberTitle', { number: order.orderNumber })}</p>
         </div>
         <div className="glass-card rounded-2xl border border-white/10 p-4 w-full max-w-sm space-y-2">
           {order.orderItems.map((item, i) => (
@@ -34,7 +36,7 @@ export default function Level3_ArrivedRestaurant({ order, updateStatus }: Props)
         disabled={loading}
         className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
       >
-        {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" /> : "En attente de la commande"}
+        {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" /> : t('waitingForOrderBtn')}
       </button>
     </div>
   )

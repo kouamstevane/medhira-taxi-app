@@ -147,12 +147,3 @@ export default function LayoutClient({ children }: LayoutClientProps) {
 
   return <VoipCallProvider>{body}</VoipCallProvider>;
 }
-
-
-
-
-
-
-
-
-

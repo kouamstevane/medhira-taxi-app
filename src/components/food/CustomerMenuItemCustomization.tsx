@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type {
   CustomerMenuCustomizationPayload,
   CustomerMenuItemDetails,
@@ -10,6 +10,7 @@ import type {
 } from '@/types/food-delivery';
 import { validateCustomerMenuCustomization } from '@/services/checkout.service';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface CustomerMenuItemCustomizationProps {
   item: Pick<MenuItem, 'id' | 'name' | 'price'>;
@@ -49,22 +50,6 @@ function getInitialModifierSelections(groups: CustomerMenuModifierGroup[]): Modi
   }, {});
 }
 
-function formatValidationMessage(group: CustomerMenuModifierGroup, kind: 'min' | 'max'): string {
-  if (kind === 'min') {
-    return `Sélectionnez au moins ${getGroupMinimumSelections(group)} option pour ${group.label}.`;
-  }
-
-  return `Vous pouvez choisir jusqu’à ${getGroupMaximumSelections(group)} options pour ${group.label}.`;
-}
-
-function formatPriceDelta(amount: number): string {
-  if (amount === 0) {
-    return 'Inclus';
-  }
-
-  return `+${amount.toFixed(2)} ${CURRENCY_CODE}`;
-}
-
 export function CustomerMenuItemCustomization({
   item,
   modifierGroups,
@@ -72,6 +57,24 @@ export function CustomerMenuItemCustomization({
   checkoutRules,
   onAddToCart,
 }: CustomerMenuItemCustomizationProps) {
+  const { t } = useTranslation('food');
+
+  const formatValidationMessage = (group: CustomerMenuModifierGroup, kind: 'min' | 'max'): string => {
+    if (kind === 'min') {
+      return t('selectAtLeastMinOptions', { count: getGroupMinimumSelections(group), label: group.label });
+    }
+
+    return t('selectUpToMaxOptions', { count: getGroupMaximumSelections(group), label: group.label });
+  };
+
+  const formatPriceDelta = (amount: number): string => {
+    if (amount === 0) {
+      return t('priceIncluded');
+    }
+
+    return `+${amount.toFixed(2)} ${CURRENCY_CODE}`;
+  };
+
   const minimumQuantity = 1;
   const maximumQuantity = checkoutRules?.maxQuantity && checkoutRules.maxQuantity > 0
     ? checkoutRules.maxQuantity
@@ -83,18 +86,15 @@ export function CustomerMenuItemCustomization({
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(minimumQuantity);
 
-  useEffect(() => {
+  const currentConfigKey = `${item.id}:${checkoutRules?.allowZeroQuantity ? '1' : '0'}:${checkoutRules?.maxQuantity ?? 'default'}`;
+  const [prevConfigKey, setPrevConfigKey] = useState(currentConfigKey);
+  if (prevConfigKey !== currentConfigKey) {
+    setPrevConfigKey(currentConfigKey);
     setModifierSelections(getInitialModifierSelections(modifierGroups));
     setSelectedSupplementIds([]);
     setValidationMessage(null);
     setQuantity(minimumQuantity);
-  }, [
-    item.id,
-    modifierGroups,
-    supplements,
-    checkoutRules?.allowZeroQuantity,
-    checkoutRules?.maxQuantity,
-  ]);
+  }
 
   const totalCustomizationPrice = useMemo(() => {
     const modifierTotal = modifierGroups.reduce((sum, group) => {
@@ -119,7 +119,7 @@ export function CustomerMenuItemCustomization({
     setValidationMessage(null);
     setQuantity((current) => {
       if (maximumQuantity !== undefined && current >= maximumQuantity) {
-        setValidationMessage(`Vous pouvez ajouter jusqu’à ${maximumQuantity} exemplaires pour ce plat.`);
+        setValidationMessage(t('maxQuantityExceeded', { count: maximumQuantity }));
         return current;
       }
 
@@ -201,7 +201,7 @@ export function CustomerMenuItemCustomization({
       checkoutRules: checkoutRules ?? {},
     }, nextPayload);
     if (!validation.valid) {
-      setValidationMessage(validation.errors[0]?.message ?? 'Vérifiez les choix du plat avant de continuer.');
+      setValidationMessage(validation.errors[0]?.message ?? t('checkChoicesBeforeContinue'));
       return;
     }
 
@@ -214,18 +214,18 @@ export function CustomerMenuItemCustomization({
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="text-sm font-semibold text-white">Quantité</h3>
+            <h3 className="text-sm font-semibold text-white">{t('quantity')}</h3>
             <p className="mt-1 text-xs text-slate-400">
               {maximumQuantity !== undefined
-                ? `Quantité maximale : ${maximumQuantity}`
-                : 'Ajoutez la quantité souhaitée avant de confirmer.'}
+                ? t('maxQuantityLabel', { max: maximumQuantity })
+                : t('quantityAddPrompt')}
             </p>
           </div>
 
           <div className="flex items-center overflow-hidden rounded-full border border-white/10 bg-black/10">
             <button
               type="button"
-              aria-label="Diminuer la quantité"
+              aria-label={t('decreaseQuantity')}
               onClick={handleDecrementQuantity}
               className="px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
             >
@@ -234,7 +234,7 @@ export function CustomerMenuItemCustomization({
             <span className="min-w-12 px-3 text-center text-sm font-semibold text-white">{quantity}</span>
             <button
               type="button"
-              aria-label="Augmenter la quantité"
+              aria-label={t('increaseQuantity')}
               onClick={handleIncrementQuantity}
               className="px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
             >
@@ -255,9 +255,13 @@ export function CustomerMenuItemCustomization({
             <legend className="px-1 text-sm font-semibold text-white">{group.label}</legend>
             <p className="mb-3 text-xs text-slate-400">
               {group.selectionType === 'single'
-                ? 'Choisissez une option'
-                : `Choisissez jusqu’à ${Number.isFinite(getGroupMaximumSelections(group)) ? getGroupMaximumSelections(group) : 'autant d’options que souhaité'}`}
-              {group.required ? ' · Obligatoire' : ' · Optionnel'}
+                ? t('chooseOption')
+                : t('chooseUpToOptions', {
+                    count: Number.isFinite(getGroupMaximumSelections(group))
+                      ? getGroupMaximumSelections(group)
+                      : t('chooseAsManyOptions'),
+                  })}
+              {group.required ? ` · ${t('requiredBadge')}` : ` · ${t('optionalBadge')}`}
             </p>
 
             <div className="space-y-3">
@@ -298,8 +302,8 @@ export function CustomerMenuItemCustomization({
 
       {supplements.length > 0 ? (
         <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-          <h3 className="text-sm font-semibold text-white">Suppléments</h3>
-          <p className="mb-3 text-xs text-slate-400">Ajoutez-les indépendamment de votre personnalisation.</p>
+          <h3 className="text-sm font-semibold text-white">{t('supplements')}</h3>
+          <p className="mb-3 text-xs text-slate-400">{t('supplementsDesc')}</p>
 
           <div className="space-y-3">
             {supplements.map((supplement) => {
@@ -340,11 +344,11 @@ export function CustomerMenuItemCustomization({
           <span>{(item.price * quantity).toFixed(2)} {CURRENCY_CODE}</span>
         </div>
         <div className="mt-2 flex items-center justify-between text-sm text-slate-300">
-          <span>Personnalisation</span>
+          <span>{t('customizationSummary')}</span>
           <span>{(totalCustomizationPrice * quantity).toFixed(2)} {CURRENCY_CODE}</span>
         </div>
         <div className="mt-3 flex items-center justify-between text-base font-semibold text-white">
-          <span>Total</span>
+          <span>{t('cartTotal')}</span>
           <span>{((item.price + totalCustomizationPrice) * quantity).toFixed(2)} {CURRENCY_CODE}</span>
         </div>
       </div>
@@ -353,7 +357,7 @@ export function CustomerMenuItemCustomization({
         type="submit"
         className="w-full rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-4 py-4 text-base font-bold text-white transition hover:opacity-95"
       >
-        Ajouter au panier
+        {t('addToCart')}
       </button>
     </form>
   );

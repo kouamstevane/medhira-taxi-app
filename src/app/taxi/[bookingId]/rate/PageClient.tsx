@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { auth, db } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { CURRENCY_CODE, DEFAULT_LOCALE } from '@/utils/constants'
+import { useTranslation } from '@/hooks/useTranslation'
 
 const ratingSchema = z.object({
   score: z.number().int().min(1).max(5),
@@ -31,6 +32,7 @@ interface BookingData {
 }
 
 export default function RateTaxiRidePage() {
+  const { t, locale } = useTranslation()
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -47,7 +49,7 @@ export default function RateTaxiRidePage() {
 
   useEffect(() => {
     if (!bookingId) {
-      setFetchError('Identifiant de course invalide.')
+      setFetchError(t('taxi.invalidBookingId'))
       setLoading(false)
       return
     }
@@ -61,31 +63,31 @@ export default function RateTaxiRidePage() {
         if (cancelled) return
 
         if (!bookingSnap.exists()) {
-          setFetchError('Course introuvable. Vérifiez le lien ou contactez le support.')
+          setFetchError(t('taxi.rideNotFoundContactSupport'))
           return
         }
 
         const data = bookingSnap.data() as BookingData
 
         if (data.status !== 'completed') {
-          setFetchError('Cette course n\'est pas encore terminée.')
+          setFetchError(t('taxi.rideNotCompletedYet'))
           return
         }
 
         if (!data.driverId) {
-          setFetchError('Chauffeur non identifié pour cette course.')
+          setFetchError(t('taxi.driverNotIdentified'))
           return
         }
 
         if (data.userId !== auth.currentUser?.uid) {
-          setFetchError('Vous n\'êtes pas autorisé à évaluer cette course.')
+          setFetchError(t('taxi.notAuthorizedToRate'))
           return
         }
 
         setBooking(data)
       } catch {
         if (cancelled) return
-        setFetchError('Erreur de chargement. Veuillez réessayer.')
+        setFetchError(t('common.errorOccurred'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -93,7 +95,7 @@ export default function RateTaxiRidePage() {
 
     fetchBooking()
     return () => { cancelled = true }
-  }, [bookingId])
+  }, [bookingId, t])
 
   const handleSubmit = async () => {
     if (!auth.currentUser || !booking?.driverId) return
@@ -103,7 +105,7 @@ export default function RateTaxiRidePage() {
       comment: comment.trim() || undefined,
     })
     if (!validation.success) {
-      setFetchError('Données invalides. Veuillez corriger votre évaluation.')
+      setFetchError(t('taxi.invalidRatingData'))
       return
     }
 
@@ -117,7 +119,7 @@ export default function RateTaxiRidePage() {
       );
       const existingSnap = await getDocs(existingQuery);
       if (!existingSnap.empty) {
-        setFetchError('Vous avez déjà noté cette course');
+        setFetchError(t('taxi.alreadyRatedRide'));
         return;
       }
 
@@ -134,7 +136,7 @@ export default function RateTaxiRidePage() {
       setSubmitted(true)
       setTimeout(() => router.push('/historique'), 2000)
     } catch {
-      setFetchError('Erreur lors de l\'envoi. Veuillez réessayer.')
+      setFetchError(t('taxi.errorSubmittingRating'))
     } finally {
       setSubmitting(false)
     }
@@ -170,7 +172,7 @@ export default function RateTaxiRidePage() {
             onClick={() => router.push('/historique')}
             className="text-primary text-sm underline"
           >
-            Retour à l&apos;historique
+            {t('taxi.backToHistory')}
           </button>
         </div>
       </div>
@@ -182,7 +184,7 @@ export default function RateTaxiRidePage() {
       <div className="min-h-screen bg-background flex items-center justify-center text-white">
         <div className="text-center space-y-4">
           <MaterialIcon name="check_circle" className="text-green-400 text-[64px]" />
-          <p className="text-xl font-bold">Merci pour votre évaluation !</p>
+          <p className="text-xl font-bold">{t('taxi.thankYouForRating')}</p>
         </div>
       </div>
     )
@@ -193,8 +195,8 @@ export default function RateTaxiRidePage() {
       <div className="glass-card rounded-2xl border border-white/10 p-6 w-full max-w-sm space-y-6">
         <div className="text-center">
           <MaterialIcon name="local_taxi" className="text-primary text-[48px]" />
-          <h1 className="text-xl font-bold mt-2">Notez votre course</h1>
-          <p className="text-slate-400 text-sm mt-1">Votre avis aide à améliorer le service</p>
+          <h1 className="text-xl font-bold mt-2">{t('taxi.rateYourRide')}</h1>
+          <p className="text-slate-400 text-sm mt-1">{t('taxi.rateYourRideDesc')}</p>
         </div>
 
         {booking && (
@@ -230,7 +232,7 @@ export default function RateTaxiRidePage() {
                 {booking.distance} km · {booking.duration} min
               </div>
               <p className="text-sm font-bold text-primary">
-                {(booking.finalPrice ?? booking.price).toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}
+                {(booking.finalPrice ?? booking.price).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR', { minimumFractionDigits: 2 })} {CURRENCY_CODE}
               </p>
             </div>
           </div>
@@ -252,7 +254,7 @@ export default function RateTaxiRidePage() {
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="Commentaire optionnel…"
+          placeholder={t('taxi.optionalCommentPlaceholder')}
           maxLength={500}
           className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm resize-none"
           rows={3}
@@ -267,11 +269,11 @@ export default function RateTaxiRidePage() {
           disabled={score === 0 || submitting || !booking?.driverId}
           className="w-full h-12 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
         >
-          {submitting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Envoyer'}
+          {submitting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : t('taxi.send')}
         </button>
 
         <button onClick={() => router.push('/historique')} className="w-full text-center text-slate-500 text-sm">
-          Passer
+          {t('taxi.skip')}
         </button>
       </div>
     </div>

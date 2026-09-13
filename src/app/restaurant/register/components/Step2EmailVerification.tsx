@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import OTPInput from '@/components/ui/OTPInput';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { functions } from '@/config/firebase';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface Step2EmailVerificationProps {
   email: string;
@@ -15,6 +16,7 @@ interface Step2EmailVerificationProps {
 }
 
 export function Step2EmailVerification({ email, onVerified, loading: externalLoading, error: externalError }: Step2EmailVerificationProps) {
+  const { t } = useTranslation('restaurant');
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const initialRequestEmail = useRef<string | null>(null);
@@ -31,12 +33,12 @@ export function Step2EmailVerification({ email, onVerified, loading: externalLoa
     } catch (err: unknown) {
       const mapped = err as { code?: string; message?: string };
       if (mapped.code === 'functions/resource-exhausted') {
-        const msg = 'Trop de tentatives. Réessayez dans quelques minutes.';
+        const msg = t('tooManyAttemptsError');
         setLocalError(msg);
         toast.error(msg);
-        return { success: false, error: 'Trop de tentatives.' };
+        return { success: false, error: t('tooManyAttempts') };
       } else {
-        const msg = mapped.message || 'Erreur lors de l\'envoi du code.';
+        const msg = mapped.message || t('codeSentError');
         setLocalError(msg);
         toast.error(msg);
         return { success: false, error: msg };
@@ -44,7 +46,7 @@ export function Step2EmailVerification({ email, onVerified, loading: externalLoa
     } finally {
       setLoading(false);
     }
-  }, [email]);
+  }, [email, t]);
 
   const verifyCode = useCallback(async (code: string) => {
     try {
@@ -53,9 +55,9 @@ export function Step2EmailVerification({ email, onVerified, loading: externalLoa
       return result.data as { success: boolean; error?: string; attemptsLeft?: number };
     } catch (err: unknown) {
       const mapped = err as { message?: string };
-      return { success: false, error: mapped.message || 'Code incorrect.' };
+      return { success: false, error: mapped.message || t('incorrectCodeError') };
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!email || initialRequestEmail.current === email) return;
@@ -70,8 +72,8 @@ export function Step2EmailVerification({ email, onVerified, loading: externalLoa
   return (
     <div className="flex flex-col items-center px-4 py-6">
       <div className="w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-1 text-white">Vérifiez votre email</h2>
-        <p className="text-gray-400 mb-6">Étape 2 sur 4 — Code de vérification envoyé à <strong>{email}</strong></p>
+        <h2 className="text-2xl font-bold mb-1 text-white">{t('step2Title')}</h2>
+        <p className="text-gray-400 mb-6">{t('step2Subtitle')} <strong>{email}</strong></p>
 
         {error && (
           <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm" role="alert">

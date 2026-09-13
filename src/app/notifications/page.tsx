@@ -11,6 +11,7 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { NetworkErrorView } from '@/components/ui';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { useAuth } from "@/hooks/useAuth";
+import { useTranslation } from "@/hooks/useTranslation";
 import { notificationService, NotificationCollection } from "@/services/notification.service";
 import { driverNavItems, adminNavItems } from "@/components/ui/BottomNav";
 import { getFoodOrderDetailPath } from '@/utils/entity-route-paths';
@@ -33,6 +34,7 @@ interface DriverNotificationData {
 export default function NotificationsPage() {
   const router = useRouter();
   const { userData, currentUser } = useAuth();
+  const { t, locale } = useTranslation();
   const [notifications, setNotifications] = useState<NotificationCollection[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isNetworkError, setIsNetworkError] = useState<boolean>(false);
@@ -148,8 +150,8 @@ export default function NotificationsPage() {
       systemNotifications.push({
         notificationId: 'sys_pending',
         userId: currentUser?.uid ?? '',
-        title: "Candidature en cours d'examen",
-        body: "Vos données sont en lecture seule jusqu'à approbation par notre équipe.",
+        title: t('notifications.sysPendingTitle'),
+        body: t('notifications.sysPendingBody'),
         type: 'sys_pending',
         read: false,
         createdAt: driverData.createdAt || new Date().toISOString(),
@@ -160,8 +162,8 @@ export default function NotificationsPage() {
         systemNotifications.push({
           notificationId: 'sys_email_verified',
           userId: currentUser?.uid ?? '',
-          title: "Adresse email validée",
-          body: "Votre adresse email est validée. Votre candidature est en cours d'étude par notre équipe. Vous recevrez une confirmation dès que votre compte sera approuvé.",
+          title: t('notifications.sysEmailVerifiedTitle'),
+          body: t('notifications.sysEmailVerifiedBody'),
           type: 'sys_email',
           read: true,
           createdAt: driverData.createdAt || new Date().toISOString(),
@@ -181,24 +183,24 @@ export default function NotificationsPage() {
       let stripeType: SystemNotification['type'] = 'sys_stripe_amber';
 
       if (stripeStatus === 'disabled') {
-        stripeLabel = 'Compte de paiement désactivé';
-        stripeSublabel = 'Contactez le support pour réactiver vos virements.';
+        stripeLabel = t('notifications.sysStripeDisabledTitle');
+        stripeSublabel = t('notifications.sysStripeDisabledBody');
         stripeType = 'sys_stripe_red';
       } else if (stripeStatus === 'restricted') {
-        stripeLabel = 'Compte de paiement restreint';
+        stripeLabel = t('notifications.sysStripeRestrictedTitle');
         stripeSublabel = requirementsCount
-          ? `${requirementsCount} information(s) à fournir pour débloquer vos virements.`
-          : 'Vos virements sont bloqués. Vérifiez votre compte Stripe.';
+          ? t('notifications.sysStripeRestrictedBody', { count: requirementsCount })
+          : t('notifications.sysStripeRestrictedFallback');
         stripeType = 'sys_stripe_red';
       } else if (stripeStatus === 'not_created') {
-        stripeLabel = 'Configuration des paiements requise';
-        stripeSublabel = 'Vous ne pourrez pas être payé tant que votre compte Stripe n\'est pas configuré.';
+        stripeLabel = t('notifications.sysStripeNotCreatedTitle');
+        stripeSublabel = t('notifications.sysStripeNotCreatedBody');
         stripeType = 'sys_stripe_amber';
       } else { // pending
-        stripeLabel = 'Configuration des paiements à terminer';
+        stripeLabel = t('notifications.sysStripePendingTitle');
         stripeSublabel = requirementsCount
-          ? `${requirementsCount} information(s) demandée(s) par Stripe.`
-          : 'Vérification Stripe en cours.';
+          ? t('notifications.sysStripePendingBody', { count: requirementsCount })
+          : t('notifications.sysStripePendingFallback');
         stripeType = 'sys_stripe_amber';
       }
 
@@ -218,8 +220,8 @@ export default function NotificationsPage() {
       systemNotifications.push({
         notificationId: 'sys_available',
         userId: currentUser?.uid ?? '',
-        title: "Disponible — En attente",
-        body: "Votre position est visible par les clients. Restez à proximité des zones animées.",
+        title: t('notifications.sysAvailableTitle'),
+        body: t('notifications.sysAvailableBody'),
         type: 'sys_available',
         read: true,
         createdAt: new Date().toISOString(),
@@ -332,7 +334,8 @@ export default function NotificationsPage() {
     const date = hasSeconds
       ? new Date((dateOrTimestamp as { seconds: number }).seconds * 1000)
       : new Date(dateOrTimestamp as string | number | Date);
-    return date.toLocaleDateString("fr-FR", {
+    const dateLocale = locale === 'en' ? 'en-US' : 'fr-FR';
+    return date.toLocaleDateString(dateLocale, {
       day: "2-digit",
       month: "short",
       hour: "2-digit",
@@ -349,18 +352,18 @@ export default function NotificationsPage() {
             <button
               onClick={() => router.back()}
               className="p-2 mr-2 rounded-full hover:bg-white/5 transition touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
-              aria-label="Retour"
+              aria-label={t('notifications.back')}
             >
               <MaterialIcon name="arrow_back" className="text-white" />
             </button>
-            <h1 className="text-xl font-bold text-white">Notifications</h1>
+            <h1 className="text-xl font-bold text-white">{t('notifications.title')}</h1>
           </div>
           {hasUnread && (
             <button
               onClick={markAllAsRead}
               className="text-sm font-medium text-primary hover:text-[#ffae33] px-3 py-2 rounded-lg touch-manipulation transition min-h-[44px] flex items-center justify-center"
             >
-              Tout marquer lu
+              {t('notifications.markAllAsRead')}
             </button>
           )}
         </div>
@@ -370,8 +373,8 @@ export default function NotificationsPage() {
       <main className="max-w-[430px] mx-auto px-4 pt-6 pb-28">
         {isNetworkError && allNotifications.length === 0 ? (
           <NetworkErrorView
-            title="Oops !"
-            message="Impossible de charger vos notifications. Veuillez vérifier votre connexion internet et réessayer."
+            title={t('notifications.networkErrorTitle')}
+            message={t('notifications.networkErrorMessage')}
             onRetry={handleRetry}
           />
         ) : isLoading ? (
@@ -425,9 +428,9 @@ export default function NotificationsPage() {
             <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
               <MaterialIcon name="notifications_off" className="text-slate-500 text-[40px]" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Aucune notification</h2>
+            <h2 className="text-xl font-bold text-white mb-2">{t('notifications.noNotifications')}</h2>
             <p className="text-slate-500">
-              Vous n&apos;avez pas de nouvelles notifications pour le moment.
+              {t('notifications.noNotificationsDesc')}
             </p>
           </GlassCard>
         )}

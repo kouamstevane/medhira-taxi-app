@@ -5,6 +5,8 @@ import { addDoc, collection, serverTimestamp, doc, getDoc, query, where, getDocs
 import { z } from 'zod'
 import { auth, db } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
+import { useTranslation } from '@/hooks/useTranslation'
+import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 const ratingSchema = z.object({
   score: z.number().int().min(1).max(5),
@@ -15,6 +17,7 @@ export default function RateDriverPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t } = useTranslation()
   const rawOrderId = searchParams.get('orderId') || params.orderId
   const orderId = typeof rawOrderId === 'string' ? rawOrderId.trim() : ''
   const [score, setScore] = useState(0)
@@ -28,7 +31,7 @@ export default function RateDriverPage() {
 
   useEffect(() => {
     if (!orderId) {
-      setFetchError('Identifiant de commande invalide.')
+      setFetchError(t('client.orderNotFoundContactSupport'))
       setLoadingOrderId(false)
       return
     }
@@ -42,7 +45,7 @@ export default function RateDriverPage() {
         if (cancelled) return
 
         if (!deliveryOrderSnap.exists()) {
-          setFetchError('Commande introuvable. Vérifiez le lien ou contactez le support.')
+          setFetchError(t('client.orderNotFoundContactSupport'))
           return
         }
 
@@ -50,11 +53,11 @@ export default function RateDriverPage() {
         if (data?.driverId) {
           setDriverId(data.driverId)
         } else {
-          setFetchError('Livreur non identifié pour cette commande.')
+          setFetchError(t('client.driverNotIdentifiedForOrder'))
         }
       } catch {
         if (cancelled) return
-        setFetchError('Erreur de chargement. Veuillez réessayer.')
+        setFetchError(t('common.errorOccurred'))
       } finally {
         if (!cancelled) setLoadingOrderId(false)
       }
@@ -62,7 +65,7 @@ export default function RateDriverPage() {
 
     fetchDriverId()
     return () => { cancelled = true }
-  }, [orderId])
+  }, [orderId, t])
 
   const handleSubmit = async () => {
     if (!auth.currentUser || !driverId) return
@@ -72,13 +75,12 @@ export default function RateDriverPage() {
       comment: comment.trim() || undefined,
     })
     if (!validation.success) {
-      setFetchError('Données invalides. Veuillez corriger votre évaluation.')
+      setFetchError(t('taxi.invalidRatingData'))
       return
     }
 
     setSubmitting(true)
     try {
-      // Vérifier qu'aucun rating n'existe déjà pour ce orderId + clientId
       const existingQuery = query(
         collection(db, 'driver_ratings'),
         where('orderId', '==', orderId),
@@ -87,7 +89,7 @@ export default function RateDriverPage() {
       );
       const existingSnap = await getDocs(existingQuery);
       if (!existingSnap.empty) {
-        setFetchError('Vous avez déjà évalué cette commande.');
+        setFetchError(t('client.alreadyRatedOrder'));
         setSubmitted(true);
         setTimeout(() => router.push('/food/orders'), 2000);
         return;
@@ -105,7 +107,7 @@ export default function RateDriverPage() {
       setSubmitted(true)
       setTimeout(() => router.push('/food/orders'), 2000)
     } catch {
-      setFetchError('Erreur lors de l\'envoi. Veuillez réessayer.')
+      setFetchError(t('taxi.errorSubmittingRating'))
     } finally {
       setSubmitting(false)
     }
@@ -138,9 +140,9 @@ export default function RateDriverPage() {
           <p className="text-slate-300">{fetchError}</p>
           <button
             onClick={() => router.push('/food/orders')}
-            className="text-primary text-sm underline"
+            className="text-primary text-sm underline min-h-[44px]"
           >
-            Retour à mes commandes
+            {t('client.backToHome')}
           </button>
         </div>
       </div>
@@ -152,7 +154,7 @@ export default function RateDriverPage() {
       <div className="min-h-screen bg-background flex items-center justify-center text-white">
         <div className="text-center space-y-4">
           <MaterialIcon name="check_circle" className="text-green-400 text-[64px]" />
-          <p className="text-xl font-bold">Merci pour votre évaluation !</p>
+          <p className="text-xl font-bold">{t('taxi.thankYouForRating')}</p>
         </div>
       </div>
     )
@@ -160,11 +162,14 @@ export default function RateDriverPage() {
 
   return (
     <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-4">
-      <div className="glass-card rounded-2xl border border-white/10 p-6 w-full max-w-sm space-y-6">
+      <div className="glass-card rounded-2xl border border-white/10 p-6 w-full max-w-sm space-y-6 relative">
+        <div className="flex justify-end">
+          <LanguageSelector variant="pill" />
+        </div>
         <div className="text-center">
           <MaterialIcon name="delivery_dining" className="text-primary text-[48px]" />
-          <h1 className="text-xl font-bold mt-2">Notez votre livreur</h1>
-          <p className="text-slate-400 text-sm mt-1">Votre avis aide à améliorer le service</p>
+          <h1 className="text-xl font-bold mt-2">{t('client.rateDriverTitle')}</h1>
+          <p className="text-slate-400 text-sm mt-1">{t('client.rateDriverDesc')}</p>
         </div>
 
         <div className="flex justify-center gap-2">
@@ -173,6 +178,7 @@ export default function RateDriverPage() {
               onClick={() => setScore(s)}
               onMouseEnter={() => setHovered(s)}
               onMouseLeave={() => setHovered(0)}
+              aria-label={`Score ${s}`}
               className="min-w-[44px] min-h-[44px] flex items-center justify-center">
               <MaterialIcon name="star"
                 className={`text-[40px] transition-colors ${s <= (hovered || score) ? 'text-amber-400' : 'text-slate-600'}`} />
@@ -183,7 +189,7 @@ export default function RateDriverPage() {
         <textarea
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="Commentaire optionnel…"
+          placeholder={t('taxi.optionalCommentPlaceholder')}
           maxLength={500}
           className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm resize-none"
           rows={3}
@@ -196,13 +202,16 @@ export default function RateDriverPage() {
         <button
           onClick={handleSubmit}
           disabled={score === 0 || submitting || !driverId}
-          className="w-full h-12 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
+          className="w-full h-12 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40 min-h-[44px]"
         >
-          {submitting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Envoyer'}
+          {submitting ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : t('taxi.send')}
         </button>
 
-        <button onClick={() => router.push('/food/orders')} className="w-full text-center text-slate-500 text-sm">
-          Passer
+        <button
+          onClick={() => router.push('/food/orders')}
+          className="w-full text-center text-slate-500 text-sm min-h-[44px] flex items-center justify-center"
+        >
+          {t('taxi.skip')}
         </button>
       </div>
     </div>

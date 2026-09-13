@@ -8,10 +8,13 @@ import { collection, query, where, orderBy, limit, getDocs } from 'firebase/fire
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import { formatCurrencyWithCode, formatFirestoreDate } from '@/utils/format';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { type TripRecord } from '../_shared';
 
 export default function DriverHistoriquePage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [trips, setTrips] = useState<TripRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,19 +41,31 @@ export default function DriverHistoriquePage() {
     return () => unsubscribe();
   }, [router]);
 
-  const statusLabel: Record<string, { label: string; color: string }> = {
-    completed: { label: 'Terminée', color: 'text-green-400 bg-green-400/10' },
-    cancelled: { label: 'Annulée', color: 'text-red-400 bg-red-400/10' },
-    accepted: { label: 'En cours', color: 'text-blue-400 bg-blue-400/10' },
+  const getStatusConfig = (status: string): { label: string; color: string } => {
+    switch (status) {
+      case 'completed':
+        return { label: t('driver.statusCompleted'), color: 'text-green-400 bg-green-400/10' };
+      case 'cancelled':
+        return { label: t('driver.statusCancelled'), color: 'text-red-400 bg-red-400/10' };
+      case 'accepted':
+        return { label: t('driver.statusInProgress'), color: 'text-blue-400 bg-blue-400/10' };
+      default:
+        return { label: status, color: 'text-slate-400 bg-white/5' };
+    }
   };
 
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-2 rounded-full hover:bg-white/5 transition">
+        <button
+          onClick={() => router.back()}
+          aria-label={t('common.back')}
+          className="p-2 rounded-full hover:bg-white/5 transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+        >
           <MaterialIcon name="arrow_back" size="md" className="text-white" />
         </button>
-        <h1 className="text-xl font-bold text-white flex-1">Historique des courses</h1>
+        <h1 className="text-xl font-bold text-white flex-1">{t('driver.tripsHistory')}</h1>
+        <LanguageSelector variant="pill" />
       </header>
 
       <main className="max-w-[430px] mx-auto px-4 py-6 space-y-3">
@@ -63,17 +78,19 @@ export default function DriverHistoriquePage() {
             <div className="bg-primary/10 p-5 rounded-full w-fit mx-auto mb-4">
               <MaterialIcon name="history" size="xl" className="text-primary" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">Aucune course</h3>
-            <p className="text-slate-400 text-sm">Votre historique apparaîtra ici.</p>
+            <h3 className="text-lg font-bold text-white mb-2">{t('driver.noTrips')}</h3>
+            <p className="text-slate-400 text-sm">{t('driver.noTripsDesc')}</p>
           </div>
         ) : (
           trips.map(trip => {
-            const s = statusLabel[trip.status] ?? { label: trip.status, color: 'text-slate-400 bg-white/5' };
+            const s = getStatusConfig(trip.status);
             return (
               <div key={trip.id} className="glass-card p-4 rounded-2xl border border-white/5">
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-500">Course #{trip.id.slice(-4)}</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-500">
+                      {t('driver.tripNumber', { id: trip.id.slice(-4) })}
+                    </span>
                     <p className="text-xs text-slate-500 mt-0.5">{formatFirestoreDate(trip.createdAt)}</p>
                   </div>
                   <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${s.color}`}>{s.label}</span>

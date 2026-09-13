@@ -8,6 +8,7 @@
 
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface FareSummaryProps {
   distance: number | null;
@@ -24,6 +25,8 @@ export const FareSummary = ({
   loading = false,
   currency = CURRENCY_CODE,
 }: FareSummaryProps) => {
+  const { t } = useTranslation();
+
   if (loading) {
     return (
       <div className="bg-[#1A1A1A] p-4 rounded-lg border border-white/[0.06]">
@@ -39,7 +42,7 @@ export const FareSummary = ({
   if (distance === null || duration === null || price === null) {
     return (
       <div className="bg-[#1A1A1A] p-4 rounded-lg border border-white/[0.06] text-center text-slate-300">
-        <p>Sélectionnez un départ et une destination pour voir l'estimation</p>
+        <p>{t('taxi.selectPickupDropoffForEstimate')}</p>
       </div>
     );
   }
@@ -47,30 +50,30 @@ export const FareSummary = ({
   return (
     <div className="glass-card p-4 sm:p-5 rounded-2xl">
       <h3 className="text-sm font-semibold text-[#f29200] mb-3 uppercase tracking-wide">
-        Estimation de la course
+        {t('taxi.fareEstimation')}
       </h3>
 
       <div className="space-y-2 mb-3">
         <div className="flex justify-between items-center">
-          <span className="text-sm text-slate-300">Distance</span>
+          <span className="text-sm text-slate-300">{t('common.distance')}</span>
           <span className="text-sm font-semibold text-white">{distance.toFixed(1)} km</span>
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-sm text-slate-300">Durée estimée</span>
+          <span className="text-sm text-slate-300">{t('taxi.estimatedDuration')}</span>
           <span className="text-sm font-semibold text-white">{duration} min</span>
         </div>
       </div>
 
       <div className="border-t border-white/[0.06] pt-3 mt-3">
         <div className="flex justify-between items-center">
-          <span className="text-base font-semibold text-white">Prix estimé</span>
+          <span className="text-base font-semibold text-white">{t('taxi.estimatedFare')}</span>
           <span className="text-2xl font-bold text-[#f29200]">{formatCurrencyWithCode(price)}</span>
         </div>
       </div>
 
       <p className="text-xs text-slate-400 mt-3">
-        * Le prix final peut varier selon le trafic et les conditions de route
+        {t('taxi.trafficConditionsDisclaimer')}
       </p>
     </div>
   );

@@ -15,6 +15,8 @@ import Image from 'next/image';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { UserData } from '@/types';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface HeaderProps {
   userData: UserData | null;
@@ -31,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   onNotificationClick,
 }) => {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const handleLogout = async () => {
     try {
@@ -59,6 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
       </h1>
 
       <div className="flex items-center space-x-2 sm:space-x-4">
+        <LanguageSelector variant="pill" />
         {/* Notifications */}
         {onNotificationClick && (
           <button
@@ -132,13 +136,13 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => router.push('/profil')}
                 className="block w-full text-left px-4 py-2 text-sm text-white hover:bg-white/5 transition"
               >
-                👤 Mon profil
+                👤 {t('profile.title')}
               </button>
               <button
                 onClick={handleLogout}
                 className="block w-full text-left px-4 py-2 text-sm text-[#EF4444] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition"
               >
-                🔐 Déconnexion
+                🔐 {t('profile.logout')}
               </button>
             </div>
           </div>

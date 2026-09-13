@@ -1,15 +1,12 @@
-/**
- * Page 404 - Not Found
- * 
- * Affichée automatiquement par Next.js lorsqu'une route n'existe pas.
- * 
- * @page
- */
+'use client';
 
 import Link from 'next/link';
 import { Button } from '@/components/ui';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function NotFound() {
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#101010] via-[#1a1a1a] to-[#2a2a2a] flex items-center justify-center px-4">
       <div className="max-w-lg w-full text-center">
@@ -37,12 +34,12 @@ export default function NotFound() {
 
         {/* Titre */}
         <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-          Page introuvable
+          {t('errors.pageNotFound')}
         </h2>
 
         {/* Description */}
         <p className="text-gray-300 text-lg mb-8">
-          Oups ! La page que vous recherchez semble avoir pris un taxi vers une destination inconnue.
+          {t('errors.pageNotFoundDesc')}
         </p>
 
         {/* Actions */}
@@ -62,7 +59,7 @@ export default function NotFound() {
                   d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
                 />
               </svg>
-              Retour à l'accueil
+              {t('errors.backToHome')}
             </Button>
           </Link>
 
@@ -81,23 +78,23 @@ export default function NotFound() {
                   d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
                 />
               </svg>
-              Dashboard
+              {t('common.home')}
             </Button>
           </Link>
         </div>
 
         {/* Liens utiles */}
         <div className="mt-12 pt-8 border-t border-gray-700">
-          <p className="text-gray-400 text-sm mb-3">Liens utiles :</p>
+          <p className="text-gray-400 text-sm mb-3">Medjira</p>
           <div className="flex flex-wrap justify-center gap-4 text-sm">
             <Link href="/taxi" className="text-[#f29200] hover:underline">
-              Commander un taxi
+              {t('taxi.title')}
             </Link>
             <Link href="/wallet" className="text-[#f29200] hover:underline">
-              Mon portefeuille
+              {t('wallet.title')}
             </Link>
             <Link href="/login" className="text-[#f29200] hover:underline">
-              Connexion
+              {t('auth.login')}
             </Link>
           </div>
         </div>

@@ -3,13 +3,12 @@
 import Link from 'next/link';
 import type { StripeConnectStatus } from '@/services/roles.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type Props = { status: StripeConnectStatus };
 
-const RESTAURANT_VISIBILITY_MESSAGE =
-  "Votre restaurant ne sera pas affiché aux clients tant que votre compte de paiement Stripe n'est pas actif.";
-
 export function StripeConnectBanner({ status }: Props) {
+  const { t } = useTranslation('restaurant');
   if (status === 'active') return null;
 
   if (status === 'not_started') {
@@ -17,11 +16,11 @@ export function StripeConnectBanner({ status }: Props) {
       <div role="status" className="rounded-lg bg-orange-500/15 border border-orange-500/40 p-4 flex items-center gap-3">
         <MaterialIcon name="payments" className="text-orange-400" />
         <div className="flex-1">
-          <p className="text-white font-semibold">Configurez vos paiements</p>
-          <p className="text-slate-300 text-sm">Pour recevoir vos premières commandes, finalisez votre compte Stripe.</p>
-          <p className="text-slate-300 text-sm mt-1">{RESTAURANT_VISIBILITY_MESSAGE}</p>
+          <p className="text-white font-semibold">{t('stripeConnectSetupTitle')}</p>
+          <p className="text-slate-300 text-sm">{t('stripeConnectSetupDesc')}</p>
+          <p className="text-slate-300 text-sm mt-1">{t('stripeConnectVisibilityMessage')}</p>
         </div>
-        <Link href="/restaurant/onboarding/payments" className="bg-orange-500 text-white rounded-md px-4 py-2 text-sm font-semibold">Configurer</Link>
+        <Link href="/restaurant/onboarding/payments" className="min-h-[44px] bg-orange-500 text-white rounded-md px-4 py-2 text-sm font-semibold inline-flex items-center justify-center">{t('stripeConnectConfigure')}</Link>
       </div>
     );
   }
@@ -31,11 +30,11 @@ export function StripeConnectBanner({ status }: Props) {
       <div role="status" className="rounded-lg bg-blue-500/15 border border-blue-500/40 p-4 flex items-center gap-3">
         <MaterialIcon name="hourglass_top" className="text-blue-400" />
         <div className="flex-1">
-          <p className="text-white font-semibold">Onboarding Stripe en cours</p>
-          <p className="text-slate-300 text-sm">Reprenez là où vous vous êtes arrêté pour activer les paiements.</p>
-          <p className="text-slate-300 text-sm mt-1">{RESTAURANT_VISIBILITY_MESSAGE}</p>
+          <p className="text-white font-semibold">{t('stripeConnectInProgressTitle')}</p>
+          <p className="text-slate-300 text-sm">{t('stripeConnectInProgressDesc')}</p>
+          <p className="text-slate-300 text-sm mt-1">{t('stripeConnectVisibilityMessage')}</p>
         </div>
-        <Link href="/restaurant/onboarding/payments" className="bg-blue-500 text-white rounded-md px-4 py-2 text-sm font-semibold">Reprendre</Link>
+        <Link href="/restaurant/onboarding/payments" className="min-h-[44px] bg-blue-500 text-white rounded-md px-4 py-2 text-sm font-semibold inline-flex items-center justify-center">{t('stripeConnectResume')}</Link>
       </div>
     );
   }
@@ -44,11 +43,11 @@ export function StripeConnectBanner({ status }: Props) {
     <div role="alert" className="rounded-lg bg-red-500/15 border border-red-500/40 p-4 flex items-center gap-3">
       <MaterialIcon name="error" className="text-red-400" />
       <div className="flex-1">
-        <p className="text-white font-semibold">Action requise sur votre compte Stripe</p>
-        <p className="text-slate-300 text-sm">Stripe demande des informations supplémentaires pour réactiver les paiements.</p>
-        <p className="text-slate-300 text-sm mt-1">{RESTAURANT_VISIBILITY_MESSAGE}</p>
+        <p className="text-white font-semibold">{t('stripeConnectActionRequiredTitle')}</p>
+        <p className="text-slate-300 text-sm">{t('stripeConnectActionRequiredDesc')}</p>
+        <p className="text-slate-300 text-sm mt-1">{t('stripeConnectVisibilityMessage')}</p>
       </div>
-      <Link href="/restaurant/onboarding/payments?mode=update" className="bg-red-500 text-white rounded-md px-4 py-2 text-sm font-semibold">Réparer</Link>
+      <Link href="/restaurant/onboarding/payments?mode=update" className="min-h-[44px] bg-red-500 text-white rounded-md px-4 py-2 text-sm font-semibold inline-flex items-center justify-center">{t('stripeConnectFix')}</Link>
     </div>
   );
 }

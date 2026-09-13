@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
+import { useTranslation } from '@/hooks/useTranslation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import { getUserFacingCallableError } from '@/utils/callable-error';
@@ -25,25 +26,25 @@ import type {
   PersonalDriverTrip,
 } from '@/types/personal-driver';
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending_payment: { label: 'Paiement en attente', color: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
-  activating: { label: 'Activation en cours', color: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
-  activation_failed: { label: 'Activation à relancer', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
-  payment_failed: { label: 'Paiement échoué', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
-  active: { label: 'Abonnement Actif', color: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' },
-  cancelled: { label: 'Annulé', color: 'bg-gray-500/15 text-gray-400 border border-gray-500/30' },
-  expired: { label: 'Expiré', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
+const STATUS_CONFIG: Record<string, { labelKey: 'personalDriver.statusPendingPayment' | 'personalDriver.statusActivating' | 'personalDriver.statusActivationFailed' | 'personalDriver.statusPaymentFailed' | 'personalDriver.statusActive' | 'personalDriver.statusCancelled' | 'personalDriver.statusExpired'; color: string }> = {
+  pending_payment: { labelKey: 'personalDriver.statusPendingPayment', color: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
+  activating: { labelKey: 'personalDriver.statusActivating', color: 'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
+  activation_failed: { labelKey: 'personalDriver.statusActivationFailed', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
+  payment_failed: { labelKey: 'personalDriver.statusPaymentFailed', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
+  active: { labelKey: 'personalDriver.statusActive', color: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' },
+  cancelled: { labelKey: 'personalDriver.statusCancelled', color: 'bg-gray-500/15 text-gray-400 border border-gray-500/30' },
+  expired: { labelKey: 'personalDriver.statusExpired', color: 'bg-red-500/15 text-red-400 border border-red-500/30' },
 };
 
-const TRIP_STATUS_BADGES: Record<string, { label: string; color: string }> = {
-  scheduled: { label: 'Planifié', color: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' },
-  driver_assigned: { label: 'Chauffeur attribué', color: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' },
-  driver_en_route: { label: 'Chauffeur en route', color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' },
-  driver_arrived: { label: 'Chauffeur arrivé', color: 'bg-purple-500/10 text-purple-400 border border-purple-500/20' },
-  passenger_picked_up: { label: 'Passager à bord', color: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' },
-  in_progress: { label: 'En cours', color: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
-  completed: { label: 'Terminé', color: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' },
-  cancelled: { label: 'Annulé (Km perdus)', color: 'bg-red-500/10 text-red-400 border border-red-500/20' },
+const TRIP_STATUS_CONFIG: Record<string, { labelKey: 'personalDriver.tripScheduled' | 'personalDriver.tripDriverAssigned' | 'personalDriver.tripDriverEnRoute' | 'personalDriver.tripDriverArrived' | 'personalDriver.tripPassengerPickedUp' | 'personalDriver.tripInProgress' | 'personalDriver.tripCompleted' | 'personalDriver.tripCancelledKmLost'; color: string }> = {
+  scheduled: { labelKey: 'personalDriver.tripScheduled', color: 'bg-blue-500/10 text-blue-400 border border-blue-500/20' },
+  driver_assigned: { labelKey: 'personalDriver.tripDriverAssigned', color: 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' },
+  driver_en_route: { labelKey: 'personalDriver.tripDriverEnRoute', color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20' },
+  driver_arrived: { labelKey: 'personalDriver.tripDriverArrived', color: 'bg-purple-500/10 text-purple-400 border border-purple-500/20' },
+  passenger_picked_up: { labelKey: 'personalDriver.tripPassengerPickedUp', color: 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' },
+  in_progress: { labelKey: 'personalDriver.tripInProgress', color: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' },
+  completed: { labelKey: 'personalDriver.tripCompleted', color: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' },
+  cancelled: { labelKey: 'personalDriver.tripCancelledKmLost', color: 'bg-red-500/10 text-red-400 border border-red-500/20' },
 };
 
 const StripePaymentElement = dynamic(
@@ -83,6 +84,7 @@ function isSubscriptionUsable(subscription: PersonalDriverSubscription): boolean
 export function PersonalDriverClientDashboard() {
   const { currentUser } = useAuth();
   const { plans, error: plansError, reload: reloadPlans } = usePersonalDriverPlans();
+  const { t, locale } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<PersonalDriverSubscription | null>(null);
   const [pendingRenewal, setPendingRenewal] = useState<PersonalDriverSubscription | null>(null);
@@ -322,7 +324,7 @@ export function PersonalDriverClientDashboard() {
     return (
       <div className="flex min-h-[400px] flex-col items-center justify-center gap-3 p-8 text-slate-400">
         <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <p className="text-sm font-medium">Chargement de votre espace Personal Driver...</p>
+        <p className="text-sm font-medium">{t('personalDriver.loadingDashboard')}</p>
       </div>
     );
   }
@@ -334,22 +336,22 @@ export function PersonalDriverClientDashboard() {
           <MaterialIcon name="directions_car" size="xl" className="text-primary" />
         </div>
         <h2 className="mb-3 text-2xl font-bold text-white">
-          Aucun abonnement Personal Driver actif
+          {t('personalDriver.noActiveSubscriptionTitle')}
         </h2>
         <p className="mb-6 text-sm leading-relaxed text-slate-400">
-          Planifiez vos déplacements récurrents du mois et profitez d&apos;un chauffeur dédié au meilleur tarif.
+          {t('personalDriver.noActiveSubscriptionDesc')}
         </p>
         {reloadError && (
           <div role="alert" className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
             {reloadError}
-            <button type="button" onClick={() => void reloadData()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">Réessayer</button>
+            <button type="button" onClick={() => void reloadData()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">{t('personalDriver.retry')}</button>
           </div>
         )}
         <Link
           href="/personal-driver"
           className="inline-flex min-h-12 items-center justify-center rounded-xl bg-primary px-6 text-sm font-bold text-white transition hover:bg-primary/90 active:scale-95"
         >
-          Configurer mon transport mensuel
+          {t('personalDriver.configureMonthlyTransport')}
         </Link>
       </div>
     );
@@ -372,21 +374,22 @@ export function PersonalDriverClientDashboard() {
         ? 'active'
         : 'activating'
     : subscription.status;
-  const statusInfo = STATUS_LABELS[displayedStatus] || STATUS_LABELS.pending_payment;
+  const statusCfg = STATUS_CONFIG[displayedStatus] || STATUS_CONFIG.pending_payment;
+  const statusLabel = t(statusCfg.labelKey);
   const includedSpecialTrips = planInfo.includedSpecialTrips;
   const specialTripsUsed = subscription.specialTripsUsed ?? 0;
   const specialTripsRemaining = Math.max(0, includedSpecialTrips - specialTripsUsed);
   const subscriptionUsable = isSubscriptionUsable(subscription);
-  const distanceFormatter = new Intl.NumberFormat('fr-CA', { maximumFractionDigits: 1 });
+  const distanceFormatter = new Intl.NumberFormat(locale === 'en' ? 'en-CA' : 'fr-CA', { maximumFractionDigits: 1 });
   const paymentStatusLabel = subscription.paymentStatus === 'succeeded'
-    ? 'Paiement confirmé'
+    ? t('personalDriver.paymentConfirmed')
     : subscription.paymentStatus === 'requires_action'
-      ? 'Action de paiement requise'
+      ? t('personalDriver.paymentActionRequired')
       : subscription.paymentStatus === 'failed'
-        ? 'Paiement échoué'
+        ? t('personalDriver.paymentFailed')
         : subscription.paymentStatus === 'cancelled'
-          ? 'Paiement annulé'
-          : 'Paiement non confirmé';
+          ? t('personalDriver.paymentCancelled')
+          : t('personalDriver.paymentUnconfirmed');
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12 text-slate-100">
@@ -394,42 +397,42 @@ export function PersonalDriverClientDashboard() {
       <div className="rounded-2xl border border-white/10 bg-card p-6 shadow-xl backdrop-blur-xl">
         {plansError && (
           <div role="alert" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
-            Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
+            {t('personalDriver.fallbackNotice')}
             <button type="button" onClick={() => void reloadPlans()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">
-              Réessayer
+              {t('personalDriver.retry')}
             </button>
           </div>
         )}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-primary">
-              MON ACCÈS PERSONAL DRIVER
+              {t('personalDriver.myAccessBadge')}
             </span>
             <h1 className="mt-1 text-2xl font-black text-white">
-              Abonnement Forfait {planInfo.name}
+              {t('personalDriver.subscriptionPlanTitle', { name: planInfo.name })}
             </h1>
           </div>
-          <span className={`rounded-full px-4 py-1.5 text-xs font-bold ${statusInfo.color}`}>
-            {statusInfo.label}
+          <span className={`rounded-full px-4 py-1.5 text-xs font-bold ${statusCfg.color}`}>
+            {statusLabel}
           </span>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="rounded-xl border border-white/5 bg-white/5 p-3.5">
-            <span className="block text-xs font-medium text-slate-400">Forfait choisi</span>
+            <span className="block text-xs font-medium text-slate-400">{t('personalDriver.chosenPlan')}</span>
             <span className="mt-1 block text-base font-bold text-white">{planInfo.name}</span>
           </div>
           <div className="rounded-xl border border-white/5 bg-white/5 p-3.5">
-            <span className="block text-xs font-medium text-slate-400">Kilométrage planifié</span>
+            <span className="block text-xs font-medium text-slate-400">{t('personalDriver.plannedDistance')}</span>
             <span className="mt-1 block text-base font-bold text-white">{subscription.monthlyDistanceKm} km</span>
           </div>
           <div className="rounded-xl border border-white/5 bg-white/5 p-3.5">
-            <span className="block text-xs font-medium text-slate-400">Attente gratuite</span>
-            <span className="mt-1 block text-base font-bold text-white">{planInfo.includedRegularWaitMinutes} min / trajet</span>
+            <span className="block text-xs font-medium text-slate-400">{t('personalDriver.freeWait')}</span>
+            <span className="mt-1 block text-base font-bold text-white">{t('personalDriver.freeWaitPerTrip', { minutes: planInfo.includedRegularWaitMinutes })}</span>
           </div>
           <div className="rounded-xl border border-white/5 bg-white/5 p-3.5">
-            <span className="block text-xs font-medium text-slate-400">Missions prévues</span>
-            <span className="mt-1 block text-base font-bold text-white">{trips.length} trajets</span>
+            <span className="block text-xs font-medium text-slate-400">{t('personalDriver.plannedMissions')}</span>
+            <span className="mt-1 block text-base font-bold text-white">{t('personalDriver.tripsCount', { count: trips.length })}</span>
           </div>
         </div>
 
@@ -437,12 +440,12 @@ export function PersonalDriverClientDashboard() {
         <div className="mt-5 rounded-xl border border-white/5 bg-white/5 p-4 space-y-2 text-xs sm:text-sm">
           <div className="flex items-start gap-2">
             <MaterialIcon name="my_location" size="sm" className="mt-0.5 text-emerald-400 shrink-0" />
-            <span className="text-slate-400 font-medium shrink-0 w-24">Départ habituel:</span>
+            <span className="text-slate-400 font-medium shrink-0 w-24">{t('personalDriver.usualPickup')}</span>
             <span className="font-semibold text-white">{subscription.pickupAddress}</span>
           </div>
           <div className="flex items-start gap-2">
             <MaterialIcon name="location_on" size="sm" className="mt-0.5 text-primary shrink-0" />
-            <span className="text-slate-400 font-medium shrink-0 w-24">Destination:</span>
+            <span className="text-slate-400 font-medium shrink-0 w-24">{t('personalDriver.destination')}</span>
             <span className="font-semibold text-white">{subscription.destinationAddress}</span>
           </div>
         </div>
@@ -451,8 +454,8 @@ export function PersonalDriverClientDashboard() {
       <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5 shadow-xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold text-white">Renouveler votre forfait</h2>
-            <p className="mt-1 text-xs text-slate-400">Un nouveau paiement crée une nouvelle période de 30 jours.</p>
+            <h2 className="text-sm font-bold text-white">{t('personalDriver.renewPlanTitle')}</h2>
+            <p className="mt-1 text-xs text-slate-400">{t('personalDriver.renewPlanDesc')}</p>
           </div>
           <button
             type="button"
@@ -460,13 +463,13 @@ export function PersonalDriverClientDashboard() {
             disabled={renewalLoading || !!renewalPayment || !!pendingRenewal}
             className="min-h-11 rounded-lg bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50"
           >
-            {renewalLoading ? 'Préparation...' : 'Renouveler'}
+            {renewalLoading ? t('personalDriver.preparing') : t('personalDriver.renew')}
           </button>
         </div>
         <div className="mt-4 space-y-1 text-xs text-slate-400">
-          <p>Période : {subscription.periodStartDate ?? 'inconnue'} → {subscription.periodEndDateExclusive ?? 'inconnue'}</p>
+          <p>{t('personalDriver.periodLabel', { start: subscription.periodStartDate ?? t('personalDriver.unknownPeriod'), end: subscription.periodEndDateExclusive ?? t('personalDriver.unknownPeriod') })}</p>
           <p>{paymentStatusLabel}</p>
-          {!subscriptionUsable && <p className="text-amber-300">Les trajets spéciaux sont indisponibles tant que le forfait n’est pas payé et actif.</p>}
+          {!subscriptionUsable && <p className="text-amber-300">{t('personalDriver.specialTripsUnavailableNotice')}</p>}
         </div>
         {renewalError && (
           <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300" role="alert">
@@ -476,26 +479,26 @@ export function PersonalDriverClientDashboard() {
         {renewalActivationProgress === 'preparing'
           && renewalActivationSubscriptionId !== subscription.id && (
           <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-semibold text-emerald-300" role="status">
-            Paiement confirmé — préparation de vos trajets…
+            {t('personalDriver.paymentConfirmedPreparingTrips')}
           </p>
         )}
         {renewalActivationProgress === 'timeout' && (
           <div className="mt-4 space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="alert">
-            <p>La préparation prend plus de temps que prévu. Votre paiement reste confirmé.</p>
+            <p>{t('personalDriver.preparationTakesLongerSimple')}</p>
             <button
               type="button"
               onClick={() => renewalActivationSubscriptionId && beginRenewalActivationPolling(renewalActivationSubscriptionId)}
               className="min-h-11 rounded-lg border border-amber-400/40 px-4 font-bold text-amber-100"
             >
-              Réessayer la vérification
+              {t('personalDriver.retryVerification')}
             </button>
           </div>
         )}
         {renewalPayment && (
           <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
-            <h3 className="mb-3 text-sm font-bold text-white">Paiement du renouvellement</h3>
+            <h3 className="mb-3 text-sm font-bold text-white">{t('personalDriver.renewalPaymentTitle')}</h3>
             <div className="mb-3 flex items-center justify-between gap-3 text-xs text-slate-400">
-              <span>Taxes non calculées</span>
+              <span>{t('personalDriver.taxesNotCalculated')}</span>
               <strong className="text-white">
                 {formatPersonalDriverCurrency(renewalPayment.quote.totalAmount, renewalPayment.quote.currency)}{' '}
                 {renewalPayment.quote.currency.toUpperCase()}
@@ -511,7 +514,7 @@ export function PersonalDriverClientDashboard() {
                 beginRenewalActivationPolling(subscriptionId);
               }}
               onError={setRenewalError}
-              submitLabel={`Payer ${formatPersonalDriverCurrency(renewalPayment.quote.totalAmount, renewalPayment.quote.currency)}`}
+              submitLabel={t('personalDriver.payAmount', { amount: formatPersonalDriverCurrency(renewalPayment.quote.totalAmount, renewalPayment.quote.currency) })}
             />
           </div>
         )}
@@ -522,15 +525,15 @@ export function PersonalDriverClientDashboard() {
           className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-300"
           role="status"
         >
-          Distance officielle : {distanceFormatter.format(specialTripResult.officialDistanceKm)} km.
-          {' '}Trajets spéciaux restants : {specialTripResult.specialTripsRemaining}.
-          {' '}Kilométrage restant : {distanceFormatter.format(specialTripResult.monthlyDistanceKmRemaining)} km.
+          {t('personalDriver.officialDistance', { distance: distanceFormatter.format(specialTripResult.officialDistanceKm) })}{' '}
+          {t('personalDriver.specialTripsRemainingCount', { count: specialTripResult.specialTripsRemaining })}{' '}
+          {t('personalDriver.remainingMileageCount', { distance: distanceFormatter.format(specialTripResult.monthlyDistanceKmRemaining) })}
         </p>
       )}
       {(actionError || reloadError) && (
         <div role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-xs font-semibold text-red-200">
           {actionError || reloadError}
-          <button type="button" onClick={() => void reloadData()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">Réessayer</button>
+          <button type="button" onClick={() => void reloadData()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">{t('personalDriver.retry')}</button>
         </div>
       )}
 
@@ -538,7 +541,7 @@ export function PersonalDriverClientDashboard() {
       <div className="rounded-2xl border border-white/10 bg-card p-6 shadow-xl">
         <h2 className="mb-4 text-base font-bold text-white flex items-center gap-2">
           <MaterialIcon name="star" size="md" className="text-amber-400" />
-          Vos avantages inclus ({planInfo.name})
+          {t('personalDriver.includedBenefitsTitle', { name: planInfo.name })}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {planInfo.benefits.map((benefit, i) => (
@@ -556,10 +559,10 @@ export function PersonalDriverClientDashboard() {
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               <MaterialIcon name="event_available" size="md" className="text-primary" />
-              Trajets Spéciaux Inclus ({includedSpecialTrips} par période)
+              {t('personalDriver.includedSpecialTripsTitle', { count: includedSpecialTrips })}
             </h2>
             <p className="mt-1 text-xs text-slate-400">
-              Déplacements occasionnels (médecin, aéroport, événements). Les kilomètres sont déduits du forfait.
+              {t('personalDriver.includedSpecialTripsDesc')}
             </p>
           </div>
           {includedSpecialTrips > 0 ? (
@@ -570,22 +573,22 @@ export function PersonalDriverClientDashboard() {
               className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-white transition hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               <MaterialIcon name="add" size="sm" />
-              Demander un trajet spécial ({specialTripsRemaining} restant{specialTripsRemaining > 1 ? 's' : ''})
+              {t('personalDriver.requestSpecialTripWithRemaining', { remaining: specialTripsRemaining, plural: specialTripsRemaining > 1 ? 's' : '' })}
             </button>
           ) : (
             <Link
               href="/personal-driver"
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-primary/50 bg-primary/10 px-4 text-xs font-bold text-primary transition hover:bg-primary/20"
             >
-              Passer à Classic pour 2 trajets spéciaux
+              {t('personalDriver.upgradeToClassic')}
             </Link>
           )}
         </div>
 
         <div className="rounded-xl border border-white/5 bg-white/5 p-4 flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-300">Quota de trajets spéciaux utilisés :</span>
+          <span className="text-xs font-medium text-slate-300">{t('personalDriver.specialTripsQuotaUsed')}</span>
           <span className="text-sm font-bold text-white">
-            {specialTripsUsed} / {includedSpecialTrips} utilisés
+            {t('personalDriver.specialTripsUsedRatio', { used: specialTripsUsed, included: includedSpecialTrips })}
           </span>
         </div>
       </div>
@@ -596,53 +599,54 @@ export function PersonalDriverClientDashboard() {
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <MaterialIcon name="calendar_month" size="md" className="text-primary" />
-              Calendrier de transport (30 jours)
+              {t('personalDriver.transportCalendar30Days')}
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Consultez vos missions quotidiennes et gérez vos présences.
+              {t('personalDriver.transportCalendarDesc')}
             </p>
           </div>
           <span className="rounded-lg bg-white/5 px-3 py-1 text-xs font-bold text-slate-300 border border-white/10">
-            {trips.length} missions enregistrées
+            {t('personalDriver.missionsRecordedCount', { count: trips.length })}
           </span>
         </div>
 
         {trips.length === 0 && activationStatus === 'activating' ? (
           <p className="py-8 text-center text-sm font-medium text-amber-300" role="status">
-            Paiement confirmé — préparation de vos trajets…
+            {t('personalDriver.paymentConfirmedPreparingTrips')}
           </p>
         ) : trips.length === 0 && activationStatus === 'activation_failed' ? (
           <div className="space-y-3 py-8 text-center text-sm text-red-300" role="alert">
-            <p className="font-semibold">La préparation de vos trajets a échoué.</p>
-            <p className="mt-2">Actualisez cette page dans quelques instants pour vérifier la nouvelle tentative, puis contactez l’assistance si nécessaire.</p>
+            <p className="font-semibold">{t('personalDriver.tripPreparationFailedTitle')}</p>
+            <p className="mt-2">{t('personalDriver.tripPreparationFailedDesc')}</p>
             {renewalActivationSubscriptionId === subscription.id && (
               <button
                 type="button"
                 onClick={() => beginRenewalActivationPolling(subscription.id)}
                 className="min-h-11 rounded-lg border border-red-400/40 px-4 font-bold text-red-100"
               >
-                Réessayer la vérification
+                {t('personalDriver.retryVerification')}
               </button>
             )}
           </div>
         ) : trips.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-400">
-            Votre calendrier est en préparation. Vos trajets apparaîtront ici dès validation.
+            {t('personalDriver.calendarPreparing')}
           </p>
         ) : (
           <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
             {trips.map((trip) => {
+              const dateLocale = locale === 'en' ? 'en-US' : 'fr-FR';
               const dateObj = new Date(trip.scheduledAtIso);
-              const dateStr = dateObj.toLocaleDateString('fr-FR', {
+              const dateStr = dateObj.toLocaleDateString(dateLocale, {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
               });
-              const timeStr = dateObj.toLocaleTimeString('fr-FR', {
+              const timeStr = dateObj.toLocaleTimeString(dateLocale, {
                 hour: '2-digit',
                 minute: '2-digit',
               });
-              const badge = TRIP_STATUS_BADGES[trip.status] || TRIP_STATUS_BADGES.scheduled;
+              const badgeCfg = TRIP_STATUS_CONFIG[trip.status] || TRIP_STATUS_CONFIG.scheduled;
 
               return (
                 <div
@@ -652,14 +656,14 @@ export function PersonalDriverClientDashboard() {
                   <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-bold text-white capitalize">
-                        {dateStr} à {timeStr}
+                        {dateStr} {t('personalDriver.atTime')} {timeStr}
                       </span>
-                      <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${badge.color}`}>
-                        {badge.label}
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${badgeCfg.color}`}>
+                        {t(badgeCfg.labelKey)}
                       </span>
                       {trip.isSpecialTrip && (
                         <span className="rounded-md bg-purple-500/20 px-2 py-0.5 text-xs font-bold text-purple-300 border border-purple-500/30">
-                          Trajet Spécial
+                          {t('personalDriver.specialTripBadge')}
                         </span>
                       )}
                     </div>
@@ -676,7 +680,7 @@ export function PersonalDriverClientDashboard() {
                       onClick={() => setSelectedTripToCancel(trip)}
                       className="min-h-11 rounded-lg border border-red-500/30 bg-red-500/10 px-3 text-xs font-semibold text-red-400 transition hover:bg-red-500/20 active:scale-95"
                     >
-                      Annuler ce trajet
+                      {t('personalDriver.cancelThisTrip')}
                     </button>
                   )}
                 </div>
@@ -692,23 +696,21 @@ export function PersonalDriverClientDashboard() {
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-card p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3 text-red-400">
               <MaterialIcon name="warning" size="lg" />
-              <h3 className="text-lg font-bold text-white">Confirmer l&apos;annulation</h3>
+              <h3 className="text-lg font-bold text-white">{t('personalDriver.confirmTripCancelTitle')}</h3>
             </div>
             <p className="text-sm leading-relaxed text-slate-300">
-              Êtes-vous sûr de vouloir annuler le trajet du{' '}
-              <strong className="text-white">
-                {new Date(selectedTripToCancel.scheduledAtIso).toLocaleDateString('fr-FR', {
+              {t('personalDriver.confirmTripCancelQuestion', {
+                date: new Date(selectedTripToCancel.scheduledAtIso).toLocaleDateString(locale === 'en' ? 'en-US' : 'fr-FR', {
                   weekday: 'long',
                   day: 'numeric',
                   month: 'long',
                   hour: '2-digit',
                   minute: '2-digit',
-                })}
-              </strong>{' '}
-              ?
+                }),
+              })}
             </p>
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-300">
-              ⚠️ <strong>Règle d&apos;abonnement :</strong> Les kilomètres de cette journée annulée ne sont ni remboursables ni reportables sur le mois suivant.
+              {t('personalDriver.subscriptionRuleWarning')}
             </div>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
@@ -717,7 +719,7 @@ export function PersonalDriverClientDashboard() {
                 disabled={actionLoading}
                 className="min-h-11 rounded-xl border border-white/10 px-4 text-xs font-semibold text-slate-300 hover:bg-white/5"
               >
-                Retour
+                {t('common.back')}
               </button>
               <button
                 type="button"
@@ -725,7 +727,7 @@ export function PersonalDriverClientDashboard() {
                 disabled={actionLoading}
                 className="min-h-11 rounded-xl bg-red-600 px-4 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-50"
               >
-                {actionLoading ? 'Annulation...' : 'Oui, annuler ce trajet'}
+                {actionLoading ? t('personalDriver.cancellingAction') : t('personalDriver.confirmCancelAction')}
               </button>
             </div>
           </div>
@@ -742,12 +744,12 @@ export function PersonalDriverClientDashboard() {
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <MaterialIcon name="event_available" size="md" className="text-primary" />
-                Demander un trajet spécial
+                {t('personalDriver.requestSpecialTripTitle')}
               </h3>
               <button
                 type="button"
                 onClick={() => setShowSpecialTripModal(false)}
-                aria-label="Fermer"
+                aria-label={t('common.close')}
                 className="flex size-11 items-center justify-center rounded-lg text-slate-400 hover:text-white"
               >
                 <MaterialIcon name="close" size="md" />
@@ -755,37 +757,37 @@ export function PersonalDriverClientDashboard() {
             </div>
 
             <div className="rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs text-primary">
-              ℹ️ Le kilométrage officiel de ce trajet spécial sera déduit du kilométrage restant affiché pour votre période.
+              {t('personalDriver.specialTripMileageDeductionNotice')}
             </div>
 
             <div className="space-y-3">
               <label className="block text-xs font-semibold text-slate-300">
-                Lieu de prise en charge
+                {t('personalDriver.pickupLocationLabel')}
                 <input
                   type="text"
                   required
                   value={specialPickup}
                   onChange={(e) => setSpecialPickup(e.target.value)}
-                  placeholder="Ex: Clinique Médicale, Domicile..."
+                  placeholder={t('personalDriver.pickupLocationPlaceholder')}
                   className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white outline-none focus:border-primary"
                 />
               </label>
 
               <label className="block text-xs font-semibold text-slate-300">
-                Destination
+                {t('personalDriver.destination')}
                 <input
                   type="text"
                   required
                   value={specialDestination}
                   onChange={(e) => setSpecialDestination(e.target.value)}
-                  placeholder="Ex: Aéroport, Centre Commercial..."
+                  placeholder={t('personalDriver.destinationLocationPlaceholder')}
                   className="mt-1 min-h-11 w-full rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white outline-none focus:border-primary"
                 />
               </label>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-xs font-semibold text-slate-300">
-                  Date du trajet
+                  {t('personalDriver.tripDateLabel')}
                   <input
                     type="date"
                     required
@@ -795,7 +797,7 @@ export function PersonalDriverClientDashboard() {
                   />
                 </label>
                 <label className="block text-xs font-semibold text-slate-300">
-                  Heure du trajet
+                  {t('personalDriver.tripTimeLabel')}
                   <input
                     type="time"
                     required
@@ -807,7 +809,7 @@ export function PersonalDriverClientDashboard() {
               </div>
 
               <label className="block text-xs font-semibold text-slate-300">
-                Distance estimée (km)
+                {t('personalDriver.estimatedDistanceLabel')}
                 <input
                   type="number"
                   min="1"
@@ -826,14 +828,14 @@ export function PersonalDriverClientDashboard() {
                 onClick={() => setShowSpecialTripModal(false)}
                 className="min-h-11 rounded-xl border border-white/10 px-4 text-xs font-semibold text-slate-300 hover:bg-white/5"
               >
-                Annuler
+                {t('common.cancel')}
               </button>
               <button
                 type="submit"
                 disabled={actionLoading}
                 className="min-h-11 rounded-xl bg-primary px-5 text-xs font-bold text-white hover:bg-primary/90 disabled:opacity-50"
               >
-                {actionLoading ? 'Réservation...' : 'Confirmer le trajet spécial'}
+                {actionLoading ? t('personalDriver.bookingAction') : t('personalDriver.confirmSpecialTripAction')}
               </button>
             </div>
           </form>

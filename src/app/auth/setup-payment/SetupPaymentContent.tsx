@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Elements,
   PaymentElement,
@@ -16,6 +17,8 @@ import { httpsCallable } from 'firebase/functions';
 import type { User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import {
   getAuthenticatedUser,
   getStripeSetupReturn,
@@ -35,6 +38,7 @@ interface SetupFormProps {
 function SetupForm({ onSuccess, onError }: SetupFormProps) {
   const stripe = useStripe();
   const elements = useElements();
+  const { t } = useTranslation();
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -54,7 +58,7 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
     });
 
     if (error) {
-      const msg = error.message ?? 'Erreur lors de la sauvegarde de la carte';
+      const msg = error.message ?? t('auth.saveCardError');
       setErrorMessage(msg);
       onError(msg);
       setProcessing(false);
@@ -94,19 +98,19 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            Vérification…
+            {t('common.loading')}
           </>
         ) : (
           <>
             <MaterialIcon name="credit_card" size="md" />
-            Ajouter une carte
+            {t('auth.addCardButton')}
           </>
         )}
       </button>
 
       <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
         <MaterialIcon name="verified_user" size="sm" />
-        <span>Paiement sécurisé par Stripe · PCI DSS Niveau 1</span>
+        <span>{t('auth.stripeSecurityNotice')}</span>
       </div>
     </form>
   );
@@ -251,7 +255,8 @@ export default function SetupPaymentContent() {
     })();
   };
 
-  const resolvedLocale = typeof navigator !== 'undefined' && navigator.language?.startsWith('en') ? 'en' : 'fr';
+  const { t, locale } = useTranslation();
+  const resolvedLocale = locale === 'en' ? 'en' : 'fr';
 
   const appearance = {
     theme: 'night' as const,
@@ -290,13 +295,13 @@ export default function SetupPaymentContent() {
             <MaterialIcon name="check_circle" className="text-emerald-500 text-[40px]" />
           </div>
           <h1 className="text-white text-[28px] font-bold leading-tight mb-2 text-center">
-            Carte ajoutée !
+            {t('auth.cardAddedSuccess')}
           </h1>
           <p className="text-slate-400 text-base text-center">
-            Votre moyen de paiement a été enregistré avec succès.
+            {t('auth.paymentMethodSaved')}
           </p>
           <p className="text-slate-500 text-sm mt-4 animate-pulse">
-            Redirection vers le tableau de bord…
+            {t('auth.redirectingDashboard')}
           </p>
         </div>
       </div>
@@ -308,14 +313,15 @@ export default function SetupPaymentContent() {
       <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-hidden">
         <div className="h-12 w-full" />
 
-        <div className="px-6">
+        <div className="px-6 flex items-center justify-between">
           <button
             onClick={handleSkip}
-            className="inline-flex items-center text-slate-400 hover:text-primary transition-colors"
+            className="inline-flex items-center text-slate-400 hover:text-primary transition-colors min-h-[44px]"
           >
             <MaterialIcon name="close" size="md" className="mr-2" />
-            Passer cette étape
+            {t('auth.skipStep')}
           </button>
+          <LanguageSelector variant="pill" />
         </div>
 
         <div className="flex flex-col items-center justify-center pt-8 pb-6">
@@ -326,10 +332,10 @@ export default function SetupPaymentContent() {
 
         <div className="px-6 text-center">
           <h1 className="text-white text-[28px] font-bold leading-tight mb-2">
-            Préparez vos futurs paiements
+            {t('auth.prepareFuturePayments')}
           </h1>
           <p className="text-slate-400 text-base font-normal">
-            Ajoutez une carte pour réserver plus vite. Aucun montant ne sera débité maintenant.
+            {t('auth.prepareFuturePaymentsDesc')}
           </p>
         </div>
 
@@ -341,10 +347,10 @@ export default function SetupPaymentContent() {
             </div>
             <button
               onClick={handleRetry}
-              className="mt-3 w-full h-12 flex items-center justify-center gap-2 rounded-xl border border-primary/30 text-primary font-medium active:scale-[0.98] transition-transform hover:bg-primary/5"
+              className="mt-3 w-full h-12 flex items-center justify-center gap-2 rounded-xl border border-primary/30 text-primary font-medium active:scale-[0.98] transition-transform hover:bg-primary/5 min-h-[44px]"
             >
               <MaterialIcon name="refresh" size="md" />
-              Réessayer
+              {t('common.retry')}
             </button>
           </div>
         )}
@@ -353,7 +359,7 @@ export default function SetupPaymentContent() {
           <div className="flex-1 flex items-center justify-center px-6">
             <div className="text-center">
               <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary mx-auto mb-4" />
-              <p className="text-slate-400 text-sm">Chargement du formulaire sécurisé…</p>
+              <p className="text-slate-400 text-sm">{t('auth.secureFormLoading')}</p>
             </div>
           </div>
         )}
@@ -388,25 +394,28 @@ export default function SetupPaymentContent() {
           <div className="px-6 mt-6">
             <button
               onClick={handleSkip}
-              className="w-full h-14 flex items-center justify-center gap-2 rounded-2xl border border-white/10 text-slate-400 font-medium active:scale-[0.98] transition-transform hover:text-slate-300 hover:border-white/20"
+              className="w-full h-14 flex items-center justify-center gap-2 rounded-2xl border border-white/10 text-slate-400 font-medium active:scale-[0.98] transition-transform hover:text-slate-300 hover:border-white/20 min-h-[44px]"
             >
               <MaterialIcon name="schedule" size="md" />
-              Continuer sans carte
+              {t('auth.continueWithoutCard')}
             </button>
           </div>
         )}
 
         <div className="px-6 mt-6 text-center text-xs text-slate-500 space-y-1">
-          <p>Vous pourrez ajouter votre carte plus tard depuis votre profil.</p>
-          <p>Vous pourrez aussi utiliser votre portefeuille quand son solde est suffisant.</p>
+          <p>{t('auth.addCardLaterNotice')}</p>
+          <p>{t('auth.walletBalanceNotice')}</p>
         </div>
 
         <div className="mt-auto pb-10 pt-8 text-center px-6">
           <p className="text-slate-500 text-xs">
-            En ajoutant une carte, vous acceptez nos{' '}
-            <a href="/legal/terms" className="text-primary hover:underline">Conditions d&apos;utilisation</a>
+            <Link href="/terms" className="text-primary hover:underline">
+              {t('common.terms')}
+            </Link>
             {' '}&amp;{' '}
-            <a href="/legal/privacy" className="text-primary hover:underline">Politique de confidentialité</a>
+            <Link href="/privacy" className="text-primary hover:underline">
+              {t('common.privacy')}
+            </Link>
           </p>
         </div>
       </div>

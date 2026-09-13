@@ -2,6 +2,7 @@
 
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import type { MenuCatalogAvailability, MenuCatalogSort } from '@/utils/menu-catalog';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface MenuCatalogToolbarProps {
   search: string;
@@ -18,10 +19,6 @@ interface MenuCatalogToolbarProps {
   onClearFilters: () => void;
 }
 
-function formatCount(value: number, singular: string, plural: string): string {
-  return `${value.toLocaleString('fr-FR')} ${value === 1 ? singular : plural}`;
-}
-
 export function MenuCatalogToolbar({
   search,
   category,
@@ -36,17 +33,24 @@ export function MenuCatalogToolbar({
   onSortChange,
   onClearFilters,
 }: MenuCatalogToolbarProps) {
+  const { t } = useTranslation('restaurant');
   const hasFilters = Boolean(search || category || availability !== 'all' || sort !== 'category');
 
   return (
-    <section aria-label="Recherche et filtres du menu" className="space-y-3">
+    <section aria-label={t('searchAndFiltersLabel')} className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <p className="text-sm font-semibold text-white">
-            {formatCount(totalCount, 'plat', 'plats')}
+            {t('dishesCount', {
+              count: totalCount.toLocaleString(),
+              dishes: totalCount === 1 ? t('dishSingular') : t('dishPlural'),
+            })}
           </p>
           <p className="truncate text-xs text-slate-500">
-            {formatCount(availableCount, 'disponible', 'disponibles')}
+            {t('availableCount', {
+              count: availableCount.toLocaleString(),
+              available: availableCount === 1 ? t('availableSingular') : t('availablePlural'),
+            })}
           </p>
         </div>
         {hasFilters && (
@@ -55,27 +59,27 @@ export function MenuCatalogToolbar({
             onClick={onClearFilters}
             className="min-h-11 rounded-xl px-3 text-xs font-bold text-primary transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            Réinitialiser
+            {t('reset')}
           </button>
         )}
       </div>
 
       <label className="relative block">
-        <span className="sr-only">Rechercher un plat</span>
+        <span className="sr-only">{t('searchDishPlaceholder')}</span>
         <MaterialIcon name="search" size="md" className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
         <input
           type="text"
           inputMode="search"
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder="Rechercher un plat, une catégorie ou une référence..."
+          placeholder={t('searchDishPlaceholder')}
           className="glass-input min-h-12 w-full rounded-2xl pl-12 pr-14 text-sm text-white outline-none transition focus:ring-2 focus:ring-primary/30"
         />
         {search && (
           <button
             type="button"
             onClick={() => onSearchChange('')}
-            aria-label="Effacer la recherche"
+            aria-label={t('clearSearch')}
             className="absolute right-2 top-1/2 flex size-12 -translate-y-1/2 items-center justify-center rounded-xl text-slate-300 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <MaterialIcon name="close" size="lg" />
@@ -83,11 +87,11 @@ export function MenuCatalogToolbar({
         )}
       </label>
 
-      <div className="flex gap-2 overflow-x-auto px-1 pb-0.5 scrollbar-hide" role="group" aria-label="Disponibilité">
+      <div className="flex gap-2 overflow-x-auto px-1 pb-0.5 scrollbar-hide" role="group" aria-label={t('availabilityFilter')}>
         {([
-          ['all', 'Tous'],
-          ['available', 'Disponibles'],
-          ['unavailable', 'Indisponibles'],
+          ['all', t('allFilter')],
+          ['available', t('availableFilter')],
+          ['unavailable', t('unavailableFilter')],
         ] as const).map(([value, label]) => (
           <button
             key={value}
@@ -103,27 +107,27 @@ export function MenuCatalogToolbar({
 
       <div className="grid grid-cols-2 gap-2">
         <label className="min-w-0">
-          <span className="sr-only">Catégorie</span>
+          <span className="sr-only">{t('categoryField')}</span>
           <select
             value={category ?? ''}
             onChange={(event) => onCategoryChange(event.target.value || null)}
             className="glass-input min-h-11 w-full rounded-xl px-3 text-xs font-semibold text-slate-200 outline-none focus:ring-2 focus:ring-primary/30"
           >
-            <option value="">Toutes les catégories</option>
+            <option value="">{t('allCategories')}</option>
             {categories.map((itemCategory) => <option key={itemCategory} value={itemCategory}>{itemCategory}</option>)}
           </select>
         </label>
         <label className="min-w-0">
-          <span className="sr-only">Trier par</span>
+          <span className="sr-only">{t('sortByField')}</span>
           <select
             value={sort}
             onChange={(event) => onSortChange(event.target.value as MenuCatalogSort)}
             className="glass-input min-h-11 w-full rounded-xl px-3 text-xs font-semibold text-slate-200 outline-none focus:ring-2 focus:ring-primary/30"
           >
-            <option value="category">Catégorie</option>
-            <option value="name">Nom A–Z</option>
-            <option value="price-asc">Prix croissant</option>
-            <option value="price-desc">Prix décroissant</option>
+            <option value="category">{t('sortCategory')}</option>
+            <option value="name">{t('sortName')}</option>
+            <option value="price-asc">{t('sortPriceAsc')}</option>
+            <option value="price-desc">{t('sortPriceDesc')}</option>
           </select>
         </label>
       </div>

@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useCartStore } from '@/store/cartStore';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export const CartDrawer: React.FC = () => {
+  const { t } = useTranslation('food');
   const [isOpen, setIsOpen] = useState(false);
   const { items, restaurant, updateQuantity, getTotalItems, getSubtotal } = useCartStore();
 
@@ -24,7 +26,7 @@ export const CartDrawer: React.FC = () => {
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4">
           <button
             onClick={() => setIsOpen(true)}
-            className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white rounded-2xl p-4 flex items-center justify-between shadow-lg shadow-primary/25 hover:opacity-95 transition-all transform hover:scale-[1.02] active:scale-95 primary-glow"
+            className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white rounded-2xl p-4 flex items-center justify-between shadow-lg shadow-primary/25 hover:opacity-95 transition-all transform hover:scale-[1.02] active:scale-95 primary-glow min-h-[44px]"
           >
             <div className="flex items-center gap-3">
               <div className="relative">
@@ -34,7 +36,7 @@ export const CartDrawer: React.FC = () => {
                 </span>
               </div>
               <div className="flex flex-col items-start">
-                <span className="text-sm font-medium opacity-90">Voir le panier</span>
+                <span className="text-sm font-medium opacity-90">{t('viewCart')}</span>
                 <span className="text-xs opacity-75 truncate max-w-[150px]">{restaurant.name}</span>
               </div>
             </div>
@@ -61,17 +63,18 @@ export const CartDrawer: React.FC = () => {
         }`}
       >
         <div className="p-4 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#1A1A1A]/90 backdrop-blur-xl z-10 rounded-t-3xl">
-          <h2 className="text-xl font-bold text-white">Votre commande</h2>
+          <h2 className="text-xl font-bold text-white">{t('cartYourOrder')}</h2>
           <button
             onClick={() => setIsOpen(false)}
-            className="p-2 text-slate-400 hover:bg-white/10 rounded-full transition-colors"
+            aria-label={t('close')}
+            className="p-2 text-slate-400 hover:bg-white/10 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           >
             <MaterialIcon name="close" size="lg" />
           </button>
         </div>
 
         <div className="p-4 bg-white/5 border-b border-white/5">
-          <p className="text-xs text-slate-500 font-medium">Depuis</p>
+          <p className="text-xs text-slate-500 font-medium">{t('fromRestaurant')}</p>
           <h3 className="text-base font-bold text-white">{restaurant.name}</h3>
         </div>
 
@@ -86,14 +89,16 @@ export const CartDrawer: React.FC = () => {
                   <div className="flex items-center gap-4 bg-white/10 rounded-full px-3 py-1.5 w-fit">
                     <button
                       onClick={() => updateQuantity(item.id!, item.quantity - 1)}
-                      className="text-slate-300 hover:text-white"
+                      aria-label={t('decreaseQuantity')}
+                      className="text-slate-300 hover:text-white min-h-[32px] min-w-[32px] flex items-center justify-center"
                     >
                       <MaterialIcon name="remove" size="sm" />
                     </button>
                     <span className="font-semibold text-sm w-4 text-center text-white">{item.quantity}</span>
                     <button
                       onClick={() => updateQuantity(item.id!, item.quantity + 1)}
-                      className="text-slate-300 hover:text-white"
+                      aria-label={t('increaseQuantity')}
+                      className="text-slate-300 hover:text-white min-h-[32px] min-w-[32px] flex items-center justify-center"
                     >
                       <MaterialIcon name="add" size="sm" />
                     </button>
@@ -106,13 +111,13 @@ export const CartDrawer: React.FC = () => {
 
         <div className="p-4 border-t border-white/5 bg-[#1A1A1A]/90 backdrop-blur-xl sticky bottom-0">
           <div className="flex justify-between items-center mb-4 text-lg">
-            <span className="font-semibold text-slate-300">Sous-total</span>
+            <span className="font-semibold text-slate-300">{t('subtotal')}</span>
             <span className="font-bold text-white">{subtotal.toFixed(2)} {CURRENCY_CODE}</span>
           </div>
 
           <Link href="/food/checkout" onClick={() => setIsOpen(false)} className="block w-full">
-            <button className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-lg py-4 rounded-xl primary-glow hover:opacity-90 transition-opacity active:scale-[0.98]">
-              Passer la commande
+            <button className="w-full bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold text-lg py-4 rounded-xl primary-glow hover:opacity-90 transition-opacity active:scale-[0.98] min-h-[44px]">
+              {t('placeOrder')}
             </button>
           </Link>
         </div>

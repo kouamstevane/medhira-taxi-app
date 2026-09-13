@@ -13,8 +13,10 @@ import { CURRENCY_CODE } from '@/utils/constants';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { useCustomerRestaurantMenuQuery } from '@/hooks/useCustomerRestaurantMenuQuery';
 import { isRestaurantOpenAt } from '@/utils/restaurant-hours';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function RestaurantClient() {
+  const { t } = useTranslation();
   const params = useParams();
   const searchParams = useSearchParams();
   const id = searchParams.get('id')?.trim() || (typeof params.id === 'string' ? params.id : '');
@@ -85,12 +87,12 @@ export default function RestaurantClient() {
     return (
       <div className="min-h-screen text-center py-20 bg-background">
         <h2 className="text-xl font-bold text-white">
-          {unavailable ? 'Restaurant indisponible' : 'Restaurant introuvable'}
+          {unavailable ? t('food.restaurantUnavailable') : t('food.restaurantNotFound')}
         </h2>
         {unavailable && (
-          <p className="mt-2 text-slate-400">Ce restaurant n’est pas disponible actuellement.</p>
+          <p className="mt-2 text-slate-400">{t('food.restaurantUnavailableDesc')}</p>
         )}
-        <button onClick={() => router.back()} className="mt-4 text-primary font-medium">Retour</button>
+        <button onClick={() => router.back()} className="mt-4 text-primary font-medium">{t('common.back')}</button>
       </div>
     );
   }
@@ -114,6 +116,7 @@ export default function RestaurantClient() {
 
         <button
           onClick={() => router.back()}
+          aria-label={t('common.back')}
           className="absolute top-6 left-4 bg-white/20 backdrop-blur-md p-2 rounded-full text-white hover:bg-white/30 transition-colors"
         >
           <MaterialIcon name="arrow_back" size="lg" />
@@ -148,7 +151,7 @@ export default function RestaurantClient() {
           </div>
 
           <p className="text-slate-400 font-medium mb-4">
-            {Array.isArray(restaurant.cuisineType) ? restaurant.cuisineType.join(' • ') : restaurant.cuisineType} • {restaurant.avgPricePerPerson} {CURRENCY_CODE} / pers.
+            {Array.isArray(restaurant.cuisineType) ? restaurant.cuisineType.join(' • ') : restaurant.cuisineType} • {restaurant.avgPricePerPerson} {CURRENCY_CODE} / {t('food.perPerson')}
           </p>
 
           <div className="flex items-center gap-6 text-sm text-slate-300 font-medium">
@@ -180,8 +183,8 @@ export default function RestaurantClient() {
           <div className="bg-destructive/10 border border-destructive/20 text-destructive rounded-xl p-4 mb-6 flex items-start gap-3">
             <MaterialIcon name="info" size="md" className="shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold">Ce restaurant est actuellement fermé.</p>
-              <p className="text-sm mt-1 opacity-90">Vous ne pouvez pas passer de commande pour le moment.</p>
+              <p className="font-bold">{t('food.restaurantClosed')}</p>
+              <p className="text-sm mt-1 opacity-90">{t('food.restaurantClosedDesc')}</p>
             </div>
           </div>
         )}

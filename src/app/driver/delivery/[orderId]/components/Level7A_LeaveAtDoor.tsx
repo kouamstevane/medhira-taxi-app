@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
+import { useTranslation } from '@/hooks/useTranslation'
 import type { FoodDeliveryOrder } from '@/types/firestore-collections'
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function Level7A_LeaveAtDoor({ order, confirmDelivery, uploadProofPhoto }: Props) {
+  const { t } = useTranslation('driver')
   const [photo, setPhoto] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -45,7 +47,7 @@ export default function Level7A_LeaveAtDoor({ order, confirmDelivery, uploadProo
       const url = await uploadProofPhoto(photo)
       await confirmDelivery('photo', url)
     } catch {
-      setError('Erreur lors du téléversement. Réessayez.')
+      setError(t('uploadErrorRetry'))
     } finally {
       setUploading(false)
     }
@@ -56,8 +58,8 @@ export default function Level7A_LeaveAtDoor({ order, confirmDelivery, uploadProo
       <div className="flex-1 space-y-6">
         <div className="text-center pt-8">
           <MaterialIcon name="door_front" className="text-primary text-[56px]" />
-          <h2 className="text-xl font-bold mt-2">Déposer à la porte</h2>
-          <p className="text-slate-400 text-sm mt-1">Prenez une photo de la commande déposée</p>
+          <h2 className="text-xl font-bold mt-2">{t('leaveAtDoorTitle')}</h2>
+          <p className="text-slate-400 text-sm mt-1">{t('takeProofPhoto')}</p>
         </div>
 
         <label className="glass-card block p-6 rounded-2xl border border-dashed border-white/20 text-center cursor-pointer">
@@ -67,7 +69,7 @@ export default function Level7A_LeaveAtDoor({ order, confirmDelivery, uploadProo
           ) : (
             <>
               <MaterialIcon name="photo_camera" className="text-slate-400 text-[48px] mb-2" />
-              <p className="text-slate-400">Appuyer pour prendre une photo</p>
+              <p className="text-slate-400">{t('tapToTakePhoto')}</p>
             </>
           )}
         </label>
@@ -78,7 +80,7 @@ export default function Level7A_LeaveAtDoor({ order, confirmDelivery, uploadProo
         disabled={!photo || uploading}
         className="w-full h-14 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
       >
-        {uploading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Confirmer la livraison'}
+        {uploading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : t('confirmDeliveryAction')}
       </button>
     </div>
   )

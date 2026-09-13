@@ -20,6 +20,8 @@ import { NetworkErrorView } from '@/components/ui';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import {
   getClientOrderTrackingPath,
   getClientParcelTrackingPath,
@@ -38,38 +40,6 @@ interface UnifiedOrder {
   subtitle: string;
   destination?: string;
 }
-
-const TAB_OPTIONS: { value: OrderType; label: string; icon: string }[] = [
-  { value: 'all', label: 'Tout', icon: 'grid_view' },
-  { value: 'taxi', label: 'Taxi', icon: 'local_taxi' },
-  { value: 'food', label: 'Repas', icon: 'restaurant' },
-  { value: 'parcel', label: 'Livraison', icon: 'inventory_2' },
-];
-
-const getStatusLabel = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    pending: 'En attente',
-    pending_payment: 'En attente',
-    confirmed: 'Confirmée',
-    accepted: 'Acceptée',
-    in_progress: 'En cours',
-    preparing: 'En préparation',
-    ready: 'Prête',
-    picked_up: 'Récupérée',
-    driver_heading_to_restaurant: 'Chauffeur en route',
-    driver_arrived_restaurant: 'Chauffeur arrivé',
-    out_for_delivery: 'En livraison',
-    arriving: 'Arrivée',
-    delivering: 'En livraison',
-    delivered: 'Livrée',
-    completed: 'Terminée',
-    cancelled: 'Annulée',
-    cancelled_by_restaurant: 'Annulée',
-    failed: 'Échouée',
-    no_driver_available: 'Aucun chauffeur',
-  };
-  return statusMap[status] || status;
-};
 
 const getStatusColor = (status: string): string => {
   const colorMap: Record<string, string> = {
@@ -110,11 +80,6 @@ const getTypeBadgeColor = (type: 'taxi' | 'food' | 'parcel'): string => {
   return colorMap[type];
 };
 
-const getTypeLabel = (type: 'taxi' | 'food' | 'parcel'): string => {
-  const labelMap = { taxi: 'Taxi', food: 'Repas', parcel: 'Livraison' };
-  return labelMap[type];
-};
-
 const getOrderDetailPath = (order: UnifiedOrder): string => {
   switch (order.type) {
     case 'taxi':
@@ -130,6 +95,7 @@ const getOrderDetailPath = (order: UnifiedOrder): string => {
 
 export default function ClientOrdersPage() {
   const router = useRouter();
+  const { t, locale } = useTranslation();
   const [orders, setOrders] = useState<UnifiedOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [isNetworkError, setIsNetworkError] = useState(false);
@@ -273,6 +239,49 @@ export default function ClientOrdersPage() {
     }
   }, [userId, fetchOrders]);
 
+  const getTypeLabel = (type: 'taxi' | 'food' | 'parcel'): string => {
+    switch (type) {
+      case 'taxi':
+        return t('client.taxiTab');
+      case 'food':
+        return t('client.foodTab');
+      case 'parcel':
+        return t('client.parcelTab');
+    }
+  };
+
+  const getStatusLabel = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      pending: t('client.orderStatusLabels.pending'),
+      pending_payment: t('client.orderStatusLabels.pending'),
+      confirmed: t('client.orderStatusLabels.confirmed'),
+      accepted: t('client.orderStatusLabels.accepted'),
+      in_progress: t('client.orderStatusLabels.in_progress'),
+      preparing: t('client.orderStatusLabels.preparing'),
+      ready: t('client.orderStatusLabels.ready'),
+      picked_up: t('client.orderStatusLabels.picked_up'),
+      driver_heading_to_restaurant: t('client.orderStatusLabels.driver_heading'),
+      driver_arrived_restaurant: t('client.orderStatusLabels.driver_arrived'),
+      out_for_delivery: t('client.orderStatusLabels.out_for_delivery'),
+      arriving: t('client.orderStatusLabels.out_for_delivery'),
+      delivering: t('client.orderStatusLabels.out_for_delivery'),
+      delivered: t('client.orderStatusLabels.delivered'),
+      completed: t('client.orderStatusLabels.completed'),
+      cancelled: t('client.orderStatusLabels.cancelled'),
+      cancelled_by_restaurant: t('client.orderStatusLabels.cancelled'),
+      failed: t('client.orderStatusLabels.failed'),
+      no_driver_available: t('client.orderStatusLabels.no_driver'),
+    };
+    return statusMap[status] || status;
+  };
+
+  const tabOptions: { value: OrderType; label: string; icon: string }[] = [
+    { value: 'all', label: t('client.allTab'), icon: 'grid_view' },
+    { value: 'taxi', label: t('client.taxiTab'), icon: 'local_taxi' },
+    { value: 'food', label: t('client.foodTab'), icon: 'restaurant' },
+    { value: 'parcel', label: t('client.parcelTab'), icon: 'inventory_2' },
+  ];
+
   const filteredOrders =
     activeTab === 'all' ? orders : orders.filter((o) => o.type === activeTab);
 
@@ -282,7 +291,8 @@ export default function ClientOrdersPage() {
       typeof ts === 'object' && 'toDate' in ts && typeof ts.toDate === 'function'
         ? ts.toDate()
         : new Date(ts as unknown as string | number);
-    return new Intl.DateTimeFormat('fr-FR', {
+    const localeCode = locale === 'en' ? 'en-US' : 'fr-FR';
+    return new Intl.DateTimeFormat(localeCode, {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
@@ -297,19 +307,19 @@ export default function ClientOrdersPage() {
           <button
             onClick={() => router.push('/dashboard')}
             className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10 min-w-[44px] min-h-[44px] flex items-center justify-center"
-            aria-label="Retour au tableau de bord"
+            aria-label={t('client.backToHome')}
           >
             <MaterialIcon name="arrow_back" size="lg" />
           </button>
-          <h1 className="text-xl font-bold text-white">Mes Commandes</h1>
-          <div className="w-10" />
+          <h1 className="text-xl font-bold text-white">{t('client.myOrders')}</h1>
+          <LanguageSelector variant="pill" />
         </div>
 
         {isNetworkError && orders.length === 0 ? (
           <div className="p-4">
             <NetworkErrorView
               title="Oops !"
-              message="Impossible de charger vos commandes. Veuillez vérifier votre connexion internet et réessayer."
+              message={t('common.offlineMessage')}
               onRetry={handleRetry}
             />
           </div>
@@ -317,7 +327,7 @@ export default function ClientOrdersPage() {
           <>
             <div className="p-4">
           <div className="flex gap-2 overflow-x-auto pb-3 scrollbar-hide">
-            {TAB_OPTIONS.map((tab) => (
+            {tabOptions.map((tab) => (
               <button
                 key={tab.value}
                 onClick={() => setActiveTab(tab.value)}
@@ -361,13 +371,13 @@ export default function ClientOrdersPage() {
                   <MaterialIcon name="error_outline" size="xl" className="text-red-400" />
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Erreur de chargement</h3>
+              <h3 className="text-xl font-bold text-white mb-2">{t('client.loadErrorTitle')}</h3>
               <p className="text-slate-400 text-sm mb-6">{fetchError}</p>
               <button
                 onClick={() => userId && fetchOrders(userId)}
                 className="bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold px-6 py-3 rounded-xl min-h-[44px]"
               >
-                Réessayer
+                {t('common.retry')}
               </button>
             </GlassCard>
           ) : filteredOrders.length === 0 ? (
@@ -377,17 +387,17 @@ export default function ClientOrdersPage() {
                   <MaterialIcon name="receipt_long" size="xl" className="text-primary" />
                 </div>
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">Aucune commande</h3>
+              <h3 className="text-xl font-bold text-white mb-2">{t('client.noOrdersTitle')}</h3>
               <p className="text-slate-400 text-sm mb-6">
                 {activeTab === 'all'
-                  ? 'Vous n\'avez pas encore passé de commande.'
-                  : `Aucune commande ${getTypeLabel(activeTab as 'taxi' | 'food' | 'parcel').toLowerCase()}.`}
+                  ? t('client.noOrdersDesc')
+                  : t('client.noOrdersTypeDesc', { type: getTypeLabel(activeTab).toLowerCase() })}
               </p>
               <button
                 onClick={() => router.push('/dashboard')}
                 className="bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold px-6 py-3 rounded-xl min-h-[44px]"
               >
-                Retour à l&apos;accueil
+                {t('client.backToHome')}
               </button>
             </GlassCard>
           ) : (

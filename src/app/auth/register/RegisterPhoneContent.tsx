@@ -18,6 +18,8 @@ import {
   driverPrimaryButtonClassName,
   driverSecondaryButtonClassName,
 } from '@/app/driver/register/components/driverOnboardingStyles';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 type FieldErrors = Partial<Record<'fullName' | 'phone', string>>;
 
@@ -32,6 +34,7 @@ const splitFullName = (fullName: string) => {
 export default function RegisterPhoneContent() {
   const router = useRouter();
   const phoneInputId = useId();
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -81,13 +84,13 @@ export default function RegisterPhoneContent() {
     const nextFieldErrors: FieldErrors = {};
     const nameParts = splitFullName(formData.fullName);
     if (!formData.fullName.trim()) {
-      nextFieldErrors.fullName = 'Nom complet requis';
+      nextFieldErrors.fullName = t('auth.nameRequired');
     }
-    if (!formData.phone.trim()) nextFieldErrors.phone = 'Numéro de téléphone requis';
+    if (!formData.phone.trim()) nextFieldErrors.phone = t('auth.phoneRequired');
 
     if (Object.keys(nextFieldErrors).length > 0) {
       setFieldErrors(nextFieldErrors);
-      setError('Vérifiez les champs obligatoires.');
+      setError(t('auth.checkRequiredFields'));
       return;
     }
 
@@ -102,8 +105,8 @@ export default function RegisterPhoneContent() {
 
     if (!isValidPhoneNumber(fullPhoneNumber, selectedCountry.dialCode)) {
       const expectedLength = countryLengths[selectedCountry.dialCode] || 9;
-      setFieldErrors({ phone: `Utilisez ${expectedLength} chiffres après ${selectedCountry.dialCode}` });
-      setError(`Numéro invalide pour ${selectedCountry.name}.`);
+      setFieldErrors({ phone: t('auth.phoneLengthHint', { length: expectedLength, dialCode: selectedCountry.dialCode }) });
+      setError(t('auth.invalidNumberForCountry', { country: selectedCountry.name }));
       return;
     }
 
@@ -117,7 +120,7 @@ export default function RegisterPhoneContent() {
 
       setVerificationPhone(result.phoneNumber);
       setMaskedVerificationPhone(result.maskedPhone);
-      setSuccess(`Demande de code envoyée à ${result.maskedPhone}`);
+      setSuccess(t('auth.codeRequestSentTo', { phone: result.maskedPhone }));
     } catch (error: unknown) {
       handleAuthError(error);
     } finally {
@@ -129,7 +132,7 @@ export default function RegisterPhoneContent() {
     event?.preventDefault();
 
     if (!code || code.length < 6) {
-      setError('Veuillez entrer le code complet');
+      setError(t('auth.enterCompleteCode'));
       return;
     }
 
@@ -137,7 +140,7 @@ export default function RegisterPhoneContent() {
     setError(null);
 
     try {
-      if (!verificationPhone) throw new Error('Aucun numéro en attente de vérification');
+      if (!verificationPhone) throw new Error(t('auth.noPendingPhoneVerification'));
 
       const nameParts = splitFullName(formData.fullName);
       await verifyTwilioPhoneCodeAndSignIn({
@@ -229,11 +232,12 @@ export default function RegisterPhoneContent() {
       <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-hidden">
         <div className="h-12 w-full" />
 
-        <div className="px-6">
-          <Link href="/auth/role" className="inline-flex items-center text-slate-400 hover:text-primary transition-colors">
+        <div className="px-6 flex items-center justify-between">
+          <Link href="/auth/role" className="inline-flex items-center text-slate-400 hover:text-primary transition-colors min-h-[44px]">
             <MaterialIcon name="arrow_back" size="md" className="mr-2" />
-              Retour
-            </Link>
+            {t('common.back')}
+          </Link>
+          <LanguageSelector variant="pill" />
         </div>
 
         <div className="flex flex-col items-center justify-center pt-6 pb-8">
@@ -244,8 +248,8 @@ export default function RegisterPhoneContent() {
         </div>
 
         <div className="px-6 text-center">
-          <h1 className="text-white text-[28px] font-bold leading-tight mb-2">Créer un compte</h1>
-          <p className="text-slate-400 text-base font-normal">Inscription rapide par téléphone</p>
+          <h1 className="text-white text-[28px] font-bold leading-tight mb-2">{t('auth.createAccount')}</h1>
+          <p className="text-slate-400 text-base font-normal">{t('auth.quickPhoneRegistration')}</p>
         </div>
 
         {error && (
@@ -264,9 +268,9 @@ export default function RegisterPhoneContent() {
 
         {!verificationPhone ? (
           <>
-            <form onSubmit={handleSendCode} aria-label="Inscription par téléphone" className="mt-8 px-6 space-y-4" noValidate>
+            <form onSubmit={handleSendCode} aria-label={t('auth.phoneRegistration')} className="mt-8 px-6 space-y-4" noValidate>
             <InputField
-              label="Nom complet"
+              label={t('auth.fullName')}
               type="text"
               name="fullName"
               value={formData.fullName}
@@ -279,14 +283,14 @@ export default function RegisterPhoneContent() {
 
             <div className="space-y-2" ref={countryDropdownRef}>
               <label htmlFor={phoneInputId} className={cn(driverFieldLabelClassName, 'block')}>
-                Numéro de téléphone
+                {t('auth.phoneNumber')}
                 <span className="text-red-500 ml-1">*</span>
               </label>
               <div className="glass-input autofill-dark flex h-14 overflow-hidden rounded-xl border border-white/[0.08] bg-[#1A1A1A] text-white shadow-sm transition-all duration-200 focus-within:border-[#f29200] focus-within:ring-2 focus-within:ring-[#f29200]">
                 <button
                   type="button"
                   onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
-                  aria-label={`Indicatif ${selectedCountry.name} ${selectedCountry.dialCode}`}
+                  aria-label={t('auth.countryPrefix', { country: selectedCountry.name, dialCode: selectedCountry.dialCode })}
                   aria-haspopup="listbox"
                   aria-expanded={isCountryDropdownOpen}
                   className="flex h-full shrink-0 items-center gap-2 border-r border-white/[0.08] px-3 text-sm font-semibold text-white outline-none transition-colors hover:bg-white/[0.04] focus:bg-white/[0.04]"
@@ -317,7 +321,7 @@ export default function RegisterPhoneContent() {
               </div>
 
               {isCountryDropdownOpen && (
-                <div role="listbox" aria-label="Pays disponibles" className="mt-2 w-full max-h-56 overflow-y-auto glass-card border border-white/10 rounded-xl shadow-xl">
+                <div role="listbox" aria-label={t('auth.availableCountries')} className="mt-2 w-full max-h-56 overflow-y-auto glass-card border border-white/10 rounded-xl shadow-xl">
                   <div className="py-1">
                     {SUPPORTED_COUNTRIES.map((country) => (
                       <button
@@ -345,7 +349,7 @@ export default function RegisterPhoneContent() {
                 </p>
               ) : (
                 <p id={`${phoneInputId}-helper`} className="mt-1 text-sm text-slate-400">
-                  Exemple: {selectedCountry.defaultNumber}
+                  {t('auth.phoneExample', { example: selectedCountry.defaultNumber })}
                 </p>
               )}
             </div>
@@ -361,10 +365,10 @@ export default function RegisterPhoneContent() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Envoi en cours...
+                  {t('auth.sendingCode')}
                 </>
               ) : (
-                'Envoyer le code de vérification'
+                t('auth.sendVerificationCode')
               )}
             </button>
           </form>
@@ -372,7 +376,7 @@ export default function RegisterPhoneContent() {
           <div className="mt-6 px-6 space-y-4">
             <div className="flex items-center space-x-4">
               <div className="flex-1 h-[1px] bg-slate-800" />
-              <span className="text-slate-500 text-sm font-medium">ou continuer avec</span>
+              <span className="text-slate-500 text-sm font-medium">{t('auth.orContinueWith').toLowerCase()}</span>
               <div className="flex-1 h-[1px] bg-slate-800" />
             </div>
 
@@ -380,7 +384,7 @@ export default function RegisterPhoneContent() {
               onClick={handleGoogleLogin}
               disabled={loading}
               type="button"
-              aria-label="Continuer avec Google"
+              aria-label={t('auth.continueWithGoogle')}
               className="glass-card w-full h-14 flex items-center justify-center gap-3 rounded-2xl active:scale-[0.98] transition-transform border border-white/10 disabled:opacity-50"
             >
               <svg fill="none" height="20" viewBox="0 0 24 24" width="20">
@@ -389,14 +393,14 @@ export default function RegisterPhoneContent() {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
               </svg>
-              <span className="text-white font-semibold">Continuer avec Google</span>
+              <span className="text-white font-semibold">{t('auth.continueWithGoogle')}</span>
             </button>
           </div>
         </>
         ) : (
-          <form onSubmit={handleVerifyCode} aria-label="Vérification du téléphone" className="mt-8 px-6 space-y-4">
+          <form onSubmit={handleVerifyCode} aria-label={t('auth.phoneRegistration')} className="mt-8 px-6 space-y-4">
             <InputField
-              label="Code de vérification (6 chiffres)"
+              label={t('auth.verificationCodeLabel')}
               type="text"
               value={code}
               onChange={(e) => {
@@ -423,10 +427,10 @@ export default function RegisterPhoneContent() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Vérification...
+                    {t('auth.verifying')}
                   </>
                 ) : (
-                  'Créer mon compte'
+                  t('auth.createMyAccount')
                 )}
               </button>
 
@@ -436,18 +440,18 @@ export default function RegisterPhoneContent() {
                 disabled={loading}
                 className={cn(driverSecondaryButtonClassName, 'w-auto px-4 rounded-2xl')}
               >
-                Changer le numéro
+                {t('auth.changeNumber')}
               </button>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-              <p className="font-semibold text-white">Vous n'avez rien reçu ?</p>
+              <p className="font-semibold text-white">{t('auth.didntReceiveCode')}</p>
               <p className="mt-1 text-slate-400">
-                Le SMS peut prendre jusqu'à une minute. Vérifiez le réseau, le numéro saisi et les SMS bloqués avant de renvoyer.
+                {t('auth.smsDelayNotice')}
               </p>
               {maskedVerificationPhone && (
                 <p className="mt-2 text-xs text-slate-500">
-                  Code envoyé à {maskedVerificationPhone}
+                  {t('auth.codeSentToPhone', { phone: maskedVerificationPhone })}
                 </p>
               )}
               <button
@@ -456,7 +460,7 @@ export default function RegisterPhoneContent() {
                 className="mt-3 text-sm font-bold text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={loading}
               >
-                Renvoyer le code
+                {t('auth.otpResend')}
               </button>
             </div>
           </form>
@@ -464,18 +468,19 @@ export default function RegisterPhoneContent() {
 
         <div className="mt-auto pb-10 pt-8 text-center">
           <p className="text-slate-400 text-sm">
-            Vous avez déjà un compte ?
+            {t('auth.alreadyHaveAccount')}
             <Link href="/login" className="text-primary font-bold ml-1 hover:underline">
-              Se connecter
+              {t('auth.login')}
             </Link>
           </p>
         </div>
 
         <div className="px-6 pb-4 text-center">
           <p className="text-xs text-white/80">
-            En vous inscrivant, vous acceptez nos Conditions d'utilisation et Politique de confidentialité
+            {t('auth.termsAgreementNotice')}
           </p>
         </div>
+
 
       </div>
     </div>

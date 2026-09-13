@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
+import { useTranslation } from '@/hooks/useTranslation'
 import type { FoodDeliveryOrder, DeliveryStatus } from '@/types/firestore-collections'
 import DriverFoodContacts from './DriverFoodContacts'
 
@@ -10,15 +11,16 @@ interface Props {
 }
 
 export default function Level5_HeadingToClient({ order, updateStatus }: Props) {
+  const { t } = useTranslation('driver')
   const [loading, setLoading] = useState(false)
   const nextStatus: DeliveryStatus = order.status === 'picked_up' ? 'heading_to_client' : 'arrived_client'
-  const buttonLabel = order.status === 'picked_up' ? 'Je pars vers le client' : 'Je suis arrivé chez le client'
+  const buttonLabel = order.status === 'picked_up' ? t('leavingForClient') : t('arrivedAtClient')
   return (
     <div className="min-h-screen bg-background text-white flex flex-col p-4">
       <div className="flex-1 flex flex-col items-center justify-center space-y-6">
         <MaterialIcon name="delivery_dining" className="text-primary text-[64px]" />
         <div className="text-center">
-          <h2 className="text-xl font-bold">En route vers le client</h2>
+          <h2 className="text-xl font-bold">{t('headingToClient')}</h2>
           <p className="text-slate-400 mt-1">{order.clientNeighbourhood}</p>
           {order.clientAddress && (
             <div className="mt-3 space-y-1">
@@ -31,7 +33,7 @@ export default function Level5_HeadingToClient({ order, updateStatus }: Props) {
         </div>
         <a href={`tel:${order.clientPhone}`}
           className="flex items-center gap-2 text-primary border border-primary/30 rounded-xl px-4 py-2 text-sm">
-          <MaterialIcon name="phone" className="text-[16px]" /> Appeler le client
+          <MaterialIcon name="phone" className="text-[16px]" /> {t('callClient')}
         </a>
         <DriverFoodContacts order={order} target="client" />
       </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { useTranslation } from '@/hooks/useTranslation';
 import type { RideRequest } from '@/types/trip';
 
 interface RideRequestCardProps {
@@ -12,6 +13,7 @@ interface RideRequestCardProps {
 }
 
 export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCardProps) {
+  const { t, locale } = useTranslation();
   const [showMap, setShowMap] = useState(false);
   const expiresAtMs = useMemo(
     () => request.candidate.expiresAt?.toDate().getTime() ?? null,
@@ -61,11 +63,11 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
               <MaterialIcon name="schedule" size="sm" className={`${isUrgent ? 'text-red-400 animate-pulse' : 'text-primary'}`} />
             </div>
             <span className={`text-xs sm:text-sm font-bold ${isUrgent ? 'text-red-400 animate-pulse' : 'text-primary'}`}>
-              {visibleTimeRemaining !== null ? formatTime(visibleTimeRemaining) : 'Nouvelle demande'}
+              {visibleTimeRemaining !== null ? formatTime(visibleTimeRemaining) : t('driver.newRideRequest')}
             </span>
             {isUrgent && (
               <span className="text-xs font-semibold text-red-400 animate-bounce">
-                URGENT !
+                {t('driver.urgent')}
               </span>
             )}
           </div>
@@ -77,7 +79,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
                 <div className="flex items-center space-x-2 mb-2">
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30">
                     <MaterialIcon name="person" size="sm" />
-                    Pour un tiers
+                    {t('driver.forThirdParty')}
                   </span>
                 </div>
               )}
@@ -86,7 +88,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
               <div className="flex items-start mt-2 bg-white/5 rounded-lg p-2">
                 <div className="w-2 h-2 rounded-full bg-green-500 mt-1 mr-2 flex-shrink-0"></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Départ</p>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{t('taxi.pickup')}</p>
                   <p className="text-xs sm:text-sm text-white break-words font-medium">{request.bookingData.pickup}</p>
                 </div>
               </div>
@@ -95,7 +97,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
               <div className="flex items-start mt-2 bg-white/5 rounded-lg p-2">
                 <div className="w-2 h-2 rounded-full bg-red-500 mt-1 mr-2 flex-shrink-0"></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Destination</p>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{t('driver.destination')}</p>
                   <p className="text-xs sm:text-sm text-white break-words font-medium">{request.bookingData.destination}</p>
                 </div>
               </div>
@@ -147,9 +149,9 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
               ? 'bg-gradient-to-r from-green-500 to-emerald-600 ring-2 ring-green-400/50 ring-offset-1 ring-offset-background'
               : 'bg-gradient-to-r from-primary to-[#ffae33]'
               }`}>
-              <p className="text-xs font-semibold opacity-90">Gain Total</p>
+              <p className="text-xs font-semibold opacity-90">{t('driver.totalEarnings')}</p>
               <p className="text-sm sm:text-base font-bold">
-                {(request.bookingData.price + (request.candidate.bonus || 0)).toLocaleString('fr-FR')}
+                {(request.bookingData.price + (request.candidate.bonus || 0)).toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR')}
               </p>
               <p className="text-xs opacity-75">{CURRENCY_CODE}</p>
             </div>
@@ -173,7 +175,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
             <div className="text-center p-4">
               <MaterialIcon name="location_on" size="xl" className="text-blue-400 mx-auto mb-2" />
               <p className="text-xs text-slate-400">
-                Carte disponible après acceptation
+                {t('driver.mapAvailableAfterAccept')}
               </p>
             </div>
           </div>
@@ -185,10 +187,9 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
         className="w-full text-xs text-primary hover:text-[#ffae33] font-semibold py-2 flex items-center justify-center space-x-1 transition mb-2"
       >
         <MaterialIcon name="location_on" size="sm" />
-        <span>{showMap ? 'Masquer la carte' : 'Voir sur la carte'}</span>
+        <span>{showMap ? t('driver.hideMap') : t('driver.viewOnMap')}</span>
       </button>
 
-      {/* Boutons d'action - Large et tactile */}
       {/* Boutons d'action - Large et tactile */}
       <div className="flex flex-col sm:flex-row gap-3">
         <button
@@ -197,7 +198,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
           style={{ minHeight: '56px' }}
         >
           <MaterialIcon name="check_circle" size="lg" />
-          <span className="text-lg">Accepter</span>
+          <span className="text-lg">{t('driver.accept')}</span>
         </button>
         <button
           onClick={onDecline}
@@ -205,7 +206,7 @@ export function RideRequestCard({ request, onAccept, onDecline }: RideRequestCar
           style={{ minHeight: '56px' }}
         >
           <MaterialIcon name="close" size="lg" />
-          <span className="text-lg">Refuser</span>
+          <span className="text-lg">{t('driver.decline')}</span>
         </button>
       </div>
     </div>

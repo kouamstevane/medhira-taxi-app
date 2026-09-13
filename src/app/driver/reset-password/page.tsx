@@ -7,9 +7,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ERROR_MESSAGES } from '@/utils/constants';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function DriverResetPasswordPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +22,7 @@ export default function DriverResetPasswordPage() {
     e.preventDefault();
 
     if (!email || !email.includes('@')) {
-      setError('Veuillez entrer une adresse email valide');
+      setError(t('auth.validEmailPrompt'));
       return;
     }
 
@@ -39,16 +42,16 @@ export default function DriverResetPasswordPage() {
 
       switch (code) {
         case 'auth/user-not-found':
-          setError('Aucun compte associé à cet email');
+          setError(t('auth.noAccountFound'));
           break;
         case 'auth/invalid-email':
           setError(ERROR_MESSAGES.INVALID_EMAIL);
           break;
         case 'auth/too-many-requests':
-          setError('Trop de tentatives. Veuillez réessayer plus tard');
+          setError(t('auth.tooManyAttempts'));
           break;
         default:
-          setError('Une erreur est survenue. Veuillez réessayer');
+          setError(t('common.error'));
       }
     } finally {
       setLoading(false);
@@ -60,14 +63,15 @@ export default function DriverResetPasswordPage() {
       <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-hidden">
         <div className="h-12 w-full" />
 
-        <div className="px-6">
+        <div className="px-6 flex items-center justify-between">
           <Link
             href="/driver/login"
             className="inline-flex items-center text-slate-400 hover:text-primary transition-colors"
           >
             <MaterialIcon name="arrow_back" size="md" className="mr-2" />
-            Retour à la connexion
+            {t('auth.backToLogin')}
           </Link>
+          <LanguageSelector variant="pill" />
         </div>
 
         <div className="flex flex-col items-center justify-center pt-8 pb-6">
@@ -75,17 +79,17 @@ export default function DriverResetPasswordPage() {
             <MaterialIcon name="local_taxi" className="text-primary text-[32px] font-bold" />
           </div>
           <h2 className="text-primary text-2xl font-bold tracking-tight">Medjira</h2>
-          <span className="text-slate-500 text-sm mt-1">Espace Chauffeur</span>
+          <span className="text-slate-500 text-sm mt-1">{t('driver.dashboard')}</span>
         </div>
 
         <div className="px-6 text-center">
           <h1 className="text-white text-[28px] font-bold leading-tight mb-2">
-            {success ? 'Email envoyé !' : 'Mot de passe oublié ?'}
+            {success ? t('auth.emailSentSuccess') : t('auth.forgotPassword')}
           </h1>
           <p className="text-slate-400 text-base font-normal">
             {success
-              ? 'Vérifiez votre boîte email'
-              : 'Pas de problème, nous allons vous aider'}
+              ? t('auth.checkYourInbox')
+              : t('auth.helpWithPassword')}
           </p>
         </div>
 
@@ -99,13 +103,12 @@ export default function DriverResetPasswordPage() {
               </div>
 
               <p className="text-slate-400 text-center mb-6">
-                Un email de réinitialisation a été envoyé à{' '}
-                <strong className="text-primary">{email}</strong>
+                {t('auth.resetLinkSentTo', { email })}
               </p>
 
               <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 mb-6">
                 <p className="text-sm text-slate-300">
-                  Vérifiez également votre dossier spam si vous ne recevez pas l&apos;email dans quelques minutes.
+                  {t('auth.checkSpamNotice')}
                 </p>
               </div>
 
@@ -114,14 +117,14 @@ export default function DriverResetPasswordPage() {
                   onClick={() => router.push('/driver/login')}
                   className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center"
                 >
-                  Retour à la connexion
+                  {t('auth.backToLogin')}
                 </button>
 
                 <button
                   onClick={() => setSuccess(false)}
                   className="glass-card w-full h-14 flex items-center justify-center rounded-2xl border border-white/10 text-slate-300 font-medium active:scale-[0.98] transition-transform"
                 >
-                  Renvoyer l&apos;email
+                  {t('auth.resendEmail')}
                 </button>
               </div>
             </div>
@@ -129,7 +132,7 @@ export default function DriverResetPasswordPage() {
             <div className="glass-card rounded-2xl p-6">
               <div className="text-center mb-6">
                 <p className="text-slate-400 text-sm">
-                  Entrez l&apos;adresse email associée à votre compte chauffeur et nous vous enverrons un lien pour réinitialiser votre mot de passe.
+                  {t('auth.enterEmailInstruction')}
                 </p>
               </div>
 
@@ -169,10 +172,10 @@ export default function DriverResetPasswordPage() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
-                      Envoi en cours...
+                      {t('common.loading')}
                     </>
                   ) : (
-                    'Réinitialiser le mot de passe'
+                    t('auth.resetPasswordAction')
                   )}
                 </button>
               </form>
@@ -186,7 +189,7 @@ export default function DriverResetPasswordPage() {
             className="inline-flex items-center text-slate-400 text-sm hover:text-primary transition-colors"
           >
             <MaterialIcon name="arrow_back" size="sm" className="mr-1" />
-            Retour à la connexion
+            {t('auth.backToLogin')}
           </Link>
         </div>
       </div>

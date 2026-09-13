@@ -12,24 +12,27 @@ import { useDocumentStatus } from '@/hooks/useDocumentStatus'
 import type { DocStatus } from '@/hooks/useDocumentStatus'
 import { getDriverDocumentsSummary } from './documents-summary'
 import { getDriverDocumentReuploadPath } from '@/utils/entity-route-paths'
+import { useTranslation } from '@/hooks/useTranslation'
+import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 type Filter = 'all' | 'not_submitted' | 'pending' | 'approved' | 'rejected'
 
-function statusVisuals(status: DocStatus) {
+function statusVisuals(status: DocStatus, t: (key: string) => string) {
   switch (status) {
     case 'approved':
-      return { icon: 'check_circle', text: 'APPROUVÉ', color: 'text-green-400', bg: 'bg-green-500/10' }
+      return { icon: 'check_circle', text: t('driver.docApproved'), color: 'text-green-400', bg: 'bg-green-500/10' }
     case 'pending':
-      return { icon: 'hourglass_empty', text: 'EN COURS DE VÉRIFICATION', color: 'text-amber-400', bg: 'bg-amber-500/10' }
+      return { icon: 'hourglass_empty', text: t('driver.docPending'), color: 'text-amber-400', bg: 'bg-amber-500/10' }
     case 'rejected':
-      return { icon: 'cancel', text: 'REJETÉ', color: 'text-red-400', bg: 'bg-red-500/10' }
+      return { icon: 'cancel', text: t('driver.docRejected'), color: 'text-red-400', bg: 'bg-red-500/10' }
     default:
-      return { icon: 'upload_file', text: 'NON SOUMIS', color: 'text-slate-400', bg: 'bg-white/5' }
+      return { icon: 'upload_file', text: t('driver.docNotSubmitted'), color: 'text-slate-400', bg: 'bg-white/5' }
   }
 }
 
 export default function DriverDocumentsPage() {
   const router = useRouter()
+  const { t } = useTranslation()
   const [uid, setUid] = useState<string | null>(null)
   const [authResolved, setAuthResolved] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
@@ -130,31 +133,41 @@ export default function DriverDocumentsPage() {
     notSubmitted: counts.not_submitted,
     total: counts.all || documents.length || 10,
     globalStatus,
-  }), [counts, documents.length, globalStatus])
+  }, t), [counts, documents.length, globalStatus, t])
 
   const progress = documents.length === 0 ? 0 : counts.approved / documents.length
   const dashOffset = 2 * Math.PI * 42 * (1 - progress)
   const isPageLoading = !authResolved || loading
 
   const filters: Array<{ key: Filter; label: string }> = [
-    { key: 'all', label: 'Tous' },
-    { key: 'not_submitted', label: 'À téléverser' },
-    { key: 'pending', label: 'En attente' },
-    { key: 'approved', label: 'Approuvés' },
-    { key: 'rejected', label: 'Rejetés' },
+    { key: 'all', label: t('driver.filterAll') },
+    { key: 'not_submitted', label: t('driver.filterToUpload') },
+    { key: 'pending', label: t('driver.filterPending') },
+    { key: 'approved', label: t('driver.filterApproved') },
+    { key: 'rejected', label: t('driver.filterRejected') },
   ]
 
   return (
     <div className="min-h-screen bg-background pb-28 font-sans text-slate-100 antialiased">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-4">
-          <button onClick={() => router.back()} className="rounded-xl p-2 -ml-2 transition hover:bg-white/5 min-h-[44px] min-w-[44px] flex items-center justify-center">
+          <button
+            onClick={() => router.back()}
+            aria-label={t('common.back')}
+            className="rounded-xl p-2 -ml-2 transition hover:bg-white/5 min-h-[44px] min-w-[44px] flex items-center justify-center"
+          >
             <MaterialIcon name="arrow_back" className="text-[24px] text-primary" />
           </button>
-          <h1 className="text-lg font-bold text-primary">Mes documents</h1>
-          <button className="rounded-xl p-2 -mr-2 transition hover:bg-white/5 min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Aide">
-            <MaterialIcon name="help_outline" className="text-[24px] text-primary" />
-          </button>
+          <h1 className="text-lg font-bold text-primary">{t('driver.myDocuments')}</h1>
+          <div className="flex items-center gap-2">
+            <LanguageSelector variant="pill" />
+            <button
+              className="rounded-xl p-2 transition hover:bg-white/5 min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label={t('common.help')}
+            >
+              <MaterialIcon name="help_outline" className="text-[24px] text-primary" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -242,12 +255,12 @@ export default function DriverDocumentsPage() {
               </div>
             ) : filteredDocuments.length === 0 ? (
               <div className="py-12 text-center text-sm text-slate-500">
-                Aucun document dans cette catégorie
+                {t('driver.noDocumentsInCategory')}
               </div>
             ) : (
               <div className="space-y-3">
                 {filteredDocuments.map((document) => {
-                  const visual = statusVisuals(document.status)
+                  const visual = statusVisuals(document.status, t)
                   const showUploadButton = document.status === 'not_submitted' || document.status === 'rejected'
 
                   return (
@@ -270,7 +283,7 @@ export default function DriverDocumentsPage() {
 
                       {showUploadButton ? (
                         <span className="flex h-8 flex-shrink-0 items-center rounded-full bg-gradient-to-r from-primary to-[#ffae33] px-4 text-xs font-bold text-black">
-                          TÉLÉVERSER
+                          {t('driver.uploadAction')}
                         </span>
                       ) : (
                         <MaterialIcon name="chevron_right" className="flex-shrink-0 text-[20px] text-slate-500" />

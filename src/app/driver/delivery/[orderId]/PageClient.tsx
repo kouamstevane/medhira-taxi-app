@@ -11,8 +11,10 @@ import Level6_ArrivedClient from './components/Level6_ArrivedClient'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { NetworkErrorView } from '@/components/ui'
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler'
+import { useTranslation } from '@/hooks/useTranslation'
 
 export default function DeliveryOrderPage() {
+  const { t } = useTranslation('driver')
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -93,11 +95,11 @@ export default function DeliveryOrderPage() {
           <button
             onClick={() => router.replace('/driver/dashboard')}
             className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full glass-card text-white active:scale-95 transition-transform"
-            aria-label="Retour au tableau de bord"
+            aria-label={t('backToDashboard')}
           >
             <MaterialIcon name="arrow_back" size="md" />
           </button>
-          <h1 className="flex-1 text-center text-lg font-bold text-white pr-11">Course de livraison</h1>
+          <h1 className="flex-1 text-center text-lg font-bold text-white pr-11">{t('deliveryRideTitle')}</h1>
         </header>
         <main className="flex-1 flex items-center justify-center p-4">
           <NetworkErrorView onRetry={recharger} />
@@ -119,17 +121,17 @@ export default function DeliveryOrderPage() {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="glass-card rounded-2xl border border-white/10 p-6 max-w-sm w-full text-center space-y-4">
           <MaterialIcon name="cancel" className="text-amber-400 text-[48px]" />
-          <h2 className="text-xl font-bold text-white">Commande annulée</h2>
+          <h2 className="text-xl font-bold text-white">{t('deliveryOrderCancelled')}</h2>
           <p className="text-slate-400 text-sm">
             {order.cancellationReason === 'restaurant_cancelled'
-              ? "Le restaurant a annulé la commande — vous n'êtes pas pénalisé."
-              : 'La commande a été annulée.'}
+              ? t('deliveryCancelledByRestaurant')
+              : t('deliveryCancelledGeneric')}
           </p>
           <button
             onClick={() => router.replace('/driver/dashboard')}
             className="w-full h-12 bg-primary text-white font-bold rounded-2xl min-h-[44px]"
           >
-            Retour au dashboard
+            {t('backToDashboard')}
           </button>
         </div>
       </div>
@@ -155,7 +157,7 @@ export default function DeliveryOrderPage() {
     default:
       return (
         <div className="min-h-screen bg-background flex items-center justify-center text-slate-400">
-          Statut inconnu : {order.status}
+          {t('unknownStatus', { status: order.status })}
         </div>
       )
   }

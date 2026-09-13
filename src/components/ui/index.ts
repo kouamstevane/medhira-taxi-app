@@ -21,3 +21,5 @@ export { WalletPreview } from './WalletPreview';
 
 export { NetworkErrorView, DisconnectedCableIllustration } from './NetworkErrorView';
 export type { NetworkErrorViewProps } from './NetworkErrorView';
+
+export { LanguageSelector } from './LanguageSelector';

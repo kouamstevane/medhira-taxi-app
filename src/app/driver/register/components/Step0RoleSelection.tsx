@@ -3,28 +3,30 @@ import { useState } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { cn } from '@/lib/utils'
 import type { DriverType } from '@/types/firestore-collections'
+import { useTranslation } from '@/hooks/useTranslation'
 import { driverPrimaryButtonClassName, driverSectionCardClassName } from './driverOnboardingStyles'
 
 interface Props {
   onNext: (driverType: DriverType) => void
 }
 
-const ROLES: { value: DriverType; label: string; desc: string; icon: string }[] = [
-  { value: 'chauffeur', label: 'Chauffeur', desc: 'Transportez des passagers ou effectuez des courses avec votre véhicule', icon: 'directions_car' },
-  { value: 'livreur', label: 'Livreur', desc: 'Livrez repas, colis et toute commande à vos clients', icon: 'delivery_dining' },
-  { value: 'les_deux', label: 'Les deux', desc: 'Chauffeur et livreur selon la demande', icon: 'sync_alt' },
-]
-
 export default function Step0RoleSelection({ onNext }: Props) {
   const [selected, setSelected] = useState<DriverType | null>(null)
+  const { t } = useTranslation()
+
+  const roles: { value: DriverType; label: string; desc: string; icon: string }[] = [
+    { value: 'chauffeur', label: t('driver.roleChauffeur'), desc: t('driver.roleChauffeurDesc'), icon: 'directions_car' },
+    { value: 'livreur', label: t('driver.roleLivreur'), desc: t('driver.roleLivreurDesc'), icon: 'delivery_dining' },
+    { value: 'les_deux', label: t('driver.roleBoth'), desc: t('driver.roleBothDesc'), icon: 'sync_alt' },
+  ]
 
   return (
     <div className={cn(driverSectionCardClassName, 'w-full max-w-lg mx-auto')} data-testid="step0-role-selection">
-      <h2 className="text-2xl font-bold text-white mb-2 text-center">Quel est votre rôle ?</h2>
-      <p className="text-slate-400 text-center mb-8">Choisissez comment vous souhaitez utiliser l&apos;application.</p>
+      <h2 className="text-2xl font-bold text-white mb-2 text-center">{t('driver.roleSelectionTitle')}</h2>
+      <p className="text-slate-400 text-center mb-8">{t('driver.roleSelectionSubtitle')}</p>
 
       <div className="space-y-4 mb-8">
-        {ROLES.map((role) => (
+        {roles.map((role) => (
           <button
             key={role.value}
             onClick={() => setSelected(role.value)}
@@ -56,7 +58,7 @@ export default function Step0RoleSelection({ onNext }: Props) {
         data-testid="step0-continue-btn"
         className={cn(driverPrimaryButtonClassName)}
       >
-        Continuer
+        {t('common.next')}
         <MaterialIcon name="arrow_forward" size="md" className="ml-2" />
       </button>
     </div>

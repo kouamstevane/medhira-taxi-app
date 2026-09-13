@@ -1,4 +1,5 @@
 import type { MenuItem } from '@/types';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface DeleteMenuItemDialogProps {
   item: Pick<MenuItem, 'name'>;
@@ -13,6 +14,8 @@ export function DeleteMenuItemDialog({
   onConfirm,
   isProcessing = false,
 }: DeleteMenuItemDialogProps) {
+  const { t } = useTranslation('restaurant');
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
       <div
@@ -22,10 +25,10 @@ export function DeleteMenuItemDialog({
         className="w-full max-w-md rounded-2xl border border-white/10 bg-[#171a20] p-5 shadow-2xl"
       >
         <h2 id="delete-menu-item-dialog-title" className="text-lg font-bold text-white">
-          Supprimer un plat ?
+          {t('deleteItemPrompt')}
         </h2>
         <p className="mt-2 text-sm leading-5 text-slate-300">
-          Voulez-vous vraiment supprimer « {item.name} » ? Cette action est irréversible.
+          {t('deleteItemConfirmNamed', { name: item.name })}
         </p>
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row">
           <button
@@ -34,7 +37,7 @@ export function DeleteMenuItemDialog({
             disabled={isProcessing}
             className="h-11 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-slate-200 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Annuler
+            {t('cancel')}
           </button>
           <button
             type="button"
@@ -42,7 +45,7 @@ export function DeleteMenuItemDialog({
             disabled={isProcessing}
             className="h-11 flex-1 rounded-xl border border-destructive/30 bg-destructive/15 px-3 text-sm font-bold text-destructive transition hover:bg-destructive/25 disabled:cursor-wait disabled:opacity-60"
           >
-            {isProcessing ? 'Suppression en cours…' : 'Confirmer la suppression'}
+            {isProcessing ? t('deletingInProgress') : t('deleteItemConfirm')}
           </button>
         </div>
       </div>

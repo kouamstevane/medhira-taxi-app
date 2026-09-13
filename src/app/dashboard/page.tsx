@@ -34,9 +34,12 @@ import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { BecomeProCard } from '@/components/role/BecomeProCard';
 import { getRestaurantPortalPath } from '@/app/food/portal/restaurant-portal-paths';
 import { DashboardServiceGrid } from './components/DashboardServiceGrid';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function Dashboard() {
   const router = useRouter();
+  const { t } = useTranslation('client');
   const { authStatus, currentUser, userData: authUserData } = useAuth();
   const effectiveStatuses = useEffectiveRoleStatus();
   const routerRef = useRef(router);
@@ -250,7 +253,7 @@ export default function Dashboard() {
               </div>
             </div>
             <h2 className="text-2xl font-bold text-white mb-2">Medjira</h2>
-            <p className="text-muted-foreground animate-pulse">Redirection...</p>
+            <p className="text-muted-foreground animate-pulse">{t('redirecting')}</p>
           </div>
         </div>
       ) : (
@@ -275,11 +278,12 @@ export default function Dashboard() {
               </div>
             )}
             <h1 className="text-white text-[18px] font-bold tracking-tight">
-              Bonjour, {userData.firstName || 'Utilisateur'}
+              {t('greeting', { name: userData.firstName || t('defaultUser') })}
             </h1>
           </div>
 
           <div className="flex items-center gap-2">
+            <LanguageSelector variant="pill" />
             <RoleSwitcher />
 
             {/* Notifications */}
@@ -325,8 +329,8 @@ export default function Dashboard() {
                 <MaterialIcon name="credit_card" className="text-primary text-xl" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white font-bold text-sm">Ajoutez votre carte bancaire</p>
-                <p className="text-slate-400 text-xs mt-0.5">Payez vos courses facilement et en toute sécurité</p>
+                <p className="text-white font-bold text-sm">{t('addPaymentMethodTitle')}</p>
+                <p className="text-slate-400 text-xs mt-0.5">{t('addPaymentMethodDesc')}</p>
               </div>
               <MaterialIcon name="chevron_right" className="text-slate-400 flex-shrink-0" />
             </div>
@@ -335,7 +339,7 @@ export default function Dashboard() {
 
         {/* Service Grid */}
         <section className="mb-6">
-          <h2 className="text-white text-[20px] font-bold mb-4 px-1 tracking-tight">Que voulez-vous faire ?</h2>
+          <h2 className="text-white text-[20px] font-bold mb-4 px-1 tracking-tight">{t('whatDoYouWantToDo')}</h2>
           <DashboardServiceGrid />
         </section>
 
@@ -351,8 +355,8 @@ export default function Dashboard() {
                   <MaterialIcon name="directions_car" className="text-emerald-500" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-white font-bold">Espace Chauffeur</p>
-                  <p className="text-emerald-500 text-xs font-medium">Voir les demandes en cours</p>
+                  <p className="text-white font-bold">{t('driverAreaTitle')}</p>
+                  <p className="text-emerald-500 text-xs font-medium">{t('driverAreaSubtitle')}</p>
                 </div>
                 <MaterialIcon name="chevron_right" className="text-slate-400" />
               </div>
@@ -364,9 +368,9 @@ export default function Dashboard() {
         {userData.roles?.restaurant != null && restaurantData.length > 0 && (
           <section className="mb-6">
             <div className="flex items-center justify-between mb-3 px-1">
-              <h2 className="text-white text-[20px] font-bold tracking-tight">Mes restaurants</h2>
+              <h2 className="text-white text-[20px] font-bold tracking-tight">{t('myRestaurantsTitle')}</h2>
               <Link href="/restaurant/register?from=become-pro" className="text-primary font-semibold text-sm">
-                Ajouter
+                {t('addRestaurant')}
               </Link>
             </div>
             <div className="space-y-3">
@@ -383,12 +387,12 @@ export default function Dashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-bold truncate">{restaurant.name}</p>
-                      <p className="text-slate-400 text-xs">Gérer menus et commandes</p>
+                      <p className="text-slate-400 text-xs">{t('manageMenuAndOrders')}</p>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                       restaurant.status === 'approved' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-amber-500/15 text-amber-500'
                     }`}>
-                      {restaurant.status === 'approved' ? 'Actif' : 'En attente'}
+                      {restaurant.status === 'approved' ? t('activeStatus') : t('pendingStatus')}
                     </span>
                   </div>
                 </GlassCard>
@@ -400,9 +404,9 @@ export default function Dashboard() {
         {/* Recent Rides */}
         <section className="mb-8">
           <div className="flex items-center justify-between mb-4 px-1">
-            <h2 className="text-white text-[20px] font-bold tracking-tight">Courses récentes</h2>
+            <h2 className="text-white text-[20px] font-bold tracking-tight">{t('recentRidesTitle')}</h2>
             <Link href="/historique" className="text-primary font-semibold text-sm">
-              Voir tout &rarr;
+              {t('viewAll')} &rarr;
             </Link>
           </div>
           <div className="space-y-3">
@@ -418,7 +422,7 @@ export default function Dashboard() {
                   <div className="flex-1">
                     <div className="flex justify-between items-start">
                       <p className="text-white font-medium text-[15px]">
-                        {item.destination || item.receiverAddress || item.description || 'Course'}
+                        {item.destination || item.receiverAddress || item.description || t('rideFallbackName')}
                       </p>
                       <span className="text-white font-bold">
                         {formatCurrencyWithCode(item.price ?? item.amount ?? 0)}
@@ -432,10 +436,10 @@ export default function Dashboard() {
                         : 'text-amber-500'
                     }`}>
                       {item.status === 'completed' || item.status === 'delivered'
-                        ? 'Terminé'
+                        ? t('statusCompleted')
                         : item.status === 'cancelled'
-                        ? 'Annulé'
-                        : 'En cours'}
+                        ? t('statusCancelled')
+                        : t('statusInProgress')}
                     </p>
                   </div>
                 </GlassCard>
@@ -443,8 +447,8 @@ export default function Dashboard() {
             ) : (
               <GlassCard className="p-8 text-center">
                 <MaterialIcon name="receipt_long" className="text-slate-600 text-[40px] mx-auto mb-3" />
-                <p className="text-slate-400 font-medium">Aucune course aujourd&apos;hui</p>
-                <p className="text-sm text-slate-500 mt-1">Réservez un taxi pour commencer</p>
+                <p className="text-slate-400 font-medium">{t('noRidesToday')}</p>
+                <p className="text-sm text-slate-500 mt-1">{t('bookTaxiToStart')}</p>
               </GlassCard>
             )}
           </div>

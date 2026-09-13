@@ -5,6 +5,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { MenuItemCard } from '@/components/food/MenuItemCard';
 import type { MenuItem, Restaurant } from '@/types/food-delivery';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface RestaurantMenuListProps {
   restaurant: Restaurant;
@@ -53,11 +54,12 @@ export function RestaurantMenuList({
   onLoadMore,
   onRetry,
 }: RestaurantMenuListProps) {
+  const { t } = useTranslation('food');
   const hasFilters = Boolean(search.trim()) || Boolean(category);
   const showEmptyState = !isLoading && !error && items.length === 0;
 
   return (
-    <section aria-label="Plats du menu" className="space-y-4">
+    <section aria-label={t('menuDishesLabel')} className="space-y-4">
       {error ? (
         <div
           role="alert"
@@ -70,7 +72,7 @@ export function RestaurantMenuList({
             className="mt-3 min-h-11 rounded-full px-4"
             onClick={onRetry}
           >
-            Réessayer
+            {t('retry')}
           </Button>
         </div>
       ) : null}
@@ -94,7 +96,7 @@ export function RestaurantMenuList({
       {isLoadingMore ? (
         <div className="flex items-center justify-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-4 text-sm text-slate-300">
           <MaterialIcon name="progress_activity" size="sm" className="animate-spin text-[#F2C87D]" />
-          <span>Chargement de plats supplémentaires…</span>
+          <span>{t('loadingMoreDishes')}</span>
         </div>
       ) : null}
 
@@ -102,8 +104,8 @@ export function RestaurantMenuList({
         <div className="rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-10 text-center text-slate-300">
           <p className="text-base font-medium text-white">
             {hasFilters
-              ? 'Aucun plat ne correspond à votre recherche.'
-              : "Ce restaurant n'a pas encore ajouté de plats à son menu."}
+              ? t('noDishesFound')
+              : t('noDishesInRestaurant')}
           </p>
         </div>
       ) : null}
@@ -116,7 +118,7 @@ export function RestaurantMenuList({
             className="min-h-11 rounded-full border-white/10 bg-white/[0.03] px-5 text-slate-100 hover:bg-white/[0.07]"
             onClick={onLoadMore}
           >
-            Afficher plus de plats
+            {t('showMoreDishes')}
           </Button>
         </div>
       ) : null}

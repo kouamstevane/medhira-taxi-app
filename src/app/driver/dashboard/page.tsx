@@ -17,7 +17,7 @@ import {
   increment
 } from 'firebase/firestore';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signOut, User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { StripeOnboardingBanner } from '@/components/ui/StripeOnboardingBanner';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -50,6 +50,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { useDocumentStatus } from '@/hooks/useDocumentStatus';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   canDriverAccessRideWork,
   getDriverAvailabilityCardState,
@@ -102,9 +103,10 @@ async function fetchBookingsForRequests(
 }
 
 export default function DriverDashboard() {
-  const { driver, setDriver, updateDriver } = useDriverStore();
+  const { driver, setDriver, updateDriver, clearDriver } = useDriverStore();
   const { userData } = useAuth();
   const { unreadCount } = useNotifications();
+  const { t, locale } = useTranslation();
   useDriverAvailability();
   const { documents: driverDocs } = useDocumentStatus(driver?.uid ?? null);
   const approvedDocsCount = driverDocs.filter(d => d.status === 'approved').length;
@@ -136,7 +138,7 @@ export default function DriverDashboard() {
   const getInitials = (firstName?: string, lastName?: string): string => {
     const firstChar = firstName?.[0] || 'D';
     const lastChar = lastName?.[0] || 'C';
-    return `${firstChar}${lastChar}`;
+    return `${firstChar}${lastChar}`.toUpperCase();
   };
 
   const formatValue = (value: string | number | boolean | null | undefined, defaultValue: string | number = 'N/A'): string | number | boolean => {
@@ -144,11 +146,18 @@ export default function DriverDashboard() {
   };
 
   useEffect(() => {
-    let authChangeId = 0;
     mountedRef.current = true;
-    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
-      const thisChangeId = ++authChangeId;
+    let authChangeId = 0;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user: User | null) => {
+      authChangeId += 1;
+      const thisChangeId = authChangeId;
+      if (!mountedRef.current) return;
+
       if (!user) {
+        clearDriver();
+        setCurrentUser(null);
+        setLoading(false);
         router.push('/driver/login');
         return;
       }
@@ -170,7 +179,7 @@ export default function DriverDashboard() {
         const driverDoc = await getDoc(doc(db, 'drivers', user.uid));
         if (!mountedRef.current || thisChangeId !== authChangeId) return;
         if (!driverDoc.exists()) {
-          setError("Profil chauffeur non trouvé");
+          setError(t('driver.driverProfileNotFound'));
           setLoading(false);
           return;
         }
@@ -180,7 +189,7 @@ export default function DriverDashboard() {
         // Vérifier si le compte est actif
         if (driverData.isActive === false) {
           await signOut(auth);
-          showError('Votre compte a été désactivé par un administrateur. Contactez le support.');
+          showError(t('driver.accountDeactivated'));
           router.push('/driver/login');
           return;
         }
@@ -188,14 +197,14 @@ export default function DriverDashboard() {
         // Vérifier si le compte est suspendu
         if (driverData.isSuspended) {
           await signOut(auth);
-          const reason = driverData.suspensionReason || 'Contactez le support pour plus d\'informations.';
-          showError(`Votre compte a été suspendu. Raison: ${reason}`);
+          const reason = driverData.suspensionReason || t('driver.supportFallback');
+          showError(t('driver.accountSuspended', { reason }));
           router.push('/driver/login');
           return;
         }
 
         if (driverData.status === 'rejected') {
-          showError('Votre demande a été rejetée. Vous pouvez soumettre une nouvelle demande.');
+          showError(t('driver.accountRejected'));
           router.push('/driver/register');
           return;
         }
@@ -222,15 +231,15 @@ export default function DriverDashboard() {
 
         const safeDriverData: DriverCoreData = {
           uid: user.uid,
-          firstName: driverData.firstName || 'Chauffeur',
+          firstName: driverData.firstName || t('taxi.driver'),
           lastName: driverData.lastName || '',
           email: driverData.email || '',
           phone: driverData.phone || '',
           currentLocation: driverData.currentLocation || null,
           car: driverData.car || {
-            model: 'Modèle non spécifié',
-            plate: 'Non spécifié',
-            color: 'Non spécifié'
+            model: t('driver.modelNotSpecified'),
+            plate: t('driver.notSpecified'),
+            color: t('driver.notSpecified')
           },
           status: driverData.status || 'pending',
           isAvailable: Boolean(driverData.isAvailable),
@@ -418,7 +427,7 @@ export default function DriverDashboard() {
       const stripeStatus = (driver as DriverCoreData & { stripeAccountStatus?: string; stripePayoutsEnabled?: boolean }).stripeAccountStatus;
       const payoutsEnabled = (driver as DriverCoreData & { stripePayoutsEnabled?: boolean }).stripePayoutsEnabled;
       if (stripeStatus !== 'active' || payoutsEnabled === false) {
-        showError("Configuration des paiements requise avant de passer en ligne. Vous allez être redirigé pour la terminer.");
+        showError(t('driver.paymentSetupRequiredOnline'));
         router.push('/driver/payments/setup');
         return;
       }
@@ -432,7 +441,7 @@ export default function DriverDashboard() {
       });
     } catch {
       updateDriver({ isAvailable: driver.isAvailable });
-      showError("Impossible de changer votre disponibilité. Réessayez dans un instant.");
+      showError(t('driver.availabilityChangeError'));
     } finally {
       setAvailabilityUpdating(false);
     }
@@ -446,7 +455,7 @@ export default function DriverDashboard() {
       const result = await assignDriver(rideId, auth.currentUser.uid);
 
       if (!result.success) {
-        showError(result.error || "Impossible d'accepter la course. Elle a peut-être déjà été prise.");
+        showError(result.error || t('driver.cannotAcceptRide'));
         return;
       }
 
@@ -468,7 +477,7 @@ export default function DriverDashboard() {
           userId: bookingData.userId,
           passengerName: (bookingData.bookedForSomeoneElse && bookingData.passengerName)
             ? bookingData.passengerName
-            : (bookingData.userEmail || "Client"),
+            : (bookingData.userEmail || t('driver.client')),
           pickup: bookingData.pickup,
           destination: bookingData.destination,
           price: bookingData.price,
@@ -487,7 +496,7 @@ export default function DriverDashboard() {
       }
     } catch (err: unknown) {
       console.error("Erreur d'acceptation:", err);
-      const message = err instanceof Error ? err.message : "Impossible d'accepter la course.";
+      const message = err instanceof Error ? err.message : t('driver.cannotAcceptRide');
       showError(message);
     }
   };
@@ -515,7 +524,7 @@ export default function DriverDashboard() {
       const result = await assignDriver(tripId, auth.currentUser.uid);
 
       if (!result.success) {
-        showError(result.error || "Impossible d'accepter la course. Elle a peut-être déjà été prise.");
+        showError(result.error || t('driver.cannotAcceptRide'));
         return;
       }
 
@@ -537,7 +546,7 @@ export default function DriverDashboard() {
           userId: bookingData.userId,
           passengerName: (bookingData.bookedForSomeoneElse && bookingData.passengerName)
             ? bookingData.passengerName
-            : (bookingData.userEmail || "Client"),
+            : (bookingData.userEmail || t('driver.client')),
           pickup: bookingData.pickup,
           destination: bookingData.destination,
           price: bookingData.price,
@@ -556,7 +565,7 @@ export default function DriverDashboard() {
       }
     } catch (err: unknown) {
       console.error("Erreur d'acceptation:", err);
-      const message = err instanceof Error ? err.message : "Impossible d'accepter la course.";
+      const message = err instanceof Error ? err.message : t('driver.cannotAcceptRide');
       showError(message);
     }
   };
@@ -568,7 +577,7 @@ export default function DriverDashboard() {
       // Le state se mettra à jour via onSnapshot
     } catch (error) {
       console.error('Erreur marquage arrivée:', error);
-      showError('Erreur lors du marquage. Réessayez.');
+      showError(t('driver.errorMarkingArrived'));
     }
   };
 
@@ -579,7 +588,7 @@ export default function DriverDashboard() {
       // Le state se mettra à jour via onSnapshot
     } catch (error) {
       console.error('Erreur démarrage course:', error);
-      showError('Erreur lors du démarrage. Réessayez.');
+      showError(t('driver.errorStartingTrip'));
     }
   };
 
@@ -604,7 +613,7 @@ export default function DriverDashboard() {
       setCurrentTrip(null);
     } catch (error) {
       console.error("Erreur lors de la fin de course:", error);
-      showError("Erreur lors de la clôture de la course");
+      showError(t('driver.errorCompletingTrip'));
     }
   };
 
@@ -614,7 +623,7 @@ export default function DriverDashboard() {
       // Forcer le rechargement complet pour vider le cache
       window.location.href = '/driver/login';
     } catch {
-      setError("Erreur de déconnexion");
+      setError(t('driver.logoutError'));
     }
   };
 
@@ -684,7 +693,7 @@ export default function DriverDashboard() {
 
         {/* Greeting Section */}
         <div className="px-6 pt-5 pb-2">
-          <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Espace Chauffeur</span>
+          <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">{t('driver.dashboard')}</span>
           <h1 className="text-xl font-bold text-white mt-1 leading-tight">
             Bonjour, {formatValue(driver.firstName)} !
           </h1>
@@ -746,9 +755,9 @@ export default function DriverDashboard() {
 
         <div className="px-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Demandes en cours</h2>
+            <h2 className="text-lg font-bold text-white">{t('driver.newRideRequest')}</h2>
             {rideRequests.length > 0 && (
-              <span className="text-primary text-xs font-bold px-2 py-1 bg-primary/10 rounded">Nouveau</span>
+              <span className="text-primary text-xs font-bold px-2 py-1 bg-primary/10 rounded">{t('driver.newBadge')}</span>
             )}
           </div>
 
@@ -768,7 +777,7 @@ export default function DriverDashboard() {
               {availableTrips.length === 0 ? (
                 <GlassCard className="p-8 text-center">
                   <MaterialIcon name="search_off" className="text-slate-500 text-[40px] mb-3" />
-                  <p className="text-slate-400 text-sm">Aucune demande pour le moment</p>
+                  <p className="text-slate-400 text-sm">{t('driver.waitingForRides')}</p>
                 </GlassCard>
               ) : (
                 <div className="space-y-4">
@@ -819,7 +828,7 @@ export default function DriverDashboard() {
                             <div className="size-1.5 bg-primary rounded-full" />
                           </div>
                           <div>
-                            <p className="text-slate-400 text-[10px] uppercase font-bold leading-none mb-1">Départ</p>
+                            <p className="text-slate-400 text-[10px] uppercase font-bold leading-none mb-1">{t('taxi.pickup')}</p>
                             <p className="text-white text-sm font-medium">{trip.pickup}</p>
                           </div>
                         </div>
@@ -828,7 +837,7 @@ export default function DriverDashboard() {
                             <div className="size-1.5 bg-white/40 rounded-full" />
                           </div>
                           <div>
-                            <p className="text-slate-400 text-[10px] uppercase font-bold leading-none mb-1">Destination</p>
+                            <p className="text-slate-400 text-[10px] uppercase font-bold leading-none mb-1">{t('driver.destination')}</p>
                             <p className="text-white text-sm font-medium">{trip.destination}</p>
                           </div>
                         </div>
@@ -839,14 +848,14 @@ export default function DriverDashboard() {
                           className="py-3 rounded-xl bg-gradient-to-r from-primary to-orange-600 text-background font-bold shadow-lg shadow-primary/20 active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
                         >
                           <MaterialIcon name="check_circle" size="md" />
-                          Accepter
+                          {t('driver.accept')}
                         </button>
                         <button
                           onClick={() => setAvailableTrips(prev => prev.filter(t => t.id !== trip.id))}
                           className="py-3 rounded-xl border border-white/10 bg-white/5 text-slate-400 font-bold active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
                         >
                           <MaterialIcon name="cancel" size="md" />
-                          Ignorer
+                          {t('driver.ignore')}
                         </button>
                       </div>
                     </GlassCard>
@@ -859,18 +868,18 @@ export default function DriverDashboard() {
 
         <div className="grid grid-cols-3 gap-3 px-6 mb-6">
           <GlassCard className="p-3 flex flex-col items-center text-center">
-            <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Gains</span>
+            <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">{t('driver.tabEarnings')}</span>
             <span className="text-white font-bold text-sm leading-tight">{formatCurrencyWithCode(driver.earnings || 0)}</span>
           </GlassCard>
           <GlassCard className="p-3 flex flex-col items-center text-center">
-            <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Note</span>
+            <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">{t('driver.rating')}</span>
             <div className="flex items-center gap-1">
               <MaterialIcon name="star" size="sm" className="text-primary" filled />
               <span className="text-white font-bold text-sm">{formatValue(driver.rating, 0)}</span>
             </div>
           </GlassCard>
           <GlassCard className="p-3 flex flex-col items-center text-center">
-            <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">Courses</span>
+            <span className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1">{t('driver.rides')}</span>
             <span className="text-white font-bold text-sm">{formatValue(driver.tripsCompleted, 0)}</span>
           </GlassCard>
         </div>
@@ -879,7 +888,7 @@ export default function DriverDashboard() {
           <div className="px-6 mb-6">
             <DeliveryOrdersList
               uid={driver.uid}
-              header={<h2 className="text-base font-bold text-white mb-3">Commandes de livraison</h2>}
+              header={<h2 className="text-base font-bold text-white mb-3">{t('driver.deliveryOrders')}</h2>}
             />
           </div>
         )}
@@ -888,26 +897,26 @@ export default function DriverDashboard() {
           <div className="px-6 mb-6">
             <ParcelOrdersList
               uid={driver.uid}
-              header={<h2 className="text-base font-bold text-white mb-3">Colis à transporter</h2>}
+              header={<h2 className="text-base font-bold text-white mb-3">{t('driver.parcelsToDeliver')}</h2>}
             />
           </div>
         )}
 
         {dailyHistory.length > 0 && (
           <div className="px-6 mb-6">
-            <h2 className="text-base font-bold text-white mb-3">Historique du jour</h2>
+            <h2 className="text-base font-bold text-white mb-3">{t('driver.todayHistory')}</h2>
             <GlassCard className="p-4">
               <div className="space-y-3">
                 {dailyHistory.map(trip => (
                   <div key={trip.id} className="border-b border-white/5 pb-2 last:border-b-0 last:pb-0">
                     <div className="flex justify-between items-center">
                       <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-white text-sm truncate">Course #{trip.id.slice(-4)}</p>
+                        <p className="font-semibold text-white text-sm truncate">{t('driver.tripNumber', { id: trip.id.slice(-4) })}</p>
                         <p className="text-xs text-slate-400 truncate">
                           {trip.createdAt instanceof Timestamp
-                            ? new Date(trip.createdAt.seconds * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                            ? new Date(trip.createdAt.seconds * 1000).toLocaleTimeString(locale === 'en' ? 'en-US' : 'fr-FR', { hour: '2-digit', minute: '2-digit' })
                             : trip.createdAt
-                              ? new Date(trip.createdAt instanceof Date ? trip.createdAt : trip.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+                              ? new Date(trip.createdAt instanceof Date ? trip.createdAt : trip.createdAt).toLocaleTimeString(locale === 'en' ? 'en-US' : 'fr-FR', { hour: '2-digit', minute: '2-digit' })
                               : '--:--'
                           } — {trip.destination}
                         </p>
@@ -923,7 +932,7 @@ export default function DriverDashboard() {
 
         {/* Actions rapides — 2x2 grid */}
         <div className="px-6 mb-6">
-          <h2 className="text-base font-bold text-white mb-3">Accès rapide</h2>
+          <h2 className="text-base font-bold text-white mb-3">{t('driver.quickAccess')}</h2>
           <div className="grid grid-cols-2 gap-3">
             {quickActions.map((item) => (
               <button
@@ -952,6 +961,7 @@ export default function DriverDashboard() {
 
 
 function Loading() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center">
@@ -961,13 +971,14 @@ function Loading() {
             <MaterialIcon name="local_taxi" className="text-white text-[28px]" />
           </div>
         </div>
-        <p className="text-slate-400 animate-pulse">Chargement...</p>
+        <p className="text-slate-400 animate-pulse">{t('common.loading')}</p>
       </div>
     </div>
   );
 }
 
 function ErrorView({ error, onLogout }: { error: string; onLogout: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
       <div className="glass-card p-8 rounded-2xl text-center max-w-sm w-full border border-white/10">
@@ -980,7 +991,7 @@ function ErrorView({ error, onLogout }: { error: string; onLogout: () => void })
           className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
         >
           <MaterialIcon name="logout" size="sm" />
-          Se déconnecter
+          {t('driver.logout')}
         </button>
       </div>
     </div>
@@ -988,19 +999,20 @@ function ErrorView({ error, onLogout }: { error: string; onLogout: () => void })
 }
 
 function NoDriver({ onLogout }: { onLogout: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
       <div className="glass-card p-8 rounded-2xl text-center max-w-sm w-full border border-white/10">
         <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
           <MaterialIcon name="person_off" className="text-primary text-[28px]" />
         </div>
-        <p className="text-slate-400 text-sm mb-6">Aucun profil chauffeur trouvé</p>
+        <p className="text-slate-400 text-sm mb-6">{t('driver.noDriverProfileFound')}</p>
         <button
           onClick={onLogout}
           className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
         >
           <MaterialIcon name="logout" size="sm" />
-          Se déconnecter
+          {t('driver.logout')}
         </button>
       </div>
     </div>

@@ -6,6 +6,8 @@ import Image from 'next/image';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { AuthService } from '@/services';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 interface RestaurantPortalHeaderProps {
   restaurantName: string;
@@ -13,6 +15,7 @@ interface RestaurantPortalHeaderProps {
 }
 
 export function RestaurantPortalHeader({ restaurantName, logoUrl }: RestaurantPortalHeaderProps) {
+  const { t } = useTranslation('restaurant');
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +29,7 @@ export function RestaurantPortalHeader({ restaurantName, logoUrl }: RestaurantPo
       await AuthService.signOut();
       router.replace('/login');
     } catch {
-      setError('Impossible de vous déconnecter. Réessayez.');
+      setError(t('signOutError'));
       setSigningOut(false);
     }
   }
@@ -35,7 +38,7 @@ export function RestaurantPortalHeader({ restaurantName, logoUrl }: RestaurantPo
     <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/5 bg-background/80 px-4 py-4 backdrop-blur-xl sm:px-8">
       <div className="flex min-w-0 items-center gap-3">
         {logoUrl ? (
-          <Image src={logoUrl} alt={`Logo ${restaurantName}`} width={40} height={40} className="size-10 shrink-0 rounded-xl object-cover" />
+          <Image src={logoUrl} alt={t('restaurantLogoAlt', { name: restaurantName })} width={40} height={40} className="size-10 shrink-0 rounded-xl object-cover" />
         ) : (
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
             <MaterialIcon name="shopping_bag" size="lg" className="text-primary" />
@@ -43,18 +46,19 @@ export function RestaurantPortalHeader({ restaurantName, logoUrl }: RestaurantPo
         )}
         <div className="min-w-0">
           <h1 className="truncate text-xl font-bold text-white">{restaurantName}</h1>
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Tableau de bord gérant</p>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('dashboardTitle')}</p>
         </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        <LanguageSelector variant="compact" />
         <RoleSwitcher allowClientActivation />
         <button
           type="button"
           onClick={() => void handleLogout()}
           disabled={signingOut}
-          aria-label="Se déconnecter"
-          title="Se déconnecter"
+          aria-label={t('signOut')}
+          title={t('signOut')}
           className="flex size-10 items-center justify-center rounded-full border border-white/10 text-slate-400 transition hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-wait disabled:opacity-50"
         >
           {signingOut ? (

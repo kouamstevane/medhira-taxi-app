@@ -12,6 +12,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { NetworkStatusBanner } from '@/components/ui/NetworkStatusBanner';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   createParcelOrder,
   estimateParcelPrice,
@@ -85,6 +86,7 @@ const initialFormData: FormData = {
 export default function ColisPage() {
   const router = useRouter();
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
   const { isLoaded, loadError, autocompleteService } = useGoogleMaps();
 
   const { preciseLocation, getCurrentPosition } = useCapacitorGeolocation();
@@ -377,7 +379,7 @@ export default function ColisPage() {
         >
           <MaterialIcon name="arrow_back" size="md" />
         </button>
-        <h1 className="text-lg font-bold text-white">Transport de colis</h1>
+        <h1 className="text-lg font-bold text-white">{t('colis.title')}</h1>
         <div className="w-10" />
       </header>
 
@@ -391,18 +393,18 @@ export default function ColisPage() {
         <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-3 flex items-start gap-2">
           <MaterialIcon name="info" size="sm" className="text-blue-400 mt-0.5" />
           <p className="text-xs text-blue-300/90">
-            Service de transport urbain
+            {t('colis.urbanServiceNotice')}
           </p>
         </div>
 
         <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <MaterialIcon name="swap_vert" className="text-primary" />
-            Adresses
+            {t('colis.addresses')}
           </h2>
 
           <AddressInput
-            label="Adresse de retrait"
+            label={t('colis.pickupAddressLabel')}
             value={formData.pickupAddress}
             onChange={(val) => setFormData((prev) => ({ ...prev, pickupAddress: val, pickupLocation: null }))}
             onSelect={async (suggestion) => {
@@ -411,7 +413,7 @@ export default function ColisPage() {
                 setFormData((prev) => ({ ...prev, pickupLocation: loc }));
               }
             }}
-            placeholder="Où récupérer le colis ?"
+            placeholder={t('colis.pickupAddressPlaceholder')}
             autocompleteService={autocompleteService}
             error={fieldErrors.pickup}
             location={gpsLocation}
@@ -420,7 +422,7 @@ export default function ColisPage() {
           />
 
           <AddressInput
-            label="Adresse de livraison"
+            label={t('colis.dropoffAddressLabel')}
             value={formData.dropoffAddress}
             onChange={(val) => setFormData((prev) => ({ ...prev, dropoffAddress: val, dropoffLocation: null }))}
             onSelect={async (suggestion) => {
@@ -429,7 +431,7 @@ export default function ColisPage() {
                 setFormData((prev) => ({ ...prev, dropoffLocation: loc }));
               }
             }}
-            placeholder="Où livrer le colis ?"
+            placeholder={t('colis.dropoffAddressPlaceholder')}
             autocompleteService={autocompleteService}
             error={fieldErrors.dropoff}
             location={gpsLocation}
@@ -441,7 +443,7 @@ export default function ColisPage() {
         <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <MaterialIcon name="inventory_2" className="text-primary" />
-            Type de colis
+            {t('colis.packageType')}
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {(Object.entries(PARCEL_TYPE_LABELS) as [ParcelType, typeof PARCEL_TYPE_LABELS[ParcelType]][]).map(
@@ -473,13 +475,13 @@ export default function ColisPage() {
           {formData.parcelType === 'other' && (
             <div className="mt-3">
               <label className="block text-xs font-medium text-slate-300 mb-1">
-                Précisez le type de colis <span className="text-red-500">*</span>
+                {t('colis.customTypeLabel')} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 value={formData.customType}
                 onChange={(e) => setFormData((prev) => ({ ...prev, customType: e.target.value }))}
-                placeholder="Ex: Clés, vêtement, appareil..."
+                placeholder={t('colis.customTypePlaceholder')}
                 className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
                 style={{ fontSize: '16px' }}
                 maxLength={100}
@@ -494,12 +496,12 @@ export default function ColisPage() {
         <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <MaterialIcon name="person" className="text-primary" />
-            Destinataire
+            {t('colis.recipient')}
           </h2>
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
-              Nom du destinataire <span className="text-red-500">*</span>
+              {t('colis.recipientName')} <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -516,7 +518,7 @@ export default function ColisPage() {
 
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">
-              Téléphone du destinataire <span className="text-red-500">*</span>
+              {t('colis.recipientPhone')} <span className="text-red-500">*</span>
             </label>
             <input
               type="tel"
@@ -535,13 +537,13 @@ export default function ColisPage() {
         <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <MaterialIcon name="note" className="text-primary" />
-            Instructions de retrait
-            <span className="text-xs text-slate-500 font-normal">(optionnel)</span>
+            {t('colis.pickupInstructionsTitle')}
+            <span className="text-xs text-slate-500 font-normal">({t('common.optional')})</span>
           </h2>
           <textarea
             value={formData.pickupInstructions}
             onChange={(e) => setFormData((prev) => ({ ...prev, pickupInstructions: e.target.value }))}
-            placeholder="Ex: Sonner à l'entrée, 3e étage…"
+            placeholder={t('colis.pickupInstructionsPlaceholder')}
             className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm resize-none focus:ring-2 focus:ring-primary focus:border-transparent"
             style={{ fontSize: '16px' }}
             rows={2}
@@ -553,19 +555,19 @@ export default function ColisPage() {
           <section className="glass-card p-5 rounded-2xl border border-primary/20 bg-primary/5">
             <h2 className="text-lg font-bold text-white flex items-center gap-2 mb-3">
               <MaterialIcon name="local_shipping" className="text-primary" />
-              Estimation
+              {t('taxi.estimatedFare')}
             </h2>
             <div className="space-y-2 text-sm text-slate-400">
               <div className="flex justify-between">
-                <span>Distance</span>
+                <span>{t('common.distance')}</span>
                 <span className="text-white">{priceEstimate.distance.toFixed(1)} km</span>
               </div>
               <div className="flex justify-between">
-                <span>Durée estimée</span>
+                <span>{t('common.duration')}</span>
                 <span className="text-white">~{priceEstimate.duration} min</span>
               </div>
               <div className="border-t border-white/10 pt-3 flex justify-between items-center text-lg font-bold text-white">
-                <span>Prix estimé</span>
+                <span>{t('taxi.fare')}</span>
                 <span className="text-primary">{priceEstimate.price.toFixed(2)} {priceEstimate.currency}</span>
               </div>
             </div>
@@ -575,7 +577,7 @@ export default function ColisPage() {
         <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <MaterialIcon name="account_balance_wallet" className="text-primary" />
-            Mode de paiement (100% In-App)
+            {t('colis.paymentMethodTitle')}
           </h2>
 
           <div className="grid grid-cols-2 gap-3">
@@ -594,12 +596,12 @@ export default function ColisPage() {
             >
               <div className="flex items-center gap-2 font-semibold text-sm">
                 <MaterialIcon name="account_balance_wallet" className={paymentMethod === 'wallet' ? 'text-primary' : 'text-slate-400'} size="sm" />
-                Wallet Medjira
+                {t('colis.walletMedjira')}
               </div>
               <span className="text-xs text-slate-300">
                 {walletBalance !== null
-                  ? `Solde : ${walletBalance.toFixed(2)} ${priceEstimate?.currency || 'CAD'}`
-                  : 'Chargement solde…'}
+                  ? `${t('wallet.balance')} : ${walletBalance.toFixed(2)} ${priceEstimate?.currency || 'CAD'}`
+                  : t('common.loading')}
               </span>
             </button>
 
@@ -618,9 +620,9 @@ export default function ColisPage() {
             >
               <div className="flex items-center gap-2 font-semibold text-sm">
                 <MaterialIcon name="credit_card" className={paymentMethod === 'card' ? 'text-primary' : 'text-slate-400'} size="sm" />
-                Carte bancaire
+                {t('colis.creditCard')}
               </div>
-              <span className="text-xs text-slate-300">Paiement Stripe</span>
+              <span className="text-xs text-slate-300">{t('colis.stripePayment')}</span>
             </button>
           </div>
 
@@ -632,7 +634,11 @@ export default function ColisPage() {
                 <div className="flex items-start gap-2 text-amber-300">
                   <MaterialIcon name="warning" size="sm" className="mt-0.5 flex-shrink-0" />
                   <span>
-                    Solde insuffisant ({walletBalance.toFixed(2)} / {priceEstimate.price.toFixed(2)} {priceEstimate.currency}). Rechargez votre portefeuille ou payez par carte bancaire.
+                    {t('colis.insufficientWalletBalance', {
+                      balance: walletBalance.toFixed(2),
+                      price: priceEstimate.price.toFixed(2),
+                      currency: priceEstimate.currency,
+                    })}
                   </span>
                 </div>
                 <button
@@ -641,7 +647,7 @@ export default function ColisPage() {
                   className="w-full py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold rounded-lg transition-colors flex items-center justify-center gap-1"
                 >
                   <MaterialIcon name="add_card" size="sm" />
-                  Recharger mon portefeuille
+                  {t('colis.topUpWalletButton')}
                 </button>
               </div>
             )}
@@ -650,7 +656,7 @@ export default function ColisPage() {
         {priceLoading && (
           <div className="glass-card p-5 rounded-2xl border border-white/5 flex items-center justify-center gap-2">
             <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-primary" />
-            <span className="text-sm text-slate-400">Calcul du prix…</span>
+            <span className="text-sm text-slate-400">{t('colis.calculatingPrice')}</span>
           </div>
         )}
 
@@ -678,12 +684,12 @@ export default function ColisPage() {
             {step === 'submitting' ? (
               <>
                 <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
-                Création en cours…
+                {t('colis.creatingOrder')}
               </>
             ) : priceEstimate ? (
-              `Confirmer — ${priceEstimate.price.toFixed(2)} ${priceEstimate.currency}`
+              `${t('common.confirm')} — ${priceEstimate.price.toFixed(2)} ${priceEstimate.currency}`
             ) : (
-              'Confirmer le transport'
+              t('colis.confirmTransport')
             )}
           </button>
         </div>

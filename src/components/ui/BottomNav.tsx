@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { getRestaurantPortalPath } from '@/app/food/portal/restaurant-portal-paths';
 import { MaterialIcon } from './MaterialIcon';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface NavItem {
   readonly href: string;
@@ -48,7 +49,33 @@ export const adminNavItems: NavItem[] = [
 
 export function BottomNav({ items = defaultUserItems, className, hidden = false }: BottomNavProps) {
   const pathname = usePathname();
+  const { t } = useTranslation();
   if (hidden) return null;
+
+  const getTranslatedLabel = (item: NavItem): string => {
+    switch (item.href) {
+      case '/dashboard':
+      case '/driver/dashboard':
+        return t('common.home');
+      case '/historique':
+      case '/driver/activite':
+        return t('common.activity');
+      case '/wallet':
+        return t('common.wallet');
+      case '/profil':
+      case '/driver/profile':
+        return t('common.profile');
+      case '/driver/documents':
+        return t('driver.documents');
+      default: {
+        if (item.href.includes('/orders')) return t('restaurant.orders');
+        if (item.href.includes('/menu')) return t('restaurant.menu');
+        if (item.href.includes('/settings')) return t('restaurant.settings');
+        if (item.href.includes('/food/portal')) return t('restaurant.dashboard');
+        return item.label;
+      }
+    }
+  };
 
   const activeItemPath = items
     .map((item) => item.href.split('?')[0])
@@ -90,7 +117,7 @@ export function BottomNav({ items = defaultUserItems, className, hidden = false 
                     isActive ? 'font-bold' : 'font-medium'
                   )}
                 >
-                  {item.label}
+                  {getTranslatedLabel(item)}
                 </span>
               </Link>
             );

@@ -10,6 +10,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
@@ -27,6 +28,7 @@ const StripePaymentElement = dynamic(
 );
 
 export default function CheckoutPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { currentUser: user, userData } = useAuth();
   const { items, restaurant, getSubtotal, clearCart } = useCartStore();
@@ -250,22 +252,22 @@ export default function CheckoutPage() {
     <div className="min-h-screen bg-background pb-32 max-w-[430px] mx-auto">
       {/* Header */}
       <div className="bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 sticky top-0 z-20 flex items-center justify-between">
-        <button onClick={() => router.back()} className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10">
+        <button onClick={() => router.back()} className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10" aria-label={t('common.back')}>
           <MaterialIcon name="arrow_back" size="lg" />
         </button>
-        <h1 className="text-xl font-bold text-white">Paiement</h1>
+        <h1 className="text-xl font-bold text-white">{t('wallet.payment')}</h1>
         <div className="w-10"></div>
       </div>
 
       <div className="p-4 space-y-6">
         {cardPayment ? (
           <section className="glass-card p-5 rounded-2xl border border-white/5">
-            <h2 className="text-lg font-bold text-white mb-4">Paiement carte</h2>
+            <h2 className="text-lg font-bold text-white mb-4">{t('food.cardPayment')}</h2>
             <StripePaymentElement
               clientSecret={cardPayment.clientSecret}
               amount={cardPayment.amount}
               currency={cardPayment.currency}
-              submitLabel="Payer la commande"
+              submitLabel={t('food.payOrder')}
               onSuccess={handleCardPaymentSuccess}
               onError={setErrorMsg}
             />
@@ -274,17 +276,17 @@ export default function CheckoutPage() {
           <>
         {/* Delivery Address */}
         <section className="glass-card p-5 rounded-2xl border border-white/5">
-          <h2 className="text-lg font-bold text-white mb-4">Adresse de livraison</h2>
+          <h2 className="text-lg font-bold text-white mb-4">{t('food.deliveryAddress')}</h2>
           <div className="space-y-4">
             <AddressInput
-              label="Domicile"
+              label={t('food.homeAddress')}
               value={checkoutAddress}
               onChange={setCheckoutAddress}
               onSelect={(suggestion) => setCheckoutAddress(suggestion.description)}
-              placeholder="Saisissez votre adresse"
+              placeholder={t('food.enterAddressPlaceholder')}
               autocompleteService={autocompleteService}
               enableLocationButton
-              locationButtonLabel="Utiliser ma position"
+              locationButtonLabel={t('food.useMyLocation')}
             />
 
             {userAddress && (
@@ -299,11 +301,11 @@ export default function CheckoutPage() {
                     : 'border-white/10 bg-white/[0.03]',
                 ].join(' ')}
               >
-                <span className="block text-xs font-medium uppercase tracking-wide text-primary">Adresse enregistrée</span>
+                <span className="block text-xs font-medium uppercase tracking-wide text-primary">{t('food.savedAddress')}</span>
                 <span className="mt-1 block text-sm text-white">
                   {isProfileAddressSelected(checkoutAddress, userAddress)
-                    ? 'Adresse de mon profil sélectionnée'
-                    : 'Utiliser l’adresse de mon profil'}
+                    ? t('food.profileAddressSelected')
+                    : t('food.useProfileAddress')}
                 </span>
                 <span className="mt-1 block text-xs text-slate-400">{userAddress}</span>
               </button>
@@ -312,22 +314,22 @@ export default function CheckoutPage() {
             {hasValidAddress ? (
               <p className="text-slate-500 text-xs">
                 {distanceLoading
-                  ? 'Calcul de la distance...'
+                  ? t('food.calculatingDistance')
                   : `${distanceIsEstimate ? '~' : ''} ${deliveryDistance.toFixed(1)} km · ~${durationMinutes} min`}
               </p>
             ) : (
-              <p className="text-destructive text-sm font-medium">Renseignez une adresse pour continuer.</p>
+              <p className="text-destructive text-sm font-medium">{t('food.provideAddressToContinue')}</p>
             )}
 
             <button onClick={() => router.push(PROFILE_ADDRESS_EDIT_HREF)} className="text-primary text-sm font-semibold">
-              Modifier mon adresse enregistrée
+              {t('food.editSavedAddress')}
             </button>
           </div>
         </section>
 
         {/* Order Summary */}
         <section className="glass-card p-5 rounded-2xl border border-white/5">
-          <h2 className="text-lg font-bold text-white mb-4">Résumé ({items.length} articles)</h2>
+          <h2 className="text-lg font-bold text-white mb-4">{t('food.orderSummaryWithCount', { count: items.length })}</h2>
           <div className="space-y-3 mb-4">
             {items.map(item => (
               <div key={item.id} className="flex justify-between text-sm">
@@ -342,35 +344,35 @@ export default function CheckoutPage() {
 
           <div className="border-t border-white/5 pt-4 space-y-2 text-sm text-slate-400">
             <div className="flex justify-between">
-              <span>Sous-total</span>
+              <span>{t('common.subtotal')}</span>
               <span>{displayedSubtotal.toFixed(2)} {CURRENCY_CODE}</span>
             </div>
             <div className="flex justify-between">
-              <span>Frais de livraison ({hasServerTotal ? '' : distanceIsEstimate ? '~' : ''}{displayedDistance.toFixed(1)} km)</span>
+              <span>{t('food.deliveryFee')} ({hasServerTotal ? '' : distanceIsEstimate ? '~' : ''}{displayedDistance.toFixed(1)} km)</span>
               <span>{deliveryCost.toFixed(2)} {CURRENCY_CODE}</span>
             </div>
             {isWeekend && (
               <div className="flex justify-between text-primary/80">
-                <span>Majoration weekend</span>
-                <span>Inclus</span>
+                <span>{t('food.weekendSurcharge')}</span>
+                <span>{t('food.included')}</span>
               </div>
             )}
           </div>
 
           <div className="border-t border-white/5 mt-4 pt-4 flex justify-between items-center text-lg font-bold text-white">
-            <span>Total</span>
+            <span>{t('common.total')}</span>
             <span>{total.toFixed(2)} {CURRENCY_CODE}</span>
           </div>
           {hasServerTotal && (
             <div className="mt-4 bg-primary/10 border border-primary/20 text-primary p-3 rounded-xl text-sm">
-              Montant vérifié par le serveur. Confirmez pour payer ce total.
+              {t('food.serverVerifiedTotal')}
             </div>
           )}
         </section>
 
         {/* Payment Method Selection */}
         <section className="glass-card p-5 rounded-2xl border border-white/5">
-          <h2 className="text-lg font-bold text-white mb-4">Moyen de paiement</h2>
+          <h2 className="text-lg font-bold text-white mb-4">{t('wallet.paymentMethod')}</h2>
           <div className="space-y-3">
             {/* Wallet Option */}
             <button
@@ -384,9 +386,9 @@ export default function CheckoutPage() {
               <div className="flex items-center gap-3">
                 <MaterialIcon name="account_balance_wallet" size="lg" className="text-primary" />
                 <div>
-                  <p className="font-semibold text-white">Portefeuille Medjira</p>
+                  <p className="font-semibold text-white">{t('wallet.title')}</p>
                   <p className="text-xs text-slate-400">
-                    Solde: {walletBalance !== null ? `${walletBalance.toFixed(2)} ${CURRENCY_CODE}` : 'Chargement...'}
+                    {t('wallet.currentBalance')}: {walletBalance !== null ? `${walletBalance.toFixed(2)} ${CURRENCY_CODE}` : t('common.loading')}
                   </p>
                 </div>
               </div>
@@ -407,8 +409,8 @@ export default function CheckoutPage() {
               <div className="flex items-center gap-3">
                 <MaterialIcon name="credit_card" size="lg" className="text-slate-400" />
                 <div>
-                  <p className="font-semibold text-white">Carte bancaire / Apple Pay</p>
-                  <p className="text-xs text-slate-400">Paiement sécurisé Stripe</p>
+                  <p className="font-semibold text-white">{t('wallet.creditCardOption')}</p>
+                  <p className="text-xs text-slate-400">{t('wallet.securePaymentByStripe')}</p>
                 </div>
               </div>
               {paymentMethod === 'card' && (
@@ -420,13 +422,13 @@ export default function CheckoutPage() {
 
         {/* Delivery Preference */}
         <section className="glass-card p-5 rounded-2xl border border-white/5">
-          <h2 className="text-lg font-bold text-white mb-4">Préférences de livraison</h2>
+          <h2 className="text-lg font-bold text-white mb-4">{t('food.deliveryPreferences')}</h2>
           <div className="space-y-3">
-            <p className="text-sm font-semibold text-white">Mode de livraison</p>
+            <p className="text-sm font-semibold text-white">{t('food.deliveryMode')}</p>
             {([
-              { value: 'leave_at_door', label: 'Déposer à la porte', desc: 'Photo requise pour confirmation' },
-              { value: 'meet_outside',  label: "Rendez-vous à l'extérieur", desc: 'Code PIN requis' },
-              { value: 'meet_at_door',  label: 'Rendez-vous à la porte', desc: 'Code PIN requis' },
+              { value: 'leave_at_door', label: t('food.leaveAtDoor'), desc: t('food.leaveAtDoorDesc') },
+              { value: 'meet_outside',  label: t('food.meetOutside'), desc: t('food.meetOutsideDesc') },
+              { value: 'meet_at_door',  label: t('food.meetAtDoor'), desc: t('food.meetAtDoorDesc') },
             ] as const).map((opt) => (
               <button
                 key={opt.value}
@@ -444,11 +446,11 @@ export default function CheckoutPage() {
           </div>
 
           <div className="mt-4">
-            <label className="text-sm font-semibold text-white">Instructions de livraison (optionnel)</label>
+            <label className="text-sm font-semibold text-white">{t('food.deliveryInstructionsOptional')}</label>
             <textarea
               value={deliveryInstructions}
               onChange={(e) => setDeliveryInstructions(e.target.value)}
-              placeholder="Ex: 3e étage, porte gauche…"
+              placeholder={t('food.deliveryInstructionsPlaceholder')}
               className="w-full mt-1 bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm resize-none"
               rows={2}
             />
@@ -475,17 +477,17 @@ export default function CheckoutPage() {
           {loading ? (
             <>
               <MaterialIcon name="progress_activity" size="md" className="animate-spin" />
-              Traitement du paiement...
+              {t('food.processingPayment')}
             </>
           ) : isWalletInsufficient ? (
-            'Solde portefeuille insuffisant'
+            t('food.insufficientWalletBalance')
           ) : !hasValidAddress ? (
-            'Adresse de livraison manquante'
+            t('food.missingDeliveryAddress')
           ) : (
             hasServerTotal ? (
-              `Confirmer et payer ${total.toFixed(2)} ${CURRENCY_CODE}`
+              t('food.confirmAndPay', { amount: `${total.toFixed(2)} ${CURRENCY_CODE}` })
             ) : (
-            `Payer ${total.toFixed(2)} ${CURRENCY_CODE}`
+              t('food.payAmount', { amount: `${total.toFixed(2)} ${CURRENCY_CODE}` })
             )
           )}
         </button>

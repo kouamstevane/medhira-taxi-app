@@ -6,6 +6,7 @@ import { Network } from '@capacitor/network';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { RefreshCw, Home } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslation } from '@/hooks/useTranslation';
 import { cn } from '@/lib/utils';
 
 export interface NetworkErrorViewProps {
@@ -94,16 +95,19 @@ export function DisconnectedCableIllustration({ className }: { className?: strin
  * Composant réutilisable pour afficher un état d'erreur réseau convivial et interactif.
  */
 export function NetworkErrorView({
-  title = 'Oops !',
-  message = 'Échec du chargement des données. Veuillez vérifier votre connexion internet et réessayer.',
+  title,
+  message,
   onRetry,
-  retryLabel = 'Réessayer',
+  retryLabel,
   fullScreen = false,
   autoRetryOnReconnect = true,
   showHomeButton = false,
   className,
 }: NetworkErrorViewProps) {
+  const { t } = useTranslation();
   const [isRetrying, setIsRetrying] = useState(false);
+  const effectiveMessage = message ?? t('common.networkErrorMessage');
+  const effectiveRetryLabel = retryLabel ?? t('common.retry');
 
   // Déclenche une vibration haptique sur mobile
   const triggerHaptic = useCallback(async () => {
@@ -179,13 +183,13 @@ export function NetworkErrorView({
       </div>
 
       {/* Titre optionnel si différent ou personnalisé */}
-      {title && title !== 'Oops !' && (
+      {title && title !== 'Oops !' && title !== 'Oops!' && (
         <h2 className="text-xl font-bold text-white mb-2">{title}</h2>
       )}
 
       {/* Message explicatif */}
       <p className="text-slate-300 text-sm sm:text-base font-normal mb-6 leading-relaxed">
-        {message}
+        {effectiveMessage}
       </p>
 
       {/* Bouton Réessayer (Touch Target >= 44x44px) */}
@@ -201,13 +205,13 @@ export function NetworkErrorView({
               "flex items-center justify-center gap-2",
               "disabled:opacity-70 disabled:pointer-events-none focus:outline-none focus:ring-2 focus:ring-[#F29200] focus:ring-offset-2 focus:ring-offset-background"
             )}
-            aria-label={retryLabel}
+            aria-label={effectiveRetryLabel}
           >
             <RefreshCw
               className={cn("size-5 shrink-0", isRetrying && "animate-spin")}
               aria-hidden="true"
             />
-            <span>{isRetrying ? 'Reconnexion en cours...' : retryLabel}</span>
+            <span>{isRetrying ? t('common.reconnecting') : effectiveRetryLabel}</span>
           </button>
         )}
 
@@ -218,7 +222,7 @@ export function NetworkErrorView({
             className="w-full min-h-[44px] px-4 py-2.5 rounded-xl text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 border border-white/10 transition-colors flex items-center justify-center gap-2"
           >
             <Home className="size-4" aria-hidden="true" />
-            <span>Retour à l&apos;accueil</span>
+            <span>{t('common.backToHome')}</span>
           </Link>
         )}
       </div>

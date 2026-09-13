@@ -2,21 +2,24 @@ import Link from 'next/link';
 import type { PersonalDriverPlan } from '@/types/personal-driver';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface PersonalDriverPlanCardProps {
   readonly plan: PersonalDriverPlan;
 }
 
-const planLabels: Partial<Record<PersonalDriverPlan['id'], string>> = {
-  classic: 'LE PLUS POPULAIRE',
-  premium: 'SERVICE PRIORITAIRE',
-};
-
 export function PersonalDriverPlanCard({ plan }: PersonalDriverPlanCardProps) {
+  const { t, locale } = useTranslation();
+  const numLocale = locale === 'en' ? 'en-US' : 'fr-FR';
   const benefits = plan.benefits;
-  const badge = (plan.badge ?? planLabels[plan.id])?.toLocaleUpperCase('fr-FR');
+  const planLabels: Partial<Record<PersonalDriverPlan['id'], string>> = {
+    classic: t('personalDriver.mostPopular'),
+    premium: t('personalDriver.priorityService'),
+  };
+  const badge = (plan.badge ?? planLabels[plan.id])?.toLocaleUpperCase(numLocale);
   const isClassic = plan.id === 'classic';
   const isPremium = plan.id === 'premium';
+  const chooseLabel = locale === 'en' ? `Choose ${plan.name}` : `Choisir ${plan.name}`;
 
   return (
     <article
@@ -44,7 +47,7 @@ export function PersonalDriverPlanCard({ plan }: PersonalDriverPlanCardProps) {
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               <MaterialIcon name="directions_car" size="sm" className="text-[14px] text-slate-400" />
-              Formule Standard
+              {t('personalDriver.standardFormula')}
             </span>
           )}
         </div>
@@ -53,17 +56,17 @@ export function PersonalDriverPlanCard({ plan }: PersonalDriverPlanCardProps) {
         <p className="mt-1 min-h-10 text-xs leading-5 text-slate-300">{plan.promise}</p>
 
         <div className="mt-5 rounded-2xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">À partir de</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('personalDriver.startingFrom')}</p>
           <div className="mt-1 flex items-baseline gap-1">
             <span className="text-3xl font-black text-white">
-              {plan.minimumAmount.toLocaleString('fr-FR')} {CURRENCY_CODE}
+              {plan.minimumAmount.toLocaleString(numLocale)} {CURRENCY_CODE}
             </span>
-            <span className="text-xs font-semibold text-slate-400">/ mois</span>
+            <span className="text-xs font-semibold text-slate-400">{t('personalDriver.perMonth')}</span>
           </div>
           <div className="mt-2 flex items-center justify-between text-xs border-t border-white/5 pt-2">
-            <span className="text-slate-400">Tarif au km</span>
+            <span className="text-slate-400">{t('personalDriver.ratePerKm')}</span>
             <span className="font-bold text-primary">
-              {plan.pricePerKm.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} {CURRENCY_CODE}/km
+              {plan.pricePerKm.toLocaleString(numLocale, { minimumFractionDigits: 2 })} {CURRENCY_CODE}/km
             </span>
           </div>
         </div>
@@ -81,7 +84,7 @@ export function PersonalDriverPlanCard({ plan }: PersonalDriverPlanCardProps) {
       <div className="mt-8">
         <Link
           href={`/personal-driver/configurer?plan=${plan.id}`}
-          aria-label={`Choisir ${plan.name}`}
+          aria-label={chooseLabel}
           className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-extrabold tracking-wide transition-all active:scale-[0.97] ${
             isClassic
               ? 'bg-primary text-black shadow-md hover:brightness-110'
@@ -90,7 +93,7 @@ export function PersonalDriverPlanCard({ plan }: PersonalDriverPlanCardProps) {
                 : 'bg-white/10 text-white hover:bg-white/20 border border-white/15'
           }`}
         >
-          <span>Choisir ce plan</span>
+          <span>{t('personalDriver.chooseThisPlan')}</span>
           <MaterialIcon name="arrow_forward" size="sm" />
         </Link>
       </div>

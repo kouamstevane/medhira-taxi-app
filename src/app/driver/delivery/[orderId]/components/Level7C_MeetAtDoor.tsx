@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
+import { useTranslation } from '@/hooks/useTranslation'
 import type { FoodDeliveryOrder } from '@/types/firestore-collections'
 
 const MAX_ATTEMPTS = 3
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function Level7C_MeetAtDoor({ order, confirmDelivery }: Props) {
+  const { t } = useTranslation('driver')
   const [pin, setPin] = useState('')
   const [attempts, setAttempts] = useState(0)
   const [error, setError] = useState<string | null>(null)
@@ -48,10 +50,10 @@ export default function Level7C_MeetAtDoor({ order, confirmDelivery }: Props) {
       setAttempts(newAttempts)
       const remaining = MAX_ATTEMPTS - newAttempts
       if (remaining === 0) {
-        setError('Code PIN incorrect. Tentatives épuisées. Contactez le client ou le support.')
+        setError(t('pinErrorBlocked'))
         await handlePinFailed()
       } else {
-        setError(`Code incorrect. ${remaining} tentative(s) restante(s).`)
+        setError(t('pinErrorRemaining', { remaining }))
       }
       setPin('')
     } finally {
@@ -64,8 +66,8 @@ export default function Level7C_MeetAtDoor({ order, confirmDelivery }: Props) {
       <div className="glass-card rounded-2xl border border-white/10 p-6 w-full max-w-sm space-y-6">
         <div className="text-center">
           <MaterialIcon name="door_front" className="text-primary text-[48px]" />
-          <h2 className="text-xl font-bold text-white mt-2">Rendez-vous à la porte</h2>
-          <p className="text-slate-400 text-sm mt-1">Sonnez, remettez le sac, puis saisissez le code PIN communiqué par le client.</p>
+          <h2 className="text-xl font-bold text-white mt-2">{t('meetAtDoorTitle')}</h2>
+          <p className="text-slate-400 text-sm mt-1">{t('meetAtDoorDesc')}</p>
         </div>
         {isBlocked ? (
           <div className="space-y-3">
@@ -74,11 +76,11 @@ export default function Level7C_MeetAtDoor({ order, confirmDelivery }: Props) {
             </div>
             <a href={`tel:${order.clientPhone}`}
               className="w-full h-12 flex items-center justify-center gap-2 bg-primary/10 border border-primary/30 text-primary rounded-2xl text-sm font-medium">
-              <MaterialIcon name="phone" className="text-[18px]" /> Appeler le client
+              <MaterialIcon name="phone" className="text-[18px]" /> {t('callClient')}
             </a>
             <a href={`tel:${supportPhone}`}
               className="w-full h-12 flex items-center justify-center gap-2 bg-white/5 border border-white/10 text-slate-300 rounded-2xl text-sm font-medium">
-              <MaterialIcon name="support_agent" className="text-[18px]" /> Appeler le support
+              <MaterialIcon name="support_agent" className="text-[18px]" /> {t('callSupport')}
             </a>
           </div>
         ) : (
@@ -87,7 +89,7 @@ export default function Level7C_MeetAtDoor({ order, confirmDelivery }: Props) {
               type="number"
               inputMode="numeric"
               maxLength={4}
-              placeholder="Entrez le code PIN"
+              placeholder={t('enterPinCode')}
               value={pin}
               onChange={(e) => { setPin(e.target.value.slice(0, 4)); setError(null) }}
               className="w-full h-14 text-center text-2xl font-mono bg-white/5 border border-white/10 rounded-2xl text-white focus:outline-none focus:border-primary"
@@ -98,7 +100,7 @@ export default function Level7C_MeetAtDoor({ order, confirmDelivery }: Props) {
               disabled={pin.length < 4 || confirming}
               className="w-full h-14 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow disabled:opacity-40"
             >
-              {confirming ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Valider la livraison'}
+              {confirming ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : t('validateDelivery')}
             </button>
           </div>
         )}

@@ -10,6 +10,8 @@ import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import { useDriverProfile } from '@/hooks/useDriverProfile';
 import { useAuth } from '@/hooks/useAuth';
 import { CardSkeleton } from '@/components/ui/Skeleton';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import {
   getDriverAvailabilityProfileState,
   getDriverVerificationBadges,
@@ -38,10 +40,11 @@ interface InfoRowProps {
   label: string;
   value?: string | null;
   italic?: boolean;
+  emptyFallback?: string;
 }
 
-function InfoRow({ label, value, italic }: InfoRowProps) {
-  const display = value && value.length > 0 ? value : 'Non spécifié';
+function InfoRow({ label, value, italic, emptyFallback = 'Non spécifié' }: InfoRowProps) {
+  const display = value && value.length > 0 ? value : emptyFallback;
   const isEmpty = !value || value.length === 0;
 
   return (
@@ -54,6 +57,7 @@ function InfoRow({ label, value, italic }: InfoRowProps) {
 
 export default function DriverProfilePage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { userData, reloadUser } = useAuth();
   const {
     driver,
@@ -190,17 +194,20 @@ export default function DriverProfilePage() {
           <button onClick={() => router.push('/driver/dashboard')} className="-ml-2 rounded-xl p-2 transition hover:bg-white/5">
             <MaterialIcon name="arrow_back" className="text-[24px] text-primary" />
           </button>
-          <h1 className="text-lg font-bold text-primary">Profil</h1>
-          <button
-            onClick={() => {
-              if (isEmailVerified) setEditMode(!editMode);
-            }}
-            disabled={!isEmailVerified}
-            className="-mr-2 rounded-xl p-2 transition hover:bg-white/5 disabled:opacity-40"
-            aria-label={editMode ? 'Annuler' : 'Modifier'}
-          >
-            <MaterialIcon name={editMode ? 'close' : 'edit'} className="text-[22px] text-primary" />
-          </button>
+          <h1 className="text-lg font-bold text-primary">{t('common.profile')}</h1>
+          <div className="flex items-center gap-2">
+            <LanguageSelector variant="pill" />
+            <button
+              onClick={() => {
+                if (isEmailVerified) setEditMode(!editMode);
+              }}
+              disabled={!isEmailVerified}
+              className="-mr-2 rounded-xl p-2 transition hover:bg-white/5 disabled:opacity-40"
+              aria-label={editMode ? t('common.cancel') : t('common.edit')}
+            >
+              <MaterialIcon name={editMode ? 'close' : 'edit'} className="text-[22px] text-primary" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -250,7 +257,7 @@ export default function DriverProfilePage() {
               disabled={!isEmailVerified}
               className="mt-4 h-10 rounded-full bg-white/10 px-6 text-sm font-medium text-white transition hover:bg-white/15 disabled:opacity-40"
             >
-              Modifier
+              {t('common.edit')}
             </button>
           )}
         </div>
@@ -282,12 +289,12 @@ export default function DriverProfilePage() {
         </div>
 
         <div>
-          <SectionTitle icon="person">Informations personnelles</SectionTitle>
+          <SectionTitle icon="person">{t('driver.personalInfo')}</SectionTitle>
           <div className="glass-card divide-y divide-white/[0.04] rounded-2xl px-5 py-3">
             {editMode ? (
               <div className="space-y-3 py-2">
                 <div>
-                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Prénom</label>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">{t('driver.firstName')}</label>
                   <input
                     type="text"
                     value={formData.firstName || ''}
@@ -296,7 +303,7 @@ export default function DriverProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Nom</label>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">{t('driver.lastName')}</label>
                   <input
                     type="text"
                     value={formData.lastName || ''}
@@ -305,7 +312,7 @@ export default function DriverProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Téléphone</label>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">{t('driver.phone')}</label>
                   <input
                     type="tel"
                     value={formData.phone || ''}
@@ -314,7 +321,7 @@ export default function DriverProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Photo de profil</label>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">{t('driver.profilePhoto')}</label>
                   <input
                     type="file"
                     onChange={(e) => setProfileImage(e.target.files?.[0] || null)}
@@ -325,23 +332,23 @@ export default function DriverProfilePage() {
               </div>
             ) : (
               <>
-                <InfoRow label="Prénom" value={driver.firstName} />
-                <InfoRow label="Nom" value={driver.lastName} />
-                <InfoRow label="Téléphone" value={driver.phone} />
-                <InfoRow label="Email" value={driver.email} />
-                <InfoRow label="Permis" value={driver.licenseNumber} />
+                <InfoRow label={t('driver.firstName')} value={driver.firstName} emptyFallback={t('driver.notSpecified')} />
+                <InfoRow label={t('driver.lastName')} value={driver.lastName} emptyFallback={t('driver.notSpecified')} />
+                <InfoRow label={t('driver.phone')} value={driver.phone} emptyFallback={t('driver.notSpecified')} />
+                <InfoRow label={t('driver.email')} value={driver.email} emptyFallback={t('driver.notSpecified')} />
+                <InfoRow label={t('driver.license')} value={driver.licenseNumber} emptyFallback={t('driver.notSpecified')} />
               </>
             )}
           </div>
         </div>
 
         <div>
-          <SectionTitle icon="directions_car">Véhicule</SectionTitle>
+          <SectionTitle icon="directions_car">{t('driver.vehicle')}</SectionTitle>
           <div className={`glass-card rounded-2xl ${editMode ? 'divide-y divide-white/[0.04] px-5 py-3' : 'p-4'}`}>
             {editMode ? (
               <div className="space-y-3 py-2">
                 <div>
-                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Modèle</label>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">{t('driver.model')}</label>
                   <input
                     type="text"
                     value={formData.car?.model || ''}
@@ -350,7 +357,7 @@ export default function DriverProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Plaque</label>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">{t('driver.plate')}</label>
                   <input
                     type="text"
                     value={formData.car?.plate || ''}
@@ -359,7 +366,7 @@ export default function DriverProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">Couleur</label>
+                  <label className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-slate-500">{t('driver.color')}</label>
                   <input
                     type="text"
                     value={formData.car?.color || ''}
@@ -384,7 +391,7 @@ export default function DriverProfilePage() {
                   disabled={!isEmailVerified}
                   className="h-9 flex-shrink-0 rounded-full bg-white/5 px-3 text-xs font-bold text-primary transition hover:bg-white/10 disabled:opacity-40"
                 >
-                  {vehicleSummary.isComplete ? 'Modifier' : 'Compléter'}
+                  {vehicleSummary.isComplete ? t('common.edit') : t('driver.complete')}
                 </button>
               </div>
             )}
@@ -397,20 +404,20 @@ export default function DriverProfilePage() {
               onClick={() => setEditMode(false)}
               className="h-12 flex-1 rounded-2xl bg-white/5 font-medium text-slate-300 transition-transform active:scale-[0.98]"
             >
-              Annuler
+              {t('common.cancel')}
             </button>
             <button
               onClick={handleUpdateProfile}
               disabled={loading}
               className="primary-glow h-12 flex-1 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] font-bold text-white transition-transform active:scale-[0.98] disabled:opacity-50"
             >
-              {loading ? 'Enregistrement...' : 'Enregistrer'}
+              {loading ? t('driver.saving') : t('common.save')}
             </button>
           </div>
         )}
 
         <div>
-          <SectionTitle icon="account_balance">Paiements & Stripe</SectionTitle>
+          <SectionTitle icon="account_balance">{t('driver.paymentsAndStripe')}</SectionTitle>
           <div className="glass-card space-y-4 rounded-2xl p-5">
             {stripeError && (
               <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-3">
@@ -432,24 +439,24 @@ export default function DriverProfilePage() {
             ) : !stripeData || stripeData.status === 'not_created' ? (
               <>
                 <div>
-                  <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">Solde en attente</p>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{t('driver.pendingBalance')}</p>
                   <p className="mt-1 text-3xl font-bold text-white">
                     0.00 <span className="text-base font-normal text-slate-400">CAD</span>
                   </p>
                 </div>
-                <p className="text-sm text-slate-400">Connectez un compte bancaire pour recevoir vos gains.</p>
+                <p className="text-sm text-slate-400">{t('driver.connectBankDesc')}</p>
                 <button
                   onClick={handleCreateStripeAccount}
                   className="primary-glow h-12 w-full rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] font-bold text-white"
                 >
-                  Configurer Stripe
+                  {t('driver.setupStripe')}
                 </button>
               </>
             ) : (
               <>
                 <div className="flex items-end justify-between">
                   <div>
-                    <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">Solde en attente</p>
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{t('driver.pendingBalance')}</p>
                     <p className="mt-1 text-3xl font-bold text-white">
                       {((stripeData.pendingBalance ?? 0) / 100).toFixed(2)}{' '}
                       <span className="text-base font-normal text-slate-400">{stripeData.currency?.toUpperCase() ?? 'CAD'}</span>
@@ -458,16 +465,16 @@ export default function DriverProfilePage() {
                   {stripeData.status === 'active' && (
                     <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/15 px-2 py-0.5 text-[10px] font-bold text-green-400">
                       <MaterialIcon name="verified" className="text-[11px]" />
-                      VÉRIFIÉ
+                      {t('driver.verifiedBadge')}
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 pr-3">
-                    <p className="text-sm font-medium text-white">Versement automatique</p>
+                    <p className="text-sm font-medium text-white">{t('driver.autoPayout')}</p>
                     <p className="text-xs text-slate-500">
-                      {stripeData.weeklyPayoutEnabled ? 'Chaque lundi (70%)' : 'Manuel — vous décidez'}
+                      {stripeData.weeklyPayoutEnabled ? t('driver.autoPayoutSchedule') : t('driver.manualPayoutSchedule')}
                     </p>
                   </div>
                   <button
@@ -491,13 +498,13 @@ export default function DriverProfilePage() {
                     disabled={manualPayoutLoading || (stripeData.pendingBalance ?? 0) <= 0}
                     className="primary-glow h-12 w-full rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] font-bold text-white disabled:opacity-40"
                   >
-                    {manualPayoutLoading ? 'Virement en cours...' : 'Virer maintenant'}
+                    {manualPayoutLoading ? t('driver.payoutProcessing') : t('driver.payoutNow')}
                   </button>
                   <button
                     onClick={handleCreateStripeAccount}
                     className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 font-medium text-white hover:bg-white/10"
                   >
-                    Configurer Stripe
+                    {t('driver.setupStripe')}
                   </button>
                 </div>
               </>
@@ -506,7 +513,7 @@ export default function DriverProfilePage() {
         </div>
 
         <div>
-          <SectionTitle icon="shield">Compte & sécurité</SectionTitle>
+          <SectionTitle icon="shield">{t('driver.accountAndSecurity')}</SectionTitle>
           <div className="glass-card divide-y divide-white/[0.04] rounded-2xl">
             {canActivateClientRole && (
               <div className="px-5 py-4">
@@ -515,9 +522,9 @@ export default function DriverProfilePage() {
                     <MaterialIcon name="person_add" className="text-[20px] text-primary" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-white">Espace client</p>
+                    <p className="text-sm font-bold text-white">{t('driver.clientSpace')}</p>
                     <p className="mt-1 text-xs leading-5 text-slate-400">
-                      Activez-le uniquement si vous voulez commander des courses, repas ou colis avec ce même compte.
+                      {t('driver.activateClientSpaceDesc')}
                     </p>
                     {clientActivationMessage && (
                       <p className="mt-2 text-xs font-medium text-green-400">{clientActivationMessage}</p>
@@ -532,7 +539,7 @@ export default function DriverProfilePage() {
                   disabled={clientActivationLoading || Boolean(clientActivationMessage)}
                   className="mt-3 h-11 w-full rounded-2xl border border-primary/30 bg-primary/10 text-sm font-bold text-primary transition hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {clientActivationLoading ? 'Activation...' : clientActivationMessage ? 'Espace client activé' : 'Activer mon espace client'}
+                  {clientActivationLoading ? t('driver.activating') : clientActivationMessage ? t('driver.clientSpaceActivated') : t('driver.activateClientSpace')}
                 </button>
               </div>
             )}
@@ -542,7 +549,7 @@ export default function DriverProfilePage() {
             >
               <div className="flex items-center gap-3">
                 <MaterialIcon name="lock" className="text-[20px] text-slate-400" />
-                <span className="text-sm text-white">Changer mon mot de passe</span>
+                <span className="text-sm text-white">{t('driver.changePassword')}</span>
               </div>
               <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
             </button>
@@ -554,7 +561,7 @@ export default function DriverProfilePage() {
               <div className="flex items-center gap-3">
                 <MaterialIcon name="logout" className="text-[20px] text-orange-400" />
                 <span className="text-sm font-medium text-orange-400">
-                  {signOutLoading ? 'Déconnexion...' : 'Se déconnecter'}
+                  {signOutLoading ? t('driver.disconnecting') : t('auth.logout')}
                 </span>
               </div>
               <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
@@ -565,7 +572,7 @@ export default function DriverProfilePage() {
             >
               <div className="flex items-center gap-3">
                 <MaterialIcon name="delete_forever" className="text-[20px] text-red-400" />
-                <span className="text-sm font-medium text-red-400">Supprimer mon compte</span>
+                <span className="text-sm font-medium text-red-400">{t('driver.deleteAccount')}</span>
               </div>
               <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
             </button>
@@ -585,21 +592,21 @@ export default function DriverProfilePage() {
                 <MaterialIcon name="warning" className="text-[24px] text-red-400" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Supprimer votre compte ?</h3>
+                <h3 className="text-lg font-bold text-white">{t('driver.deleteAccountTitle')}</h3>
                 <p className="mt-1 text-sm text-slate-400">
-                  Cette action est <span className="font-medium text-red-400">irréversible</span>. Toutes vos données chauffeur seront supprimées.
+                  {t('driver.deleteAccountDesc')}
                 </p>
               </div>
             </div>
 
             <label className="mb-2 block text-xs text-slate-400">
-              Pour confirmer, tapez <span className="font-mono font-bold text-red-400">SUPPRIMER</span>
+              {t('driver.deleteAccountConfirmPrompt')} <span className="font-mono font-bold text-red-400">{t('driver.deleteAccountWord')}</span>
             </label>
             <input
               type="text"
               value={deleteConfirm}
               onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder="SUPPRIMER"
+              placeholder={t('driver.deleteAccountWord')}
               autoFocus
               className="glass-input mb-3 h-12 w-full rounded-xl px-4 font-mono uppercase tracking-wider text-white placeholder:text-slate-600 outline-none focus:ring-1 focus:ring-red-400"
             />
@@ -616,14 +623,14 @@ export default function DriverProfilePage() {
                 disabled={deleteLoading}
                 className="h-12 flex-1 rounded-2xl bg-white/5 font-medium text-slate-300 disabled:opacity-50"
               >
-                Annuler
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleDeleteAccount}
-                disabled={deleteConfirm !== 'SUPPRIMER' || deleteLoading}
+                disabled={(deleteConfirm.trim().toUpperCase() !== t('driver.deleteAccountWord').toUpperCase() && deleteConfirm.trim().toUpperCase() !== 'SUPPRIMER') || deleteLoading}
                 className="h-12 flex-1 rounded-2xl bg-red-500 font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-500/30"
               >
-                {deleteLoading ? 'Suppression...' : 'Supprimer'}
+                {deleteLoading ? t('driver.deleting') : t('common.delete')}
               </button>
             </div>
           </div>

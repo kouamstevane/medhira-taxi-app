@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import { CarType } from '@/types';
 import { getVehicleMeta } from '@/app/taxi/data/vehicleCatalog';
 import { TaxiIcon } from './TaxiIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface VehicleDetailsSheetProps {
   carType: CarType;
@@ -19,6 +20,7 @@ interface VehicleDetailsSheetProps {
 }
 
 export function VehicleDetailsSheet({ carType, onClose }: VehicleDetailsSheetProps) {
+  const { t } = useTranslation();
   const meta = getVehicleMeta(carType);
 
   // Fermeture clavier (Escape) — confort desktop / Capacitor web view
@@ -43,7 +45,7 @@ export function VehicleDetailsSheet({ carType, onClose }: VehicleDetailsSheetPro
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label={`Détails du véhicule ${carType.name}`}
+      aria-label={t('taxi.vehicleDetailsTitle', { name: carType.name })}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -57,7 +59,7 @@ export function VehicleDetailsSheet({ carType, onClose }: VehicleDetailsSheetPro
             onClick={onClose}
             className="p-2 hover:bg-white/10 active:bg-white/20 rounded-full transition touch-manipulation"
             style={{ minHeight: '44px', minWidth: '44px' }}
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             <X className="h-5 w-5 text-[#9CA3AF]" />
           </button>
@@ -79,14 +81,14 @@ export function VehicleDetailsSheet({ carType, onClose }: VehicleDetailsSheetPro
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 flex items-center gap-2">
             <Users className="w-4 h-4 text-primary shrink-0" />
             <div className="text-xs">
-              <div className="text-slate-400">Capacité</div>
-              <div className="text-white font-medium">{carType.seats} passagers</div>
+              <div className="text-slate-400">{t('taxi.vehicleCapacity')}</div>
+              <div className="text-white font-medium">{t('taxi.vehicleSeatsCount', { count: carType.seats })}</div>
             </div>
           </div>
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2 flex items-center gap-2">
             <Clock className="w-4 h-4 text-primary shrink-0" />
             <div className="text-xs">
-              <div className="text-slate-400">Attente</div>
+              <div className="text-slate-400">{t('taxi.vehicleWait')}</div>
               <div className="text-white font-medium">{carType.time}</div>
             </div>
           </div>
@@ -94,7 +96,7 @@ export function VehicleDetailsSheet({ carType, onClose }: VehicleDetailsSheetPro
 
         {/* Points forts */}
         <div className="px-4 sm:px-6 pt-4 pb-2">
-          <h3 className="text-sm font-semibold text-white mb-2">Ce qui est inclus</h3>
+          <h3 className="text-sm font-semibold text-white mb-2">{t('taxi.vehicleIncluded')}</h3>
           <ul className="space-y-2">
             {meta.highlights.map((h) => (
               <li key={h} className="flex items-start gap-2 text-sm text-slate-300">
@@ -107,7 +109,7 @@ export function VehicleDetailsSheet({ carType, onClose }: VehicleDetailsSheetPro
 
         <div className="sticky bottom-0 bg-[#0F0F0F] border-t border-white/[0.05] px-4 sm:px-6 py-3">
           <p className="text-xs text-slate-500 text-center">
-            Sélectionnez cette catégorie depuis la liste principale.
+            {t('taxi.selectCategoryFromList')}
           </p>
         </div>
       </div>

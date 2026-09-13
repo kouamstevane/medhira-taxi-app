@@ -10,45 +10,33 @@ import { getDashboardRouteFor, getEffectiveRoleStatuses } from '@/services/roles
 import type { ActiveRole } from '@/types/user';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
-
-/*
- * ANCIEN PARCOURS CHAUFFEUR/LIVREUR — À CONSERVER
- *
- * Ce parcours est temporairement masqué de /auth/role/.
- * Ne pas supprimer ce code : il pourra être réactivé ultérieurement.
- */
-// const LEGACY_DRIVER_ROLE = {
-//   id: 'chauffeur',
-//   title: 'Chauffeur / Livreur',
-//   description: 'Recevez des courses et gagnez de l\'argent.',
-//   icon: 'directions_car',
-//   href: '/driver/register',
-//   color: 'bg-orange-500',
-// } as const;
-
-const ROLES = [
-  {
-    id: 'client',
-    title: 'Client',
-    description: 'Commandez des courses, des repas ou des colis.',
-    icon: 'person',
-    href: '/auth/register/phone',
-    color: 'bg-blue-500',
-  },
-  {
-    id: 'restaurateur',
-    title: 'Restaurateur',
-    description: 'Inscrivez votre restaurant et recevez des commandes.',
-    icon: 'restaurant',
-    href: '/restaurant/register',
-    color: 'bg-green-500',
-  },
-] as const;
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function RoleSelectionPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { currentUser, userData, loading } = useAuth();
   const registrationType = userData ? getIncompleteRegistrationType(userData) : null;
+
+  const roles = [
+    {
+      id: 'client',
+      title: t('auth.clientRole'),
+      description: t('auth.clientRoleDescription'),
+      icon: 'person',
+      href: '/auth/register/phone',
+      color: 'bg-blue-500',
+    },
+    {
+      id: 'restaurateur',
+      title: t('auth.restaurantRole'),
+      description: t('auth.restaurantRoleDescription'),
+      icon: 'restaurant',
+      href: '/restaurant/register',
+      color: 'bg-green-500',
+    },
+  ] as const;
 
   useEffect(() => {
     if (loading) return;
@@ -108,13 +96,17 @@ export default function RoleSelectionPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <h1 className="text-3xl font-bold text-center mb-2 text-white">Je suis…</h1>
+        <div className="flex justify-end mb-4">
+          <LanguageSelector variant="pill" />
+        </div>
+
+        <h1 className="text-3xl font-bold text-center mb-2 text-white">{t('auth.iAm')}</h1>
         <p className="text-slate-400 text-center mb-8">
-          Choisissez votre profil pour commencer
+          {t('auth.chooseProfileToStart')}
         </p>
 
         <div className="space-y-4">
-          {ROLES.map((role) => (
+          {roles.map((role) => (
             <Link key={role.id} href={role.href} className="block">
               <div className="glass-card p-6 rounded-2xl border border-white/5 hover:border-primary/40 hover:shadow-lg transition-all duration-200 cursor-pointer">
                 <div className="flex items-center gap-4">
@@ -137,13 +129,13 @@ export default function RoleSelectionPage() {
           className="mt-7 flex items-center justify-center gap-2 py-1 text-base font-semibold text-primary transition hover:text-primary/80 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
         >
           <MaterialIcon name="local_taxi" size="md" className="text-primary" />
-          Vous souhaitez devenir Chauffeur / Livreur ?
+          {t('auth.becomeDriverPrompt')}
         </Link>
 
         <p className="text-center text-sm text-slate-400 mt-8">
-          Vous avez déjà un compte ?{' '}
+          {t('auth.alreadyHaveAccount')}{' '}
           <Link href="/login" className="text-primary font-semibold hover:underline">
-            Se connecter
+            {t('auth.login')}
           </Link>
         </p>
       </div>

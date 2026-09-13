@@ -16,6 +16,7 @@ import {
   driverFieldLabelClassName,
 } from '@/app/driver/register/components/driverOnboardingStyles';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface AddressInputProps {
   label: string;
@@ -56,6 +57,7 @@ export const AddressInput = ({
   onLocationResolved,
   locationButtonLabel,
 }: AddressInputProps) => {
+  const { t } = useTranslation();
   const [isFocused, setIsFocused] = useState(false);
   const [internalGeoLoading, setInternalGeoLoading] = useState(false);
   const [geoErrorMessage, setGeoErrorMessage] = useState<string | null>(null);
@@ -259,7 +261,7 @@ export const AddressInput = ({
               {isLocationLoading ? (
                 <>
                   <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" />
-                  Détection en cours
+                  {t('taxi.detectingLocation')}
                 </>
               ) : (
                 <>
@@ -267,7 +269,7 @@ export const AddressInput = ({
                     <path d="M12 21s6-4.35 6-10a6 6 0 10-12 0c0 5.65 6 10 6 10z" />
                     <circle cx="12" cy="11" r="2.25" />
                   </svg>
-                  {locationButtonLabel || 'Utiliser ma position'}
+                  {locationButtonLabel || t('taxi.useCurrentLocation')}
                 </>
               )}
             </button>
@@ -277,15 +279,15 @@ export const AddressInput = ({
             <div role="alert" aria-live="polite" className="bg-[#f29200]/10 border-l-4 border-orange-400 p-3 rounded-lg text-xs">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 text-[#f29200]">
-                  <p className="font-medium">Impossible de détecter votre position</p>
-                  <p className="mt-0.5 text-slate-400">Vérifiez que le GPS est activé et réessayez.</p>
+                  <p className="font-medium">{t('taxi.locationDetectionFailed')}</p>
+                  <p className="mt-0.5 text-slate-400">{t('taxi.locationDetectionHelp')}</p>
                 </div>
                 <button
                   type="button"
                   onClick={handleUseCurrentLocation}
                   className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-3 py-1 rounded bg-[#f29200]/20 hover:bg-[#f29200]/30 text-[#f29200] font-medium transition-colors touch-manipulation"
                 >
-                  Réessayer
+                  {t('common.retry')}
                 </button>
               </div>
             </div>

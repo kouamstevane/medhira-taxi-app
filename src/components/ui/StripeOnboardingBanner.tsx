@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { auth, db } from '@/config/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { AlertTriangle, ArrowRight } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type StripeStatus = 'not_created' | 'pending' | 'active' | 'restricted' | 'disabled';
 
@@ -14,6 +15,7 @@ type StripeStatus = 'not_created' | 'pending' | 'active' | 'restricted' | 'disab
  * par le webhook `account.updated` côté serveur).
  */
 export function StripeOnboardingBanner() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<StripeStatus | null>(null);
   const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
   const [requirementsCount, setRequirementsCount] = useState<number>(0);
@@ -50,25 +52,25 @@ export function StripeOnboardingBanner() {
   let tone: 'amber' | 'red';
 
   if (status === 'disabled') {
-    label = 'Compte de paiement désactivé';
-    sublabel = 'Contactez le support pour réactiver vos virements.';
+    label = t('driver.stripeDisabledTitle');
+    sublabel = t('driver.stripeDisabledDesc');
     tone = 'red';
   } else if (status === 'restricted') {
-    label = 'Compte de paiement restreint';
+    label = t('driver.stripeRestrictedTitle');
     sublabel = requirementsCount
-      ? `${requirementsCount} information(s) à fournir pour débloquer vos virements.`
-      : 'Vos virements sont bloqués. Vérifiez votre compte Stripe.';
+      ? t('driver.stripeRestrictedWithCount', { count: requirementsCount })
+      : t('driver.stripeRestrictedBlocked');
     tone = 'red';
   } else if (status === 'not_created') {
-    label = 'Configuration des paiements requise';
-    sublabel = 'Vous ne pourrez pas être payé tant que votre compte Stripe n\'est pas configuré.';
+    label = t('driver.stripeNotCreatedTitle');
+    sublabel = t('driver.stripeNotCreatedDesc');
     tone = 'amber';
   } else {
     // pending
-    label = 'Configuration des paiements à terminer';
+    label = t('driver.stripePendingTitle');
     sublabel = requirementsCount
-      ? `${requirementsCount} information(s) demandée(s) par Stripe.`
-      : 'Vérification Stripe en cours.';
+      ? t('driver.stripePendingWithCount', { count: requirementsCount })
+      : t('driver.stripePendingReview');
     tone = 'amber';
   }
 
@@ -81,7 +83,7 @@ export function StripeOnboardingBanner() {
     <Link
       href="/driver/payments/setup"
       className={`block ${palette.bg} ${palette.border} border rounded-xl p-4 mb-3 active:opacity-80 transition`}
-      aria-label="Terminer la configuration Stripe"
+      aria-label={t('driver.completeStripeSetup')}
     >
       <div className="flex items-start gap-3">
         <AlertTriangle className={`w-5 h-5 ${palette.icon} mt-0.5 shrink-0`} />

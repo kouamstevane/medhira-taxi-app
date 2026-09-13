@@ -11,12 +11,14 @@ import { CURRENCY_CODE, LIMITS, WALLET_PRESET_AMOUNTS, ACTIVE_MARKET } from '@/u
 import { formatCurrencyWithCode } from '@/utils/format';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
+import { useTranslation } from '@/hooks/useTranslation';
 const StripePaymentElement = dynamic(() => import('@/components/stripe/StripePaymentElement').then(m => ({ default: m.StripePaymentElement })), { ssr: false, loading: () => <div className="w-full h-48 bg-gray-100 animate-pulse rounded-xl" /> })
 import { STRIPE_CURRENCY_BY_MARKET } from '@/types/stripe';
 
 type PaymentStep = 'select' | 'stripe_form';
 
 export default function RechargerPage() {
+  const { t } = useTranslation();
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -37,11 +39,11 @@ export default function RechargerPage() {
 
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error('Vous devez être connecté pour recharger');
+      if (!user) throw new Error(t('wallet.mustBeLoggedIn'));
 
       const numericAmount = parseFloat(amount);
       if (isNaN(numericAmount) || numericAmount < LIMITS.MIN_WALLET_RECHARGE) {
-        throw new Error(`Le montant minimum est de ${LIMITS.MIN_WALLET_RECHARGE} ${CURRENCY_CODE}`);
+        throw new Error(t('wallet.minAmountNotice', { min: String(LIMITS.MIN_WALLET_RECHARGE), currency: CURRENCY_CODE }));
       }
 
       // Créer le PaymentIntent via l'API Stripe
@@ -52,7 +54,7 @@ export default function RechargerPage() {
       setStripeClientSecret(data.clientSecret);
       setStep('stripe_form');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue. Veuillez réessayer.');
+      setError(err instanceof Error ? err.message : t('common.errorOccurred'));
     } finally {
       setLoading(false);
     }
@@ -65,7 +67,7 @@ export default function RechargerPage() {
   const handleStripeSuccess = async (_paymentIntentId: string) => {
     // Le solde est crédité par le webhook Stripe (payment_intent.succeeded →
     // Cloud Function stripeWebhookInstant). On redirige avec un message informatif.
-    router.push(`/wallet?success=${encodeURIComponent('Recharge en cours de traitement. Votre solde sera mis à jour dans quelques instants.')}`);
+    router.push(`/wallet?success=${encodeURIComponent(t('wallet.pendingProcessing'))}`);
   };
 
   const handleStripeError = (message: string) => {
@@ -91,7 +93,7 @@ export default function RechargerPage() {
             >
               <MaterialIcon name="arrow_back" size="md" />
             </button>
-            <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Paiement par carte</h1>
+            <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">{t('wallet.payWithCard')}</h1>
           </header>
 
           <main className="flex-1 p-6">
@@ -107,7 +109,7 @@ export default function RechargerPage() {
               currency={stripeCurrency}
               onSuccess={handleStripeSuccess}
               onError={handleStripeError}
-              submitLabel={`Recharger ${formatCurrencyWithCode(numericAmount)}`}
+              submitLabel={`${t('wallet.topUp')} ${formatCurrencyWithCode(numericAmount)}`}
             />
           </main>
         </div>
@@ -127,7 +129,7 @@ export default function RechargerPage() {
           <Link href="/wallet" className="flex items-center justify-center size-10 rounded-full glass-card text-white active:scale-95 transition-transform">
             <MaterialIcon name="arrow_back" size="md" />
           </Link>
-          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Recharger</h1>
+          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">{t('wallet.topUp')}</h1>
         </header>
 
         <main className="flex-1 p-6 space-y-6 pb-10">
@@ -142,7 +144,7 @@ export default function RechargerPage() {
             {/* Montant */}
             <div>
               <label className="block text-sm font-medium text-slate-400 mb-2">
-                Montant à recharger ({CURRENCY_CODE})
+                {t('wallet.amountToRechargeWithCurrency', { currency: CURRENCY_CODE })}
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -181,15 +183,15 @@ export default function RechargerPage() {
             {/* Méthode de paiement — uniquement carte bancaire (Canada) */}
             <div>
               <label className="block text-sm font-medium text-slate-400 mb-3">
-                Méthode de paiement
+                {t('wallet.paymentMethod')}
               </label>
               <div className="flex items-center gap-3 p-4 rounded-xl glass-card border-2 border-primary">
                 <div className="bg-blue-600 text-white p-2 rounded-lg">
                   <MaterialIcon name="credit_card" size="md" />
                 </div>
                 <div className="flex-1">
-                  <span className="text-white font-medium block">Carte bancaire</span>
-                  <span className="text-slate-500 text-xs">Visa · Mastercard · Apple Pay · Google Pay</span>
+                  <span className="text-white font-medium block">{t('wallet.creditCardOption')}</span>
+                  <span className="text-slate-500 text-xs">{t('wallet.creditCardSubtitle')}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <MaterialIcon name="check_circle" size="md" className="text-primary" />
@@ -210,12 +212,12 @@ export default function RechargerPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Traitement...
+                  {t('wallet.processing')}
                 </>
               ) : (
                 <>
                   <MaterialIcon name="credit_card" size="md" />
-                  Continuer vers le paiement
+                  {t('wallet.continueToPayment')}
                 </>
               )}
             </button>
@@ -223,8 +225,8 @@ export default function RechargerPage() {
 
           {/* Info */}
           <div className="text-center text-xs text-slate-500 space-y-1">
-            <p>Aucuns frais supplémentaires · Traitement sécurisé par Stripe</p>
-            <p>Le solde est crédité via webhook Stripe après confirmation du paiement</p>
+            <p>{t('wallet.noExtraFees')}</p>
+            <p>{t('wallet.webhookNotice')}</p>
           </div>
         </main>
       </div>

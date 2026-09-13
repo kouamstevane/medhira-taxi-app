@@ -8,20 +8,13 @@ import { confirmParcelReceipt } from '@/services/parcel.service'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { Capacitor } from '@capacitor/core'
+import { useTranslation } from '@/hooks/useTranslation'
+import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 const ParcelTrackingMap = dynamic(() => import('./ParcelTrackingMap'), {
   ssr: false,
   loading: () => <div className="w-full h-[300px] bg-white/5 animate-pulse rounded-xl" />,
 })
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "En attente d'un chauffeur",
-  accepted: 'Chauffeur en route vers le retrait',
-  in_transit: 'Colis en transit',
-  delivered: 'Colis déposé — En attente de votre confirmation',
-  completed: 'Colis reçu & paiement validé',
-  cancelled: 'Annulé',
-}
 
 const STATUS_STEPS = ['pending', 'accepted', 'in_transit', 'delivered', 'completed'] as const
 
@@ -40,6 +33,7 @@ export default function ClientParcelTrackingPage() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t } = useTranslation()
   const parcelId = searchParams.get('parcelId')?.trim() || (params.parcelId as string) || ''
 
   const { parcel, parcelLoading, parcelError, driverLocation, isDriverOnline } =
@@ -47,6 +41,25 @@ export default function ClientParcelTrackingPage() {
 
   const [confirming, setConfirming] = useState(false)
   const [confirmError, setConfirmError] = useState<string | null>(null)
+
+  const getStatusLabel = (status: string): string => {
+    switch (status) {
+      case 'pending':
+        return t('client.parcelPendingDriver')
+      case 'accepted':
+        return t('client.parcelAccepted')
+      case 'in_transit':
+        return t('client.parcelInTransit')
+      case 'delivered':
+        return t('client.parcelDeliveredWaitConfirm')
+      case 'completed':
+        return t('client.parcelCompleted')
+      case 'cancelled':
+        return t('client.parcelCancelled')
+      default:
+        return status
+    }
+  }
 
   const handleConfirmReceipt = async () => {
     setConfirming(true)
@@ -56,7 +69,7 @@ export default function ClientParcelTrackingPage() {
       await triggerHaptic('success')
     } catch (err) {
       await triggerHaptic('error')
-      setConfirmError(err instanceof Error ? err.message : 'Erreur lors de la confirmation du colis')
+      setConfirmError(err instanceof Error ? err.message : t('common.errorOccurred'))
     } finally {
       setConfirming(false)
     }
@@ -75,13 +88,14 @@ export default function ClientParcelTrackingPage() {
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="glass-card p-6 rounded-2xl border border-white/10 text-center max-w-sm">
           <MaterialIcon name="error_outline" className="text-red-400 text-[48px] mb-3" />
-          <p className="text-white font-bold mb-2">Colis introuvable</p>
-          <p className="text-slate-400 text-sm mb-4">{parcelError ?? 'Ce colis n\'existe pas ou vous n\'y avez pas accès.'}</p>
+          <p className="text-white font-bold mb-2">{t('client.parcelNotFound')}</p>
+          <p className="text-slate-400 text-sm mb-4">{parcelError ?? t('client.parcelNotFoundDesc')}</p>
           <button
             onClick={() => router.back()}
-            className="w-full h-12 bg-primary text-white font-bold rounded-xl"
+            aria-label={t('common.back')}
+            className="w-full h-12 bg-primary text-white font-bold rounded-xl min-h-[44px]"
           >
-            Retour
+            {t('common.back')}
           </button>
         </div>
       </div>
@@ -97,17 +111,19 @@ export default function ClientParcelTrackingPage() {
         <header className="sticky top-0 z-20 flex items-center p-4 bg-background/80 backdrop-blur-xl border-b border-white/5">
           <button
             onClick={() => window.history.back()}
-            className="flex items-center justify-center size-11 rounded-full glass-card text-white active:scale-95 transition-transform"
+            aria-label={t('common.back')}
+            className="flex items-center justify-center size-11 rounded-full glass-card text-white active:scale-95 transition-transform min-w-[44px] min-h-[44px]"
           >
             <MaterialIcon name="arrow_back" size="md" />
           </button>
-          <h1 className="flex-1 text-center text-lg font-bold text-white pr-11">Suivi du colis</h1>
+          <h1 className="flex-1 text-center text-lg font-bold text-white px-2">{t('client.parcelTrackingTitle')}</h1>
+          <LanguageSelector variant="pill" />
         </header>
 
         <main className="flex-1 p-4 space-y-4">
           <div className={`flex items-center gap-2 text-sm ${isDriverOnline ? 'text-green-400' : 'text-slate-500'}`}>
             <MaterialIcon name={isDriverOnline ? 'location_on' : 'location_off'} className="text-[18px]" />
-            {isDriverOnline ? 'Chauffeur en mouvement — position en temps réel' : 'Position du chauffeur indisponible'}
+            {isDriverOnline ? t('client.driverMovingLive') : t('client.driverLocationUnavailable')}
           </div>
 
           <div className="rounded-xl overflow-hidden border border-white/10">
@@ -124,9 +140,9 @@ export default function ClientParcelTrackingPage() {
               <div className="flex items-center gap-3 text-white">
                 <MaterialIcon name="mark_email_read" className="text-primary text-[28px]" />
                 <div>
-                  <h3 className="font-bold text-base text-white">Le chauffeur a déposé le colis</h3>
+                  <h3 className="font-bold text-base text-white">{t('client.driverDepositedParcel')}</h3>
                   <p className="text-xs text-slate-300">
-                    Veuillez confirmer la réception pour valider la livraison et débloquer les 70% pour le chauffeur.
+                    {t('client.driverDepositedParcelDesc')}
                   </p>
                 </div>
               </div>
@@ -140,17 +156,17 @@ export default function ClientParcelTrackingPage() {
               <button
                 onClick={handleConfirmReceipt}
                 disabled={confirming}
-                className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50 min-h-[44px]"
               >
                 {confirming ? (
                   <>
                     <MaterialIcon name="progress_activity" className="animate-spin" />
-                    Validation en cours…
+                    {t('client.confirmingReceipt')}
                   </>
                 ) : (
                   <>
                     <MaterialIcon name="check_circle" />
-                    J&apos;ai reçu mon colis
+                    {t('client.iReceivedParcel')}
                   </>
                 )}
               </button>
@@ -161,18 +177,18 @@ export default function ClientParcelTrackingPage() {
             <div className="glass-card rounded-2xl p-4 border border-green-500/30 bg-green-500/10 flex items-center gap-3 text-green-400">
               <MaterialIcon name="verified" size="md" />
               <div>
-                <p className="font-bold text-sm text-white">Réception confirmée</p>
-                <p className="text-xs text-slate-300">Le paiement a été libéré avec succès pour le chauffeur.</p>
+                <p className="font-bold text-sm text-white">{t('client.receiptConfirmed')}</p>
+                <p className="text-xs text-slate-300">{t('client.paymentReleasedToDriver')}</p>
               </div>
             </div>
           )}
 
           <div className="glass-card rounded-2xl p-5 border border-white/5">
-            <h2 className="text-sm font-bold text-white mb-3 uppercase tracking-wide">Statut</h2>
+            <h2 className="text-sm font-bold text-white mb-3 uppercase tracking-wide">{t('common.status')}</h2>
             {isCancelled ? (
               <div className="flex items-center gap-3 text-red-400">
                 <MaterialIcon name="cancel" />
-                <span className="font-medium">{STATUS_LABEL.cancelled}</span>
+                <span className="font-medium">{getStatusLabel('cancelled')}</span>
               </div>
             ) : (
               <div className="space-y-3">
@@ -189,7 +205,7 @@ export default function ClientParcelTrackingPage() {
                         ].join(' ')}
                       />
                       <span className={['text-sm', reached ? 'text-white font-medium' : 'text-slate-500'].join(' ')}>
-                        {STATUS_LABEL[step]}
+                        {getStatusLabel(step)}
                       </span>
                     </div>
                   )
@@ -199,20 +215,20 @@ export default function ClientParcelTrackingPage() {
           </div>
 
           <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-4">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wide">Trajet</h2>
+            <h2 className="text-sm font-bold text-white uppercase tracking-wide">{t('client.route')}</h2>
             <div className="space-y-3 relative">
               <div className="absolute left-[5px] top-3 bottom-3 w-[1.5px] bg-slate-700" />
               <div className="flex items-start gap-4">
                 <div className="size-3 rounded-full bg-primary ring-4 ring-primary/20 z-10 mt-1" />
                 <div className="flex-1">
-                  <p className="text-[10px] text-slate-500 uppercase font-bold">Retrait</p>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">{t('client.pickup')}</p>
                   <p className="text-white text-sm font-medium">{parcel.pickupLocation.address}</p>
                 </div>
               </div>
               <div className="flex items-start gap-4">
                 <div className="size-3 rounded-full border-2 border-white/60 z-10 mt-1" />
                 <div className="flex-1">
-                  <p className="text-[10px] text-slate-500 uppercase font-bold">Livraison</p>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">{t('client.delivery')}</p>
                   <p className="text-white text-sm font-medium">{parcel.dropoffLocation.address}</p>
                 </div>
               </div>
@@ -220,21 +236,21 @@ export default function ClientParcelTrackingPage() {
           </div>
 
           <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-2">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wide mb-2">Détails</h2>
+            <h2 className="text-sm font-bold text-white uppercase tracking-wide mb-2">{t('common.details')}</h2>
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Description</span>
               <span className="text-white text-right max-w-[60%] truncate">{parcel.description}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Destinataire</span>
+              <span className="text-slate-400">{t('client.recipient')}</span>
               <span className="text-white">{parcel.recipientName}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Distance</span>
+              <span className="text-slate-400">{t('common.distance')}</span>
               <span className="text-white">{parcel.distanceKm.toFixed(1)} km</span>
             </div>
             <div className="flex justify-between text-sm border-t border-white/5 pt-2 mt-2">
-              <span className="text-slate-400">Prix</span>
+              <span className="text-slate-400">{t('common.price')}</span>
               <span className="text-primary font-bold">{parcel.price.toFixed(2)} {parcel.currency}</span>
             </div>
           </div>
@@ -242,8 +258,8 @@ export default function ClientParcelTrackingPage() {
           {parcel.status === 'pending' && (
             <div className="glass-card rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5 text-center">
               <MaterialIcon name="hourglass_top" className="text-amber-400 text-[36px] mb-2" />
-              <p className="text-white font-medium">Recherche d&apos;un chauffeur en cours…</p>
-              <p className="text-xs text-slate-400 mt-1">Vous serez notifié dès qu&apos;un chauffeur sera assigné.</p>
+              <p className="text-white font-medium">{t('client.searchingDriver')}</p>
+              <p className="text-xs text-slate-400 mt-1">{t('client.searchingDriverDesc')}</p>
             </div>
           )}
         </main>

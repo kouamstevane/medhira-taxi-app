@@ -11,8 +11,11 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { cn } from '@/lib/utils';
 import { driverSecondaryButtonClassName } from '@/app/driver/register/components/driverOnboardingStyles';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 function RestaurantRegisterWizard() {
+  const { t } = useTranslation('restaurant');
   const {
     currentStep,
     loading,
@@ -58,27 +61,30 @@ function RestaurantRegisterWizard() {
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <div className="w-full max-w-md mx-auto px-4 pt-4">
-        <nav className="mb-4 flex items-center justify-between" aria-label="Navigation de l'inscription">
-          <button
-            type="button"
-            onClick={() => void leaveRegistration('/')}
-            disabled={isLeaving}
-            className={cn(driverSecondaryButtonClassName, 'h-10 min-h-10 w-auto gap-2 rounded-xl px-3 text-sm')}
-            aria-label="Accueil"
-          >
-            <MaterialIcon name="home" size="sm" />
-            Accueil
-          </button>
-          <button
-            type="button"
-            onClick={() => void leaveRegistration('/login')}
-            disabled={isLeaving}
-            className={cn(driverSecondaryButtonClassName, 'h-10 min-h-10 w-auto gap-2 rounded-xl px-3 text-sm')}
-            aria-label="Connexion"
-          >
-            <MaterialIcon name="login" size="sm" />
-            Connexion
-          </button>
+        <nav className="mb-4 flex items-center justify-between" aria-label={t('navLabel')}>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void leaveRegistration('/')}
+              disabled={isLeaving}
+              className={cn(driverSecondaryButtonClassName, 'h-10 min-h-10 w-auto gap-2 rounded-xl px-3 text-sm')}
+              aria-label={t('homeNav')}
+            >
+              <MaterialIcon name="home" size="sm" />
+              {t('homeNav')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void leaveRegistration('/login')}
+              disabled={isLeaving}
+              className={cn(driverSecondaryButtonClassName, 'h-10 min-h-10 w-auto gap-2 rounded-xl px-3 text-sm')}
+              aria-label={t('loginNav')}
+            >
+              <MaterialIcon name="login" size="sm" />
+              {t('loginNav')}
+            </button>
+          </div>
+          <LanguageSelector variant="compact" />
         </nav>
         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
@@ -87,9 +93,9 @@ function RestaurantRegisterWizard() {
           />
         </div>
         <div className="flex justify-between mt-1">
-          <span className="text-xs text-gray-400">Étape {currentStep} / 4</span>
+          <span className="text-xs text-gray-400">{t('stepIndicator', { step: currentStep })}</span>
           {fromBecomePro && (
-            <span className="text-xs text-primary font-medium">Ajout de rôle</span>
+            <span className="text-xs text-primary font-medium">{t('addingRoleBadge')}</span>
           )}
         </div>
       </div>

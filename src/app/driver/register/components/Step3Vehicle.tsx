@@ -8,6 +8,7 @@ import { imageCompressionService } from '@/services/image-compression.service';
 import { useToast } from '@/hooks/useToast';
 import { InputField } from '@/components/forms/InputField';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/hooks/useTranslation';
 import { DriverDocumentUploadField } from './DriverDocumentUploadField';
 import {
   driverPrimaryButtonClassName,
@@ -43,13 +44,6 @@ interface Step3VehicleProps {
   onVehicleTypeChange?: (vehicleType: VehicleDeliveryType) => void;
 }
 
-const DELIVERY_VEHICLE_OPTIONS: { value: VehicleDeliveryType; label: string; icon: string }[] = [
-  { value: 'velo', label: 'Vélo', icon: '🚲' },
-  { value: 'scooter', label: 'Scooter', icon: '🛵' },
-  { value: 'moto', label: 'Moto', icon: '🏍️' },
-  { value: 'voiture', label: 'Voiture', icon: '🚗' },
-];
-
 export default function Step3Vehicle({
   onNext,
   onBack,
@@ -59,11 +53,12 @@ export default function Step3Vehicle({
   driverType = 'chauffeur',
   onVehicleTypeChange,
 }: Step3VehicleProps) {
+  const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
   const isChauffeur = driverType === 'chauffeur' || driverType === 'les_deux';
   const maxAge = isChauffeur ? 10 : 15;
   const minYear = currentYear - maxAge;
-  const productionYearErrorMessage = `Le véhicule doit être de l'année ${minYear} ou plus récent (${maxAge} ans max pour le rôle choisi).`;
+  const productionYearErrorMessage = t('driver.vehicleProductionYearError', { year: minYear, maxAge });
   const vehicleSchema = React.useMemo(
     () => step3Schema.refine((data) => {
       const yearVal = parseInt(data.productionYear, 10);
@@ -75,8 +70,15 @@ export default function Step3Vehicle({
     [minYear, productionYearErrorMessage]
   );
 
+  const deliveryVehicleOptions: { value: VehicleDeliveryType; label: string; icon: string }[] = [
+    { value: 'velo', label: t('driver.vehicleBicycle'), icon: '🚲' },
+    { value: 'scooter', label: t('driver.vehicleScooter'), icon: '🛵' },
+    { value: 'moto', label: t('driver.vehicleMotorcycle'), icon: '🏍️' },
+    { value: 'voiture', label: t('driver.vehicleCar'), icon: '🚗' },
+  ];
+
   const [selectedDeliveryVehicle, setSelectedDeliveryVehicle] = React.useState<VehicleDeliveryType>('scooter');
-  const { showInfo, showError } = useToast();
+  const { showError } = useToast();
 
   const { register, handleSubmit, formState: { errors } } = useForm<Step3FormData>({
     resolver: zodResolver(vehicleSchema),
@@ -99,7 +101,6 @@ export default function Step3Vehicle({
   });
 
   const [compressionLoading, setCompressionLoading] = useState<string | null>(null);
-  const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, key: keyof typeof files) => {
     const file = e.target.files?.[0];
@@ -107,13 +108,13 @@ export default function Step3Vehicle({
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
     if (!allowedTypes.includes(file.type)) {
-      showError("Format de fichier non supporté (JPEG, PNG, WebP, PDF uniquement).");
+      showError(t('driver.unsupportedFileFormat'));
       return;
     }
 
     if (file.type === 'application/pdf') {
       if (file.size > 10 * 1024 * 1024) {
-        showError("Le PDF ne doit pas dépasser 10Mo.");
+        showError(t('driver.pdfTooLargeMax10'));
         return;
       }
       setFiles(prev => ({ ...prev, [key]: file }));
@@ -127,9 +128,9 @@ export default function Step3Vehicle({
         quality: 0.8,
       });
       setFiles(prev => ({ ...prev, [key]: compressedResult.file }));
-    } catch (err) {
+    } catch {
       setFiles(prev => ({ ...prev, [key]: file }));
-      showError("La compression a échoué pour " + file.name);
+      showError(t('driver.compressionFailed', { name: file.name }));
     } finally {
       setCompressionLoading(null);
     }
@@ -143,12 +144,12 @@ export default function Step3Vehicle({
 
   const onSubmit = (data: Step3FormData) => {
     if (isChauffeur && !data.hasFourDoors) {
-      showError("Votre véhicule doit posséder 4 portes indépendantes pour le service VTC.");
+      showError(t('driver.fourDoorsError'));
       return;
     }
 
     if (!files.registration || !files.techControl || !files.exteriorPhoto) {
-      showError("Veuillez fournir tous les documents obligatoires (Carte grise, Contrôle technique, Photo extérieur).");
+      showError(t('driver.allVehicleDocsRequired'));
       return;
     }
 
@@ -177,12 +178,12 @@ export default function Step3Vehicle({
     return (
       <div className="space-y-6">
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-white">Moyen de transport</h2>
-          <p className="text-[#9CA3AF] mt-2">Sélectionnez votre véhicule pour la livraison.</p>
+          <h2 className="text-2xl font-bold text-white">{t('driver.transportMethodTitle')}</h2>
+          <p className="text-[#9CA3AF] mt-2">{t('driver.transportMethodSubtitle')}</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {DELIVERY_VEHICLE_OPTIONS.map((opt) => (
+          {deliveryVehicleOptions.map((opt) => (
             <button
               key={opt.value}
               type="button"
@@ -201,7 +202,7 @@ export default function Step3Vehicle({
 
         <div className="flex gap-4 pt-4">
           <button type="button" onClick={onBack} disabled={loading} className={cn(driverSecondaryButtonClassName, 'flex-[1]')}>
-            Retour
+            {t('common.back')}
           </button>
           <button
             type="button"
@@ -212,7 +213,7 @@ export default function Step3Vehicle({
             disabled={loading}
             className={cn(driverPrimaryButtonClassName, 'flex-[2]')}
           >
-            Continuer
+            {t('common.next')}
           </button>
         </div>
       </div>
@@ -222,21 +223,21 @@ export default function Step3Vehicle({
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Éligibilité Véhicule</h2>
-        <p className="text-[#9CA3AF] mt-2">Veuillez renseigner les détails de votre véhicule.</p>
+        <h2 className="text-2xl font-bold text-white">{t('driver.vehicleEligibilityTitle')}</h2>
+        <p className="text-[#9CA3AF] mt-2">{t('driver.vehicleEligibilitySubtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div className={driverSectionCardClassName}>
-          <h3 className={driverSectionTitleClassName}>Détails Véhicule</h3>
+          <h3 className={driverSectionTitleClassName}>{t('driver.vehicleDetailsSection')}</h3>
 
           <div className="grid grid-cols-1 gap-4">
             <InputField
               type="number"
               {...register('productionYear')}
-              label="Année de production"
-              placeholder={`Ex: ${currentYear - 2}`}
-              helperText={`Véhicule de ${minYear} ou plus récent (${maxAge} ans max pour le rôle choisi)`}
+              label={t('driver.productionYear')}
+              placeholder={t('driver.productionYearPlaceholder', { year: currentYear - 2 })}
+              helperText={t('driver.vehicleAgeHelper', { year: minYear, maxAge })}
               error={errors.productionYear?.message}
               required
             />
@@ -251,10 +252,10 @@ export default function Step3Vehicle({
                 />
                 <div className="flex flex-col">
                   <label htmlFor="hasFourDoors" className="text-sm font-semibold text-white cursor-pointer select-none">
-                    Mon véhicule dispose de 4 portes indépendantes
+                    {t('driver.fourDoorsCheckbox')}
                   </label>
                   <span className="text-xs text-[#9CA3AF] mt-1">
-                    Exigence réglementaire obligatoire pour tous les services VTC (les voitures à 2 ou 3 portes sont interdites).
+                    {t('driver.fourDoorsDesc')}
                   </span>
                   {errors.hasFourDoors && (
                     <span className="text-red-500 text-xs mt-1">{errors.hasFourDoors.message}</span>
@@ -266,21 +267,21 @@ export default function Step3Vehicle({
         </div>
 
         <div className={driverSectionCardClassName}>
-          <h3 className={driverSectionTitleClassName}>Documents Véhicule</h3>
+          <h3 className={driverSectionTitleClassName}>{t('driver.vehicleDocumentsSection')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {renderFileInput("Carte Grise (Recto/Verso)", "registration")}
-            {renderFileInput("Contrôle Technique", "techControl")}
-            {renderFileInput("Photo Extérieur (Plaque visible)", "exteriorPhoto", true, "image/*")}
+            {renderFileInput(t('driver.docRegistration'), "registration")}
+            {renderFileInput(t('driver.docTechControl'), "techControl")}
+            {renderFileInput(t('driver.docExteriorPhoto'), "exteriorPhoto", true, "image/*")}
           </div>
-          {renderFileInput("Assurance Pro", "insurance", false)}
+          {renderFileInput(t('driver.docInsurancePro'), "insurance", false)}
         </div>
 
         <div className="flex gap-4 pt-4">
           <button type="button" onClick={onBack} disabled={loading} className={cn(driverSecondaryButtonClassName, 'flex-[1]')}>
-            Retour
+            {t('common.back')}
           </button>
           <button type="submit" disabled={loading} className={cn(driverPrimaryButtonClassName, 'flex-[2]')}>
-            {loading ? <Loader2 className="animate-spin mr-2" /> : null} Continuer
+            {loading ? <Loader2 className="animate-spin mr-2" /> : null} {t('common.next')}
           </button>
         </div>
       </form>

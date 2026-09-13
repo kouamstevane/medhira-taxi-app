@@ -27,6 +27,8 @@ import type { MenuItem } from '@/types';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
 import { FileDown, ShoppingCart } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { MenuCatalogToolbar } from '@/components/restaurant/menu/MenuCatalogToolbar';
 import { MenuCatalogTable } from '@/components/restaurant/menu/MenuCatalogTable';
 import { MenuCatalogPagination } from '@/components/restaurant/menu/MenuCatalogPagination';
@@ -36,16 +38,16 @@ import { mergeMenuCategories } from '@/utils/menu-categories';
 
 const STORE_CONNECTOR_ENABLED = false;
 
-function getMenuItemSaveErrorMessage(error: unknown): string {
+function getMenuItemSaveErrorMessage(error: unknown, t: (key: string) => string): string {
   const code = error && typeof error === 'object' && 'code' in error
     ? String((error as { code?: unknown }).code)
     : '';
 
   if (code === 'unauthenticated') {
-    return 'Votre session a expiré. Reconnectez-vous avant de modifier le menu.';
+    return t('sessionExpiredMenu');
   }
   if (code === 'permission-denied') {
-    return 'Vous n’avez pas les droits pour modifier ce menu.';
+    return t('permissionDeniedMenu');
   }
   return getMenuImageStorageErrorMessage(error);
 }
@@ -58,6 +60,7 @@ export default function MenuManagementClient() {
   const id = searchParams.get('restaurantId')?.trim() || null;
   const restaurantId = id ?? '';
   const { showError, showSuccess, toasts, removeToast } = useToast();
+  const { t } = useTranslation('restaurant');
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
@@ -149,13 +152,13 @@ export default function MenuManagementClient() {
         ) {
           setIsNetworkError(true);
         }
-        showError('Erreur lors du chargement du restaurant');
+        showError(t('restaurantLoadErrorToast'));
         setLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [id, router, refreshKey]);
+  }, [id, router, refreshKey, t]);
 
   // Révoquer l'ObjectURL de prévisualisation au démontage ou remplacement
   const cleanupPreview = useCallback(() => {
@@ -254,7 +257,7 @@ export default function MenuManagementClient() {
 
   const handleAttemptCloseModal = () => {
     if (isCompressing || isUploading) {
-      showError("Impossible de fermer pendant le traitement de l'image");
+      showError(t('cannotCloseProcessingToast'));
       return;
     }
     resetImageEditorState();
@@ -322,13 +325,13 @@ export default function MenuManagementClient() {
     if (imageChoice === 'external-url' && externalUrl.trim()) {
       const isValid = await urlValidation.validateUrl(externalUrl.trim());
       if (!isValid) {
-        showError("Veuillez corriger l'URL de l'image avant d'enregistrer");
+        showError(t('fixImageUrlToast'));
         return;
       }
     }
 
     if (imageChoice === 'upload' && !compressedResult) {
-      showError("Veuillez sélectionner et compresser une image avant d'enregistrer");
+      showError(t('selectAndCompressToast'));
       return;
     }
 
@@ -408,8 +411,8 @@ export default function MenuManagementClient() {
 
       showSuccess(
         oldImageCleanupFailed
-          ? `${editingItem ? "Article modifié" : "Article ajouté"}, mais l’ancienne image n’a pas pu être supprimée`
-          : (editingItem ? "Article modifié" : "Article ajouté"),
+          ? t('itemUpdateCleanupFailedToast', { prefix: editingItem ? t('itemUpdatedToast') : t('itemAddedToast') })
+          : (editingItem ? t('itemUpdatedToast') : t('itemAddedToast')),
       );
 
       // Rafraîchir le menu
@@ -428,7 +431,7 @@ export default function MenuManagementClient() {
         }
       }
 
-      showError(getMenuItemSaveErrorMessage(error));
+      showError(getMenuItemSaveErrorMessage(error, t as unknown as (key: string) => string));
     } finally {
       setIsSaving(false);
       setIsUploading(false);
@@ -441,7 +444,7 @@ export default function MenuManagementClient() {
       await FoodDeliveryService.updateMenuItemAvailability(restaurantId, item.id, !item.isAvailable);
       await catalog.reload();
     } catch {
-      showError("Erreur de mise à jour");
+      showError(t('updateItemErrorToast'));
     }
   };
 
@@ -471,11 +474,11 @@ export default function MenuManagementClient() {
       setPendingDeleteItem(null);
       showSuccess(
         imageCleanupFailed
-          ? "Article supprimé, mais son image n’a pas pu être supprimée"
-          : "Article supprimé",
+          ? t('itemDeleteCleanupFailedToast')
+          : t('itemDeletedToast'),
       );
     } catch {
-      showError("Erreur de suppression");
+      showError(t('deleteItemErrorToast'));
     } finally {
       setIsDeleting(false);
     }
@@ -488,16 +491,16 @@ export default function MenuManagementClient() {
           <button
             onClick={() => router.push(id ? getRestaurantPortalPath(id) : '/restaurant/dashboard')}
             className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Retour"
+            aria-label={t('back')}
           >
             <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
           </button>
-          <h1 className="text-xl font-bold text-white">Gestion du Menu</h1>
-          <div className="w-10"></div>
+          <h1 className="text-xl font-bold text-white">{t('menuTitle')}</h1>
+          <LanguageSelector variant="compact" />
         </header>
         <div className="flex-1 flex items-center justify-center p-4">
           <NetworkErrorView
-            message="Impossible de charger les informations du restaurant. Veuillez vérifier votre connexion internet et réessayer."
+            message={t('networkErrorRestoInfo')}
             onRetry={recharger}
           />
         </div>
@@ -534,42 +537,43 @@ export default function MenuManagementClient() {
           <button
             onClick={() => router.push(getRestaurantPortalPath(restaurantId))}
             className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Retour"
+            aria-label={t('back')}
           >
             <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-white">Gestion du Menu</h1>
-            <p className="text-xs text-slate-500">{catalog.totalCount.toLocaleString('fr-FR')} articles au total</p>
+            <h1 className="text-xl font-bold text-white">{t('menuTitle')}</h1>
+            <p className="text-xs text-slate-500">{t('totalArticlesCount', { count: catalog.totalCount.toLocaleString() })}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setIsCsvModalOpen(true)}
-            aria-label="Importer catalogue"
+            aria-label={t('importCatalog')}
             className="glass-card border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition text-sm min-h-[44px]"
           >
             <FileDown size={17} strokeWidth={2.2} aria-hidden="true" />
-            <span className="hidden sm:inline">Importer catalogue</span>
+            <span className="hidden sm:inline">{t('importCatalog')}</span>
           </button>
           {STORE_CONNECTOR_ENABLED && (
             <button
               type="button"
               onClick={() => setIsStoreModalOpen(true)}
-              aria-label="Connecter boutique"
+              aria-label={t('connectStore')}
               className="glass-card border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition text-sm min-h-[44px]"
             >
               <ShoppingCart size={17} strokeWidth={2.2} aria-hidden="true" />
-              <span className="hidden sm:inline">Connecter boutique</span>
+              <span className="hidden sm:inline">{t('connectStore')}</span>
             </button>
           )}
           <button
             onClick={() => handleOpenModal()}
             className="bg-gradient-to-r from-primary to-[#ffae33] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 primary-glow hover:opacity-90 transition min-h-[44px]"
           >
-            <MaterialIcon name="add" size="md" /> Nouveau
+            <MaterialIcon name="add" size="md" /> {t('newItem')}
           </button>
+          <LanguageSelector variant="compact" />
         </div>
       </header>
 
@@ -592,16 +596,16 @@ export default function MenuManagementClient() {
         {catalog.error && !catalog.isNetworkError && (
           <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-200">
             <span>{catalog.error}</span>
-            <button type="button" onClick={catalog.retry} className="min-h-11 rounded-xl px-3 font-bold hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">Réessayer</button>
+            <button type="button" onClick={catalog.retry} className="min-h-11 rounded-xl px-3 font-bold hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">{t('retry')}</button>
           </div>
         )}
 
         {catalog.selectedIds.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/[0.08] p-3">
-            <span className="text-xs font-bold text-primary">{catalog.selectedIds.length} plat(s) sélectionné(s)</span>
+            <span className="text-xs font-bold text-primary">{t('itemsSelectedCount', { count: catalog.selectedIds.length })}</span>
             <div className="flex gap-2">
-              <button type="button" onClick={async () => { await bulkUpdateMenuItemAvailability(restaurantId, catalog.selectedIds, true); await catalog.reload(); }} className="min-h-11 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-emerald-300">Rendre disponibles</button>
-              <button type="button" onClick={async () => { await bulkUpdateMenuItemAvailability(restaurantId, catalog.selectedIds, false); await catalog.reload(); }} className="min-h-11 rounded-xl bg-white/[0.06] px-3 text-xs font-bold text-slate-300">Masquer</button>
+              <button type="button" onClick={async () => { await bulkUpdateMenuItemAvailability(restaurantId, catalog.selectedIds, true); await catalog.reload(); }} className="min-h-11 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-emerald-300">{t('makeAvailable')}</button>
+              <button type="button" onClick={async () => { await bulkUpdateMenuItemAvailability(restaurantId, catalog.selectedIds, false); await catalog.reload(); }} className="min-h-11 rounded-xl bg-white/[0.06] px-3 text-xs font-bold text-slate-300">{t('hideSelected')}</button>
             </div>
           </div>
         )}
@@ -621,7 +625,7 @@ export default function MenuManagementClient() {
         {!catalog.isLoading && (isNetworkError || catalog.isNetworkError) && catalog.items.length === 0 && (
           <div className="py-12">
             <NetworkErrorView
-              message="Impossible de charger le catalogue de votre menu. Veuillez vérifier votre connexion internet et réessayer."
+              message={t('networkErrorMenu')}
               onRetry={recharger}
             />
           </div>
@@ -632,15 +636,15 @@ export default function MenuManagementClient() {
             <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
               <MaterialIcon name="menu_book" size="xl" className="text-slate-500" />
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Votre menu est vide</h3>
+            <h3 className="text-xl font-bold text-white mb-2">{t('emptyMenuTitle')}</h3>
             <p className="text-slate-400 mb-8">
-              Commencez par ajouter votre premier plat pour attirer des clients !
+              {t('emptyMenuDesc')}
             </p>
             <button
               onClick={() => handleOpenModal()}
               className="bg-primary text-white px-8 py-3 rounded-2xl font-bold primary-glow hover:opacity-90 transition min-h-[44px]"
             >
-              Ajouter un plat
+              {t('addItem')}
             </button>
           </div>
         )}
@@ -648,9 +652,9 @@ export default function MenuManagementClient() {
         {!catalog.isLoading && catalog.items.length === 0 && catalog.totalCount > 0 && (
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] px-6 py-16 text-center">
             <MaterialIcon name="search_off" size="xl" className="mx-auto mb-4 text-slate-500" />
-            <h3 className="text-lg font-bold text-white">Aucun plat trouvé</h3>
-            <p className="mt-2 text-sm text-slate-500">Modifiez votre recherche ou réinitialisez les filtres.</p>
-            <button type="button" onClick={catalog.clearFilters} className="mt-6 min-h-11 rounded-xl bg-primary px-4 text-sm font-bold text-white">Réinitialiser les filtres</button>
+            <h3 className="text-lg font-bold text-white">{t('noDishesFound')}</h3>
+            <p className="mt-2 text-sm text-slate-500">{t('noDishesFoundDesc')}</p>
+            <button type="button" onClick={catalog.clearFilters} className="mt-6 min-h-11 rounded-xl bg-primary px-4 text-sm font-bold text-white">{t('resetFilters')}</button>
           </div>
         )}
 
@@ -690,7 +694,7 @@ export default function MenuManagementClient() {
             {/* Header Sticky */}
             <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#1A1A1A]/80 backdrop-blur-md shrink-0">
               <h3 id="modal-title" className="text-xl font-bold text-white">
-                {editingItem ? 'Modifier' : 'Ajouter'} un article
+                {editingItem ? t('editItem') : t('addItem')}
               </h3>
               <button
                 type="button"
@@ -706,14 +710,14 @@ export default function MenuManagementClient() {
             <form id="menu-item-form" onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Nom du plat *
+                  {t('dishNameLabel')}
                 </label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white"
-                  placeholder="Ex: Burger Gourmet Cheese"
+                  placeholder={t('dishNamePlaceholder')}
                   required
                 />
               </div>
@@ -721,7 +725,7 @@ export default function MenuManagementClient() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Prix ({CURRENCY_CODE}) *
+                    {t('priceLabel', { currency: CURRENCY_CODE })}
                   </label>
                   <input
                     type="number"
@@ -735,7 +739,7 @@ export default function MenuManagementClient() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                    Catégorie *
+                    {t('categoryLabel')}
                   </label>
                   <input
                     type="text"
@@ -743,7 +747,7 @@ export default function MenuManagementClient() {
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
                     className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white"
-                    placeholder="Ex: Plats, Desserts, Burgers..."
+                    placeholder={t('categoryPlaceholder')}
                     required
                   />
                   <datalist id="category-suggestions">
@@ -772,20 +776,20 @@ export default function MenuManagementClient() {
 
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Description
+                  {t('dishDescLabel')}
                 </label>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white h-20 resize-none"
-                  placeholder="Ingrédients, taille, accompagnement..."
+                  placeholder={t('dishDescPlaceholder')}
                 />
               </div>
 
               {/* ÉDITEUR D'IMAGE ACCESSIBLE */}
               <div className="space-y-3 pt-2 border-t border-white/5">
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Image du plat
+                  {t('dishImageLabel')}
                 </label>
 
                 {/* Choix d'action image */}
@@ -799,7 +803,7 @@ export default function MenuManagementClient() {
                         : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
                     }`}
                   >
-                    Conserver
+                    {t('keepImageBtn')}
                   </button>
 
                   <button
@@ -811,7 +815,7 @@ export default function MenuManagementClient() {
                         : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
                     }`}
                   >
-                    Lien externe
+                    {t('externalLinkBtn')}
                   </button>
 
                   <button
@@ -823,7 +827,7 @@ export default function MenuManagementClient() {
                         : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
                     }`}
                   >
-                    Importer
+                    {t('importImageBtn')}
                   </button>
 
                   <button
@@ -836,20 +840,20 @@ export default function MenuManagementClient() {
                         : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 disabled:opacity-40'
                     }`}
                   >
-                    Supprimer
+                    {t('deleteImageBtn')}
                   </button>
                 </div>
 
                 {/* Explication secondaire pour chaque option */}
                 <p className="text-[11px] text-slate-500 italic">
                   {imageChoice === 'image-unchanged' &&
-                    "Conserve l'image actuellement enregistrée sans modification."}
+                    t('keepImageHelp')}
                   {imageChoice === 'external-url' &&
-                    "Saisissez une URL directe d'image (ex: Unsplash). Les liens de partage (Google Drive, Photos) sont refusés."}
+                    t('externalLinkHelp')}
                   {imageChoice === 'upload' &&
-                    "Sélectionnez une image (max 10 Mo). Elle sera automatiquement compressée au format WebP (max 500 Ko)."}
+                    t('importImageHelp')}
                   {imageChoice === 'remove' &&
-                    "Supprime l'image du plat."}
+                    t('deleteImageHelp')}
                 </p>
 
                 {/* Lien Externe Option */}
@@ -872,7 +876,7 @@ export default function MenuManagementClient() {
 
                     {urlValidation.isValidating && (
                       <p className="text-xs text-amber-400 flex items-center gap-1">
-                        <MaterialIcon name="refresh" className="animate-spin text-sm" /> Vérification de l'image...
+                        <MaterialIcon name="refresh" className="animate-spin text-sm" /> {t('verifyingImage')}
                       </p>
                     )}
 
@@ -899,14 +903,14 @@ export default function MenuManagementClient() {
                     {isCompressing && (
                       <div className="p-3 bg-white/5 rounded-xl space-y-2">
                         <p className="text-xs text-amber-400 flex items-center gap-2">
-                          <MaterialIcon name="refresh" className="animate-spin text-sm" /> Compression WebP en cours...
+                          <MaterialIcon name="refresh" className="animate-spin text-sm" /> {t('compressingWebp')}
                         </p>
                         <button
                           type="button"
                           onClick={handleCancelImport}
                           className="text-xs text-destructive hover:underline font-semibold"
                         >
-                          Annuler l import
+                          {t('cancelImport')}
                         </button>
                       </div>
                     )}
@@ -922,10 +926,12 @@ export default function MenuManagementClient() {
                           />
                         </div>
                         <div className="flex-1 text-xs space-y-1">
-                          <p className="font-bold text-white">Image compressée WebP</p>
+                          <p className="font-bold text-white">{t('compressedWebpImage')}</p>
                           <p className="text-slate-400">
-                            {(compressedResult.compressedSize / 1024).toFixed(0)} Ko / 500 Ko max (
-                            {compressedResult.compressionRatio.toFixed(0)}% économisés)
+                            {t('compressedStats', {
+                              size: (compressedResult.compressedSize / 1024).toFixed(0),
+                              ratio: compressedResult.compressionRatio.toFixed(0),
+                            })}
                           </p>
                         </div>
                         <button
@@ -942,7 +948,7 @@ export default function MenuManagementClient() {
                     {isUploading && (
                       <div className="p-3 bg-white/5 border border-primary/20 rounded-xl space-y-2">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-primary">Envoi vers Firebase Storage...</span>
+                          <span className="font-bold text-primary">{t('uploadingToStorage')}</span>
                           <span className="text-slate-400">{uploadProgress}%</span>
                         </div>
                         <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -957,14 +963,14 @@ export default function MenuManagementClient() {
                             onClick={handleTogglePauseUpload}
                             className="text-xs text-slate-300 hover:text-white font-semibold"
                           >
-                            {isUploadPaused ? 'Reprendre' : 'Pause'}
+                            {isUploadPaused ? t('resume') : t('pause')}
                           </button>
                           <button
                             type="button"
                             onClick={handleCancelImport}
                             className="text-xs text-destructive hover:underline font-semibold"
                           >
-                            Annuler l import
+                            {t('cancelImport')}
                           </button>
                         </div>
                       </div>
@@ -974,7 +980,7 @@ export default function MenuManagementClient() {
               </div>
 
               <div className="flex items-center justify-between py-2 border-t border-white/5">
-                <span className="text-sm font-bold text-slate-300">Disponible à la vente</span>
+                <span className="text-sm font-bold text-slate-300">{t('availableForSale')}</span>
                 <button
                   type="button"
                   className={`w-12 h-6 rounded-full transition relative ${
@@ -998,7 +1004,7 @@ export default function MenuManagementClient() {
                   disabled={isCompressing || isUploading}
                   className="flex-1 py-4 glass-card border border-white/10 text-slate-300 font-bold rounded-2xl hover:bg-white/10 transition disabled:opacity-40"
                 >
-                  Annuler
+                  {t('cancel')}
                 </button>
                 <button
                   type="submit"
@@ -1011,7 +1017,7 @@ export default function MenuManagementClient() {
                   }
                   className="flex-1 py-4 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow hover:opacity-90 transition disabled:opacity-50"
                 >
-                  {isSaving ? 'Enregistrement...' : 'Enregistrer'}
+                  {isSaving ? t('savingProgress') : t('save')}
                 </button>
               </div>
             </form>
@@ -1025,9 +1031,9 @@ export default function MenuManagementClient() {
         restaurantId={restaurantId}
         onImportCompleted={async (job) => {
           if (job.failedItems > 0) {
-            showError(`Import terminé avec ${job.failedItems} anomalie(s). Consultez les détails.`);
+            showError(t('importCompletedWithErrors', { count: job.failedItems }));
           } else {
-            showSuccess('Catalogue importé avec succès !');
+            showSuccess(t('catalogImportedSuccess'));
           }
           await catalog.reload();
         }}
@@ -1038,7 +1044,7 @@ export default function MenuManagementClient() {
         onClose={() => setIsStoreModalOpen(false)}
         restaurantId={restaurantId}
         onSyncCompleted={async () => {
-          showSuccess('Synchronisation WooCommerce terminée !');
+          showSuccess(t('woocommerceSyncSuccess'));
           await catalog.reload();
         }}
       />

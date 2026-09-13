@@ -10,10 +10,12 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { NetworkErrorView } from '@/components/ui';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { getFoodOrderDetailPath } from '@/utils/entity-route-paths';
 
 export default function OrdersHistoryPage() {
+  const { t, locale } = useTranslation();
   const router = useRouter();
   const { currentUser: user } = useAuth();
   const [orders, setOrders] = useState<FoodOrder[]>([]);
@@ -50,7 +52,7 @@ export default function OrdersHistoryPage() {
   const formatDate = (timestamp: { toDate?: () => Date } | Date | string | number | null | undefined) => {
     if (!timestamp) return '';
     const date = typeof timestamp === 'object' && 'toDate' in timestamp && typeof timestamp.toDate === 'function' ? timestamp.toDate() : new Date(timestamp as string | number | Date);
-    return new Intl.DateTimeFormat('fr-FR', {
+    return new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'fr-FR', {
       day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
     }).format(date);
   };
@@ -62,11 +64,11 @@ export default function OrdersHistoryPage() {
         <button
           onClick={() => router.push('/food')}
           className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center"
-          aria-label="Retour"
+          aria-label={t('common.back')}
         >
           <MaterialIcon name="arrow_back" size="lg" />
         </button>
-        <h1 className="text-xl font-bold text-white">Mes Commandes</h1>
+        <h1 className="text-xl font-bold text-white">{t('food.myOrders')}</h1>
         <div className="w-10"></div>
       </div>
 
@@ -78,7 +80,7 @@ export default function OrdersHistoryPage() {
         ) : isNetworkError && orders.length === 0 ? (
           <div className="py-8">
             <NetworkErrorView
-              message="Impossible de charger l'historique de vos commandes. Veuillez vérifier votre connexion internet et réessayer."
+              message={t('food.ordersNetworkError')}
               onRetry={loadOrders}
             />
           </div>
@@ -89,13 +91,13 @@ export default function OrdersHistoryPage() {
                 <MaterialIcon name="shopping_bag" size="xl" className="text-primary" />
               </div>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Aucune commande</h3>
-            <p className="text-slate-400 text-sm mb-6">Vous n'avez pas encore passé de commande.</p>
+            <h3 className="text-xl font-bold text-white mb-2">{t('food.noOrders')}</h3>
+            <p className="text-slate-400 text-sm mb-6">{t('food.noOrdersDesc')}</p>
             <button
               onClick={() => router.push('/food')}
               className="bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold px-6 py-3 rounded-xl min-h-[44px]"
             >
-              Découvrir les restaurants
+              {t('food.discoverRestaurants')}
             </button>
           </div>
         ) : (

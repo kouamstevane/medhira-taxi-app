@@ -12,6 +12,7 @@ import { Info } from 'lucide-react';
 import { CarType } from '@/types';
 import { getVehicleMeta } from '@/app/taxi/data/vehicleCatalog';
 import { TaxiIcon } from './TaxiIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface VehicleOptionProps {
   carType: CarType;
@@ -30,6 +31,7 @@ export const VehicleOption = ({
   estimatedPrice = null,
   disabled = false,
 }: VehicleOptionProps) => {
+  const { t } = useTranslation();
   const meta = getVehicleMeta(carType);
 
   return (
@@ -66,7 +68,7 @@ export const VehicleOption = ({
               <span
                 role="button"
                 tabIndex={0}
-                aria-label={`Voir la description de ${carType.name}`}
+                aria-label={t('taxi.viewVehicleDescription', { name: carType.name })}
                 onClick={(e) => {
                   e.stopPropagation();
                   onShowDetails(carType);
@@ -88,15 +90,15 @@ export const VehicleOption = ({
             {meta.tagline}
           </p>
           <p className="text-[10px] sm:text-[11px] text-slate-300 mt-0.5">
-            {carType.seats} places • {carType.time} d&apos;attente
+            {t('taxi.vehicleSeatsCount', { count: carType.seats })} • {carType.time} {t('taxi.vehicleWait').toLowerCase()}
           </p>
           <p className="text-[10px] sm:text-[11px] text-slate-200 mt-0.5 line-clamp-1">
             {estimatedPrice != null ? (
               <>
-                Prix estimé <span className="font-semibold text-white">{estimatedPrice} CAD</span>
+                {t('taxi.estimatedFare')} <span className="font-semibold text-white">{estimatedPrice} CAD</span>
               </>
             ) : (
-              'Prix estimé disponible après saisie du trajet'
+              t('taxi.fareEstimatedAvailableAfter')
             )}
           </p>
         </div>

@@ -5,12 +5,14 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { Restaurant } from '@/types/food-delivery';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { isRestaurantOpenAt } from '@/utils/restaurant-hours';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
 }
 
 export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) => {
+  const { t } = useTranslation();
   const isOpen = isRestaurantOpenAt(restaurant, new Date());
   const coverImageUrl = restaurant.coverImageUrl || restaurant.imageUrl;
 
@@ -38,13 +40,13 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) =>
           {/* Badge fermé */}
           {!isOpen && (
             <div className="absolute top-3 left-3 bg-destructive text-white text-xs font-bold px-2 py-1 rounded-full">
-              Fermé
+              {t('food.closed')}
             </div>
           )}
 
           {/* Badge Prix */}
           <div className="absolute top-3 right-3 bg-black/50 backdrop-blur text-white text-xs font-semibold px-2 py-1 rounded-full border border-white/10">
-            {restaurant.avgPricePerPerson} {CURRENCY_CODE} / pers.
+            {restaurant.avgPricePerPerson} {CURRENCY_CODE} / {t('food.perPerson')}
           </div>
         </div>
 

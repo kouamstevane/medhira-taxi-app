@@ -23,6 +23,7 @@ import { startAutomaticSearch, stopAutomaticSearch } from '@/services/matching/a
 import { cancelBooking } from '@/services/taxi.service';
 import { BonusSelector } from './components/BonusSelector';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 
@@ -31,6 +32,7 @@ type Step = 'form' | 'searching' | 'driver_found' | 'completed' | 'failed' | 'sc
 export default function TaxiPage() {
   const router = useRouter();
   const { currentUser } = useAuth();
+  const { t } = useTranslation();
   
   //  Fonction pour déclencher le haptic feedback (medJira.md #93)
   const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Medium) => {
@@ -346,7 +348,7 @@ export default function TaxiPage() {
           >
             <MaterialIcon name="arrow_back" size="md" />
           </button>
-          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Taxi</h1>
+          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">{t('taxi.title')}</h1>
         </header>
 
         {/* Content */}
@@ -382,10 +384,10 @@ export default function TaxiPage() {
                 </div>
 
                 <h2 className="text-xl font-bold text-white mb-2">
-                  Aucun chauffeur disponible
+                  {t('taxi.findingDriver')}
                 </h2>
                 <p className="text-sm text-slate-400 mb-6">
-                  Désolé, aucun chauffeur n&apos;est disponible dans votre zone pour le moment.
+                  {t('taxi.findingDriverDesc')}
                 </p>
 
                 {/* Sélecteur de Bonus pour le retry */}
@@ -451,7 +453,7 @@ export default function TaxiPage() {
                   className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
                 >
                   <MaterialIcon name="refresh" size="md" />
-                  Réessayer
+                  {t('common.retry')}
                 </button>
 
                 {/* Bouton retour */}
@@ -464,11 +466,11 @@ export default function TaxiPage() {
                   }}
                   className="w-full mt-3 h-14 glass-card text-slate-300 font-semibold rounded-2xl border border-white/10 active:scale-[0.98] transition-transform flex items-center justify-center"
                 >
-                  Retour à l&apos;accueil
+                  {t('common.home')}
                 </button>
 
                 <p className="text-xs text-slate-500 mt-4">
-                  Conseil : Essayez à une heure différente pour plus de disponibilité
+                  {t('taxi.tryDifferentHourTip')}
                 </p>
               </div>
             </div>
@@ -487,9 +489,9 @@ export default function TaxiPage() {
                   </div>
                 </div>
 
-                <h2 className="text-xl font-bold text-white mb-2">Réservation programmée</h2>
+                <h2 className="text-xl font-bold text-white mb-2">{t('taxi.scheduledTitle')}</h2>
                 <p className="text-sm text-slate-400 mb-2">
-                  Votre course a bien été enregistrée.
+                  {t('taxi.scheduledSuccess')}
                 </p>
                 {scheduledAtLabel && (
                   <p className="text-sm font-semibold text-white mb-6">{scheduledAtLabel}</p>
@@ -507,7 +509,7 @@ export default function TaxiPage() {
                   className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
                 >
                   <MaterialIcon name="edit" size="md" />
-                  Modifier
+                  {t('common.edit')}
                 </button>
 
                 <button
@@ -523,7 +525,7 @@ export default function TaxiPage() {
                   }}
                   className="w-full mt-3 h-14 glass-card text-slate-300 font-semibold rounded-2xl border border-white/10 active:scale-[0.98] transition-transform flex items-center justify-center"
                 >
-                  Annuler la réservation
+                  {t('taxi.cancelRide')}
                 </button>
               </div>
             </div>
@@ -538,9 +540,9 @@ export default function TaxiPage() {
                   </div>
                 </div>
 
-                <h2 className="text-xl font-bold text-white mb-2">Course terminée !</h2>
+                <h2 className="text-xl font-bold text-white mb-2">{t('taxi.tripCompleted')}</h2>
                 <p className="text-sm text-slate-400 mb-6">
-                  Merci d&apos;avoir utilisé Medjira Taxi
+                  {t('taxi.thankYouRide')}
                 </p>
                 <button
                   onClick={async () => {
@@ -553,7 +555,7 @@ export default function TaxiPage() {
                   className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
                 >
                   <MaterialIcon name="add" size="md" />
-                  Nouvelle course
+                  {t('taxi.newRide')}
                 </button>
               </div>
             </div>

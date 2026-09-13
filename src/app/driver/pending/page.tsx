@@ -5,9 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { AuthService } from '@/services';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function DriverPendingPage() {
   const router = useRouter();
+  const { t } = useTranslation('driver');
   const { currentUser, loading: authLoading, authStatus } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -33,14 +36,17 @@ export default function DriverPendingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8 text-center">
+    <main className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8 text-center relative">
+      <div className="absolute top-4 right-4">
+        <LanguageSelector variant="pill" />
+      </div>
       <div className="w-full max-w-md">
         <div className="w-20 h-20 rounded-full bg-orange-500/10 flex items-center justify-center mx-auto mb-4 animate-pulse">
           <MaterialIcon name="schedule" size="xl" className="text-orange-400" />
         </div>
-        <h1 className="text-2xl font-bold mb-2 text-white">Dossier en cours de validation</h1>
+        <h1 className="text-2xl font-bold mb-2 text-white">{t('pendingValidationTitle')}</h1>
         <p className="text-slate-400 mb-6">
-          Votre dossier est en cours d&apos;examen par notre équipe. Vous recevrez un email dès qu&apos;il sera approuvé.
+          {t('pendingValidationDesc')}
         </p>
         <button
           type="button"
@@ -48,7 +54,7 @@ export default function DriverPendingPage() {
           disabled={isSigningOut}
           className="inline-flex h-[48px] items-center justify-center px-6 mt-2 glass-card border border-white/10 text-slate-300 font-semibold rounded-xl hover:bg-white/5 disabled:opacity-60"
         >
-          {isSigningOut ? 'Déconnexion…' : "Retour à l'accueil"}
+          {isSigningOut ? t('disconnecting') : t('backToHome')}
         </button>
       </div>
     </main>

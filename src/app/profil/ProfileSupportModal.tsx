@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ProfileSupportModalProps {
   readonly isOpen: boolean;
@@ -9,26 +10,28 @@ interface ProfileSupportModalProps {
 }
 
 export function ProfileSupportModal({ isOpen, onClose }: ProfileSupportModalProps) {
+  const { t } = useTranslation();
+
   if (!isOpen) return null;
 
   const supportChannels = [
     {
-      title: 'WhatsApp Support',
-      subtitle: 'Discutez directement avec un conseiller',
+      title: t('profile.whatsappSupport'),
+      subtitle: t('profile.chatWithAdvisor'),
       icon: 'chat',
       href: 'https://wa.me/237693372118?text=Bonjour%20Medjira%2C%20j%27ai%20besoin%20d%27assistance',
       badge: '24/7',
       color: 'bg-emerald-500/15 border-emerald-500/25 text-emerald-400',
     },
     {
-      title: 'Appel Téléphonique',
+      title: t('profile.phoneCall'),
       subtitle: '+237 693 372 118',
       icon: 'call',
       href: 'tel:+237693372118',
       color: 'bg-sky-500/15 border-sky-500/25 text-sky-400',
     },
     {
-      title: 'Support par Email',
+      title: t('profile.emailSupport'),
       subtitle: 'support@medjira.com',
       icon: 'mail',
       href: 'mailto:support@medjira.com?subject=Demande%20d%27assistance%20Medjira',
@@ -51,15 +54,15 @@ export function ProfileSupportModal({ isOpen, onClose }: ProfileSupportModalProp
               <MaterialIcon name="support_agent" className="text-[22px]" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">Service Client</h3>
-              <p className="text-xs text-slate-400">Nous sommes à votre disposition</p>
+              <h3 className="text-base font-semibold text-white">{t('profile.customerService')}</h3>
+              <p className="text-xs text-slate-400">{t('profile.atYourService')}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             <MaterialIcon name="close" size="sm" />
           </button>
@@ -101,7 +104,7 @@ export function ProfileSupportModal({ isOpen, onClose }: ProfileSupportModalProp
             onClick={onClose}
             className="w-full h-11 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition active:scale-[0.98]"
           >
-            Fermer
+            {t('common.close')}
           </button>
         </div>
       </div>

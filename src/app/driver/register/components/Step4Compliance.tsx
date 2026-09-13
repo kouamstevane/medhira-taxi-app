@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/useToast';
 import { SelectField } from '@/components/forms/SelectField';
 import { InputField } from '@/components/forms/InputField';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/hooks/useTranslation';
 import { DriverDocumentUploadField } from './DriverDocumentUploadField';
 import {
   driverInfoBannerClassName,
@@ -40,6 +41,7 @@ export default function Step4Compliance({
   driverType = 'chauffeur',
   vehicleType = 'voiture',
 }: Step4ComplianceProps) {
+  const { t } = useTranslation();
   const { showError, showWarning } = useToast();
   const isVelo = driverType === 'livreur' && vehicleType === 'velo';
 
@@ -66,13 +68,13 @@ export default function Step4Compliance({
     if (!file) return;
 
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      showWarning('Format non supporté. Utilisez JPEG, PNG, WebP ou PDF.');
+      showWarning(t('driver.unsupportedFileFormat'));
       e.target.value = '';
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      showError('Fichier trop lourd (Max 10Mo)');
+      showError(t('driver.fileTooLargeMax10'));
       return;
     }
 
@@ -89,25 +91,25 @@ export default function Step4Compliance({
     e.preventDefault();
 
     if (!files.workEligibility) {
-      showError("Le document d'admissibilité au travail est obligatoire.");
+      showError(t('driver.workEligibilityRequired'));
       return;
     }
 
     if (!isVelo) {
       if (!files.licenseNumber || files.licenseNumber.trim().length < 4) {
-        showError("Le numéro de votre permis de conduire est requis.");
+        showError(t('driver.licenseNumberRequired'));
         return;
       }
       if (!files.driversAbstract) {
-        showError("Le dossier de conduite (Driver's Abstract) est obligatoire.");
+        showError(t('driver.driversAbstractRequired'));
         return;
       }
       if (!files.licenseClass) {
-        showError('La classe de votre permis de conduire est requise.');
+        showError(t('driver.licenseClassRequired'));
         return;
       }
       if (!files.licenseFront || !files.licenseBack) {
-        showError('Les photos recto/verso de votre permis de conduire sont obligatoires.');
+        showError(t('driver.licenseFrontBackRequired'));
         return;
       }
     }
@@ -129,7 +131,7 @@ export default function Step4Compliance({
       accept={accept}
       file={files[key] instanceof File ? files[key] : null}
       onChange={(e) => handleFileChange(e, key)}
-      helperText="Assurez-vous que le texte soit lisible et sans reflet."
+      helperText={t('driver.ensureTextReadable')}
       onRemove={() => removeFile(key)}
     />
   );
@@ -137,72 +139,71 @@ export default function Step4Compliance({
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Conformité Légale</h2>
-        <p className="text-[#9CA3AF] mt-2">Vos documents d'identité pour validation de votre profil.</p>
+        <h2 className="text-2xl font-bold text-white">{t('driver.legalComplianceTitle')}</h2>
+        <p className="text-[#9CA3AF] mt-2">{t('driver.legalComplianceSubtitle')}</p>
         <div className={cn(driverInfoBannerClassName, 'bg-[#f29200]/10 border-[#f29200]/20 text-slate-200 text-sm mt-4 font-medium flex items-center justify-center')}>
           <FileCheck className="mr-2" size={18} />
-          Vérifiez la lisibilité de vos documents avant d'envoyer.
+          {t('driver.checkDocReadability')}
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Section 1: Admissibilité au travail */}
+        {/* Section 1: Work eligibility */}
         <div className={driverSectionCardClassName}>
           <h3 className={driverSectionTitleClassName}>
-            Preuve d'admissibilité au travail
+            {t('driver.workEligibilitySection')}
           </h3>
           <p className="text-xs text-[#9CA3AF]">
-            Veuillez téléverser un document prouvant votre droit de travailler (Passeport, Certificat de naissance, Résidence
-            permanente ou Permis de travail).
+            {t('driver.workEligibilityDesc')}
           </p>
           <div className="grid grid-cols-1 gap-4">
-            {renderFileInput('Preuve d\'admissibilité', 'workEligibility')}
+            {renderFileInput(t('driver.workEligibilityProof'), 'workEligibility')}
           </div>
         </div>
 
-        {/* Section 2: Conduite & Permis (masqué pour les livreurs vélo) */}
+        {/* Section 2: Driving & License (hidden for bicycle couriers) */}
         {!isVelo && (
           <>
             <div className={driverSectionCardClassName}>
-              <h3 className={driverSectionTitleClassName}>Classe de Permis & Conduite</h3>
+              <h3 className={driverSectionTitleClassName}>{t('driver.licenseClassAndDrivingSection')}</h3>
               <div className="grid grid-cols-1 gap-4">
                  <InputField
-                  label="Numéro de permis de conduire"
+                  label={t('driver.driversLicenseNumber')}
                   value={files.licenseNumber}
                   onChange={(e) => setFiles((prev) => ({ ...prev, licenseNumber: e.target.value }))}
-                  placeholder="Ex: A-1234-567890-12"
+                  placeholder={t('driver.driversLicenseNumberPlaceholder')}
                   required
                 />
                 <SelectField
-                  label="Classe du permis de conduire"
+                  label={t('driver.licenseClassLabel')}
                   value={files.licenseClass}
                   onChange={(e) => setFiles((prev) => ({ ...prev, licenseClass: e.target.value }))}
                   options={[
-                    { value: '', label: 'Sélectionnez la classe de votre permis' },
-                    { value: 'Classe 4', label: 'Classe 4 (Commercial / Rideshare)' },
-                    { value: 'Classe 1', label: 'Classe 1 (Professionnel / Poids lourd)' },
-                    { value: 'Classe 2', label: 'Classe 2 (Autobus)' },
-                    { value: 'Classe 3', label: 'Classe 3 (Camion lourd)' },
-                    { value: 'Classe 5', label: 'Classe 5 (Standard / Véhicule léger)' },
-                    { value: 'Autre', label: 'Autre / Équivalent' },
+                    { value: '', label: t('driver.selectLicenseClass') },
+                    { value: 'Classe 4', label: t('driver.licenseClass4') },
+                    { value: 'Classe 1', label: t('driver.licenseClass1') },
+                    { value: 'Classe 2', label: t('driver.licenseClass2') },
+                    { value: 'Classe 3', label: t('driver.licenseClass3') },
+                    { value: 'Classe 5', label: t('driver.licenseClass5') },
+                    { value: 'Autre', label: t('driver.licenseClassOther') },
                   ]}
                   required
                 />
                 <div className="mt-4">
-                  <h4 className="text-sm font-semibold text-white mb-2">Dossier de conduite récent (Driver's Abstract)</h4>
+                  <h4 className="text-sm font-semibold text-white mb-2">{t('driver.driversAbstractTitle')}</h4>
                   <p className="text-xs text-[#9CA3AF] mb-3">
-                    Téléversez l'extrait officiel de votre dossier de conduite de moins de 30 jours.
+                    {t('driver.driversAbstractDesc')}
                   </p>
-                  {renderFileInput('Dossier de conduite', 'driversAbstract')}
+                  {renderFileInput(t('driver.driversAbstractLabel'), 'driversAbstract')}
                 </div>
               </div>
             </div>
 
             <div className={driverSectionCardClassName}>
-              <h3 className={driverSectionTitleClassName}>Permis de Conduire (Photos)</h3>
+              <h3 className={driverSectionTitleClassName}>{t('driver.licensePhotosSection')}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderFileInput('Recto', 'licenseFront')}
-                {renderFileInput('Verso', 'licenseBack')}
+                {renderFileInput(t('driver.licenseFront'), 'licenseFront')}
+                {renderFileInput(t('driver.licenseBack'), 'licenseBack')}
               </div>
             </div>
           </>
@@ -215,14 +216,14 @@ export default function Step4Compliance({
             disabled={loading}
             className={cn(driverSecondaryButtonClassName, 'flex-[1]')}
           >
-            Retour
+            {t('common.back')}
           </button>
           <button
             type="submit"
             disabled={loading}
             className={cn(driverPrimaryButtonClassName, 'flex-[2]')}
           >
-            {loading ? <Loader2 className="animate-spin mr-2" /> : null} Continuer
+            {loading ? <Loader2 className="animate-spin mr-2" /> : null} {t('common.next')}
           </button>
         </div>
       </form>

@@ -10,6 +10,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 /**
  * Loading - Écran de chargement global
@@ -18,6 +19,7 @@ import React from 'react';
  * des pages en mode streaming.
  */
 export default function Loading() {
+  const { t } = useTranslation('common');
   return (
     <div
       className="min-h-screen bg-[#0F0F0F] flex items-center justify-center"
@@ -128,7 +130,7 @@ export default function Loading() {
             fontFamily: 'inherit',
           }}
         >
-          Chargement en cours...
+          {t('loading')}
         </p>
 
         {/* Barre de progression */}

@@ -22,23 +22,25 @@ import {
   getHistoryStatusPresentation,
   getHistoryTypePresentation,
 } from './history-ui';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type FilterPeriod = 'today' | 'week' | 'month' | 'all';
 
-const FILTER_OPTIONS: { value: FilterPeriod; label: string }[] = [
-  { value: 'today', label: "Aujourd'hui" },
-  { value: 'week', label: '7 derniers jours' },
-  { value: 'month', label: 'Ce mois-ci' },
-  { value: 'all', label: 'Tout' },
-];
-
 export default function HistoriquePage() {
+  const { t, locale } = useTranslation();
   const [history, setHistory] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
   const [isNetworkError, setIsNetworkError] = useState(false);
   const [filter, setFilter] = useState<FilterPeriod>('today');
   const router = useRouter();
   const { showError, toasts, removeToast } = useToast();
+
+  const filterOptions: { value: FilterPeriod; label: string }[] = [
+    { value: 'today', label: t('history.filters.today') },
+    { value: 'week', label: t('history.filters.week') },
+    { value: 'month', label: t('history.filters.month') },
+    { value: 'all', label: t('history.filters.all') },
+  ];
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -197,9 +199,11 @@ export default function HistoriquePage() {
       await downloadInvoiceFromBooking(booking);
     } catch (error) {
       console.error('Erreur téléchargement facture:', error);
-      showError('Erreur lors du téléchargement de la facture');
+      showError(t('history.actions.invoiceDownloadError'));
     }
   };
+
+  const dateLocale = locale === 'en' ? 'en-US' : 'fr-FR';
 
   return (
     <>
@@ -211,17 +215,17 @@ export default function HistoriquePage() {
           <Link
             href="/dashboard"
             className="mr-4 p-2 rounded-full hover:bg-white/5 transition min-w-[44px] min-h-[44px] flex items-center justify-center"
-            aria-label="Retour au tableau de bord"
+            aria-label={t('history.backToDashboard')}
           >
             <MaterialIcon name="arrow_back" className="text-white" />
           </Link>
-          <h1 className="text-2xl font-bold text-white">Historique des commandes</h1>
+          <h1 className="text-2xl font-bold text-white">{t('history.title')}</h1>
         </div>
 
         {isNetworkError && history.length === 0 ? (
           <NetworkErrorView
-            title="Oops !"
-            message="Impossible de charger votre historique. Veuillez vérifier votre connexion internet et réessayer."
+            title={t('history.networkErrorTitle')}
+            message={t('history.networkErrorMessage')}
             onRetry={handleRetry}
           />
         ) : (
@@ -237,26 +241,26 @@ export default function HistoriquePage() {
               <MaterialIcon name="history" className="text-primary" />
             </div>
             <div>
-              <p className="text-white font-bold">Toutes vos courses</p>
-              <p className="text-slate-400 text-xs">Filtrez par période ci-dessous</p>
+              <p className="text-white font-bold">{t('history.allTrips')}</p>
+              <p className="text-slate-400 text-xs">{t('history.filterByPeriod')}</p>
             </div>
           </div>
 
           <div className="relative grid grid-cols-2 gap-2 mb-4">
             <div className="rounded-xl border border-white/10 bg-black/20 p-3">
               <p className="text-2xl font-bold text-white">{history.filter((item) => item.type === 'Taxi').length}</p>
-              <p className="text-xs text-slate-400">Courses taxi</p>
+              <p className="text-xs text-slate-400">{t('history.taxiRides')}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-black/20 p-3">
               <p className="text-2xl font-bold text-white">{history.filter((item) => item.type === 'Livraison').length}</p>
-              <p className="text-xs text-slate-400">Livraisons de colis</p>
+              <p className="text-xs text-slate-400">{t('history.parcelDeliveries')}</p>
             </div>
           </div>
 
           <div className="relative">
-            <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">Période</p>
+            <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">{t('history.period')}</p>
             <div className="flex flex-wrap gap-2">
-              {FILTER_OPTIONS.map((opt) => (
+              {filterOptions.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => setFilter(opt.value)}
@@ -277,7 +281,7 @@ export default function HistoriquePage() {
         {loading ? (
           <GlassCard className="p-12 text-center">
             <MaterialIcon name="refresh" className="animate-spin text-primary text-[48px] mx-auto block mb-4" />
-            <p className="text-slate-400">Chargement de l&apos;historique...</p>
+            <p className="text-slate-400">{t('history.loadingHistory')}</p>
           </GlassCard>
         ) : history.length > 0 ? (
           <div className="space-y-3">
@@ -291,9 +295,9 @@ export default function HistoriquePage() {
               const status = item.status as string | undefined;
               const type = item.type as string | undefined;
               const id = item.id as string | undefined;
-              const typePresentation = getHistoryTypePresentation(type);
-              const statusPresentation = getHistoryStatusPresentation(type, status || 'pending');
-              const action = getHistoryAction(type, status || 'pending');
+              const typePresentation = getHistoryTypePresentation(type, t);
+              const statusPresentation = getHistoryStatusPresentation(type, status || 'pending', t);
+              const action = getHistoryAction(type, status || 'pending', t);
               const pickupLocation = item.pickupLocation as { address?: string } | undefined;
               const dropoffLocation = item.dropoffLocation as { address?: string } | undefined;
               const pickupAddress = pickupLocation?.address || pickup;
@@ -309,12 +313,12 @@ export default function HistoriquePage() {
                       <div className="min-w-0">
                         <p className="truncate text-base font-bold text-white">{typePresentation.label}</p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {new Date(timestamp).toLocaleDateString('fr-FR', {
+                          {new Date(timestamp).toLocaleDateString(dateLocale, {
                             weekday: 'long',
                             day: '2-digit',
                             month: 'long',
                             year: 'numeric'
-                          })} à {new Date(timestamp).toLocaleTimeString('fr-FR', {
+                          })} {locale === 'en' ? 'at' : 'à'} {new Date(timestamp).toLocaleTimeString(dateLocale, {
                             hour: '2-digit',
                             minute: '2-digit'
                           })}
@@ -328,7 +332,7 @@ export default function HistoriquePage() {
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                      {type === 'Livraison' ? 'Colis' : 'Taxi'}
+                      {type === 'Livraison' ? t('history.badges.colis') : t('history.badges.taxi')}
                     </span>
                     <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getToneClasses(statusPresentation.tone)}`}>
                       {statusPresentation.label}
@@ -339,19 +343,19 @@ export default function HistoriquePage() {
 
                   {type === 'Taxi' && (
                     <div className="mt-4 space-y-3 border-t border-white/10 pt-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Itinéraire</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t('history.itinerary')}</p>
                       <div className="flex items-start gap-3">
                         <MaterialIcon name="location_on" size="sm" className="mt-0.5 text-emerald-400" />
                         <div className="min-w-0">
-                          <p className="text-xs text-slate-500">Départ</p>
-                          <p className="font-medium text-white">{pickup || 'Non spécifié'}</p>
+                          <p className="text-xs text-slate-500">{t('history.pickup')}</p>
+                          <p className="font-medium text-white">{pickup || t('history.notSpecified')}</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-3">
                         <MaterialIcon name="navigation" size="sm" className="mt-0.5 text-rose-400" />
                         <div className="min-w-0">
-                          <p className="text-xs text-slate-500">Arrivée</p>
-                          <p className="font-medium text-white">{destination || 'Non spécifié'}</p>
+                          <p className="text-xs text-slate-500">{t('history.dropoff')}</p>
+                          <p className="font-medium text-white">{destination || t('history.notSpecified')}</p>
                         </div>
                       </div>
 
@@ -374,15 +378,15 @@ export default function HistoriquePage() {
                       <div className="flex items-start gap-3">
                         <MaterialIcon name="shopping_bag" size="sm" className="mt-0.5 text-primary" />
                         <div className="min-w-0">
-                          <p className="text-xs text-slate-500">Type de colis</p>
-                          <p className="font-medium text-white">{description || 'Colis à livrer'}</p>
+                          <p className="text-xs text-slate-500">{t('history.packageType')}</p>
+                          <p className="font-medium text-white">{description || t('history.badges.colis')}</p>
                         </div>
                       </div>
                       {pickupAddress && (
                         <div className="flex items-start gap-3">
                           <MaterialIcon name="location_on" size="sm" className="mt-0.5 text-emerald-400" />
                           <div className="min-w-0">
-                            <p className="text-xs text-slate-500">Lieu de retrait</p>
+                            <p className="text-xs text-slate-500">{t('history.pickupLocation')}</p>
                             <p className="font-medium text-white">{pickupAddress}</p>
                           </div>
                         </div>
@@ -391,7 +395,7 @@ export default function HistoriquePage() {
                         <div className="flex items-start gap-3">
                           <MaterialIcon name="navigation" size="sm" className="mt-0.5 text-rose-400" />
                           <div className="min-w-0">
-                            <p className="text-xs text-slate-500">Lieu de livraison</p>
+                            <p className="text-xs text-slate-500">{t('history.dropoffLocation')}</p>
                             <p className="font-medium text-white">{dropoffAddress}</p>
                           </div>
                         </div>
@@ -416,12 +420,12 @@ export default function HistoriquePage() {
         ) : (
           <GlassCard className="p-12 text-center">
             <MaterialIcon name="assignment" className="text-slate-500 text-[64px] mx-auto block mb-4" />
-            <p className="text-white text-lg font-medium">Aucune commande trouvée</p>
+            <p className="text-white text-lg font-medium">{t('history.noOrders')}</p>
             <p className="text-slate-500 text-sm mt-2">
-              {filter === 'today' && "Vous n'avez passé aucune commande aujourd'hui"}
-              {filter === 'week' && "Aucune commande dans les 7 derniers jours"}
-              {filter === 'month' && "Aucune commande ce mois-ci"}
-              {filter === 'all' && "Votre historique est vide"}
+              {filter === 'today' && t('history.emptyToday')}
+              {filter === 'week' && t('history.emptyWeek')}
+              {filter === 'month' && t('history.emptyMonth')}
+              {filter === 'all' && t('history.emptyAll')}
             </p>
           </GlassCard>
         )}

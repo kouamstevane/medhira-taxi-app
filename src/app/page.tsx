@@ -9,12 +9,15 @@ import { getEffectiveRoleStatuses, getRouteForAuthenticatedProfile } from '@/ser
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 import { redirectWithFallback } from '@/utils/navigation';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import Loading from './loading';
 
 function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { currentUser, loading, userData } = useAuth();
+  const { t } = useTranslation();
   const returnFromPending = ['restaurant-pending', 'driver-pending'].includes(searchParams.get('from') ?? '');
   const redirectedRef = useRef(false);
   const fallbackRef = useRef<NodeJS.Timeout | null>(null);
@@ -66,7 +69,7 @@ function HomeContent() {
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Medjira</h2>
           <p className="text-muted-foreground animate-pulse">
-            {loading ? 'Chargement...' : 'Redirection...'}
+            {loading ? t('common.loading') : t('common.redirecting')}
           </p>
         </div>
       </div>
@@ -75,6 +78,11 @@ function HomeContent() {
 
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-background">
+      {/* Language Selector */}
+      <div className="absolute top-4 right-4 z-30">
+        <LanguageSelector variant="pill" />
+      </div>
+
       {/* Hero Area */}
       <div className="relative h-[397px] w-full flex flex-col items-center justify-center overflow-hidden">
         <div className="absolute inset-0 hero-gradient" />
@@ -95,19 +103,19 @@ function HomeContent() {
         {/* Tagline */}
         <div className="text-center space-y-3">
           <h1 className="text-white text-[22px] font-bold leading-tight">
-            Votre taxi &amp; livraison en 1 clic
+            {t('common.appSlogan')}
           </h1>
           <p className="text-slate-400 text-sm font-medium">
-            Rapide, fiable, disponible 24h/24
+            {t('common.appSubSlogan')}
           </p>
         </div>
 
         {/* Service Chips */}
         <div className="flex justify-center gap-3 py-6">
           {[
-            { emoji: '🚕', label: 'Taxi' },
-            { emoji: '🍔', label: 'Repas' },
-            { emoji: '📦', label: 'Colis' },
+            { emoji: '🚕', label: t('client.serviceTaxi') },
+            { emoji: '🍔', label: t('client.serviceFood') },
+            { emoji: '📦', label: t('client.serviceColis') },
           ].map((service) => (
             <div
               key={service.label}
@@ -123,18 +131,18 @@ function HomeContent() {
         <div className="flex flex-col gap-4 w-full max-w-md mx-auto">
           <Link href="/login">
             <button className="h-[56px] w-full bg-gradient-to-r from-primary to-[#ffae00] text-white font-bold text-lg rounded-xl primary-glow flex items-center justify-center transition-all hover:opacity-90 active:scale-[0.98]">
-              Se Connecter
+              {t('auth.login')}
             </button>
           </Link>
 
           <Link href="/auth/role">
             <button className="h-[56px] w-full glass-card border-2 border-primary/60 text-primary font-bold text-lg rounded-xl flex items-center justify-center transition-all hover:bg-primary/10 active:scale-[0.98]">
-              Créer un compte
+              {t('auth.createAccount')}
             </button>
           </Link>
 
           <Link href="/auth/driver-application" className="mt-3 flex items-center justify-center gap-2 py-1 text-base font-semibold text-primary transition hover:text-primary/80 hover:underline">
-            <MaterialIcon name="local_taxi" size="md" className="text-primary" /> Vous souhaitez devenir Chauffeur / Livreur ?
+            <MaterialIcon name="local_taxi" size="md" className="text-primary" /> {t('auth.becomeDriver')}
           </Link>
         </div>
 

@@ -2,44 +2,37 @@
 
 import React, { useState } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ProfileFaqModalProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
 }
 
-interface FaqItem {
-  readonly question: string;
-  readonly answer: string;
-}
-
-const FAQ_ITEMS: readonly FaqItem[] = [
-  {
-    question: 'Comment réserver une course avec Medjira ?',
-    answer:
-      'Depuis l’écran d’accueil, indiquez votre point de départ et votre destination. Sélectionnez la catégorie de véhicule souhaitée (Standard, Confort, etc.) puis confirmez votre réservation.',
-  },
-  {
-    question: 'Quels modes de paiement sont disponibles ?',
-    answer:
-      'Vous pouvez régler vos courses directement par carte bancaire via Stripe, via votre Wallet Medjira rechargé, ou en espèces selon les chauffeurs disponibles.',
-  },
-  {
-    question: 'Comment annuler une course ?',
-    answer:
-      'Tant que le chauffeur n’est pas arrivé à votre point de prise en charge, vous pouvez annuler votre course directement depuis l’écran de suivi en direct sans frais supplémentaires si effectué dans les 2 minutes.',
-  },
-  {
-    question: 'Comment devenir chauffeur partenaire Medjira ?',
-    answer:
-      'Rendez-vous dans la section « Mode Chauffeur » de votre profil ou sur la page Devenir Chauffeur. Téléchargez vos documents (permis, carte grise, assurance) pour validation en moins de 24h.',
-  },
-];
-
 export function ProfileFaqModal({ isOpen, onClose }: ProfileFaqModalProps) {
+  const { t } = useTranslation();
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   if (!isOpen) return null;
+
+  const faqItems = [
+    {
+      question: t('profile.faqItems.q1'),
+      answer: t('profile.faqItems.a1'),
+    },
+    {
+      question: t('profile.faqItems.q2'),
+      answer: t('profile.faqItems.a2'),
+    },
+    {
+      question: t('profile.faqItems.q3'),
+      answer: t('profile.faqItems.a3'),
+    },
+    {
+      question: t('profile.faqItems.q4'),
+      answer: t('profile.faqItems.a4'),
+    },
+  ];
 
   return (
     <div
@@ -56,26 +49,26 @@ export function ProfileFaqModal({ isOpen, onClose }: ProfileFaqModalProps) {
               <MaterialIcon name="help_outline" className="text-[20px]" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">Foire aux questions</h3>
-              <p className="text-xs text-slate-400">Questions fréquentes & réponses</p>
+              <h3 className="text-base font-semibold text-white">{t('profile.faqTitle')}</h3>
+              <p className="text-xs text-slate-400">{t('profile.faqSubtitle')}</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             <MaterialIcon name="close" size="sm" />
           </button>
         </div>
 
         <div className="overflow-y-auto space-y-2.5 pr-1 max-h-[50vh]">
-          {FAQ_ITEMS.map((item, idx) => {
+          {faqItems.map((item, idx) => {
             const isExpanded = openIndex === idx;
             return (
               <div
-                key={item.question}
+                key={idx}
                 className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden transition-all"
               >
                 <button
@@ -105,7 +98,7 @@ export function ProfileFaqModal({ isOpen, onClose }: ProfileFaqModalProps) {
             onClick={onClose}
             className="w-full h-11 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition active:scale-[0.98]"
           >
-            Fermer
+            {t('common.close')}
           </button>
         </div>
       </div>

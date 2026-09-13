@@ -7,6 +7,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, auth, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface RestaurantClientActivationProps {
   hasClientRole?: boolean;
@@ -17,6 +18,7 @@ export function RestaurantClientActivation({
   hasClientRole = false,
   className = '',
 }: RestaurantClientActivationProps) {
+  const { t } = useTranslation('restaurant');
   const router = useRouter();
   const { reloadUser } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -27,7 +29,7 @@ export function RestaurantClientActivation({
     setError(null);
     try {
       const user = auth.currentUser;
-      if (!user) throw new Error('Utilisateur non connecté.');
+      if (!user) throw new Error(t('userNotConnected'));
 
       if (hasClientRole) {
         // Rôle client déjà activé, simple bascule
@@ -49,7 +51,7 @@ export function RestaurantClientActivation({
       await reloadUser();
       router.replace('/dashboard');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erreur lors de l’activation de l’espace client.');
+      setError(err instanceof Error ? err.message : t('clientActivationError'));
     } finally {
       setLoading(false);
     }
@@ -67,14 +69,14 @@ export function RestaurantClientActivation({
         onClick={handleActivateOrSwitch}
         disabled={loading}
         className="min-h-[44px] min-w-[44px] px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-white font-medium rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-        aria-label="Basculer vers l'espace client"
+        aria-label={t('switchToClientSpaceAria')}
       >
         {loading ? (
           <span className="animate-spin text-sm">⏳</span>
         ) : (
           <MaterialIcon name="person" size="sm" />
         )}
-        <span>{hasClientRole ? 'Passer à l’espace client' : 'Activer l’espace client'}</span>
+        <span>{hasClientRole ? t('switchToClientSpace') : t('activateClientSpace')}</span>
       </button>
     </div>
   );

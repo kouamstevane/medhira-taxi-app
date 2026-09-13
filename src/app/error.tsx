@@ -13,6 +13,7 @@ import { useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui';
 import { NetworkErrorView } from '@/components/ui/NetworkErrorView';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ErrorProps {
   error: Error & { digest?: string };
@@ -20,6 +21,7 @@ interface ErrorProps {
 }
 
 export default function Error({ error, reset }: ErrorProps) {
+  const { t } = useTranslation('common');
   useEffect(() => {
     // Log l'erreur vers un service de monitoring (ex: Sentry)
     console.error('Application Error:', error);
@@ -45,8 +47,8 @@ export default function Error({ error, reset }: ErrorProps) {
     return (
       <NetworkErrorView
         fullScreen
-        title="Oops !"
-        message="Échec du chargement des données. Veuillez vérifier votre connexion internet et réessayer."
+        title={t('networkErrorTitle')}
+        message={t('networkErrorMessage')}
         onRetry={reset}
         showHomeButton
       />
@@ -75,12 +77,12 @@ export default function Error({ error, reset }: ErrorProps) {
 
         {/* Titre */}
         <h1 className="text-2xl font-bold text-white mb-3">
-          Une erreur est survenue
+          {t('errorOccurred')}
         </h1>
 
         {/* Message */}
         <p className="text-[#9CA3AF] mb-6">
-          Nous sommes désolés, quelque chose s'est mal passé. Veuillez réessayer.
+          {t('somethingWentWrong')}
         </p>
 
         {/* Détails de l'erreur (en développement) */}
@@ -104,7 +106,7 @@ export default function Error({ error, reset }: ErrorProps) {
             variant="default"
             className="w-full sm:w-auto"
           >
-            Réessayer
+            {t('retry')}
           </Button>
           
           <Button
@@ -112,7 +114,7 @@ export default function Error({ error, reset }: ErrorProps) {
             variant="outline"
             className="w-full sm:w-auto"
           >
-            Retour à l'accueil
+            {t('backToHome')}
           </Button>
         </div>
       </div>

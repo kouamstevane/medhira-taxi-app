@@ -1,5 +1,8 @@
+'use client';
+
 import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type DashboardService = {
   icon: string;
@@ -12,27 +15,54 @@ type DashboardService = {
   cta?: string;
 };
 
-const dashboardServices: DashboardService[] = [
-  { icon: 'local_taxi', label: 'Taxi', sub: 'Départ immédiat ou programmé', subColor: 'text-emerald-500', route: '/taxi', highlight: true },
-  {
-    icon: 'calendar_month',
-    label: 'Personal Driver',
-    sub: 'Transport mensuel',
-    description: 'Un chauffeur dédié pour vos trajets réguliers.',
-    subColor: 'text-primary',
-    route: '/personal-driver',
-  },
-  { icon: 'lunch_dining', label: 'Commander', sub: 'Restaurants', subColor: 'text-slate-400', route: '/food' },
-  { icon: 'package_2', label: 'Transporter un colis', sub: 'Transport rapide', subColor: 'text-slate-400', route: '/colis' },
-  { icon: 'favorite', label: 'Favoris', sub: '3 adresses', subColor: 'text-slate-400', route: '/profil' },
-];
-
 export function DashboardServiceGrid() {
+  const { t } = useTranslation('client');
+
+  const dashboardServices: DashboardService[] = [
+    {
+      icon: 'local_taxi',
+      label: t('quickActions.taxi'),
+      sub: t('serviceTaxiDesc'),
+      subColor: 'text-emerald-500',
+      route: '/taxi',
+      highlight: true,
+    },
+    {
+      icon: 'calendar_month',
+      label: t('quickActions.personalDriver'),
+      sub: t('servicePersonalDriverDesc'),
+      description: t('servicePersonalDriverDetail'),
+      subColor: 'text-primary',
+      route: '/personal-driver',
+    },
+    {
+      icon: 'lunch_dining',
+      label: t('quickActions.food'),
+      sub: t('serviceFoodDesc'),
+      subColor: 'text-slate-400',
+      route: '/food',
+    },
+    {
+      icon: 'package_2',
+      label: t('quickActions.colis'),
+      sub: t('serviceColisDesc'),
+      subColor: 'text-slate-400',
+      route: '/colis',
+    },
+    {
+      icon: 'favorite',
+      label: t('serviceFavorites'),
+      sub: t('serviceFavoritesDesc'),
+      subColor: 'text-slate-400',
+      route: '/profil',
+    },
+  ];
+
   return (
     <div className="grid grid-cols-2 gap-4">
       {dashboardServices.map((service) => (
         <Link
-          key={service.label}
+          key={service.route}
           href={service.route}
           className={`bg-card p-5 rounded-2xl border border-white/5 flex flex-col gap-4 shadow-lg cursor-pointer active:scale-[0.98] transition-transform ${
             service.highlight ? 'border-b-4 border-b-primary' : ''

@@ -18,6 +18,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { I18nProvider } from "@/context/I18nContext";
 import LayoutClient from "./LayoutClient";
 import { cn } from "@/lib/utils";
 
@@ -153,11 +154,13 @@ export default function RootLayout({
       <body
         className="font-sans antialiased bg-background text-foreground min-h-screen"
       >
-        <AuthProvider>
-          <LayoutClient>
-            {children}
-          </LayoutClient>
-        </AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            <LayoutClient>
+              {children}
+            </LayoutClient>
+          </AuthProvider>
+        </I18nProvider>
       </body>
     </html>
   );

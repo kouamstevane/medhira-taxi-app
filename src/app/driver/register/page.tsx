@@ -7,6 +7,8 @@ import { ToastContainer } from '@/components/ui/Toast';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useToast } from '@/hooks/useToast';
 import { useDriverRegistration } from '@/hooks/useDriverRegistration';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import Step0RoleSelection from './components/Step0RoleSelection';
 import Step1Intent from './components/Step1Intent';
 import Step2Identity from './components/Step2Identity';
@@ -16,6 +18,7 @@ import Step5Monetization from './components/Step5Monetization';
 
 export default function DriverRegisterWizard() {
   const { toasts, removeToast } = useToast();
+  const { t } = useTranslation();
   const [allowStep1AutoAdvance, setAllowStep1AutoAdvance] = useState(true);
   const {
     currentStep,
@@ -53,11 +56,14 @@ export default function DriverRegisterWizard() {
   if (rejectionCode) {
     return (
       <div className="min-h-screen bg-background font-sans text-slate-100 antialiased flex items-center justify-center p-4">
-        <div className="glass-card rounded-2xl w-full max-w-lg p-8 text-center">
+        <div className="glass-card rounded-2xl w-full max-w-lg p-8 text-center relative">
+          <div className="flex justify-end mb-2">
+            <LanguageSelector variant="pill" />
+          </div>
           <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-destructive/10 border border-destructive/30 mb-6">
             <MaterialIcon name="error" className="text-destructive text-[32px]" />
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Action Requise</h2>
+          <h2 className="text-2xl font-bold text-white mb-2">{t('driver.actionRequired')}</h2>
           <div className="mb-4 p-4 bg-white/5 rounded-xl border border-white/10">
             <span className="font-mono text-xs text-destructive block mb-1">Code: {rejectionCode}</span>
             <p className="text-slate-400">{rejectionReason}</p>
@@ -66,16 +72,16 @@ export default function DriverRegisterWizard() {
             {rejectionCode !== 'R005' && (
               <button
                 onClick={handleFixRejection}
-                className="w-full h-14 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform"
+                className="w-full h-14 flex items-center justify-center bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform min-h-[44px]"
               >
-                <MaterialIcon name="edit" size="md" className="mr-2" /> Mettre à jour mon dossier
+                <MaterialIcon name="edit" size="md" className="mr-2" /> {t('driver.updateMyFile')}
               </button>
             )}
             <button
               onClick={handleLogout}
-              className="glass-card w-full h-14 flex items-center justify-center rounded-2xl border border-white/10 text-slate-300 font-bold active:scale-[0.98] transition-transform"
+              className="glass-card w-full h-14 flex items-center justify-center rounded-2xl border border-white/10 text-slate-300 font-bold active:scale-[0.98] transition-transform min-h-[44px]"
             >
-              <MaterialIcon name="logout" size="md" className="mr-2" /> Se déconnecter
+              <MaterialIcon name="logout" size="md" className="mr-2" /> {t('auth.logout')}
             </button>
           </div>
         </div>
@@ -88,7 +94,10 @@ export default function DriverRegisterWizard() {
       <ToastContainer toasts={toasts} onRemove={removeToast} position="top-right" />
 
       <div className="glass-card rounded-2xl w-full max-w-2xl overflow-hidden">
-        <div className="h-2 w-full bg-white/5">
+        <div className="flex justify-end p-3 pb-0">
+          <LanguageSelector variant="pill" />
+        </div>
+        <div className="h-2 w-full bg-white/5 mt-2">
           <div
             className="h-full bg-gradient-to-r from-primary to-[#ffae33] transition-all duration-300"
             style={{ width: `${(currentStep / 5) * 100}%` }}
@@ -101,7 +110,7 @@ export default function DriverRegisterWizard() {
               <MaterialIcon name="error" size="md" className="text-destructive mr-3 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium text-destructive">{error}</p>
-                <p className="text-sm mt-1 text-slate-400">Si le problème persiste, contactez le support.</p>
+                <p className="text-sm mt-1 text-slate-400">{t('driver.supportFallback')}</p>
               </div>
             </div>
           )}

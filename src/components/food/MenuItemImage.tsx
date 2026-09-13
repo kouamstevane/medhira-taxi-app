@@ -36,11 +36,12 @@ export function MenuItemImage({
   onError,
 }: MenuItemImageProps) {
   const [hasError, setHasError] = useState(false);
-
-  // Réinitialiser l'état d'erreur si la source de l'image change
-  useEffect(() => {
+  const currentSrcKey = `${src ?? ''}:${imageStoragePath ?? ''}`;
+  const [prevSrcKey, setPrevSrcKey] = useState(currentSrcKey);
+  if (prevSrcKey !== currentSrcKey) {
+    setPrevSrcKey(currentSrcKey);
     setHasError(false);
-  }, [src, imageStoragePath]);
+  }
 
   const handleError = () => {
     setHasError(true);

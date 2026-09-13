@@ -13,6 +13,7 @@ import { CURRENCY_CODE } from '@/utils/constants';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('AdminRestaurants');
@@ -36,6 +37,7 @@ const RestaurantSkeleton = () => (
 );
 
 export default function AdminRestaurantsPage() {
+  const { t, locale } = useTranslation('restaurant');
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending_approval' | 'approved' | 'rejected' | 'all'>('pending_approval');
@@ -76,9 +78,9 @@ export default function AdminRestaurantsPage() {
       } catch (err) {
         logger.error('Chargement des restaurants', err instanceof Error ? err : new Error(String(err)));
         if (err instanceof Error && err.message?.includes('index')) {
-          setError('Erreur d\'index Firestore. Veuillez déployer les index avec "firebase deploy --only firestore:indexes".');
+          setError(t('adminIndexError'));
         } else {
-          setError('Impossible de charger les restaurants. Vérifiez votre connexion.');
+          setError(t('adminLoadError'));
         }
       } finally {
         setLoading(false);
@@ -86,11 +88,11 @@ export default function AdminRestaurantsPage() {
     };
 
     fetchRestaurants();
-  }, [isAdmin, filter]);
+  }, [isAdmin, filter, t]);
 
   const handleApproval = async (restaurantId: string, approve: boolean) => {
     if (!auth.currentUser) {
-      toast.error('Session expirée. Veuillez vous reconnecter.');
+      toast.error(t('adminSessionExpired'));
       return;
     }
 
@@ -108,10 +110,10 @@ export default function AdminRestaurantsPage() {
       const response = result.data as { emailSent?: boolean };
       toast.success(
         approve && response.emailSent === false
-          ? 'Restaurant approuvé, mais l\'email de notification n\'a pas été envoyé.'
+          ? t('adminRestaurantApprovedNoEmail')
           : approve
-            ? 'Restaurant approuvé !'
-            : 'Restaurant refusé.',
+            ? t('adminRestaurantApproved')
+            : t('adminRestaurantRejected'),
       );
 
       // Mettre à jour l'état local pour retirer le restaurant traité de la liste
@@ -119,7 +121,7 @@ export default function AdminRestaurantsPage() {
       setSelectedRestaurant(null);
       setRejectionReason('');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur lors de la mise à jour du statut.';
+      const message = err instanceof Error ? err.message : t('adminStatusUpdateError');
       logger.error('Mise à jour statut restaurant', err instanceof Error ? err : new Error(String(err)));
       toast.error(message);
     } finally {
@@ -129,13 +131,13 @@ export default function AdminRestaurantsPage() {
 
   const handleCommissionRateSave = async (restaurantId: string) => {
     if (!auth.currentUser) {
-      toast.error('Session expirée. Veuillez vous reconnecter.');
+      toast.error(t('adminSessionExpired'));
       return;
     }
 
     const commissionRate = Number(commissionRateDraft);
     if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
-      toast.error('Le taux de commission doit être compris entre 0 et 100 %.');
+      toast.error(t('adminCommissionRateError'));
       return;
     }
 
@@ -162,9 +164,9 @@ export default function AdminRestaurantsPage() {
           ? { ...prev, commissionRate: savedRate }
           : prev
       ));
-      toast.success('Commission mise à jour.');
+      toast.success(t('adminCommissionUpdated'));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur lors de la mise à jour de la commission.';
+      const message = err instanceof Error ? err.message : t('adminCommissionUpdateError');
       logger.error('Mise à jour commission restaurant', err instanceof Error ? err : new Error(String(err)));
       toast.error(message);
     } finally {
@@ -174,10 +176,10 @@ export default function AdminRestaurantsPage() {
 
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { label: string, style: string }> = {
-      pending_approval: { label: 'En attente', style: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
-      approved: { label: 'Actif', style: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
-      rejected: { label: 'Refusé', style: 'bg-rose-500/10 text-rose-500 border-rose-500/20' },
-      suspended: { label: 'Suspendu', style: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
+      pending_approval: { label: t('adminStatusPending'), style: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
+      approved: { label: t('adminStatusApproved'), style: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
+      rejected: { label: t('adminStatusRejected'), style: 'bg-rose-500/10 text-rose-500 border-rose-500/20' },
+      suspended: { label: t('adminStatusSuspended'), style: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
     };
 
     const config = configs[status] || { label: status, style: 'bg-slate-500/10 text-slate-500 border-slate-500/20' };
@@ -202,17 +204,17 @@ export default function AdminRestaurantsPage() {
   return (
     <div className="min-h-screen bg-background text-white">
       <AdminHeader
-        title="Validation Restaurants"
-        subtitle="Gérez les demandes d'adhésion des restaurateurs"
+        title={t('adminTitle')}
+        subtitle={t('adminSubtitle')}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div role="tablist" aria-label="Filtres restaurants" className="mb-6 grid grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-[#151a26] p-1">
+        <div role="tablist" aria-label={t('adminTablistLabel')} className="mb-6 grid grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-[#151a26] p-1">
           {([
-            ['pending_approval', 'schedule', 'En attente'],
-            ['approved', 'check_circle', 'Actifs'],
-            ['rejected', 'cancel', 'Refusés'],
-            ['all', 'store', 'Tous'],
+            ['pending_approval', 'schedule', t('adminTabPending')],
+            ['approved', 'check_circle', t('adminTabApproved')],
+            ['rejected', 'cancel', t('adminTabRejected')],
+            ['all', 'store', t('adminTabAll')],
           ] as const).map(([value, icon, label]) => (
             <button
               key={value}
@@ -245,9 +247,9 @@ export default function AdminRestaurantsPage() {
               <div className="inline-flex p-4 rounded-full bg-white/5 mb-4 text-slate-500">
                 <MaterialIcon name="store" size="xl" />
               </div>
-              <h3 className="text-lg font-semibold text-white">Aucune demande en attente</h3>
+              <h3 className="text-lg font-semibold text-white">{t('adminNoPending')}</h3>
               <p className="text-slate-400 text-sm mt-1 max-w-xs mx-auto">
-                Tous les restaurants ont été traités. Revenez plus tard !
+                {t('adminNoPendingDesc')}
               </p>
             </div>
           ) : (
@@ -255,12 +257,12 @@ export default function AdminRestaurantsPage() {
               <table className="min-w-full divide-y divide-white/5">
                 <thead className="bg-white/[0.03]">
                   <tr>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Restaurant</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Type / Budget</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Localisation</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Statut</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">Date Création</th>
-                    <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-500 uppercase tracking-widest">Détails</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThRestaurant')}</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThTypeBudget')}</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThLocation')}</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThStatus')}</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThCreatedAt')}</th>
+                    <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThDetails')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -296,7 +298,9 @@ export default function AdminRestaurantsPage() {
                           {restaurant.cuisineType.slice(0, 2).join(', ')}
                           {restaurant.cuisineType.length > 2 && '...'}
                         </div>
-                        <div className="text-[11px] text-slate-500">Budget: {restaurant.avgPricePerPerson} {CURRENCY_CODE}/pers</div>
+                        <div className="text-[11px] text-slate-500">
+                          {t('adminBudgetPerPerson', { price: restaurant.avgPricePerPerson, currency: CURRENCY_CODE })}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
@@ -309,8 +313,8 @@ export default function AdminRestaurantsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-[11px] font-medium text-slate-500">
                         {restaurant.createdAt instanceof Timestamp
-                          ? restaurant.createdAt.toDate().toLocaleDateString('fr-FR')
-                          : new Date(restaurant.createdAt as unknown as Date).toLocaleDateString('fr-FR')}
+                          ? restaurant.createdAt.toDate().toLocaleDateString(locale === 'en' ? 'en-US' : 'fr-FR')
+                          : new Date(restaurant.createdAt as unknown as Date).toLocaleDateString(locale === 'en' ? 'en-US' : 'fr-FR')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button
@@ -348,14 +352,14 @@ export default function AdminRestaurantsPage() {
                   <h2 className="text-xl font-bold text-white">{selectedRestaurant.name}</h2>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(selectedRestaurant.status)}
-                    <span className="text-[10px] text-slate-500 font-mono">Vérification de compte</span>
+                    <span className="text-[10px] text-slate-500 font-mono">{t('adminAccountVerification')}</span>
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedRestaurant(null)}
                 className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl transition-colors"
-                title="Fermer"
+                title={t('adminClose')}
               >
                 <MaterialIcon name="cancel" size="lg" className="text-slate-400" />
               </button>
@@ -379,11 +383,11 @@ export default function AdminRestaurantsPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                 <section className="space-y-4">
                   <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <MaterialIcon name="store" size="sm" /> Identité
+                    <MaterialIcon name="store" size="sm" /> {t('adminIdentity')}
                   </h3>
                   <div className="space-y-3 bg-white/[0.02] p-5 rounded-2xl border border-white/5">
                     <div>
-                      <span className="block text-[10px] text-slate-500 uppercase mb-1">Cuisines</span>
+                      <span className="block text-[10px] text-slate-500 uppercase mb-1">{t('adminCuisines')}</span>
                       <div className="flex flex-wrap gap-1">
                         {selectedRestaurant.cuisineType.map(c => (
                           <span key={c} className="text-xs font-semibold px-2 py-0.5 bg-white/5 border border-white/10 rounded-lg text-slate-300">{c}</span>
@@ -391,15 +395,15 @@ export default function AdminRestaurantsPage() {
                       </div>
                     </div>
                     <div>
-                      <span className="block text-[10px] text-slate-500 uppercase mb-1">Budget Moyen</span>
-                      <p className="text-sm font-bold text-white">{selectedRestaurant.avgPricePerPerson} {CURRENCY_CODE} / Personne</p>
+                      <span className="block text-[10px] text-slate-500 uppercase mb-1">{t('adminAvgBudget')}</span>
+                      <p className="text-sm font-bold text-white">{selectedRestaurant.avgPricePerPerson} {CURRENCY_CODE} {t('adminPerPerson')}</p>
                     </div>
                   </div>
                 </section>
 
                 <section className="space-y-4">
                   <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                    <MaterialIcon name="location_on" size="sm" /> Contact & Localisation
+                    <MaterialIcon name="location_on" size="sm" /> {t('adminContactLocation')}
                   </h3>
                   <div className="space-y-3 bg-white/[0.02] p-5 rounded-2xl border border-white/5">
                     <div className="flex items-start gap-2">
@@ -417,14 +421,14 @@ export default function AdminRestaurantsPage() {
               {/* Working Hours */}
               <section className="space-y-4">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                  <MaterialIcon name="calendar_today" size="sm" /> Horaires d&apos;Ouverture
+                  <MaterialIcon name="calendar_today" size="sm" /> {t('adminOpeningHours')}
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {selectedRestaurant.openingHours && Object.entries(selectedRestaurant.openingHours).map(([day, hours]) => (
                     <div key={day} className={`p-3 rounded-xl border ${hours ? 'bg-primary/5 border-primary/10' : 'bg-white/[0.02] border-white/5'}`}>
                       <span className="block text-[10px] font-bold capitalize text-slate-500 mb-1">{day}</span>
                       <span className="text-[11px] font-semibold text-slate-300">
-                        {hours ? `${hours.open} - ${hours.close}` : 'Fermé'}
+                        {hours ? `${hours.open} - ${hours.close}` : t('adminClosedDay')}
                       </span>
                     </div>
                   ))}
@@ -435,15 +439,15 @@ export default function AdminRestaurantsPage() {
                 <div className="flex items-center gap-3">
                   <MaterialIcon name="percent" size="md" className="text-primary" />
                   <div>
-                    <h3 className="text-lg font-bold text-white">Commission Medira</h3>
-                    <p className="text-xs text-slate-400">Ce taux s&apos;appliquera aux nouvelles commandes.</p>
+                    <h3 className="text-lg font-bold text-white">{t('adminCommissionMedjira')}</h3>
+                    <p className="text-xs text-slate-400">{t('adminCommissionNotice')}</p>
                   </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-5 bg-primary/5 rounded-2xl border border-primary/10">
                   <div className="flex-1 space-y-2">
                     <label htmlFor="restaurant-commission-rate" className="block text-xs font-semibold text-slate-300">
-                      Taux de commission du restaurant
+                      {t('adminCommissionRateField')}
                     </label>
                     <div className="relative">
                       <input
@@ -464,7 +468,7 @@ export default function AdminRestaurantsPage() {
                     disabled={!!processing}
                     className="h-12 px-5 bg-primary hover:bg-primary/90 text-black font-bold rounded-xl transition-all disabled:opacity-50"
                   >
-                    {processing === selectedRestaurant.id ? 'Enregistrement...' : 'Enregistrer la commission'}
+                    {processing === selectedRestaurant.id ? t('adminSavingCommission') : t('adminSaveCommission')}
                   </button>
                 </div>
               </section>
@@ -474,20 +478,20 @@ export default function AdminRestaurantsPage() {
                 <div className="pt-8 border-t border-white/10 space-y-6">
                   <div className="flex items-center gap-3">
                     <MaterialIcon name="verified_user" size="md" className="text-emerald-500" />
-                    <h3 className="text-lg font-bold text-white">Validation Requise</h3>
+                    <h3 className="text-lg font-bold text-white">{t('adminValidationRequired')}</h3>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-5 bg-emerald-500/5 rounded-2xl border border-emerald-500/10">
                       <p className="text-xs text-emerald-400 mb-4 font-medium italic">
-                        L&apos;approbation rendra le restaurant visible par tous les passagers.
+                        {t('adminApprovalNotice')}
                       </p>
                       <button
                         onClick={() => handleApproval(selectedRestaurant.id, true)}
                         disabled={!!processing}
                         className="w-full h-14 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-black font-bold uppercase tracking-wider rounded-2xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.2)] disabled:opacity-50"
                       >
-                        {processing === selectedRestaurant.id ? 'Traitement...' : 'Approuver'}
+                        {processing === selectedRestaurant.id ? t('adminApprovingButton') : t('adminApproveButton')}
                       </button>
                     </div>
 
@@ -495,7 +499,7 @@ export default function AdminRestaurantsPage() {
                       <textarea
                         value={rejectionReason}
                         onChange={(e) => setRejectionReason(e.target.value)}
-                        placeholder="Motif du refus..."
+                        placeholder={t('adminRejectionPlaceholder')}
                         className="glass-input w-full p-3 rounded-xl text-sm min-h-[80px]"
                       />
                       <button
@@ -503,7 +507,7 @@ export default function AdminRestaurantsPage() {
                         disabled={!!processing || !rejectionReason.trim()}
                         className="w-full h-14 bg-white/5 hover:bg-rose-500/10 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 text-slate-400 font-bold uppercase tracking-wider rounded-2xl transition-all disabled:opacity-50"
                       >
-                        Refuser
+                        {t('adminRejectButton')}
                       </button>
                     </div>
                   </div>

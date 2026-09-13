@@ -7,9 +7,12 @@ import { auth } from '@/config/firebase';
 import { signOut } from 'firebase/auth';
 import { sendVerificationEmail } from '@/services/auth.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function VerifyEmailPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [email, setEmail] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +38,7 @@ export default function VerifyEmailPage() {
   const handleResendEmail = async () => {
     const user = auth.currentUser;
     if (!user) {
-      setError('Aucun utilisateur connecté');
+      setError(t('auth.noUserConnected'));
       return;
     }
 
@@ -45,10 +48,10 @@ export default function VerifyEmailPage() {
 
     try {
       await sendVerificationEmail(user);
-      setSuccess(`Un email de vérification a été envoyé à ${email}`);
+      setSuccess(t('auth.verificationEmailSentTo', { email }));
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
-      setError(error.message || 'Erreur lors de l\'envoi de l\'email de vérification');
+      setError(error.message || t('common.errorOccurred'));
     } finally {
       setLoading(false);
     }
@@ -57,7 +60,7 @@ export default function VerifyEmailPage() {
   const handleCheckVerification = async () => {
     const user = auth.currentUser;
     if (!user) {
-      setError('Aucun utilisateur connecté');
+      setError(t('auth.noUserConnected'));
       return;
     }
 
@@ -68,16 +71,16 @@ export default function VerifyEmailPage() {
     try {
       await user.reload();
       if (user.emailVerified) {
-        setSuccess('Votre email a été vérifié avec succès ! Redirection en cours...');
+        setSuccess(t('auth.emailVerifiedSuccess'));
         setTimeout(() => {
           router.push('/auth/setup-payment');
         }, 1500);
       } else {
-        setError('Votre email n\'est pas encore vérifié. Veuillez vérifier votre boîte de réception.');
+        setError(t('auth.emailNotYetVerified'));
       }
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
-      setError(error.message || 'Erreur lors de la vérification');
+      setError(error.message || t('common.errorOccurred'));
     } finally {
       setLoading(false);
     }
@@ -98,15 +101,16 @@ export default function VerifyEmailPage() {
         {/* Top Safe Area */}
         <div className="h-12 w-full" />
 
-        {/* Back Link */}
-        <div className="px-6">
+        {/* Back Link and LanguageSelector */}
+        <div className="px-6 flex items-center justify-between">
           <Link
             href="/"
-            className="inline-flex items-center text-slate-400 hover:text-primary transition-colors"
+            className="inline-flex items-center text-slate-400 hover:text-primary transition-colors min-h-[44px]"
           >
             <MaterialIcon name="arrow_back" size="md" className="mr-2" />
-            Retour
+            {t('common.back')}
           </Link>
+          <LanguageSelector variant="pill" />
         </div>
 
         {/* Icon */}
@@ -118,8 +122,8 @@ export default function VerifyEmailPage() {
 
         {/* Heading */}
         <div className="px-6 text-center">
-          <h1 className="text-white text-[28px] font-bold leading-tight mb-2">Vérifiez votre email</h1>
-          <p className="text-slate-400 text-base font-normal">Un email de vérification a été envoyé à votre adresse</p>
+          <h1 className="text-white text-[28px] font-bold leading-tight mb-2">{t('auth.verifyYourEmail')}</h1>
+          <p className="text-slate-400 text-base font-normal">{t('auth.verificationEmailSentToAddress')}</p>
         </div>
 
         {/* Error Message */}
@@ -142,7 +146,7 @@ export default function VerifyEmailPage() {
         <div className="mx-6 mt-8 glass-card rounded-2xl p-6">
           {/* Email Display */}
           <div className="mb-6 p-4 bg-white/5 rounded-xl border border-white/10">
-            <p className="text-sm text-slate-500 mb-1">Adresse email :</p>
+            <p className="text-sm text-slate-500 mb-1">{t('auth.email')} :</p>
             <p className="text-lg font-semibold text-white">{email}</p>
           </div>
 
@@ -152,19 +156,19 @@ export default function VerifyEmailPage() {
               <div className="flex-shrink-0 w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-3 mt-0.5">
                 <span className="text-white text-sm font-bold">1</span>
               </div>
-              <p className="text-sm text-slate-400">Ouvrez votre boîte de réception email</p>
+              <p className="text-sm text-slate-400">{t('auth.stepOpenInbox')}</p>
             </div>
             <div className="flex items-start">
               <div className="flex-shrink-0 w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-3 mt-0.5">
                 <span className="text-white text-sm font-bold">2</span>
               </div>
-              <p className="text-sm text-slate-400">Trouvez l&apos;email de Medjira Taxi</p>
+              <p className="text-sm text-slate-400">{t('auth.stepFindEmail')}</p>
             </div>
             <div className="flex items-start">
               <div className="flex-shrink-0 w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-3 mt-0.5">
                 <span className="text-white text-sm font-bold">3</span>
               </div>
-              <p className="text-sm text-slate-400">Cliquez sur le lien de vérification</p>
+              <p className="text-sm text-slate-400">{t('auth.stepClickLink')}</p>
             </div>
           </div>
 
@@ -181,12 +185,12 @@ export default function VerifyEmailPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Vérification en cours...
+                  {t('auth.verifying')}
                 </>
               ) : (
                 <span className="flex items-center justify-center">
                   <MaterialIcon name="refresh" size="md" className="mr-2" />
-                  J&apos;ai vérifié mon email
+                  {t('auth.iHaveVerifiedEmail')}
                 </span>
               )}
             </button>
@@ -202,12 +206,12 @@ export default function VerifyEmailPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Envoi en cours...
+                  {t('auth.sendingCode')}
                 </>
               ) : (
                 <>
                   <MaterialIcon name="mail" size="md" />
-                  Renvoyer l&apos;email de vérification
+                  {t('auth.resendVerificationEmail')}
                 </>
               )}
             </button>
@@ -217,21 +221,21 @@ export default function VerifyEmailPage() {
               className="glass-card w-full h-14 flex items-center justify-center gap-2 rounded-2xl border border-white/10 text-slate-300 font-medium active:scale-[0.98] transition-transform"
             >
               <MaterialIcon name="logout" size="md" />
-              Se déconnecter
+              {t('auth.logout')}
             </button>
           </div>
         </div>
 
         {/* Footer */}
         <div className="mt-auto pb-10 pt-6 text-center">
-          <p className="text-slate-500 text-sm">Vous n&apos;avez pas reçu l&apos;email ?</p>
+          <p className="text-slate-500 text-sm">{t('auth.emailNotReceived')}</p>
           <p className="mt-1">
             <button
               onClick={handleResendEmail}
               disabled={loading}
               className="text-primary text-sm font-semibold hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Renvoyer l&apos;email
+              {t('auth.resendEmail')}
             </button>
           </p>
         </div>
@@ -239,3 +243,4 @@ export default function VerifyEmailPage() {
     </div>
   );
 }
+

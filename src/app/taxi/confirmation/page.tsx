@@ -13,15 +13,17 @@ const ConfirmationMap = dynamic(() => import('./ConfirmationMap').then(m => ({ d
 import { MaterialIcon } from "@/components/ui/MaterialIcon";
 import { getDirections } from "@/services/directions.service";
 import { useSmoothMarker } from "@/hooks/useSmoothMarker";
+import { useTranslation } from "@/hooks/useTranslation";
 
 // Composant principal qui utilise useSearchParams
 function ConfirmationContent() {
+  const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
   const bookingId = searchParams.get("bookingId");
 
   const [booking, setBooking] = useState<DocumentData | null>(null);
   const [loading, setLoading] = useState(() => Boolean(bookingId));
-  const [error, setError] = useState<string | null>(() => bookingId ? null : "ID de course manquant");
+  const [error, setError] = useState<string | null>(() => bookingId ? null : t('taxi.missingBookingId'));
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [showArrival, setShowArrival] = useState(false);
   const [finalPrice, setFinalPrice] = useState<number | null>(null);
@@ -43,7 +45,7 @@ function ConfirmationContent() {
       bookingRef,
       (docSnap: DocumentSnapshot<DocumentData>) => {
         if (!docSnap.exists()) {
-          setError("Course non trouvée");
+          setError(t('taxi.rideNotFound'));
           setLoading(false);
           return;
         }
@@ -61,7 +63,7 @@ function ConfirmationContent() {
               const snap = await getDoc(bookingRef);
               if (snap.exists() && snap.data().status === "pending") {
                 await updateDoc(bookingRef, { status: "failed", reason: "timeout" });
-                setError("Aucun chauffeur disponible après 60 secondes.");
+                setError(t('taxi.noDriverAfterTimeout'));
               }
             } catch (err) {
               console.error("Erreur mise à jour timeout:", err);
@@ -114,7 +116,7 @@ function ConfirmationContent() {
       },
       (err: unknown) => {
         console.error("Erreur Firestore:", err);
-        setError("Erreur de connexion");
+        setError(t('taxi.connectionError'));
         setLoading(false);
       }
     );
@@ -128,7 +130,7 @@ function ConfirmationContent() {
   }, [bookingId]);
 
   const getEstimatedArrivalTime = () => {
-    if (!driverLocation || !booking?.pickupLocation) return "Calcul en cours...";
+    if (!driverLocation || !booking?.pickupLocation) return t('taxi.calculating');
     
     // Utiliser les données d'itinéraire si disponibles
     if (directions?.routes?.[0]?.legs?.[0]?.duration) {
@@ -162,7 +164,7 @@ function ConfirmationContent() {
             <MaterialIcon name="local_taxi" className="text-white text-[28px]" />
           </div>
         </div>
-        <p className="text-slate-400 animate-pulse">Chargement...</p>
+        <p className="text-slate-400 animate-pulse">{t('common.loading')}</p>
       </div>
     );
   }
@@ -179,7 +181,7 @@ function ConfirmationContent() {
             onClick={() => window.history.back()}
             className="w-full h-12 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-xl active:scale-[0.98] transition-transform"
           >
-            Retour
+            {t('common.back')}
           </button>
         </div>
       </div>
@@ -192,11 +194,12 @@ function ConfirmationContent() {
         <header className="sticky top-0 z-20 flex items-center p-4 bg-background/80 backdrop-blur-xl border-b border-white/5">
           <button
             onClick={() => window.history.back()}
+            aria-label={t('common.back')}
             className="flex items-center justify-center size-10 rounded-full glass-card text-white active:scale-95 transition-transform"
           >
             <MaterialIcon name="arrow_back" size="md" />
           </button>
-          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">Suivi de course</h1>
+          <h1 className="flex-1 text-center text-lg font-bold text-white pr-10">{t('taxi.trackingTitle')}</h1>
         </header>
 
         <main className="flex-1 p-4 space-y-4">
@@ -205,7 +208,7 @@ function ConfirmationContent() {
             <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-2">
               <MaterialIcon name="person" size="md" className="text-amber-400" />
               <p className="text-sm text-amber-300">
-                Course réservée pour <span className="font-bold text-white">{booking.passengerName}</span>
+                {t('taxi.bookedForPassenger', { name: booking.passengerName })}
               </p>
             </div>
           )}
@@ -224,13 +227,13 @@ function ConfirmationContent() {
           {showArrival && (
             <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-4 rounded-xl flex items-center gap-3">
               <MaterialIcon name="where_to_vote" size="md" className="text-green-400" />
-              <p className="font-semibold">Votre chauffeur est arrivé !</p>
+              <p className="font-semibold">{t('taxi.driverArrivedNotice')}</p>
             </div>
           )}
 
           {/* Statut */}
           <div className="glass-card rounded-2xl p-6 border border-white/5">
-            <h2 className="text-lg font-bold text-white mb-4">Statut de la course</h2>
+            <h2 className="text-lg font-bold text-white mb-4">{t('taxi.rideStatus')}</h2>
 
             {booking?.status === "pending" && (
               <div className="text-center py-6">
@@ -240,23 +243,23 @@ function ConfirmationContent() {
                     <MaterialIcon name="search" className="text-primary text-[24px]" />
                   </div>
                 </div>
-                <h3 className="text-base font-semibold text-white">Recherche d&apos;un chauffeur</h3>
-                <p className="text-slate-400 text-sm">En attente...</p>
+                <h3 className="text-base font-semibold text-white">{t('taxi.findingDriver')}</h3>
+                <p className="text-slate-400 text-sm">{t('taxi.waiting')}</p>
               </div>
             )}
 
             {booking?.status === "accepted" && (
               <div>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-semibold text-white">Chauffeur en route</h3>
-                  <span className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-xs font-bold">En route</span>
+                  <h3 className="text-base font-semibold text-white">{t('taxi.driverHeading')}</h3>
+                  <span className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-full text-xs font-bold">{t('taxi.enRouteBadge')}</span>
                 </div>
-                <p className="text-slate-300 text-sm"><strong>Temps estimé :</strong> {getEstimatedArrivalTime()}</p>
+                <p className="text-slate-300 text-sm"><strong>{t('taxi.estimatedTime')} :</strong> {getEstimatedArrivalTime()}</p>
                 {booking.driverName && (
                   <div className="mt-4 p-4 glass-card rounded-xl border border-white/5 space-y-1">
-                    <p className="text-sm text-slate-300"><span className="text-slate-500">Chauffeur :</span> {booking.driverName}</p>
-                    {booking.carModel && <p className="text-sm text-slate-300"><span className="text-slate-500">Véhicule :</span> {[booking.carColor, booking.carModel].filter(Boolean).join(' ')}{booking.carPlate ? ` (${booking.carPlate})` : ''}</p>}
-                    <p className="text-sm text-slate-300"><span className="text-slate-500">Téléphone :</span> {booking.driverPhone}</p>
+                    <p className="text-sm text-slate-300"><span className="text-slate-500">{t('taxi.driver')} :</span> {booking.driverName}</p>
+                    {booking.carModel && <p className="text-sm text-slate-300"><span className="text-slate-500">{t('taxi.vehicle')} :</span> {[booking.carColor, booking.carModel].filter(Boolean).join(' ')}{booking.carPlate ? ` (${booking.carPlate})` : ''}</p>}
+                    <p className="text-sm text-slate-300"><span className="text-slate-500">{t('taxi.phone')} :</span> {booking.driverPhone}</p>
                   </div>
                 )}
               </div>
@@ -267,8 +270,8 @@ function ConfirmationContent() {
                 <div className="w-14 h-14 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-500/20">
                   <MaterialIcon name="where_to_vote" className="text-green-400 text-[28px]" />
                 </div>
-                <h3 className="text-base font-semibold text-white">Chauffeur arrivé</h3>
-                <p className="text-slate-400 text-sm">Votre chauffeur vous attend au point de départ.</p>
+                <h3 className="text-base font-semibold text-white">{t('taxi.driverArrived')}</h3>
+                <p className="text-slate-400 text-sm">{t('taxi.driverArrivedDesc')}</p>
               </div>
             )}
 
@@ -277,8 +280,8 @@ function ConfirmationContent() {
                 <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">
                   <MaterialIcon name="local_taxi" className="text-primary text-[28px]" />
                 </div>
-                <h3 className="text-base font-semibold text-white">Course en cours</h3>
-                <p className="text-slate-400 text-sm">Destination : {booking?.destination}</p>
+                <h3 className="text-base font-semibold text-white">{t('taxi.tripInProgress')}</h3>
+                <p className="text-slate-400 text-sm">{t('taxi.tripDestination', { destination: booking?.destination })}</p>
               </div>
             )}
 
@@ -287,45 +290,45 @@ function ConfirmationContent() {
                 <div className="w-14 h-14 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-500/20">
                   <MaterialIcon name="check_circle" className="text-green-400 text-[28px]" />
                 </div>
-                <h3 className="text-base font-semibold text-white">Course terminée</h3>
-                <p className="text-2xl font-bold text-primary mt-2">{finalPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}</p>
-                <p className="text-slate-400 text-sm mt-1">Merci d&apos;avoir utilisé Medjira Taxi</p>
+                <h3 className="text-base font-semibold text-white">{t('taxi.tripCompleted')}</h3>
+                <p className="text-2xl font-bold text-primary mt-2">{finalPrice.toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR', { minimumFractionDigits: 2 })} {CURRENCY_CODE}</p>
+                <p className="text-slate-400 text-sm mt-1">{t('taxi.thanksUsingMedjiraTaxi')}</p>
               </div>
             )}
           </div>
 
           {/* Détails */}
           <div className="glass-card rounded-2xl p-6 border border-white/5">
-            <h2 className="text-lg font-bold text-white mb-4">Détails du trajet</h2>
+            <h2 className="text-lg font-bold text-white mb-4">{t('taxi.rideDetails')}</h2>
             <div className="space-y-4 relative">
               <div className="absolute left-[5px] top-3 bottom-12 w-[1.5px] bg-slate-700" />
               <div className="flex items-start gap-4">
                 <div className="size-3 rounded-full bg-primary ring-4 ring-primary/20 z-10" />
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase font-bold">Départ</p>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">{t('taxi.pickup')}</p>
                   <p className="text-white text-sm font-medium">{booking?.pickup}</p>
                 </div>
               </div>
               <div className="flex items-start gap-4">
                 <div className="size-3 rounded-full border-2 border-white/60 z-10" />
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase font-bold">Destination</p>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">{t('taxi.dropoff')}</p>
                   <p className="text-white text-sm font-medium">{booking?.destination}</p>
                 </div>
               </div>
             </div>
             <div className="border-t border-white/5 pt-4 mt-4 space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Distance</span>
+                <span className="text-slate-400">{t('common.distance')}</span>
                 <span className="text-white">{booking?.distance} km</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Durée estimée</span>
+                <span className="text-slate-400">{t('taxi.estimatedDuration')}</span>
                 <span className="text-white">{booking?.duration} min</span>
               </div>
               <div className="flex justify-between font-bold text-sm">
-                <span className="text-white">Prix initial</span>
-                <span className="text-primary">{booking?.price?.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} {CURRENCY_CODE}</span>
+                <span className="text-white">{t('taxi.initialPrice')}</span>
+                <span className="text-primary">{booking?.price?.toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR', { minimumFractionDigits: 2 })} {CURRENCY_CODE}</span>
               </div>
             </div>
           </div>

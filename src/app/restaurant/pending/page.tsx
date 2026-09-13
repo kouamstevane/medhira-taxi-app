@@ -8,11 +8,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { AuthService } from '@/services';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import Link from 'next/link';
 
 type RestaurantStatus = 'pending_approval' | 'approved' | 'rejected' | 'suspended';
 
 function RestaurantPendingContent() {
+  const { t } = useTranslation('restaurant');
   const router = useRouter();
   const searchParams = useSearchParams();
   const idFromParams = searchParams.get('id');
@@ -39,7 +42,7 @@ function RestaurantPendingContent() {
         const data = snap.data();
         setStatus(data.status as RestaurantStatus);
         if (data.status === 'rejected') {
-          setRejectionReason(data.rejectionReason || 'Documents incomplets ou non conformes.');
+          setRejectionReason(data.rejectionReason || t('defaultRejectionReason'));
         }
         if (data.status === 'approved') {
           router.replace('/restaurant/dashboard?welcome=1');
@@ -53,7 +56,7 @@ function RestaurantPendingContent() {
       setLoading(false);
     });
     return () => unsub();
-  }, [restaurantId, authLoading, authStatus, router]);
+  }, [restaurantId, authLoading, authStatus, router, t]);
 
   const handleReturnHome = async () => {
     setIsSigningOut(true);
@@ -74,22 +77,25 @@ function RestaurantPendingContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8 relative">
+      <div className="absolute top-4 right-4 z-10">
+        <LanguageSelector variant="pill" />
+      </div>
       <div className="w-full max-w-md text-center">
         {status === 'rejected' ? (
           <>
             <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
               <MaterialIcon name="close" size="xl" className="text-red-400" />
             </div>
-            <h1 className="text-2xl font-bold mb-2 text-white">Dossier non approuvé</h1>
-            <p className="text-slate-400 mb-4">Votre restaurant n&apos;a pas été approuvé.</p>
+            <h1 className="text-2xl font-bold mb-2 text-white">{t('rejectedTitle')}</h1>
+            <p className="text-slate-400 mb-4">{t('rejectedDesc')}</p>
             {rejectionReason && (
               <div className="p-4 glass-card border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">
-                <strong>Motif :</strong> {rejectionReason}
+                <strong>{t('reasonLabel')}</strong> {rejectionReason}
               </div>
             )}
             <Link href={`/restaurant/register?from=become-pro&resubmit=${restaurantId}`} className="inline-block h-[48px] px-6 glass-card border-2 border-primary/60 text-primary font-bold rounded-xl leading-[48px]">
-              Modifier et resoumettre
+              {t('editAndResubmit')}
             </Link>
           </>
         ) : (
@@ -97,9 +103,9 @@ function RestaurantPendingContent() {
             <div className="w-20 h-20 rounded-full bg-orange-500/10 flex items-center justify-center mx-auto mb-4 animate-pulse">
               <MaterialIcon name="schedule" size="xl" className="text-orange-400" />
             </div>
-            <h1 className="text-2xl font-bold mb-2 text-white">Dossier en cours de validation</h1>
+            <h1 className="text-2xl font-bold mb-2 text-white">{t('pendingTitle')}</h1>
             <p className="text-slate-400 mb-6">
-              Votre dossier est en cours d&apos;examen par notre équipe. Vous recevrez un email dès qu&apos;il sera approuvé.
+              {t('pendingDesc')}
             </p>
           </>
         )}
@@ -110,7 +116,7 @@ function RestaurantPendingContent() {
           disabled={isSigningOut}
           className="inline-flex h-[48px] items-center justify-center px-6 mt-8 glass-card border border-white/10 text-slate-300 font-semibold rounded-xl hover:bg-white/5"
         >
-          {isSigningOut ? 'Déconnexion…' : "Retour à l'accueil"}
+          {isSigningOut ? t('disconnecting') : t('backToHome')}
         </button>
       </div>
     </div>

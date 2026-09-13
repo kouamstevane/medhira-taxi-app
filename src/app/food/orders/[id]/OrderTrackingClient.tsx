@@ -17,15 +17,16 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 import { ConversationLauncher } from '@/components/ConversationLauncher';
 import type { ConversationContext } from '@/types/conversation';
 
-const STATUS_STEPS = [
-  { step: 0, icon: 'schedule', label: 'Commande reçue' },
-  { step: 1, icon: 'restaurant', label: 'En préparation' },
-  { step: 2, icon: 'shopping_bag', label: 'Prête' },
-  { step: 3, icon: 'delivery_dining', label: 'En livraison' },
-  { step: 4, icon: 'location_on', label: 'Livrée' },
+const STATUS_STEPS: { step: number; icon: string; labelKey: 'food.stepReceived' | 'food.stepPreparing' | 'food.stepReady' | 'food.stepDelivering' | 'food.stepDelivered' }[] = [
+  { step: 0, icon: 'schedule', labelKey: 'food.stepReceived' },
+  { step: 1, icon: 'restaurant', labelKey: 'food.stepPreparing' },
+  { step: 2, icon: 'shopping_bag', labelKey: 'food.stepReady' },
+  { step: 3, icon: 'delivery_dining', labelKey: 'food.stepDelivering' },
+  { step: 4, icon: 'location_on', labelKey: 'food.stepDelivered' },
 ];
 
 export const getFoodOrderStepIndex = (status?: FoodOrderStatus): number => {
@@ -74,6 +75,7 @@ export default function OrderTrackingClient() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('id')?.trim() || (params.id as string) || '';
   const router = useRouter();
+  const { t } = useTranslation();
   const { showError, toasts, removeToast } = useToast();
   const { currentUser, userData } = useAuth();
 
@@ -94,7 +96,7 @@ export default function OrderTrackingClient() {
 
   useEffect(() => {
     if (!orderId) {
-      setError('ID de commande manquant');
+      setError(t('food.missingOrderId'));
       setLoading(false);
       return;
     }
@@ -119,7 +121,7 @@ export default function OrderTrackingClient() {
           });
           setIsNetworkError(false);
         } else {
-          setError('Commande introuvable');
+          setError(t('food.orderNotFound'));
         }
         setLoading(false);
       },
@@ -132,13 +134,13 @@ export default function OrderTrackingClient() {
         ) {
           setIsNetworkError(true);
         }
-        setError('Erreur lors du chargement de la commande');
+        setError(t('food.orderLoadingError'));
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [orderId, refreshKey]);
+  }, [orderId, refreshKey, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +175,7 @@ export default function OrderTrackingClient() {
 
   const handleSubmitReview = async () => {
     if (!order || restaurantRating === 0) {
-      showError('Veuillez au moins noter le restaurant.');
+      showError(t('food.rateRestaurantRequired'));
       return;
     }
 
@@ -202,7 +204,7 @@ export default function OrderTrackingClient() {
       setReviewSubmitted(true);
     } catch (err) {
       console.error('Erreur soumission avis:', err);
-      showError('Erreur lors de la soumission de l\'avis.');
+      showError(t('food.reviewSubmitError'));
     } finally {
       setSubmittingReview(false);
     }
@@ -223,16 +225,16 @@ export default function OrderTrackingClient() {
           <button
             onClick={() => router.push('/food/orders')}
             className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Retour aux commandes"
+            aria-label={t('food.backToOrders')}
           >
             <MaterialIcon name="arrow_back" size="lg" />
           </button>
-          <h1 className="text-xl font-bold text-white">Détail commande</h1>
+          <h1 className="text-xl font-bold text-white">{t('food.orderDetail')}</h1>
           <div className="w-10"></div>
         </div>
         <div className="flex-1 flex items-center justify-center p-4">
           <NetworkErrorView
-            message="Impossible de charger les détails de votre commande. Veuillez vérifier votre connexion internet et réessayer."
+            message={t('food.networkError')}
             onRetry={recharger}
           />
         </div>
@@ -244,13 +246,13 @@ export default function OrderTrackingClient() {
   if (error || !order) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
-        <h2 className="text-xl font-bold text-white mb-2">Oups !</h2>
-        <p className="text-slate-400 mb-6">{error || 'Commande introuvable'}</p>
+        <h2 className="text-xl font-bold text-white mb-2">{t('common.networkErrorTitle')}</h2>
+        <p className="text-slate-400 mb-6">{error || t('food.orderNotFound')}</p>
         <button
           onClick={() => router.push('/food/orders')}
           className="bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold px-6 py-3 rounded-xl min-h-[44px]"
         >
-          Retour aux commandes
+          {t('food.backToOrders')}
         </button>
       </div>
     );
@@ -262,7 +264,7 @@ export default function OrderTrackingClient() {
   const clientUid = currentUser?.uid ?? order.userId;
   const clientName = userData?.firstName
     ? `${userData.firstName} ${userData.lastName ?? ''}`.trim()
-    : order.customerName || 'Client';
+    : order.customerName || t('common.profile');
 
   const restaurantContext: ConversationContext = {
     type: 'food',
@@ -274,7 +276,7 @@ export default function OrderTrackingClient() {
     },
     participantB: {
       uid: restaurantConversationUid || getRestaurantConversationUid(order),
-      name: order.restaurantName || 'Restaurant',
+      name: order.restaurantName || t('food.restaurant'),
       role: 'restaurant',
     },
   };
@@ -291,7 +293,7 @@ export default function OrderTrackingClient() {
           },
           participantB: {
             uid: order.driverId,
-            name: order.driverName || 'Livreur',
+            name: order.driverName || t('food.assignedCourier'),
             role: 'livreur',
           },
         }
@@ -306,11 +308,11 @@ export default function OrderTrackingClient() {
           <button
             onClick={() => router.back()}
             className="p-2 -ml-2 text-white bg-white/5 rounded-full hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Retour"
+            aria-label={t('common.back')}
           >
             <MaterialIcon name="arrow_back" size="lg" />
           </button>
-          <h1 className="text-xl font-bold text-white">Suivi Commande</h1>
+          <h1 className="text-xl font-bold text-white">{t('food.orderTrackingTitle')}</h1>
           <div className="w-10"></div>
         </div>
 
@@ -318,18 +320,18 @@ export default function OrderTrackingClient() {
           {/* En-tête de la commande */}
           <section className="glass-card p-5 rounded-2xl border border-white/5 text-center">
             <h2 className="text-2xl font-bold text-white mb-1">{order.restaurantName}</h2>
-            <p className="text-slate-400 text-sm mb-4">Commande n° {order.id?.slice(-6).toUpperCase()}</p>
+            <p className="text-slate-400 text-sm mb-4">{t('food.orderNumber', { number: order.id?.slice(-6).toUpperCase() })}</p>
             <OrderStatusBadge status={order.status} className="mx-auto" />
           </section>
 
           {/* Contacts (chat + appel) - visible tant que la commande est active */}
           {isOrderActive && currentUser && (
             <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-4">
-              <h3 className="font-bold text-white">Contacter</h3>
+              <h3 className="font-bold text-white">{t('food.contactSectionTitle')}</h3>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-white">Restaurant</p>
-                  <p className="text-xs text-slate-400">{order.restaurantName || 'Restaurant'}</p>
+                  <p className="text-sm font-semibold text-white">{t('food.restaurant')}</p>
+                  <p className="text-xs text-slate-400">{order.restaurantName || t('food.restaurant')}</p>
                 </div>
                 <ConversationLauncher
                   context={restaurantContext}
@@ -340,8 +342,8 @@ export default function OrderTrackingClient() {
               {driverContext && (
                 <div className="flex items-center justify-between pt-3 border-t border-white/5">
                   <div>
-                    <p className="text-sm font-semibold text-white">Livreur</p>
-                    <p className="text-xs text-slate-400">{order.driverName || 'Livreur assigné'}</p>
+                    <p className="text-sm font-semibold text-white">{t('food.assignedCourier')}</p>
+                    <p className="text-xs text-slate-400">{order.driverName || t('food.assignedCourier')}</p>
                   </div>
                   <ConversationLauncher
                     context={driverContext}
@@ -356,7 +358,7 @@ export default function OrderTrackingClient() {
           {/* Timeline de suivi (Optimistic UI pour le tracking) */}
           {!isCancelled && (
             <section className="glass-card p-5 rounded-2xl border border-white/5">
-              <h3 className="font-bold text-white mb-6">État d'avancement</h3>
+              <h3 className="font-bold text-white mb-6">{t('food.progressTitle')}</h3>
               <div className="space-y-6 relative before:absolute before:inset-0 before:ml-[1.4rem] before:w-0.5 before:bg-white/5 before:-z-10">
                 {STATUS_STEPS.map((step) => {
                   const isCompleted = currentStepIndex >= 0 && step.step <= currentStepIndex;
@@ -369,7 +371,7 @@ export default function OrderTrackingClient() {
                       </div>
                       <div className="pt-1.5">
                         <p className={`font-semibold ${isCurrent ? 'text-primary font-bold' : isCompleted ? 'text-white' : 'text-slate-500'}`}>
-                          {step.label}
+                          {t(step.labelKey)}
                         </p>
                       </div>
                     </div>
@@ -381,7 +383,7 @@ export default function OrderTrackingClient() {
 
           {/* Détails de la commande */}
           <section className="glass-card p-5 rounded-2xl border border-white/5">
-            <h3 className="font-bold text-white mb-4">Détails de la commande</h3>
+            <h3 className="font-bold text-white mb-4">{t('food.orderSummary')}</h3>
             <div className="space-y-3 mb-4">
               {order.orderItems.map((item, idx) => (
                 <div key={idx} className="flex justify-between text-sm">
@@ -394,7 +396,7 @@ export default function OrderTrackingClient() {
               ))}
             </div>
             <div className="border-t border-white/5 pt-4 flex justify-between items-center font-bold text-lg text-white">
-              <span>Total Payé</span>
+              <span>{t('food.totalPaid')}</span>
               <span>{order.totalOrderPrice.toFixed(2)} {CURRENCY_CODE}</span>
             </div>
           </section>
@@ -402,13 +404,13 @@ export default function OrderTrackingClient() {
           {/* Section Avis (visible uniquement si livrée et pas encore notée) */}
           {isDelivered && !reviewSubmitted && (
             <section className="glass-card p-5 rounded-2xl border border-primary/20">
-              <h3 className="font-bold text-white mb-2">Comment s'est passée votre commande ?</h3>
-              <p className="text-sm text-slate-400 mb-6">Votre avis aide les autres utilisateurs et les restaurants.</p>
+              <h3 className="font-bold text-white mb-2">{t('food.howWasYourOrder')}</h3>
+              <p className="text-sm text-slate-400 mb-6">{t('food.reviewHelpsOthers')}</p>
 
               <div className="space-y-4">
                 {/* Avis Restaurant */}
                 <div>
-                  <p className="text-sm font-semibold text-slate-300 mb-2">Noter {order.restaurantName}</p>
+                  <p className="text-sm font-semibold text-slate-300 mb-2">{t('food.rateRestaurant', { name: order.restaurantName || t('food.restaurant') })}</p>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button key={star} onClick={() => setRestaurantRating(star)} className={`p-1 min-h-[44px] min-w-[44px] flex items-center justify-center ${restaurantRating >= star ? 'text-yellow-400' : 'text-slate-600'}`}>
@@ -420,7 +422,7 @@ export default function OrderTrackingClient() {
                     <textarea
                       value={restaurantComment}
                       onChange={(e) => setRestaurantComment(e.target.value)}
-                      placeholder="Qu'avez-vous pensé du repas ? (Optionnel)"
+                      placeholder={t('food.restaurantCommentPlaceholder')}
                       className="w-full mt-3 p-3 text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-white"
                       rows={2}
                     />
@@ -430,7 +432,7 @@ export default function OrderTrackingClient() {
                 {/* Avis Livreur */}
                 {order.driverId && (
                   <div className="pt-4 border-t border-white/5">
-                    <p className="text-sm font-semibold text-slate-300 mb-2">Noter le livreur</p>
+                    <p className="text-sm font-semibold text-slate-300 mb-2">{t('food.rateCourier')}</p>
                     <div className="flex gap-2">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <button key={star} onClick={() => setDriverRating(star)} className={`p-1 min-h-[44px] min-w-[44px] flex items-center justify-center ${driverRating >= star ? 'text-yellow-400' : 'text-slate-600'}`}>
@@ -442,7 +444,7 @@ export default function OrderTrackingClient() {
                       <textarea
                         value={driverComment}
                         onChange={(e) => setDriverComment(e.target.value)}
-                        placeholder="Comment s'est passée la livraison ? (Optionnel)"
+                        placeholder={t('food.deliveryCommentPlaceholder')}
                         className="w-full mt-3 p-3 text-sm glass-input rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-white"
                         rows={2}
                       />
@@ -455,7 +457,7 @@ export default function OrderTrackingClient() {
                   disabled={submittingReview || restaurantRating === 0}
                   className="w-full mt-4 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold py-3 rounded-xl disabled:opacity-50 flex justify-center items-center gap-2 min-h-[44px]"
                 >
-                  {submittingReview ? <MaterialIcon name="progress_activity" size="md" className="animate-spin" /> : 'Envoyer mon avis'}
+                  {submittingReview ? <MaterialIcon name="progress_activity" size="md" className="animate-spin" /> : t('food.submitReview')}
                 </button>
               </div>
             </section>
@@ -466,8 +468,8 @@ export default function OrderTrackingClient() {
               <div className="bg-green-500/10 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
                 <MaterialIcon name="check_circle" size="lg" className="text-green-400" />
               </div>
-              <h3 className="font-bold text-green-400 mb-1">Merci pour votre avis !</h3>
-              <p className="text-sm text-green-400/80">Votre retour est précieux.</p>
+              <h3 className="font-bold text-green-400 mb-1">{t('food.thankYouReviewTitle')}</h3>
+              <p className="text-sm text-green-400/80">{t('food.thankYouReviewDesc')}</p>
             </section>
           )}
         </div>

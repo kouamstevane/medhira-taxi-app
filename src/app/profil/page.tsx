@@ -22,6 +22,8 @@ import { InputField } from '@/components/forms/InputField';
 import { SelectField } from '@/components/forms/SelectField';
 import { ProtectedPageGuard } from '@/components/auth/ProtectedPageGuard';
 import type { PlaceSuggestion } from '@/types';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { getFirestoreErrorMessage, isFirestoreNetworkError, logFirestoreError } from '@/utils/firestore-error-handler';
 
 import { shouldOpenAddressEditor } from './profile-navigation';
@@ -44,6 +46,7 @@ interface ProfileFormData {
 
 function ProfilPageContent() {
   const { currentUser, userData: authUserData, reloadUser } = useAuth();
+  const { t } = useTranslation();
   const [userData, setUserData] = useState({
     firstName: authUserData?.firstName || '',
     lastName: authUserData?.lastName || '',
@@ -220,7 +223,7 @@ function ProfilPageContent() {
 
       setUserData((prev) => ({ ...prev, ...data }));
       setEditing(false);
-      showSuccess('Profil mis à jour avec succès');
+      showSuccess(t('profile.profileUpdated'));
     } catch (err) {
       logFirestoreError(err, 'mise à jour du profil client');
       const errorMessage = getFirestoreErrorMessage(err, 'mise à jour de votre profil');
@@ -238,13 +241,15 @@ function ProfilPageContent() {
       router.replace('/login');
     } catch (err) {
       console.error('Erreur de déconnexion:', err);
-      showError('Impossible de vous déconnecter. Réessayez.');
+      showError(t('profile.logoutError'));
       setLoggingOut(false);
     }
   };
 
   const handleDeleteAccount = async () => {
-    if (deleteConfirmText !== 'SUPPRIMER') return;
+    const confirmWord = t('profile.deleteConfirmWord');
+    const inputClean = deleteConfirmText.trim().toUpperCase();
+    if (inputClean !== confirmWord && inputClean !== 'SUPPRIMER' && inputClean !== 'DELETE') return;
     setDeleting(true);
     try {
       const requestAccountDeletion = httpsCallable(functions, 'requestAccountDeletion');
@@ -252,20 +257,19 @@ function ProfilPageContent() {
       try {
         await signOut(auth);
       } catch {}
-      showSuccess('Votre compte a été supprimé.');
+      showSuccess(t('profile.deleteSuccess'));
       router.replace('/login');
     } catch (err: unknown) {
       const deletionError = err as { code?: string; message?: string };
       console.error('Erreur suppression compte:', deletionError);
-      let msg = 'Impossible de supprimer le compte. Réessayez plus tard.';
+      let msg = t('profile.deleteErrorGeneral');
       if (
         deletionError?.message?.includes('courses') ||
         deletionError?.message?.includes('commandes')
       ) {
-        msg =
-          'Vous avez des courses ou commandes en cours. Annulez-les ou attendez leur fin avant de supprimer le compte.';
+        msg = t('profile.deleteErrorActiveOrders');
       } else if (deletionError?.code === 'functions/resource-exhausted') {
-        msg = 'Trop de tentatives. Réessayez dans une heure.';
+        msg = t('profile.deleteErrorRateLimit');
       }
       showError(msg);
       setDeleting(false);
@@ -296,7 +300,7 @@ function ProfilPageContent() {
           <Link
             href="/dashboard"
             className="w-11 h-11 rounded-full flex items-center justify-center text-slate-200 hover:text-white hover:bg-white/10 active:scale-95 transition"
-            aria-label="Retour à l'accueil"
+            aria-label={t('common.back')}
           >
             <MaterialIcon name="arrow_back" className="text-[22px]" />
           </Link>
@@ -305,8 +309,8 @@ function ProfilPageContent() {
         {/* Network Error State */}
         {isNetworkError && !userData.email && !userData.firstName ? (
           <NetworkErrorView
-            title="Oops !"
-            message="Impossible de charger votre profil. Veuillez vérifier votre connexion internet et réessayer."
+            title={t('common.error')}
+            message={t('common.networkErrorMessage')}
             onRetry={handleRetry}
           />
         ) : editing ? (
@@ -323,7 +327,7 @@ function ProfilPageContent() {
               >
                 <MaterialIcon name="arrow_back" size="sm" />
               </button>
-              <h1 className="text-xl font-bold text-white">Modifier mes informations</h1>
+              <h1 className="text-xl font-bold text-white">{t('profile.editProfileTitle')}</h1>
             </div>
 
             {error && (
@@ -346,7 +350,7 @@ function ProfilPageContent() {
                   {profileImageUrl ? (
                     <Image
                       src={profileImageUrl}
-                      alt="Photo de profil"
+                      alt={t('profile.profilePhoto')}
                       width={96}
                       height={96}
                       className="w-full h-full object-cover"
@@ -372,7 +376,7 @@ function ProfilPageContent() {
                     onChange={handleImageChange}
                     className="hidden"
                   />
-                  Changer la photo
+                  {t('profile.changePhoto')}
                 </label>
               </div>
 
@@ -380,23 +384,23 @@ function ProfilPageContent() {
               <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
                 <InputField
                   type="email"
-                  label="Email"
+                  label={t('profile.email')}
                   value={userData.email}
                   disabled
-                  helperText="L'adresse email ne peut pas être modifiée."
+                  helperText={t('profile.emailCannotChange')}
                 />
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <InputField
                     {...form.register('firstName')}
-                    label="Prénom"
-                    placeholder="Votre prénom"
+                    label={t('profile.firstName')}
+                    placeholder={t('profile.firstNamePlaceholder')}
                     required
                   />
                   <InputField
                     {...form.register('lastName')}
-                    label="Nom"
-                    placeholder="Votre nom"
+                    label={t('profile.lastName')}
+                    placeholder={t('profile.lastNamePlaceholder')}
                     required
                   />
                 </div>
@@ -404,9 +408,9 @@ function ProfilPageContent() {
                 <InputField
                   type="tel"
                   {...form.register('phone')}
-                  label="Numéro de téléphone"
+                  label={t('profile.phone')}
                   placeholder="693372118"
-                  helperText="Format sans le code pays."
+                  helperText={t('profile.phoneCountryNotice')}
                   required
                 />
 
@@ -429,25 +433,25 @@ function ProfilPageContent() {
                   <InputField
                     type="text"
                     {...form.register('city')}
-                    label="Ville"
-                    placeholder="Votre ville"
+                    label={t('profile.city')}
+                    placeholder={t('profile.cityPlaceholder')}
                   />
                   <SelectField
                     {...form.register('country')}
-                    label="Pays"
+                    label={t('profile.country')}
                     options={countries.map((c) => ({ value: c, label: c }))}
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1">
-                    À propos de moi
+                    {t('profile.aboutMe')}
                   </label>
                   <textarea
                     {...form.register('bio')}
                     rows={3}
                     className="glass-input w-full rounded-xl p-3 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:ring-2 focus:ring-primary"
-                    placeholder="Parlez-nous un peu de vous..."
+                    placeholder={t('profile.aboutMePlaceholder')}
                   />
                 </div>
 
@@ -461,7 +465,7 @@ function ProfilPageContent() {
                     }}
                     className="flex-1 h-12 rounded-2xl bg-white/10 hover:bg-white/15 text-slate-300 font-medium text-sm transition"
                   >
-                    Annuler
+                    {t('common.cancel')}
                   </button>
                   <button
                     type="submit"
@@ -471,7 +475,7 @@ function ProfilPageContent() {
                     {loading ? (
                       <MaterialIcon name="refresh" className="animate-spin" size="sm" />
                     ) : (
-                      'Enregistrer'
+                      t('common.save')
                     )}
                   </button>
                 </div>
@@ -496,7 +500,7 @@ function ProfilPageContent() {
               <div
                 onClick={() => setEditing(true)}
                 className="w-16 h-16 rounded-full overflow-hidden bg-[#262629] border border-white/15 shrink-0 flex items-center justify-center cursor-pointer active:scale-95 transition shadow-lg relative group"
-                title="Modifier le profil"
+                title={t('profile.editProfile')}
               >
                 {profileImageUrl ? (
                   <Image
@@ -521,54 +525,75 @@ function ProfilPageContent() {
             {/* SECTION 1: Paramètres du compte */}
             <div className="space-y-1.5">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
-                Paramètres du compte
+                {t('profile.accountSettings')}
               </h2>
               <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
                 <ProfileMenuItem
                   icon="bolt"
                   iconColorVariant="sky"
-                  title="Mode Chauffeur"
-                  badge="Nouveau"
+                  title={t('profile.driverMode')}
+                  badge={t('profile.newBadge')}
                   href="/auth/become-pro"
                 />
                 <ProfileMenuItem
                   icon="person"
                   iconColorVariant="sky"
-                  title="Informations personnelles"
+                  title={t('profile.personalInfo')}
                   onClick={() => setEditing(true)}
                 />
                 <ProfileMenuItem
                   icon="credit_card"
                   iconColorVariant="sky"
-                  title="Moyens de paiement & Wallet"
-                  subtitle={hasPaymentMethod ? 'Carte enregistrée' : 'Ajouter un mode de paiement'}
+                  title={t('profile.paymentMethodsAndWallet')}
+                  subtitle={hasPaymentMethod ? t('profile.savedCard') : t('profile.addPaymentMethod')}
                   href="/wallet"
                 />
                 <ProfileMenuItem
                   icon="lock"
                   iconColorVariant="sky"
-                  title="Sécurité et connexion"
+                  title={t('profile.securityAndLogin')}
                   href="/auth/reset-password"
                 />
+              </div>
+            </div>
+
+            {/* SECTION: Préférences & Langue */}
+            <div className="space-y-1.5">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
+                {t('profile.preferences')}
+              </h2>
+              <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+                    <MaterialIcon name="language" size="md" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{t('profile.language')}</p>
+                    <p className="text-xs text-slate-400">{t('profile.languageDesc')}</p>
+                  </div>
+                </div>
+                <LanguageSelector variant="toggle" />
               </div>
             </div>
 
             {/* SECTION 2: Obtenir de l'aide */}
             <div className="space-y-1.5">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
-                Obtenir de l&apos;aide
+                {t('profile.helpSection')}
               </h2>
               <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
                 <ProfileMenuItem
                   icon="help_outline"
                   iconColorVariant="purple"
-                  title="Consulter la FAQ"
+                  title={t('profile.faq')}
+                  subtitle={t('profile.faqSubtitle')}
                   onClick={() => setShowFaqModal(true)}
                 />
                 <ProfileMenuItem
                   icon="support_agent"
                   iconColorVariant="purple"
-                  title="Contacter le service client"
+                  title={t('profile.contactSupport')}
+                  subtitle={t('profile.contactSupportSubtitle')}
                   onClick={() => setShowSupportModal(true)}
                 />
               </div>
@@ -577,23 +602,23 @@ function ProfilPageContent() {
             {/* SECTION 3: Activité & Services */}
             <div className="space-y-1.5">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
-                Activité & Services
+                {t('profile.activitySection')}
               </h2>
               <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
                 <ProfileMenuItem
                   icon="history"
                   iconColorVariant="amber"
-                  title="Historique des courses"
-                  subtitle="Retrouvez vos trajets et reçus"
+                  title={t('profile.rideHistory')}
+                  subtitle={t('profile.rideHistorySubtitle')}
                   href="/historique"
                 />
                 <ProfileMenuItem
                   icon="storefront"
                   iconColorVariant="amber"
-                  title="Villes & Services disponibles"
-                  subtitle="Taxis, livraisons de repas et colis"
+                  title={t('profile.availableCities')}
+                  subtitle={t('profile.availableCitiesSubtitle')}
                   onClick={() =>
-                    showSuccess('Services disponibles 24h/24 et 7j/7')
+                    showSuccess(t('common.appSubSlogan'))
                   }
                 />
               </div>
@@ -602,14 +627,14 @@ function ProfilPageContent() {
             {/* SECTION 4: Récompenses */}
             <div className="space-y-1.5">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
-                Récompenses
+                {t('profile.referral')}
               </h2>
               <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
                 <ProfileMenuItem
                   icon="favorite"
                   iconColorVariant="pink"
-                  title="Parrainage"
-                  subtitle="Invitez vos amis et gagnez des réductions"
+                  title={t('profile.referral')}
+                  subtitle={t('profile.referralSubtitle')}
                   onClick={() => setShowReferralModal(true)}
                 />
               </div>
@@ -618,19 +643,19 @@ function ProfilPageContent() {
             {/* SECTION 5: Mentions légales */}
             <div className="space-y-1.5">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 px-1">
-                Mentions légales
+                {t('auth.termsOfService')}
               </h2>
               <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
                 <ProfileMenuItem
                   icon="menu_book"
                   iconColorVariant="emerald"
-                  title="Politique de confidentialité"
+                  title={t('profile.privacyPolicy')}
                   href="/privacy"
                 />
                 <ProfileMenuItem
                   icon="description"
                   iconColorVariant="emerald"
-                  title="Conditions de service"
+                  title={t('profile.termsOfService')}
                   href="/terms"
                 />
               </div>
@@ -642,13 +667,13 @@ function ProfilPageContent() {
                 <ProfileMenuItem
                   icon="logout"
                   iconColorVariant="slate"
-                  title={loggingOut ? 'Déconnexion en cours...' : 'Se déconnecter'}
+                  title={loggingOut ? t('profile.loggingOut') : t('profile.logout')}
                   onClick={loggingOut ? undefined : handleLogout}
                 />
                 <ProfileMenuItem
                   icon="delete_forever"
                   iconColorVariant="destructive"
-                  title="Supprimer mon compte"
+                  title={t('profile.deleteAccount')}
                   destructive
                   onClick={() => {
                     setDeleteConfirmText('');
@@ -664,7 +689,7 @@ function ProfilPageContent() {
                 VERSION 1.0.0 (2508122)
               </p>
               <p className="text-[10px]">
-                © Medjira Taxi. Tous droits réservés.
+                © Medjira Taxi. {t('profile.allRightsReserved')}
               </p>
             </div>
           </div>
@@ -684,28 +709,28 @@ function ProfilPageContent() {
                 <div className="w-14 h-14 rounded-2xl bg-destructive/15 flex items-center justify-center mb-3">
                   <MaterialIcon name="warning" className="text-destructive text-[32px]" />
                 </div>
-                <h3 className="text-lg font-bold text-white">Supprimer votre compte ?</h3>
+                <h3 className="text-lg font-bold text-white">{t('profile.deleteAccountConfirmTitle')}</h3>
                 <p className="text-slate-400 text-xs mt-1 leading-relaxed">
-                  Cette action est <strong className="text-destructive">irréversible</strong>. Vos données personnelles seront effacées et votre historique sera anonymisé conformément au RGPD.
+                  {t('profile.deleteAccountIrreversible')}
                 </p>
               </div>
 
               <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-3 text-xs text-slate-300 space-y-1">
-                <p>• Profil, photos et coordonnées : supprimés</p>
-                <p>• Historique financier : anonymisé (légal)</p>
-                <p>• Déconnexion immédiate</p>
+                <p>{t('profile.deleteBulletProfile')}</p>
+                <p>{t('profile.deleteBulletFinancial')}</p>
+                <p>{t('profile.deleteBulletLogout')}</p>
               </div>
 
               <div>
                 <label className="block text-xs text-slate-400 mb-1.5">
-                  Tapez <span className="font-mono font-bold text-destructive">SUPPRIMER</span> pour confirmer :
+                  {t('profile.deleteTypePrompt', { confirmWord: t('profile.deleteConfirmWord') })}
                 </label>
                 <input
                   type="text"
                   value={deleteConfirmText}
                   onChange={(e) => setDeleteConfirmText(e.target.value)}
                   disabled={deleting}
-                  placeholder="SUPPRIMER"
+                  placeholder={t('profile.deleteConfirmWord')}
                   className="glass-input w-full rounded-xl p-3 text-sm text-white placeholder:text-slate-500 outline-none transition-all focus:ring-2 focus:ring-destructive"
                 />
               </div>
@@ -717,21 +742,26 @@ function ProfilPageContent() {
                   disabled={deleting}
                   className="flex-1 h-12 rounded-2xl bg-white/10 hover:bg-white/15 text-slate-300 text-sm font-medium transition"
                 >
-                  Annuler
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="button"
                   onClick={handleDeleteAccount}
-                  disabled={deleting || deleteConfirmText !== 'SUPPRIMER'}
+                  disabled={
+                    deleting ||
+                    (deleteConfirmText.trim().toUpperCase() !== t('profile.deleteConfirmWord') &&
+                      deleteConfirmText.trim().toUpperCase() !== 'SUPPRIMER' &&
+                      deleteConfirmText.trim().toUpperCase() !== 'DELETE')
+                  }
                   className="flex-1 h-12 rounded-2xl bg-destructive text-white font-bold text-sm transition-all hover:bg-destructive/90 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {deleting ? (
                     <>
                       <MaterialIcon name="refresh" className="animate-spin" size="sm" />
-                      Suppression...
+                      {t('profile.deleteProgress')}
                     </>
                   ) : (
-                    'Supprimer'
+                    t('common.delete')
                   )}
                 </button>
               </div>

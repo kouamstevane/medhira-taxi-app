@@ -12,6 +12,8 @@ import { useDriverActivity, type ActivityRecord } from '@/hooks/useDriverActivit
 import { EvaluationsTab } from './components/EvaluationsTab'
 import { formatCurrencyWithCode } from '@/utils/format'
 import { getInitialActivityTab, type ActivityTab } from './activity-tabs'
+import { useTranslation } from '@/hooks/useTranslation'
+import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 function RecordItem({ record }: { record: ActivityRecord }) {
   return (
@@ -34,6 +36,7 @@ function RecordItem({ record }: { record: ActivityRecord }) {
 export default function DriverActivitePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t } = useTranslation()
   const [uid, setUid] = useState<string | null>(null)
   const [tab, setTab] = useState<ActivityTab>(() => getInitialActivityTab(searchParams.get('tab')))
   const { driver } = useDriverStore()
@@ -99,25 +102,28 @@ export default function DriverActivitePage() {
   const todayTotal = records.filter(r => new Date(r.date).toDateString() === today)
     .reduce((s, r) => s + r.amount, 0)
 
-  const TABS: { key: ActivityTab; label: string; icon: string }[] = [
-    { key: 'historique', label: 'Historique', icon: 'history' },
-    { key: 'gains',      label: 'Gains',      icon: 'payments' },
-    { key: 'evaluations', label: 'Évaluations', icon: 'star' },
+  const tabs: { key: ActivityTab; label: string; icon: string }[] = [
+    { key: 'historique', label: t('driver.tabHistory'), icon: 'history' },
+    { key: 'gains',      label: t('driver.tabEarnings'), icon: 'payments' },
+    { key: 'evaluations', label: t('driver.tabRatings'), icon: 'star' },
   ]
 
   return (
     <div className="min-h-screen bg-background text-slate-100 pb-28">
       <div className="max-w-lg mx-auto px-4 pt-8">
-        <h1 className="text-2xl font-bold text-white mb-6">Activité</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-white">{t('driver.activity')}</h1>
+          <LanguageSelector variant="pill" />
+        </div>
 
         {/* Onglets — 3 onglets */}
         <div className="flex gap-1 mb-6 bg-white/5 rounded-2xl p-1">
-          {TABS.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)}
+          {tabs.map((tabItem) => (
+            <button key={tabItem.key} onClick={() => setTab(tabItem.key)}
               className={['flex-1 min-h-[44px] h-11 rounded-xl text-xs font-medium capitalize transition-all flex items-center justify-center gap-1',
-                tab === t.key ? 'bg-primary text-white' : 'text-slate-400'].join(' ')}>
-              <MaterialIcon name={t.icon} className="text-[14px]" />
-              {t.label}
+                tab === tabItem.key ? 'bg-primary text-white' : 'text-slate-400'].join(' ')}>
+              <MaterialIcon name={tabItem.icon} className="text-[14px]" />
+              {tabItem.label}
             </button>
           ))}
         </div>
@@ -137,7 +143,7 @@ export default function DriverActivitePage() {
         ) : tab === 'historique' ? (
           <div className="space-y-3">
             {records.length === 0 ? (
-              <p className="text-slate-500 text-center mt-12">Aucune activité pour l&apos;instant.</p>
+              <p className="text-slate-500 text-center mt-12">{t('driver.noActivity')}</p>
             ) : records.map((r) => <RecordItem key={r.id} record={r} />)}
           </div>
         ) : (
@@ -145,11 +151,11 @@ export default function DriverActivitePage() {
             <div className="glass-card rounded-2xl border border-white/10 p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-slate-400">Aujourd&apos;hui</p>
+                  <p className="text-xs text-slate-400">{t('common.today')}</p>
                   <p className="text-2xl font-bold text-white">{formatCurrencyWithCode(todayTotal)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-400">Total cumulé</p>
+                  <p className="text-xs text-slate-400">{t('driver.totalAccumulated')}</p>
                   <p className="text-xl font-bold text-primary">{formatCurrencyWithCode(totals.total)}</p>
                 </div>
               </div>
@@ -157,12 +163,12 @@ export default function DriverActivitePage() {
                 <div className="border-t border-white/10 pt-4 grid grid-cols-2 gap-4">
                   <div className="text-center">
                     <MaterialIcon name="directions_car" className="text-primary text-[20px]" />
-                    <p className="text-xs text-slate-400 mt-1">Taxi</p>
+                    <p className="text-xs text-slate-400 mt-1">{t('driver.serviceTaxi')}</p>
                     <p className="font-bold text-white">{formatCurrencyWithCode(totals.taxi)}</p>
                   </div>
                   <div className="text-center">
                     <MaterialIcon name="delivery_dining" className="text-amber-400 text-[20px]" />
-                    <p className="text-xs text-slate-400 mt-1">Livraison</p>
+                    <p className="text-xs text-slate-400 mt-1">{t('driver.serviceDelivery')}</p>
                     <p className="font-bold text-white">{formatCurrencyWithCode(totals.livraison)}</p>
                   </div>
                 </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   validateRestaurantImageFile,
   type RestaurantImageKind,
@@ -14,29 +15,30 @@ interface RestaurantVisualPickerProps {
   disabled?: boolean;
 }
 
-const labels: Record<RestaurantImageKind, { title: string; hint: string; empty: string }> = {
-  logo: {
-    title: 'Logo du restaurant',
-    hint: 'Carré, JPEG, PNG ou WebP, 2 Mo maximum',
-    empty: 'Ajoutez votre logo',
-  },
-  cover: {
-    title: 'Photo de couverture',
-    hint: 'Format horizontal, JPEG, PNG ou WebP, 2 Mo maximum',
-    empty: 'Ajoutez une photo de couverture',
-  },
-};
-
 export function RestaurantVisualPicker({
   kind,
   currentUrl,
   onChange,
   disabled = false,
 }: RestaurantVisualPickerProps) {
+  const { t } = useTranslation('restaurant');
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentUrl ?? null);
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const label = labels[kind];
+
+  const label = kind === 'logo'
+    ? {
+        title: t('logoTitle'),
+        hint: t('logoHint'),
+        empty: t('logoEmpty'),
+        aria: t('chooseLogoAria'),
+      }
+    : {
+        title: t('coverTitle'),
+        hint: t('coverHint'),
+        empty: t('coverEmpty'),
+        aria: t('chooseCoverAria'),
+      };
 
   useEffect(() => () => {
     if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
@@ -80,7 +82,7 @@ export function RestaurantVisualPicker({
             disabled={disabled}
             className="text-xs text-gray-400 hover:text-white disabled:opacity-50"
           >
-            Supprimer
+            {t('delete')}
           </button>
         )}
       </div>
@@ -106,12 +108,12 @@ export function RestaurantVisualPicker({
           className="sr-only"
           disabled={disabled}
           onChange={(event) => handleFileChange(event.target.files?.[0])}
-          aria-label={`Choisir ${kind === 'logo' ? 'le logo' : 'la photo de couverture'}`}
+          aria-label={label.aria}
         />
       </label>
 
       {previewUrl && (
-        <p className="text-xs text-gray-400">Cliquez sur l’image pour la remplacer.</p>
+        <p className="text-xs text-gray-400">{t('clickToReplaceImage')}</p>
       )}
       {error && <p className="text-sm text-red-400" role="alert">{error}</p>}
     </div>

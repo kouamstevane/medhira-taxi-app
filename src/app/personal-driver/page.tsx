@@ -5,84 +5,79 @@ import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { PERSONAL_DRIVER_PLAN_IDS } from '@/services/personal-driver/plans';
 import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
+import { useTranslation } from '@/hooks/useTranslation';
 import type { PersonalDriverPlan, PersonalDriverPlanId, PersonalDriverWeekday } from '@/types/personal-driver';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { PersonalDriverPlanCard } from './components/PersonalDriverPlanCard';
 
-const benefits = [
-  { icon: 'calendar_month', title: 'Planification 30 jours', text: 'Jours et horaires planifiés à l\'avance sans surprise.' },
-  { icon: 'route', title: 'Transparence totale', text: 'Distance et coût mensuel exact calculés avant confirmation.' },
-  { icon: 'payments', title: 'Meilleurs tarifs', text: 'Comparatif direct entre tarif mensuel et tarif au kilomètre.' },
-  { icon: 'support_agent', title: 'Suivi & Assistance', text: 'Notifications chauffeur et suivi dédié par l\'équipe Medjira.' },
-];
-
 type ChoiceNeed = 'week' | 'weekend' | 'priority';
-
-const WEEKDAY_LABELS: Record<PersonalDriverWeekday, string> = {
-  0: 'Dim.',
-  1: 'Lun.',
-  2: 'Mar.',
-  3: 'Mer.',
-  4: 'Jeu.',
-  5: 'Ven.',
-  6: 'Sam.',
-};
-
 type ComparisonRow = { label: string } & Record<PersonalDriverPlanId, string>;
 
-function formatAmount(amount: number): string {
-  return amount.toLocaleString('fr-FR');
-}
-
-function formatPricePerKm(amount: number): string {
-  return amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function formatWeekdays(weekdays: PersonalDriverWeekday[]): string {
-  return weekdays.map((weekday) => WEEKDAY_LABELS[weekday]).join(', ');
-}
-
-function buildComparisonRows(plans: Record<PersonalDriverPlanId, PersonalDriverPlan>): ComparisonRow[] {
-  return [
-    {
-      label: 'Minimum mensuel',
-      basic: `${formatAmount(plans.basic.minimumAmount)} ${CURRENCY_CODE}`,
-      classic: `${formatAmount(plans.classic.minimumAmount)} ${CURRENCY_CODE}`,
-      premium: `${formatAmount(plans.premium.minimumAmount)} ${CURRENCY_CODE}`,
-    },
-    {
-      label: 'Tarif kilométrique',
-      basic: `${formatPricePerKm(plans.basic.pricePerKm)} ${CURRENCY_CODE} / km`,
-      classic: `${formatPricePerKm(plans.classic.pricePerKm)} ${CURRENCY_CODE} / km`,
-      premium: `${formatPricePerKm(plans.premium.pricePerKm)} ${CURRENCY_CODE} / km`,
-    },
-    {
-      label: 'Jours autorisés',
-      basic: formatWeekdays(plans.basic.allowedWeekdays),
-      classic: formatWeekdays(plans.classic.allowedWeekdays),
-      premium: formatWeekdays(plans.premium.allowedWeekdays),
-    },
-    {
-      label: 'Trajets spéciaux',
-      basic: plans.basic.includedSpecialTrips === 0 ? '0' : `${plans.basic.includedSpecialTrips} inclus`,
-      classic: plans.classic.includedSpecialTrips === 0 ? '0' : `${plans.classic.includedSpecialTrips} inclus`,
-      premium: plans.premium.includedSpecialTrips === 0 ? '0' : `${plans.premium.includedSpecialTrips} inclus`,
-    },
-    {
-      label: 'Attente gratuite',
-      basic: `${plans.basic.includedRegularWaitMinutes} min`,
-      classic: `${plans.classic.includedRegularWaitMinutes} min`,
-      premium: `${plans.premium.includedRegularWaitMinutes} min`,
-    },
-  ];
-}
-
 export default function PersonalDriverPage() {
+  const { t, locale } = useTranslation();
   const { plans, error, reload } = usePersonalDriverPlans();
   const [showComparison, setShowComparison] = useState(false);
   const [showHelper, setShowHelper] = useState(false);
   const [need, setNeed] = useState<ChoiceNeed>('week');
   const [activeTab, setActiveTab] = useState<'all' | 'basic' | 'classic' | 'premium'>('all');
+
+  const numLocale = locale === 'en' ? 'en-US' : 'fr-FR';
+
+  const weekdayLabels: Record<PersonalDriverWeekday, string> = useMemo(() => ({
+    0: t('personalDriver.weekdaySun'),
+    1: t('personalDriver.weekdayMon'),
+    2: t('personalDriver.weekdayTue'),
+    3: t('personalDriver.weekdayWed'),
+    4: t('personalDriver.weekdayThu'),
+    5: t('personalDriver.weekdayFri'),
+    6: t('personalDriver.weekdaySat'),
+  }), [t]);
+
+  const benefits = useMemo(() => [
+    { icon: 'calendar_month', title: t('personalDriver.benefitPlanningTitle'), text: t('personalDriver.benefitPlanningText') },
+    { icon: 'route', title: t('personalDriver.benefitTransparencyTitle'), text: t('personalDriver.benefitTransparencyText') },
+    { icon: 'payments', title: t('personalDriver.benefitRatesTitle'), text: t('personalDriver.benefitRatesText') },
+    { icon: 'support_agent', title: t('personalDriver.benefitSupportTitle'), text: t('personalDriver.benefitSupportText') },
+  ], [t]);
+
+  const comparisonRows = useMemo<ComparisonRow[]>(() => {
+    const formatAmount = (amt: number) => amt.toLocaleString(numLocale);
+    const formatPricePerKm = (amt: number) => amt.toLocaleString(numLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatWeekdays = (wds: PersonalDriverWeekday[]) => wds.map((w) => weekdayLabels[w]).join(', ');
+
+    return [
+      {
+        label: t('personalDriver.comparisonMinMonthly'),
+        basic: `${formatAmount(plans.basic.minimumAmount)} ${CURRENCY_CODE}`,
+        classic: `${formatAmount(plans.classic.minimumAmount)} ${CURRENCY_CODE}`,
+        premium: `${formatAmount(plans.premium.minimumAmount)} ${CURRENCY_CODE}`,
+      },
+      {
+        label: t('personalDriver.comparisonRatePerKm'),
+        basic: `${formatPricePerKm(plans.basic.pricePerKm)} ${CURRENCY_CODE} / km`,
+        classic: `${formatPricePerKm(plans.classic.pricePerKm)} ${CURRENCY_CODE} / km`,
+        premium: `${formatPricePerKm(plans.premium.pricePerKm)} ${CURRENCY_CODE} / km`,
+      },
+      {
+        label: t('personalDriver.comparisonAllowedDays'),
+        basic: formatWeekdays(plans.basic.allowedWeekdays),
+        classic: formatWeekdays(plans.classic.allowedWeekdays),
+        premium: formatWeekdays(plans.premium.allowedWeekdays),
+      },
+      {
+        label: t('personalDriver.comparisonSpecialTrips'),
+        basic: plans.basic.includedSpecialTrips === 0 ? '0' : `${plans.basic.includedSpecialTrips} ${t('personalDriver.includedSuffix')}`,
+        classic: plans.classic.includedSpecialTrips === 0 ? '0' : `${plans.classic.includedSpecialTrips} ${t('personalDriver.includedSuffix')}`,
+        premium: plans.premium.includedSpecialTrips === 0 ? '0' : `${plans.premium.includedSpecialTrips} ${t('personalDriver.includedSuffix')}`,
+      },
+      {
+        label: t('personalDriver.comparisonFreeWait'),
+        basic: `${plans.basic.includedRegularWaitMinutes} min`,
+        classic: `${plans.classic.includedRegularWaitMinutes} min`,
+        premium: `${plans.premium.includedRegularWaitMinutes} min`,
+      },
+    ];
+  }, [plans, numLocale, weekdayLabels, t]);
 
   useEffect(() => {
     if (showHelper || showComparison) {
@@ -102,7 +97,6 @@ export default function PersonalDriverPage() {
   }, [need]);
 
   const recommendedPlan = plans[recommendedPlanId];
-  const comparisonRows = useMemo(() => buildComparisonRows(plans), [plans]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-slate-950 to-background pb-16 text-slate-100 selection:bg-primary selection:text-black">
@@ -112,13 +106,13 @@ export default function PersonalDriverPage() {
           <div className="flex items-center gap-3">
             <Link
               href="/dashboard"
-              aria-label="Retour au tableau de bord"
+              aria-label={t('common.back')}
               className="flex size-11 items-center justify-center rounded-full border border-white/10 bg-card/80 text-white transition-all hover:bg-white/10 active:scale-95"
             >
               <MaterialIcon name="arrow_back" size="md" />
             </Link>
             <div>
-              <h1 className="text-base font-bold text-white leading-tight">Personal Driver</h1>
+              <h1 className="text-base font-bold text-white leading-tight">{t('personalDriver.title')}</h1>
               <p className="text-[11px] font-medium text-slate-400">Medjira Mobility</p>
             </div>
           </div>
@@ -128,7 +122,7 @@ export default function PersonalDriverPage() {
             className="hidden sm:inline-flex min-h-11 items-center gap-1.5 rounded-full bg-primary/20 px-4 py-1.5 text-xs font-bold text-primary border border-primary/30 transition hover:bg-primary/30 active:scale-95"
           >
             <MaterialIcon name="directions_car" size="sm" />
-            <span>Voir les forfaits</span>
+            <span>{t('personalDriver.viewPlans')}</span>
           </Link>
         </div>
       </header>
@@ -136,9 +130,9 @@ export default function PersonalDriverPage() {
       <main className="mx-auto max-w-5xl px-4 py-6 sm:py-10 space-y-10">
         {error && (
           <div role="alert" className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
-            Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
+            {t('personalDriver.fallbackNotice')}
             <button type="button" onClick={() => void reload()} className="ml-3 inline-flex min-h-11 items-center font-bold underline underline-offset-4">
-              Réessayer
+              {t('personalDriver.retry')}
             </button>
           </div>
         )}
@@ -151,16 +145,15 @@ export default function PersonalDriverPage() {
             <div>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 border border-primary/30 px-3.5 py-1 text-[11px] font-extrabold uppercase tracking-wider text-primary">
                 <MaterialIcon name="verified" size="sm" className="text-[14px] text-primary" />
-                Transport Régulier & Sur Mesure
+                {t('personalDriver.regularTailoredBadge')}
               </span>
               
               <h2 className="mt-3 text-3xl font-black leading-tight tracking-tight text-white sm:text-4xl lg:text-5xl">
-                MEDJIRA PERSONAL DRIVER
+                {t('personalDriver.brandHeroTitle')}
               </h2>
               
               <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base">
-                Votre service de chauffeur dédié pour vos trajets récurrents (travail, école, famille). 
-                Profitez d&apos;un budget mensuel maîtrisé sans mauvaise surprise.
+                {t('personalDriver.heroDescription')}
               </p>
 
               <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -169,7 +162,7 @@ export default function PersonalDriverPage() {
                   className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-primary px-6 text-sm font-extrabold text-black shadow-lg shadow-primary/25 transition-all hover:brightness-110 active:scale-95"
                 >
                   <MaterialIcon name="arrow_downward" size="sm" />
-                  Commencer
+                  {t('personalDriver.getStarted')}
                 </Link>
                 
                 <button
@@ -182,7 +175,7 @@ export default function PersonalDriverPage() {
                   }`}
                 >
                   <MaterialIcon name="compare_arrows" size="sm" />
-                  Comparer les forfaits
+                  {t('personalDriver.comparePlans')}
                 </button>
                 
                 <button
@@ -191,7 +184,7 @@ export default function PersonalDriverPage() {
                   className="inline-flex min-h-12 items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-5 text-sm font-bold text-slate-200 transition-all hover:bg-white/10 active:scale-95"
                 >
                   <MaterialIcon name="psychology" size="sm" className="text-amber-400" />
-                  Aidez-moi à choisir
+                  {t('personalDriver.helpMeChoose')}
                 </button>
               </div>
             </div>
@@ -235,27 +228,27 @@ export default function PersonalDriverPage() {
                     <MaterialIcon name="psychology" size="md" />
                   </div>
                   <div>
-                    <h3 id="helper-title" className="text-base font-bold text-white">Assistant de Choix</h3>
-                    <p className="text-xs text-slate-400">Trouvez la formule idéale en 1 clic</p>
+                    <h3 id="helper-title" className="text-base font-bold text-white">{t('personalDriver.helperTitle')}</h3>
+                    <p className="text-xs text-slate-400">{t('personalDriver.helperSubtitle')}</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowHelper(false)}
                   className="flex size-11 items-center justify-center rounded-full bg-white/10 text-slate-300 transition-all hover:bg-white/20 active:scale-95"
-                  aria-label="Fermer la fenêtre d'aide"
+                  aria-label={t('common.close')}
                 >
                   <MaterialIcon name="close" size="sm" />
                 </button>
               </div>
 
               <div className="mt-5 space-y-4">
-                <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Quel est votre besoin principal ?</p>
+                <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">{t('personalDriver.helperQuestion')}</p>
                 <div className="grid gap-2 sm:grid-cols-3">
                   {[
-                    { id: 'week', label: 'Semaine uniquement', icon: 'work' },
-                    { id: 'weekend', label: 'Inclure le week-end', icon: 'weekend' },
-                    { id: 'priority', label: 'Service prioritaire', icon: 'bolt' },
+                    { id: 'week', label: t('personalDriver.helperOptionWeek'), icon: 'work' },
+                    { id: 'weekend', label: t('personalDriver.helperOptionWeekend'), icon: 'weekend' },
+                    { id: 'priority', label: t('personalDriver.helperOptionPriority'), icon: 'bolt' },
                   ].map((option) => (
                     <button
                       key={option.id}
@@ -275,8 +268,8 @@ export default function PersonalDriverPage() {
 
                 <div className="mt-6 rounded-2xl border border-primary/40 bg-gradient-to-br from-primary/20 to-primary/5 p-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary">Recommandation personnalisée</span>
-                    <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-primary">Idéal pour vous</span>
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary">{t('personalDriver.helperRecommendation')}</span>
+                    <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-primary">{t('personalDriver.helperIdealBadge')}</span>
                   </div>
                   
                   <h4 className="mt-2 text-xl font-black text-white">{recommendedPlan.name}</h4>
@@ -284,9 +277,9 @@ export default function PersonalDriverPage() {
                   
                   <div className="mt-4 flex items-center justify-between pt-3 border-t border-white/10">
                     <div>
-                      <span className="text-xs text-slate-400">À partir de </span>
-                      <span className="text-lg font-black text-white">{recommendedPlan.minimumAmount} {CURRENCY_CODE}</span>
-                      <span className="text-xs text-slate-400"> / mois</span>
+                      <span className="text-xs text-slate-400">{t('personalDriver.startingFrom')} </span>
+                      <span className="text-lg font-black text-white">{recommendedPlan.minimumAmount.toLocaleString(numLocale)} {CURRENCY_CODE}</span>
+                      <span className="text-xs text-slate-400"> {t('personalDriver.perMonth')}</span>
                     </div>
                     
                     <Link
@@ -294,7 +287,7 @@ export default function PersonalDriverPage() {
                       onClick={() => setShowHelper(false)}
                       className="inline-flex min-h-11 items-center gap-1.5 rounded-xl bg-primary px-4 text-xs font-extrabold text-black transition hover:brightness-110 active:scale-95"
                     >
-                      <span>Configurer {recommendedPlan.name}</span>
+                      <span>{t('personalDriver.helperConfigure', { plan: recommendedPlan.name })}</span>
                       <MaterialIcon name="arrow_forward" size="sm" />
                     </Link>
                   </div>
@@ -323,15 +316,15 @@ export default function PersonalDriverPage() {
                     <MaterialIcon name="compare_arrows" size="md" />
                   </div>
                   <div>
-                    <h3 id="comparison-title" className="text-base font-bold text-white">Tableau comparatif détaillé</h3>
-                    <p className="text-xs text-slate-400">Comparez toutes les caractéristiques de nos offres</p>
+                    <h3 id="comparison-title" className="text-base font-bold text-white">{t('personalDriver.comparisonTitle')}</h3>
+                    <p className="text-xs text-slate-400">{t('personalDriver.comparisonSubtitle')}</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowComparison(false)}
                   className="flex size-11 items-center justify-center rounded-full bg-white/10 text-slate-300 transition-all hover:bg-white/20 active:scale-95"
-                  aria-label="Fermer le tableau comparatif"
+                  aria-label={t('common.close')}
                 >
                   <MaterialIcon name="close" size="sm" />
                 </button>
@@ -348,7 +341,7 @@ export default function PersonalDriverPage() {
                       activeTab === tab ? 'bg-primary text-black shadow' : 'text-slate-400'
                     }`}
                   >
-                    {tab === 'all' ? 'Tous' : tab}
+                    {tab === 'all' ? t('personalDriver.comparisonAllTabs') : tab}
                   </button>
                 ))}
               </div>
@@ -357,7 +350,7 @@ export default function PersonalDriverPage() {
                 <table className="w-full text-left text-xs sm:text-sm">
                   <thead className="bg-white/5 text-[11px] uppercase tracking-wider text-slate-400">
                     <tr>
-                      <th scope="col" className="px-4 py-3 font-semibold">Critère</th>
+                      <th scope="col" className="px-4 py-3 font-semibold">{t('personalDriver.comparisonCriterion')}</th>
                       {(activeTab === 'all' || activeTab === 'basic') && <th scope="col" className="px-4 py-3 font-semibold text-slate-200">{plans.basic.name}</th>}
                       {(activeTab === 'all' || activeTab === 'classic') && (
                         <th scope="col" className="px-4 py-3 font-semibold text-slate-200">
@@ -392,10 +385,10 @@ export default function PersonalDriverPage() {
         {/* Formules section */}
         <section id="forfaits" aria-labelledby="plan-heading" className="space-y-6 pt-4">
           <div className="text-center max-w-xl mx-auto space-y-2">
-            <span className="text-xs font-extrabold uppercase tracking-widest text-primary">Offres & Forfaits</span>
-            <h2 id="plan-heading" className="text-2xl font-black text-white sm:text-3xl">Choisissez votre formule</h2>
+            <span className="text-xs font-extrabold uppercase tracking-widest text-primary">{t('personalDriver.offersSectionTitle')}</span>
+            <h2 id="plan-heading" className="text-2xl font-black text-white sm:text-3xl">{t('personalDriver.chooseFormulaTitle')}</h2>
             <p className="text-xs sm:text-sm text-slate-400">
-              Chaque forfait s&apos;adapte à vos horaires. Le tarif exact est ajusté dynamiquement selon la distance mensuelle.
+              {t('personalDriver.chooseFormulaSubtitle')}
             </p>
           </div>
 

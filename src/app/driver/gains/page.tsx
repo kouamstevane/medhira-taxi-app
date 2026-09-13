@@ -8,10 +8,13 @@ import { collection, query, where, orderBy, limit, getDocs } from 'firebase/fire
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import { formatCurrencyWithCode, formatFirestoreDate } from '@/utils/format';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { type TripRecord } from '../_shared';
 
 export default function DriverGainsPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [trips, setTrips] = useState<TripRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,21 +62,26 @@ export default function DriverGainsPage() {
   return (
     <div className="min-h-screen bg-background pb-24">
       <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center gap-3">
-        <button onClick={() => router.back()} className="p-2 rounded-full hover:bg-white/5 transition">
+        <button
+          onClick={() => router.back()}
+          aria-label={t('common.back')}
+          className="p-2 rounded-full hover:bg-white/5 transition min-h-[44px] min-w-[44px] flex items-center justify-center"
+        >
           <MaterialIcon name="arrow_back" size="md" className="text-white" />
         </button>
-        <h1 className="text-xl font-bold text-white flex-1">Mes gains</h1>
+        <h1 className="text-xl font-bold text-white flex-1">{t('driver.myEarnings')}</h1>
+        <LanguageSelector variant="pill" />
       </header>
 
       <main className="max-w-[430px] mx-auto px-4 py-6 space-y-6">
         {/* Stats cards */}
         <div className="grid grid-cols-2 gap-4">
           <div className="glass-card p-4 rounded-2xl border border-white/5">
-            <p className="text-xs text-slate-400 mb-1">Aujourd'hui</p>
+            <p className="text-xs text-slate-400 mb-1">{t('common.today')}</p>
             <p className="text-2xl font-black text-primary">{formatCurrencyWithCode(todayGains)}</p>
           </div>
           <div className="glass-card p-4 rounded-2xl border border-white/5">
-            <p className="text-xs text-slate-400 mb-1">Total ({trips.length} courses)</p>
+            <p className="text-xs text-slate-400 mb-1">{t('driver.totalTripsCount', { count: trips.length })}</p>
             <p className="text-2xl font-black text-white">{formatCurrencyWithCode(totalGains)}</p>
           </div>
         </div>
@@ -88,12 +96,12 @@ export default function DriverGainsPage() {
             <div className="bg-primary/10 p-5 rounded-full w-fit mx-auto mb-4">
               <MaterialIcon name="payments" size="xl" className="text-primary" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">Aucun gain</h3>
-            <p className="text-slate-400 text-sm">Vos gains apparaîtront ici après vos premières courses.</p>
+            <h3 className="text-lg font-bold text-white mb-2">{t('driver.noEarnings')}</h3>
+            <p className="text-slate-400 text-sm">{t('driver.noEarningsDesc')}</p>
           </div>
         ) : (
           <div className="space-y-3">
-            <h2 className="text-base font-bold text-white">Détail des courses</h2>
+            <h2 className="text-base font-bold text-white">{t('driver.tripsBreakdown')}</h2>
             {trips.map(trip => (
               <div key={trip.id} className="glass-card p-4 rounded-2xl border border-white/5 flex items-center gap-4">
                 <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">

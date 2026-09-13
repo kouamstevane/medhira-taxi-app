@@ -22,6 +22,8 @@ import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { ConversationLauncher } from '@/components/ConversationLauncher';
 import type { ConversationContext } from '@/types/conversation';
 import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { OrderRejectionDialog } from './OrderRejectionDialog';
 import {
   getRestaurantOrderFilterClassName,
@@ -43,6 +45,7 @@ export default function OrdersManagementClient() {
   const searchParams = useSearchParams();
   const id = searchParams.get('restaurantId')?.trim() || null;
   const { showError, showSuccess, toasts, removeToast } = useToast();
+  const { t } = useTranslation('restaurant');
   const [loading, setLoading] = useState(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [orders, setOrders] = useState<FoodOrder[]>([]);
@@ -105,7 +108,7 @@ export default function OrdersManagementClient() {
             ) {
               setIsNetworkError(true);
             }
-            showError("Erreur lors du chargement des commandes");
+            showError(t('ordersLoadError'));
             setLoading(false);
           },
         );
@@ -118,7 +121,7 @@ export default function OrdersManagementClient() {
         ) {
           setIsNetworkError(true);
         }
-        showError("Erreur lors du chargement des commandes");
+        showError(t('ordersLoadError'));
         setLoading(false);
       }
     });
@@ -127,7 +130,7 @@ export default function OrdersManagementClient() {
       unsubscribeOrders?.();
       unsubscribe();
     };
-  }, [id, router, showError, refreshKey]);
+  }, [id, router, showError, refreshKey, t]);
 
   const loadHistoryPage = async (reset = false, dateKey = selectedHistoryDate) => {
     if (!id || historyLoading) return;
@@ -153,7 +156,7 @@ export default function OrdersManagementClient() {
       ) {
         setIsNetworkError(true);
       }
-      showError("Erreur lors du chargement de l'historique");
+      showError(t('historyLoadError'));
     } finally {
       setHistoryLoading(false);
     }
@@ -196,10 +199,10 @@ export default function OrdersManagementClient() {
     try {
       await FoodDeliveryService.updateFoodOrderStatus(orderId, status);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-      showSuccess(`Commande mise à jour : ${getRestaurantOrderStatusLabel(status)}`);
+      showSuccess(t('orderUpdatedSuccess', { status: getRestaurantOrderStatusLabel(status) }));
       return true;
     } catch {
-      showError("Erreur lors de la mise à jour");
+      showError(t('updateError'));
       return false;
     }
   };
@@ -241,16 +244,16 @@ export default function OrdersManagementClient() {
           <button
             onClick={() => router.push(id ? getRestaurantPortalPath(id) : '/restaurant/dashboard')}
             className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Retour"
+            aria-label={t('back')}
           >
             <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
           </button>
-          <h1 className="text-xl font-bold text-white">Commandes</h1>
-          <div className="w-10"></div>
+          <h1 className="text-xl font-bold text-white">{t('ordersTitle')}</h1>
+          <LanguageSelector variant="compact" />
         </header>
         <div className="flex-1 flex items-center justify-center p-4">
           <NetworkErrorView
-            message="Impossible de charger les informations du restaurant. Veuillez vérifier votre connexion internet et réessayer."
+            message={t('networkErrorRestoInfo')}
             onRetry={recharger}
           />
         </div>
@@ -288,22 +291,25 @@ export default function OrdersManagementClient() {
           <button
             onClick={() => router.push(getRestaurantPortalPath(id))}
             className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label="Retour"
+            aria-label={t('back')}
           >
             <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-white">Commandes</h1>
+            <h1 className="text-xl font-bold text-white">{t('ordersTitle')}</h1>
             <p className="text-xs text-slate-500">
-              {viewMode === 'history' ? `${historyOrders.length}${historyHasMore ? '+' : ''} commandes chargées` : `${orders.length} commandes en cours`}
+              {viewMode === 'history'
+                ? t('ordersLoaded', { count: historyOrders.length, hasMore: historyHasMore ? '+' : '' })
+                : t('ordersInProgress', { count: orders.length })}
             </p>
           </div>
         </div>
+        <LanguageSelector variant="compact" />
       </header>
 
       <main className="mx-auto max-w-5xl p-4 sm:p-8">
-        <section className="mb-6 space-y-3" aria-label="Filtrer les commandes par statut">
-          <div role="tablist" aria-label="Vue des commandes" className="flex gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-1">
+        <section className="mb-6 space-y-3" aria-label={t('filterOrdersByStatus')}>
+          <div role="tablist" aria-label={t('viewOrdersRole')} className="flex gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-1">
             <button
               type="button"
               role="tab"
@@ -311,7 +317,7 @@ export default function OrdersManagementClient() {
               onClick={openActiveOrders}
               className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition min-h-[44px] flex items-center justify-center ${viewMode === 'active' ? 'bg-primary text-[#1a1305]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
             >
-              En cours <span className="ml-1 text-xs opacity-75">{orders.length}</span>
+              {t('activeOrdersTab')} <span className="ml-1 text-xs opacity-75">{orders.length}</span>
             </button>
             <button
               type="button"
@@ -320,17 +326,17 @@ export default function OrdersManagementClient() {
               onClick={openHistory}
               className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition min-h-[44px] flex items-center justify-center ${viewMode === 'history' ? 'bg-primary text-[#1a1305]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
             >
-              Historique <span className="ml-1 text-xs opacity-75">{historyOrders.length}{historyHasMore ? '+' : ''}</span>
+              {t('historyOrdersTab')} <span className="ml-1 text-xs opacity-75">{historyOrders.length}{historyHasMore ? '+' : ''}</span>
             </button>
           </div>
           {viewMode === 'history' && (
             <div className="flex flex-col gap-2 rounded-xl border border-white/5 bg-white/[0.02] p-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Historique du jour</p>
-                <p className="mt-0.5 text-xs text-slate-400">Sélectionnez une date pour retrouver les commandes terminées.</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{t('todayHistory')}</p>
+                <p className="mt-0.5 text-xs text-slate-400">{t('todayHistoryDesc')}</p>
               </div>
               <input
-                aria-label="Date de l'historique"
+                aria-label={t('historyDate')}
                 type="date"
                 value={selectedHistoryDate}
                 max={getRestaurantHistoryDateKey()}
@@ -343,7 +349,7 @@ export default function OrdersManagementClient() {
             </div>
           )}
           <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
-            <div role="group" aria-label="Filtrer par étape" className="flex min-w-max gap-2">
+            <div role="group" aria-label={t('filterByStage')} className="flex min-w-max gap-2">
               {visibleFilterGroups.map((group) => (
                 <button
                   key={group}
@@ -367,20 +373,25 @@ export default function OrdersManagementClient() {
 
         <div className="mb-3 flex items-center justify-between gap-3">
           <p aria-live="polite" className="text-sm font-semibold text-slate-300">
-            {filteredOrders.length} commande{filteredOrders.length !== 1 ? 's' : ''} affichée{filteredOrders.length !== 1 ? 's' : ''}
+            {t('ordersDisplayed', {
+              count: filteredOrders.length,
+              plural: filteredOrders.length !== 1 ? 's' : '',
+            })}
           </p>
-          <p className="hidden text-xs text-slate-500 sm:block">Filtre : {activeFilterLabel}</p>
+          <p className="hidden text-xs text-slate-500 sm:block">
+            {t('filterActiveLabel', { label: activeFilterLabel })}
+          </p>
         </div>
 
         <div className="space-y-3">
           {viewMode === 'history' && historyLoading && historyOrders.length === 0 && (
-            <div className="py-16 text-center text-sm text-slate-400">Chargement de l'historique…</div>
+            <div className="py-16 text-center text-sm text-slate-400">{t('historyLoadingState')}</div>
           )}
 
           {isNetworkError && (viewMode === 'active' ? orders.length === 0 : historyOrders.length === 0) ? (
             <div className="py-12">
               <NetworkErrorView
-                message="Impossible de charger les commandes. Veuillez vérifier votre connexion internet et réessayer."
+                message={t('ordersNetworkError')}
                 onRetry={recharger}
               />
             </div>
@@ -397,7 +408,9 @@ export default function OrdersManagementClient() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <h3 className="break-words text-sm font-bold text-white sm:text-base">Commande #{order.id.slice(-5).toUpperCase()}</h3>
+                            <h3 className="break-words text-sm font-bold text-white sm:text-base">
+                              {t('orderTitleNum', { id: order.id.slice(-5).toUpperCase() })}
+                            </h3>
                             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getRestaurantOrderStatusTone(order.status).colorClassName}`}>
                               {getRestaurantOrderStatusLabel(order.status)}
                             </span>
@@ -408,7 +421,7 @@ export default function OrdersManagementClient() {
                         </div>
                       </div>
                       <div className="shrink-0 text-left sm:text-right">
-                        <p className="text-[11px] text-slate-500">Total</p>
+                        <p className="text-[11px] text-slate-500">{t('total')}</p>
                         <p className="text-sm font-bold text-primary">{formatCurrencyWithCode(order.totalOrderPrice)}</p>
                       </div>
                     </header>
@@ -416,8 +429,8 @@ export default function OrdersManagementClient() {
                     {(order.status === 'confirmed' || order.status === 'accepted' || order.status === 'preparing' || RESTAURANT_REJECTABLE_STATUSES.includes(order.status)) && (
                       <div className="flex flex-col gap-2 bg-primary/[0.03] p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Prochaine action</p>
-                          <p className="mt-0.5 text-xs text-slate-300">Faites progresser cette commande ou refusez-la.</p>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t('nextAction')}</p>
+                          <p className="mt-0.5 text-xs text-slate-300">{t('nextActionDesc')}</p>
                         </div>
                         <div className="flex w-full gap-2 sm:w-auto sm:justify-end">
                           {order.status === 'confirmed' && (
@@ -425,8 +438,8 @@ export default function OrdersManagementClient() {
                               onClick={() => updateOrderStatus(order.id, 'accepted')}
                               className="h-11 min-h-[44px] flex-1 rounded-lg bg-primary px-3 text-xs font-bold text-white sm:flex-none sm:px-4 sm:text-sm"
                             >
-                              <span className="sm:hidden">Accepter</span>
-                              <span className="hidden sm:inline">Accepter la commande</span>
+                              <span className="sm:hidden">{t('accept')}</span>
+                              <span className="hidden sm:inline">{t('acceptOrder')}</span>
                             </button>
                           )}
                           {order.status === 'accepted' && (
@@ -434,7 +447,7 @@ export default function OrdersManagementClient() {
                               onClick={() => updateOrderStatus(order.id, 'preparing')}
                               className="h-11 min-h-[44px] flex-1 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 text-xs font-bold text-blue-400 transition hover:bg-blue-500/20 sm:flex-none sm:px-4 sm:text-sm"
                             >
-                              Préparer
+                              {t('prepare')}
                             </button>
                           )}
                           {order.status === 'preparing' && (
@@ -442,7 +455,7 @@ export default function OrdersManagementClient() {
                               onClick={() => updateOrderStatus(order.id, 'ready')}
                               className="h-11 min-h-[44px] flex-1 rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 text-xs font-bold text-blue-400 transition hover:bg-blue-500/20 sm:flex-none sm:px-4 sm:text-sm"
                             >
-                              Marquer prête
+                              {t('markReady')}
                             </button>
                           )}
                           {RESTAURANT_REJECTABLE_STATUSES.includes(order.status) && (
@@ -450,7 +463,7 @@ export default function OrdersManagementClient() {
                               onClick={() => setRejectionOrder(order)}
                               className="h-11 min-h-[44px] flex-1 rounded-lg border border-destructive/20 bg-destructive/10 px-3 text-xs font-bold text-destructive transition hover:bg-destructive/20 sm:flex-none sm:px-4 sm:text-sm"
                             >
-                              Refuser
+                              {t('refuseOrder')}
                             </button>
                           )}
                         </div>
@@ -465,7 +478,12 @@ export default function OrdersManagementClient() {
                         onClick={() => toggleOrderDetails(order.id)}
                         className="flex w-full items-center justify-between gap-3 rounded-lg bg-white/5 px-3 py-2 text-left text-xs font-semibold text-slate-200 transition hover:bg-white/10 min-h-[44px]"
                       >
-                        <span>{order.orderItems.length} {order.orderItems.length > 1 ? 'articles' : 'article'} · Voir les détails</span>
+                        <span>
+                          {t('viewDetailsItems', {
+                            count: order.orderItems.length,
+                            items: order.orderItems.length > 1 ? t('articlePlural') : t('articleSingular'),
+                          })}
+                        </span>
                         <MaterialIcon name={expandedOrderIds.has(order.id) ? 'expand_less' : 'expand_more'} size="md" className="shrink-0 text-primary" />
                       </button>
                     </div>
@@ -476,7 +494,7 @@ export default function OrdersManagementClient() {
                     >
                       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
                         <div>
-                          <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Articles commandés</h4>
+                          <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">{t('orderedItems')}</h4>
                           <div className="divide-y divide-white/5 rounded-lg border border-white/5 bg-white/5">
                             {order.orderItems.map((item, idx) => (
                               <div key={idx} className="flex items-center justify-between p-2.5 text-xs sm:text-sm">
@@ -496,14 +514,14 @@ export default function OrdersManagementClient() {
 
                         <aside className="space-y-3 border-t border-white/5 pt-3 lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
                           <div>
-                            <h4 className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Client</h4>
+                            <h4 className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">{t('client')}</h4>
                             <div className="flex items-center justify-between gap-2 rounded-lg border border-white/5 bg-white/5 p-2">
                               <div className="flex min-w-0 items-center gap-2">
                                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                                   <MaterialIcon name="person" size="sm" />
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="break-words text-sm font-semibold text-white">{order.customerName || 'Client'}</p>
+                                  <p className="break-words text-sm font-semibold text-white">{order.customerName || t('client')}</p>
                                 </div>
                               </div>
                               {currentUserUid && restaurant && (
@@ -513,7 +531,7 @@ export default function OrdersManagementClient() {
                                     type: 'food',
                                     entityId: order.id,
                                     participantA: { uid: currentUserUid, name: restaurant.name, role: 'restaurant' },
-                                    participantB: { uid: order.userId, name: order.customerName || 'Client', role: 'client' },
+                                    participantB: { uid: order.userId, name: order.customerName || t('client'), role: 'client' },
                                   } as ConversationContext}
                                   currentUserUid={currentUserUid}
                                   variant="icon-only"
@@ -523,7 +541,7 @@ export default function OrdersManagementClient() {
                           </div>
 
                           <section aria-labelledby={`order-${order.id}-delivery`}>
-                            <h4 id={`order-${order.id}-delivery`} className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Livraison</h4>
+                            <h4 id={`order-${order.id}-delivery`} className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">{t('deliveryTitle')}</h4>
                             <div className="rounded-lg border border-white/5 bg-white/5 p-2">
                               <p className="break-words text-xs text-slate-300">{order.deliveryAddress}</p>
                             </div>
@@ -532,15 +550,15 @@ export default function OrdersManagementClient() {
                           {currentUserUid && restaurant && order.driverId && (
                             <div className="flex items-center justify-between gap-2 rounded-lg bg-white/5 p-2">
                               <div className="min-w-0">
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Livreur</p>
-                                <p className="truncate text-xs text-slate-300">{order.driverName || 'Livreur'}</p>
+                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{t('driver')}</p>
+                                <p className="truncate text-xs text-slate-300">{order.driverName || t('driver')}</p>
                               </div>
                               <ConversationLauncher
                                 context={{
                                   type: 'food',
                                   entityId: order.id,
                                   participantA: { uid: currentUserUid, name: restaurant.name, role: 'restaurant' },
-                                  participantB: { uid: order.driverId, name: order.driverName || 'Livreur', role: 'livreur' },
+                                  participantB: { uid: order.driverId, name: order.driverName || t('driver'), role: 'livreur' },
                                 } as ConversationContext}
                                 currentUserUid={currentUserUid}
                                 variant="icon-label"
@@ -560,7 +578,7 @@ export default function OrdersManagementClient() {
                   disabled={historyLoading}
                   className="mx-auto block rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-primary/40 hover:bg-white/10 disabled:cursor-wait disabled:opacity-60 min-h-[44px]"
                 >
-                  {historyLoading ? 'Chargement…' : 'Charger 25 autres commandes'}
+                  {historyLoading ? t('loadingMore') : t('loadMoreOrdersCount')}
                 </button>
               )}
 
@@ -569,7 +587,9 @@ export default function OrdersManagementClient() {
                   <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/5">
                     <MaterialIcon name="shopping_bag" size="xl" className="text-slate-500" />
                   </div>
-                  <p className="text-slate-400">Aucune commande dans « {activeFilterLabel} ».</p>
+                  <p className="text-slate-400">
+                    {t('noOrdersInFilter', { filter: activeFilterLabel })}
+                  </p>
                 </div>
               )}
             </>

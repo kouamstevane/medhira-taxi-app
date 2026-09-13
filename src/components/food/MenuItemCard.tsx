@@ -5,6 +5,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { MenuItem, Restaurant } from '@/types/food-delivery';
 import { useCartStore } from '@/store/cartStore';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface MenuItemCardProps {
   item: MenuItem;
@@ -12,6 +13,7 @@ interface MenuItemCardProps {
 }
 
 export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, restaurant }) => {
+  const { t } = useTranslation('food');
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const { items, addItem, addCustomizedItem, updateQuantity } = useCartStore();
 
@@ -99,27 +101,27 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, restaurant }) 
             <div className="mt-3 flex justify-end items-center gap-3">
               {hasCustomizedSelections ? (
                 <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                  {totalItemQuantity} au panier
+                  {t('inCart', { count: totalItemQuantity })}
                 </span>
               ) : null}
 
               {!item.isAvailable ? (
-                <span className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-1 rounded">Épuisé</span>
+                <span className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-1 rounded">{t('soldOut')}</span>
               ) : quantity === 0 || hasCustomizedSelections ? (
                 <button
                   onClick={handleOpenDetails}
                   className="flex items-center gap-1 bg-white/10 hover:bg-white/20 text-white text-sm font-medium px-3 py-1.5 rounded-full transition-colors"
-                  aria-label={`Ajouter ${item.name} au panier`}
+                  aria-label={t('addItemNamed', { name: item.name })}
                 >
                   <MaterialIcon name="add" size="sm" />
-                  <span>{hasCustomizedSelections ? 'Personnaliser' : 'Ajouter'}</span>
+                  <span>{hasCustomizedSelections ? t('customize') : t('add')}</span>
                 </button>
               ) : (
                 <div className="flex items-center border border-white/10 rounded-full bg-white/5 overflow-hidden">
                   <button
                     onClick={handleDecrement}
                     className="p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
-                    aria-label="Diminuer la quantité"
+                    aria-label={t('decreaseQuantity')}
                   >
                     <MaterialIcon name="remove" size="sm" />
                   </button>
@@ -129,7 +131,7 @@ export const MenuItemCard: React.FC<MenuItemCardProps> = ({ item, restaurant }) 
                   <button
                     onClick={handleIncrement}
                     className="p-1.5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
-                    aria-label="Augmenter la quantité"
+                    aria-label={t('increaseQuantity')}
                   >
                     <MaterialIcon name="add" size="sm" />
                   </button>

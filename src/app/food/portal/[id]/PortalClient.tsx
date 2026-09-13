@@ -17,8 +17,10 @@ import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { RestaurantPortalPayoutBanner } from '@/components/restaurant/RestaurantPortalPayoutBanner';
 import { RestaurantPortalHeader } from './RestaurantPortalHeader';
 import { getRestaurantPortalPath } from '../restaurant-portal-paths';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function PortalClient() {
+  const { t } = useTranslation('restaurant');
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('restaurantId')?.trim() || null;
@@ -50,13 +52,13 @@ export default function PortalClient() {
       try {
         const res = await FoodDeliveryService.getRestaurantById(id);
         if (!res) {
-          showError("Restaurant introuvable");
+          showError(t('restaurantNotFound'));
           router.push('/dashboard');
           return;
         }
 
         if (res.ownerId !== user.uid) {
-          showError("Accès non autorisé");
+          showError(t('unauthorizedAccess'));
           router.push('/dashboard');
           return;
         }
@@ -93,14 +95,14 @@ export default function PortalClient() {
 
       } catch (error) {
         console.error("Error loading portal:", error);
-        showError("Erreur lors du chargement des données");
+        showError(t('dataLoadError'));
       } finally {
         setLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [id, router, showError]);
+  }, [id, router, showError, t]);
 
   if (loading) {
     return (
@@ -132,7 +134,7 @@ export default function PortalClient() {
           <div className="mb-8 p-4 bg-primary/10 border border-primary/20 rounded-2xl flex items-center gap-4 animate-pulse">
             <MaterialIcon name="error" size="lg" className="text-primary shrink-0" />
             <p className="text-sm text-primary font-medium">
-              Votre restaurant est en attente de validation. Certaines fonctionnalités seront limitées tant que l'administration n'aura pas approuvé votre compte.
+              {t('pendingValidationAlert')}
             </p>
           </div>
         )}
@@ -148,7 +150,7 @@ export default function PortalClient() {
             <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center mb-4">
               <MaterialIcon name="inventory_2" size="md" className="text-blue-400" />
             </div>
-            <p className="text-sm text-slate-400 font-medium mb-1">Commandes aujourd'hui</p>
+            <p className="text-sm text-slate-400 font-medium mb-1">{t('todayOrders')}</p>
             <h3 className="text-2xl font-bold text-white">{stats.todayOrders}</h3>
           </div>
 
@@ -156,7 +158,7 @@ export default function PortalClient() {
             <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
               <MaterialIcon name="schedule" size="md" className="text-primary" />
             </div>
-            <p className="text-sm text-slate-400 font-medium mb-1">En cours</p>
+            <p className="text-sm text-slate-400 font-medium mb-1">{t('inProgress')}</p>
             <h3 className="text-2xl font-bold text-primary">{stats.pendingOrders}</h3>
           </div>
 
@@ -164,7 +166,7 @@ export default function PortalClient() {
             <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center mb-4">
               <MaterialIcon name="trending_up" size="md" className="text-green-400" />
             </div>
-            <p className="text-sm text-slate-400 font-medium mb-1">Chiffre d'aff. (Aujourd'hui)</p>
+            <p className="text-sm text-slate-400 font-medium mb-1">{t('todayRevenue')}</p>
             <h3 className="text-2xl font-bold text-white">{formatCurrencyWithCode(stats.todayRevenue)}</h3>
           </div>
 
@@ -172,7 +174,7 @@ export default function PortalClient() {
             <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center mb-4">
               <MaterialIcon name="check_circle" size="md" className="text-yellow-400" />
             </div>
-            <p className="text-sm text-slate-400 font-medium mb-1">Note moyenne</p>
+            <p className="text-sm text-slate-400 font-medium mb-1">{t('avgRating')}</p>
             <h3 className="text-2xl font-bold text-white">{stats.avgRating.toFixed(1)} / 5</h3>
           </div>
         </div>
@@ -192,8 +194,8 @@ export default function PortalClient() {
                   </div>
                   <MaterialIcon name="arrow_forward" size="md" className="text-slate-500 group-hover:translate-x-1 transition" />
                 </div>
-                <h4 className="text-xl font-bold text-white mb-2">Gérer le Menu</h4>
-                <p className="text-slate-400 text-sm">Ajoutez des plats, modifiez les prix et gérez les disponibilités en temps réel.</p>
+                <h4 className="text-xl font-bold text-white mb-2">{t('manageMenu')}</h4>
+                <p className="text-slate-400 text-sm">{t('manageMenuDesc')}</p>
               </div>
 
               <div
@@ -206,8 +208,8 @@ export default function PortalClient() {
                   </div>
                   <MaterialIcon name="arrow_forward" size="md" className="text-slate-500 group-hover:translate-x-1 transition" />
                 </div>
-                <h4 className="text-xl font-bold text-white mb-2">Commandes</h4>
-                <p className="text-slate-400 text-sm">Suivez les commandes actives, changez les statuts et consultez l'historique.</p>
+                <h4 className="text-xl font-bold text-white mb-2">{t('viewOrders')}</h4>
+                <p className="text-slate-400 text-sm">{t('viewOrdersDesc')}</p>
               </div>
             </div>
 
@@ -218,30 +220,30 @@ export default function PortalClient() {
             <div className="glass-card p-6 rounded-3xl border border-white/5">
               <h3 className="font-bold text-white mb-6 flex items-center gap-2">
                 <MaterialIcon name="settings" size="md" className="text-slate-400" />
-                Gérer le Point de Vente
+                {t('managePOS')}
               </h3>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-slate-300">Ouvert actuellement</span>
+                  <span className="text-sm font-medium text-slate-300">{t('openNow')}</span>
                   <span className={`rounded-full px-3 py-1 text-xs font-bold ${isRestaurantOpen ? 'bg-green-500/15 text-green-400' : 'bg-slate-600/30 text-slate-400'}`}>
-                    {isRestaurantOpen ? 'Oui' : 'Non'}
+                    {isRestaurantOpen ? t('yes') : t('no')}
                   </span>
                 </div>
                 <div className="h-px bg-white/5"></div>
                 <div>
-                  <p className="text-xs text-slate-500 mb-2">Horaires aujourd'hui</p>
+                  <p className="text-xs text-slate-500 mb-2">{t('openingHoursToday')}</p>
                   <p className="text-sm font-bold text-slate-300">
-                    {todayHours.closed ? 'Fermé aujourd’hui' : `${todayHours.open} – ${todayHours.close}`}
+                    {todayHours.closed ? t('closedToday') : `${todayHours.open} – ${todayHours.close}`}
                   </p>
                   <Link
                     href={getRestaurantPortalPath(id, 'settings')}
                     className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
                   >
-                    Modifier les horaires
+                    {t('modifyHours')}
                     <MaterialIcon name="arrow_forward" size="sm" />
                   </Link>
-                  <p className="mt-3 text-xs text-slate-500">Les commandes suivent automatiquement les horaires configurés.</p>
+                  <p className="mt-3 text-xs text-slate-500">{t('ordersFollowSchedule')}</p>
                 </div>
               </div>
             </div>
@@ -254,16 +256,16 @@ export default function PortalClient() {
                 <div className="size-10 rounded-full bg-primary/15 border border-primary/30 flex items-center justify-center">
                   <MaterialIcon name="support_agent" className="text-primary" />
                 </div>
-                <h3 className="font-bold text-lg text-white">Support Partenaire</h3>
+                <h3 className="font-bold text-lg text-white">{t('partnerSupport')}</h3>
               </div>
               <p className="relative text-slate-400 text-sm mb-6">
-                Besoin d&apos;aide avec une commande ou votre compte ?
+                {t('partnerSupportDesc')}
               </p>
               <button
                 onClick={() => window.open('mailto:business@medjira.com', '_blank')}
                 className="relative w-full py-3 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform text-sm"
               >
-                Contacter Medjira Business
+                {t('contactBusiness')}
               </button>
             </div>
           </div>

@@ -18,6 +18,7 @@ import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { PlaceSuggestion } from '@/types';
 import { isValidPhoneNumber } from '@/lib/validation';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   driverFieldClassName,
   driverPrimaryButtonClassName,
@@ -104,6 +105,7 @@ function parseCountryFields(addressComponents: google.maps.GeocoderAddressCompon
 }
 
 export default function Step2Identity({ onNext, onBack, initialData, initialPhoto, loading }: Step2IdentityProps) {
+  const { t, locale } = useTranslation();
   const { showError } = useToast();
   const { autocompleteService } = useGoogleMaps();
   const { getCurrentPosition } = useCapacitorGeolocation();
@@ -289,12 +291,12 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
         parseCountryFields(result.address_components),
         result.formatted_address || result.address_components.map((component) => component.long_name).join(', ')
       );
-      setLocationFeedback({ type: 'success', message: 'Position détectée et adresse remplie automatiquement.' });
+      setLocationFeedback({ type: 'success', message: t('driver.positionDetectedSuccess') });
     } catch (error: unknown) {
-      const rawMessage = error instanceof Error ? error.message : "Impossible d'obtenir votre position.";
+      const rawMessage = error instanceof Error ? error.message : t('taxi.locationServiceUnavailable');
       const locationServicesDisabled = /location services are not enabled/i.test(rawMessage);
       const message = locationServicesDisabled
-        ? 'Les services de localisation sont désactivés. Activez la localisation de votre téléphone, puis réessayez.'
+        ? t('driver.locationServicesDisabled')
         : rawMessage;
       setCanOpenLocationSettings(locationServicesDisabled && Capacitor.getPlatform() === 'android');
       setLocationFeedback({ type: 'error', message });
@@ -302,15 +304,15 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
     } finally {
       setIsLocating(false);
     }
-  }, [applyCountryFields, getCurrentPosition, showError]);
+  }, [applyCountryFields, getCurrentPosition, showError, t]);
 
   const handleOpenLocationSettings = useCallback(async () => {
     try {
       await LocationSettings.open();
     } catch {
-      showError('Impossible d’ouvrir les réglages de localisation. Activez la localisation depuis les réglages Android.');
+      showError(t('driver.cannotOpenLocationSettings'));
     }
-  }, [showError]);
+  }, [showError, t]);
 
   const phoneCountry = getCountryByDialCode(phonePrefix);
   const phonePlaceholder = phoneCountry
@@ -418,9 +420,9 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
         if (msg.includes('User cancelled') || msg.includes('cancelled')) {
           return;
         } else if (msg.includes('permission')) {
-          setPhotoError("Permission caméra refusée. Veuillez l'autoriser dans les paramètres.");
+          setPhotoError(t('driver.cameraPermissionDenied'));
         } else {
-          setPhotoError('Impossible de prendre la photo. Veuillez réessayer.');
+          setPhotoError(t('driver.cameraCaptureError'));
         }
       }
     } else {
@@ -434,11 +436,11 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setPhotoError('Seules les images sont acceptées.');
+      setPhotoError(t('driver.onlyImagesAccepted'));
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      setPhotoError('Image trop lourde (Max 10Mo).');
+      setPhotoError(t('driver.imageTooLargeMax10'));
       return;
     }
 
@@ -456,7 +458,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
 
   const onSubmit = (data: Step2FormData) => {
     if (!photoFile) {
-      showError('La photo biométrique est obligatoire pour finaliser votre inscription.');
+      showError(t('driver.biometricPhotoRequired'));
       return;
     }
     onNext(data, photoFile);
@@ -479,17 +481,17 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Votre Profil Chauffeur</h2>
-        <p className="text-[#9CA3AF] mt-2">Ces informations sont requises pour votre vérification légale.</p>
+        <h2 className="text-2xl font-bold text-white">{t('driver.driverProfileTitle')}</h2>
+        <p className="text-[#9CA3AF] mt-2">{t('driver.driverProfileSubtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" data-driver-onboarding-form>
         <div className={driverSectionCardClassName}>
-          <h3 className={driverSectionTitleClassName}>Identité</h3>
+          <h3 className={driverSectionTitleClassName}>{t('driver.identitySection')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InputField
               {...register('firstName')}
-              label="Prénom"
+              label={t('auth.firstName')}
               labelClassName="text-slate-100"
               onInput={handleNameInput}
               error={errors.firstName?.message}
@@ -497,7 +499,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
             />
             <InputField
               {...register('lastName')}
-              label="Nom"
+              label={t('auth.lastName')}
               labelClassName="text-slate-100"
               onInput={handleNameInput}
               error={errors.lastName?.message}
@@ -508,7 +510,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="w-full">
               <label className="block text-sm font-medium text-slate-100 mb-2">
-                Date de naissance<span className="text-red-500 ml-1">*</span>
+                {t('driver.dobLabel')}<span className="text-red-500 ml-1">*</span>
               </label>
               <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1.35fr)] items-center gap-1.5 sm:gap-2">
                 <input
@@ -517,11 +519,11 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                   type="text"
                   inputMode="numeric"
                   maxLength={2}
-                  placeholder="JJ"
+                  placeholder={locale === 'en' ? 'DD' : 'JJ'}
                   value={dayVal}
                   onChange={(e) => handleDobFieldChange(e, 'day', 2, monthRef)}
                   onKeyDown={(e) => handleDobKeyDown(e, dayRef)}
-                  aria-label="Jour de naissance"
+                  aria-label={t('driver.dobDayAria')}
                   className={dobInputClassName}
                 />
                 <span className="text-[#4B5563] text-lg font-medium select-none">/</span>
@@ -535,7 +537,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                   value={monthVal}
                   onChange={(e) => handleDobFieldChange(e, 'month', 2, yearRef)}
                   onKeyDown={(e) => handleDobKeyDown(e, dayRef)}
-                  aria-label="Mois de naissance"
+                  aria-label={t('driver.dobMonthAria')}
                   className={dobInputClassName}
                 />
                 <span className="text-[#4B5563] text-lg font-medium select-none">/</span>
@@ -545,15 +547,15 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                   type="text"
                   inputMode="numeric"
                   maxLength={4}
-                  placeholder="AAAA"
+                  placeholder={locale === 'en' ? 'YYYY' : 'AAAA'}
                   value={yearVal}
                   onChange={(e) => handleDobFieldChange(e, 'year', 4, { current: null })}
                   onKeyDown={(e) => handleDobKeyDown(e, monthRef)}
-                  aria-label="Année de naissance"
+                  aria-label={t('driver.dobYearAria')}
                   className={dobInputClassName}
                 />
               </div>
-              <p className="mt-1 text-sm text-slate-300">Format : JJ / MM / AAAA</p>
+              <p className="mt-1 text-sm text-slate-300">{t('driver.dobFormat')}</p>
               {errors.dob?.message && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -566,7 +568,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
             </div>
             <InputField
               type="tel"
-              label="Numéro de Téléphone"
+              label={t('auth.phoneNumber')}
               labelClassName="text-slate-100"
               placeholder={phonePlaceholder}
               {...phoneField}
@@ -578,7 +580,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
 
           <div className="w-full">
             <AddressInput
-              label="Adresse de résidence"
+              label={t('driver.residenceAddress')}
               value={addressVal}
               onChange={(val) => {
                 setValue('address', val, { shouldValidate: true });
@@ -592,7 +594,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
               }}
               onSelect={handleAddressSelect}
               autocompleteService={autocompleteService}
-              placeholder="Saisissez votre adresse de résidence"
+              placeholder={t('driver.residenceAddressPlaceholder')}
               required
               error={errors.address?.message}
             />
@@ -604,7 +606,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <MaterialIcon name="my_location" size="sm" />}
-                Utiliser ma position
+                {t('driver.useCurrentLocation')}
               </button>
               {locationFeedback?.type === 'error' && (
                 <div className="mt-2 space-y-2">
@@ -615,7 +617,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                       onClick={handleOpenLocationSettings}
                       className="text-sm font-semibold text-[#f29200] underline underline-offset-4"
                     >
-                      Activer la localisation
+                      {t('driver.enableLocation')}
                     </button>
                   )}
                 </div>
@@ -626,19 +628,19 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
           {watch('city') && (
             <div className="grid grid-cols-2 gap-4 p-4 rounded-xl bg-[#242424]/50 border border-white/[0.05] text-sm text-slate-400">
               <div>
-                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Ville</span>
+                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">{t('driver.cityLabel')}</span>
                 <span className="text-white font-medium">{watch('city')}</span>
               </div>
               <div>
-                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Code Postal</span>
-                <span className="text-white font-medium">{watch('zipCode') || 'Non détecté'}</span>
+                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">{t('driver.postalCodeLabel')}</span>
+                <span className="text-white font-medium">{watch('zipCode') || t('driver.notDetected')}</span>
               </div>
               <div>
-                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Province / Région</span>
+                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">{t('driver.provinceRegionLabel')}</span>
                 <span className="text-white font-medium">{watch('province')}</span>
               </div>
               <div>
-                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">Pays</span>
+                <span className="block text-xs font-semibold text-slate-500 uppercase tracking-widest">{t('driver.countryLabel')}</span>
                 <span className="text-white font-medium">{watch('country')}</span>
               </div>
             </div>
@@ -651,8 +653,8 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
         </div>
 
         <div className={driverSectionCardClassName}>
-          <h3 className={driverSectionTitleClassName}>Photo de profil</h3>
-          <p className="text-sm text-[#9CA3AF]">Prenez un selfie sur le vif. Assurez-vous d'être bien éclairé et de cadrer votre visage et cou dans l'ovale virtuel.</p>
+          <h3 className={driverSectionTitleClassName}>{t('driver.profilePhotoSection')}</h3>
+          <p className="text-sm text-[#9CA3AF]">{t('driver.profilePhotoDesc')}</p>
 
           <input
             id="web-camera-fallback"
@@ -678,7 +680,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
               onClick={takePhoto}
               className="mt-4 px-6 py-2 bg-[#242424] text-white font-medium rounded-full hover:bg-white/10 transition-colors"
             >
-              {photoDataUrl ? 'Reprendre la photo' : 'Ouvrir la caméra'}
+              {photoDataUrl ? t('driver.retakePhoto') : t('driver.openCamera')}
             </button>
 
             {photoError && (
@@ -695,7 +697,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
             onClick={onBack}
             className={cn(driverSecondaryButtonClassName, 'w-1/3')}
           >
-            Retour
+            {t('common.back')}
           </button>
           <button
             type="submit"
@@ -703,7 +705,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
             className={cn(driverPrimaryButtonClassName, 'w-2/3')}
           >
             {loading ? <Loader2 className="animate-spin mr-2" /> : null}
-            Continuer
+            {t('common.next')}
           </button>
         </div>
       </form>

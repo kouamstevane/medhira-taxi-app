@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
+import { useTranslation } from '@/hooks/useTranslation';
 import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import {
   createPersonalDriverSubscriptionPayment,
@@ -29,14 +30,14 @@ const StripePaymentElement = dynamic(
   { ssr: false, loading: () => <div className="h-52 rounded-xl border border-white/10 bg-white/5" /> },
 );
 
-const WEEKDAY_NAMES: Record<PersonalDriverWeekday, string> = {
-  0: 'Dimanche',
-  1: 'Lundi',
-  2: 'Mardi',
-  3: 'Mercredi',
-  4: 'Jeudi',
-  5: 'Vendredi',
-  6: 'Samedi',
+const WEEKDAY_KEYS: Record<PersonalDriverWeekday, 'personalDriver.weekday0' | 'personalDriver.weekday1' | 'personalDriver.weekday2' | 'personalDriver.weekday3' | 'personalDriver.weekday4' | 'personalDriver.weekday5' | 'personalDriver.weekday6'> = {
+  0: 'personalDriver.weekday0',
+  1: 'personalDriver.weekday1',
+  2: 'personalDriver.weekday2',
+  3: 'personalDriver.weekday3',
+  4: 'personalDriver.weekday4',
+  5: 'personalDriver.weekday5',
+  6: 'personalDriver.weekday6',
 };
 
 const ACTIVATION_POLL_INTERVAL_MS = 2_000;
@@ -196,6 +197,7 @@ function getPaymentPreparationErrorMessage(error: unknown): string {
 
 export function PersonalDriverConfirmation() {
   const { plans, error: plansError, reload: reloadPlans } = usePersonalDriverPlans();
+  const { t } = useTranslation();
   const { push, replace } = useRouter();
   const searchParams = useSearchParams();
   const [checkout, setCheckout] = useState<{ config: PersonalDriverConfiguration; estimate: PersonalDriverEstimateSession } | null>(null);
@@ -230,8 +232,8 @@ export function PersonalDriverConfirmation() {
     : (checkout?.config.distanceOneWayKm ?? 0) + (checkout?.config.distanceReturnKm ?? 0);
   const displayedTotalAmount = quote?.totalAmount ?? selectedPrice?.totalBeforeTax ?? 0;
   const formattedDays = useMemo(
-    () => checkout?.config.weekdays.map((day) => WEEKDAY_NAMES[day]).join(', ') ?? '',
-    [checkout],
+    () => checkout?.config.weekdays.map((day) => t(WEEKDAY_KEYS[day])).join(', ') ?? '',
+    [checkout, t],
   );
 
   const beginActivationPolling = useCallback((subscriptionId: string) => {
@@ -307,29 +309,29 @@ export function PersonalDriverConfirmation() {
 
   const activationPanel = activationProgress === 'preparing' ? (
     <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 text-center" role="status">
-      <p className="font-bold text-emerald-300">Paiement confirmé — préparation de vos trajets…</p>
-      <p className="mt-1 text-sm text-slate-300">Cette étape peut prendre quelques instants.</p>
+      <p className="font-bold text-emerald-300">{t('personalDriver.paymentConfirmedPreparingTrips')}</p>
+      <p className="mt-1 text-sm text-slate-300">{t('personalDriver.thisStepMayTakeFewMoments')}</p>
     </div>
   ) : activationProgress === 'failed' ? (
     <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200" role="alert">
-      <p>La préparation de vos trajets a échoué après la confirmation du paiement. Actualisez cette page dans quelques instants pour vérifier la nouvelle tentative, puis contactez l’assistance si le problème persiste.</p>
+      <p>{t('personalDriver.tripsPreparationFailed')}</p>
       <button
         type="button"
         onClick={() => activationSubscriptionId && beginActivationPolling(activationSubscriptionId)}
         className="min-h-11 rounded-lg border border-red-400/40 px-4 font-bold text-red-100"
       >
-        Réessayer la vérification
+        {t('personalDriver.retryVerification')}
       </button>
     </div>
   ) : activationProgress === 'timeout' ? (
     <div className="space-y-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200" role="alert">
-      <p>La préparation prend plus de temps que prévu. Votre paiement est confirmé : actualisez cette page pour vérifier l’activation, puis contactez l’assistance si nécessaire.</p>
+      <p>{t('personalDriver.preparationTakesLonger')}</p>
       <button
         type="button"
         onClick={() => activationSubscriptionId && beginActivationPolling(activationSubscriptionId)}
         className="min-h-11 rounded-lg border border-amber-400/40 px-4 font-bold text-amber-100"
       >
-        Réessayer la vérification
+        {t('personalDriver.retryVerification')}
       </button>
     </div>
   ) : null;
@@ -355,14 +357,14 @@ export function PersonalDriverConfirmation() {
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-2xl items-center px-4 text-center text-slate-100">
         <div className="w-full space-y-4 rounded-xl border border-white/10 bg-card p-6">
-          <h1 className="text-2xl font-bold text-white">Résumé introuvable</h1>
-          <p className="text-sm text-slate-400">Reprenez la configuration de votre transport mensuel pour confirmer votre abonnement.</p>
+          <h1 className="text-2xl font-bold text-white">{t('personalDriver.summaryNotFound')}</h1>
+          <p className="text-sm text-slate-400">{t('personalDriver.resumeConfiguration')}</p>
           <button
             type="button"
             onClick={() => push('/personal-driver')}
             className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-bold text-white"
           >
-            Configurer mon transport mensuel
+            {t('personalDriver.configureMonthlyTransport')}
           </button>
         </div>
       </main>
@@ -374,13 +376,13 @@ export function PersonalDriverConfirmation() {
       <div className="bg-gradient-to-br from-card to-primary/5 p-4 sm:p-6">
         <div className="flex items-start justify-between gap-4 border-l-2 border-primary/70 pl-3">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Résumé de votre abonnement</p>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">{t('personalDriver.subscriptionSummaryTitle')}</p>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">{plan.name.toUpperCase()}</h1>
-            <p className="mt-1 text-sm text-slate-400">Période de 30 jours calendaires glissants</p>
+            <p className="mt-1 text-sm text-slate-400">{t('personalDriver.calendarDays30')}</p>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-2xl font-black tracking-tight text-white sm:text-3xl">{formatPersonalDriverCurrency(displayedTotalAmount, displayedCurrency)}</p>
-            <p className="text-xs text-slate-400">{quote ? quote.currency.toUpperCase() : 'Estimation indicative'}</p>
+            <p className="text-xs text-slate-400">{quote ? quote.currency.toUpperCase() : t('personalDriver.indicativeEstimate')}</p>
           </div>
         </div>
 
@@ -391,56 +393,56 @@ export function PersonalDriverConfirmation() {
         )}
         {plansError && (
           <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm leading-5 text-amber-100" role="alert" aria-live="polite">
-            Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
+            {t('personalDriver.fallbackNotice')}
             <button type="button" onClick={() => void reloadPlans()} className="ml-3 font-bold underline underline-offset-4">
-              Réessayer
+              {t('personalDriver.retry')}
             </button>
           </div>
         )}
       </div>
 
       <div className="border-t border-white/10 px-4 py-4 sm:px-6">
-        <h2 className="mb-3 text-base font-bold text-white">Trajet planifié</h2>
+        <h2 className="mb-3 text-base font-bold text-white">{t('personalDriver.plannedTrip')}</h2>
         <dl className="space-y-1.5 text-sm">
           <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
-            <dt className="text-slate-400">Départ</dt>
+            <dt className="text-slate-400">{t('personalDriver.departure')}</dt>
             <dd className="min-w-0 break-words text-slate-200">{checkout.config.pickupAddress}</dd>
           </div>
           <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
-            <dt className="text-slate-400">Destination</dt>
+            <dt className="text-slate-400">{t('personalDriver.destination')}</dt>
             <dd className="min-w-0 break-words text-slate-200">{checkout.config.destinationAddress}</dd>
           </div>
           <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
-            <dt className="text-slate-400">Type</dt>
-            <dd className="min-w-0 text-slate-200">{checkout.config.tripType === 'round_trip' ? 'Aller-retour' : 'Aller simple'}</dd>
+            <dt className="text-slate-400">{t('personalDriver.tripTypeLabel')}</dt>
+            <dd className="min-w-0 text-slate-200">{checkout.config.tripType === 'round_trip' ? t('personalDriver.roundTrip') : t('personalDriver.oneWay')}</dd>
           </div>
           <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
-            <dt className="text-slate-400">Jours</dt>
+            <dt className="text-slate-400">{t('personalDriver.days')}</dt>
             <dd className="min-w-0 break-words text-slate-200">{formattedDays}</dd>
           </div>
           <div className="grid grid-cols-[6.25rem_minmax(0,1fr)] gap-3 py-1.5">
-            <dt className="text-slate-400">Heures</dt>
-            <dd className="min-w-0 text-slate-200">{checkout.config.departureTime}{checkout.config.returnTime ? ` et ${checkout.config.returnTime}` : ''}</dd>
+            <dt className="text-slate-400">{t('personalDriver.hours')}</dt>
+            <dd className="min-w-0 text-slate-200">{checkout.config.departureTime}{checkout.config.returnTime ? `${t('personalDriver.hoursSeparator')}${checkout.config.returnTime}` : ''}</dd>
           </div>
         </dl>
       </div>
 
       <div className="border-t border-white/10 px-4 py-4 sm:px-6">
-        <h2 className="mb-3 text-base font-bold text-white">Calcul du tarif</h2>
+        <h2 className="mb-3 text-base font-bold text-white">{t('personalDriver.fareCalculation')}</h2>
         <div className="grid gap-2 text-sm text-slate-300">
-          <div className="flex items-start justify-between gap-4"><span>Distance par trajet</span><strong className="text-right text-white">{formatKm(displayedTripDistanceKm)} km</strong></div>
-          <div className="flex items-start justify-between gap-4"><span>Kilométrage mensuel</span><strong className="text-right text-white">{formatKm(displayedMonthlyDistanceKm)} km</strong></div>
-          <div className="flex items-start justify-between gap-4"><span>Formule</span><strong className="max-w-[62%] text-right text-white">{formatKm(displayedMonthlyDistanceKm)} km x {formatPersonalDriverCurrency(displayedPrice.pricePerKm, displayedCurrency)}/km</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.distancePerTrip')}</span><strong className="text-right text-white">{formatKm(displayedTripDistanceKm)} km</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.monthlyMileage')}</span><strong className="text-right text-white">{formatKm(displayedMonthlyDistanceKm)} km</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.formula')}</span><strong className="max-w-[62%] text-right text-white">{formatKm(displayedMonthlyDistanceKm)} km x {formatPersonalDriverCurrency(displayedPrice.pricePerKm, displayedCurrency)}/km</strong></div>
           {displayedPrice.minimumApplied && (
-            <div className="flex items-start justify-between gap-4"><span>Minimum appliqué</span><strong className="text-right text-white">{formatPersonalDriverCurrency(displayedPrice.minimumAmount, displayedCurrency)}</strong></div>
+            <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.minimumApplied')}</span><strong className="text-right text-white">{formatPersonalDriverCurrency(displayedPrice.minimumAmount, displayedCurrency)}</strong></div>
           )}
-          <div className="mt-1 flex items-center justify-between gap-4 border-t border-white/10 pt-3"><span className="font-bold text-white">Total</span><strong className="text-lg font-black text-white">{formatPersonalDriverCurrency(displayedTotalAmount, displayedCurrency)}</strong></div>
-          <div className="flex items-start justify-between gap-4"><span>Taxes</span><span className="text-right text-slate-400">Taxes non calculées</span></div>
+          <div className="mt-1 flex items-center justify-between gap-4 border-t border-white/10 pt-3"><span className="font-bold text-white">{t('personalDriver.total')}</span><strong className="text-lg font-black text-white">{formatPersonalDriverCurrency(displayedTotalAmount, displayedCurrency)}</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.taxes')}</span><span className="text-right text-slate-400">{t('personalDriver.taxesNotCalculated')}</span></div>
         </div>
       </div>
 
       <div className="border-t border-white/10 px-4 py-4 sm:px-6">
-        <h2 className="mb-3 text-base font-bold text-white">Inclus dans votre formule</h2>
+        <h2 className="mb-3 text-base font-bold text-white">{t('personalDriver.includedInPlan')}</h2>
         <ul className="grid gap-2 sm:grid-cols-2">
           {plan.benefits.map((benefit) => (
             <li key={benefit} className="flex min-h-8 items-center gap-2 text-sm text-slate-300">
@@ -461,11 +463,11 @@ export function PersonalDriverConfirmation() {
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-white transition active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:cursor-wait disabled:opacity-60"
             >
               <MaterialIcon name="lock" size="sm" />
-              {loading ? 'Préparation...' : 'Préparer le paiement sécurisé'}
+              {loading ? t('personalDriver.preparing') : t('personalDriver.prepareSecurePayment')}
             </button>
             <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
               <MaterialIcon name="verified_user" size="sm" />
-              Paiement sécurisé par Stripe
+              {t('personalDriver.securePaymentByStripe')}
             </p>
           </>
         ) : (
@@ -475,7 +477,7 @@ export function PersonalDriverConfirmation() {
             currency={payment.currency}
             onSuccess={handlePaymentSuccess}
             onError={setError}
-            submitLabel={`Payer ${formatPersonalDriverCurrency(payment.amount, payment.currency)}`}
+            submitLabel={t('personalDriver.payAmount', { amount: formatPersonalDriverCurrency(payment.amount, payment.currency) })}
           />
         ))}
       </div>

@@ -6,12 +6,17 @@ import { Haptics } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
 
 // Mock Capacitor plugins
-jest.mock('@capacitor/core', () => ({
-  Capacitor: {
-    isNativePlatform: jest.fn(() => false),
-    isPluginAvailable: jest.fn(() => true),
-  },
-}));
+jest.mock('@capacitor/core', () => {
+  const actual = jest.requireActual('@capacitor/core');
+  return {
+    ...actual,
+    Capacitor: {
+      ...actual.Capacitor,
+      isNativePlatform: jest.fn(() => false),
+      isPluginAvailable: jest.fn(() => true),
+    },
+  };
+});
 
 jest.mock('@capacitor/network', () => ({
   Network: {

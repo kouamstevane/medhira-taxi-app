@@ -8,11 +8,14 @@ import { db, functions } from '@/config/firebase';
 import { useAuth } from '@/hooks/useAuth';
 import { mapHttpsError } from '@/services/cloud-functions.helpers';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import toast from 'react-hot-toast';
 
 type CallResult = { onboardingUrl: string; mode: string };
 
 function PaymentsOnboardingContent() {
+  const { t } = useTranslation('restaurant');
   const router = useRouter();
   const params = useSearchParams();
   const requestedMode = params.get('mode') === 'update' ? 'update' : 'onboarding';
@@ -41,12 +44,12 @@ function PaymentsOnboardingContent() {
   useEffect(() => {
     const onboardingParam = params.get('onboarding');
     if (onboardingParam === 'success') {
-      toast.success('Configuration Stripe enregistrée avec succès !');
+      toast.success(t('stripeSuccessToast'));
       router.replace('/restaurant/dashboard');
     } else if (onboardingParam === 'refresh') {
-      toast.error('La configuration Stripe a été interrompue. Veuillez réessayer.');
+      toast.error(t('stripeInterruptedToast'));
     }
-  }, [params, router]);
+  }, [params, router, t]);
 
   async function handleClick() {
     const restaurantId = userData?.roles?.restaurant?.restaurantId;
@@ -71,13 +74,16 @@ function PaymentsOnboardingContent() {
     );
   }
 
-  const title = requestedMode === 'update' ? 'Réparer votre compte Stripe' : 'Configurez vos paiements';
+  const title = requestedMode === 'update' ? t('repairStripeTitle') : t('setupPaymentsTitle');
   const description = requestedMode === 'update'
-    ? 'Stripe demande des informations supplémentaires pour réactiver votre compte.'
-    : 'Stripe traite les paiements de vos clients. La configuration prend 2 minutes.';
+    ? t('repairStripeDesc')
+    : t('setupPaymentsDesc');
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 relative">
+      <div className="absolute top-4 right-4">
+        <LanguageSelector variant="compact" />
+      </div>
       <div className="w-full max-w-md glass-card p-6 space-y-4">
         <div className="flex items-center gap-3">
           <div className="bg-primary/10 p-3 rounded-xl">
@@ -95,10 +101,10 @@ function PaymentsOnboardingContent() {
           {submitting ? (
             <>
               <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full" />
-              Redirection...
+              {t('redirecting')}
             </>
           ) : (
-            'Continuer vers Stripe'
+            t('continueToStripe')
           )}
         </button>
       </div>

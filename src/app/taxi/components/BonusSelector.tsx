@@ -6,6 +6,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface BonusSelectorProps {
     selectedBonus: number;
@@ -20,11 +21,13 @@ export const BonusSelector: React.FC<BonusSelectorProps> = ({
     onSelect,
     disabled = false,
 }) => {
+    const { t } = useTranslation();
+
     return (
         <div className="w-full space-y-3 animate-fadeIn">
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-white">
-                    Motiver un chauffeur (Bonus)
+                    {t('taxi.motivateDriver')}
                 </h3>
                 {selectedBonus > 0 && (
                     <button
@@ -32,13 +35,13 @@ export const BonusSelector: React.FC<BonusSelectorProps> = ({
                         className="text-xs text-red-500 hover:text-red-700 font-medium px-2 py-1 rounded active:bg-red-50"
                         disabled={disabled}
                     >
-                        Retirer
+                        {t('taxi.removeBonus')}
                     </button>
                 )}
             </div>
 
             <p className="text-xs text-[#9CA3AF]">
-                Ajoutez un bonus pour élargir la zone de recherche à 10 min et motiver les chauffeurs éloignés.
+                {t('taxi.bonusHelp')}
             </p>
 
             <div className="grid grid-cols-4 gap-2 sm:gap-3">
@@ -71,7 +74,7 @@ export const BonusSelector: React.FC<BonusSelectorProps> = ({
                 <div className="bg-[#f29200]/10 border border-[#f29200]/20 rounded-lg p-3 flex items-start gap-2">
                     <span className="text-orange-500 mt-0.5">⚡</span>
                     <p className="text-xs text-[#f29200]">
-                        <strong>Zone élargie !</strong> Votre demande est maintenant visible par les chauffeurs jusqu&apos;à 10 minutes de distance.
+                        {t('taxi.bonusActiveNotice')}
                     </p>
                 </div>
             )}

@@ -1,6 +1,7 @@
 'use client'
 import { useAuth } from '@/hooks/useAuth'
 import { ConversationLauncher } from '@/components/ConversationLauncher'
+import { useTranslation } from '@/hooks/useTranslation'
 import type { ConversationContext } from '@/types/conversation'
 import type { FoodDeliveryOrder } from '@/types/firestore-collections'
 
@@ -17,6 +18,7 @@ interface Props {
  * - target='client'     : livreur <-> client (après ramassage)
  */
 export default function DriverFoodContacts({ order, target }: Props) {
+  const { t } = useTranslation('driver')
   const { currentUser, userData } = useAuth()
   if (!currentUser?.uid) return null
 
@@ -52,8 +54,8 @@ export default function DriverFoodContacts({ order, target }: Props) {
 
   const label =
     target === 'restaurant'
-      ? 'Contacter le restaurant'
-      : 'Contacter le client'
+      ? t('contactRestaurant')
+      : t('contactClient')
 
   return (
     <div className="w-full max-w-sm mx-auto">

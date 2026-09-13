@@ -16,9 +16,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ERROR_MESSAGES } from '@/utils/constants';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
+import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +34,7 @@ export default function ResetPasswordPage() {
     e.preventDefault();
 
     if (!email || !email.includes('@')) {
-      setError('Veuillez entrer une adresse email valide');
+      setError(t('auth.validEmailPrompt'));
       return;
     }
 
@@ -51,16 +54,16 @@ export default function ResetPasswordPage() {
 
       switch (code) {
         case 'auth/user-not-found':
-          setError('Aucun compte associé à cet email');
+          setError(t('auth.noAccountFound'));
           break;
         case 'auth/invalid-email':
           setError(ERROR_MESSAGES.INVALID_EMAIL);
           break;
         case 'auth/too-many-requests':
-          setError('Trop de tentatives. Veuillez réessayer plus tard');
+          setError(t('auth.tooManyAttempts'));
           break;
         default:
-          setError('Une erreur est survenue. Veuillez réessayer');
+          setError(t('common.errorOccurred'));
       }
     } finally {
       setLoading(false);
@@ -73,15 +76,16 @@ export default function ResetPasswordPage() {
         {/* Top Safe Area */}
         <div className="h-12 w-full" />
 
-        {/* Back Link */}
-        <div className="px-6">
+        {/* Back Link and LanguageSelector */}
+        <div className="px-6 flex items-center justify-between">
           <Link
             href="/login"
-            className="inline-flex items-center text-slate-400 hover:text-primary transition-colors"
+            className="inline-flex items-center text-slate-400 hover:text-primary transition-colors min-h-[44px]"
           >
             <MaterialIcon name="arrow_back" size="md" className="mr-2" />
-            Retour à la connexion
+            {t('auth.backToLogin')}
           </Link>
+          <LanguageSelector variant="pill" />
         </div>
 
         {/* Icon */}
@@ -94,12 +98,12 @@ export default function ResetPasswordPage() {
         {/* Heading */}
         <div className="px-6 text-center">
           <h1 className="text-white text-[28px] font-bold leading-tight mb-2">
-            {success ? 'Email envoyé !' : 'Mot de passe oublié ?'}
+            {success ? t('auth.emailSentSuccess') : t('auth.forgotPassword')}
           </h1>
           <p className="text-slate-400 text-base font-normal">
             {success
-              ? 'Vérifiez votre boîte email'
-              : 'Pas de problème, nous allons vous aider'}
+              ? t('auth.checkYourInbox')
+              : t('auth.helpWithPassword')}
           </p>
         </div>
 
@@ -115,13 +119,12 @@ export default function ResetPasswordPage() {
               </div>
 
               <p className="text-slate-400 text-center mb-6">
-                Un email de réinitialisation a été envoyé à{' '}
-                <strong className="text-primary">{email}</strong>
+                {t('auth.resetLinkSentTo', { email })}
               </p>
 
               <div className="bg-primary/10 border border-primary/20 rounded-xl p-4 mb-6">
                 <p className="text-sm text-slate-300">
-                  Vérifiez également votre dossier spam si vous ne recevez pas l'email dans quelques minutes.
+                  {t('auth.checkSpamNotice')}
                 </p>
               </div>
 
@@ -130,14 +133,14 @@ export default function ResetPasswordPage() {
                   onClick={() => router.push('/login')}
                   className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center"
                 >
-                  Retour à la connexion
+                  {t('auth.backToLogin')}
                 </button>
 
                 <button
                   onClick={() => setSuccess(false)}
                   className="glass-card w-full h-14 flex items-center justify-center rounded-2xl border border-white/10 text-slate-300 font-medium active:scale-[0.98] transition-transform"
                 >
-                  Renvoyer l'email
+                  {t('auth.resendEmail')}
                 </button>
               </div>
             </div>
@@ -145,7 +148,7 @@ export default function ResetPasswordPage() {
             <div className="glass-card rounded-2xl p-6">
               <div className="text-center mb-6">
                 <p className="text-slate-400 text-sm">
-                  Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.
+                  {t('auth.enterEmailInstruction')}
                 </p>
               </div>
 
@@ -171,7 +174,7 @@ export default function ResetPasswordPage() {
                       setError(null);
                     }}
                     className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
-                    placeholder="votre@email.com"
+                    placeholder={t('auth.emailPlaceholder')}
                     required
                   />
                 </div>
@@ -188,10 +191,10 @@ export default function ResetPasswordPage() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                       </svg>
-                      Envoi en cours...
+                      {t('common.loading')}
                     </>
                   ) : (
-                    'Réinitialiser le mot de passe'
+                    t('auth.resetPasswordAction')
                   )}
                 </button>
               </form>
@@ -203,13 +206,14 @@ export default function ResetPasswordPage() {
         <div className="mt-auto pb-10 pt-6 text-center">
           <Link
             href="/login"
-            className="inline-flex items-center text-slate-400 text-sm hover:text-primary transition-colors"
+            className="inline-flex items-center text-slate-400 text-sm hover:text-primary transition-colors min-h-[44px]"
           >
             <MaterialIcon name="arrow_back" size="sm" className="mr-1" />
-            Retour à la connexion
+            {t('auth.backToLogin')}
           </Link>
         </div>
       </div>
     </div>
   );
 }
+

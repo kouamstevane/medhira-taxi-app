@@ -8,6 +8,7 @@
 'use client';
 
 import { X, Clock } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface SearchingDriverBottomSheetProps {
   bookingId: string;
@@ -25,6 +26,7 @@ export function SearchingDriverBottomSheet({
   onCancel,
   isAutoSearching = false,
 }: SearchingDriverBottomSheetProps) {
+  const { t } = useTranslation();
   const progressPercent = ((60 - timeRemaining) / 60) * 100;
 
   return (
@@ -33,12 +35,12 @@ export function SearchingDriverBottomSheet({
       <div className="bg-[#0F0F0F] w-full sm:max-w-lg sm:mx-4 rounded-t-3xl sm:rounded-2xl shadow-2xl transform transition-all duration-300 ease-out animate-slideUp max-h-[85vh] overflow-y-auto">
         {/* Header avec bouton fermer */}
         <div className="sticky top-0 bg-[#0F0F0F] border-b border-white/[0.05] px-4 sm:px-6 py-4 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
-          <h2 className="text-lg sm:text-xl font-bold text-white">Recherche de chauffeur</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-white">{t('taxi.searchDriverHeader')}</h2>
           <button
             onClick={onCancel}
             className="p-2 hover:bg-white/10 active:bg-white/20 rounded-full transition touch-manipulation"
             style={{ minHeight: '44px', minWidth: '44px' }}
-            aria-label="Annuler la recherche"
+            aria-label={t('taxi.cancelSearch')}
           >
             <X className="h-6 w-6 text-[#9CA3AF]" />
           </button>
@@ -85,14 +87,14 @@ export function SearchingDriverBottomSheet({
           {/* Texte de statut */}
           <div className="text-center space-y-2">
             <h3 className="text-xl sm:text-2xl font-bold text-white">
-              Recherche en cours...
+              {t('taxi.searchingDriver')}
             </h3>
             <p className="text-sm sm:text-base text-[#9CA3AF]">
-              Nous recherchons les chauffeurs proches de vous
+              {t('taxi.findingDriverDesc')}
             </p>
             {isAutoSearching && (
               <div className="inline-block mt-2 px-3 py-1 bg-[#3B82F6]/20 text-[#3B82F6] text-xs font-semibold rounded-full animate-pulse">
-                Recherche automatique active
+                {t('taxi.autoSearchActiveBadge')}
               </div>
             )}
           </div>
@@ -102,7 +104,7 @@ export function SearchingDriverBottomSheet({
             <div className="flex items-center justify-center space-x-2 text-white">
               <Clock className="h-5 w-5 text-[#f29200]" />
               <span className="text-base sm:text-lg font-semibold">
-                {timeRemaining}s restantes
+                {t('taxi.secondsRemaining', { seconds: timeRemaining })}
               </span>
             </div>
 
@@ -123,7 +125,7 @@ export function SearchingDriverBottomSheet({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-[#4B5563] uppercase tracking-wide mb-1">
-                  Départ
+                  {t('taxi.fromLabel')}
                 </p>
                 <p className="text-sm sm:text-base text-white break-words leading-tight">
                   {pickupAddress}
@@ -137,7 +139,7 @@ export function SearchingDriverBottomSheet({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-[#4B5563] uppercase tracking-wide mb-1">
-                  Destination
+                  {t('taxi.toLabel')}
                 </p>
                 <p className="text-sm sm:text-base text-white break-words leading-tight">
                   {destinationAddress}
@@ -153,13 +155,13 @@ export function SearchingDriverBottomSheet({
             style={{ minHeight: '56px' }}
           >
             <X className="h-5 w-5" />
-            <span className="text-base sm:text-lg">Annuler la recherche</span>
+            <span className="text-base sm:text-lg">{t('taxi.cancelSearch')}</span>
           </button>
 
           {/* Conseils */}
           <div className="bg-[#3B82F6]/10 border-l-4 border-l-[#3B82F6] p-3 rounded-r-lg">
             <p className="text-xs sm:text-sm text-[#93C5FD]">
-              💡 <strong>Astuce :</strong> Nous élargissons automatiquement la zone de recherche pour trouver le meilleur chauffeur pour vous.
+              {t('taxi.searchDriverTip')}
             </p>
           </div>
         </div>

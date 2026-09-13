@@ -4,6 +4,7 @@ import { Loader2, Lock } from 'lucide-react';
 import { ACTIVE_MARKET } from '@/utils/constants';
 import { InputField } from '@/components/forms/InputField';
 import { useToast } from '@/hooks/useToast';
+import { useTranslation } from '@/hooks/useTranslation';
 import { cn } from '@/lib/utils';
 import {
   driverInfoBannerClassName,
@@ -35,6 +36,7 @@ export default function Step5Monetization({
   disabled = false,
   driverType = 'chauffeur',
 }: Step5MonetizationProps) {
+  const { t } = useTranslation();
   const { showError } = useToast();
   const [taxId, setTaxId] = useState(initialData?.taxId || '');
 
@@ -43,7 +45,7 @@ export default function Step5Monetization({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isChauffeur && taxId.trim().length < 5) {
-      showError("Le numéro d'enregistrement fiscal est obligatoire pour le service VTC.");
+      showError(t('driver.taxIdRequired'));
       return;
     }
     onSubmitFinal({
@@ -55,36 +57,34 @@ export default function Step5Monetization({
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Paiement & Monétisation</h2>
-        <p className="text-[#9CA3AF] mt-2">Configuration de vos virements</p>
+        <h2 className="text-2xl font-bold text-white">{t('driver.paymentMonetizationTitle')}</h2>
+        <p className="text-[#9CA3AF] mt-2">{t('driver.paymentMonetizationSubtitle')}</p>
       </div>
 
       {/* Informations Fiscales (VTC uniquement) */}
       {isChauffeur && (
         <div className={driverSectionCardClassName}>
-          <h3 className={driverSectionTitleClassName}>Informations Fiscales</h3>
+          <h3 className={driverSectionTitleClassName}>{t('driver.taxInfoSection')}</h3>
           <InputField
-            label="Numéro fiscal ou d'entreprise (TPS-TVH, TVA, SIRET)"
+            label={t('driver.taxIdLabel')}
             value={taxId}
             onChange={(e) => setTaxId(e.target.value)}
-            placeholder="Ex: 123456789 RT0001 (Canada) ou SIRET (France)"
-            helperText="Requis réglementairement pour émettre les factures des trajets VTC."
+            placeholder={t('driver.taxIdPlaceholder')}
+            helperText={t('driver.taxIdHelper')}
             required
           />
         </div>
       )}
 
-      {/* Bannière Stripe */}
+      {/* Stripe banner */}
       <div className={cn(driverInfoBannerClassName, 'bg-white/[0.03] border-white/[0.08] flex items-start gap-4')}>
         <div className="w-10 h-10 rounded-full bg-white/[0.06] flex items-center justify-center flex-shrink-0">
           <Lock className="w-5 h-5 text-[#f29200]" />
         </div>
         <div>
-          <p className="font-semibold text-white text-sm">Coordonnées bancaires sécurisées par Stripe</p>
+          <p className="font-semibold text-white text-sm">{t('driver.stripeSecuredTitle')}</p>
           <p className="text-xs text-[#9CA3AF] mt-1 leading-relaxed">
-            Pour votre sécurité et la conformité <strong>PCI DSS</strong>, vous serez redirigé vers
-            le formulaire sécurisé de Stripe pour renseigner vos informations bancaires après la
-            soumission de votre candidature. Elles ne sont jamais stockées sur nos serveurs.
+            {t('driver.stripeSecuredDesc')}
           </p>
         </div>
       </div>
@@ -96,7 +96,7 @@ export default function Step5Monetization({
           disabled={loading || disabled}
           className={cn(driverSecondaryButtonClassName, 'w-1/3')}
         >
-          Retour
+          {t('common.back')}
         </button>
 
         <button
@@ -105,7 +105,7 @@ export default function Step5Monetization({
           className={cn(driverPrimaryButtonClassName, 'w-2/3')}
         >
           {loading ? <Loader2 className="animate-spin mr-2 w-5 h-5" /> : null}
-          Soumettre ma candidature
+          {t('driver.submitApplication')}
         </button>
       </form>
     </div>
