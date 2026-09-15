@@ -86,10 +86,9 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
         type="button"
         onClick={() => handleSelect(nextLocale)}
         aria-label={`Current language: ${currentOpt.label}. Click to switch to ${nextLocale.toUpperCase()}`}
-        className={`min-w-[44px] min-h-[44px] px-3 rounded-full bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] text-xs font-semibold text-white flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm ${className}`}
+        className={`min-h-[44px] min-w-[44px] px-2 font-sans text-[11px] font-semibold tracking-[0.18em] text-primary/80 transition-colors hover:text-primary active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0c0d] ${className}`}
       >
-        <span className="text-sm">{currentOpt.flag}</span>
-        <span className="tracking-wider">{locale.toUpperCase()}</span>
+        {locale.toUpperCase()}
       </button>
     );
   }
