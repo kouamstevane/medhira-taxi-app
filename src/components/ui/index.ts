@@ -23,3 +23,6 @@ export { NetworkErrorView, DisconnectedCableIllustration } from './NetworkErrorV
 export type { NetworkErrorViewProps } from './NetworkErrorView';
 
 export { LanguageSelector } from './LanguageSelector';
+
+export { BottomSheet } from './BottomSheet';
+export type { BottomSheetProps } from './BottomSheet';
