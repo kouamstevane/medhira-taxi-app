@@ -7,7 +7,6 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { RoleSwitcher } from '@/components/role/RoleSwitcher';
 import { AuthService } from '@/services';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 interface RestaurantPortalHeaderProps {
   restaurantName: string;
@@ -44,14 +43,10 @@ export function RestaurantPortalHeader({ restaurantName, logoUrl }: RestaurantPo
             <MaterialIcon name="shopping_bag" size="lg" className="text-primary" />
           </div>
         )}
-        <div className="min-w-0">
-          <h1 className="truncate text-xl font-bold text-white">{restaurantName}</h1>
-          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('dashboardTitle')}</p>
-        </div>
+        <h1 className="truncate text-base font-bold text-white sm:text-xl">{restaurantName}</h1>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <LanguageSelector variant="compact" />
         <RoleSwitcher allowClientActivation />
         <button
           type="button"

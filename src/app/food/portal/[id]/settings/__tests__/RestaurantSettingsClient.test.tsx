@@ -138,12 +138,10 @@ describe('RestaurantSettingsClient', () => {
     await expandHours();
 
     expect(await screen.findByRole('heading', { name: 'Paramètres' })).toBeInTheDocument();
+    expect(screen.queryByText('Gérez les horaires de votre restaurant.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Tableau de bord' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Lundi ouverture')).toHaveValue('10:00');
     expect(screen.queryByLabelText('Mardi ouverture')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Tableau de bord/i })).toHaveAttribute(
-      'href',
-      '/food/portal?restaurantId=restaurant-1',
-    );
   });
 
   it('prevents saving when every day is closed', async () => {

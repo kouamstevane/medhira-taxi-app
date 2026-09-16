@@ -33,6 +33,8 @@ describe('RestaurantPortalHeader', () => {
     render(<RestaurantPortalHeader restaurantName="Chez Medjira" />);
 
     expect(screen.getByText('Chez Medjira')).toBeInTheDocument();
+    expect(screen.queryByText('Tableau de bord gérant')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Current language/i })).not.toBeInTheDocument();
     expect(screen.getByTestId('portal-role-toggle')).toHaveTextContent('client-activation-enabled');
   });
 

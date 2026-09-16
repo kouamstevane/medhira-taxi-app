@@ -2,7 +2,6 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
@@ -270,33 +269,10 @@ export default function RestaurantSettingsClient() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <RestaurantPortalHeader restaurantName={restaurant.name} logoUrl={logoUrl} />
 
-      <main className="mx-auto max-w-[440px] space-y-6 px-4 pb-8 pt-4">
+      <main className="mx-auto max-w-[440px] space-y-5 px-4 pb-8 pt-3">
         <div className="flex items-center justify-between gap-4 px-1">
           <div className="min-w-0 flex-1">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{t('restaurantSettingsSubtitle')}</p>
             <h1 className="truncate text-2xl font-black tracking-tight text-white">{t('settingsTitle')}</h1>
-            <p className="mt-1 truncate text-sm font-medium text-slate-400">{t('settingsSubtitle')}</p>
-          </div>
-          <Link
-            href={getRestaurantPortalPath(id)}
-            aria-label={t('backToDashboard')}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full text-slate-300 transition hover:bg-white/10 hover:text-white"
-          >
-            <MaterialIcon name="arrow_back" size="sm" />
-          </Link>
-        </div>
-
-        <div className="flex items-center justify-between gap-4 px-1">
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-xl font-bold text-white">{restaurant.name}</h2>
-            <p className="mt-1 truncate text-sm text-slate-400">{restaurant.phone || restaurant.address}</p>
-          </div>
-          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-[#262629] shadow-lg">
-            {logoUrl ? (
-              <Image src={logoUrl} alt="" width={64} height={64} unoptimized className="size-full object-cover" />
-            ) : (
-              <MaterialIcon name="storefront" className="text-[30px] text-slate-400" />
-            )}
           </div>
         </div>
 
