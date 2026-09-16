@@ -130,8 +130,12 @@ beforeEach(() => {
 });
 
 describe('RestaurantSettingsClient', () => {
+  const expandHours = async () => fireEvent.click(await screen.findByRole('button', { name: /Horaires d'ouverture/i }));
+  const expandVisuals = async () => fireEvent.click(await screen.findByRole('button', { name: /Identité visuelle/i }));
+
   it('renders existing hours and hides controls for a closed day', async () => {
     render(<RestaurantSettingsClient />);
+    await expandHours();
 
     expect(await screen.findByRole('heading', { name: 'Paramètres' })).toBeInTheDocument();
     expect(screen.getByLabelText('Lundi ouverture')).toHaveValue('10:00');
@@ -144,6 +148,7 @@ describe('RestaurantSettingsClient', () => {
 
   it('prevents saving when every day is closed', async () => {
     render(<RestaurantSettingsClient />);
+    await expandHours();
 
     const toggles = await screen.findAllByRole('checkbox');
     toggles.forEach((toggle) => {
@@ -157,6 +162,7 @@ describe('RestaurantSettingsClient', () => {
 
   it('saves valid changes and confirms success', async () => {
     render(<RestaurantSettingsClient />);
+    await expandHours();
     fireEvent.change(await screen.findByLabelText('Lundi ouverture'), { target: { value: '08:00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les horaires' }));
 
@@ -172,6 +178,7 @@ describe('RestaurantSettingsClient', () => {
 
     try {
       render(<RestaurantSettingsClient />);
+      await expandVisuals();
       const input = await screen.findByLabelText('Choisir la photo de couverture');
       fireEvent.change(input, {
         target: { files: [new File(['cover'], 'cover.png', { type: 'image/png' })] },
@@ -200,6 +207,7 @@ describe('RestaurantSettingsClient', () => {
   it('keeps an inline error when saving fails', async () => {
     mockUpdateRestaurantOpeningHours.mockRejectedValueOnce(new Error('network'));
     render(<RestaurantSettingsClient />);
+    await expandHours();
     fireEvent.change(await screen.findByLabelText('Lundi ouverture'), { target: { value: '08:00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les horaires' }));
 
@@ -221,6 +229,7 @@ describe('RestaurantSettingsClient', () => {
   it('deletes the restaurant only after the explicit confirmation step', async () => {
     render(<RestaurantSettingsClient />);
 
+    expect(screen.queryByText(/suppression définitive/i)).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Supprimer ce restaurant' }));
 
     expect(screen.getByText(/suppression définitive/i)).toBeInTheDocument();

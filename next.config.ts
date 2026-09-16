@@ -12,6 +12,7 @@ function getTurbopackRoot(): string {
 }
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ['192.168.1.195'],
   distDir: getNextBuildDirectory({ isMobile }),
   outputFileTracingRoot: getTurbopackRoot(),
   async redirects() {

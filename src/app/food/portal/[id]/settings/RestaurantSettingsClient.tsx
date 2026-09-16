@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/config/firebase';
@@ -63,6 +64,7 @@ export default function RestaurantSettingsClient() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [openSection, setOpenSection] = useState<'visuals' | 'hours' | null>(null);
 
   useEffect(() => {
     if (!id) {
@@ -268,213 +270,250 @@ export default function RestaurantSettingsClient() {
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <RestaurantPortalHeader restaurantName={restaurant.name} logoUrl={logoUrl} />
 
-      <main className="mx-auto max-w-3xl p-4 sm:p-8">
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">{t('restaurantSettingsSubtitle')}</p>
-            <h1 className="text-3xl font-bold text-white">{t('settingsTitle')}</h1>
-            <p className="mt-2 text-sm text-slate-400">{t('settingsSubtitle')}</p>
+      <main className="mx-auto max-w-[440px] space-y-6 px-4 pb-8 pt-4">
+        <div className="flex items-center justify-between gap-4 px-1">
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{t('restaurantSettingsSubtitle')}</p>
+            <h1 className="truncate text-2xl font-black tracking-tight text-white">{t('settingsTitle')}</h1>
+            <p className="mt-1 truncate text-sm font-medium text-slate-400">{t('settingsSubtitle')}</p>
           </div>
           <Link
             href={getRestaurantPortalPath(id)}
-            className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-slate-300 transition hover:border-primary/50 hover:text-primary"
+            aria-label={t('backToDashboard')}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full text-slate-300 transition hover:bg-white/10 hover:text-white"
           >
             <MaterialIcon name="arrow_back" size="sm" />
-            <span className="hidden sm:inline">{t('backToDashboard')}</span>
           </Link>
         </div>
 
-        <section className="glass-card mb-6 rounded-3xl border border-white/5 p-5 sm:p-7">
-          <div className="mb-6 flex items-start gap-4">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
-              <MaterialIcon name="photo_library" size="lg" className="text-primary" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-white">{t('visualIdentity')}</h3>
-              <p className="mt-1 text-sm leading-6 text-slate-400">
-                {t('visualIdentityDesc')}
-              </p>
-            </div>
+        <div className="flex items-center justify-between gap-4 px-1">
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-xl font-bold text-white">{restaurant.name}</h2>
+            <p className="mt-1 truncate text-sm text-slate-400">{restaurant.phone || restaurant.address}</p>
           </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <RestaurantVisualPicker
-              key={`logo-${visualRefreshKey}`}
-              kind="logo"
-              currentUrl={logoUrl}
-              onChange={(file, action) => {
-                setLogoFile(file);
-                setLogoRemoved(action === 'remove');
-              }}
-              disabled={isSaving || isDeleting}
-            />
-            <RestaurantVisualPicker
-              key={`cover-${visualRefreshKey}`}
-              kind="cover"
-              currentUrl={coverImageUrl}
-              onChange={(file, action) => {
-                setCoverFile(file);
-                setCoverRemoved(action === 'remove');
-              }}
-              disabled={isSaving || isDeleting}
-            />
+          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/15 bg-[#262629] shadow-lg">
+            {logoUrl ? (
+              <Image src={logoUrl} alt="" width={64} height={64} unoptimized className="size-full object-cover" />
+            ) : (
+              <MaterialIcon name="storefront" className="text-[30px] text-slate-400" />
+            )}
           </div>
+        </div>
 
-          <div className="mt-6 flex justify-end border-t border-white/5 pt-6">
+        <section className="space-y-2">
+          <p className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{t('visualIdentity')}</p>
+          <div className="rounded-3xl border border-white/[0.06] bg-[#1c1b1a] p-1.5">
             <button
               type="button"
-              disabled={!isVisualDirty || isSaving || isDeleting}
-              onClick={handleVisualSubmit}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-6 py-3.5 font-bold text-white primary-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+              aria-expanded={openSection === 'visuals'}
+              onClick={() => setOpenSection((current) => current === 'visuals' ? null : 'visuals')}
+              className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
-              {isSaving && <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
-              {isSaving ? t('savingSettings') : t('saveVisuals')}
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
+                <MaterialIcon name="photo_library" size="md" className="text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[15px] font-semibold text-white">{t('visualIdentity')}</h2>
+                <p className="mt-0.5 truncate text-xs text-slate-400">{t('visualIdentityDesc')}</p>
+              </div>
+              <MaterialIcon name={openSection === 'visuals' ? 'expand_less' : 'chevron_right'} className="shrink-0 text-slate-500" />
             </button>
-          </div>
-        </section>
 
-        <section className="glass-card rounded-3xl border border-white/5 p-5 sm:p-7">
-          <div className="mb-6 flex items-start gap-4">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
-              <MaterialIcon name="schedule" size="lg" className="text-primary" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-white">{t('step4Title')}</h3>
-              <p className="mt-1 text-sm leading-6 text-slate-400">
-                {t('ordersFollowSchedule')}
-              </p>
-            </div>
-          </div>
+            {openSection === 'visuals' && <>
+              <div className="grid gap-3 px-1 pb-1">
+              <RestaurantVisualPicker
+                key={`logo-${visualRefreshKey}`}
+                kind="logo"
+                currentUrl={logoUrl}
+                onChange={(file, action) => {
+                  setLogoFile(file);
+                  setLogoRemoved(action === 'remove');
+                }}
+                disabled={isSaving || isDeleting}
+              />
+              <RestaurantVisualPicker
+                key={`cover-${visualRefreshKey}`}
+                kind="cover"
+                currentUrl={coverImageUrl}
+                onChange={(file, action) => {
+                  setCoverFile(file);
+                  setCoverRemoved(action === 'remove');
+                }}
+                disabled={isSaving || isDeleting}
+              />
+              </div>
 
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3">
-            <MaterialIcon name="today" className="text-primary" />
-            <p className="text-sm text-slate-300">
-              {t('openingHoursToday')} : <span className="font-bold text-white">{today.closed ? t('closedDay') : `${today.open} – ${today.close}`}</span>
-            </p>
-          </div>
-
-          {validationError && (
-            <div role="alert" className="mb-5 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              {validationError}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-3" noValidate>
-            {RESTAURANT_DAYS.map(({ key, label }) => {
-              const day = hours[key];
-
-              return (
-                <div key={key} className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 transition hover:border-white/10">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-semibold text-white">{label}</p>
-                      <p className="mt-1 text-xs text-slate-500">{day.closed ? t('closedDay') : `${day.open} – ${day.close}`}</p>
-                    </div>
-                    <label className="flex shrink-0 cursor-pointer items-center gap-3">
-                      <span className="text-xs font-semibold text-slate-400">{day.closed ? t('closedDay') : t('openDay')}</span>
-                      <input
-                        type="checkbox"
-                        checked={!day.closed}
-                        onChange={(event) => updateDay(key, 'closed', !event.target.checked)}
-                        disabled={isDeleting}
-                        aria-label={`${label} ouvert`}
-                        className="peer sr-only"
-                      />
-                      <span aria-hidden="true" className={`relative h-6 w-11 rounded-full transition peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-primary ${day.closed ? 'bg-slate-700' : 'bg-green-500'}`}>
-                        <span className={`absolute left-1 top-1 size-4 rounded-full bg-white transition ${day.closed ? '' : 'translate-x-5'}`} />
-                      </span>
-                    </label>
-                  </div>
-
-                  {!day.closed && (
-                    <div className="mt-4 grid grid-cols-1 gap-3 border-t border-white/5 pt-4 sm:grid-cols-2">
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        {t('openDay')}
-                        <input
-                          type="time"
-                          disabled={isDeleting}
-                          value={day.open}
-                          onChange={(event) => updateDay(key, 'open', event.target.value)}
-                          aria-label={`${label} ouverture`}
-                          className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm font-semibold text-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                        />
-                      </label>
-                      <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                        {t('closedDay')}
-                        <input
-                          type="time"
-                          disabled={isDeleting}
-                          value={day.close}
-                          onChange={(event) => updateDay(key, 'close', event.target.value)}
-                          aria-label={`${label} fermeture`}
-                          className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm font-semibold text-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            <div className="flex justify-end border-t border-white/5 pt-6">
-              <button
-                type="submit"
-                disabled={!isDirty || isSaving || isDeleting}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-6 py-3.5 font-bold text-white primary-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-              >
-                {isSaving && <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
-                {isSaving ? t('savingSettings') : t('saveHours')}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <section className="mt-6 rounded-3xl border border-red-500/25 bg-red-500/5 p-5 sm:p-7">
-          <div className="flex items-start gap-4">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-red-500/10">
-              <MaterialIcon name="delete_forever" size="lg" className="text-red-300" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-xl font-bold text-white">{t('dangerZone')}</h3>
-              <p className="mt-1 text-sm leading-6 text-slate-400">
-                {t('deleteRestaurantWarning')}
-              </p>
-
-              {!showDeleteConfirmation ? (
+              <div className="flex justify-end border-t border-white/[0.06] px-3 py-3">
                 <button
                   type="button"
-                  disabled={isSaving || isDeleting}
-                  onClick={() => setShowDeleteConfirmation(true)}
-                  className="mt-5 rounded-xl border border-red-500/40 px-4 py-3 text-sm font-bold text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!isVisualDirty || isSaving || isDeleting}
+                  onClick={handleVisualSubmit}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-5 py-3 font-bold text-white primary-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
                 >
-                  {t('deleteThisRestaurant')}
+                  {isSaving && <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                  {isSaving ? t('savingSettings') : t('saveVisuals')}
                 </button>
-              ) : (
-                <div className="mt-5 rounded-2xl border border-red-500/30 bg-black/20 p-4">
-                  <p className="text-sm font-semibold text-red-100">{t('confirmDeletePermanently')}</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">
-                    {t('deleteRestaurantConfirmPrompt')}
-                  </p>
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end">
-                    <button
-                      type="button"
-                      disabled={isDeleting}
-                      onClick={() => setShowDeleteConfirmation(false)}
-                      className="rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-slate-300 transition hover:border-white/20 disabled:opacity-40"
-                    >
-                      {t('cancel')}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isDeleting}
-                      onClick={handleDeleteRestaurant}
-                      className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isDeleting ? t('submittingFile') : t('deletePermanently')}
-                    </button>
-                  </div>
-                </div>
+              </div>
+            </>}
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <p className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{t('step4Title')}</p>
+          <div className="rounded-3xl border border-white/[0.06] bg-[#1c1b1a] p-1.5">
+            <button
+              type="button"
+              aria-expanded={openSection === 'hours'}
+              onClick={() => setOpenSection((current) => current === 'hours' ? null : 'hours')}
+              className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10">
+                <MaterialIcon name="schedule" size="md" className="text-primary" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[15px] font-semibold text-white">{t('step4Title')}</h2>
+                <p className="mt-0.5 truncate text-xs text-slate-400">
+                  {t('ordersFollowSchedule')}
+                </p>
+              </div>
+              <MaterialIcon name={openSection === 'hours' ? 'expand_less' : 'chevron_right'} className="shrink-0 text-slate-500" />
+            </button>
+
+            {openSection === 'hours' && <>
+              <div className="mx-1 mb-3 flex items-center gap-3 rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3">
+              <MaterialIcon name="today" size="md" className="text-primary" />
+              <p className="text-sm text-slate-300">
+                {t('openingHoursToday')} : <span className="font-bold text-white">{today.closed ? t('closedDay') : `${today.open} – ${today.close}`}</span>
+              </p>
+              </div>
+
+              {validationError && (
+              <div role="alert" className="mx-1 mb-3 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                {validationError}
+              </div>
               )}
+
+              <form onSubmit={handleSubmit} className="space-y-1.5 px-1" noValidate>
+              {RESTAURANT_DAYS.map(({ key, label }) => {
+                const day = hours[key];
+
+                return (
+                  <div key={key} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 transition hover:border-white/10">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-semibold text-white">{label}</p>
+                        <p className="mt-1 text-xs text-slate-500">{day.closed ? t('closedDay') : `${day.open} – ${day.close}`}</p>
+                      </div>
+                      <label className="flex shrink-0 cursor-pointer items-center gap-3">
+                        <span className="text-xs font-semibold text-slate-400">{day.closed ? t('closedDay') : t('openDay')}</span>
+                        <input
+                          type="checkbox"
+                          checked={!day.closed}
+                          onChange={(event) => updateDay(key, 'closed', !event.target.checked)}
+                          disabled={isDeleting}
+                          aria-label={`${label} ouvert`}
+                          className="peer sr-only"
+                        />
+                        <span aria-hidden="true" className={`relative h-6 w-11 rounded-full transition peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-primary ${day.closed ? 'bg-slate-700' : 'bg-green-500'}`}>
+                          <span className={`absolute left-1 top-1 size-4 rounded-full bg-white transition ${day.closed ? '' : 'translate-x-5'}`} />
+                        </span>
+                      </label>
+                    </div>
+
+                    {!day.closed && (
+                      <div className="mt-4 grid grid-cols-1 gap-3 border-t border-white/[0.06] pt-4 sm:grid-cols-2">
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                          {t('openDay')}
+                          <input
+                            type="time"
+                            disabled={isDeleting}
+                            value={day.open}
+                            onChange={(event) => updateDay(key, 'open', event.target.value)}
+                            aria-label={`${label} ouverture`}
+                            className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm font-semibold text-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                          />
+                        </label>
+                        <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                          {t('closedDay')}
+                          <input
+                            type="time"
+                            disabled={isDeleting}
+                            value={day.close}
+                            onChange={(event) => updateDay(key, 'close', event.target.value)}
+                            aria-label={`${label} fermeture`}
+                            className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm font-semibold text-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              <div className="flex justify-end border-t border-white/[0.06] pt-4">
+                <button
+                  type="submit"
+                  disabled={!isDirty || isSaving || isDeleting}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] px-5 py-3 font-bold text-white primary-glow transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                >
+                  {isSaving && <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                  {isSaving ? t('savingSettings') : t('saveHours')}
+                </button>
+              </div>
+              </form>
+            </>}
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <p className="px-1 text-xs font-semibold uppercase tracking-wider text-red-300/80">{t('dangerZone')}</p>
+          <div className="rounded-3xl border border-red-500/20 bg-red-500/[0.04] p-1.5">
+            <div className="flex items-start gap-3 px-3 py-3">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-red-500/10">
+                <MaterialIcon name="delete_forever" size="md" className="text-red-300" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-[15px] font-semibold text-white">{t('dangerZone')}</h2>
+                <p className="mt-0.5 text-xs leading-5 text-slate-400">
+                  {t('deleteRestaurantWarning')}
+                </p>
+
+                {!showDeleteConfirmation ? (
+                  <button
+                    type="button"
+                    disabled={isSaving || isDeleting}
+                    onClick={() => setShowDeleteConfirmation(true)}
+                    className="mt-4 rounded-xl border border-red-500/40 px-4 py-3 text-sm font-bold text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {t('deleteThisRestaurant')}
+                  </button>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-red-500/30 bg-black/20 p-4">
+                    <p className="text-sm font-semibold text-red-100">{t('confirmDeletePermanently')}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-400">
+                      {t('deleteRestaurantConfirmPrompt')}
+                    </p>
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        disabled={isDeleting}
+                        onClick={() => setShowDeleteConfirmation(false)}
+                        className="rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-slate-300 transition hover:border-white/20 disabled:opacity-40"
+                      >
+                        {t('cancel')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isDeleting}
+                        onClick={handleDeleteRestaurant}
+                        className="rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isDeleting ? t('submittingFile') : t('deletePermanently')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </section>
