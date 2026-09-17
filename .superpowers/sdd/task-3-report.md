@@ -1,159 +1,54 @@
-# Task 3 Report: Secure admin plan updates
+# Task 3 report: migrate catalog action modals to BottomSheet
 
-## Scope
+## Status
 
-- Updated `functions/src/personalDriver/adminManagePersonalDriver.ts`.
-- Updated `functions/src/personalDriver/__tests__/adminManagePersonalDriver.test.ts`.
-- Updated `firestore.rules`.
-- Updated `tests/firestore/personal-driver.rules.test.ts`.
-- Preserved existing admin operational actions and existing personal driver subscription/trip rules.
+Implemented Task 3 in the four approved feature files. Existing public `isOpen` and `onClose` props remain unchanged, and business service workflows, cleanup, progress handling, and import confirmation logic were preserved.
 
-## Implementation
+## Changes
 
-- Added callable action payload `{ action: 'updatePlan'; plan: PersonalDriverPlan }`.
-- Added result `{ success: true; planId: PersonalDriverPlanId }`.
-- Kept writes behind existing server-side authentication and `assertAdminUser` verification.
-- Restricted writable plan IDs to fixed IDs `basic`, `classic`, and `premium`.
-- Validated Task 3 bounds:
-  - name: 1-80 chars
-  - badge: 0-80 chars
-  - promise: 1-200 chars
-  - pricePerKm: 0-1000
-  - minimumBillableKm: positive integer up to 100000
-  - minimumAmount: 0-1000000
-  - allowedWeekdays: 1-7 unique integer weekdays from 0 to 6
-  - includedRegularWaitMinutes: 0-1440
-  - includedSpecialTrips: 0-100
-  - benefits: 1-12 items, each 1-200 chars
-- Wrote validated fields to `personal_driver_plans/{plan.id}` with `updatedAt: serverTimestamp()` and `updatedBy: adminUid` using `{ merge: true }`.
-- Added `FieldValue.delete()` for an empty optional badge so merge updates can clear a stale badge.
-- Added Firestore rules for public reads of `basic`, `classic`, and `premium`, with all client writes denied.
+- Migrated `BulkCsvImportModal` to the shared `BottomSheet` exported from `@/components/ui`.
+- Migrated `StoreConnectorModal` to the shared `BottomSheet`.
+- Removed the feature-local fixed overlays, panel wrappers, and import modal body-overflow effect.
+- Routed sheet dismissal through each modal’s existing `handleClose`.
+- Applied the requested dismissal rules:
+  - Import: `canDismiss={!(isProcessing && importJob?.status === 'processing')}`.
+  - Store: `canDismiss={!isTesting && !isSaving && !isSyncing}`.
+  - Store footer cancellation is also disabled while testing, saving, or syncing so it cannot bypass the shared dismissal guard.
+- Added focused presentation coverage for accessible titles, shared handles, idle import drag dismissal, and busy-state dismissal blocking. Existing workflow tests remain in place.
 
-## TDD Evidence
+## Verification evidence
 
-### Callable RED
+Focused command, run after implementation:
 
-Command:
+```text
+npx jest src/components/food/__tests__/BulkCsvImportModal.test.tsx src/components/food/__tests__/StoreConnectorModal.test.tsx --runInBand
 
-```powershell
-npm --prefix functions test -- --runInBand src/personalDriver/__tests__/adminManagePersonalDriver.test.ts
+Test Suites: 2 passed, 2 total
+Tests:       15 passed, 15 total
 ```
 
-Observed before implementation:
+The required red-first check was also observed before migration: the new shared-handle assertions failed because both modals still rendered local overlays and no `bottom-sheet-handle` existed. After migration, the focused suite passed.
 
-- Exit code: 1
-- Test Suites: 1 failed, 1 total
-- Tests: 5 failed, 18 passed, 23 total
-- Expected failure: `updatePlan` was rejected as invalid input because the callable union did not include the new action.
+`git diff --check` completed without whitespace errors.
 
-Additional RED for merge badge clearing:
+## Task 3 review-fix evidence
 
-- Exit code: 1
-- Test Suites: 1 failed, 1 total
-- Tests: 1 failed, 23 passed, 24 total
-- Expected failure: `clears an empty badge during merge plan updates` showed the merge write omitted `badge` instead of sending the delete sentinel.
+Required covering command:
 
-### Callable GREEN
+```text
+npx jest src/components/ui/__tests__/BottomSheet.test.tsx src/components/food/__tests__/BulkCsvImportModal.test.tsx src/components/food/__tests__/StoreConnectorModal.test.tsx --runInBand
 
-Command:
-
-```powershell
-npm --prefix functions test -- --runInBand src/personalDriver/__tests__/adminManagePersonalDriver.test.ts
+Test Suites: 3 passed, 3 total
+Tests:       30 passed, 30 total
+Snapshots:   0 total
+Time:        10.104 s
+Ran all test suites matching src/components/ui/__tests__/BottomSheet.test.tsx|src/components/food/__tests__/BulkCsvImportModal.test.tsx|src/components/food/__tests__/StoreConnectorModal.test.tsx.
 ```
 
-Observed after implementation:
+The review fix adds optional `BottomSheet.onCloseRequest` behavior for the explicit close button only. With no callback, existing `canDismiss` behavior remains unchanged; backdrop, Escape, and drag dismissal continue to use `canDismiss`. `BulkCsvImportModal` routes the explicit close button to `handleClose`, allowing its active-processing `window.confirm` path while drag/backdrop/Escape remain blocked. `StoreConnectorModal` routes the explicit close request through its testing/saving/syncing guard, preserving blocked close behavior in those states. `MenuManagementClient` routes the explicit close request through `handleAttemptCloseModal`.
 
-- Exit code: 0
-- Test Suites: 1 passed, 1 total
-- Tests: 24 passed, 24 total
-- Snapshots: 0 total
-- Time: 30.083 s
+Focused regressions cover the callback contract, import confirmation reachability with `window.confirm` mocked, blocked import drag, and blocked store close while testing. `git diff --check` completed without whitespace errors.
 
-### Firestore Emulator RED Attempt
+## Scope and concerns
 
-Command:
-
-```powershell
-firebase emulators:exec --project medjira-taxi-test --only firestore "npx jest --config jest.firestore.config.js tests/firestore/personal-driver.rules.test.ts --runInBand"
-```
-
-Observed before rules implementation:
-
-- Output reached `i  emulators: Starting emulators: firestore` and `i  firestore: downloading cloud-firestore-emulator-v1.20.4.jar...`.
-- It stayed on the emulator jar download with no completion after roughly 60 seconds.
-- It was interrupted with Ctrl-C.
-- Exit code: 1.
-
-### Firestore Emulator GREEN Attempt
-
-Command:
-
-```powershell
-firebase emulators:exec --project medjira-taxi-test --only firestore "npx jest --config jest.firestore.config.js tests/firestore/personal-driver.rules.test.ts --runInBand"
-```
-
-Observed after rules implementation:
-
-- Output reached `i  emulators: Starting emulators: firestore` and `i  firestore: downloading cloud-firestore-emulator-v1.20.4.jar...`.
-- It stayed on the emulator jar download with no new output after roughly 90 seconds.
-- It was interrupted with Ctrl-C.
-- Exit code: 1.
-- Blocker: `cloud-firestore-emulator-v1.20.4.jar` did not finish downloading, so Jest did not execute the Firestore rules test file.
-
-### Build Check
-
-Command:
-
-```powershell
-npm --prefix functions run build
-```
-
-Observed after implementation:
-
-- Exit code: 0
-- Output included `> build` and `> tsc`.
-
-### Review Fix RED
-
-Command:
-
-```powershell
-npx jest --roots src/services/personal-driver --runTestsByPath src/services/personal-driver/plan-config.service.test.ts --runInBand --watch=false
-```
-
-Observed before loader implementation:
-
-- Exit code: 1
-- Test Suites: 1 failed, 1 total
-- Tests: 4 failed, 1 passed, 5 total
-- Expected failure: the updated client loader test required three direct `doc(db, 'personal_driver_plans', id)` / `getDoc(...)` reads for `basic`, `classic`, and `premium`, but the loader still used `getDocs(collection(...))`, so `mockDoc` was called `0` times.
-
-### Review Fix GREEN
-
-Implementation:
-
-- Updated `src/services/personal-driver/plan-config.service.ts` to fetch only the fixed plan document IDs with `getDoc(doc(db, 'personal_driver_plans', planId))`.
-- Preserved existing missing-document and invalid-document behavior by normalizing each fixed ID independently and falling back to its static plan when needed.
-- Preserved existing read-failure behavior by returning cloned static plans with `source: 'fallback'` and the thrown error.
-- Preserved clone isolation for returned plans and static defaults.
-
-Command:
-
-```powershell
-npx jest --roots src/services/personal-driver --runTestsByPath src/services/personal-driver/plan-config.service.test.ts src/services/personal-driver/pricing.service.test.ts --runInBand --watch=false
-```
-
-Observed after implementation:
-
-- Exit code: 0
-- Test Suites: 2 passed, 2 total
-- Tests: 10 passed, 10 total
-- Snapshots: 0 total
-- Time: 4.604 s
-- Firestore emulator was not run for this review fix because the emulator JAR download blocker is already documented and the review fix only requested focused plan-config/pricing Jest coverage.
-
-## Concerns
-
-- Firestore emulator verification did not reach GREEN because the emulator jar download timed out/stalled.
-- No long-running emulator process was found afterward; process inspection only found the inspection command itself.
-- Existing unrelated modification `.superpowers/sdd/task-2-report.md` was present before Task 3 work and was left untouched.
+Only the four Task 3 source/test files are intended for the Task 3 commit. Other pre-existing working-tree modifications were left unstaged and untouched. No full build or repository-wide test run was requested; validation is limited to the focused feature tests and diff check.

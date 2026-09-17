@@ -229,6 +229,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
       onOpenChange={(open) => {
         if (!open) handleClose();
       }}
+      onCloseRequest={handleClose}
       title="Importer un catalogue de plats"
       canDismiss={!(isProcessing && importJob?.status === 'processing')}
       className="sm:max-w-2xl"

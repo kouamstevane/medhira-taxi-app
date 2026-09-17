@@ -638,6 +638,7 @@ export default function MenuManagementClient() {
           onOpenChange={(open) => {
             if (!open) handleAttemptCloseModal();
           }}
+          onCloseRequest={handleAttemptCloseModal}
           canDismiss={!isCompressing && !isUploading}
           className="glass-card border border-white/10 bg-[#1A1A1A]"
         >

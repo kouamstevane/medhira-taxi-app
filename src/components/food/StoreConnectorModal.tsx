@@ -203,6 +203,9 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
       onOpenChange={(open) => {
         if (!open) handleClose();
       }}
+      onCloseRequest={() => {
+        if (!isTesting && !isSaving && !isSyncing) handleClose();
+      }}
       title="Connecter une boutique"
       canDismiss={!isTesting && !isSaving && !isSyncing}
       className="sm:max-w-2xl"

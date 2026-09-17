@@ -126,6 +126,16 @@ describe('BottomSheet', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
+  it('routes the explicit close button to onCloseRequest when dismissal is blocked', () => {
+    const onCloseRequest = jest.fn();
+    const { onOpenChange } = renderSheet({ canDismiss: false, onCloseRequest });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+
+    expect(onCloseRequest).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
   it('dismisses after a downward handle drag of at least 120 pixels', () => {
     const { onOpenChange } = renderSheet();
     const handle = screen.getByTestId('bottom-sheet-handle');

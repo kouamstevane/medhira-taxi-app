@@ -10,6 +10,7 @@ export interface BottomSheetProps {
   readonly title: string;
   readonly children: ReactNode;
   readonly canDismiss?: boolean;
+  readonly onCloseRequest?: () => void;
   readonly className?: string;
 }
 
@@ -22,6 +23,7 @@ export function BottomSheet({
   title,
   children,
   canDismiss = true,
+  onCloseRequest,
   className,
 }: BottomSheetProps) {
   const titleId = `bottom-sheet-title-${useId().replace(/:/g, '')}`;
@@ -139,7 +141,11 @@ export function BottomSheet({
               aria-label="Fermer"
               className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => {
-                if (canDismiss) onOpenChange(false);
+                if (onCloseRequest) {
+                  onCloseRequest();
+                } else if (canDismiss) {
+                  onOpenChange(false);
+                }
               }}
               type="button"
             >

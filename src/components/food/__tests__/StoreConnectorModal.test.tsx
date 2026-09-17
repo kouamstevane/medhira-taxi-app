@@ -44,6 +44,8 @@ describe('StoreConnectorModal', () => {
     firePointerDrag(handle);
 
     expect(defaultProps.onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 
   test('does not close while syncing', async () => {

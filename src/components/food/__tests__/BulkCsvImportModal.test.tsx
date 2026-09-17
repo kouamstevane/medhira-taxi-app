@@ -17,6 +17,10 @@ describe('BulkCsvImportModal', () => {
     jest.clearAllMocks();
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   test('renders modal when isOpen is true', () => {
     render(<BulkCsvImportModal {...defaultProps} />);
     expect(screen.getByText('Importer un catalogue de plats')).toBeInTheDocument();
@@ -110,6 +114,14 @@ describe('BulkCsvImportModal', () => {
     firePointer('pointerMove', 140);
     firePointer('pointerUp', 140);
 
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
+
+    jest.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      "L'importation est en cours de traitement en arrière-plan. Souhaitez-vous fermer la fenêtre ?",
+    );
     expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 
