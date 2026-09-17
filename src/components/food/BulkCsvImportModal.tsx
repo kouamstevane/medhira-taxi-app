@@ -9,8 +9,8 @@ import {
   FileText,
   FolderOpen,
   Info,
-  X,
 } from 'lucide-react';
+import { BottomSheet } from '@/components/ui';
 import {
   MENU_IMPORT_TEMPLATE_URLS,
   listenToImportProgress,
@@ -70,17 +70,6 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
       cleanupSubscription();
     };
   }, []);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-    };
-  }, [isOpen]);
 
   const handleClose = () => {
     if (isProcessing && importJob?.status === 'processing') {
@@ -228,8 +217,6 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
     });
   };
 
-  if (!isOpen) return null;
-
   const total = importJob?.totalItems || 0;
   const processed = importJob?.processedItems || 0;
   const failed = importJob?.failedItems || 0;
@@ -237,31 +224,19 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
   const completedWithErrors = importJob?.status === 'completed' && failed > 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="import-modal-title"
+    <BottomSheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) handleClose();
+      }}
+      title="Importer un catalogue de plats"
+      canDismiss={!(isProcessing && importJob?.status === 'processing')}
+      className="sm:max-w-2xl"
     >
-      <div className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 md:p-8 flex flex-col max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
-          <div>
-            <h2 id="import-modal-title" className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-              Importer un catalogue de plats
-            </h2>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-              Fichiers acceptés : CSV, ZIP et Excel XLSX (jusqu'à 10 000 plats, max 15 Mo)
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            aria-label="Fermer"
-            className="p-2 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-          >
-            <X aria-hidden="true" className="size-5" />
-          </button>
-        </div>
+      <div className="flex flex-col">
+        <p className="border-b border-zinc-200 pb-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+          Fichiers acceptés : CSV, ZIP et Excel XLSX (jusqu'à 10 000 plats, max 15 Mo)
+        </p>
 
         {/* Body */}
         <div className="py-6 space-y-6 flex-1">
@@ -614,6 +589,6 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </BottomSheet>
   );
 };

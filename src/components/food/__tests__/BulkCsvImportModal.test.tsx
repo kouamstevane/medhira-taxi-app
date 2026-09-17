@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { createEvent, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BulkCsvImportModal } from '../BulkCsvImportModal';
 import * as MenuImportClientService from '@/services/menu-import-client.service';
 
@@ -20,6 +20,8 @@ describe('BulkCsvImportModal', () => {
   test('renders modal when isOpen is true', () => {
     render(<BulkCsvImportModal {...defaultProps} />);
     expect(screen.getByText('Importer un catalogue de plats')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Importer un catalogue de plats' })).toBeInTheDocument();
+    expect(screen.getByTestId('bottom-sheet-handle')).toBeInTheDocument();
     expect(screen.getByLabelText('Modèles d’importation')).toBeInTheDocument();
     expect(screen.getByText('Besoin d’un modèle ?')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /modèle CSV sans images/i })).toHaveAttribute(
@@ -52,6 +54,63 @@ describe('BulkCsvImportModal', () => {
   test('does not trigger a service call when a template link is rendered', () => {
     render(<BulkCsvImportModal {...defaultProps} />);
     expect(MenuImportClientService.downloadSampleCsvTemplate).not.toHaveBeenCalled();
+  });
+
+  test('closes when the shared sheet handle is dragged while idle', () => {
+    render(<BulkCsvImportModal {...defaultProps} />);
+    const handle = screen.getByTestId('bottom-sheet-handle');
+
+    const firePointer = (type: 'pointerDown' | 'pointerMove' | 'pointerUp', clientY: number) => {
+      const event = createEvent[type](handle);
+      Object.defineProperty(event, 'clientY', { value: clientY });
+      Object.defineProperty(event, 'pointerId', { value: 1 });
+      fireEvent(handle, event);
+    };
+    firePointer('pointerDown', 0);
+    firePointer('pointerMove', 140);
+    firePointer('pointerUp', 140);
+
+    expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not dismiss while an import is processing', async () => {
+    (MenuImportClientService.uploadMenuImportFile as jest.Mock).mockResolvedValueOnce({
+      importId: 'imp-processing',
+      filePath: 'menu-imports/resto-123/imp-processing.csv',
+      type: 'csv',
+      fileFormat: 'csv',
+    });
+    (MenuImportClientService.previewMenuFileImport as jest.Mock).mockResolvedValueOnce({
+      importId: 'imp-processing',
+      rows: [{ rowNumber: 2, name: 'Pizza', description: '', price: 12, category: 'Plats', externalId: 'pizza-1', hasImage: false, status: 'new', selectable: true }],
+      summary: { totalRows: 1, importableRows: 1, invalidRows: 0, conflictRows: 0, newRows: 1, updateRows: 0 },
+    });
+    (MenuImportClientService.startMenuFileImport as jest.Mock).mockResolvedValueOnce({ importId: 'imp-processing' });
+    (MenuImportClientService.listenToImportProgress as jest.Mock).mockImplementation((_restaurantId, importId, onJob) => {
+      onJob({ id: importId, restaurantId: 'resto-123', type: 'csv', status: 'processing', totalItems: 1, processedItems: 0, failedItems: 0, errors: [] });
+      return jest.fn();
+    });
+    render(<BulkCsvImportModal {...defaultProps} />);
+    fireEvent.change(screen.getByTestId('file-input'), {
+      target: { files: [new File(['name,price\nPizza,12'], 'menu.csv', { type: 'text/csv' })] },
+    });
+    fireEvent.click(screen.getByText(/Analyser le fichier/i));
+    await waitFor(() => expect(screen.getByText('Récapitulatif de l’importation')).toBeInTheDocument());
+    fireEvent.click(screen.getByText(/Confirmer et importer/i));
+    await waitFor(() => expect(MenuImportClientService.listenToImportProgress).toHaveBeenCalled());
+
+    const handle = screen.getByTestId('bottom-sheet-handle');
+    const firePointer = (type: 'pointerDown' | 'pointerMove' | 'pointerUp', clientY: number) => {
+      const event = createEvent[type](handle);
+      Object.defineProperty(event, 'clientY', { value: clientY });
+      Object.defineProperty(event, 'pointerId', { value: 1 });
+      fireEvent(handle, event);
+    };
+    firePointer('pointerDown', 0);
+    firePointer('pointerMove', 140);
+    firePointer('pointerUp', 140);
+
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 
   test('shows a review before starting the import job', async () => {

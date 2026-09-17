@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { BottomSheet } from '@/components/ui';
 import {
   listenToImportProgress,
   saveStoreIntegration,
@@ -191,39 +192,25 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
-
   const total = importJob?.totalItems || 0;
   const processed = importJob?.processedItems || 0;
   const failed = importJob?.failedItems || 0;
   const progressPercent = total > 0 ? Math.min(100, Math.round(((processed + failed) / total) * 100)) : 0;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="store-modal-title"
+    <BottomSheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) handleClose();
+      }}
+      title="Connecter une boutique"
+      canDismiss={!isTesting && !isSaving && !isSyncing}
+      className="sm:max-w-2xl"
     >
-      <div className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 md:p-8 flex flex-col max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
-          <div>
-            <h2 id="store-modal-title" className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-              <span>🛒</span> Connecter une boutique WooCommerce
-            </h2>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-              Synchronisez automatiquement votre catalogue WooCommerce vers votre menu Medjira
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            aria-label="Fermer"
-            className="p-2 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-          >
-            ✕
-          </button>
-        </div>
+      <div className="flex flex-col">
+        <p className="border-b border-zinc-200 pb-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+          Synchronisez automatiquement votre catalogue WooCommerce vers votre menu Medjira
+        </p>
 
         {/* Body */}
         <div className="py-6 space-y-5 flex-1">
@@ -428,7 +415,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
         <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-end gap-3">
           <button
             onClick={handleClose}
-            disabled={isSyncing && importJob?.status === 'processing'}
+            disabled={isTesting || isSaving || isSyncing}
             className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors min-h-[44px]"
           >
             {importJob?.status === 'completed' ? 'Fermer' : 'Annuler'}
@@ -458,6 +445,6 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </BottomSheet>
   );
 };
