@@ -68,6 +68,15 @@ jest.mock('next/image', () => ({
   default: () => null,
 }));
 
+jest.mock('@capacitor/haptics', () => ({
+  Haptics: {
+    impact: jest.fn().mockResolvedValue(undefined),
+  },
+  ImpactStyle: {
+    Light: 'LIGHT',
+  },
+}));
+
 const mockOnAuthStateChanged = onAuthStateChanged as jest.Mock;
 const mockGetRestaurantById = FoodDeliveryService.getRestaurantById as jest.Mock;
 const mockGetRestaurantMenuPaginated = FoodDeliveryService.getRestaurantMenuPaginated as jest.Mock;
@@ -178,5 +187,31 @@ describe('MenuManagementClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer la suppression' }));
 
     await waitFor(() => expect(mockDeleteMenuItem).toHaveBeenCalledWith('restaurant-1', '1'));
+  });
+
+  it('renders descriptive image action choices when opening the add dish modal', async () => {
+    render(<MenuManagementClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Ajouter un plat/i }));
+
+    expect(screen.getByRole('button', { name: /Sans image/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Téléverser un fichier/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Lien web \(URL\)/i })).toBeInTheDocument();
+  });
+
+  it('renders the MaterialSwitch toggle for availability and toggles state on click', async () => {
+    render(<MenuManagementClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Ajouter un plat/i }));
+
+    const availabilitySwitch = screen.getByRole('switch', { name: /Disponible à la vente/i });
+    expect(availabilitySwitch).toBeInTheDocument();
+    expect(availabilitySwitch).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(availabilitySwitch);
+    expect(availabilitySwitch).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(availabilitySwitch);
+    expect(availabilitySwitch).toHaveAttribute('aria-checked', 'true');
   });
 });

@@ -12,6 +12,8 @@ export interface BottomSheetProps {
   readonly canDismiss?: boolean;
   readonly onCloseRequest?: () => void;
   readonly className?: string;
+  readonly contentClassName?: string;
+  readonly showCloseButton?: boolean;
 }
 
 const DISMISS_DISTANCE = 120;
@@ -25,6 +27,8 @@ export function BottomSheet({
   canDismiss = true,
   onCloseRequest,
   className,
+  contentClassName,
+  showCloseButton = false,
 }: BottomSheetProps) {
   const titleId = `bottom-sheet-title-${useId().replace(/:/g, '')}`;
   const startYRef = useRef<number | null>(null);
@@ -40,7 +44,13 @@ export function BottomSheet({
     document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (canDismiss && event.key === 'Escape') onOpenChange(false);
+      if (event.key === 'Escape') {
+        if (canDismiss) {
+          onOpenChange(false);
+        } else if (onCloseRequest) {
+          onCloseRequest();
+        }
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -49,7 +59,7 @@ export function BottomSheet({
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [canDismiss, onOpenChange, open]);
+  }, [canDismiss, onCloseRequest, onOpenChange, open]);
 
   if (!open) return null;
 
@@ -107,13 +117,19 @@ export function BottomSheet({
         className="absolute inset-0 bg-black/60"
         data-testid="bottom-sheet-backdrop"
         onClick={(event) => {
-          if (canDismiss && event.target === event.currentTarget) onOpenChange(false);
+          if (event.target === event.currentTarget) {
+            if (canDismiss) {
+              onOpenChange(false);
+            } else if (onCloseRequest) {
+              onCloseRequest();
+            }
+          }
         }}
       />
       <section
         className={cn(
-          'relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-3xl bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl',
-          'sm:max-w-lg sm:rounded-2xl',
+          'relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-3xl bg-[#18181b] text-foreground border-t border-white/10 pb-[env(safe-area-inset-bottom)] shadow-2xl',
+          'sm:max-w-lg sm:rounded-2xl sm:border',
           className,
         )}
         style={{
@@ -134,26 +150,28 @@ export function BottomSheet({
             data-testid="bottom-sheet-handle"
           />
           <div className="mt-3 flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold" id={titleId}>
+            <h2 className="text-lg font-bold text-white tracking-tight" id={titleId}>
               {title}
             </h2>
-            <button
-              aria-label="Fermer"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => {
-                if (onCloseRequest) {
-                  onCloseRequest();
-                } else if (canDismiss) {
-                  onOpenChange(false);
-                }
-              }}
-              type="button"
-            >
-              <MaterialIcon name="close" size="md" />
-            </button>
+            {showCloseButton && (
+              <button
+                aria-label="Fermer"
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => {
+                  if (onCloseRequest) {
+                    onCloseRequest();
+                  } else if (canDismiss) {
+                    onOpenChange(false);
+                  }
+                }}
+                type="button"
+              >
+                <MaterialIcon name="close" size="md" />
+              </button>
+            )}
           </div>
         </div>
-        <div className="min-h-0 overflow-y-auto px-4 pb-4">{children}</div>
+        <div className={cn('min-h-0 overflow-y-auto px-4 pb-4', contentClassName)}>{children}</div>
       </section>
     </div>
   );

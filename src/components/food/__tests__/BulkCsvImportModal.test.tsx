@@ -117,7 +117,7 @@ describe('BulkCsvImportModal', () => {
     expect(defaultProps.onClose).not.toHaveBeenCalled();
 
     jest.spyOn(window, 'confirm').mockReturnValue(false);
-    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    fireEvent.click(screen.getByTestId('bottom-sheet-backdrop'));
 
     expect(window.confirm).toHaveBeenCalledWith(
       "L'importation est en cours de traitement en arrière-plan. Souhaitez-vous fermer la fenêtre ?",

@@ -110,7 +110,10 @@ export function useMenuCatalogQuery(restaurantId: string) {
       cursorByPageRef.current = [null];
       void fetchPage(currentQuery, 0, null);
     }, 300);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      window.clearTimeout(timeout);
+      requestIdRef.current += 1;
+    };
   }, [currentQuery, fetchPage, restaurantId]);
 
   useEffect(() => {
@@ -130,6 +133,7 @@ export function useMenuCatalogQuery(restaurantId: string) {
     setCategoryState(nextQuery.category ?? null);
     setAvailabilityState(nextQuery.availability ?? 'all');
     setSortState(nextQuery.sort ?? 'category');
+    setState((previous) => ({ ...previous, isLoading: true, isLoadingPage: true, selectedIds: [] }));
     syncUrl(nextQuery);
   }, [availability, category, search, sort, syncUrl]);
 

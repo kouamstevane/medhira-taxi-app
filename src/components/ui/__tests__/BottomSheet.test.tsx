@@ -97,14 +97,22 @@ describe('BottomSheet', () => {
     expect(document.body.style.overflow).toBe('auto');
   });
 
-  it.each([
-    ['the backdrop', () => screen.getByTestId('bottom-sheet-backdrop')],
-    ['the close button', () => screen.getByRole('button', { name: 'Fermer' })],
-  ])('closes from %s when dismissible', (_source, getTarget) => {
+  it('does not render the close button by default', () => {
+    renderSheet();
+    expect(screen.queryByRole('button', { name: 'Fermer' })).not.toBeInTheDocument();
+  });
+
+  it('renders and closes from the close button when showCloseButton is true', () => {
+    const { onOpenChange } = renderSheet({ showCloseButton: true });
+    const closeBtn = screen.getByRole('button', { name: 'Fermer' });
+    expect(closeBtn).toBeInTheDocument();
+    fireEvent.click(closeBtn);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('closes from the backdrop when dismissible', () => {
     const { onOpenChange } = renderSheet();
-
-    fireEvent.click(getTarget());
-
+    fireEvent.click(screen.getByTestId('bottom-sheet-backdrop'));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -117,7 +125,7 @@ describe('BottomSheet', () => {
   });
 
   it('does not dismiss from backdrop, close button, or Escape when canDismiss is false', () => {
-    const { onOpenChange } = renderSheet({ canDismiss: false });
+    const { onOpenChange } = renderSheet({ canDismiss: false, showCloseButton: true });
 
     fireEvent.click(screen.getByTestId('bottom-sheet-backdrop'));
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
@@ -126,13 +134,16 @@ describe('BottomSheet', () => {
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 
-  it('routes the explicit close button to onCloseRequest when dismissal is blocked', () => {
+  it('routes backdrop click and explicit close button to onCloseRequest when dismissal is blocked', () => {
     const onCloseRequest = jest.fn();
-    const { onOpenChange } = renderSheet({ canDismiss: false, onCloseRequest });
+    const { onOpenChange } = renderSheet({ canDismiss: false, onCloseRequest, showCloseButton: true });
 
     fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
-
     expect(onCloseRequest).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId('bottom-sheet-backdrop'));
+    expect(onCloseRequest).toHaveBeenCalledTimes(2);
+
     expect(onOpenChange).not.toHaveBeenCalled();
   });
 

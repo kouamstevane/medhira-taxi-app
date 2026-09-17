@@ -44,7 +44,7 @@ describe('StoreConnectorModal', () => {
     firePointerDrag(handle);
 
     expect(defaultProps.onClose).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+    fireEvent.click(screen.getByTestId('bottom-sheet-backdrop'));
     expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 

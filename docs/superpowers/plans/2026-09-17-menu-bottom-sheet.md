@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Use one responsive, draggable bottom-sheet component for menu add/edit, catalog import, and store connection modals, while leaving delete confirmation unchanged.
+**Goal:** Use one responsive, draggable bottom-sheet component for menu add/edit, catalog import, and store connection modals, while leaving delete confirmation uncha1nged.
 
 **Architecture:** Create a controlled client component at `src/components/ui/BottomSheet.tsx`. It owns overlay rendering, scroll locking, Escape/backdrop dismissal, accessibility, safe-area spacing, and pointer-based drag-to-dismiss. Existing feature components keep their business state and pass a guarded `onOpenChange` callback or `canDismiss` predicate.
 

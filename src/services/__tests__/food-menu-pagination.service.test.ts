@@ -70,6 +70,21 @@ describe('food-menu-pagination service', () => {
     expect(startAfter).toHaveBeenCalledWith(mockCursor);
   });
 
+  test('keeps availability counters scoped to search/category, not the active availability filter', async () => {
+    (getCountFromServer as jest.Mock)
+      .mockResolvedValueOnce({ data: () => ({ count: 22 }) })
+      .mockResolvedValueOnce({ data: () => ({ count: 19 }) });
+    (getDocs as jest.Mock).mockResolvedValueOnce({ docs: [] });
+
+    const result = await getRestaurantMenuPaginated(restaurantId, {
+      availability: 'unavailable',
+      pageSize: 50,
+    });
+
+    expect(result.totalCount).toBe(22);
+    expect(result.availableCount).toBe(19);
+  });
+
   test('bounds pageSize between 1 and 100', async () => {
     (getDocs as jest.Mock).mockResolvedValueOnce({ docs: [] });
     await getRestaurantMenuPaginated(restaurantId, 250);

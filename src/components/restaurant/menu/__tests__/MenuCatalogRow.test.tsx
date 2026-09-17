@@ -13,9 +13,11 @@ describe('MenuCatalogRow', () => {
   it('renders compact item content and accessible actions', () => {
     render(<MenuCatalogRow item={item} selected={false} onSelect={jest.fn()} onToggleAvailability={jest.fn()} onEdit={jest.fn()} onDelete={jest.fn()} />);
     expect(screen.getByText('Burger Maison')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Modifier Burger Maison' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Supprimer Burger Maison' })).toBeInTheDocument();
-    expect(screen.getByTestId('menu-image').parentElement).toHaveClass('relative', 'size-12', 'overflow-hidden');
+    expect(screen.getByRole('button', { name: 'Actions pour Burger Maison' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions pour Burger Maison' }));
+    expect(screen.getAllByRole('button', { name: 'Modifier Burger Maison' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Supprimer Burger Maison' })).toHaveLength(2);
+    expect(screen.getByTestId('menu-image').parentElement).toHaveClass('relative', 'size-10', 'overflow-hidden');
   });
 
   it('toggles selection through the checkbox', () => {
@@ -23,5 +25,16 @@ describe('MenuCatalogRow', () => {
     render(<MenuCatalogRow item={item} selected={false} onSelect={onSelect} onToggleAvailability={jest.fn()} onEdit={jest.fn()} onDelete={jest.fn()} />);
     fireEvent.click(screen.getByRole('checkbox', { name: 'Sélectionner Burger Maison' }));
     expect(onSelect).toHaveBeenCalledWith('item-1');
+  });
+
+  it('closes the mobile actions menu when clicking outside', () => {
+    render(<MenuCatalogRow item={item} selected={false} onSelect={jest.fn()} onToggleAvailability={jest.fn()} onEdit={jest.fn()} onDelete={jest.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions pour Burger Maison' }));
+    expect(screen.getAllByRole('button', { name: 'Modifier Burger Maison' })).toHaveLength(2);
+
+    fireEvent.pointerDown(document.body);
+
+    expect(screen.queryByText('Modifier Burger Maison')).not.toBeInTheDocument();
   });
 });

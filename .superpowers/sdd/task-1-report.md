@@ -24,7 +24,7 @@ After implementation, the focused suite passed.
 
 ## Verification
 
-- `npx jest src/components/ui/__tests__/BottomSheet.test.tsx --runInBand`: 1 suite passed, 12 tests passed, 0 failed.
+- `npx jest src/components/ui/__tests__/BottomSheet.test.tsx --runInBand`: 1 suite passed, 14 tests passed, 0 failed.
 - `npx eslint src/components/ui/BottomSheet.tsx src/components/ui/__tests__/BottomSheet.test.tsx src/components/ui/index.ts`: passed with no output/errors.
 - `npx tsc --noEmit --pretty false`: passed with no output/errors.
 - `git diff --check`: no whitespace errors in the Task 1 changes.

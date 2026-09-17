@@ -21,9 +21,7 @@ import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { ConversationLauncher } from '@/components/ConversationLauncher';
 import type { ConversationContext } from '@/types/conversation';
-import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { OrderRejectionDialog } from './OrderRejectionDialog';
 import {
   getRestaurantOrderFilterClassName,
@@ -240,16 +238,8 @@ export default function OrdersManagementClient() {
   if (isNetworkError && !restaurant) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
-          <button
-            onClick={() => router.push(id ? getRestaurantPortalPath(id) : '/restaurant/dashboard')}
-            className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label={t('back')}
-          >
-            <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
-          </button>
+        <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-center">
           <h1 className="text-xl font-bold text-white">{t('ordersTitle')}</h1>
-          <LanguageSelector variant="compact" />
         </header>
         <div className="flex-1 flex items-center justify-center p-4">
           <NetworkErrorView
@@ -286,15 +276,8 @@ export default function OrdersManagementClient() {
         />
       )}
 
-      <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
+      <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-center">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => router.push(getRestaurantPortalPath(id))}
-            className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label={t('back')}
-          >
-            <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
-          </button>
           <div>
             <h1 className="text-xl font-bold text-white">{t('ordersTitle')}</h1>
             <p className="text-xs text-slate-500">
@@ -304,7 +287,6 @@ export default function OrdersManagementClient() {
             </p>
           </div>
         </div>
-        <LanguageSelector variant="compact" />
       </header>
 
       <main className="mx-auto max-w-5xl p-4 sm:p-8">

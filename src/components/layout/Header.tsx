@@ -15,7 +15,6 @@ import Image from 'next/image';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/config/firebase';
 import { UserData } from '@/types';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { useTranslation } from '@/hooks/useTranslation';
 
 interface HeaderProps {
@@ -62,7 +61,6 @@ export const Header: React.FC<HeaderProps> = ({
       </h1>
 
       <div className="flex items-center space-x-2 sm:space-x-4">
-        <LanguageSelector variant="pill" />
         {/* Notifications */}
         {onNotificationClick && (
           <button

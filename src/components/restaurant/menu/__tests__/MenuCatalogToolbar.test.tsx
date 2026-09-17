@@ -13,7 +13,6 @@ const props = {
   onCategoryChange: jest.fn(),
   onAvailabilityChange: jest.fn(),
   onSortChange: jest.fn(),
-  onClearFilters: jest.fn(),
 };
 
 describe('MenuCatalogToolbar', () => {
@@ -21,16 +20,20 @@ describe('MenuCatalogToolbar', () => {
 
   it('renders the catalog summary and mobile filter controls', () => {
     render(<MenuCatalogToolbar {...props} />);
-    expect(screen.getByText((text) => text.replace(/\s/g, '').includes('1842plats'))).toBeInTheDocument();
-    expect(screen.getByText((text) => text.replace(/\s/g, '').includes('1706disponibles'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Tous/i })).toHaveTextContent(/1\D*842/);
+    expect(screen.getByRole('button', { name: /^Disponibles/i })).toHaveTextContent(/1\D*706/);
+    expect(screen.getByRole('button', { name: /^Indisponibles/i })).toHaveTextContent('136');
+    expect(screen.queryByText(/1842 plats/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1706 disponibles/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Réinitialiser/i })).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Rechercher un plat/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Disponibles' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Disponibles/i })).toBeInTheDocument();
   });
 
   it('emits the search and availability changes', () => {
     render(<MenuCatalogToolbar {...props} />);
     fireEvent.change(screen.getByPlaceholderText(/Rechercher un plat/i), { target: { value: 'burger' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Disponibles' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Disponibles/i }));
     expect(props.onSearchChange).toHaveBeenCalledWith('burger');
     expect(props.onAvailabilityChange).toHaveBeenCalledWith('available');
   });

@@ -709,15 +709,15 @@ export const getRestaurantMenuPaginated = async (
     const orderDirection = sort === 'price-desc' ? 'desc' : 'asc';
     constraints.push(orderBy(orderField, orderDirection), orderBy(documentId(), 'asc'));
 
-    const countSnapshot = await getCountFromServer(query(menuRef, ...constraints));
-    const availableCountSnapshot = await getCountFromServer(
-      query(menuRef, ...catalogConstraints, where('isAvailable', '==', true)),
-    );
     const pageConstraints = [...constraints, limit(boundedPageSize)];
     if (cursor) pageConstraints.push(startAfter(cursor));
     const q = query(menuRef, ...pageConstraints);
 
-    const querySnapshot = await getDocs(q);
+    const [countSnapshot, availableCountSnapshot, querySnapshot] = await Promise.all([
+      getCountFromServer(query(menuRef, ...catalogConstraints)),
+      getCountFromServer(query(menuRef, ...catalogConstraints, where('isAvailable', '==', true))),
+      getDocs(q),
+    ]);
     const docs = querySnapshot.docs;
     const items = docs.map((docSnap) => ({
       ...docSnap.data(),

@@ -26,3 +26,6 @@ export { LanguageSelector } from './LanguageSelector';
 
 export { BottomSheet } from './BottomSheet';
 export type { BottomSheetProps } from './BottomSheet';
+
+export { MaterialSwitch } from './MaterialSwitch';
+export type { MaterialSwitchProps } from './MaterialSwitch';

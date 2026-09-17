@@ -232,15 +232,16 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
       onCloseRequest={handleClose}
       title="Importer un catalogue de plats"
       canDismiss={!(isProcessing && importJob?.status === 'processing')}
-      className="sm:max-w-2xl"
+      className="border border-white/10 bg-[#18181b] sm:max-w-2xl text-white shadow-2xl"
+      contentClassName="min-h-0 overflow-y-auto px-4 pb-0"
     >
       <div className="flex flex-col">
-        <p className="border-b border-zinc-200 pb-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+        <p className="border-b border-white/10 pb-3 text-xs text-slate-300">
           Fichiers acceptés : CSV, ZIP et Excel XLSX (jusqu'à 10 000 plats, max 15 Mo)
         </p>
 
         {/* Body */}
-        <div className="py-6 space-y-6 flex-1">
+        <div className="py-5 space-y-5 flex-1">
           {/* Compact template guidance */}
           <div
             aria-label="Modèles d’importation"
@@ -248,7 +249,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           >
             <div className="flex items-center gap-1.5">
               <Info aria-hidden="true" className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+              <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">
                 Besoin d’un modèle ?
               </span>
             </div>
@@ -258,33 +259,33 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                 download="modele-import-menu.csv"
                 aria-label="Télécharger le modèle CSV sans images"
                 title="CSV sans images"
-                className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+                className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
               >
-                <FileText aria-hidden="true" className="size-3.5 text-emerald-600" />
+                <FileText aria-hidden="true" className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                 CSV
-                <Download aria-hidden="true" className="size-3 text-zinc-400" />
+                <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
               </a>
               <a
                 href={MENU_IMPORT_TEMPLATE_URLS.zip}
                 download="modele-import-menu.zip"
                 aria-label="Télécharger le modèle ZIP avec images locales"
                 title="ZIP avec images locales"
-                className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+                className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
               >
-                <Archive aria-hidden="true" className="size-3.5 text-blue-600" />
+                <Archive aria-hidden="true" className="size-3.5 text-blue-600 dark:text-blue-400" />
                 ZIP
-                <Download aria-hidden="true" className="size-3 text-zinc-400" />
+                <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
               </a>
               <a
                 href={MENU_IMPORT_TEMPLATE_URLS.xlsx}
                 download="modele-import-menu.xlsx"
                 aria-label="Télécharger le modèle Excel avec images intégrées"
                 title="Excel avec images intégrées"
-                className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+                className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
               >
-                <FileSpreadsheet aria-hidden="true" className="size-3.5 text-violet-600" />
+                <FileSpreadsheet aria-hidden="true" className="size-3.5 text-violet-600 dark:text-violet-400" />
                 Excel
-                <Download aria-hidden="true" className="size-3 text-zinc-400" />
+                <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
               </a>
             </div>
           </div>
@@ -310,7 +311,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                   ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-950/20'
                   : file
                   ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20'
-                  : 'border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600 bg-zinc-50 dark:bg-zinc-800/50'
+                  : 'border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600 bg-zinc-50 dark:bg-zinc-800/60'
               }`}
             >
               <input
@@ -324,23 +325,23 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
 
               <div className="flex flex-col items-center justify-center space-y-2">
                 {file ? (
-                  <FileText aria-hidden="true" className="size-9 text-emerald-600" />
+                  <FileText aria-hidden="true" className="size-9 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <FolderOpen aria-hidden="true" className="size-9 text-zinc-500" />
+                  <FolderOpen aria-hidden="true" className="size-9 text-zinc-400 dark:text-zinc-300" />
                 )}
                 {file ? (
                   <div>
                     <p className="font-medium text-zinc-900 dark:text-zinc-100">{file.name}</p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-300 font-medium">
                       {(file.size / (1024 * 1024)).toFixed(2)} Mo — Cliquez pour remplacer
                     </p>
                   </div>
                 ) : (
                   <div>
-                    <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                    <p className="font-medium text-zinc-900 dark:text-zinc-100">
                       Glissez votre fichier CSV, ZIP ou XLSX ici
                     </p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                    <p className="text-xs text-zinc-600 dark:text-zinc-300 font-medium mt-1">
                       ou cliquez pour sélectionner depuis votre ordinateur
                     </p>
                   </div>
@@ -378,7 +379,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">Récapitulatif de l’importation</h3>
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
                     Vérifiez les lignes sélectionnées. Rien ne sera ajouté ou modifié avant votre confirmation.
                   </p>
                 </div>
@@ -396,7 +397,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                   ['Conflits', preview.summary.conflictRows, 'text-amber-700 dark:text-amber-300'],
                 ].map(([label, value, color]) => (
                   <div key={String(label)} className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900">
-                    <div className="text-zinc-500 dark:text-zinc-400">{label}</div>
+                    <div className="text-zinc-600 dark:text-zinc-300 font-medium">{label}</div>
                     <div className={`text-base font-bold ${color}`}>{value}</div>
                   </div>
                 ))}
@@ -433,7 +434,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                             {row.status === 'new' ? 'Nouveau' : row.status === 'update' ? 'Mise à jour' : row.status === 'conflict' ? 'Conflit' : 'Invalide'}
                           </span>
                         </span>
-                        <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">
+                        <span className="mt-1 block text-xs text-zinc-600 dark:text-zinc-300">
                           {row.externalId || 'Identifiant manquant'}{row.category ? ` · ${row.category}` : ''}{row.price ? ` · ${row.price} CAD` : ''}
                         </span>
                         {row.error && <span className="mt-1 block text-xs text-red-700 dark:text-red-300">{row.error}</span>}
@@ -495,7 +496,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
               {/* Stats Counters */}
               <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
                 <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                  <div className="text-zinc-500 dark:text-zinc-400">Total plats</div>
+                  <div className="text-zinc-600 dark:text-zinc-300 font-medium">Total plats</div>
                   <div className="font-bold text-zinc-900 dark:text-zinc-100 text-base">{total || '—'}</div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
@@ -537,12 +538,12 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-end gap-3">
+        {/* Sticky Footer Actions */}
+        <div className="pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-white/10 flex items-center gap-3 sticky bottom-0 bg-[#18181b]/98 backdrop-blur-md mt-6">
           <button
             onClick={handleClose}
             disabled={isProcessing && importJob?.status === 'processing'}
-            className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors min-h-[44px]"
+            className="flex-1 py-3.5 glass-card border border-white/10 text-slate-200 font-bold rounded-2xl hover:bg-white/10 transition disabled:opacity-40 min-h-[48px]"
           >
             {importJob?.status === 'completed' ? 'Fermer' : 'Annuler'}
           </button>
@@ -551,10 +552,10 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
             <button
               onClick={handlePreviewImport}
               disabled={!file || isProcessing}
-              className={`px-6 py-2.5 rounded-xl font-medium text-sm text-white transition-all shadow-md min-h-[44px] ${
+              className={`flex-1 py-3.5 font-bold text-sm text-white rounded-2xl transition-all shadow-md min-h-[48px] ${
                 !file || isProcessing
-                  ? 'bg-zinc-400 cursor-not-allowed opacity-60'
-                  : 'bg-amber-600 hover:bg-amber-700 active:scale-95'
+                  ? 'bg-white/10 text-slate-400 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-primary to-[#ffae33] primary-glow hover:opacity-90 active:scale-98'
               }`}
             >
               {isProcessing ? 'Analyse du fichier...' : 'Analyser le fichier'}
@@ -566,14 +567,14 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
               <button
                 onClick={handleBackToFile}
                 disabled={isProcessing}
-                className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors min-h-[44px]"
+                className="flex-1 py-3.5 glass-card border border-white/10 text-slate-200 font-bold rounded-2xl hover:bg-white/10 transition min-h-[48px]"
               >
                 Retour au fichier
               </button>
               <button
                 onClick={handleConfirmImport}
                 disabled={selectedRows.size === 0 || isProcessing}
-                className="px-6 py-2.5 rounded-xl font-medium text-sm text-white transition-all shadow-md min-h-[44px] bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-400 disabled:cursor-not-allowed"
+                className="flex-1 py-3.5 font-bold text-sm text-white transition-all shadow-md min-h-[48px] bg-gradient-to-r from-primary to-[#ffae33] primary-glow hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Confirmer et importer ({selectedRows.size})
               </button>
@@ -583,7 +584,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           {importJob?.status === 'completed' && (
             <button
               onClick={handleClose}
-              className="px-6 py-2.5 rounded-xl font-medium text-sm text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-md min-h-[44px]"
+              className="flex-1 py-3.5 font-bold text-sm text-white rounded-2xl transition-all shadow-md min-h-[48px] bg-gradient-to-r from-primary to-[#ffae33] primary-glow hover:opacity-90"
             >
               Voir le menu mis à jour
             </button>

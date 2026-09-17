@@ -18,7 +18,7 @@ import { StoreConnectorModal } from '@/components/food/StoreConnectorModal';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { BottomSheet, NetworkErrorView } from '@/components/ui';
+import { BottomSheet, NetworkErrorView, MaterialSwitch } from '@/components/ui';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
@@ -124,6 +124,9 @@ export default function MenuManagementClient() {
     }
   }, [id, router]);
 
+  const showErrorRef = useRef(showError);
+  showErrorRef.current = showError;
+
   useEffect(() => {
     if (!id) return;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -149,7 +152,7 @@ export default function MenuManagementClient() {
         ) {
           setIsNetworkError(true);
         }
-        showError(t('restaurantLoadErrorToast'));
+        showErrorRef.current(t('restaurantLoadErrorToast'));
         setLoading(false);
       }
     });
@@ -500,7 +503,7 @@ export default function MenuManagementClient() {
         <div className="flex min-w-0 items-center justify-between gap-2.5 sm:gap-4">
           <div className="min-w-0">
             <h1 className="truncate text-lg font-bold text-white sm:text-xl">{t('menuTitle')}</h1>
-            <p className="text-[11px] text-slate-500 sm:text-xs">{t('totalArticlesCount', { count: catalog.totalCount.toLocaleString() })}</p>
+            <p className="text-[11px] text-slate-300 font-medium sm:text-xs">{t('totalArticlesCount', { count: catalog.totalCount.toLocaleString() })}</p>
           </div>
         </div>
         <div className="mt-2 flex w-full gap-2 sm:mt-0 sm:w-auto sm:justify-end">
@@ -593,10 +596,10 @@ export default function MenuManagementClient() {
         {!catalog.isLoading && !isNetworkError && !catalog.isNetworkError && catalog.items.length === 0 && catalog.totalCount === 0 && (
           <div className="py-20 text-center">
             <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-              <MaterialIcon name="menu_book" size="xl" className="text-slate-500" />
+              <MaterialIcon name="menu_book" size="xl" className="text-slate-400" />
             </div>
             <h3 className="text-xl font-bold text-white mb-2">{t('emptyMenuTitle')}</h3>
-            <p className="text-slate-400 mb-8">
+            <p className="text-slate-300 mb-8">
               {t('emptyMenuDesc')}
             </p>
             <button
@@ -610,9 +613,9 @@ export default function MenuManagementClient() {
 
         {!catalog.isLoading && catalog.items.length === 0 && catalog.totalCount > 0 && (
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.02] px-6 py-16 text-center">
-            <MaterialIcon name="search_off" size="xl" className="mx-auto mb-4 text-slate-500" />
+            <MaterialIcon name="search_off" size="xl" className="mx-auto mb-4 text-slate-400" />
             <h3 className="text-lg font-bold text-white">{t('noDishesFound')}</h3>
-            <p className="mt-2 text-sm text-slate-500">{t('noDishesFoundDesc')}</p>
+            <p className="mt-2 text-sm text-slate-300">{t('noDishesFoundDesc')}</p>
             <button type="button" onClick={catalog.clearFilters} className="mt-6 min-h-11 rounded-xl bg-primary px-4 text-sm font-bold text-white">{t('resetFilters')}</button>
           </div>
         )}
@@ -639,41 +642,41 @@ export default function MenuManagementClient() {
             if (!open) handleAttemptCloseModal();
           }}
           onCloseRequest={handleAttemptCloseModal}
-          canDismiss={!isCompressing && !isUploading}
-          className="glass-card border border-white/10 bg-[#1A1A1A]"
+          className="border border-white/10 bg-[#18181b] shadow-2xl"
+          contentClassName="min-h-0 overflow-y-auto px-4 pb-0"
         >
-          <form id="menu-item-form" onSubmit={handleSubmit} className="space-y-6 p-5 sm:p-6">
+          <form id="menu-item-form" onSubmit={handleSubmit} className="space-y-5 pt-1">
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">
                   {t('dishNameLabel')}
                 </label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white"
+                  className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white min-h-[44px]"
                   placeholder={t('dishNamePlaceholder')}
                   required
                 />
               </div>
 
-              <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="min-w-0">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">
                     {t('priceLabel', { currency: CURRENCY_CODE })}
                   </label>
                   <input
                     type="number"
                     value={form.price}
                     onChange={(e) => setForm({ ...form, price: e.target.value })}
-                    className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white"
+                    className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white min-h-[44px]"
                     placeholder="0.00"
                     step="50"
                     required
                   />
                 </div>
                 <div className="min-w-0">
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">
                     {t('categoryLabel')}
                   </label>
                   <input
@@ -681,7 +684,7 @@ export default function MenuManagementClient() {
                     list="category-suggestions"
                     value={form.category}
                     onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white"
+                    className="w-full glass-input px-4 py-3 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none text-white min-h-[44px]"
                     placeholder={t('categoryPlaceholder')}
                     required
                   />
@@ -696,10 +699,10 @@ export default function MenuManagementClient() {
                         key={cat}
                         type="button"
                         onClick={() => setForm({ ...form, category: cat })}
-                         className={`max-w-full truncate px-2 py-0.5 rounded-lg text-[11px] font-medium transition ${
+                         className={`max-w-full truncate px-2.5 py-1 rounded-lg text-xs font-medium transition min-h-[32px] ${
                           form.category === cat
-                            ? 'bg-primary text-white font-bold'
-                            : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                            ? 'bg-primary text-white font-bold shadow-sm shadow-primary/30'
+                            : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
                         }`}
                       >
                         {cat}
@@ -710,7 +713,7 @@ export default function MenuManagementClient() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-2">
                   {t('dishDescLabel')}
                 </label>
                 <textarea
@@ -722,74 +725,202 @@ export default function MenuManagementClient() {
               </div>
 
               {/* ÉDITEUR D'IMAGE ACCESSIBLE */}
-              <div className="space-y-3 pt-2 border-t border-white/5">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  {t('dishImageLabel')}
-                </label>
-
-                {/* Choix d'action image */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setImageChoice('image-unchanged')}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border ${
-                      imageChoice === 'image-unchanged'
-                        ? 'bg-primary/20 border-primary text-primary'
-                        : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
-                    }`}
-                  >
-                    {t('keepImageBtn')}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setImageChoice('external-url')}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border ${
-                      imageChoice === 'external-url'
-                        ? 'bg-primary/20 border-primary text-primary'
-                        : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
-                    }`}
-                  >
-                    {t('externalLinkBtn')}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setImageChoice('upload')}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border ${
-                      imageChoice === 'upload'
-                        ? 'bg-primary/20 border-primary text-primary'
-                        : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'
-                    }`}
-                  >
-                    {t('importImageBtn')}
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={!editingItem?.imageUrl && imageChoice === 'image-unchanged'}
-                    onClick={() => setImageChoice('remove')}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 border ${
-                      imageChoice === 'remove'
-                        ? 'bg-destructive/20 border-destructive text-destructive'
-                        : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 disabled:opacity-40'
-                    }`}
-                  >
-                    {t('deleteImageBtn')}
-                  </button>
+              <div className="space-y-3 pt-3 border-t border-white/10">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                      {t('dishImageLabel')}
+                    </label>
+                    <span className="text-[11px] text-slate-400 font-medium px-2 py-0.5 rounded-md bg-white/5 border border-white/10">
+                      {t('optionalBadge')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed font-normal">
+                    {t('dishImageSectionSubtitle')}
+                  </p>
                 </div>
 
-                {/* Explication secondaire pour chaque option */}
-                <p className="text-[11px] text-slate-500 italic">
-                  {imageChoice === 'image-unchanged' &&
-                    t('keepImageHelp')}
-                  {imageChoice === 'external-url' &&
-                    t('externalLinkHelp')}
-                  {imageChoice === 'upload' &&
-                    t('importImageHelp')}
-                  {imageChoice === 'remove' &&
-                    t('deleteImageHelp')}
-                </p>
+                {/* Choix d'action image sous forme de cartes d'options */}
+                <div
+                  aria-label={t('dishImageLabel')}
+                  className={`grid gap-2 ${editingItem?.imageUrl ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}
+                >
+                  <button
+                    type="button"
+                    aria-pressed={imageChoice === 'image-unchanged'}
+                    onClick={() => setImageChoice('image-unchanged')}
+                    className={`px-3.5 py-3 rounded-xl text-xs font-semibold transition flex items-center justify-between gap-2 border min-h-[48px] ${
+                      imageChoice === 'image-unchanged'
+                        ? 'bg-primary/15 border-primary text-white shadow-sm shadow-primary/20 ring-1 ring-primary/30'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                        imageChoice === 'image-unchanged' ? 'bg-primary/20 text-primary' : 'bg-white/5 text-slate-400'
+                      }`}>
+                        <MaterialIcon
+                          name={editingItem?.imageUrl ? 'image' : 'hide_image'}
+                          size="sm"
+                        />
+                      </div>
+                      <span className="truncate">
+                        {editingItem?.imageUrl ? t('keepImageBtn') : t('noImageBtn')}
+                      </span>
+                    </div>
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                      imageChoice === 'image-unchanged'
+                        ? 'border-primary bg-primary/20'
+                        : 'border-white/20 bg-black/20'
+                    }`}>
+                      {imageChoice === 'image-unchanged' && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    aria-pressed={imageChoice === 'upload'}
+                    onClick={() => setImageChoice('upload')}
+                    className={`px-3.5 py-3 rounded-xl text-xs font-semibold transition flex items-center justify-between gap-2 border min-h-[48px] ${
+                      imageChoice === 'upload'
+                        ? 'bg-primary/15 border-primary text-white shadow-sm shadow-primary/20 ring-1 ring-primary/30'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                        imageChoice === 'upload' ? 'bg-primary/20 text-primary' : 'bg-white/5 text-slate-400'
+                      }`}>
+                        <MaterialIcon
+                          name="cloud_upload"
+                          size="sm"
+                        />
+                      </div>
+                      <span className="truncate">{t('importImageBtn')}</span>
+                    </div>
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                      imageChoice === 'upload'
+                        ? 'border-primary bg-primary/20'
+                        : 'border-white/20 bg-black/20'
+                    }`}>
+                      {imageChoice === 'upload' && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    aria-pressed={imageChoice === 'external-url'}
+                    onClick={() => setImageChoice('external-url')}
+                    className={`px-3.5 py-3 rounded-xl text-xs font-semibold transition flex items-center justify-between gap-2 border min-h-[48px] ${
+                      imageChoice === 'external-url'
+                        ? 'bg-primary/15 border-primary text-white shadow-sm shadow-primary/20 ring-1 ring-primary/30'
+                        : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                        imageChoice === 'external-url' ? 'bg-primary/20 text-primary' : 'bg-white/5 text-slate-400'
+                      }`}>
+                        <MaterialIcon
+                          name="link"
+                          size="sm"
+                        />
+                      </div>
+                      <span className="truncate">{t('externalLinkBtn')}</span>
+                    </div>
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                      imageChoice === 'external-url'
+                        ? 'border-primary bg-primary/20'
+                        : 'border-white/20 bg-black/20'
+                    }`}>
+                      {imageChoice === 'external-url' && (
+                        <div className="w-2 h-2 rounded-full bg-primary" />
+                      )}
+                    </div>
+                  </button>
+
+                  {editingItem?.imageUrl && (
+                    <button
+                      type="button"
+                      aria-pressed={imageChoice === 'remove'}
+                      onClick={() => setImageChoice('remove')}
+                      className={`px-3.5 py-3 rounded-xl text-xs font-semibold transition flex items-center justify-between gap-2 border min-h-[48px] ${
+                        imageChoice === 'remove'
+                          ? 'bg-destructive/20 border-destructive text-white shadow-sm shadow-destructive/20 ring-1 ring-destructive/30'
+                          : 'bg-white/5 border-white/10 text-slate-300 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                          imageChoice === 'remove' ? 'bg-destructive/20 text-destructive' : 'bg-white/5 text-slate-400'
+                        }`}>
+                          <MaterialIcon
+                            name="delete_outline"
+                            size="sm"
+                          />
+                        </div>
+                        <span className="truncate">{t('deleteImageBtn')}</span>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                        imageChoice === 'remove'
+                          ? 'border-destructive bg-destructive/20'
+                          : 'border-white/20 bg-black/20'
+                      }`}>
+                        {imageChoice === 'remove' && (
+                          <div className="w-2 h-2 rounded-full bg-destructive" />
+                        )}
+                      </div>
+                    </button>
+                  )}
+                </div>
+
+                {/* Aperçu de l'image actuelle si conservée */}
+                {editingItem?.imageUrl && imageChoice === 'image-unchanged' && (
+                  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
+                    <div className="w-12 h-12 rounded-lg overflow-hidden relative bg-black/40 shrink-0 border border-white/10">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={editingItem.imageUrl}
+                        alt={editingItem.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-white truncate">{t('currentImageLabel')}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{editingItem.name}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Explication contextuelle pour chaque option avec en-tête explicite */}
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/10 text-xs">
+                  <MaterialIcon name="info" size="xs" className="text-primary mt-0.5 shrink-0" />
+                  <div className="space-y-1 min-w-0">
+                    <p className="font-bold text-white flex items-center gap-1.5">
+                      <span className="text-primary text-[11px] uppercase tracking-wider font-semibold">
+                        {t('activeChoicePrefix')}
+                      </span>
+                      <span>
+                        {imageChoice === 'image-unchanged' &&
+                          (editingItem?.imageUrl ? t('keepImageSelectedTitle') : t('noImageSelectedTitle'))}
+                        {imageChoice === 'upload' && t('importImageSelectedTitle')}
+                        {imageChoice === 'external-url' && t('externalLinkSelectedTitle')}
+                        {imageChoice === 'remove' && t('deleteImageSelectedTitle')}
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-300 leading-relaxed font-normal">
+                      {imageChoice === 'image-unchanged' &&
+                        (editingItem?.imageUrl ? t('keepImageHelp') : t('noImageHelp'))}
+                      {imageChoice === 'upload' && t('importImageHelp')}
+                      {imageChoice === 'external-url' && t('externalLinkHelp')}
+                      {imageChoice === 'remove' && t('deleteImageHelp')}
+                    </p>
+                  </div>
+                </div>
 
                 {/* Lien Externe Option */}
                 {imageChoice === 'external-url' && (
@@ -832,8 +963,21 @@ export default function MenuManagementClient() {
                       accept="image/jpeg,image/jpg,image/png,image/webp,image/heic,image/heif"
                       onChange={handleFileSelect}
                       disabled={isCompressing || isUploading}
-                      className="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary/20 file:text-primary hover:file:bg-primary/30 file:cursor-pointer cursor-pointer"
+                      className="w-full text-xs text-slate-200 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-primary/20 file:text-primary hover:file:bg-primary/30 file:cursor-pointer cursor-pointer"
                     />
+
+                    {selectedFile && isCompressing && (
+                      <p className="text-[11px] text-slate-300 font-medium truncate">
+                        {selectedFile.name}
+                      </p>
+                    )}
+
+                    {compressionError && (
+                      <p className="text-xs text-red-400 font-medium flex items-center gap-1.5">
+                        <MaterialIcon name="error_outline" size="xs" />
+                        {compressionError}
+                      </p>
+                    )}
 
                     {isCompressing && (
                       <div className="p-3 bg-white/5 rounded-xl space-y-2">
@@ -862,7 +1006,7 @@ export default function MenuManagementClient() {
                         </div>
                         <div className="flex-1 text-xs space-y-1">
                           <p className="font-bold text-white">{t('compressedWebpImage')}</p>
-                          <p className="text-slate-400">
+                          <p className="text-slate-300 font-medium">
                             {t('compressedStats', {
                               size: (compressedResult.compressedSize / 1024).toFixed(0),
                               ratio: compressedResult.compressionRatio.toFixed(0),
@@ -873,7 +1017,7 @@ export default function MenuManagementClient() {
                           type="button"
                           onClick={handleCancelImport}
                           disabled={isUploading}
-                          className="p-1.5 text-slate-400 hover:text-destructive rounded-lg hover:bg-white/5"
+                          className="p-1.5 text-slate-300 hover:text-destructive rounded-lg hover:bg-white/5"
                         >
                           <MaterialIcon name="close" size="sm" />
                         </button>
@@ -884,7 +1028,7 @@ export default function MenuManagementClient() {
                       <div className="p-3 bg-white/5 border border-primary/20 rounded-xl space-y-2">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-bold text-primary">{t('uploadingToStorage')}</span>
-                          <span className="text-slate-400">{uploadProgress}%</span>
+                          <span className="text-slate-200 font-semibold">{uploadProgress}%</span>
                         </div>
                         <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
                           <div
@@ -914,30 +1058,40 @@ export default function MenuManagementClient() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between py-2 border-t border-white/5">
-                <span className="text-sm font-bold text-slate-300">{t('availableForSale')}</span>
-                <button
-                  type="button"
-                  className={`w-12 h-6 rounded-full transition relative ${
-                    form.isAvailable ? 'bg-green-500' : 'bg-slate-600'
-                  }`}
-                  onClick={() => setForm({ ...form, isAvailable: !form.isAvailable })}
-                >
-                  <div
-                    className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
-                      form.isAvailable ? 'left-7' : 'left-1'
-                    }`}
-                  ></div>
-                </button>
+              <div className="flex items-center justify-between py-3 border-t border-white/10">
+                <div className="space-y-0.5 pr-3">
+                  <label
+                    htmlFor="dish-availability-switch"
+                    className="text-sm font-bold text-slate-200 cursor-pointer flex items-center gap-2 select-none"
+                  >
+                    <MaterialIcon
+                      name={form.isAvailable ? "check_circle" : "pause_circle"}
+                      size="sm"
+                      className={form.isAvailable ? "text-emerald-400" : "text-slate-400"}
+                    />
+                    {t('availableForSale')}
+                  </label>
+                  <p className="text-[11px] text-slate-300 font-medium leading-tight">
+                    {form.isAvailable
+                      ? t('availableForSaleActiveHelp')
+                      : t('availableForSaleInactiveHelp')}
+                  </p>
+                </div>
+                <MaterialSwitch
+                  id="dish-availability-switch"
+                  checked={form.isAvailable}
+                  onChange={(checked) => setForm({ ...form, isAvailable: checked })}
+                  ariaLabel={t('availableForSale')}
+                />
               </div>
 
               {/* Sticky Footer */}
-              <div className="pt-4 flex gap-3 sticky bottom-0 bg-[#1A1A1A]/95 backdrop-blur-md pb-safe">
+              <div className="pt-4 flex gap-3 sticky bottom-0 bg-[#18181b]/98 backdrop-blur-md pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-white/5 mt-6">
                 <button
                   type="button"
                   onClick={handleAttemptCloseModal}
                   disabled={isCompressing || isUploading}
-                  className="flex-1 py-4 glass-card border border-white/10 text-slate-300 font-bold rounded-2xl hover:bg-white/10 transition disabled:opacity-40"
+                  className="flex-1 py-3.5 glass-card border border-white/10 text-slate-200 font-bold rounded-2xl hover:bg-white/10 transition disabled:opacity-40 min-h-[48px]"
                 >
                   {t('cancel')}
                 </button>
@@ -950,7 +1104,7 @@ export default function MenuManagementClient() {
                     urlValidation.isValidating ||
                     (imageChoice === 'upload' && !compressedResult)
                   }
-                  className="flex-1 py-4 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow hover:opacity-90 transition disabled:opacity-50"
+                  className="flex-1 py-3.5 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow hover:opacity-90 transition disabled:opacity-50 min-h-[48px]"
                 >
                   {isSaving ? t('savingProgress') : t('save')}
                 </button>
