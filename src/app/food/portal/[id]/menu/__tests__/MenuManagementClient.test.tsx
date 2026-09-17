@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MenuManagementClient from '../MenuManagementClient';
 import { onAuthStateChanged } from 'firebase/auth';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
@@ -117,17 +117,49 @@ describe('MenuManagementClient', () => {
     const { getByText } = render(<MenuManagementClient />);
 
     await waitFor(() => {
-      expect(getByText(/Importer catalogue/i)).toBeInTheDocument();
+      expect(getByText(/Importer des plats/i)).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: /Connecter boutique/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps both primary menu actions labelled and equally sized on mobile', async () => {
+    render(<MenuManagementClient />);
+
+    const importButton = await screen.findByRole('button', { name: /Importer des plats/i });
+    const newButton = screen.getByRole('button', { name: /Ajouter un plat/i });
+
+    expect(importButton).toHaveClass('flex-1');
+    expect(newButton).toHaveClass('flex-1');
   });
 
   it('uses a Lucide icon for the import action', async () => {
     render(<MenuManagementClient />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Importer catalogue/i }).querySelector('[data-testid="LucideIcon-icon"]')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Importer des plats/i }).querySelector('[data-testid="LucideIcon-icon"]')).toBeTruthy();
     });
+  });
+
+  it('opens the add form as a mobile bottom sheet', async () => {
+    render(<MenuManagementClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Ajouter un plat/i }));
+
+    expect(screen.getByRole('dialog', { name: /Ajouter un plat/i })).toBeInTheDocument();
+    expect(screen.getByTestId('bottom-sheet-handle')).toBeInTheDocument();
+
+    const handle = screen.getByTestId('bottom-sheet-handle');
+    const pointerDown = createEvent.pointerDown(handle);
+    Object.defineProperty(pointerDown, 'clientY', { value: 100 });
+    Object.defineProperty(pointerDown, 'pointerId', { value: 1 });
+    fireEvent(handle, pointerDown);
+
+    const pointerUp = createEvent.pointerUp(handle);
+    Object.defineProperty(pointerUp, 'clientY', { value: 220 });
+    Object.defineProperty(pointerUp, 'pointerId', { value: 1 });
+    fireEvent(handle, pointerUp);
+
+    expect(screen.queryByRole('dialog', { name: /Ajouter un plat/i })).not.toBeInTheDocument();
   });
 
   it('requires confirmation before deleting a menu item', async () => {
@@ -136,7 +168,7 @@ describe('MenuManagementClient', () => {
     const deleteButton = await screen.findByRole('button', { name: 'Supprimer Burger Maison' });
     fireEvent.click(deleteButton);
 
-    expect(screen.getByRole('dialog', { name: 'Supprimer un plat ?' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Supprimer un plat ?' })).toHaveClass('max-w-md', 'rounded-2xl');
     expect(mockDeleteMenuItem).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));

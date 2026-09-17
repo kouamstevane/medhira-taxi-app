@@ -18,17 +18,15 @@ import { StoreConnectorModal } from '@/components/food/StoreConnectorModal';
 import { auth } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { NetworkErrorView } from '@/components/ui';
+import { BottomSheet, NetworkErrorView } from '@/components/ui';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { ERROR_MESSAGES, CURRENCY_CODE } from '@/utils/constants';
 import type { MenuItem } from '@/types';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
-import { getRestaurantPortalPath } from '../../restaurant-portal-paths';
 import { FileDown, ShoppingCart } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { MenuCatalogToolbar } from '@/components/restaurant/menu/MenuCatalogToolbar';
 import { MenuCatalogTable } from '@/components/restaurant/menu/MenuCatalogTable';
 import { MenuCatalogPagination } from '@/components/restaurant/menu/MenuCatalogPagination';
@@ -110,7 +108,6 @@ export default function MenuManagementClient() {
   const compressionAbortControllerRef = useRef<AbortController | null>(null);
   const currentUploadTaskRef = useRef<UploadMenuTask | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const modalRef = useRef<HTMLDivElement | null>(null);
 
   // Form states
   const [form, setForm] = useState({
@@ -201,31 +198,6 @@ export default function MenuManagementClient() {
       fileInputRef.current.value = '';
     }
   }, [resetImageEditorState]);
-
-  // Verrouillage du scroll et gestion de la touche Escape
-  useEffect(() => {
-    if (isModalOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isModalOpen) {
-        if (isCompressing || isUploading) {
-          // Bloquer la fermeture pendant la compression ou l'upload
-          return;
-        }
-        handleAttemptCloseModal();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.body.style.overflow = '';
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isModalOpen, isCompressing, isUploading]);
 
   const handleOpenModal = (item?: MenuItem) => {
     resetImageEditorState();
@@ -487,16 +459,8 @@ export default function MenuManagementClient() {
   if (isNetworkError && (loading || !id)) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
-          <button
-            onClick={() => router.push(id ? getRestaurantPortalPath(id) : '/restaurant/dashboard')}
-            className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label={t('back')}
-          >
-            <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
-          </button>
+        <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-center">
           <h1 className="text-xl font-bold text-white">{t('menuTitle')}</h1>
-          <LanguageSelector variant="compact" />
         </header>
         <div className="flex-1 flex items-center justify-center p-4">
           <NetworkErrorView
@@ -532,28 +496,22 @@ export default function MenuManagementClient() {
       )}
 
       {/* Header */}
-      <header className="bg-background/80 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-4 sm:px-8 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => router.push(getRestaurantPortalPath(restaurantId))}
-            className="p-2 hover:bg-white/10 rounded-full transition min-h-[44px] min-w-[44px] flex items-center justify-center"
-            aria-label={t('back')}
-          >
-            <MaterialIcon name="arrow_back" size="lg" className="text-slate-300" />
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-white">{t('menuTitle')}</h1>
-            <p className="text-xs text-slate-500">{t('totalArticlesCount', { count: catalog.totalCount.toLocaleString() })}</p>
+      <header className="bg-background/90 backdrop-blur-xl border-b border-white/5 sticky top-0 z-20 px-4 py-2.5 sm:px-8 sm:py-4">
+        <div className="flex min-w-0 items-center justify-between gap-2.5 sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="truncate text-lg font-bold text-white sm:text-xl">{t('menuTitle')}</h1>
+            <p className="text-[11px] text-slate-500 sm:text-xs">{t('totalArticlesCount', { count: catalog.totalCount.toLocaleString() })}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="mt-2 flex w-full gap-2 sm:mt-0 sm:w-auto sm:justify-end">
           <button
             type="button"
             onClick={() => setIsCsvModalOpen(true)}
             aria-label={t('importCatalog')}
-            className="glass-card border border-white/10 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition text-sm min-h-[44px]"
+            className="glass-card border border-white/10 text-white flex h-11 flex-1 items-center justify-center gap-2 rounded-xl px-3 font-bold transition hover:bg-white/10 sm:h-[44px] sm:w-auto sm:flex-none sm:px-4"
           >
             <FileDown size={17} strokeWidth={2.2} aria-hidden="true" />
+            <span className="sm:hidden">{t('importCatalogShort')}</span>
             <span className="hidden sm:inline">{t('importCatalog')}</span>
           </button>
           {STORE_CONNECTOR_ENABLED && (
@@ -569,29 +527,30 @@ export default function MenuManagementClient() {
           )}
           <button
             onClick={() => handleOpenModal()}
-            className="bg-gradient-to-r from-primary to-[#ffae33] text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 primary-glow hover:opacity-90 transition min-h-[44px]"
+            type="button"
+            className="glass-card border border-white/10 text-white flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 font-bold transition hover:bg-white/10 sm:h-[44px] sm:w-auto sm:flex-none sm:px-4 sm:gap-2"
           >
-            <MaterialIcon name="add" size="md" /> {t('newItem')}
+            <MaterialIcon name="add" size="md" className="text-primary" />
+            <span className="sm:hidden">{t('newItemShort')}</span>
+            <span className="hidden sm:inline">{t('newItem')}</span>
           </button>
-          <LanguageSelector variant="compact" />
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-6 p-4 pb-24 sm:p-8 sm:pb-28">
+      <main className="mx-auto max-w-6xl space-y-4 p-2.5 pb-24 sm:space-y-6 sm:p-8 sm:pb-28">
         <MenuCatalogToolbar
           search={catalog.search}
           category={catalog.category}
           categories={dynamicCategories}
           availability={catalog.availability}
           sort={catalog.sort}
-          totalCount={catalog.totalCount}
-          availableCount={catalog.availableCount}
+            totalCount={catalog.totalCount}
+            availableCount={catalog.availableCount}
           onSearchChange={catalog.setSearch}
           onCategoryChange={catalog.setCategory}
-          onAvailabilityChange={catalog.setAvailability}
-          onSortChange={catalog.setSort}
-          onClearFilters={catalog.clearFilters}
-        />
+            onAvailabilityChange={catalog.setAvailability}
+            onSortChange={catalog.setSort}
+          />
 
         {catalog.error && !catalog.isNetworkError && (
           <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-200">
@@ -672,42 +631,17 @@ export default function MenuManagementClient() {
         )}
       </main>
 
-      {/* Accessible Modal */}
       {isModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modal-title"
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+        <BottomSheet
+          open={isModalOpen}
+          title={editingItem ? t('editItem') : t('addItem')}
+          onOpenChange={(open) => {
+            if (!open) handleAttemptCloseModal();
+          }}
+          canDismiss={!isCompressing && !isUploading}
+          className="glass-card border border-white/10 bg-[#1A1A1A]"
         >
-          {/* Overlay backdrop */}
-          <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-md transition-opacity"
-            onClick={handleAttemptCloseModal}
-          />
-
-          {/* Dialog Container */}
-          <div
-            ref={modalRef}
-            className="glass-card rounded-3xl w-full max-w-lg relative z-10 overflow-hidden border border-white/10 shadow-2xl flex flex-col max-h-[90dvh] my-auto"
-          >
-            {/* Header Sticky */}
-            <div className="p-6 border-b border-white/5 flex items-center justify-between bg-[#1A1A1A]/80 backdrop-blur-md shrink-0">
-              <h3 id="modal-title" className="text-xl font-bold text-white">
-                {editingItem ? t('editItem') : t('addItem')}
-              </h3>
-              <button
-                type="button"
-                onClick={handleAttemptCloseModal}
-                disabled={isCompressing || isUploading}
-                className="p-2 hover:bg-white/10 rounded-full transition text-slate-400 disabled:opacity-30"
-              >
-                <MaterialIcon name="close" size="lg" />
-              </button>
-            </div>
-
-            {/* Scrollable Form Body */}
-            <form id="menu-item-form" onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1">
+          <form id="menu-item-form" onSubmit={handleSubmit} className="space-y-6 p-5 sm:p-6">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                   {t('dishNameLabel')}
@@ -722,8 +656,8 @@ export default function MenuManagementClient() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4">
+                <div className="min-w-0">
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                     {t('priceLabel', { currency: CURRENCY_CODE })}
                   </label>
@@ -737,7 +671,7 @@ export default function MenuManagementClient() {
                     required
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                     {t('categoryLabel')}
                   </label>
@@ -755,13 +689,13 @@ export default function MenuManagementClient() {
                       <option key={c} value={c} />
                     ))}
                   </datalist>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
+                   <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
                     {dynamicCategories.slice(0, 6).map((cat) => (
                       <button
                         key={cat}
                         type="button"
                         onClick={() => setForm({ ...form, category: cat })}
-                        className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition ${
+                         className={`max-w-full truncate px-2 py-0.5 rounded-lg text-[11px] font-medium transition ${
                           form.category === cat
                             ? 'bg-primary text-white font-bold'
                             : 'bg-white/5 text-slate-400 hover:bg-white/10'
@@ -1021,8 +955,7 @@ export default function MenuManagementClient() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+        </BottomSheet>
       )}
       {/* Modales d'importation de catalogue */}
       <BulkCsvImportModal
