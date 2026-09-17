@@ -7,7 +7,7 @@ function renderSheet(
 ) {
   const onOpenChange = jest.fn();
 
-  render(
+  const renderResult = render(
     <BottomSheet
       open
       onOpenChange={onOpenChange}
@@ -18,11 +18,11 @@ function renderSheet(
     </BottomSheet>,
   );
 
-  return { onOpenChange };
+  return { onOpenChange, ...renderResult };
 }
 
 function firePointer(
-  type: 'pointerDown' | 'pointerMove' | 'pointerUp',
+  type: 'pointerDown' | 'pointerMove' | 'pointerUp' | 'pointerCancel',
   element: HTMLElement,
   clientY: number,
 ) {
@@ -135,6 +135,37 @@ describe('BottomSheet', () => {
     firePointer('pointerUp', handle, 220);
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('does not dismiss when canDismiss becomes false during a drag', () => {
+    const { onOpenChange, rerender } = renderSheet();
+    const handle = screen.getByTestId('bottom-sheet-handle');
+
+    firePointer('pointerDown', handle, 100);
+    rerender(
+      <BottomSheet
+        open
+        onOpenChange={onOpenChange}
+        title="Options de livraison"
+        canDismiss={false}
+      >
+        <p>Contenu de la feuille</p>
+      </BottomSheet>,
+    );
+    firePointer('pointerUp', handle, 220);
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('resets a canceled downward handle drag without dismissing', () => {
+    const { onOpenChange } = renderSheet();
+    const handle = screen.getByTestId('bottom-sheet-handle');
+
+    firePointer('pointerDown', handle, 100);
+    firePointer('pointerMove', handle, 220);
+    firePointer('pointerCancel', handle, 220);
+
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it('keeps the dialog open after a short downward handle drag', () => {

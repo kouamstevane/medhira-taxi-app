@@ -67,6 +67,17 @@ export function BottomSheet({
     setDragOffset(Math.max(0, event.clientY - startYRef.current));
   };
 
+  const resetPointerGesture = (event: PointerEvent<HTMLDivElement>) => {
+    if (startYRef.current === null || (pointerIdRef.current !== null && pointerIdRef.current !== event.pointerId)) return;
+
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    startYRef.current = null;
+    pointerIdRef.current = null;
+    startTimeRef.current = null;
+    setIsDragging(false);
+    setDragOffset(0);
+  };
+
   const finishPointerGesture = (event: PointerEvent<HTMLDivElement>) => {
     if (startYRef.current === null || (pointerIdRef.current !== null && pointerIdRef.current !== event.pointerId)) return;
 
@@ -75,14 +86,9 @@ export function BottomSheet({
     const velocity = displacement / elapsed;
     const shouldDismiss = displacement >= DISMISS_DISTANCE || (displacement >= 100 && velocity >= DISMISS_VELOCITY);
 
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    startYRef.current = null;
-    pointerIdRef.current = null;
-    startTimeRef.current = null;
-    setIsDragging(false);
-    setDragOffset(0);
+    resetPointerGesture(event);
 
-    if (shouldDismiss) {
+    if (shouldDismiss && canDismiss) {
       onOpenChange(false);
     }
   };
@@ -118,7 +124,7 @@ export function BottomSheet({
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={finishPointerGesture}
-          onPointerCancel={finishPointerGesture}
+          onPointerCancel={resetPointerGesture}
         >
           <div
             aria-hidden="true"

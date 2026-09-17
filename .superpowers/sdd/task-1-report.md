@@ -1,170 +1,85 @@
-# Task 1 Report: Editable Personal Driver Plans
+# Task 1 Report: Shared Bottom Sheet Primitive
 
-## Outcome
+## Status
 
-Implemented the typed personal-driver plan catalogue loader with Firestore fallback behavior, static defaults, and validation for plan overrides.
+Implemented Task 1 in the current workspace. Unrelated user changes were preserved and feature modal files were not modified.
 
-## RED Evidence
+## Files changed by Task 1
 
-Focused test command:
+- `src/components/ui/BottomSheet.tsx`
+  - Added the client-side `BottomSheet` primitive and exported `BottomSheetProps`.
+  - Supports controlled open state, accessible dialog semantics, generated title linkage, dismissible/non-dismissible behavior, backdrop and close-button dismissal, Escape dismissal, body overflow locking/restoration, safe-area bottom padding, responsive Tailwind layout, and pointer drag dismissal from the handle/header.
+- `src/components/ui/__tests__/BottomSheet.test.tsx`
+  - Added 12 focused behavior tests covering rendering, accessibility, overflow restoration on close/unmount, dismissal paths, `canDismiss`, drag threshold behavior, and gesture origin restrictions.
+- `src/components/ui/index.ts`
+  - Added the component and prop-type barrel exports.
 
-```bash
-npx jest src/services/personal-driver/plan-config.service.test.ts --runInBand
-```
+## TDD evidence
 
-Observed failure before implementation:
+The focused test was first run before implementation and failed with:
 
-```text
-Cannot find module './plan-config.service' from 'src/services/personal-driver/plan-config.service.test.ts'
-```
+`Cannot find module '../BottomSheet'`
 
-The test suite failed for all 3 tests because the loader module did not exist yet, which matched the expected red state.
+After implementation, the focused suite passed.
 
-## GREEN Evidence
+## Verification
 
-Focused test command after implementation:
+- `npx jest src/components/ui/__tests__/BottomSheet.test.tsx --runInBand`: 1 suite passed, 12 tests passed, 0 failed.
+- `npx eslint src/components/ui/BottomSheet.tsx src/components/ui/__tests__/BottomSheet.test.tsx src/components/ui/index.ts`: passed with no output/errors.
+- `npx tsc --noEmit --pretty false`: passed with no output/errors.
+- `git diff --check`: no whitespace errors in the Task 1 changes.
 
-```bash
-npx jest src/services/personal-driver/plan-config.service.test.ts --runInBand
-```
+## Commit
 
-Result:
-
-```text
-Test Suites: 1 passed, 1 total
-Tests: 3 passed, 3 total
-```
-
-Regression command from the brief:
-
-```bash
-npx jest src/services/personal-driver/plan-config.service.test.ts src/services/personal-driver/pricing.service.test.ts --runInBand
-```
-
-Result:
-
-```text
-Test Suites: 2 passed, 2 total
-Tests: 8 passed, 8 total
-```
-
-## Files Changed
-
-- `src/types/personal-driver.ts`
-- `src/services/personal-driver/plans.ts`
-- `src/services/personal-driver/plan-config.service.ts`
-- `src/services/personal-driver/plan-config.service.test.ts`
-- `.superpowers/sdd/task-1-report.md`
-
-## What Changed
-
-- Added `PERSONAL_DRIVER_PLAN_IDS` for the fixed `basic`, `classic`, and `premium` catalogue order.
-- Added `PersonalDriverPlanDocument` with optional `updatedAt` and `updatedBy` metadata.
-- Added `PersonalDriverPlansResult` for the loader return shape.
-- Implemented `normalizePersonalDriverPlan(planId, raw)` to merge valid Firestore overrides over the static defaults.
-- Implemented `getPersonalDriverPlans()` to read `personal_driver_plans`, accept only the fixed IDs, and return static fallback plans plus the read error when Firestore access fails.
-- Added tests for:
-  - Premium override merging with missing plan fallback.
-  - Invalid plan data falling back to the static default.
-  - Firestore read failure returning fallback plans and the thrown error.
-
-## Self-Review
-
-- The loader is intentionally conservative: any invalid field in a plan document causes that document to fall back to the static default.
-- The service only accepts the three known plan IDs and ignores extra documents in the collection.
-- Static plan values remain the fallback source of truth when Firestore data is absent or unusable.
+- `e1e488e feat: add draggable bottom sheet primitive`
 
 ## Concerns
 
-- The validation accepts finite non-negative numeric overrides for price and amount fields, which matches the task brief, but the domain may later want tighter integer-only rules for count-like fields.
-- The new loader is not yet wired into any consuming UI or service entry point in this task; that integration is likely part of a later step.
+No blocking concerns. The requested primitive does not add focus trapping or a portal because those were outside the Task 1 brief.
 
-## Fix Follow-Up
+## P2 Review Fixes
 
-Reviewer finding addressed:
+Addressed both P2 findings from the Task 1 review:
 
-- `plan-config.service.ts` was returning `PERSONAL_DRIVER_PLANS` fallback objects and nested arrays by shared reference.
-- A consumer could mutate `allowedWeekdays` or `benefits` on a returned fallback plan and corrupt future callers.
-- Extra Firestore document IDs were also verified to stay out of the returned catalogue.
+- `finishPointerGesture` now checks the current `canDismiss` value before calling `onOpenChange(false)`, covering changes made after `pointerDown`.
+- `pointercancel` now uses a reset-only path that releases the pointer capture, clears gesture state, and snaps the sheet back without dismissal.
 
-## RED Evidence
+Added regression tests for both behaviors in `src/components/ui/__tests__/BottomSheet.test.tsx`.
 
-Focused regression command before the fix:
+## Fix TDD Evidence
 
-```bash
-npx jest src/services/personal-driver/plan-config.service.test.ts --runInBand
-```
-
-Observed failure:
+The new regression tests were run before the production fix and failed as expected:
 
 ```text
-FAIL src/services/personal-driver/plan-config.service.test.ts
-  ● personal driver plan catalogue loader › keeps fallback plans and static defaults isolated from consumer mutation
-
-    expect(received).toEqual(expected) // deep equality
-
-    - Expected  - 0
-    + Received  + 1
-
-    @@ -2,6 +2,7 @@
-        1,
-        2,
-        3,
-        4,
-        5,
-    +   6,
+FAIL src/components/ui/__tests__/BottomSheet.test.tsx
+  ● BottomSheet › does not dismiss when canDismiss becomes false during a drag
+    Expected number of calls: 0
+    Received number of calls: 1
+    1: false
+  ● BottomSheet › resets a canceled downward handle drag without dismissing
+    Expected number of calls: 0
+    Received number of calls: 1
+    1: false
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 12 passed, 14 total
 ```
 
-That failure showed the returned fallback plan was sharing state with the exported static defaults.
+## Fix Test Evidence
 
-## GREEN Evidence
-
-Focused regression command after the fix:
+Command:
 
 ```bash
-npx jest src/services/personal-driver/plan-config.service.test.ts --runInBand
+npx jest src/components/ui/__tests__/BottomSheet.test.tsx --runInBand
 ```
 
-Result:
+Exact passing result:
 
 ```text
 Test Suites: 1 passed, 1 total
-Tests: 5 passed, 5 total
+Tests:       14 passed, 14 total
+Snapshots:   0 total
+Time:        4.972 s
+Ran all test suites matching src/components/ui/__tests__/BottomSheet.test.tsx.
 ```
 
-Paired task command from the brief after the fix:
-
-```bash
-npx jest src/services/personal-driver/plan-config.service.test.ts src/services/personal-driver/pricing.service.test.ts --runInBand
-```
-
-Result:
-
-```text
-Test Suites: 2 passed, 2 total
-Tests: 10 passed, 10 total
-```
-
-## Changed Files
-
-- `src/services/personal-driver/plan-config.service.ts`
-- `src/services/personal-driver/plan-config.service.test.ts`
-- `.superpowers/sdd/task-1-report.md`
-
-## What Changed in the Fix
-
-- Added deep-clone helpers for single plans and plan maps so returned data no longer shares arrays with `PERSONAL_DRIVER_PLANS`.
-- Kept the Firestore merge behavior unchanged apart from cloning, so pricing and validation logic stayed intact.
-- Added a regression test that mutates a returned fallback plan and proves both the static defaults and a subsequent load stay unchanged.
-- Added a focused regression test showing an extra Firestore document ID is ignored and does not appear in the returned catalogue.
-
-## Self-Review
-
-- The fix is narrowly scoped to reference isolation and catalogue membership.
-- The fallback path now returns cloned plan data, so consumers can mutate their copy without corrupting future loads.
-- The Firestore-loaded path now returns cloned plan data as well, which keeps behavior consistent across all source modes.
-
-## Concerns After Fix
-
-- The loader still performs a shallow merge of scalar fields over a cloned base plan, which is appropriate for the current plan shape but should be revisited if nested objects are added later.
-- The existing test harness emits verbose logging, so the Jest output is noisier than ideal, but the assertions and pass/fail signal remain clear.
+Process exit code: `0`.
