@@ -85,6 +85,42 @@ function normalizeHeaderKey(key: string): string {
     .trim();
 }
 
+const MENU_TEMPLATE_HEADERS = ['externalId', 'name', 'description', 'price', 'category', 'isAvailable', 'image'] as const;
+
+export function validateMenuImportHeaders(headers: string[]): { missing: string[]; unexpected: string[] } {
+  const expected = new Map(MENU_TEMPLATE_HEADERS.map((header) => [normalizeHeaderKey(header), header]));
+  const normalizedHeaders = new Set(headers.map(normalizeHeaderKey).filter(Boolean));
+  return {
+    missing: MENU_TEMPLATE_HEADERS.filter((header) => !normalizedHeaders.has(normalizeHeaderKey(header))),
+    unexpected: headers.filter((header) => {
+      const normalized = normalizeHeaderKey(header);
+      return Boolean(normalized) && !expected.has(normalized);
+    }),
+  };
+}
+
+function hasRecognizedHeader(headers: string[], aliases: string[]): boolean {
+  const normalizedHeaders = new Set(headers.map(normalizeHeaderKey));
+  return aliases.some((alias) => normalizedHeaders.has(alias));
+}
+
+export function getTemplateHeaderError(headers: string[]): string | null {
+  const { unexpected } = validateMenuImportHeaders(headers);
+  const missing: string[] = [];
+  if (!hasRecognizedHeader(headers, ['externalid', 'external_id', 'idexterne', 'sku', 'id', 'reference', 'ref'])) missing.push('externalId');
+  if (!hasRecognizedHeader(headers, ['name', 'nom', 'titre', 'plat', 'item', 'intitule', 'libelle'])) missing.push('name');
+  if (!hasRecognizedHeader(headers, ['price', 'prix', 'tarif', 'amount', 'prixunitaire'])) missing.push('price');
+  if (missing.length === 0) return null;
+
+  const unexpectedNames = unexpected.filter((header) => !['category', 'description', 'active'].includes(normalizeHeaderKey(header)));
+  return [
+    'Fichier non conforme au modèle Excel.',
+    'Téléchargez le modèle ci-dessous et conservez exactement ses noms de colonnes.',
+    `Colonnes obligatoires manquantes : ${missing.join(', ')}.`,
+    unexpectedNames.length > 0 ? `Colonnes inconnues : ${unexpectedNames.join(', ')}.` : '',
+  ].filter(Boolean).join(' ');
+}
+
 /**
  * Parses XLSX buffer into array of key-value records from the first worksheet
  */
@@ -425,6 +461,11 @@ export const previewMenuFileImport = onCall(
 
     const [fileBuffer] = await file.download();
     const parsedRecords = await parseImportFileBuffer(fileBuffer, fileFormat);
+    const headers = parsedRecords[0] ? Object.keys(parsedRecords[0].rawRow) : [];
+    const templateHeaderError = getTemplateHeaderError(headers);
+    if (templateHeaderError) {
+      throw new HttpsError('invalid-argument', templateHeaderError);
+    }
     const existingItems = new Map<string, ExistingImportedMenuItem>();
     const refs = new Map<string, FirebaseFirestore.DocumentReference>();
 

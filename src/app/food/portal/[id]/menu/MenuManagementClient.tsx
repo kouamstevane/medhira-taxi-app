@@ -79,11 +79,25 @@ export default function MenuManagementClient() {
     setRefreshKey((k) => k + 1);
   }, [catalog]);
 
-  // Dynamic Categories calculation
+  // Dynamic Categories calculation (for creation form suggestions)
   const dynamicCategories = useMemo(
     () => mergeMenuCategories(DEFAULT_CATEGORIES, menuItems, catalog.categories),
     [catalog.categories, menuItems],
   );
+
+  // Filter categories: strictly the categories with existing dishes in this restaurant
+  const filterCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const cat of catalog.categories) {
+      const trimmed = cat.trim();
+      if (trimmed) set.add(trimmed);
+    }
+    for (const item of menuItems) {
+      const trimmed = item.category?.trim();
+      if (trimmed) set.add(trimmed);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  }, [catalog.categories, menuItems]);
 
   // Validation hook pour URLs externes
   const urlValidation = useMenuImageUrlValidation();
@@ -544,16 +558,16 @@ export default function MenuManagementClient() {
         <MenuCatalogToolbar
           search={catalog.search}
           category={catalog.category}
-          categories={dynamicCategories}
+          categories={filterCategories}
           availability={catalog.availability}
           sort={catalog.sort}
-            totalCount={catalog.totalCount}
-            availableCount={catalog.availableCount}
+          totalCount={catalog.totalCount}
+          availableCount={catalog.availableCount}
           onSearchChange={catalog.setSearch}
           onCategoryChange={catalog.setCategory}
-            onAvailabilityChange={catalog.setAvailability}
-            onSortChange={catalog.setSort}
-          />
+          onAvailabilityChange={catalog.setAvailability}
+          onSortChange={catalog.setSort}
+        />
 
         {catalog.error && !catalog.isNetworkError && (
           <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-200">
@@ -743,7 +757,7 @@ export default function MenuManagementClient() {
                 {/* Choix d'action image sous forme de cartes d'options */}
                 <div
                   aria-label={t('dishImageLabel')}
-                  className={`grid gap-2 ${editingItem?.imageUrl ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}
+                  className={`grid gap-2 ${editingItem?.imageUrl ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}
                 >
                   <button
                     type="button"
@@ -880,25 +894,31 @@ export default function MenuManagementClient() {
 
                 {/* Aperçu de l'image actuelle si conservée */}
                 {editingItem?.imageUrl && imageChoice === 'image-unchanged' && (
-                  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.04] border border-white/10">
-                    <div className="w-12 h-12 rounded-lg overflow-hidden relative bg-black/40 shrink-0 border border-white/10">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40 shadow-lg">
+                    <div className="relative w-full h-44 sm:h-52 overflow-hidden bg-black/60">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={editingItem.imageUrl}
                         alt={editingItem.name}
                         className="w-full h-full object-cover"
                       />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-white truncate">{t('currentImageLabel')}</p>
-                      <p className="text-[11px] text-slate-400 truncate">{editingItem.name}</p>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-primary/90 text-white shadow-sm backdrop-blur-xs mb-1">
+                            <MaterialIcon name="image" size="sm" />
+                            {t('currentImageLabel')}
+                          </span>
+                          <p className="text-sm font-bold text-white truncate drop-shadow-sm">{editingItem.name}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {/* Explication contextuelle pour chaque option avec en-tête explicite */}
                 <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/10 text-xs">
-                  <MaterialIcon name="info" size="xs" className="text-primary mt-0.5 shrink-0" />
+                  <MaterialIcon name="info" size="sm" className="text-primary mt-0.5 shrink-0" />
                   <div className="space-y-1 min-w-0">
                     <p className="font-bold text-white flex items-center gap-1.5">
                       <span className="text-primary text-[11px] uppercase tracking-wider font-semibold">
@@ -974,7 +994,7 @@ export default function MenuManagementClient() {
 
                     {compressionError && (
                       <p className="text-xs text-red-400 font-medium flex items-center gap-1.5">
-                        <MaterialIcon name="error_outline" size="xs" />
+                        <MaterialIcon name="error_outline" size="sm" />
                         {compressionError}
                       </p>
                     )}

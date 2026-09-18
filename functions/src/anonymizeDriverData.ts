@@ -1,4 +1,4 @@
-import { onSchedule, ScheduledEvent } from 'firebase-functions/v2/scheduler';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onDocumentUpdated, FirestoreEvent, Change, QueryDocumentSnapshot } from 'firebase-functions/v2/firestore';
 // NOTE: firebase-functions/v2/identity n'expose PAS de déclencheur de suppression.
 // "beforeUserDeleted" n'existe pas en v2 — seuls beforeUserCreated et beforeUserSignIn
@@ -21,7 +21,7 @@ export const anonymizeDriverData = onSchedule(
     region: 'europe-west1', // Adaptez selon votre région
     memory: '256MiB',
   },
-  async (_event: ScheduledEvent) => {
+  async () => {
     const thirtyDaysInMs = 30 * 24 * 60 * 60 * 1000;
     const thirtyDaysAgo = Date.now() - thirtyDaysInMs;
     
@@ -149,7 +149,7 @@ export const processAnonymizationTasks = onSchedule(
     region: 'europe-west1',
     memory: '256MiB',
   },
-  async (_event: ScheduledEvent) => {
+  async () => {
     const db = admin.firestore();
     const now = Date.now();
     

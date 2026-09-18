@@ -1,5 +1,5 @@
 import React from 'react';
-import { createEvent, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { createEvent, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { BulkCsvImportModal } from '../BulkCsvImportModal';
 import * as MenuImportClientService from '@/services/menu-import-client.service';
 
@@ -58,6 +58,30 @@ describe('BulkCsvImportModal', () => {
   test('does not trigger a service call when a template link is rendered', () => {
     render(<BulkCsvImportModal {...defaultProps} />);
     expect(MenuImportClientService.downloadSampleCsvTemplate).not.toHaveBeenCalled();
+  });
+
+  test('offers the Excel template when analysis reports a non-template catalogue', async () => {
+    (MenuImportClientService.uploadMenuImportFile as jest.Mock).mockResolvedValueOnce({
+      importId: 'imp-format',
+      filePath: 'menu-imports/resto-123/imp-format.xlsx',
+      type: 'excel',
+      fileFormat: 'xlsx',
+    });
+    (MenuImportClientService.previewMenuFileImport as jest.Mock).mockRejectedValueOnce(
+      new Error('Fichier non conforme au modèle Excel. Téléchargez le modèle ci-dessous et conservez exactement ses noms de colonnes.')
+    );
+
+    render(<BulkCsvImportModal {...defaultProps} />);
+    fireEvent.change(screen.getByTestId('file-input'), {
+      target: { files: [new File(['content'], 'menu.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })] },
+    });
+    fireEvent.click(screen.getByText(/Analyser le fichier/i));
+
+    await waitFor(() => expect(screen.getByText(/Fichier non conforme au modèle Excel/i)).toBeInTheDocument());
+    expect(within(screen.getByTestId('menu-import-error')).getByRole('link', { name: /télécharger le modèle excel/i })).toHaveAttribute(
+      'href',
+      '/templates/menu-import/menu-template.xlsx'
+    );
   });
 
   test('closes when the shared sheet handle is dragged while idle', () => {

@@ -1,16 +1,42 @@
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import {
   classifyMenuImportRows,
   computeImportedMenuItemId,
   normalizeMenuRow,
   parseCsvBuffer,
   parseXlsxBuffer,
+  validateMenuImportHeaders,
+  getTemplateHeaderError,
   stripHtml,
 } from '../menuImportJobs.js';
 import { isPublicRoutableIp, validateWooCommerceTarget } from '../woocommerceSecurity.js';
 import { assertXlsxArchiveWithinLimits } from '../xlsxLimits.js';
+import { parseXlsxImportBuffer } from '../menuImportAssets.js';
 
 describe('Menu Import Pure Helpers & Parsers', () => {
+  describe('validateMenuImportHeaders', () => {
+    test('reports the template fields missing from a non-template catalogue', () => {
+      expect(validateMenuImportHeaders(['category', 'item_name', 'description', 'price_cad', 'active'])).toEqual({
+        missing: ['externalId', 'name', 'price', 'isAvailable', 'image'],
+        unexpected: ['item_name', 'price_cad', 'active'],
+      });
+    });
+
+    test('accepts the official template headers', () => {
+      expect(validateMenuImportHeaders(['externalId', 'name', 'description', 'price', 'category', 'isAvailable', 'image'])).toEqual({
+        missing: [],
+        unexpected: [],
+      });
+    });
+  });
+
+  test('explains how to fix a non-template catalogue', () => {
+    expect(getTemplateHeaderError(['category', 'item_name', 'description', 'price_cad', 'item_type', 'contents', 'options', 'active'])).toBe(
+      'Fichier non conforme au modèle Excel. Téléchargez le modèle ci-dessous et conservez exactement ses noms de colonnes. Colonnes obligatoires manquantes : externalId, name, price. Colonnes inconnues : item_name, price_cad, item_type, contents, options.'
+    );
+  });
+
   describe('classifyMenuImportRows', () => {
     test('classifies valid new rows and same-source updates for review', () => {
       const result = classifyMenuImportRows(
@@ -200,6 +226,32 @@ describe('Menu Import Pure Helpers & Parsers', () => {
       expect(records[0].name).toBe('Tarte aux pommes');
       expect(records[0].price).toBe('6.5');
       expect(records[0].externalId).toBe('sku-xlsx-1');
+    });
+
+    test('parses XLSX files whose workbook XML uses a namespace prefix', async () => {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Menu');
+      sheet.addRow(['externalId', 'name', 'price']);
+      sheet.addRow(['sku-prefixed-1', 'Poulet', '12.5']);
+      const original = Buffer.from(await workbook.xlsx.writeBuffer());
+      const zip = await JSZip.loadAsync(original);
+      const workbookXml = await zip.file('xl/workbook.xml')!.async('string');
+      zip.file('xl/workbook.xml', workbookXml
+        .replace(/<(\/?)((?:workbook|sheets|sheet))\b/g, '<$1x:$2')
+        .replace('<x:workbook ', '<x:workbook xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ')
+        .replace('xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"', ''));
+      const sharedStringsXml = await zip.file('xl/sharedStrings.xml')!.async('string');
+      zip.file('xl/sharedStrings.xml', sharedStringsXml
+        .replace('<sst ', '<x:sst xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ')
+        .replace('</sst>', '</x:sst>')
+        .replace('xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"', ''));
+      const workbookRels = await zip.file('xl/_rels/workbook.xml.rels')!.async('string');
+      zip.file('xl/_rels/workbook.xml.rels', workbookRels.replace(/Target="([^"]+)"/g, 'Target="/xl/$1"'));
+
+      const records = await parseXlsxImportBuffer(Buffer.from(await zip.generateAsync({ type: 'nodebuffer' })));
+
+      expect(records[0].rawRow.name).toBe('Poulet');
+      expect(records[0].rawRow.price).toBe('12.5');
     });
   });
 

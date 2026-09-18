@@ -37,4 +37,26 @@ describe('MenuCatalogRow', () => {
 
     expect(screen.queryByText('Modifier Burger Maison')).not.toBeInTheDocument();
   });
+
+  it('closes the mobile actions menu when an action is clicked', () => {
+    const onEdit = jest.fn();
+    render(
+      <MenuCatalogRow
+        item={item}
+        selected={false}
+        onSelect={jest.fn()}
+        onToggleAvailability={jest.fn()}
+        onEdit={onEdit}
+        onDelete={jest.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions pour Burger Maison' }));
+    const editButtons = screen.getAllByRole('button', { name: 'Modifier Burger Maison' });
+    expect(editButtons).toHaveLength(2);
+
+    fireEvent.click(editButtons[1]);
+    expect(onEdit).toHaveBeenCalledWith(item);
+    expect(screen.getAllByRole('button', { name: 'Modifier Burger Maison' })).toHaveLength(1);
+  });
 });

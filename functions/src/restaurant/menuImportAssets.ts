@@ -1,5 +1,6 @@
 import yauzl from 'yauzl';
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import { parseCsvBuffer, MAX_IMPORT_COLUMNS, MAX_IMPORT_ROWS } from './menuImportParsing.js';
 import { assertXlsxArchiveWithinLimits } from './xlsxLimits.js';
 
@@ -144,6 +145,53 @@ function getImageReference(row: Record<string, string>): string {
   return '';
 }
 
+export function normalizePrefixedWorkbookXml(xml: string): string {
+  if (!/<x:[A-Za-z][\w.-]*\b/.test(xml)) return xml;
+  return xml
+    .replace(/<(\/?)x:([A-Za-z][\w.-]*)\b/g, '<$1$2')
+    .replace(/\s+xmlns:x="[^"]*"/g, '');
+}
+
+async function loadXlsxWorkbook(buffer: Buffer): Promise<ExcelJS.Workbook> {
+  const workbook = new ExcelJS.Workbook();
+  try {
+    await workbook.xlsx.load(Buffer.from(buffer) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    return workbook;
+  } catch (firstError) {
+    const zip = await JSZip.loadAsync(buffer);
+    const xmlEntries = Object.keys(zip.files).filter((name) => name.startsWith('xl/') && name.endsWith('.xml'));
+    let normalizedAny = false;
+    for (const entryName of xmlEntries) {
+      const entry = zip.file(entryName);
+      if (!entry) continue;
+      const originalXml = await entry.async('string');
+      const normalizedXml = normalizePrefixedWorkbookXml(originalXml);
+      if (normalizedXml !== originalXml) {
+        zip.file(entryName, normalizedXml);
+        normalizedAny = true;
+      }
+    }
+    const relationshipEntries = Object.keys(zip.files).filter((name) => name.startsWith('xl/') && name.endsWith('.rels'));
+    for (const entryName of relationshipEntries) {
+      const entry = zip.file(entryName);
+      if (!entry) continue;
+      const originalXml = await entry.async('string');
+      const targetPrefix = entryName === 'xl/_rels/workbook.xml.rels' ? 'Target="' : 'Target="../';
+      const normalizedXml = originalXml.replace(/Target="\/xl\//g, targetPrefix);
+      if (normalizedXml !== originalXml) {
+        zip.file(entryName, normalizedXml);
+        normalizedAny = true;
+      }
+    }
+    if (!normalizedAny) throw firstError;
+
+    const compatibleWorkbook = new ExcelJS.Workbook();
+    const normalizedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+    await compatibleWorkbook.xlsx.load(normalizedBuffer as unknown as Parameters<typeof compatibleWorkbook.xlsx.load>[0]);
+    return compatibleWorkbook;
+  }
+}
+
 function findZipImage(entries: ArchiveEntry[], reference: string): ArchiveEntry | undefined {
   const normalizedReference = normalizeArchivePath(reference);
   const candidates = new Set([normalizedReference, `images/${normalizedReference}`]);
@@ -198,8 +246,7 @@ function readCellValue(cell: ExcelJS.Cell): string {
 
 export async function parseXlsxImportBuffer(buffer: Buffer): Promise<ParsedMenuImportRecord[]> {
   await assertXlsxArchiveWithinLimits(buffer);
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(Buffer.from(buffer) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+  const workbook = await loadXlsxWorkbook(buffer);
 
   const worksheet = workbook.worksheets[0];
   if (!worksheet) return [];

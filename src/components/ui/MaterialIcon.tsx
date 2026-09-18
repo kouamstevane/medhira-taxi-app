@@ -276,6 +276,7 @@ export const materialIconMap: Record<string, LucideIcon> = {
   support_agent: Headphones,
   swap_horiz: ArrowLeftRight,
   swap_vert: ArrowDownUp,
+  sort: ArrowDownUp,
   sync_alt: ArrowLeftRight,
   timer: Timer,
   today: CalendarDays,

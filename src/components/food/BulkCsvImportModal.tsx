@@ -21,6 +21,7 @@ import {
 import type { MenuImportJob, MenuImportPreview } from '@/types/food-delivery';
 import type { MenuImportFileInput } from '@/services/menu-import-client.service';
 import type { Unsubscribe } from 'firebase/firestore';
+import { validateMenuImportFileHeaders } from '@/utils/menu-import-header-validation';
 
 interface BulkCsvImportModalProps {
   isOpen: boolean;
@@ -128,6 +129,13 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
       setIsProcessing(true);
       setErrorMessage(null);
       setUploadProgress(0);
+
+      const localHeaderError = await validateMenuImportFileHeaders(file);
+      if (localHeaderError) {
+        setIsProcessing(false);
+        setErrorMessage(localHeaderError);
+        return;
+      }
 
       const uploadAbortController = new AbortController();
       uploadAbortControllerRef.current = uploadAbortController;
@@ -352,9 +360,20 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
 
           {/* Error Banner */}
           {errorMessage && (
-            <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300 flex items-start gap-3">
+            <div data-testid="menu-import-error" className="p-4 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 text-sm text-red-700 dark:text-red-300 flex items-start gap-3">
               <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-              <div className="flex-1">{errorMessage}</div>
+              <div className="flex-1 space-y-2">
+                <p>{errorMessage}</p>
+                {errorMessage.startsWith('Fichier non conforme au modèle Excel') && (
+                  <a
+                    href={MENU_IMPORT_TEMPLATE_URLS.xlsx}
+                    download="modele-import-menu.xlsx"
+                    className="inline-flex items-center gap-1 font-semibold underline underline-offset-2"
+                  >
+                    Télécharger le modèle Excel <Download aria-hidden="true" className="size-3.5" />
+                  </a>
+                )}
+              </div>
             </div>
           )}
 

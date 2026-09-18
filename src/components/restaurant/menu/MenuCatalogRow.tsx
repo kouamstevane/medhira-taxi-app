@@ -40,14 +40,22 @@ export function MenuCatalogRow({ item, selected, onSelect, onToggleAvailability,
       const button = actionButtonRef.current;
       if (!button) return;
       const rect = button.getBoundingClientRect();
-      const width = Math.min(280, window.innerWidth - 16);
-      const menuHeight = menuRef.current?.offsetHeight ?? 188;
-      const bottomSafeArea = 88;
-      const opensUp = rect.bottom + menuHeight > window.innerHeight - bottomSafeArea;
+      const width = 195;
+      const menuHeight = menuRef.current?.offsetHeight || 135;
+      const bottomNavHeight = 64;
+
+      // Determine whether popup fits below the 3-dots button
+      const spaceBelow = window.innerHeight - bottomNavHeight - rect.bottom;
+      const opensUp = spaceBelow < menuHeight + 8 && rect.top > menuHeight + 16;
+
       const top = opensUp
-        ? Math.max(8, rect.top - menuHeight - 8)
-        : Math.min(window.innerHeight - bottomSafeArea - menuHeight, rect.bottom + 8);
-      const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8);
+        ? Math.max(8, rect.top - menuHeight - 4)
+        : Math.min(window.innerHeight - bottomNavHeight - menuHeight - 4, rect.bottom + 4);
+
+      // Align right edge of popup flush with right edge of 3-dots button (with 8px viewport safety)
+      const right = Math.min(rect.right, window.innerWidth - 8);
+      const left = Math.max(8, right - width);
+
       setActionsPosition({ top, left, width });
     };
 
@@ -136,18 +144,44 @@ export function MenuCatalogRow({ item, selected, onSelect, onToggleAvailability,
         {actionsOpen && actionsPosition && typeof document !== 'undefined' && createPortal(
           <div
             ref={menuRef}
-            className="fixed z-[100] max-h-[calc(100dvh-7rem)] overflow-y-auto rounded-xl border border-white/10 bg-[#1b1d22] p-1 opacity-100 shadow-2xl"
+            className="fixed z-40 overflow-hidden rounded-xl border border-white/10 bg-[#1b1d22] p-1 shadow-2xl backdrop-blur-xl"
             style={{ top: actionsPosition.top, left: actionsPosition.left, width: actionsPosition.width }}
           >
-            <button type="button" onClick={() => onToggleAvailability(item)} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-semibold text-slate-200 hover:bg-white/[0.08]">
-              <MaterialIcon name={item.isAvailable ? 'visibility_off' : 'visibility'} size="sm" />
-              {item.isAvailable ? t('makeUnavailableNamed', { name: item.name }) : t('makeAvailableNamed', { name: item.name })}
+            <button
+              type="button"
+              onClick={() => {
+                setActionsOpen(false);
+                onToggleAvailability(item);
+              }}
+              aria-label={item.isAvailable ? t('makeUnavailableNamed', { name: item.name }) : t('makeAvailableNamed', { name: item.name })}
+              className="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-xs font-semibold text-slate-200 hover:bg-white/[0.08] transition"
+            >
+              <MaterialIcon name={item.isAvailable ? 'visibility_off' : 'visibility'} size="sm" className="shrink-0 text-slate-400" />
+              <span className="truncate">{item.isAvailable ? t('makeUnavailableAction') : t('makeAvailableAction')}</span>
             </button>
-            <button type="button" onClick={() => onEdit(item)} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-semibold text-slate-200 hover:bg-white/[0.08]">
-              <MaterialIcon name="edit" size="sm" /> {t('editItemNamed', { name: item.name })}
+            <button
+              type="button"
+              onClick={() => {
+                setActionsOpen(false);
+                onEdit(item);
+              }}
+              aria-label={t('editItemNamed', { name: item.name })}
+              className="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-xs font-semibold text-slate-200 hover:bg-white/[0.08] transition"
+            >
+              <MaterialIcon name="edit" size="sm" className="shrink-0 text-slate-400" />
+              <span className="truncate">{t('editItemAction')}</span>
             </button>
-            <button type="button" onClick={() => onDelete(item.id)} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-xs font-semibold text-red-300 hover:bg-red-500/10">
-              <MaterialIcon name="delete" size="sm" /> {t('deleteItemNamed', { name: item.name })}
+            <button
+              type="button"
+              onClick={() => {
+                setActionsOpen(false);
+                onDelete(item.id);
+              }}
+              aria-label={t('deleteItemNamed', { name: item.name })}
+              className="flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-xs font-semibold text-red-300 hover:bg-red-500/10 transition"
+            >
+              <MaterialIcon name="delete" size="sm" className="shrink-0 text-red-300" />
+              <span className="truncate">{t('deleteItemAction')}</span>
             </button>
           </div>,
           document.body,

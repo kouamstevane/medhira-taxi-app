@@ -1,3 +1,5 @@
+export {};
+
 const restaurantRef = {
   get: jest.fn(),
   update: jest.fn(),

@@ -45,4 +45,26 @@ describe('MenuCatalogToolbar', () => {
 
     expect(props.onSearchChange).toHaveBeenCalledWith('');
   });
+
+  it('opens category bottom sheet and selects a category', () => {
+    render(<MenuCatalogToolbar {...props} />);
+    const categoryButton = screen.getByRole('button', { name: 'Catégorie' });
+    fireEvent.click(categoryButton);
+
+    const drinksOption = screen.getByRole('button', { name: 'Boissons' });
+    fireEvent.click(drinksOption);
+
+    expect(props.onCategoryChange).toHaveBeenCalledWith('Boissons');
+  });
+
+  it('opens sort bottom sheet and selects a sort option', () => {
+    render(<MenuCatalogToolbar {...props} />);
+    const sortButton = screen.getByRole('button', { name: 'Trier par' });
+    fireEvent.click(sortButton);
+
+    const priceAscOption = screen.getByRole('button', { name: 'Prix croissant' });
+    fireEvent.click(priceAscOption);
+
+    expect(props.onSortChange).toHaveBeenCalledWith('price-asc');
+  });
 });
