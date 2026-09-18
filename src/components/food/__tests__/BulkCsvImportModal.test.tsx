@@ -2,6 +2,7 @@ import React from 'react';
 import { createEvent, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { BulkCsvImportModal } from '../BulkCsvImportModal';
 import * as MenuImportClientService from '@/services/menu-import-client.service';
+import { I18nProvider } from '@/context/I18nContext';
 
 jest.mock('@/services/menu-import-client.service');
 
@@ -42,6 +43,20 @@ describe('BulkCsvImportModal', () => {
     );
     expect(screen.queryByText(/Obligatoires :/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/preparationTime/i)).not.toBeInTheDocument();
+  });
+
+  test('renders in English when I18nProvider initialLocale is en', () => {
+    render(
+      <I18nProvider initialLocale="en">
+        <BulkCsvImportModal {...defaultProps} />
+      </I18nProvider>
+    );
+    expect(screen.getByText('Import dish catalog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Import dish catalog' })).toBeInTheDocument();
+    expect(screen.getByText('Need a template?')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /csv template without images/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /zip template with local images/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /excel template with embedded images/i })).toBeInTheDocument();
   });
 
   test('does not render when isOpen is false', () => {

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useRef, Suspense } from 'react';
+import React, { useEffect, useRef, useState, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { NetworkErrorView } from '@/components/ui/NetworkErrorView';
 import { getEffectiveRoleStatuses, getRouteForAuthenticatedProfile } from '@/services/roles.service';
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 import { redirectWithFallback } from '@/utils/navigation';
@@ -13,15 +14,48 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import Loading from './loading';
 
+const INITIAL_LOAD_TIMEOUT_MS = 13_000;
+
 function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { currentUser, loading, userData } = useAuth();
+  const { currentUser, loading, userData, reloadUser, authStatus } = useAuth();
   const { t } = useTranslation();
   const returnFromPending = ['restaurant-pending', 'driver-pending'].includes(searchParams.get('from') ?? '');
   const redirectedRef = useRef(false);
   const fallbackRef = useRef<NodeJS.Timeout | null>(null);
+  const [hasTimedOut, setHasTimedOut] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
   const registrationType = userData ? getIncompleteRegistrationType(userData) : null;
+  const isWaiting = loading || (Boolean(currentUser) && Boolean(userData) && !returnFromPending) || authStatus === 'degraded';
+
+  useEffect(() => {
+    if (!isWaiting) {
+      setHasTimedOut(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setHasTimedOut(true);
+    }, INITIAL_LOAD_TIMEOUT_MS);
+
+    return () => clearTimeout(timer);
+  }, [isWaiting, retryCount]);
+
+  const handleRetry = useCallback(async () => {
+    setHasTimedOut(false);
+    setRetryCount((prev) => prev + 1);
+    try {
+      if (currentUser && reloadUser) {
+        await reloadUser();
+      } else if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    } catch {
+      // Retrying in offline mode may fail, timeout will re-trigger
+    }
+  }, [currentUser, reloadUser]);
 
   useEffect(() => {
     if (returnFromPending || registrationType) return;
@@ -45,6 +79,19 @@ function HomeContent() {
       }
     };
   }, [currentUser, loading, registrationType, returnFromPending, router, userData]);
+
+  if (hasTimedOut) {
+    return (
+      <NetworkErrorView
+        fullScreen
+        title={t('common.offlineTitle')}
+        message={t('common.offlineDescription')}
+        onRetry={handleRetry}
+        retryLabel={t('common.retry')}
+        autoRetryOnReconnect
+      />
+    );
+  }
 
   if (!returnFromPending && !loading && currentUser && userData && registrationType) {
     return (

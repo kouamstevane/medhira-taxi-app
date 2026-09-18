@@ -9,8 +9,11 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
+import { NetworkErrorView } from '@/components/ui/NetworkErrorView';
+
+const STREAMING_LOAD_TIMEOUT_MS = 13_000;
 
 /**
  * Loading - Écran de chargement global
@@ -20,6 +23,34 @@ import { useTranslation } from '@/hooks/useTranslation';
  */
 export default function Loading() {
   const { t } = useTranslation('common');
+  const [hasTimedOut, setHasTimedOut] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setHasTimedOut(true);
+    }, STREAMING_LOAD_TIMEOUT_MS);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (hasTimedOut) {
+    return (
+      <NetworkErrorView
+        fullScreen
+        title={t('offlineTitle')}
+        message={t('offlineDescription')}
+        onRetry={() => {
+          setHasTimedOut(false);
+          if (typeof window !== 'undefined') {
+            window.location.reload();
+          }
+        }}
+        retryLabel={t('retry')}
+        autoRetryOnReconnect
+      />
+    );
+  }
+
   return (
     <div
       className="min-h-screen bg-[#0F0F0F] flex items-center justify-center"

@@ -31,10 +31,16 @@ describe('Menu Import Pure Helpers & Parsers', () => {
     });
   });
 
-  test('explains how to fix a non-template catalogue', () => {
-    expect(getTemplateHeaderError(['category', 'item_name', 'description', 'price_cad', 'item_type', 'contents', 'options', 'active'])).toBe(
-      'Fichier non conforme au modèle Excel. Téléchargez le modèle ci-dessous et conservez exactement ses noms de colonnes. Colonnes obligatoires manquantes : externalId, name, price. Colonnes inconnues : item_name, price_cad, item_type, contents, options.'
+  test('explains how to fix a non-template catalogue with missing columns', () => {
+    expect(getTemplateHeaderError(['category', 'custom_foo', 'options'])).toBe(
+      'Format de catalogue non conforme. Utilisez le modèle Excel et conservez ses noms de colonnes. Colonnes obligatoires manquantes : name, price, externalId. Colonnes non reconnues : custom_foo, options.'
     );
+  });
+
+  test('accepts DoorDash, Uber Eats and Square headers in getTemplateHeaderError', () => {
+    expect(getTemplateHeaderError(['category', 'item_name', 'description', 'price_cad', 'contents', 'active'])).toBeNull();
+    expect(getTemplateHeaderError(['Item ID', 'Item Name', 'Base Price', 'Item Description', 'Menu Category'])).toBeNull();
+    expect(getTemplateHeaderError(['Product Name', 'Price Incl. Tax', 'Accounting Group', 'Barcode'])).toBeNull();
   });
 
   describe('classifyMenuImportRows', () => {
@@ -184,14 +190,40 @@ describe('Menu Import Pure Helpers & Parsers', () => {
       expect(result.isAvailable).toBe(true);
     });
 
-    test('throws error with row number if externalId is missing', () => {
+    test('auto-generates externalId from name when externalId is omitted', () => {
       const rawRow = {
-        name: 'Burger',
+        name: 'Burger Gourmet',
         price: '10',
         category: 'Plats',
       };
 
-      expect(() => normalizeMenuRow(rawRow, 5)).toThrow(/Ligne 5.*externalId/i);
+      const result = normalizeMenuRow(rawRow, 5);
+      expect(result.externalId).toBe('auto_burgergourmet');
+    });
+
+    test('throws error with row number if name is missing', () => {
+      const rawRow = {
+        price: '10',
+        category: 'Plats',
+        externalId: 'sku-1',
+      };
+
+      expect(() => normalizeMenuRow(rawRow, 5)).toThrow(/nom du plat est manquant/i);
+    });
+
+    test('accepts third-party field names like item_name, price_cad and contents', () => {
+      const rawRow = {
+        item_name: 'Frango Burger',
+        price_cad: '14.50 $',
+        contents: 'Poulet grillé, sauce maison',
+        category: 'Burgers',
+      };
+
+      const result = normalizeMenuRow(rawRow, 2);
+      expect(result.name).toBe('Frango Burger');
+      expect(result.price).toBe(14.5);
+      expect(result.description).toBe('Poulet grillé, sauce maison');
+      expect(result.externalId).toBe('auto_frangoburger');
     });
 
     test('throws error with row number if price is invalid or negative', () => {

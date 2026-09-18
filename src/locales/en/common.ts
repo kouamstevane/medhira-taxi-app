@@ -71,6 +71,8 @@ export const common = {
   backToHome: 'Back to home',
   networkErrorTitle: 'Oops!',
   networkErrorMessage: 'Failed to load data. Please check your internet connection and try again.',
+  offlineTitle: 'You are offline',
+  offlineDescription: 'Please check your internet connection and try again.',
   somethingWentWrong: 'We are sorry, something went wrong. Please try again.',
   reconnecting: 'Reconnecting...',
 } as const;

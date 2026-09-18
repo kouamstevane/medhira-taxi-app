@@ -1,10 +1,14 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { NetworkErrorView } from '@/components/ui/NetworkErrorView';
 import { redirectWithFallback } from '@/utils/navigation';
+import { useTranslation } from '@/hooks/useTranslation';
+
+const PROTECTED_GUARD_TIMEOUT_MS = 13_000;
 
 interface ProtectedPageGuardProps {
   children: React.ReactNode;
@@ -16,8 +20,40 @@ export function ProtectedPageGuard({
   redirectTo = '/login',
 }: ProtectedPageGuardProps) {
   const router = useRouter();
-  const { authStatus } = useAuth();
+  const { authStatus, reloadUser } = useAuth();
+  const { t } = useTranslation();
   const redirectedRef = useRef(false);
+  const [hasTimedOut, setHasTimedOut] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
+  const isWaiting = authStatus === 'loading' || authStatus === 'degraded';
+
+  useEffect(() => {
+    if (!isWaiting) {
+      setHasTimedOut(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setHasTimedOut(true);
+    }, PROTECTED_GUARD_TIMEOUT_MS);
+
+    return () => clearTimeout(timer);
+  }, [isWaiting, retryCount]);
+
+  const handleRetry = useCallback(async () => {
+    setHasTimedOut(false);
+    setRetryCount((prev) => prev + 1);
+    try {
+      if (reloadUser) {
+        await reloadUser();
+      } else if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    } catch {
+      // Retrying in offline mode may fail, timeout will re-trigger
+    }
+  }, [reloadUser]);
 
   useEffect(() => {
     if (authStatus !== 'unauthenticated' || redirectedRef.current) {
@@ -30,6 +66,19 @@ export function ProtectedPageGuard({
 
   if (authStatus === 'authenticated') {
     return <>{children}</>;
+  }
+
+  if (hasTimedOut) {
+    return (
+      <NetworkErrorView
+        fullScreen
+        title={t('common.offlineTitle')}
+        message={t('common.offlineDescription')}
+        onRetry={handleRetry}
+        retryLabel={t('common.retry')}
+        autoRetryOnReconnect
+      />
+    );
   }
 
   return (

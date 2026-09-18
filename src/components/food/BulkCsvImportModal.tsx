@@ -22,6 +22,7 @@ import type { MenuImportJob, MenuImportPreview } from '@/types/food-delivery';
 import type { MenuImportFileInput } from '@/services/menu-import-client.service';
 import type { Unsubscribe } from 'firebase/firestore';
 import { validateMenuImportFileHeaders } from '@/utils/menu-import-header-validation';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface BulkCsvImportModalProps {
   isOpen: boolean;
@@ -36,6 +37,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
   restaurantId,
   onImportCompleted,
 }) => {
+  const { t } = useTranslation('restaurant');
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -74,9 +76,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
 
   const handleClose = () => {
     if (isProcessing && importJob?.status === 'processing') {
-      const confirm = window.confirm(
-        "L'importation est en cours de traitement en arrière-plan. Souhaitez-vous fermer la fenêtre ?"
-      );
+      const confirm = window.confirm(t('importCloseConfirm'));
       if (!confirm) return;
     }
     cancelActiveUpload();
@@ -108,13 +108,13 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
 
     const name = selectedFile.name.toLowerCase();
     if (!name.endsWith('.csv') && !name.endsWith('.zip') && !name.endsWith('.xlsx')) {
-      setErrorMessage('Format de fichier non supporté. Veuillez choisir un fichier .csv, .zip ou .xlsx');
+      setErrorMessage(t('importUnsupportedFormat'));
       setFile(null);
       return;
     }
 
     if (selectedFile.size > 15 * 1024 * 1024) {
-      setErrorMessage('Le fichier dépasse la taille maximale autorisée de 15 Mo');
+      setErrorMessage(t('importFileSizeLimitExceeded'));
       setFile(null);
       return;
     }
@@ -130,7 +130,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
       setErrorMessage(null);
       setUploadProgress(0);
 
-      const localHeaderError = await validateMenuImportFileHeaders(file);
+      const localHeaderError = await validateMenuImportFileHeaders(file, t);
       if (localHeaderError) {
         setIsProcessing(false);
         setErrorMessage(localHeaderError);
@@ -163,7 +163,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
       setIsProcessing(false);
-      setErrorMessage(err instanceof Error ? err.message : "Échec de l'analyse du fichier");
+      setErrorMessage(err instanceof Error ? err.message : t('importAnalysisFailed'));
     }
   };
 
@@ -198,14 +198,14 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           }
         },
         (error) => {
-          setErrorMessage(error.message || "Erreur de suivi de l'importation");
+          setErrorMessage(error.message || t('importTrackingError'));
           setIsProcessing(false);
         }
       );
     } catch (err: unknown) {
       setIsProcessing(false);
       setStage('review');
-      setErrorMessage(err instanceof Error ? err.message : "Échec du démarrage de l'importation");
+      setErrorMessage(err instanceof Error ? err.message : t('importStartFailed'));
     }
   };
 
@@ -238,61 +238,61 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
         if (!open) handleClose();
       }}
       onCloseRequest={handleClose}
-      title="Importer un catalogue de plats"
+      title={t('importModalTitle')}
       canDismiss={!(isProcessing && importJob?.status === 'processing')}
       className="border border-white/10 bg-[#18181b] sm:max-w-2xl text-white shadow-2xl"
       contentClassName="min-h-0 overflow-y-auto px-4 pb-0"
     >
       <div className="flex flex-col">
         <p className="border-b border-white/10 pb-3 text-xs text-slate-300">
-          Fichiers acceptés : CSV, ZIP et Excel XLSX (jusqu'à 10 000 plats, max 15 Mo)
+          {t('importModalAcceptedFiles')}
         </p>
 
         {/* Body */}
         <div className="py-5 space-y-5 flex-1">
           {/* Compact template guidance */}
           <div
-            aria-label="Modèles d’importation"
+            aria-label={t('importTemplatesAria')}
             className="space-y-1.5 rounded-lg border border-zinc-200 bg-zinc-50/80 px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-800/40"
           >
             <div className="flex items-center gap-1.5">
               <Info aria-hidden="true" className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
               <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">
-                Besoin d’un modèle ?
+                {t('importNeedTemplate')}
               </span>
             </div>
             <div className="flex flex-nowrap gap-1.5 overflow-x-auto">
               <a
                 href={MENU_IMPORT_TEMPLATE_URLS.csv}
                 download="modele-import-menu.csv"
-                aria-label="Télécharger le modèle CSV sans images"
-                title="CSV sans images"
+                aria-label={t('importDownloadCsvAria')}
+                title={t('importDownloadCsvTitle')}
                 className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
               >
                 <FileText aria-hidden="true" className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                CSV
+                {t('importTemplateCsvLabel')}
                 <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
               </a>
               <a
                 href={MENU_IMPORT_TEMPLATE_URLS.zip}
                 download="modele-import-menu.zip"
-                aria-label="Télécharger le modèle ZIP avec images locales"
-                title="ZIP avec images locales"
+                aria-label={t('importDownloadZipAria')}
+                title={t('importDownloadZipTitle')}
                 className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
               >
                 <Archive aria-hidden="true" className="size-3.5 text-blue-600 dark:text-blue-400" />
-                ZIP
+                {t('importTemplateZipLabel')}
                 <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
               </a>
               <a
                 href={MENU_IMPORT_TEMPLATE_URLS.xlsx}
                 download="modele-import-menu.xlsx"
-                aria-label="Télécharger le modèle Excel avec images intégrées"
-                title="Excel avec images intégrées"
+                aria-label={t('importDownloadXlsxAria')}
+                title={t('importDownloadXlsxTitle')}
                 className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
               >
                 <FileSpreadsheet aria-hidden="true" className="size-3.5 text-violet-600 dark:text-violet-400" />
-                Excel
+                {t('importTemplateXlsxLabel')}
                 <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
               </a>
             </div>
@@ -327,6 +327,9 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                 data-testid="file-input"
                 type="file"
                 accept=".csv, .zip, .xlsx, application/zip, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, text/csv"
+                onClick={(e) => {
+                  (e.currentTarget as HTMLInputElement).value = '';
+                }}
                 onChange={(e) => handleFileChange(e.target.files?.[0] || null)}
                 className="hidden"
               />
@@ -341,16 +344,16 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                   <div>
                     <p className="font-medium text-zinc-900 dark:text-zinc-100">{file.name}</p>
                     <p className="text-xs text-zinc-600 dark:text-zinc-300 font-medium">
-                      {(file.size / (1024 * 1024)).toFixed(2)} Mo — Cliquez pour remplacer
+                      {t('importClickToReplace', { size: (file.size / (1024 * 1024)).toFixed(2) })}
                     </p>
                   </div>
                 ) : (
                   <div>
                     <p className="font-medium text-zinc-900 dark:text-zinc-100">
-                      Glissez votre fichier CSV, ZIP ou XLSX ici
+                      {t('importDropzoneTitle')}
                     </p>
                     <p className="text-xs text-zinc-600 dark:text-zinc-300 font-medium mt-1">
-                      ou cliquez pour sélectionner depuis votre ordinateur
+                      {t('importDropzoneSubtitle')}
                     </p>
                   </div>
                 )}
@@ -364,13 +367,17 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
               <AlertTriangle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
               <div className="flex-1 space-y-2">
                 <p>{errorMessage}</p>
-                {errorMessage.startsWith('Fichier non conforme au modèle Excel') && (
+                {(errorMessage.startsWith('Fichier non conforme') ||
+                  errorMessage.startsWith('Format de catalogue non conforme') ||
+                  errorMessage.startsWith('Invalid catalog format') ||
+                  errorMessage.includes('modèle Excel') ||
+                  errorMessage.includes('Excel template')) && (
                   <a
                     href={MENU_IMPORT_TEMPLATE_URLS.xlsx}
                     download="modele-import-menu.xlsx"
                     className="inline-flex items-center gap-1 font-semibold underline underline-offset-2"
                   >
-                    Télécharger le modèle Excel <Download aria-hidden="true" className="size-3.5" />
+                    {t('importDownloadExcelTemplate')} <Download aria-hidden="true" className="size-3.5" />
                   </a>
                 )}
               </div>
@@ -381,7 +388,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
           {isProcessing && stage === 'select' && uploadProgress < 100 && !importJob && (
             <div className="space-y-2">
               <div className="flex justify-between text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                <span>Téléversement du fichier...</span>
+                <span>{t('importUploading')}</span>
                 <span>{uploadProgress}%</span>
               </div>
               <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
@@ -397,23 +404,23 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
             <div className="space-y-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">Récapitulatif de l’importation</h3>
+                  <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{t('importReviewSummaryTitle')}</h3>
                   <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                    Vérifiez les lignes sélectionnées. Rien ne sera ajouté ou modifié avant votre confirmation.
+                    {t('importReviewSummaryDesc')}
                   </p>
                 </div>
                 <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                  {selectedRows.size} sélectionnée(s)
+                  {t('importSelectedCount', { count: selectedRows.size })}
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-5">
                 {[
-                  ['Total', preview.summary.totalRows, 'text-zinc-900 dark:text-zinc-100'],
-                  ['Nouveaux', preview.summary.newRows, 'text-emerald-700 dark:text-emerald-300'],
-                  ['Mises à jour', preview.summary.updateRows, 'text-blue-700 dark:text-blue-300'],
-                  ['Invalides', preview.summary.invalidRows, 'text-red-700 dark:text-red-300'],
-                  ['Conflits', preview.summary.conflictRows, 'text-amber-700 dark:text-amber-300'],
+                  [t('importTotal'), preview.summary.totalRows, 'text-zinc-900 dark:text-zinc-100'],
+                  [t('importNew'), preview.summary.newRows, 'text-emerald-700 dark:text-emerald-300'],
+                  [t('importUpdates'), preview.summary.updateRows, 'text-blue-700 dark:text-blue-300'],
+                  [t('importInvalid'), preview.summary.invalidRows, 'text-red-700 dark:text-red-300'],
+                  [t('importConflicts'), preview.summary.conflictRows, 'text-amber-700 dark:text-amber-300'],
                 ].map(([label, value, color]) => (
                   <div key={String(label)} className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900">
                     <div className="text-zinc-600 dark:text-zinc-300 font-medium">{label}</div>
@@ -424,7 +431,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
 
               {preview.summary.importableRows === 0 && (
                 <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-                  Aucune ligne importable. Corrigez le fichier puis relancez l’analyse.
+                  {t('importNoImportableRows')}
                 </div>
               )}
 
@@ -434,7 +441,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                     <label key={row.rowNumber} className={`flex items-start gap-3 p-3 text-sm ${row.selectable ? 'cursor-pointer' : 'bg-zinc-100/70 dark:bg-zinc-900/50'}`}>
                       <input
                         type="checkbox"
-                        aria-label={`Importer la ligne ${row.rowNumber}`}
+                        aria-label={t('importRowAria', { row: row.rowNumber })}
                         checked={selectedRows.has(row.rowNumber)}
                         disabled={!row.selectable}
                         onChange={() => toggleRowSelection(row.rowNumber)}
@@ -442,19 +449,25 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                       />
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
-                          <span>Ligne {row.rowNumber}</span>
-                          <span>{row.name || 'Sans nom'}</span>
+                          <span>{t('importRowNumber', { row: row.rowNumber })}</span>
+                          <span>{row.name || t('importNoName')}</span>
                           <span className={`rounded-full px-2 py-0.5 text-[11px] ${
                             row.status === 'new' ? 'bg-emerald-100 text-emerald-800' :
                             row.status === 'update' ? 'bg-blue-100 text-blue-800' :
                             row.status === 'conflict' ? 'bg-amber-100 text-amber-800' :
                             'bg-red-100 text-red-800'
                           }`}>
-                            {row.status === 'new' ? 'Nouveau' : row.status === 'update' ? 'Mise à jour' : row.status === 'conflict' ? 'Conflit' : 'Invalide'}
+                            {row.status === 'new'
+                              ? t('importStatusNew')
+                              : row.status === 'update'
+                              ? t('importStatusUpdate')
+                              : row.status === 'conflict'
+                              ? t('importStatusConflict')
+                              : t('importStatusInvalid')}
                           </span>
                         </span>
                         <span className="mt-1 block text-xs text-zinc-600 dark:text-zinc-300">
-                          {row.externalId || 'Identifiant manquant'}{row.category ? ` · ${row.category}` : ''}{row.price ? ` · ${row.price} CAD` : ''}
+                          {row.externalId || t('importMissingExternalId')}{row.category ? ` · ${row.category}` : ''}{row.price ? ` · ${row.price} CAD` : ''}
                         </span>
                         {row.error && <span className="mt-1 block text-xs text-red-700 dark:text-red-300">{row.error}</span>}
                       </span>
@@ -470,7 +483,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
             <div className="space-y-4 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-sm text-zinc-800 dark:text-zinc-200">
-                  Progression du traitement serveur
+                  {t('importServerProgressTitle')}
                 </span>
                 <span
                   className={`text-xs px-2.5 py-1 rounded-full font-medium ${
@@ -483,11 +496,11 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                       : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 animate-pulse'
                   }`}
                 >
-                  {importJob.status === 'pending' && 'En attente...'}
-                  {importJob.status === 'processing' && 'Traitement en cours...'}
-                  {importJob.status === 'completed' && !completedWithErrors && 'Terminé avec succès'}
-                  {completedWithErrors && 'Terminé avec anomalies'}
-                  {importJob.status === 'failed' && 'Échec'}
+                  {importJob.status === 'pending' && t('importJobPending')}
+                  {importJob.status === 'processing' && t('importJobProcessing')}
+                  {importJob.status === 'completed' && !completedWithErrors && t('importJobSuccess')}
+                  {completedWithErrors && t('importJobCompletedWithIssues')}
+                  {importJob.status === 'failed' && t('importJobFailed')}
                 </span>
               </div>
 
@@ -515,15 +528,15 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
               {/* Stats Counters */}
               <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
                 <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                  <div className="text-zinc-600 dark:text-zinc-300 font-medium">Total plats</div>
+                  <div className="text-zinc-600 dark:text-zinc-300 font-medium">{t('importTotalDishes')}</div>
                   <div className="font-bold text-zinc-900 dark:text-zinc-100 text-base">{total || '—'}</div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                  <div className="text-emerald-600 dark:text-emerald-400">Importés</div>
+                  <div className="text-emerald-600 dark:text-emerald-400">{t('importProcessedDishes')}</div>
                   <div className="font-bold text-emerald-700 dark:text-emerald-300 text-base">{processed}</div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                  <div className="text-red-600 dark:text-red-400">Ignorés / Erreurs</div>
+                  <div className="text-red-600 dark:text-red-400">{t('importFailedDishes')}</div>
                   <div className="font-bold text-red-700 dark:text-red-300 text-base">{failed}</div>
                 </div>
               </div>
@@ -536,15 +549,15 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                     onClick={() => setShowErrorsList(!showErrorsList)}
                     className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline flex items-center justify-between w-full"
                   >
-                    <span>{importJob.errors.length} anomalie(s) détectée(s)</span>
-                    <span>{showErrorsList ? '▲ Masquer' : '▼ Voir les détails'}</span>
+                    <span>{t('importIssuesDetected', { count: importJob.errors.length })}</span>
+                    <span>{showErrorsList ? t('importHideErrors') : t('importShowErrors')}</span>
                   </button>
 
                   {showErrorsList && (
                     <div className="mt-2 max-h-40 overflow-y-auto space-y-1.5 p-2 rounded-lg bg-red-50/50 dark:bg-red-950/30 border border-red-100 dark:border-red-900/40 text-xs">
                       {importJob.errors.map((err, idx) => (
                         <div key={idx} className="text-red-700 dark:text-red-300">
-                          {err.row && <span className="font-semibold">Ligne {err.row} : </span>}
+                          {err.row && <span className="font-semibold">{t('importRowNumber', { row: err.row })} : </span>}
                           {err.item && <span className="italic font-medium">({err.item}) </span>}
                           <span>{err.message}</span>
                         </div>
@@ -564,7 +577,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
             disabled={isProcessing && importJob?.status === 'processing'}
             className="flex-1 py-3.5 glass-card border border-white/10 text-slate-200 font-bold rounded-2xl hover:bg-white/10 transition disabled:opacity-40 min-h-[48px]"
           >
-            {importJob?.status === 'completed' ? 'Fermer' : 'Annuler'}
+            {importJob?.status === 'completed' ? t('importClose') : t('importCancel')}
           </button>
 
           {!importJob && stage === 'select' && (
@@ -577,7 +590,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                   : 'bg-gradient-to-r from-primary to-[#ffae33] primary-glow hover:opacity-90 active:scale-98'
               }`}
             >
-              {isProcessing ? 'Analyse du fichier...' : 'Analyser le fichier'}
+              {isProcessing ? t('importAnalyzingFile') : t('importAnalyzeFile')}
             </button>
           )}
 
@@ -588,14 +601,14 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
                 disabled={isProcessing}
                 className="flex-1 py-3.5 glass-card border border-white/10 text-slate-200 font-bold rounded-2xl hover:bg-white/10 transition min-h-[48px]"
               >
-                Retour au fichier
+                {t('importBackToFile')}
               </button>
               <button
                 onClick={handleConfirmImport}
                 disabled={selectedRows.size === 0 || isProcessing}
                 className="flex-1 py-3.5 font-bold text-sm text-white transition-all shadow-md min-h-[48px] bg-gradient-to-r from-primary to-[#ffae33] primary-glow hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Confirmer et importer ({selectedRows.size})
+                {t('importConfirmAndImport', { count: selectedRows.size })}
               </button>
             </>
           )}
@@ -605,7 +618,7 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
               onClick={handleClose}
               className="flex-1 py-3.5 font-bold text-sm text-white rounded-2xl transition-all shadow-md min-h-[48px] bg-gradient-to-r from-primary to-[#ffae33] primary-glow hover:opacity-90"
             >
-              Voir le menu mis à jour
+              {t('importViewUpdatedMenu')}
             </button>
           )}
         </div>

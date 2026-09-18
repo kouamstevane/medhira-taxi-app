@@ -87,6 +87,117 @@ function normalizeHeaderKey(key: string): string {
 
 const MENU_TEMPLATE_HEADERS = ['externalId', 'name', 'description', 'price', 'category', 'isAvailable', 'image'] as const;
 
+export const RECOGNIZED_HEADER_ALIASES = {
+  externalId: [
+    'externalid',
+    'external_id',
+    'idexterne',
+    'sku',
+    'id',
+    'reference',
+    'ref',
+    'itemid',
+    'merchantitemid',
+    'token',
+    'barcode',
+    'codebarre',
+    'codebarres',
+    'articleid',
+    'productid',
+    'handle',
+    'posid',
+  ],
+  name: [
+    'name',
+    'nom',
+    'titre',
+    'plat',
+    'item',
+    'intitule',
+    'libelle',
+    'itemname',
+    'productname',
+    'nomduproduit',
+    'titreduplat',
+    'designation',
+    'title',
+  ],
+  price: [
+    'price',
+    'prix',
+    'tarif',
+    'amount',
+    'prixunitaire',
+    'itemprice',
+    'baseprice',
+    'regularprice',
+    'variantprice',
+    'prixttc',
+    'prixht',
+  ],
+  description: [
+    'description',
+    'desc',
+    'details',
+    'detail',
+    'contents',
+    'shortdescription',
+    'ingredients',
+    'composition',
+    'resume',
+    'body',
+    'bodyhtml',
+  ],
+  category: [
+    'category',
+    'categorie',
+    'type',
+    'section',
+    'rayon',
+    'menucategory',
+    'categoryname',
+    'menugroup',
+    'accountinggroup',
+    'groupe',
+    'famille',
+  ],
+  isAvailable: [
+    'isavailable',
+    'is_available',
+    'disponible',
+    'disponibilite',
+    'actif',
+    'active',
+    'status',
+    'statut',
+    'published',
+    'soldout',
+    'online',
+    'visibility',
+  ],
+  image: [
+    'image',
+    'imageurl',
+    'photo',
+    'imagefile',
+    'fichierimage',
+    'variantimage',
+    'photos',
+    'images',
+    'picture',
+  ],
+} as const;
+
+export function isPriceHeaderKey(normalized: string): boolean {
+  return (
+    normalized.startsWith('price') ||
+    normalized.startsWith('prix') ||
+    normalized.includes('tarif') ||
+    normalized.includes('amount') ||
+    normalized.includes('montant')
+  );
+}
+
 export function validateMenuImportHeaders(headers: string[]): { missing: string[]; unexpected: string[] } {
   const expected = new Map(MENU_TEMPLATE_HEADERS.map((header) => [normalizeHeaderKey(header), header]));
   const normalizedHeaders = new Set(headers.map(normalizeHeaderKey).filter(Boolean));
@@ -99,25 +210,37 @@ export function validateMenuImportHeaders(headers: string[]): { missing: string[
   };
 }
 
-function hasRecognizedHeader(headers: string[], aliases: string[]): boolean {
-  const normalizedHeaders = new Set(headers.map(normalizeHeaderKey));
-  return aliases.some((alias) => normalizedHeaders.has(alias));
-}
-
 export function getTemplateHeaderError(headers: string[]): string | null {
-  const { unexpected } = validateMenuImportHeaders(headers);
+  const normalizedHeaders = headers.map(normalizeHeaderKey).filter(Boolean);
+  const normalizedSet = new Set(normalizedHeaders);
+
   const missing: string[] = [];
-  if (!hasRecognizedHeader(headers, ['externalid', 'external_id', 'idexterne', 'sku', 'id', 'reference', 'ref'])) missing.push('externalId');
-  if (!hasRecognizedHeader(headers, ['name', 'nom', 'titre', 'plat', 'item', 'intitule', 'libelle'])) missing.push('name');
-  if (!hasRecognizedHeader(headers, ['price', 'prix', 'tarif', 'amount', 'prixunitaire'])) missing.push('price');
+  const hasName = RECOGNIZED_HEADER_ALIASES.name.some((alias) => normalizedSet.has(alias));
+  const hasPrice =
+    RECOGNIZED_HEADER_ALIASES.price.some((alias) => normalizedSet.has(alias)) ||
+    normalizedHeaders.some(isPriceHeaderKey);
+  const hasExternalId = RECOGNIZED_HEADER_ALIASES.externalId.some((alias) => normalizedSet.has(alias));
+
+  if (!hasName) missing.push('name');
+  if (!hasPrice) missing.push('price');
+  if (!hasExternalId && !hasName) missing.push('externalId');
+
   if (missing.length === 0) return null;
 
-  const unexpectedNames = unexpected.filter((header) => !['category', 'description', 'active'].includes(normalizeHeaderKey(header)));
+  const allKnownAliases = new Set<string>(Object.values(RECOGNIZED_HEADER_ALIASES).flat());
+  const unknown = headers.filter((header) => {
+    const key = normalizeHeaderKey(header);
+    if (!key) return false;
+    if (allKnownAliases.has(key)) return false;
+    if (isPriceHeaderKey(key)) return false;
+    return true;
+  });
+
   return [
-    'Fichier non conforme au modèle Excel.',
-    'Téléchargez le modèle ci-dessous et conservez exactement ses noms de colonnes.',
+    'Format de catalogue non conforme.',
+    'Utilisez le modèle Excel et conservez ses noms de colonnes.',
     `Colonnes obligatoires manquantes : ${missing.join(', ')}.`,
-    unexpectedNames.length > 0 ? `Colonnes inconnues : ${unexpectedNames.join(', ')}.` : '',
+    unknown.length > 0 ? `Colonnes non reconnues : ${unknown.join(', ')}.` : '',
   ].filter(Boolean).join(' ');
 }
 
@@ -215,37 +338,39 @@ export function normalizeMenuRow(row: Record<string, unknown>, rowNumber: number
     const normKey = normalizeHeaderKey(key);
     const strVal = val !== undefined && val !== null ? String(val).trim() : '';
 
-    if (['name', 'nom', 'titre', 'plat', 'item', 'intitule', 'libelle'].includes(normKey)) {
+    if (RECOGNIZED_HEADER_ALIASES.name.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.name)[number])) {
       name = strVal;
-    } else if (['description', 'desc', 'details', 'detail'].includes(normKey)) {
+    } else if (RECOGNIZED_HEADER_ALIASES.description.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.description)[number])) {
       description = strVal;
-    } else if (['price', 'prix', 'tarif', 'amount', 'prixunitaire'].includes(normKey)) {
+    } else if (RECOGNIZED_HEADER_ALIASES.price.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.price)[number]) || isPriceHeaderKey(normKey)) {
       rawPrice = strVal;
-    } else if (['category', 'categorie', 'type', 'section', 'rayon'].includes(normKey)) {
+    } else if (RECOGNIZED_HEADER_ALIASES.category.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.category)[number])) {
       category = strVal;
-    } else if (['externalid', 'external_id', 'idexterne', 'sku', 'id', 'reference', 'ref'].includes(normKey)) {
+    } else if (RECOGNIZED_HEADER_ALIASES.externalId.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.externalId)[number])) {
       externalId = strVal;
-    } else if (['isavailable', 'is_available', 'disponible', 'disponibilite', 'actif', 'active'].includes(normKey)) {
+    } else if (RECOGNIZED_HEADER_ALIASES.isAvailable.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.isAvailable)[number])) {
       rawAvailable = strVal;
-    } else if (['image', 'imageurl', 'photo', 'imagefile', 'fichierimage'].includes(normKey)) {
+    } else if (RECOGNIZED_HEADER_ALIASES.image.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.image)[number])) {
       image = strVal;
     } else if (['sourceupdatedat', 'source_updated_at', 'datemaj', 'updatedat'].includes(normKey)) {
       rawDate = strVal;
     }
   }
 
-  if (!externalId) {
-    throw new Error(`Ligne ${rowNumber}: L'identifiant externe (externalId/sku/id) est manquant`);
-  }
-
   if (!name) {
     throw new Error(`Ligne ${rowNumber}: Le nom du plat est manquant`);
+  }
+
+  if (!externalId) {
+    externalId = `auto_${normalizeHeaderKey(name)}`;
   }
 
   // Parse price: handle commas and currency symbols
   const cleanedPriceStr = rawPrice
     .replace(/[€$£]/g, '')
     .replace(/FCFA/gi, '')
+    .replace(/CAD/gi, '')
+    .replace(/USD/gi, '')
     .replace(/EUR/gi, '')
     .replace(/\s+/g, '')
     .replace(',', '.');
@@ -302,16 +427,54 @@ export function normalizeMenuRow(row: Record<string, unknown>, rowNumber: number
 }
 
 function previewRowFromRawRecord(rawRow: Record<string, unknown>, rowNumber: number): Pick<MenuImportPreviewRow, 'rowNumber' | 'name' | 'description' | 'price' | 'category' | 'externalId' | 'hasImage'> {
+  let name = '';
+  let description = '';
+  let rawPrice = '';
+  let category = '';
+  let externalId = '';
+  let hasImage = false;
+
+  for (const [key, val] of Object.entries(rawRow)) {
+    const normKey = normalizeHeaderKey(key);
+    const strVal = val !== undefined && val !== null ? String(val).trim() : '';
+
+    if (RECOGNIZED_HEADER_ALIASES.name.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.name)[number])) {
+      name = strVal;
+    } else if (RECOGNIZED_HEADER_ALIASES.description.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.description)[number])) {
+      description = strVal;
+    } else if (RECOGNIZED_HEADER_ALIASES.price.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.price)[number]) || isPriceHeaderKey(normKey)) {
+      rawPrice = strVal;
+    } else if (RECOGNIZED_HEADER_ALIASES.category.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.category)[number])) {
+      category = strVal;
+    } else if (RECOGNIZED_HEADER_ALIASES.externalId.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.externalId)[number])) {
+      externalId = strVal;
+    } else if (RECOGNIZED_HEADER_ALIASES.image.includes(normKey as unknown as (typeof RECOGNIZED_HEADER_ALIASES.image)[number]) && strVal.length > 0) {
+      hasImage = true;
+    }
+  }
+
+  if (!externalId && name) {
+    externalId = `auto_${normalizeHeaderKey(name)}`;
+  }
+
+  const cleanedPriceStr = rawPrice
+    .replace(/[€$£]/g, '')
+    .replace(/FCFA/gi, '')
+    .replace(/CAD/gi, '')
+    .replace(/USD/gi, '')
+    .replace(/EUR/gi, '')
+    .replace(/\s+/g, '')
+    .replace(',', '.');
+  const price = Number.parseFloat(cleanedPriceStr) || 0;
+
   return {
     rowNumber,
-    name: String(rawRow.name || rawRow.nom || rawRow.titre || '').trim(),
-    description: stripHtml(String(rawRow.description || rawRow.desc || rawRow.details || '')).slice(0, 180),
-    price: Number.parseFloat(String(rawRow.price || rawRow.prix || rawRow.tarif || '').replace(',', '.')) || 0,
-    category: String(rawRow.category || rawRow.categorie || rawRow.type || '').trim(),
-    externalId: String(rawRow.externalId || rawRow.external_id || rawRow.sku || rawRow.id || '').trim(),
-    hasImage: Object.entries(rawRow).some(([key, value]) =>
-      ['image', 'imageurl', 'photo', 'imagefile', 'fichierimage'].includes(normalizeHeaderKey(key)) && String(value || '').trim().length > 0
-    ),
+    name,
+    description: stripHtml(description).slice(0, 180),
+    price,
+    category: category || 'Général',
+    externalId,
+    hasImage,
   };
 }
 
