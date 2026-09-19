@@ -139,7 +139,7 @@ describe('BulkCsvImportModal', () => {
     });
     fireEvent.click(screen.getByText(/Analyser le fichier/i));
     await waitFor(() => expect(screen.getByText('Récapitulatif de l’importation')).toBeInTheDocument());
-    fireEvent.click(screen.getByText(/Confirmer et importer/i));
+    fireEvent.click(screen.getByRole('button', { name: /importer/i }));
     await waitFor(() => expect(MenuImportClientService.listenToImportProgress).toHaveBeenCalled());
 
     const handle = screen.getByTestId('bottom-sheet-handle');
@@ -232,7 +232,7 @@ describe('BulkCsvImportModal', () => {
       expect(MenuImportClientService.startMenuFileImport).not.toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByText(/Confirmer et importer/i));
+    fireEvent.click(screen.getByRole('button', { name: /importer/i }));
 
     await waitFor(() => {
       expect(MenuImportClientService.startMenuFileImport).toHaveBeenCalledWith({

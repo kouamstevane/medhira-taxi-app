@@ -109,7 +109,7 @@ export function BottomSheet({
     <div
       aria-labelledby={titleId}
       aria-modal="true"
-      className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center"
+      className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center overscroll-none"
       role="dialog"
     >
       <div
@@ -128,7 +128,7 @@ export function BottomSheet({
       />
       <section
         className={cn(
-          'relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-t-3xl bg-[#18181b] text-foreground border-t border-white/10 pb-[env(safe-area-inset-bottom)] shadow-2xl',
+          'relative z-10 flex max-h-[90vh] max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-[#18181b] text-foreground border-t border-white/10 pb-[env(safe-area-inset-bottom)] shadow-2xl overscroll-contain',
           'sm:max-w-lg sm:rounded-2xl sm:border',
           className,
         )}

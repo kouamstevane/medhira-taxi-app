@@ -291,6 +291,7 @@ const readFileArrayBuffer = async (file: File): Promise<ArrayBuffer> => {
 const extractTargetSharedStrings = (sstXml: string, targetIndices: Set<number>): Map<number, string> => {
   const result = new Map<number, string>();
   if (targetIndices.size === 0) return result;
+  const maxIndex = Math.max(...targetIndices);
 
   // Each <si> represents a shared string entry in sequential order (0, 1, 2, ...), with optional namespace prefix
   const siRegex = /<(?:[a-zA-Z0-9_-]+:)?si\b[^>]*>([\s\S]*?)<\/(?:[a-zA-Z0-9_-]+:)?si>/gi;

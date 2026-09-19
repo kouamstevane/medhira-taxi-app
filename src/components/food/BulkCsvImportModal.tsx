@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   AlertTriangle,
   Archive,
+  Check,
+  CheckCircle2,
   Download,
   FileSpreadsheet,
   FileText,
@@ -239,64 +241,80 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
       }}
       onCloseRequest={handleClose}
       title={t('importModalTitle')}
+      showCloseButton={!(isProcessing && importJob?.status === 'processing')}
       canDismiss={!(isProcessing && importJob?.status === 'processing')}
       className="border border-white/10 bg-[#18181b] sm:max-w-2xl text-white shadow-2xl"
       contentClassName="min-h-0 overflow-y-auto px-4 pb-0"
     >
       <div className="flex flex-col">
-        <p className="border-b border-white/10 pb-3 text-xs text-slate-300">
-          {t('importModalAcceptedFiles')}
-        </p>
+        {file && (stage === 'review' || stage === 'processing') ? (
+          <div className="border-b border-white/10 pb-3 flex items-center justify-between text-xs text-slate-300">
+            <span className="flex items-center gap-1.5 truncate">
+              <FileSpreadsheet aria-hidden="true" className="size-3.5 text-amber-400 shrink-0" />
+              <span className="font-medium text-white truncate">{file.name}</span>
+              <span className="text-zinc-400 shrink-0">({(file.size / 1024).toFixed(1)} Ko)</span>
+            </span>
+            <span className="text-emerald-400 font-semibold shrink-0 text-[11px] bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-full">
+              {t('importAnalysisSuccess')}
+            </span>
+          </div>
+        ) : (
+          <p className="border-b border-white/10 pb-3 text-xs text-slate-300">
+            {t('importModalAcceptedFiles')}
+          </p>
+        )}
 
         {/* Body */}
         <div className="py-5 space-y-5 flex-1">
-          {/* Compact template guidance */}
-          <div
-            aria-label={t('importTemplatesAria')}
-            className="space-y-1.5 rounded-lg border border-zinc-200 bg-zinc-50/80 px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-800/40"
-          >
-            <div className="flex items-center gap-1.5">
-              <Info aria-hidden="true" className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">
-                {t('importNeedTemplate')}
-              </span>
+          {/* Compact template guidance - only shown when choosing a file */}
+          {!importJob && stage === 'select' && (
+            <div
+              aria-label={t('importTemplatesAria')}
+              className="space-y-1.5 rounded-lg border border-zinc-200 bg-zinc-50/80 px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-800/40"
+            >
+              <div className="flex items-center gap-1.5">
+                <Info aria-hidden="true" className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">
+                  {t('importNeedTemplate')}
+                </span>
+              </div>
+              <div className="flex flex-nowrap gap-1.5 overflow-x-auto">
+                <a
+                  href={MENU_IMPORT_TEMPLATE_URLS.csv}
+                  download="modele-import-menu.csv"
+                  aria-label={t('importDownloadCsvAria')}
+                  title={t('importDownloadCsvTitle')}
+                  className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+                >
+                  <FileText aria-hidden="true" className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                  {t('importTemplateCsvLabel')}
+                  <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
+                </a>
+                <a
+                  href={MENU_IMPORT_TEMPLATE_URLS.zip}
+                  download="modele-import-menu.zip"
+                  aria-label={t('importDownloadZipAria')}
+                  title={t('importDownloadZipTitle')}
+                  className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+                >
+                  <Archive aria-hidden="true" className="size-3.5 text-blue-600 dark:text-blue-400" />
+                  {t('importTemplateZipLabel')}
+                  <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
+                </a>
+                <a
+                  href={MENU_IMPORT_TEMPLATE_URLS.xlsx}
+                  download="modele-import-menu.xlsx"
+                  aria-label={t('importDownloadXlsxAria')}
+                  title={t('importDownloadXlsxTitle')}
+                  className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
+                >
+                  <FileSpreadsheet aria-hidden="true" className="size-3.5 text-violet-600 dark:text-violet-400" />
+                  {t('importTemplateXlsxLabel')}
+                  <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
+                </a>
+              </div>
             </div>
-            <div className="flex flex-nowrap gap-1.5 overflow-x-auto">
-              <a
-                href={MENU_IMPORT_TEMPLATE_URLS.csv}
-                download="modele-import-menu.csv"
-                aria-label={t('importDownloadCsvAria')}
-                title={t('importDownloadCsvTitle')}
-                className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
-              >
-                <FileText aria-hidden="true" className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                {t('importTemplateCsvLabel')}
-                <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
-              </a>
-              <a
-                href={MENU_IMPORT_TEMPLATE_URLS.zip}
-                download="modele-import-menu.zip"
-                aria-label={t('importDownloadZipAria')}
-                title={t('importDownloadZipTitle')}
-                className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
-              >
-                <Archive aria-hidden="true" className="size-3.5 text-blue-600 dark:text-blue-400" />
-                {t('importTemplateZipLabel')}
-                <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
-              </a>
-              <a
-                href={MENU_IMPORT_TEMPLATE_URLS.xlsx}
-                download="modele-import-menu.xlsx"
-                aria-label={t('importDownloadXlsxAria')}
-                title={t('importDownloadXlsxTitle')}
-                className="flex min-h-8 shrink-0 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:border-amber-400 hover:bg-amber-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:border-amber-500 dark:hover:bg-amber-950/30"
-              >
-                <FileSpreadsheet aria-hidden="true" className="size-3.5 text-violet-600 dark:text-violet-400" />
-                {t('importTemplateXlsxLabel')}
-                <Download aria-hidden="true" className="size-3 text-zinc-400 dark:text-zinc-300" />
-              </a>
-            </div>
-          </div>
+          )}
 
           {/* File Dropzone */}
           {!importJob && stage === 'select' && (
@@ -400,83 +418,166 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
             </div>
           )}
 
-          {preview && stage === 'review' && (
-            <div className="space-y-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h3 className="font-semibold text-zinc-900 dark:text-zinc-100">{t('importReviewSummaryTitle')}</h3>
-                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-                    {t('importReviewSummaryDesc')}
-                  </p>
-                </div>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                  {t('importSelectedCount', { count: selectedRows.size })}
-                </span>
-              </div>
+          {preview && stage === 'review' && (() => {
+            const totalIssues = preview.summary.invalidRows + preview.summary.conflictRows;
+            const hasIssues = totalIssues > 0;
+            const hasUpdates = preview.summary.updateRows > 0;
 
-              <div className="grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-5">
-                {[
-                  [t('importTotal'), preview.summary.totalRows, 'text-zinc-900 dark:text-zinc-100'],
-                  [t('importNew'), preview.summary.newRows, 'text-emerald-700 dark:text-emerald-300'],
-                  [t('importUpdates'), preview.summary.updateRows, 'text-blue-700 dark:text-blue-300'],
-                  [t('importInvalid'), preview.summary.invalidRows, 'text-red-700 dark:text-red-300'],
-                  [t('importConflicts'), preview.summary.conflictRows, 'text-amber-700 dark:text-amber-300'],
-                ].map(([label, value, color]) => (
-                  <div key={String(label)} className="rounded-lg border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900">
-                    <div className="text-zinc-600 dark:text-zinc-300 font-medium">{label}</div>
-                    <div className={`text-base font-bold ${color}`}>{value}</div>
+            return (
+              <div className="space-y-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm sm:text-base">
+                      {t('importReviewSummaryTitle')}
+                    </h3>
+                    <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-300">
+                      {t('importReviewSummaryDesc')}
+                    </p>
                   </div>
-                ))}
-              </div>
-
-              {preview.summary.importableRows === 0 && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-                  {t('importNoImportableRows')}
+                  <span className="shrink-0 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                    {t('importSelectedCount', { count: selectedRows.size })}
+                  </span>
                 </div>
-              )}
 
-              <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
-                <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                  {preview.rows.map((row) => (
-                    <label key={row.rowNumber} className={`flex items-start gap-3 p-3 text-sm ${row.selectable ? 'cursor-pointer' : 'bg-zinc-100/70 dark:bg-zinc-900/50'}`}>
-                      <input
-                        type="checkbox"
-                        aria-label={t('importRowAria', { row: row.rowNumber })}
-                        checked={selectedRows.has(row.rowNumber)}
-                        disabled={!row.selectable}
-                        onChange={() => toggleRowSelection(row.rowNumber)}
-                        className="mt-1 h-4 w-4 accent-amber-600"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex flex-wrap items-center gap-2 font-medium text-zinc-900 dark:text-zinc-100">
-                          <span>{t('importRowNumber', { row: row.rowNumber })}</span>
-                          <span>{row.name || t('importNoName')}</span>
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] ${
-                            row.status === 'new' ? 'bg-emerald-100 text-emerald-800' :
-                            row.status === 'update' ? 'bg-blue-100 text-blue-800' :
-                            row.status === 'conflict' ? 'bg-amber-100 text-amber-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {row.status === 'new'
-                              ? t('importStatusNew')
-                              : row.status === 'update'
-                              ? t('importStatusUpdate')
-                              : row.status === 'conflict'
-                              ? t('importStatusConflict')
-                              : t('importStatusInvalid')}
-                          </span>
-                        </span>
-                        <span className="mt-1 block text-xs text-zinc-600 dark:text-zinc-300">
-                          {row.externalId || t('importMissingExternalId')}{row.category ? ` · ${row.category}` : ''}{row.price ? ` · ${row.price} CAD` : ''}
-                        </span>
-                        {row.error && <span className="mt-1 block text-xs text-red-700 dark:text-red-300">{row.error}</span>}
+                {/* Smart Adaptive Status Bar */}
+                {!hasIssues ? (
+                  <div className="flex items-center justify-between gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle2 aria-hidden="true" className="size-4 text-emerald-500 shrink-0" />
+                      <span className="font-semibold text-emerald-800 dark:text-emerald-300">
+                        {hasUpdates
+                          ? `${t('importCountNew', { count: preview.summary.newRows })} · ${t('importCountUpdates', { count: preview.summary.updateRows })}`
+                          : t('importAllReadyToImport', { count: preview.summary.totalRows })}
                       </span>
-                    </label>
-                  ))}
+                    </div>
+                    <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 shrink-0 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-300/60 dark:border-emerald-700/60">
+                      100%
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-zinc-100 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700/80 p-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-semibold px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/40">
+                      <CheckCircle2 aria-hidden="true" className="size-3.5 shrink-0" />
+                      <span>{t('importReadyCount', { count: preview.summary.importableRows })}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-red-700 dark:text-red-400 font-semibold px-2.5 py-1 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40">
+                      <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0" />
+                      <span>{t('importIssuesCount', { count: totalIssues })}</span>
+                    </div>
+                  </div>
+                )}
+
+                {preview.summary.importableRows === 0 && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                    {t('importNoImportableRows')}
+                  </div>
+                )}
+
+                <div className="max-h-72 overflow-y-auto overscroll-contain rounded-lg border border-zinc-200 dark:border-zinc-700">
+                  <div className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                    {preview.rows.map((row) => {
+                      const hasCustomExternalId = Boolean(row.externalId && !row.externalId.startsWith('auto_'));
+                      const formattedPrice =
+                        row.price !== undefined && row.price !== null && !isNaN(Number(row.price))
+                          ? `${Number(row.price).toFixed(2)} CAD`
+                          : null;
+                      const isSelected = selectedRows.has(row.rowNumber);
+
+                      return (
+                        <div
+                          key={row.rowNumber}
+                          role="checkbox"
+                          aria-checked={isSelected}
+                          aria-label={t('importRowAria', { row: row.rowNumber })}
+                          tabIndex={0}
+                          onClick={() => {
+                            if (row.selectable) toggleRowSelection(row.rowNumber);
+                          }}
+                          onKeyDown={(e) => {
+                            if (row.selectable && (e.key === ' ' || e.key === 'Enter')) {
+                              e.preventDefault();
+                              toggleRowSelection(row.rowNumber);
+                            }
+                          }}
+                          className={`flex items-start gap-3 p-3 text-sm transition-colors select-none ${
+                            row.selectable
+                              ? 'cursor-pointer hover:bg-zinc-100/50 dark:hover:bg-zinc-800/60 active:bg-zinc-200/50 dark:active:bg-zinc-700/60'
+                              : 'bg-zinc-100/70 dark:bg-zinc-900/50'
+                          }`}
+                        >
+                          <div
+                            aria-hidden="true"
+                            className={`mt-0.5 size-4.5 shrink-0 rounded flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? 'bg-amber-500 border border-amber-500 text-black'
+                                : 'border border-zinc-500 bg-transparent'
+                            }`}
+                          >
+                            {isSelected && (
+                              <Check className="size-3 stroke-[3]" />
+                            )}
+                          </div>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center justify-between gap-2">
+                              <span className="flex items-center gap-1.5 min-w-0 font-medium text-zinc-900 dark:text-zinc-100">
+                                <span className="text-xs text-zinc-600 dark:text-zinc-300 shrink-0 font-normal">
+                                  {t('importRowNumber', { row: row.rowNumber })}
+                                </span>
+                                <span className="font-semibold break-words line-clamp-2 leading-tight">
+                                  {row.name || t('importNoName')}
+                                </span>
+                              </span>
+                              <span
+                                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                  row.status === 'new'
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : row.status === 'update'
+                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                    : row.status === 'conflict'
+                                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                                }`}
+                              >
+                                {row.status === 'new'
+                                  ? t('importStatusNew')
+                                  : row.status === 'update'
+                                  ? t('importStatusUpdate')
+                                  : row.status === 'conflict'
+                                  ? t('importStatusConflict')
+                                  : t('importStatusInvalid')}
+                              </span>
+                            </span>
+
+                            <span className="mt-1 flex items-center justify-between gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+                              <span className="truncate">
+                                {hasCustomExternalId && (
+                                  <span className="font-mono text-[11px] text-zinc-400 dark:text-zinc-300 mr-1.5">
+                                    #{row.externalId}
+                                  </span>
+                                )}
+                                {row.category || ''}
+                              </span>
+                              {formattedPrice && (
+                                <span className="shrink-0 font-semibold text-zinc-900 dark:text-zinc-200">
+                                  {formattedPrice}
+                                </span>
+                              )}
+                            </span>
+
+                            {row.error && (
+                              <span className="mt-1 block text-xs text-red-700 dark:text-red-300 font-medium">
+                                {row.error}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Import Job Real-Time Progress */}
           {importJob && (
@@ -572,13 +673,15 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
 
         {/* Sticky Footer Actions */}
         <div className="pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-white/10 flex items-center gap-3 sticky bottom-0 bg-[#18181b]/98 backdrop-blur-md mt-6">
-          <button
-            onClick={handleClose}
-            disabled={isProcessing && importJob?.status === 'processing'}
-            className="flex-1 py-3.5 glass-card border border-white/10 text-slate-200 font-bold rounded-2xl hover:bg-white/10 transition disabled:opacity-40 min-h-[48px]"
-          >
-            {importJob?.status === 'completed' ? t('importClose') : t('importCancel')}
-          </button>
+          {stage !== 'review' && (
+            <button
+              onClick={handleClose}
+              disabled={isProcessing && importJob?.status === 'processing'}
+              className="flex-1 py-3.5 glass-card border border-white/10 text-slate-200 font-bold rounded-2xl hover:bg-white/10 transition disabled:opacity-40 min-h-[48px]"
+            >
+              {importJob?.status === 'completed' ? t('importClose') : t('importCancel')}
+            </button>
+          )}
 
           {!importJob && stage === 'select' && (
             <button
@@ -599,14 +702,14 @@ export const BulkCsvImportModal: React.FC<BulkCsvImportModalProps> = ({
               <button
                 onClick={handleBackToFile}
                 disabled={isProcessing}
-                className="flex-1 py-3.5 glass-card border border-white/10 text-slate-200 font-bold rounded-2xl hover:bg-white/10 transition min-h-[48px]"
+                className="px-5 py-3.5 glass-card border border-white/10 text-slate-200 font-bold text-sm rounded-2xl hover:bg-white/10 transition min-h-[48px] shrink-0"
               >
                 {t('importBackToFile')}
               </button>
               <button
                 onClick={handleConfirmImport}
                 disabled={selectedRows.size === 0 || isProcessing}
-                className="flex-1 py-3.5 font-bold text-sm text-white transition-all shadow-md min-h-[48px] bg-gradient-to-r from-primary to-[#ffae33] primary-glow hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 py-3.5 font-bold text-sm text-white rounded-2xl transition-all shadow-md min-h-[48px] bg-gradient-to-r from-primary to-[#ffae33] primary-glow hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed px-4 text-center"
               >
                 {t('importConfirmAndImport', { count: selectedRows.size })}
               </button>
