@@ -18,7 +18,7 @@
     "android:bundle": "node scripts/mobile-build.js && cd android && gradlew bundleRelease",
     "android:apk:release": "node scripts/android-apk-release.mjs",
     "test:mobile:release": "node --test scripts/android-apk-release.test.mjs",
-    "start": "next start -p $PORT",
+    "start": "next start",
     "lint": "eslint .",
     "lint:personal-driver": "eslint src/app/personal-driver src/services/personal-driver src/quality e2e/personal-driver-quality.spec.ts e2e/personal-driver-v1.spec.ts e2e/helpers/personal-driver-fixtures.ts playwright.personal-driver.config.ts",
     "typecheck": "node scripts/clean-next-dev-cache.mjs && tsc --noEmit",
@@ -122,6 +122,9 @@
     "qs": "^6.16.0",
     "uuid": "^11.1.1",
     "@opentelemetry/core": "^2.8.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   },
   "description": "Application moderne de réservation de taxis et de livraison construite avec **Next.js 15**, **TypeScript**, **Firebase** et **Tailwind CSS**.",
   "keywords": [],
