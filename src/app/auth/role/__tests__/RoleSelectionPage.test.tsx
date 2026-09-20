@@ -39,7 +39,7 @@ describe('RoleSelectionPage', () => {
   it('offers a direct driver application link without exposing driver registration', () => {
     render(<RoleSelectionPage />);
 
-    expect(screen.getByRole('link', { name: /Vous souhaitez devenir Chauffeur \/ Livreur/i })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Devenir chauffeur ou livreur/i })).toHaveAttribute(
       'href',
       '/auth/driver-application',
     );

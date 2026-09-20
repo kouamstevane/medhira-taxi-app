@@ -11,7 +11,6 @@ import type { ActiveRole } from '@/types/user';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function RoleSelectionPage() {
   const router = useRouter();
@@ -96,10 +95,6 @@ export default function RoleSelectionPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="flex justify-end mb-4">
-          <LanguageSelector variant="pill" />
-        </div>
-
         <h1 className="text-3xl font-bold text-center mb-2 text-white">{t('auth.iAm')}</h1>
         <p className="text-slate-400 text-center mb-8">
           {t('auth.chooseProfileToStart')}
