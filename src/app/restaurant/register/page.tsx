@@ -12,7 +12,6 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { cn } from '@/lib/utils';
 import { driverSecondaryButtonClassName } from '@/app/driver/register/components/driverOnboardingStyles';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 function RestaurantRegisterWizard() {
   const { t } = useTranslation('restaurant');
@@ -84,7 +83,6 @@ function RestaurantRegisterWizard() {
               {t('loginNav')}
             </button>
           </div>
-          <LanguageSelector variant="compact" />
         </nav>
         <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
           <div

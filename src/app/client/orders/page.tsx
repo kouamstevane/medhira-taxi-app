@@ -21,7 +21,6 @@ import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import {
   getClientOrderTrackingPath,
   getClientParcelTrackingPath,
@@ -312,7 +311,7 @@ export default function ClientOrdersPage() {
             <MaterialIcon name="arrow_back" size="lg" />
           </button>
           <h1 className="text-xl font-bold text-white">{t('client.myOrders')}</h1>
-          <LanguageSelector variant="pill" />
+          <div className="w-11" aria-hidden="true" />
         </div>
 
         {isNetworkError && orders.length === 0 ? (

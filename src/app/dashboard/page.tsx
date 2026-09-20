@@ -35,7 +35,6 @@ import { BecomeProCard } from '@/components/role/BecomeProCard';
 import { getRestaurantPortalPath } from '@/app/food/portal/restaurant-portal-paths';
 import { DashboardServiceGrid } from './components/DashboardServiceGrid';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -283,7 +282,6 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-2">
-            <LanguageSelector variant="pill" />
             <RoleSwitcher />
 
             {/* Notifications */}

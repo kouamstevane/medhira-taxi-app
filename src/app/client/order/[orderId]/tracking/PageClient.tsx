@@ -8,7 +8,6 @@ import { db } from '@/config/firebase'
 import { useDeliveryTracking } from '@/hooks/useDeliveryTracking'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { useTranslation } from '@/hooks/useTranslation'
-import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 const TrackingMap = dynamic(() => import('./TrackingMap'), {
   ssr: false,
@@ -53,7 +52,7 @@ export default function ClientTrackingPage() {
             <MaterialIcon name="arrow_back" size="md" />
           </button>
           <h1 className="flex-1 text-center text-lg font-bold text-white px-2">{t('client.deliveryTrackingTitle')}</h1>
-          <LanguageSelector variant="pill" />
+          <div className="size-11" aria-hidden="true" />
         </header>
 
         <main className="flex-1 p-4 space-y-4">

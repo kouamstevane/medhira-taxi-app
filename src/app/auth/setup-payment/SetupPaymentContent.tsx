@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Elements,
@@ -18,7 +18,6 @@ import type { User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import {
   getAuthenticatedUser,
   getStripeSetupReturn,
@@ -31,11 +30,12 @@ interface CreateSetupIntentResult {
 }
 
 interface SetupFormProps {
+  setupIntentId?: string;
   onSuccess: () => void;
   onError: (message: string) => void;
 }
 
-function SetupForm({ onSuccess, onError }: SetupFormProps) {
+function SetupForm({ setupIntentId, onSuccess, onError }: SetupFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const { t } = useTranslation();
@@ -49,7 +49,7 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
     setProcessing(true);
     setErrorMessage('');
 
-    const { error } = await stripe.confirmSetup({
+    const { error, setupIntent } = await stripe.confirmSetup({
       elements,
       redirect: 'if_required',
       confirmParams: {
@@ -63,6 +63,19 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
       onError(msg);
       setProcessing(false);
       return;
+    }
+
+    const effectiveSetupIntentId = setupIntent?.id || setupIntentId;
+    if (effectiveSetupIntentId) {
+      try {
+        const confirmCallable = httpsCallable<{ setupIntentId: string }, { success: boolean }>(
+          functions,
+          'confirmPaymentMethodSetup'
+        );
+        await confirmCallable({ setupIntentId: effectiveSetupIntentId });
+      } catch (confirmErr) {
+        console.warn('[SetupPayment] confirmPaymentMethodSetup notice:', confirmErr);
+      }
     }
 
     setProcessing(false);
@@ -118,7 +131,10 @@ function SetupForm({ onSuccess, onError }: SetupFormProps) {
 
 export default function SetupPaymentContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTarget = searchParams?.get('redirect') || '/dashboard';
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [setupIntentId, setSetupIntentId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -156,6 +172,7 @@ export default function SetupPaymentContent() {
       const data = result.data;
 
       setClientSecret(data.clientSecret);
+      setSetupIntentId(data.setupIntentId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erreur lors du chargement';
       console.error('[SetupPayment] Erreur:', msg);
@@ -169,9 +186,9 @@ export default function SetupPaymentContent() {
     if (redirectTimeoutRef.current) return;
     setSuccess(true);
     redirectTimeoutRef.current = setTimeout(() => {
-      router.push('/dashboard');
+      router.push(redirectTarget);
     }, 1500);
-  }, [router]);
+  }, [redirectTarget, router]);
 
   const completeStripeReturn = useCallback(async (): Promise<boolean> => {
     const stripeReturn = getStripeSetupReturn(window.location.search);
@@ -191,6 +208,17 @@ export default function SetupPaymentContent() {
     if (result.error) throw new Error(result.error.message);
 
     if (result.setupIntent?.status === 'succeeded') {
+      if (result.setupIntent.id) {
+        try {
+          const confirmCallable = httpsCallable<{ setupIntentId: string }, { success: boolean }>(
+            functions,
+            'confirmPaymentMethodSetup'
+          );
+          await confirmCallable({ setupIntentId: result.setupIntent.id });
+        } catch (confirmErr) {
+          console.warn('[SetupPayment] confirmPaymentMethodSetup notice:', confirmErr);
+        }
+      }
       handleSetupSuccess();
       return true;
     }
@@ -239,12 +267,13 @@ export default function SetupPaymentContent() {
   };
 
   const handleSkip = () => {
-    router.push('/dashboard');
+    router.push(redirectTarget);
   };
 
   const handleRetry = () => {
     setError(null);
     setClientSecret(null);
+    setSetupIntentId(null);
     void (async () => {
       const user = await getAuthenticatedUser(auth);
       if (!user) {
@@ -313,7 +342,7 @@ export default function SetupPaymentContent() {
       <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-hidden">
         <div className="h-12 w-full" />
 
-        <div className="px-6 flex items-center justify-between">
+        <div className="px-6 flex items-center">
           <button
             onClick={handleSkip}
             className="inline-flex items-center text-slate-400 hover:text-primary transition-colors min-h-[44px]"
@@ -321,7 +350,6 @@ export default function SetupPaymentContent() {
             <MaterialIcon name="close" size="md" className="mr-2" />
             {t('auth.skipStep')}
           </button>
-          <LanguageSelector variant="pill" />
         </div>
 
         <div className="flex flex-col items-center justify-center pt-8 pb-6">
@@ -382,6 +410,7 @@ export default function SetupPaymentContent() {
                 }}
               >
                 <SetupForm
+                  setupIntentId={setupIntentId || undefined}
                   onSuccess={handleSetupSuccess}
                   onError={handleSetupError}
                 />

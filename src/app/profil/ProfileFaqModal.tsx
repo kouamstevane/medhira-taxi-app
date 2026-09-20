@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BottomSheet } from '@/components/ui/BottomSheet';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -12,8 +13,6 @@ interface ProfileFaqModalProps {
 export function ProfileFaqModal({ isOpen, onClose }: ProfileFaqModalProps) {
   const { t } = useTranslation();
   const [openIndex, setOpenIndex] = useState<number | null>(0);
-
-  if (!isOpen) return null;
 
   const faqItems = [
     {
@@ -32,38 +31,39 @@ export function ProfileFaqModal({ isOpen, onClose }: ProfileFaqModalProps) {
       question: t('profile.faqItems.q4'),
       answer: t('profile.faqItems.a4'),
     },
+    {
+      question: t('profile.faqItems.q5'),
+      answer: t('profile.faqItems.a5'),
+    },
+    {
+      question: t('profile.faqItems.q6'),
+      answer: t('profile.faqItems.a6'),
+    },
   ];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-4 transition-opacity animate-in fade-in duration-200"
-      onClick={onClose}
+    <BottomSheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      onCloseRequest={onClose}
+      title={t('profile.faqTitle')}
+      showCloseButton
+      closeLabel={t('common.close')}
+      className="bg-[#18181b] border-white/10 text-white max-h-[85vh] sm:max-w-lg"
     >
-      <div
-        className="w-full max-w-md max-h-[85vh] flex flex-col rounded-3xl bg-[#18181b] border border-white/10 p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-250"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-purple-500/15 border border-purple-500/25 flex items-center justify-center text-purple-300">
-              <MaterialIcon name="help_outline" className="text-[20px]" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-white">{t('profile.faqTitle')}</h3>
-              <p className="text-xs text-slate-400">{t('profile.faqSubtitle')}</p>
-            </div>
+      <div className="space-y-4 pb-4">
+        <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+          <div className="w-10 h-10 rounded-2xl bg-purple-500/15 border border-purple-500/25 flex items-center justify-center text-purple-300 shrink-0">
+            <MaterialIcon name="help_outline" className="text-[20px]" />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition"
-            aria-label={t('common.close')}
-          >
-            <MaterialIcon name="close" size="sm" />
-          </button>
+          <div>
+            <p className="text-sm font-semibold text-white">{t('profile.faqSubtitle')}</p>
+          </div>
         </div>
 
-        <div className="overflow-y-auto space-y-2.5 pr-1 max-h-[50vh]">
+        <div className="space-y-2.5">
           {faqItems.map((item, idx) => {
             const isExpanded = openIndex === idx;
             return (
@@ -75,8 +75,9 @@ export function ProfileFaqModal({ isOpen, onClose }: ProfileFaqModalProps) {
                   type="button"
                   onClick={() => setOpenIndex(isExpanded ? null : idx)}
                   className="w-full text-left p-4 flex items-center justify-between gap-3 text-sm font-medium text-white hover:bg-white/[0.03] transition"
+                  aria-expanded={isExpanded}
                 >
-                  <span>{item.question}</span>
+                  <span className="font-semibold leading-snug">{item.question}</span>
                   <MaterialIcon
                     name={isExpanded ? 'expand_less' : 'expand_more'}
                     className="text-slate-400 shrink-0 text-[20px]"
@@ -92,16 +93,16 @@ export function ProfileFaqModal({ isOpen, onClose }: ProfileFaqModalProps) {
           })}
         </div>
 
-        <div className="pt-2 shrink-0">
+        <div className="pt-2">
           <button
             type="button"
             onClick={onClose}
-            className="w-full h-11 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition active:scale-[0.98]"
+            className="w-full h-12 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm font-semibold transition active:scale-[0.98]"
           >
             {t('common.close')}
           </button>
         </div>
       </div>
-    </div>
+    </BottomSheet>
   );
 }

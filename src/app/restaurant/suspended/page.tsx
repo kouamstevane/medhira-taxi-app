@@ -8,7 +8,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function RestaurantSuspendedPage() {
   const { t } = useTranslation('restaurant');
@@ -62,9 +61,6 @@ export default function RestaurantSuspendedPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8 relative">
-      <div className="absolute top-4 right-4 z-10">
-        <LanguageSelector variant="pill" />
-      </div>
       <div className="w-full max-w-md text-center">
         <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
           <MaterialIcon name="block" size="xl" className="text-red-400" />

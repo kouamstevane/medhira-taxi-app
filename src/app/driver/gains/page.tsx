@@ -9,7 +9,6 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav, driverNavItems } from '@/components/ui/BottomNav';
 import { formatCurrencyWithCode, formatFirestoreDate } from '@/utils/format';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import { type TripRecord } from '../_shared';
 
 export default function DriverGainsPage() {
@@ -70,7 +69,6 @@ export default function DriverGainsPage() {
           <MaterialIcon name="arrow_back" size="md" className="text-white" />
         </button>
         <h1 className="text-xl font-bold text-white flex-1">{t('driver.myEarnings')}</h1>
-        <LanguageSelector variant="pill" />
       </header>
 
       <main className="max-w-[430px] mx-auto px-4 py-6 space-y-6">

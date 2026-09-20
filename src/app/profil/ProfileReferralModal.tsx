@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BottomSheet } from '@/components/ui/BottomSheet';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -18,8 +19,6 @@ export function ProfileReferralModal({
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
-  if (!isOpen) return null;
-
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(referralCode);
@@ -33,42 +32,37 @@ export function ProfileReferralModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-sm p-4 transition-opacity animate-in fade-in duration-200"
-      onClick={onClose}
+    <BottomSheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      onCloseRequest={onClose}
+      title={t('profile.referralProgramTitle')}
+      showCloseButton
+      closeLabel={t('common.close')}
+      className="bg-[#18181b] border-white/10 text-white max-h-[90vh] sm:max-w-md"
     >
-      <div
-        className="w-full max-w-md rounded-3xl bg-[#18181b] border border-white/10 p-6 shadow-2xl space-y-5 animate-in slide-in-from-bottom duration-250"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between pb-2 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-pink-500/15 border border-pink-500/25 flex items-center justify-center text-pink-400">
-              <MaterialIcon name="favorite" className="text-[20px]" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-white">{t('profile.referralProgramTitle')}</h3>
-              <p className="text-xs text-slate-400">{t('profile.referralProgramSubtitle')}</p>
-            </div>
+      <div className="space-y-4 pb-2">
+        <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+          <div className="w-10 h-10 rounded-2xl bg-pink-500/15 border border-pink-500/25 flex items-center justify-center text-pink-400 shrink-0">
+            <MaterialIcon name="favorite" className="text-[20px]" />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition"
-            aria-label={t('common.close')}
-          >
-            <MaterialIcon name="close" size="sm" />
-          </button>
+          <div>
+            <p className="text-sm font-semibold text-white">{t('profile.referralProgramSubtitle')}</p>
+          </div>
         </div>
 
-        <div className="rounded-2xl bg-gradient-to-br from-pink-500/10 via-primary/5 to-transparent border border-pink-500/20 p-4 text-center space-y-2">
-          <p className="text-xs text-pink-300 font-medium uppercase tracking-wider">{t('profile.exclusiveCode')}</p>
-          <div className="flex items-center justify-center gap-2">
-            <span className="font-mono text-xl font-bold tracking-widest text-white bg-black/40 px-4 py-2 rounded-xl border border-white/10">
+        <div className="rounded-2xl bg-gradient-to-br from-pink-500/10 via-primary/5 to-transparent border border-pink-500/20 p-5 text-center space-y-3">
+          <p className="text-xs text-pink-300 font-semibold uppercase tracking-wider">
+            {t('profile.exclusiveCode')}
+          </p>
+          <div className="flex items-center justify-center">
+            <span className="font-mono text-2xl font-bold tracking-widest text-white bg-black/50 px-5 py-2.5 rounded-xl border border-white/10 shadow-inner select-all">
               {referralCode || 'MEDJIRA2026'}
             </span>
           </div>
-          <p className="text-xs text-slate-400 pt-1">
+          <p className="text-xs text-slate-300 leading-relaxed pt-1 max-w-xs mx-auto">
             {t('profile.referralExplanation')}
           </p>
         </div>
@@ -77,20 +71,20 @@ export function ProfileReferralModal({
           <button
             type="button"
             onClick={handleCopy}
-            className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 active:scale-[0.98] transition-all"
+            className="flex-1 h-12 min-h-[44px] rounded-2xl bg-gradient-to-r from-pink-500 to-rose-600 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-pink-500/20 active:scale-[0.98] transition-all"
           >
             <MaterialIcon name={copied ? 'check' : 'attach_file'} size="sm" />
-            {copied ? t('profile.codeCopied') : t('profile.copyMyCode')}
+            <span>{copied ? t('profile.codeCopied') : t('profile.copyMyCode')}</span>
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="h-12 px-5 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition active:scale-[0.98]"
+            className="h-12 min-h-[44px] px-6 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm font-medium transition active:scale-[0.98]"
           >
             {t('common.close')}
           </button>
         </div>
       </div>
-    </div>
+    </BottomSheet>
   );
 }

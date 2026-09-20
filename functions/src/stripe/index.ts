@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Cloud Functions — Webhooks Stripe + Callable Functions
  *
  * stripeWebhookInstant : 25 événements v1 (payload complet)
@@ -227,6 +227,132 @@ export const createSetupIntent = onCall(
       throw new HttpsError('internal', `Erreur inattendue : ${e.message ?? 'inconnue'}`);
     }
   },
+);
+
+// =============================================================================
+// confirmPaymentMethodSetup — Callable Function (client → serveur)
+// =============================================================================
+
+export const confirmPaymentMethodSetup = onCall(
+  {
+    region: 'europe-west1',
+    secrets: [stripeSecretKey],
+  },
+  async (
+    request: CallableRequest<{ setupIntentId: string }>
+  ): Promise<{ success: boolean; last4?: string; brand?: string }> => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
+    }
+    const { setupIntentId } = request.data || {};
+    if (!setupIntentId) {
+      throw new HttpsError('invalid-argument', 'setupIntentId manquant.');
+    }
+
+    const userId = request.auth.uid;
+    const stripeClient = getStripe();
+    const db = getDb();
+
+    const setupIntent = await (async () => {
+      try {
+        return await stripeClient.setupIntents.retrieve(setupIntentId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Erreur Stripe';
+        throw new HttpsError('internal', `Stripe: ${msg}`);
+      }
+    })();
+
+    if (setupIntent.status !== 'succeeded') {
+      throw new HttpsError('failed-precondition', 'La configuration de la carte n’est pas terminée.');
+    }
+
+    const pmId = typeof setupIntent.payment_method === 'string'
+      ? setupIntent.payment_method
+      : setupIntent.payment_method?.id;
+
+    if (!pmId) {
+      throw new HttpsError('internal', 'Moyen de paiement introuvable sur le SetupIntent.');
+    }
+
+    const updateData: Record<string, unknown> = {
+      defaultPaymentMethodId: pmId,
+      setupIntentId: setupIntent.id,
+      updatedAt: serverTS(),
+    };
+
+    let last4: string | undefined;
+    let brand: string | undefined;
+
+    try {
+      const pm = await stripeClient.paymentMethods.retrieve(pmId);
+      if (pm.card) {
+        last4 = pm.card.last4;
+        brand = pm.card.brand;
+        updateData.cardLast4 = pm.card.last4;
+        updateData.cardBrand = pm.card.brand;
+        updateData.cardExpMonth = pm.card.exp_month;
+        updateData.cardExpYear = pm.card.exp_year;
+      }
+    } catch (err) {
+      console.warn('[confirmPaymentMethodSetup] Warning retrieving PM details:', err);
+    }
+
+    await db.collection('users').doc(userId).set(updateData, { merge: true });
+
+    return {
+      success: true,
+      last4,
+      brand,
+    };
+  }
+);
+
+// =============================================================================
+// detachPaymentMethod — Callable Function (client → serveur)
+// =============================================================================
+
+export const detachPaymentMethod = onCall(
+  {
+    region: 'europe-west1',
+    secrets: [stripeSecretKey],
+  },
+  async (request: CallableRequest<void>): Promise<{ success: boolean }> => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Vous devez être connecté.');
+    }
+    const userId = request.auth.uid;
+    const db = getDb();
+    const userDocRef = db.collection('users').doc(userId);
+    const userSnap = await userDocRef.get();
+
+    if (!userSnap.exists) {
+      throw new HttpsError('not-found', 'Utilisateur non trouvé.');
+    }
+
+    const userData = userSnap.data() || {};
+    const pmId = userData.defaultPaymentMethodId as string | undefined;
+
+    if (pmId) {
+      try {
+        const stripeClient = getStripe();
+        await stripeClient.paymentMethods.detach(pmId);
+      } catch (err) {
+        console.warn('[detachPaymentMethod] Warning detaching from Stripe:', err);
+      }
+    }
+
+    await userDocRef.update({
+      defaultPaymentMethodId: admin.firestore.FieldValue.delete(),
+      setupIntentId: admin.firestore.FieldValue.delete(),
+      cardLast4: admin.firestore.FieldValue.delete(),
+      cardBrand: admin.firestore.FieldValue.delete(),
+      cardExpMonth: admin.firestore.FieldValue.delete(),
+      cardExpYear: admin.firestore.FieldValue.delete(),
+      updatedAt: serverTS(),
+    });
+
+    return { success: true };
+  }
 );
 
 // =============================================================================
@@ -1244,11 +1370,23 @@ async function onSetupIntentSucceeded(si: Record<string, unknown>): Promise<void
   const pmId     = si.payment_method as string | null;
 
   if (metadata.userId && pmId) {
-    await getDb().collection('users').doc(metadata.userId).update({
+    const updateData: Record<string, unknown> = {
       defaultPaymentMethodId: pmId,
       setupIntentId:          siId,
       updatedAt:              serverTS(),
-    });
+    };
+    try {
+      const pm = await getStripe().paymentMethods.retrieve(pmId);
+      if (pm.card) {
+        updateData.cardLast4 = pm.card.last4;
+        updateData.cardBrand = pm.card.brand;
+        updateData.cardExpMonth = pm.card.exp_month;
+        updateData.cardExpYear = pm.card.exp_year;
+      }
+    } catch (err) {
+      console.warn('[onSetupIntentSucceeded] Warning retrieving PM details:', err);
+    }
+    await getDb().collection('users').doc(metadata.userId).set(updateData, { merge: true });
   }
 }
 

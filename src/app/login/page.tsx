@@ -27,7 +27,6 @@ import { isValidPhoneNumber } from '@/lib/validation';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 function CountryFlag({ code }: { code: string }) {
   if (code === 'CA') {
@@ -301,11 +300,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
       <div className="relative flex min-h-screen w-full flex-col max-w-[375px] mx-auto overflow-hidden">
-        {/* Language Selector */}
-        <div className="absolute top-4 right-4 z-20">
-          <LanguageSelector variant="pill" />
-        </div>
-
         <div className="h-12 w-full" />
 
         <div className="flex flex-col items-center justify-center pt-8 pb-10">

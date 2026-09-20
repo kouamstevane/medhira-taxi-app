@@ -7,7 +7,6 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { NetworkErrorView } from '@/components/ui'
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler'
 import { useTranslation } from '@/hooks/useTranslation'
-import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 export default function DriverParcelPage() {
   const { t } = useTranslation('driver')
@@ -107,7 +106,7 @@ export default function DriverParcelPage() {
             <MaterialIcon name="arrow_back" size="md" />
           </button>
           <h1 className="text-lg font-bold text-white">{t('parcelTransportTitle')}</h1>
-          <LanguageSelector variant="pill" />
+          <div className="size-11" aria-hidden="true" />
         </header>
         <main className="flex-1 flex items-center justify-center p-4">
           <NetworkErrorView onRetry={recharger} />
@@ -205,7 +204,7 @@ export default function DriverParcelPage() {
             <MaterialIcon name="arrow_back" size="md" />
           </button>
           <h1 className="text-lg font-bold text-white">{t('parcelTransportTitle')}</h1>
-          <LanguageSelector variant="pill" />
+          <div className="size-11" aria-hidden="true" />
         </header>
 
         <main className="flex-1 p-4 space-y-4">

@@ -11,7 +11,6 @@ import { useDriverProfile } from '@/hooks/useDriverProfile';
 import { useAuth } from '@/hooks/useAuth';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import {
   getDriverAvailabilityProfileState,
   getDriverVerificationBadges,
@@ -196,7 +195,6 @@ export default function DriverProfilePage() {
           </button>
           <h1 className="text-lg font-bold text-primary">{t('common.profile')}</h1>
           <div className="flex items-center gap-2">
-            <LanguageSelector variant="pill" />
             <button
               onClick={() => {
                 if (isEmailVerified) setEditMode(!editMode);

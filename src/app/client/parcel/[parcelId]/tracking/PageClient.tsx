@@ -9,7 +9,6 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { Capacitor } from '@capacitor/core'
 import { useTranslation } from '@/hooks/useTranslation'
-import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 const ParcelTrackingMap = dynamic(() => import('./ParcelTrackingMap'), {
   ssr: false,
@@ -117,7 +116,7 @@ export default function ClientParcelTrackingPage() {
             <MaterialIcon name="arrow_back" size="md" />
           </button>
           <h1 className="flex-1 text-center text-lg font-bold text-white px-2">{t('client.parcelTrackingTitle')}</h1>
-          <LanguageSelector variant="pill" />
+          <div className="size-11" aria-hidden="true" />
         </header>
 
         <main className="flex-1 p-4 space-y-4">

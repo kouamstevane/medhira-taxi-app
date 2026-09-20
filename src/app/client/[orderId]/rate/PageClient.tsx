@@ -6,7 +6,6 @@ import { z } from 'zod'
 import { auth, db } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { useTranslation } from '@/hooks/useTranslation'
-import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 const ratingSchema = z.object({
   score: z.number().int().min(1).max(5),
@@ -163,9 +162,6 @@ export default function RateDriverPage() {
   return (
     <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-4">
       <div className="glass-card rounded-2xl border border-white/10 p-6 w-full max-w-sm space-y-6 relative">
-        <div className="flex justify-end">
-          <LanguageSelector variant="pill" />
-        </div>
         <div className="text-center">
           <MaterialIcon name="delivery_dining" className="text-primary text-[48px]" />
           <h1 className="text-xl font-bold mt-2">{t('client.rateDriverTitle')}</h1>

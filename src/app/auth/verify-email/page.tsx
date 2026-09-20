@@ -8,7 +8,6 @@ import { signOut } from 'firebase/auth';
 import { sendVerificationEmail } from '@/services/auth.service';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -101,8 +100,8 @@ export default function VerifyEmailPage() {
         {/* Top Safe Area */}
         <div className="h-12 w-full" />
 
-        {/* Back Link and LanguageSelector */}
-        <div className="px-6 flex items-center justify-between">
+        {/* Back Link */}
+        <div className="px-6 flex items-center">
           <Link
             href="/"
             className="inline-flex items-center text-slate-400 hover:text-primary transition-colors min-h-[44px]"
@@ -110,7 +109,6 @@ export default function VerifyEmailPage() {
             <MaterialIcon name="arrow_back" size="md" className="mr-2" />
             {t('common.back')}
           </Link>
-          <LanguageSelector variant="pill" />
         </div>
 
         {/* Icon */}

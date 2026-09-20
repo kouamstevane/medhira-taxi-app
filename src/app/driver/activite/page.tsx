@@ -13,7 +13,6 @@ import { EvaluationsTab } from './components/EvaluationsTab'
 import { formatCurrencyWithCode } from '@/utils/format'
 import { getInitialActivityTab, type ActivityTab } from './activity-tabs'
 import { useTranslation } from '@/hooks/useTranslation'
-import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 function RecordItem({ record }: { record: ActivityRecord }) {
   return (
@@ -111,9 +110,8 @@ export default function DriverActivitePage() {
   return (
     <div className="min-h-screen bg-background text-slate-100 pb-28">
       <div className="max-w-lg mx-auto px-4 pt-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6">
           <h1 className="text-2xl font-bold text-white">{t('driver.activity')}</h1>
-          <LanguageSelector variant="pill" />
         </div>
 
         {/* Onglets — 3 onglets */}

@@ -2318,7 +2318,16 @@ export const verifyCode = onCall(
   }
 );
 
-export { stripeWebhookInstant, stripeWebhookLight, createSetupIntent, createConnectAccount, createConnectOnboardLink, getStripeAccountStatus } from './stripe/index.js';
+export {
+  stripeWebhookInstant,
+  stripeWebhookLight,
+  createSetupIntent,
+  confirmPaymentMethodSetup,
+  detachPaymentMethod,
+  createConnectAccount,
+  createConnectOnboardLink,
+  getStripeAccountStatus,
+} from './stripe/index.js';
 export { stripeConnectPayout } from './stripe/stripeConnectPayout.js';
 export { stripePaymentIntent } from './stripe/stripePaymentIntent.js';
 export { stripeWalletRecharge } from './stripe/stripeWalletRecharge.js';

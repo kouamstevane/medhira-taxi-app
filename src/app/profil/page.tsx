@@ -33,6 +33,9 @@ import { ProfileMenuItem } from './ProfileMenuItem';
 import { ProfileSupportModal } from './ProfileSupportModal';
 import { ProfileReferralModal } from './ProfileReferralModal';
 import { ProfileFaqModal } from './ProfileFaqModal';
+import { ProfilePartnerModal } from './ProfilePartnerModal';
+import { ProfilePaymentMethodsModal, type CardDetails } from './ProfilePaymentMethodsModal';
+import { subscribeToWallet } from '@/services/wallet.service';
 
 interface ProfileFormData {
   firstName: string;
@@ -59,6 +62,8 @@ function ProfilPageContent() {
   });
 
   const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
+  const [cardDetails, setCardDetails] = useState<CardDetails>({});
+  const [walletBalance, setWalletBalance] = useState<number>(0);
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileImageUrl, setProfileImageUrl] = useState(authUserData?.profileImageUrl || '');
   const [loading, setLoading] = useState(!authUserData);
@@ -67,9 +72,11 @@ function ProfilPageContent() {
   const [error, setError] = useState<string | null>(null);
 
   // Modals state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [showFaqModal, setShowFaqModal] = useState(false);
+  const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -128,6 +135,18 @@ function ProfilPageContent() {
       if (authUserData.profileImageUrl) {
         setProfileImageUrl(authUserData.profileImageUrl);
       }
+      if (authUserData.defaultPaymentMethodId) {
+        setHasPaymentMethod(true);
+        setCardDetails({
+          last4: authUserData.cardLast4 || String(authUserData.defaultPaymentMethodId).slice(-4),
+          brand: authUserData.cardBrand,
+          expMonth: authUserData.cardExpMonth,
+          expYear: authUserData.cardExpYear,
+        });
+      } else {
+        setHasPaymentMethod(false);
+        setCardDetails({});
+      }
     }
   }, [authUserData, currentUser, editing]);
 
@@ -144,7 +163,18 @@ function ProfilPageContent() {
 
       if (userDocSnap.exists()) {
         const data = userDocSnap.data();
-        setHasPaymentMethod(Boolean(data.defaultPaymentMethodId));
+        const hasPm = Boolean(data.defaultPaymentMethodId);
+        setHasPaymentMethod(hasPm);
+        if (hasPm) {
+          setCardDetails({
+            last4: data.cardLast4 || (data.defaultPaymentMethodId ? String(data.defaultPaymentMethodId).slice(-4) : undefined),
+            brand: data.cardBrand || undefined,
+            expMonth: data.cardExpMonth || undefined,
+            expYear: data.cardExpYear || undefined,
+          });
+        } else {
+          setCardDetails({});
+        }
         setUserData({
           firstName: data.firstName || '',
           lastName: data.lastName || '',
@@ -176,6 +206,37 @@ function ProfilPageContent() {
   useEffect(() => {
     void fetchUserData();
   }, [fetchUserData]);
+
+  // Real-time wallet balance subscription
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubscribe = subscribeToWallet(
+      currentUser.uid,
+      (wallet) => {
+        setWalletBalance(wallet.balance || 0);
+      },
+      (err) => {
+        console.warn('Erreur souscription wallet profil:', err);
+      }
+    );
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser]);
+
+  const handleRemoveCard = async () => {
+    try {
+      const callable = httpsCallable<unknown, { success: boolean }>(functions, 'detachPaymentMethod');
+      await callable();
+      setHasPaymentMethod(false);
+      setCardDetails({});
+      showSuccess(t('profile.cardDeleted') || 'Carte retirée avec succès');
+      await reloadUser();
+    } catch (err) {
+      console.error('Erreur suppression carte:', err);
+      showError(t('common.error') || 'Erreur lors de la suppression de la carte');
+    }
+  };
 
   const handleRetry = useCallback(() => {
     void fetchUserData();
@@ -280,9 +341,12 @@ function ProfilPageContent() {
 
   // User display name & phone calculation
   const fullName = [userData.firstName, userData.lastName].filter(Boolean).join(' ');
-  const displayName = (fullName || currentUser?.displayName || 'VICTORINE YOUGO').toUpperCase();
-  const displayPhone = userData.phone || currentUser?.phoneNumber || userData.email || '+237693372118';
+  const displayName = (fullName || currentUser?.displayName || currentUser?.email?.split('@')[0] || t('profile.user')).toUpperCase();
+  const displayPhone = userData.phone || currentUser?.phoneNumber || userData.email || '';
   const referralCode = currentUser?.uid ? `MED-${currentUser.uid.slice(0, 6).toUpperCase()}` : 'MEDJIRA2026';
+  const hasDriverRole = Boolean(authUserData?.roles?.driver);
+  const hasRestaurantRole = Boolean(authUserData?.roles?.restaurant);
+  const hasProRole = hasDriverRole || hasRestaurantRole;
 
   if (loading && !editing) {
     return (
@@ -409,7 +473,7 @@ function ProfilPageContent() {
                   type="tel"
                   {...form.register('phone')}
                   label={t('profile.phone')}
-                  placeholder="693372118"
+                  placeholder={t('profile.phonePlaceholder')}
                   helperText={t('profile.phoneCountryNotice')}
                   required
                 />
@@ -529,11 +593,12 @@ function ProfilPageContent() {
               </h2>
               <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
                 <ProfileMenuItem
-                  icon="bolt"
+                  icon="handshake"
                   iconColorVariant="sky"
-                  title={t('profile.driverMode')}
-                  badge={t('profile.newBadge')}
-                  href="/auth/become-pro"
+                  title={hasProRole ? t('profile.partnerArea') : t('profile.becomePartner')}
+                  subtitle={hasProRole ? t('profile.accessProDashboard') : t('profile.becomePartnerSubtitle')}
+                  badge={!hasProRole ? t('profile.newBadge') : undefined}
+                  onClick={() => setShowPartnerModal(true)}
                 />
                 <ProfileMenuItem
                   icon="person"
@@ -546,7 +611,7 @@ function ProfilPageContent() {
                   iconColorVariant="sky"
                   title={t('profile.paymentMethodsAndWallet')}
                   subtitle={hasPaymentMethod ? t('profile.savedCard') : t('profile.addPaymentMethod')}
-                  href="/wallet"
+                  onClick={() => setShowPaymentModal(true)}
                 />
                 <ProfileMenuItem
                   icon="lock"
@@ -686,7 +751,7 @@ function ProfilPageContent() {
             {/* App Version & Copyright Footer */}
             <div className="text-center pt-4 pb-2 space-y-1 text-slate-500">
               <p className="text-[11px] font-medium tracking-wider uppercase">
-                VERSION 1.0.0 (2508122)
+                {t('profile.appVersion')} 1.0.0 (2508122)
               </p>
               <p className="text-[10px]">
                 © Medjira Taxi. {t('profile.allRightsReserved')}
@@ -782,6 +847,21 @@ function ProfilPageContent() {
         <ProfileFaqModal
           isOpen={showFaqModal}
           onClose={() => setShowFaqModal(false)}
+        />
+        <ProfilePartnerModal
+          isOpen={showPartnerModal}
+          onClose={() => setShowPartnerModal(false)}
+          hasDriverRole={hasDriverRole}
+          hasRestaurantRole={hasRestaurantRole}
+        />
+        <ProfilePaymentMethodsModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          hasPaymentMethod={hasPaymentMethod}
+          cardDetails={cardDetails}
+          cardholderName={`${userData.firstName} ${userData.lastName}`.trim()}
+          walletBalance={walletBalance}
+          onRemoveCard={handleRemoveCard}
         />
       </div>
 

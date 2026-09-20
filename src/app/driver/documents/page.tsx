@@ -13,7 +13,6 @@ import type { DocStatus } from '@/hooks/useDocumentStatus'
 import { getDriverDocumentsSummary } from './documents-summary'
 import { getDriverDocumentReuploadPath } from '@/utils/entity-route-paths'
 import { useTranslation } from '@/hooks/useTranslation'
-import { LanguageSelector } from '@/components/ui/LanguageSelector'
 
 type Filter = 'all' | 'not_submitted' | 'pending' | 'approved' | 'rejected'
 
@@ -160,7 +159,6 @@ export default function DriverDocumentsPage() {
           </button>
           <h1 className="text-lg font-bold text-primary">{t('driver.myDocuments')}</h1>
           <div className="flex items-center gap-2">
-            <LanguageSelector variant="pill" />
             <button
               className="rounded-xl p-2 transition hover:bg-white/5 min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label={t('common.help')}

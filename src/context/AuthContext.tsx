@@ -112,6 +112,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           stripeCustomerId: data.stripeCustomerId,
           defaultPaymentMethodId: data.defaultPaymentMethodId,
           setupIntentId: data.setupIntentId,
+          cardLast4: data.cardLast4,
+          cardBrand: data.cardBrand,
+          cardExpMonth: data.cardExpMonth,
+          cardExpYear: data.cardExpYear,
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
         };

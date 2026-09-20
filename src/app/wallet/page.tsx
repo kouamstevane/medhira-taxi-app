@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { auth } from '@/config/firebase';
+import { auth, db } from '@/config/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { getTransactionHistory, subscribeToWallet } from '@/services/wallet.service';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { BottomNav } from '@/components/ui/BottomNav';
@@ -16,11 +17,14 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { NetworkErrorView } from '@/components/ui/NetworkErrorView';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { useTranslation } from '@/hooks/useTranslation';
+import type { CardDetails } from '@/app/profil/ProfilePaymentMethodsModal';
 
 export default function WalletPage() {
   const { t } = useTranslation();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
+  const [cardDetails, setCardDetails] = useState<CardDetails>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isNetworkError, setIsNetworkError] = useState(false);
@@ -31,19 +35,40 @@ export default function WalletPage() {
 
   useEffect(() => {
     if (searchParams.get('success')) {
-      toast.success('Recharge effectuée avec succès !');
+      toast.success(t('wallet.rechargeSuccess', { amount: '' }) || 'Recharge effectuée avec succès !');
       router.replace('/wallet');
     }
-  }, [searchParams, router]);
+  }, [searchParams, router, t]);
 
   useEffect(() => {
     let unsubscribeWallet: (() => void) | null = null;
+    let unsubscribeUser: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (!user) { router.push('/login'); return; }
 
       setLoading(true);
       setError('');
+
+      // S'abonner aux détails du moyen de paiement de l'utilisateur
+      if (unsubscribeUser) unsubscribeUser();
+      unsubscribeUser = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const hasCard = Boolean(data.defaultPaymentMethodId);
+          setHasPaymentMethod(hasCard);
+          if (hasCard) {
+            setCardDetails({
+              last4: data.cardLast4 || (data.defaultPaymentMethodId ? String(data.defaultPaymentMethodId).slice(-4) : undefined),
+              brand: data.cardBrand || undefined,
+              expMonth: data.cardExpMonth || undefined,
+              expYear: data.cardExpYear || undefined,
+            });
+          } else {
+            setCardDetails({});
+          }
+        }
+      });
 
       // Charger l'historique des transactions (une fois)
       getTransactionHistory(user.uid, 3)
@@ -74,7 +99,7 @@ export default function WalletPage() {
           if (isFirestoreNetworkError(err) || errMsg.includes('offline')) {
             setIsNetworkError(true);
           } else if (!errMsg.includes('permission')) {
-            setError('Erreur lors du chargement du portefeuille');
+            setError(t('common.error') || 'Erreur lors du chargement du portefeuille');
           }
           setLoading(false);
         }
@@ -84,8 +109,9 @@ export default function WalletPage() {
     return () => {
       unsubscribeAuth();
       if (unsubscribeWallet) unsubscribeWallet();
+      if (unsubscribeUser) unsubscribeUser();
     };
-  }, [router, refreshKey]);
+  }, [router, refreshKey, t]);
 
   const formatDate = (date: Date) =>
     date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
@@ -94,11 +120,11 @@ export default function WalletPage() {
     <div className="min-h-screen bg-background pb-28 max-w-[430px] mx-auto">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-xl border-b border-white/5 px-4 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-white">Mon Portefeuille</h1>
+        <h1 className="text-xl font-bold text-white">{t('wallet.title')}</h1>
         <button
           onClick={() => router.push('/notifications')}
           className="relative p-2.5 rounded-full hover:bg-white/5 transition"
-          aria-label={unreadCount > 0 ? `Notifications (${unreadCount} non lues)` : 'Notifications'}
+          aria-label={unreadCount > 0 ? `${t('common.notifications')} (${unreadCount})` : t('common.notifications')}
         >
           <MaterialIcon name="notifications" size="lg" className="text-slate-400 text-[22px]" />
           {unreadCount > 0 && (
@@ -147,7 +173,7 @@ export default function WalletPage() {
               {formatCurrencyWithCode(balance)}
             </p>
           )}
-          <p className="relative text-slate-500 text-xs">Mis à jour maintenant</p>
+          <p className="relative text-slate-500 text-xs">{t('wallet.updatedNow')}</p>
         </div>
 
         {/* Quick Actions */}
@@ -171,6 +197,72 @@ export default function WalletPage() {
               )}
             </Link>
           ))}
+        </div>
+
+        {/* Saved Payment Methods */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-white">{t('wallet.savedPaymentMethods')}</h2>
+            <Link
+              href="/auth/setup-payment?redirect=/wallet"
+              className="text-primary text-sm font-semibold flex items-center gap-1 hover:underline"
+            >
+              <MaterialIcon name="add" size="sm" />
+              <span>{hasPaymentMethod ? t('wallet.manageCard') : t('wallet.addPaymentMethod')}</span>
+            </Link>
+          </div>
+
+          {hasPaymentMethod ? (
+            <div className="relative overflow-hidden glass-card p-4 rounded-2xl border border-white/10 flex items-center justify-between shadow-lg">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-9 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-white/15 flex items-center justify-center text-white shrink-0 shadow-md">
+                  <MaterialIcon name="credit_card" size="md" className="text-amber-400" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-white tracking-wide truncate">
+                      •••• •••• •••• {cardDetails.last4 || '••••'}
+                    </p>
+                    <span className="px-1.5 py-0.5 text-[9px] font-semibold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0">
+                      {t('profile.defaultCard')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    {cardDetails.brand ? cardDetails.brand.toUpperCase() : 'CARTE BANCAIRE'}
+                    {cardDetails.expMonth && cardDetails.expYear
+                      ? ` · ${String(cardDetails.expMonth).padStart(2, '0')}/${String(cardDetails.expYear).slice(-2)}`
+                      : ''}
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/auth/setup-payment?redirect=/wallet"
+                className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white flex items-center justify-center transition shrink-0 ml-2"
+                title={t('wallet.manageCard')}
+                aria-label={t('wallet.manageCard')}
+              >
+                <MaterialIcon name="chevron_right" size="sm" />
+              </Link>
+            </div>
+          ) : (
+            <div className="glass-card rounded-2xl border border-white/5 p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-400 shrink-0">
+                  <MaterialIcon name="credit_card" size="sm" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">{t('wallet.noSavedCardYet')}</p>
+                </div>
+              </div>
+              <Link
+                href="/auth/setup-payment?redirect=/wallet"
+                className="h-8 px-3 rounded-xl bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 text-xs font-semibold flex items-center gap-1 transition shrink-0 ml-2 active:scale-95"
+              >
+                <MaterialIcon name="add" size="sm" />
+                <span>{t('wallet.addPaymentMethod')}</span>
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Recent Transactions */}

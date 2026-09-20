@@ -14,6 +14,7 @@ export interface BottomSheetProps {
   readonly className?: string;
   readonly contentClassName?: string;
   readonly showCloseButton?: boolean;
+  readonly closeLabel?: string;
 }
 
 const DISMISS_DISTANCE = 120;
@@ -29,6 +30,7 @@ export function BottomSheet({
   className,
   contentClassName,
   showCloseButton = false,
+  closeLabel,
 }: BottomSheetProps) {
   const titleId = `bottom-sheet-title-${useId().replace(/:/g, '')}`;
   const startYRef = useRef<number | null>(null);
@@ -155,7 +157,7 @@ export function BottomSheet({
             </h2>
             {showCloseButton && (
               <button
-                aria-label="Fermer"
+                aria-label={closeLabel || 'Fermer'}
                 className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => {
                   if (onCloseRequest) {

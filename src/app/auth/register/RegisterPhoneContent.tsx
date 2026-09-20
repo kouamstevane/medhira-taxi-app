@@ -19,7 +19,6 @@ import {
   driverSecondaryButtonClassName,
 } from '@/app/driver/register/components/driverOnboardingStyles';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 type FieldErrors = Partial<Record<'fullName' | 'phone', string>>;
 
@@ -232,12 +231,11 @@ export default function RegisterPhoneContent() {
       <div className="relative flex min-h-screen w-full flex-col max-w-[430px] mx-auto overflow-hidden">
         <div className="h-12 w-full" />
 
-        <div className="px-6 flex items-center justify-between">
+        <div className="px-6 flex items-center">
           <Link href="/auth/role" className="inline-flex items-center text-slate-400 hover:text-primary transition-colors min-h-[44px]">
             <MaterialIcon name="arrow_back" size="md" className="mr-2" />
             {t('common.back')}
           </Link>
-          <LanguageSelector variant="pill" />
         </div>
 
         <div className="flex flex-col items-center justify-center pt-6 pb-8">

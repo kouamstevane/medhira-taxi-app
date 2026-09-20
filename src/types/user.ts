@@ -88,6 +88,10 @@ export interface UserData {
   stripeCustomerId?: string;
   defaultPaymentMethodId?: string;
   setupIntentId?: string;
+  cardLast4?: string;
+  cardBrand?: string;
+  cardExpMonth?: number;
+  cardExpYear?: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }

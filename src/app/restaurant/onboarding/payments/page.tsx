@@ -9,7 +9,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { mapHttpsError } from '@/services/cloud-functions.helpers';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import toast from 'react-hot-toast';
 
 type CallResult = { onboardingUrl: string; mode: string };
@@ -81,9 +80,6 @@ function PaymentsOnboardingContent() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 relative">
-      <div className="absolute top-4 right-4">
-        <LanguageSelector variant="compact" />
-      </div>
       <div className="w-full max-w-md glass-card p-6 space-y-4">
         <div className="flex items-center gap-3">
           <div className="bg-primary/10 p-3 rounded-xl">

@@ -8,7 +8,6 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useToast } from '@/hooks/useToast';
 import { useDriverRegistration } from '@/hooks/useDriverRegistration';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import Step0RoleSelection from './components/Step0RoleSelection';
 import Step1Intent from './components/Step1Intent';
 import Step2Identity from './components/Step2Identity';
@@ -57,9 +56,6 @@ export default function DriverRegisterWizard() {
     return (
       <div className="min-h-screen bg-background font-sans text-slate-100 antialiased flex items-center justify-center p-4">
         <div className="glass-card rounded-2xl w-full max-w-lg p-8 text-center relative">
-          <div className="flex justify-end mb-2">
-            <LanguageSelector variant="pill" />
-          </div>
           <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-destructive/10 border border-destructive/30 mb-6">
             <MaterialIcon name="error" className="text-destructive text-[32px]" />
           </div>
@@ -94,9 +90,6 @@ export default function DriverRegisterWizard() {
       <ToastContainer toasts={toasts} onRemove={removeToast} position="top-right" />
 
       <div className="glass-card rounded-2xl w-full max-w-2xl overflow-hidden">
-        <div className="flex justify-end p-3 pb-0">
-          <LanguageSelector variant="pill" />
-        </div>
         <div className="h-2 w-full bg-white/5 mt-2">
           <div
             className="h-full bg-gradient-to-r from-primary to-[#ffae33] transition-all duration-300"

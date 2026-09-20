@@ -9,7 +9,6 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { AuthService } from '@/services';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import Link from 'next/link';
 
 type RestaurantStatus = 'pending_approval' | 'approved' | 'rejected' | 'suspended';
@@ -78,9 +77,6 @@ function RestaurantPendingContent() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8 relative">
-      <div className="absolute top-4 right-4 z-10">
-        <LanguageSelector variant="pill" />
-      </div>
       <div className="w-full max-w-md text-center">
         {status === 'rejected' ? (
           <>

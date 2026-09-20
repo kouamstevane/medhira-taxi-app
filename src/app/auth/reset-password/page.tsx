@@ -17,7 +17,6 @@ import Link from 'next/link';
 import { ERROR_MESSAGES } from '@/utils/constants';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -76,8 +75,8 @@ export default function ResetPasswordPage() {
         {/* Top Safe Area */}
         <div className="h-12 w-full" />
 
-        {/* Back Link and LanguageSelector */}
-        <div className="px-6 flex items-center justify-between">
+        {/* Back Link */}
+        <div className="px-6 flex items-center">
           <Link
             href="/login"
             className="inline-flex items-center text-slate-400 hover:text-primary transition-colors min-h-[44px]"
@@ -85,7 +84,6 @@ export default function ResetPasswordPage() {
             <MaterialIcon name="arrow_back" size="md" className="mr-2" />
             {t('auth.backToLogin')}
           </Link>
-          <LanguageSelector variant="pill" />
         </div>
 
         {/* Icon */}

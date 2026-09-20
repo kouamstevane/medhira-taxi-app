@@ -11,7 +11,6 @@ import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrat
 import { redirectWithFallback } from '@/utils/navigation';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 import Loading from './loading';
 
 const INITIAL_LOAD_TIMEOUT_MS = 13_000;
@@ -125,11 +124,6 @@ function HomeContent() {
 
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-background">
-      {/* Language Selector */}
-      <div className="absolute top-4 right-4 z-30">
-        <LanguageSelector variant="pill" />
-      </div>
-
       {/* Hero Area */}
       <div className="relative h-[397px] w-full flex flex-col items-center justify-center overflow-hidden">
         <div className="absolute inset-0 hero-gradient" />
