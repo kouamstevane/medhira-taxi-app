@@ -39,6 +39,18 @@ describe('SubmitRestaurantApplicationRequestSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  test('accepts valid merchant payload with merchantType and fulfillmentModes', () => {
+    const result = SubmitRestaurantApplicationRequestSchema.safeParse({
+      ...validPayload,
+      data: {
+        ...validPayload.data,
+        merchantType: 'pharmacy',
+        fulfillmentModes: ['delivery', 'pickup'],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
   test('accepts omitted optional image fields serialized as null by the callable transport', () => {
     const result = SubmitRestaurantApplicationRequestSchema.safeParse({
       ...validPayload,

@@ -31,9 +31,9 @@ export default function RoleSelectionPage() {
       id: 'restaurateur',
       title: t('auth.restaurantRole'),
       description: t('auth.restaurantRoleDescription'),
-      icon: 'restaurant',
+      icon: 'storefront',
       href: '/restaurant/register',
-      color: 'bg-green-500',
+      color: 'bg-emerald-600',
     },
   ] as const;
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import { Restaurant, RestaurantFilters } from '@/types/food-delivery';
+import { Restaurant, RestaurantFilters, MerchantType } from '@/types/food-delivery';
 import { RestaurantCard } from '@/components/food/RestaurantCard';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
@@ -20,9 +20,20 @@ export default function FoodHomePage() {
   const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [filters, setFilters] = useState<RestaurantFilters>({});
+  const [selectedMerchantType, setSelectedMerchantType] = useState<'all' | MerchantType>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isNetworkError, setIsNetworkError] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const MERCHANT_CATEGORIES: { id: 'all' | MerchantType; labelKey: string; icon: string }[] = [
+    { id: 'all', labelKey: 'food.merchantFilterAll', icon: 'apps' },
+    { id: 'restaurant', labelKey: 'food.merchantFilterRestaurant', icon: 'restaurant' },
+    { id: 'supermarket', labelKey: 'food.merchantFilterSupermarket', icon: 'local_grocery_store' },
+    { id: 'pharmacy', labelKey: 'food.merchantFilterPharmacy', icon: 'local_pharmacy' },
+    { id: 'bakery', labelKey: 'food.merchantFilterBakery', icon: 'bakery_dining' },
+    { id: 'retail', labelKey: 'food.merchantFilterRetail', icon: 'shopping_bag' },
+    { id: 'other', labelKey: 'food.merchantFilterOther', icon: 'storefront' },
+  ];
 
   const CUISINES = [
     { id: 'Tous', labelKey: 'food.cuisines.all' as const },
@@ -33,6 +44,19 @@ export default function FoodHomePage() {
     { id: 'Asiatique', labelKey: 'food.cuisines.asian' as const },
     { id: 'Pâtisserie', labelKey: 'food.cuisines.bakery' as const },
   ];
+
+  const handleMerchantTypeChange = (typeId: 'all' | MerchantType) => {
+    setSelectedMerchantType(typeId);
+    setFilters(prev => {
+      const next = { ...prev };
+      if (typeId === 'all') {
+        delete next.merchantType;
+      } else {
+        next.merchantType = typeId;
+      }
+      return next;
+    });
+  };
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -86,7 +110,7 @@ export default function FoodHomePage() {
     return () => {
       isMounted = false;
     };
-  }, [filters.cuisineType, filters.searchQuery, refreshKey]);
+  }, [filters.cuisineType, filters.merchantType, filters.searchQuery, refreshKey]);
 
   const loadMoreRestaurants = async () => {
     setIsNetworkError(false);
@@ -145,8 +169,8 @@ export default function FoodHomePage() {
 
         <div className="relative flex flex-wrap items-start justify-between gap-3 mb-6 pt-4">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">{t('food.title')}</h1>
-            <p className="text-slate-400 mt-1">{t('food.subtitle')}</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">{t('food.hubTitle')}</h1>
+            <p className="text-slate-400 mt-1">{t('food.hubSubtitle')}</p>
           </div>
           <Link
             href="/food/orders"
@@ -164,7 +188,7 @@ export default function FoodHomePage() {
           <MaterialIcon name="search" size="md" className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder={t('food.searchRestaurantOrDish')}
+            placeholder={t('food.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full glass-input rounded-2xl py-3.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-primary border-0"
@@ -173,32 +197,85 @@ export default function FoodHomePage() {
         </div>
       </div>
 
-      {/* Categories */}
+      {/* Merchant Activity Categories */}
       <div className="px-4 mt-6">
-        <div className="flex gap-2.5 overflow-x-auto pb-4 scrollbar-hide snap-x">
-          {CUISINES.map((cuisine) => {
-            const isSelected = filters.cuisineType === cuisine.id || (!filters.cuisineType && cuisine.id === 'Tous');
+        <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-hide snap-x">
+          {MERCHANT_CATEGORIES.map((cat) => {
+            const isSelected = selectedMerchantType === cat.id;
             return (
               <button
-                key={cuisine.id}
-                onClick={() => handleCuisineFilter(cuisine.id)}
-                className={`snap-start flex-shrink-0 px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
+                key={cat.id}
+                onClick={() => handleMerchantTypeChange(cat.id)}
+                className={`snap-start flex-shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition-all min-h-[44px] ${
                   isSelected
-                    ? 'bg-primary text-white scale-105'
+                    ? 'bg-primary text-white shadow-lg shadow-primary/25 scale-[1.02]'
                     : 'glass-card text-slate-300 border border-white/5 hover:bg-white/5'
                 }`}
               >
-                {t(cuisine.labelKey)}
+                <MaterialIcon name={cat.icon} size="sm" />
+                <span>
+                  {cat.id === 'all'
+                    ? t('food.merchantFilterAll')
+                    : cat.id === 'restaurant'
+                    ? t('food.merchantFilterRestaurant')
+                    : cat.id === 'supermarket'
+                    ? t('food.merchantFilterSupermarket')
+                    : cat.id === 'pharmacy'
+                    ? t('food.merchantFilterPharmacy')
+                    : cat.id === 'bakery'
+                    ? t('food.merchantFilterBakery')
+                    : cat.id === 'retail'
+                    ? t('food.merchantFilterRetail')
+                    : t('food.merchantFilterOther')}
+                </span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Restaurant List */}
-      <div className="px-4 mt-2">
+      {/* Cuisines Sub-filter (for restaurants or all) */}
+      {(selectedMerchantType === 'all' || selectedMerchantType === 'restaurant') && (
+        <div className="px-4 mt-3">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
+            {CUISINES.map((cuisine) => {
+              const isSelected = filters.cuisineType === cuisine.id || (!filters.cuisineType && cuisine.id === 'Tous');
+              return (
+                <button
+                  key={cuisine.id}
+                  onClick={() => handleCuisineFilter(cuisine.id)}
+                  className={`snap-start flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all min-h-[36px] ${
+                    isSelected
+                      ? 'bg-white/20 text-white border border-white/30'
+                      : 'bg-white/[0.03] text-slate-400 border border-white/5 hover:bg-white/10'
+                  }`}
+                >
+                  {t(cuisine.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Merchant List */}
+      <div className="px-4 mt-4">
         <div className="flex justify-between items-end mb-5">
-          <h2 className="text-xl font-bold text-white tracking-tight">{t('food.popularNearYou')}</h2>
+          <h2 className="text-xl font-bold text-white tracking-tight">
+            {selectedMerchantType === 'all'
+              ? t('food.allMerchants')
+              : selectedMerchantType === 'restaurant'
+              ? t('food.merchantFilterRestaurant')
+              : selectedMerchantType === 'supermarket'
+              ? t('food.merchantFilterSupermarket')
+              : selectedMerchantType === 'pharmacy'
+              ? t('food.merchantFilterPharmacy')
+              : selectedMerchantType === 'bakery'
+              ? t('food.merchantFilterBakery')
+              : selectedMerchantType === 'retail'
+              ? t('food.merchantFilterRetail')
+              : t('food.merchantFilterOther')}
+          </h2>
           <button className="flex items-center gap-1.5 text-sm text-primary font-bold bg-primary/10 px-3 py-1.5 rounded-lg">
             <MaterialIcon name="filter_list" size="sm" /> {t('common.filter')}
           </button>

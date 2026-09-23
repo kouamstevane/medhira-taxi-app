@@ -53,6 +53,8 @@ export default function CheckoutPage() {
   // Payment State
   const [paymentMethod, setPaymentMethod] = useState<'wallet' | 'card'>('wallet');
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const allowsPickup = restaurant?.fulfillmentModes?.includes('pickup') ?? false;
+  const [fulfillmentType, setFulfillmentType] = useState<'delivery' | 'pickup'>('delivery');
 
   const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
   const userAddress = getInitialCheckoutAddress(userData?.address, PROFILE_ADDRESS_PLACEHOLDER);
@@ -112,7 +114,7 @@ export default function CheckoutPage() {
   React.useEffect(() => {
     setServerOrder(null);
     setCardPayment(null);
-  }, [items, restaurant?.id, deliveryPreference, deliveryInstructions, deliveryAddress, paymentMethod]);
+  }, [items, restaurant?.id, deliveryPreference, deliveryInstructions, deliveryAddress, paymentMethod, fulfillmentType]);
 
   if (!submitted && (!user || !restaurant || items.length === 0)) {
     return null;
@@ -122,8 +124,11 @@ export default function CheckoutPage() {
   }
 
   const subtotal = getSubtotal();
-  const deliveryCost = serverOrder?.deliveryCost ?? FoodDeliveryService.calculateDeliveryCost(deliveryDistance, isWeekend);
-  const total = serverOrder?.totalOrderPrice ?? subtotal + deliveryCost;
+  const isPickup = fulfillmentType === 'pickup';
+  const deliveryCost = isPickup
+    ? 0
+    : serverOrder?.deliveryCost ?? FoodDeliveryService.calculateDeliveryCost(deliveryDistance, isWeekend);
+  const total = serverOrder?.totalOrderPrice ?? (isPickup ? subtotal : subtotal + deliveryCost);
   const displayedSubtotal = serverOrder?.basePrice ?? subtotal;
   const displayedDistance = serverOrder?.deliveryDistance ?? deliveryDistance;
   const isWalletInsufficient = paymentMethod === 'wallet' && walletBalance !== null && walletBalance < total;
@@ -149,7 +154,7 @@ export default function CheckoutPage() {
     if (loading) return;
     setErrorMsg(null);
 
-    if (!hasValidAddress) {
+    if (!isPickup && !hasValidAddress) {
       setErrorMsg('Renseignez une adresse de livraison valide (5 à 500 caractères).');
       return;
     }
@@ -213,12 +218,13 @@ export default function CheckoutPage() {
         userId: user!.uid,
         restaurantId: restaurant.id,
         orderItems,
-        deliveryDistance,
+        deliveryDistance: isPickup ? 0 : deliveryDistance,
         isWeekend,
-        deliveryAddress,
+        deliveryAddress: isPickup ? (restaurant.address || restaurant.name || 'Retrait en magasin') : deliveryAddress,
         deliveryPreference,
         deliveryInstructions,
         paymentMethod,
+        fulfillmentType,
       });
       setServerOrder(createdOrder);
       return;
@@ -274,58 +280,114 @@ export default function CheckoutPage() {
           </section>
         ) : (
           <>
-        {/* Delivery Address */}
-        <section className="glass-card p-5 rounded-2xl border border-white/5">
-          <h2 className="text-lg font-bold text-white mb-4">{t('food.deliveryAddress')}</h2>
-          <div className="space-y-4">
-            <AddressInput
-              label={t('food.homeAddress')}
-              value={checkoutAddress}
-              onChange={setCheckoutAddress}
-              onSelect={(suggestion) => setCheckoutAddress(suggestion.description)}
-              placeholder={t('food.enterAddressPlaceholder')}
-              autocompleteService={autocompleteService}
-              enableLocationButton
-              locationButtonLabel={t('food.useMyLocation')}
-            />
-
-            {userAddress && (
+        {/* Fulfillment Mode Selection (if merchant allows pickup) */}
+        {allowsPickup && (
+          <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              {t('food.fulfillmentOptionLabel')}
+            </h2>
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setCheckoutAddress(userAddress)}
-                aria-pressed={isProfileAddressSelected(checkoutAddress, userAddress)}
-                className={[
-                  'w-full rounded-xl border px-3 py-3 text-left transition hover:bg-primary/15',
-                  isProfileAddressSelected(checkoutAddress, userAddress)
-                    ? 'border-primary bg-primary/10'
-                    : 'border-white/10 bg-white/[0.03]',
-                ].join(' ')}
+                onClick={() => setFulfillmentType('delivery')}
+                className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all min-h-[44px] ${
+                  fulfillmentType === 'delivery'
+                    ? 'border-primary bg-primary/10 text-white'
+                    : 'border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20'
+                }`}
+                aria-pressed={fulfillmentType === 'delivery'}
               >
-                <span className="block text-xs font-medium uppercase tracking-wide text-primary">{t('food.savedAddress')}</span>
-                <span className="mt-1 block text-sm text-white">
-                  {isProfileAddressSelected(checkoutAddress, userAddress)
-                    ? t('food.profileAddressSelected')
-                    : t('food.useProfileAddress')}
-                </span>
-                <span className="mt-1 block text-xs text-slate-400">{userAddress}</span>
+                <div className="flex items-center gap-2">
+                  <MaterialIcon name="delivery_dining" size="sm" className={fulfillmentType === 'delivery' ? 'text-primary' : 'text-slate-400'} />
+                  <span className="text-xs font-bold text-white">{t('food.fulfillmentDelivery')}</span>
+                </div>
+                <span className="text-[11px] text-slate-400">{deliveryDistance.toFixed(1)} km</span>
               </button>
-            )}
 
-            {hasValidAddress ? (
-              <p className="text-slate-500 text-xs">
-                {distanceLoading
-                  ? t('food.calculatingDistance')
-                  : `${distanceIsEstimate ? '~' : ''} ${deliveryDistance.toFixed(1)} km · ~${durationMinutes} min`}
-              </p>
-            ) : (
-              <p className="text-destructive text-sm font-medium">{t('food.provideAddressToContinue')}</p>
-            )}
+              <button
+                type="button"
+                onClick={() => setFulfillmentType('pickup')}
+                className={`p-3.5 rounded-xl border text-left flex flex-col gap-1 transition-all min-h-[44px] ${
+                  fulfillmentType === 'pickup'
+                    ? 'border-primary bg-primary/10 text-white'
+                    : 'border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20'
+                }`}
+                aria-pressed={fulfillmentType === 'pickup'}
+              >
+                <div className="flex items-center gap-2">
+                  <MaterialIcon name="storefront" size="sm" className={fulfillmentType === 'pickup' ? 'text-primary' : 'text-slate-400'} />
+                  <span className="text-xs font-bold text-white">{t('food.fulfillmentPickup')}</span>
+                </div>
+                <span className="text-[11px] text-emerald-400 font-semibold">{t('food.noDeliveryFee')}</span>
+              </button>
+            </div>
+          </section>
+        )}
 
-            <button onClick={() => router.push(PROFILE_ADDRESS_EDIT_HREF)} className="text-primary text-sm font-semibold">
-              {t('food.editSavedAddress')}
-            </button>
-          </div>
-        </section>
+        {/* Delivery Address or In-Store Pickup Info */}
+        {fulfillmentType === 'pickup' ? (
+          <section className="glass-card p-5 rounded-2xl border border-white/5 space-y-2">
+            <div className="flex items-center gap-2 text-primary font-semibold text-sm">
+              <MaterialIcon name="storefront" size="md" />
+              <span>{t('food.pickupFree')}</span>
+            </div>
+            <p className="text-xs text-slate-300">
+              {t('food.pickupStoreAddress', { address: restaurant.address || restaurant.name })}
+            </p>
+          </section>
+        ) : (
+          <section className="glass-card p-5 rounded-2xl border border-white/5">
+            <h2 className="text-lg font-bold text-white mb-4">{t('food.deliveryAddress')}</h2>
+            <div className="space-y-4">
+              <AddressInput
+                label={t('food.homeAddress')}
+                value={checkoutAddress}
+                onChange={setCheckoutAddress}
+                onSelect={(suggestion) => setCheckoutAddress(suggestion.description)}
+                placeholder={t('food.enterAddressPlaceholder')}
+                autocompleteService={autocompleteService}
+                enableLocationButton
+                locationButtonLabel={t('food.useMyLocation')}
+              />
+
+              {userAddress && (
+                <button
+                  type="button"
+                  onClick={() => setCheckoutAddress(userAddress)}
+                  aria-pressed={isProfileAddressSelected(checkoutAddress, userAddress)}
+                  className={[
+                    'w-full rounded-xl border px-3 py-3 text-left transition hover:bg-primary/15',
+                    isProfileAddressSelected(checkoutAddress, userAddress)
+                      ? 'border-primary bg-primary/10'
+                      : 'border-white/10 bg-white/[0.03]',
+                  ].join(' ')}
+                >
+                  <span className="block text-xs font-medium uppercase tracking-wide text-primary">{t('food.savedAddress')}</span>
+                  <span className="mt-1 block text-sm text-white">
+                    {isProfileAddressSelected(checkoutAddress, userAddress)
+                      ? t('food.profileAddressSelected')
+                      : t('food.useProfileAddress')}
+                  </span>
+                  <span className="mt-1 block text-xs text-slate-400">{userAddress}</span>
+                </button>
+              )}
+
+              {hasValidAddress ? (
+                <p className="text-slate-500 text-xs">
+                  {distanceLoading
+                    ? t('food.calculatingDistance')
+                    : `${distanceIsEstimate ? '~' : ''} ${deliveryDistance.toFixed(1)} km · ~${durationMinutes} min`}
+                </p>
+              ) : (
+                <p className="text-destructive text-sm font-medium">{t('food.provideAddressToContinue')}</p>
+              )}
+
+              <button onClick={() => router.push(PROFILE_ADDRESS_EDIT_HREF)} className="text-primary text-sm font-semibold">
+                {t('food.editSavedAddress')}
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* Order Summary */}
         <section className="glass-card p-5 rounded-2xl border border-white/5">

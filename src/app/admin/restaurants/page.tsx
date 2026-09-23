@@ -8,8 +8,9 @@ import { Timestamp, collection, query, where, orderBy, limit, getDocs } from 'fi
 import { httpsCallable } from 'firebase/functions';
 import { db, auth, functions } from '@/config/firebase';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
-import { Restaurant } from '@/types/food-delivery';
+import { MerchantType, Restaurant } from '@/types/food-delivery';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { MERCHANT_TYPES_CONFIG, getMerchantTypeOption } from '@/utils/restaurant-constants';
 import AdminHeader from '@/components/admin/AdminHeader';
 import { BottomNav, adminNavItems } from '@/components/ui/BottomNav';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
@@ -41,6 +42,7 @@ export default function AdminRestaurantsPage() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending_approval' | 'approved' | 'rejected' | 'all'>('pending_approval');
+  const [merchantTypeFilter, setMerchantTypeFilter] = useState<MerchantType | 'all'>('all');
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [commissionRateDraft, setCommissionRateDraft] = useState('');
@@ -201,6 +203,11 @@ export default function AdminRestaurantsPage() {
 
   if (isAdmin === false) return null;
 
+  const filteredRestaurants = restaurants.filter((r) => {
+    if (merchantTypeFilter === 'all') return true;
+    return (r.merchantType || 'restaurant') === merchantTypeFilter;
+  });
+
   return (
     <div className="min-h-screen bg-background text-white">
       <AdminHeader
@@ -209,7 +216,7 @@ export default function AdminRestaurantsPage() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div role="tablist" aria-label={t('adminTablistLabel')} className="mb-6 grid grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-[#151a26] p-1">
+        <div role="tablist" aria-label={t('adminTablistLabel')} className="mb-4 grid grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-[#151a26] p-1">
           {([
             ['pending_approval', 'schedule', t('adminTabPending')],
             ['approved', 'check_circle', t('adminTabApproved')],
@@ -230,6 +237,40 @@ export default function AdminRestaurantsPage() {
           ))}
         </div>
 
+        {/* Merchant Type Filters */}
+        <div className="mb-6 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setMerchantTypeFilter('all')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition ${
+              merchantTypeFilter === 'all'
+                ? 'bg-primary text-black font-bold shadow-sm'
+                : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+            }`}
+          >
+            <MaterialIcon name="apps" size="sm" />
+            {t('adminAllMerchantTypes')}
+          </button>
+          {MERCHANT_TYPES_CONFIG.map((option) => {
+            const isSelected = merchantTypeFilter === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setMerchantTypeFilter(option.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition ${
+                  isSelected
+                    ? 'bg-primary text-black font-bold shadow-sm'
+                    : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <MaterialIcon name={option.icon} size="sm" />
+                {t(`merchantTypes.${option.id}` as never)}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Error Message */}
         {error && (
           <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl flex items-center gap-3 mb-6 animate-in fade-in slide-in-from-top-2">
@@ -242,7 +283,7 @@ export default function AdminRestaurantsPage() {
         <div className="glass-card border border-white/5 rounded-3xl overflow-hidden">
           {loading ? (
             <RestaurantSkeleton />
-          ) : restaurants.length === 0 ? (
+          ) : filteredRestaurants.length === 0 ? (
             <div className="py-24 text-center">
               <div className="inline-flex p-4 rounded-full bg-white/5 mb-4 text-slate-500">
                 <MaterialIcon name="store" size="xl" />
@@ -257,7 +298,7 @@ export default function AdminRestaurantsPage() {
               <table className="min-w-full divide-y divide-white/5">
                 <thead className="bg-white/[0.03]">
                   <tr>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThRestaurant')}</th>
+                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThMerchant')}</th>
                     <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThTypeBudget')}</th>
                     <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThLocation')}</th>
                     <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThStatus')}</th>
@@ -266,7 +307,11 @@ export default function AdminRestaurantsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {restaurants.map((restaurant) => (
+                  {filteredRestaurants.map((restaurant) => {
+                    const merchantType = restaurant.merchantType || 'restaurant';
+                    const typeConfig = getMerchantTypeOption(merchantType);
+
+                    return (
                     <tr key={restaurant.id} className="group hover:bg-white/5 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-4">
@@ -276,7 +321,7 @@ export default function AdminRestaurantsPage() {
                             ) : restaurant.imageUrl ? (
                               <Image src={restaurant.imageUrl} alt={restaurant.name} fill className="object-cover" />
                             ) : (
-                              <MaterialIcon name="store" size="lg" />
+                              <MaterialIcon name={typeConfig.icon} size="lg" />
                             )}
                           </div>
                           <div>
@@ -286,9 +331,15 @@ export default function AdminRestaurantsPage() {
                             >
                               {restaurant.name}
                             </div>
-                            <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                              <MaterialIcon name="verified_user" size="sm" className="text-emerald-500" />
-                              ID: {restaurant.ownerId.slice(0, 8)}...
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-slate-300 font-medium inline-flex items-center gap-1">
+                                <MaterialIcon name={typeConfig.icon} size="sm" />
+                                {t(`merchantTypes.${merchantType}` as never)}
+                              </span>
+                              <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                <MaterialIcon name="verified_user" size="sm" className="text-emerald-500" />
+                                ID: {restaurant.ownerId.slice(0, 8)}...
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -325,7 +376,8 @@ export default function AdminRestaurantsPage() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -346,7 +398,7 @@ export default function AdminRestaurantsPage() {
             <div className="sticky top-0 z-50 bg-[#0d0d0d]/80 backdrop-blur-xl border-b border-white/5 p-6 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="h-12 w-12 rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] flex items-center justify-center text-black">
-                  <MaterialIcon name="store" size="lg" />
+                  <MaterialIcon name={getMerchantTypeOption(selectedRestaurant.merchantType).icon} size="lg" />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold text-white">{selectedRestaurant.name}</h2>
@@ -386,6 +438,24 @@ export default function AdminRestaurantsPage() {
                     <MaterialIcon name="store" size="sm" /> {t('adminIdentity')}
                   </h3>
                   <div className="space-y-3 bg-white/[0.02] p-5 rounded-2xl border border-white/5">
+                    <div>
+                      <span className="block text-[10px] text-slate-500 uppercase mb-1">{t('adminMerchantType')}</span>
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 bg-primary/10 border border-primary/20 text-primary rounded-lg">
+                        <MaterialIcon name={getMerchantTypeOption(selectedRestaurant.merchantType).icon} size="sm" />
+                        {t(`merchantTypes.${selectedRestaurant.merchantType || 'restaurant'}` as never)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] text-slate-500 uppercase mb-1">{t('adminFulfillmentModes')}</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(selectedRestaurant.fulfillmentModes || ['delivery', 'pickup']).map(mode => (
+                          <span key={mode} className="text-xs font-medium px-2 py-0.5 bg-white/5 border border-white/10 rounded-lg text-slate-300 inline-flex items-center gap-1">
+                            <MaterialIcon name={mode === 'delivery' ? 'moped' : 'storefront'} size="sm" />
+                            {mode === 'delivery' ? t('deliveryModeDelivery') : t('deliveryModePickup')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                     <div>
                       <span className="block text-[10px] text-slate-500 uppercase mb-1">{t('adminCuisines')}</span>
                       <div className="flex flex-wrap gap-1">

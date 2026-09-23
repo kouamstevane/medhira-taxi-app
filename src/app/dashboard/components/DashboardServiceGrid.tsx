@@ -36,7 +36,7 @@ export function DashboardServiceGrid() {
       route: '/personal-driver',
     },
     {
-      icon: 'lunch_dining',
+      icon: 'storefront',
       label: t('quickActions.food'),
       sub: t('serviceFoodDesc'),
       subColor: 'text-slate-400',

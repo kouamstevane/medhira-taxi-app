@@ -6,7 +6,7 @@ import { InputField } from '@/components/forms/InputField';
 import { TextAreaField } from '@/components/forms/TextAreaField';
 import { cn } from '@/lib/utils';
 import { driverPrimaryButtonClassName, driverSecondaryButtonClassName } from '@/app/driver/register/components/driverOnboardingStyles';
-import { CUISINE_TYPES } from '@/utils/restaurant-constants';
+import { CUISINE_TYPES, MERCHANT_TYPES_CONFIG, type MerchantType } from '@/utils/restaurant-constants';
 import type { Step3Data } from '@/hooks/useRestaurantRegistration';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
@@ -27,6 +27,14 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
   const { autocompleteService } = useGoogleMaps();
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
+  const [merchantType, setMerchantType] = useState<MerchantType>(
+    initialData?.merchantType || 'restaurant'
+  );
+  const [fulfillmentModes, setFulfillmentModes] = useState<('delivery' | 'pickup')[]>(
+    initialData?.fulfillmentModes && initialData.fulfillmentModes.length > 0
+      ? initialData.fulfillmentModes
+      : ['delivery', 'pickup']
+  );
   const [cuisineType, setCuisineType] = useState<string[]>(initialData?.cuisineType || []);
   const [address, setAddress] = useState(initialData?.address || '');
   const [phone, setPhone] = useState(initialData?.phone || '');
@@ -52,6 +60,34 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
     setCuisineType((prev) =>
       prev.includes(cuisine) ? prev.filter((c) => c !== cuisine) : [...prev, cuisine]
     );
+  };
+
+  const toggleFulfillmentMode = (mode: 'delivery' | 'pickup') => {
+    setFulfillmentModes((prev) => {
+      if (prev.includes(mode)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((m) => m !== mode);
+      }
+      return [...prev, mode];
+    });
+  };
+
+  const getMerchantTypeLabel = (id: MerchantType): string => {
+    switch (id) {
+      case 'restaurant':
+        return t('merchantTypes.restaurant');
+      case 'supermarket':
+        return t('merchantTypes.supermarket');
+      case 'pharmacy':
+        return t('merchantTypes.pharmacy');
+      case 'bakery':
+        return t('merchantTypes.bakery');
+      case 'retail':
+        return t('merchantTypes.retail');
+      case 'other':
+      default:
+        return t('merchantTypes.other');
+    }
   };
 
   const handleAddressSelect = useCallback((suggestion: PlaceSuggestion) => {
@@ -89,9 +125,19 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
     e.preventDefault();
     setError(null);
 
-    if (!name.trim()) { setError(t('restaurantNameRequired')); return; }
+    if (!name.trim()) {
+      setError(merchantType === 'restaurant' ? t('restaurantNameRequired') : t('businessNameRequired'));
+      return;
+    }
     if (!description.trim() || description.trim().length < 10) { setError(t('descMinLengthError')); return; }
-    if (cuisineType.length === 0) { setError(t('atLeastOneCuisineError')); return; }
+    if (cuisineType.length === 0) {
+      setError(merchantType === 'restaurant' ? t('atLeastOneCuisineError') : t('atLeastOneCategoryError'));
+      return;
+    }
+    if (fulfillmentModes.length === 0) {
+      setError(t('atLeastOneFulfillmentError'));
+      return;
+    }
     if (!address.trim()) { setError(t('addressRequired')); return; }
     if (!phone.trim()) { setError(t('phoneRequired')); return; }
     if (!email.trim()) { setError(t('restaurantEmailRequired')); return; }
@@ -106,6 +152,8 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
     onNext({
       name: name.trim(),
       description: description.trim(),
+      merchantType,
+      fulfillmentModes,
       cuisineType,
       address: address.trim(),
       phone: phone.trim(),
@@ -139,12 +187,115 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          <InputField id="restName" type="text" label={t('restaurantName')} aria-label={t('restaurantName')} value={name} onChange={(e) => setName(e.target.value)} placeholder="Le Bistrot Parisien" required aria-required="true" />
+          {/* Merchant Type Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              {t('merchantTypeLabel')}
+            </label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {MERCHANT_TYPES_CONFIG.map((typeOpt) => {
+                const isSelected = merchantType === typeOpt.id;
+                return (
+                  <button
+                    key={typeOpt.id}
+                    type="button"
+                    onClick={() => setMerchantType(typeOpt.id)}
+                    className={cn(
+                      'flex items-center gap-2 p-2.5 rounded-xl border text-left text-xs font-medium transition-all min-h-[44px]',
+                      isSelected
+                        ? 'border-primary bg-primary/10 text-white shadow-sm'
+                        : 'border-white/10 bg-white/[0.03] text-gray-400 hover:border-white/20 hover:text-white'
+                    )}
+                    aria-pressed={isSelected}
+                  >
+                    <MaterialIcon
+                      name={typeOpt.icon}
+                      size="sm"
+                      className={isSelected ? 'text-primary' : 'text-gray-400'}
+                    />
+                    <span className="truncate">
+                      {getMerchantTypeLabel(typeOpt.id)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-          <TextAreaField id="restDesc" label={t('description')} aria-label={t('description')} value={description} onChange={(e) => setDescription(e.target.value)} className="min-h-[100px]" placeholder={t('descPlaceholder')} required aria-required="true" />
+          {/* Fulfillment Modes Selection */}
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400">
+              {t('fulfillmentModesLabel')}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => toggleFulfillmentMode('delivery')}
+                className={cn(
+                  'flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all min-h-[44px]',
+                  fulfillmentModes.includes('delivery')
+                    ? 'border-primary bg-primary/15 text-white'
+                    : 'border-white/10 bg-white/[0.02] text-gray-400 hover:border-white/20'
+                )}
+                aria-pressed={fulfillmentModes.includes('delivery')}
+              >
+                <MaterialIcon
+                  name="delivery_dining"
+                  size="sm"
+                  className={fulfillmentModes.includes('delivery') ? 'text-primary' : 'text-gray-400'}
+                />
+                <span className="truncate">{t('deliveryModeDelivery')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleFulfillmentMode('pickup')}
+                className={cn(
+                  'flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all min-h-[44px]',
+                  fulfillmentModes.includes('pickup')
+                    ? 'border-primary bg-primary/15 text-white'
+                    : 'border-white/10 bg-white/[0.02] text-gray-400 hover:border-white/20'
+                )}
+                aria-pressed={fulfillmentModes.includes('pickup')}
+              >
+                <MaterialIcon
+                  name="storefront"
+                  size="sm"
+                  className={fulfillmentModes.includes('pickup') ? 'text-primary' : 'text-gray-400'}
+                />
+                <span className="truncate">{t('deliveryModePickup')}</span>
+              </button>
+            </div>
+          </div>
+
+          <InputField
+            id="restName"
+            type="text"
+            label={merchantType === 'restaurant' ? t('restaurantName') : t('businessName')}
+            aria-label={merchantType === 'restaurant' ? t('restaurantName') : t('businessName')}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={merchantType === 'restaurant' ? 'Le Bistrot Parisien' : 'Supermarché Express'}
+            required
+            aria-required="true"
+          />
+
+          <TextAreaField
+            id="restDesc"
+            label={t('description')}
+            aria-label={t('description')}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="min-h-[100px]"
+            placeholder={t('descPlaceholder')}
+            required
+            aria-required="true"
+          />
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">{t('cuisineTypes')}</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              {merchantType === 'restaurant' ? t('cuisineTypes') : t('businessCategories')}
+            </label>
             <div className="flex flex-wrap gap-2">
               {CUISINE_TYPES.map((cuisine) => (
                 <button

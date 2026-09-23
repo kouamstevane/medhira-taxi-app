@@ -137,22 +137,32 @@ export const createFoodOrder = onCall(
       }
     }
 
-    const serverDistanceKm = await calculateServerDistanceKm(
-      restaurantLocation,
-      payload.deliveryLocation ?? payload.deliveryAddress,
-    );
-    const deliveryDistance = calculateRoadDistanceKm({
-      serverDistanceKm,
-    });
+    const isPickup = payload.fulfillmentType === 'pickup';
+    const serverDistanceKm = isPickup
+      ? 0
+      : await calculateServerDistanceKm(
+          restaurantLocation,
+          payload.deliveryLocation ?? payload.deliveryAddress,
+        );
+    const deliveryDistance = isPickup
+      ? 0
+      : calculateRoadDistanceKm({
+          serverDistanceKm,
+        });
 
     const totals = calculateVerifiedFoodOrderTotals(
       {
         orderItems: payload.orderItems,
         deliveryDistance,
-        isWeekend: payload.isWeekend,
+        isWeekend: isPickup ? false : payload.isWeekend,
       },
       menuItems,
     );
+
+    if (isPickup) {
+      totals.deliveryCost = 0;
+      totals.totalOrderPrice = totals.basePrice;
+    }
 
     const user = userSnap.data()!;
     const customerName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.displayName || '';
@@ -163,6 +173,7 @@ export const createFoodOrder = onCall(
       userId: uid,
       restaurantId: payload.restaurantId,
       restaurantOwnerId: restaurant.ownerId,
+      fulfillmentType: isPickup ? 'pickup' : 'delivery',
       orderItems: totals.orderItems,
       deliveryDistance,
       isWeekend: payload.isWeekend,

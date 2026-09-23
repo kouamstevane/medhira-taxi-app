@@ -42,13 +42,14 @@ const customJestConfig = {
     '**/?(*.)+(spec|test).[jt]s?(x)',
   ],
 
-  modulePathIgnorePatterns: ['<rootDir>/.worktrees/'],
+  modulePathIgnorePatterns: ['<rootDir>/.worktrees/', '<rootDir>/.kilo/'],
 
   // Fichiers à ignorer
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/.next/',
     '<rootDir>/.worktrees/',
+    '<rootDir>/.kilo/',
 
     // Tests Playwright — doivent être lancés via `npx playwright test`
     ignorePath('e2e'),

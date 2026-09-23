@@ -200,6 +200,7 @@ export const CreateFoodOrderRequestSchema = z.object({
   clientNeighbourhood: z.string().max(120).optional(),
   cityId: z.string().min(1).max(64).optional(),
   paymentMethod: z.enum(['wallet', 'card']).optional(),
+  fulfillmentType: z.enum(['delivery', 'pickup']).optional(),
 }).strict();
 
 export type CreateFoodOrderRequestInput = z.infer<typeof CreateFoodOrderRequestSchema>;
@@ -235,6 +236,16 @@ export const RestaurantApplicationDataSchema = z.object({
   phone: z.string().min(8).max(32),
   email: z.string().email().max(254),
   cuisineType: z.array(z.string().min(1)).min(1).max(10),
+  merchantType: z.enum([
+    'restaurant',
+    'supermarket',
+    'pharmacy',
+    'grocery',
+    'bakery',
+    'retail',
+    'other',
+  ]).optional(),
+  fulfillmentModes: z.array(z.enum(['delivery', 'pickup'])).optional(),
   avgPricePerPerson: z.number().nonnegative().nullish(),
   commissionRate: z.number().min(0).max(100).optional(),
   imageUrl: z.string().max(1024).nullish(),

@@ -44,6 +44,8 @@ export interface Step2Data {
 export interface Step3Data {
   name: string;
   description: string;
+  merchantType?: 'restaurant' | 'supermarket' | 'pharmacy' | 'grocery' | 'bakery' | 'retail' | 'other';
+  fulfillmentModes?: ('delivery' | 'pickup')[];
   cuisineType: string[];
   address: string;
   phone: string;
@@ -293,6 +295,8 @@ export function useRestaurantRegistration() {
       const payload: Record<string, unknown> = {
         name: step3Data.name,
         description: step3Data.description,
+        merchantType: step3Data.merchantType || 'restaurant',
+        fulfillmentModes: step3Data.fulfillmentModes || ['delivery', 'pickup'],
         address: step3Data.address,
         phone: step3Data.phone,
         email: step3Data.email,

@@ -21,11 +21,20 @@ import { Timestamp } from 'firebase/firestore';
  * - suspended : Suspendu par l'admin
  * - rejected : Rejeté par l'admin
  */
+export type MerchantType =
+  | 'restaurant'
+  | 'supermarket'
+  | 'pharmacy'
+  | 'grocery'
+  | 'bakery'
+  | 'retail'
+  | 'other';
+
 export type RestaurantStatus = 'pending_approval' | 'approved' | 'suspended' | 'rejected';
 
 /**
- * Interface Restaurant
- * Représente un établissement partenaire sur la plateforme.
+ * Interface Restaurant / Merchant
+ * Représente un établissement partenaire sur la plateforme (Restaurant, Supermarché, Pharmacie, etc.).
  */
 export interface Restaurant {
   id: string;
@@ -38,7 +47,9 @@ export interface Restaurant {
   imageUrl?: string;
   logoUrl?: string;
   coverImageUrl?: string;
-  cuisineType: string[]; // Ex: ["Italienne", "Indienne"] (Règle 9)
+  merchantType?: MerchantType;
+  fulfillmentModes?: ('delivery' | 'pickup')[];
+  cuisineType: string[]; // Ex: ["Italienne", "Indienne"] ou catégories produits (Règle 9)
   avgPricePerPerson: number; // Estimation du coût moyen (Règle 10)
   commissionRate: number; // Pourcentage reversé à la plateforme
   status: RestaurantStatus;
@@ -53,7 +64,7 @@ export interface Restaurant {
     lng: number;
   };
   /**
-   * Statut Stripe Connect du restaurateur.
+   * Statut Stripe Connect du restaurateur / commerçant.
    * - 'not_started' : aucun account créé
    * - 'in_progress' : account créé, onboarding en cours (charges_enabled = false)
    * - 'active' : charges_enabled && payouts_enabled
@@ -68,6 +79,8 @@ export interface Restaurant {
   approvedAt?: Timestamp;
   rejectionReason?: string;
 }
+
+export type Merchant = Restaurant;
 
 // ============================================================================
 // MENU ITEMS (sous-collection de restaurants)
@@ -357,6 +370,7 @@ export interface FoodOrder {
   // Champs requis par le flux livraison
   cityId?: string;
   deliveryPreference?: 'leave_at_door' | 'meet_outside' | 'meet_at_door';
+  fulfillmentType?: 'delivery' | 'pickup';
   pinCode?: string;
   orderNumber?: string;
   restaurantAddress?: { address: string; lat: number; lng: number };
@@ -364,6 +378,9 @@ export interface FoodOrder {
   clientNeighbourhood?: string;
   deliveryInstructions?: string;
 }
+
+export type MerchantProduct = MenuItem;
+export type MerchantOrder = FoodOrder;
 
 // ============================================================================
 // AVIS ET ÉVALUATIONS
@@ -406,6 +423,7 @@ export interface DeliveryReview {
  */
 export interface RestaurantFilters {
   cuisineType?: string;
+  merchantType?: MerchantType;
   maxAvgPricePerPerson?: number;
   minRating?: number;
   searchQuery?: string;

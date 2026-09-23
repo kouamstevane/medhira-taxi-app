@@ -7,7 +7,7 @@ export const client = {
   quickActions: {
     taxi: 'Taxi Ride',
     colis: 'Send Parcel',
-    food: 'Order Food',
+    food: 'Shops & Food',
     personalDriver: 'Personal Driver',
   },
   activeRides: 'Active rides',
@@ -102,7 +102,7 @@ export const client = {
   serviceTaxiDesc: 'Immediate or scheduled departure',
   servicePersonalDriverDesc: 'Monthly subscription',
   servicePersonalDriverDetail: 'A dedicated driver for your recurring trips.',
-  serviceFoodDesc: 'Restaurants',
+  serviceFoodDesc: 'Restaurants, shops, pharmacy...',
   serviceColisDesc: 'Express delivery',
   serviceFavorites: 'Favorites',
   serviceFavoritesDesc: 'Saved places',

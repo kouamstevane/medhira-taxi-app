@@ -287,6 +287,10 @@ export const getApprovedRestaurants = async (
     restaurants = restaurants.filter((r) => r.rating >= (filters.minRating ?? 0));
   }
 
+  if (filters?.merchantType) {
+    restaurants = restaurants.filter((r) => (r.merchantType ?? 'restaurant') === filters.merchantType);
+  }
+
   if (filters?.searchQuery) {
     const search = filters.searchQuery.toLowerCase();
     restaurants = restaurants.filter(
@@ -906,6 +910,7 @@ const CreateFoodOrderSchema = z.object({
     lat: z.number(),
     lng: z.number()
   }).optional(),
+  fulfillmentType: z.enum(['delivery', 'pickup']).optional(),
 });
 
 export interface CreateFoodOrderResult {
@@ -946,6 +951,7 @@ export const createFoodOrder = async (
     clientNeighbourhood?: string;
     cityId?: string;
     paymentMethod?: 'wallet' | 'card';
+    fulfillmentType?: 'delivery' | 'pickup';
   }
 ): Promise<CreateFoodOrderResult> => {
   try {
@@ -971,6 +977,7 @@ export const createFoodOrder = async (
         clientNeighbourhood?: string;
         cityId?: string;
         paymentMethod?: 'wallet' | 'card';
+        fulfillmentType?: 'delivery' | 'pickup';
       },
       CreateFoodOrderResult
     >(functions, 'createFoodOrder');
@@ -988,12 +995,14 @@ export const createFoodOrder = async (
       clientNeighbourhood?: string;
       cityId?: string;
       paymentMethod: 'wallet' | 'card';
+      fulfillmentType?: 'delivery' | 'pickup';
     } = {
       restaurantId: orderData.restaurantId,
       orderItems: orderData.orderItems,
       isWeekend: orderData.isWeekend,
       deliveryAddress: orderData.deliveryAddress.trim(),
       paymentMethod: selectedPaymentMethod,
+      fulfillmentType: orderData.fulfillmentType || 'delivery',
     };
 
     if (orderData.deliveryLocation) payload.deliveryLocation = orderData.deliveryLocation;

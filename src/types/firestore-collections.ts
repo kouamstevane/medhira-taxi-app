@@ -584,6 +584,8 @@ export interface RestaurantCollection {
   avgPricePerPerson: number;
   commissionRate: number;
   status: 'pending_approval' | 'approved' | 'suspended' | 'rejected';
+  merchantType?: 'restaurant' | 'supermarket' | 'pharmacy' | 'grocery' | 'bakery' | 'retail' | 'other';
+  fulfillmentModes?: ('delivery' | 'pickup')[];
   rating: number;
   totalReviews: number;
   createdAt: Date;
@@ -686,6 +688,7 @@ export interface FoodOrderCollection {
   totalOrderPrice: number;
   status: 'pending_payment' | 'pending' | 'confirmed' | 'accepted' | 'preparing' | 'ready' | 'driver_heading_to_restaurant' | 'driver_arrived_restaurant' | 'picked_up' | 'out_for_delivery' | 'arriving' | 'delivering' | 'delivered' | 'no_driver_available' | 'cancelled' | 'cancelled_by_restaurant';
   pickupCode: string;
+  fulfillmentType?: 'delivery' | 'pickup';
   paymentValidated: boolean;
   createdAt: Date;
   updatedAt: Date;

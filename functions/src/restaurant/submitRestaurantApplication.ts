@@ -93,6 +93,8 @@ export const submitRestaurantApplication = onCall(
 
         const restaurantDoc: Record<string, unknown> = {
           ...restaurantData,
+          merchantType: restaurantData.merchantType ?? 'restaurant',
+          fulfillmentModes: restaurantData.fulfillmentModes ?? ['delivery', 'pickup'],
           commissionRate: restaurantData.commissionRate ?? DEFAULT_RESTAURANT_COMMISSION_RATE,
           ownerId: uid,
           ownerEmail: userData.email || null,

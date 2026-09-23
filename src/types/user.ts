@@ -37,6 +37,8 @@ export type AuthStatus = 'loading' | 'authenticated' | 'degraded' | 'unauthentic
 export interface RestaurantDraftData {
   name?: string;
   description?: string;
+  merchantType?: 'restaurant' | 'supermarket' | 'pharmacy' | 'grocery' | 'bakery' | 'retail' | 'other';
+  fulfillmentModes?: ('delivery' | 'pickup')[];
   cuisineTypes?: string[];
   address?: string;
   phoneNumber?: string;
@@ -45,6 +47,9 @@ export interface RestaurantDraftData {
   logoUrl?: string;
   coverImageUrl?: string;
 }
+
+export type MerchantDraftData = RestaurantDraftData;
+export type RoleMerchant = RoleRestaurant;
 
 export interface UserData {
   uid: string;

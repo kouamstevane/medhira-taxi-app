@@ -15,6 +15,17 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) =>
   const { t } = useTranslation();
   const isOpen = isRestaurantOpenAt(restaurant, new Date());
   const coverImageUrl = restaurant.coverImageUrl || restaurant.imageUrl;
+  const merchantType = restaurant.merchantType || 'restaurant';
+  const allowsPickup = restaurant.fulfillmentModes?.includes('pickup');
+  const merchantFallbackIcon = merchantType === 'pharmacy'
+    ? 'local_pharmacy'
+    : merchantType === 'supermarket'
+    ? 'local_grocery_store'
+    : merchantType === 'bakery'
+    ? 'bakery_dining'
+    : merchantType === 'retail'
+    ? 'shopping_bag'
+    : 'restaurant';
 
   return (
     <Link href={`/food/restaurant?id=${encodeURIComponent(restaurant.id)}`} className="block">
@@ -30,7 +41,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) =>
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-white/5 text-slate-500">
-              <MaterialIcon name="restaurant" size="xl" />
+              <MaterialIcon name={merchantFallbackIcon} size="xl" />
             </div>
           )}
 
@@ -44,10 +55,20 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) =>
             </div>
           )}
 
+          {/* Badge Click & Collect */}
+          {allowsPickup && (
+            <div className="absolute bottom-3 left-3 bg-primary/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+              <MaterialIcon name="storefront" size="sm" />
+              <span>{t('food.pickupBadge')}</span>
+            </div>
+          )}
+
           {/* Badge Prix */}
-          <div className="absolute top-3 right-3 bg-black/50 backdrop-blur text-white text-xs font-semibold px-2 py-1 rounded-full border border-white/10">
-            {restaurant.avgPricePerPerson} {CURRENCY_CODE} / {t('food.perPerson')}
-          </div>
+          {restaurant.avgPricePerPerson != null && restaurant.avgPricePerPerson > 0 && (
+            <div className="absolute top-3 right-3 bg-black/50 backdrop-blur text-white text-xs font-semibold px-2 py-1 rounded-full border border-white/10">
+              {restaurant.avgPricePerPerson} {CURRENCY_CODE} / {t('food.perPerson')}
+            </div>
+          )}
         </div>
 
         <div className="p-4">
