@@ -125,7 +125,7 @@ function HomeContent() {
   return (
     <div className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-background">
       {/* Hero Area */}
-      <div className="relative h-[397px] w-full flex flex-col items-center justify-center overflow-hidden">
+      <div className="relative h-[300px] sm:h-[397px] w-full flex flex-col items-center justify-center overflow-hidden">
         <div className="absolute inset-0 hero-gradient" />
         {/* Decorative glow */}
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-40">
@@ -152,7 +152,7 @@ function HomeContent() {
         </div>
 
         {/* Service Chips */}
-        <div className="flex justify-center gap-3 py-6">
+        <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 py-4 sm:py-6 max-w-full">
           {[
             { emoji: '🚕', label: t('client.serviceTaxi') },
             { emoji: '🍔', label: t('client.serviceFood') },
@@ -160,10 +160,10 @@ function HomeContent() {
           ].map((service) => (
             <div
               key={service.label}
-              className="flex h-10 items-center justify-center gap-2 rounded-full glass-card px-5 transition-transform active:scale-95"
+              className="flex h-10 items-center justify-center gap-2 rounded-full glass-card px-4 sm:px-5 transition-transform active:scale-95 shrink-0 whitespace-nowrap"
             >
-              <span className="text-primary text-sm">{service.emoji}</span>
-              <p className="text-primary text-sm font-semibold">{service.label}</p>
+              <span className="text-sm shrink-0">{service.emoji}</span>
+              <p className="text-primary text-sm font-semibold whitespace-nowrap">{service.label}</p>
             </div>
           ))}
         </div>

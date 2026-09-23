@@ -1,9 +1,9 @@
 export const client = {
   dashboardTitle: 'Bienvenue sur Medjira',
   dashboardSubtitle: 'Où souhaitez-vous aller aujourd\'hui ?',
-  serviceTaxi: 'Commander un Taxi',
-  serviceFood: 'Livraison de Repas',
-  serviceColis: 'Livraison de Colis',
+  serviceTaxi: 'Taxi',
+  serviceFood: 'Repas',
+  serviceColis: 'Colis',
   quickActions: {
     taxi: 'Taxi VTC',
     colis: 'Envoi de Colis',
