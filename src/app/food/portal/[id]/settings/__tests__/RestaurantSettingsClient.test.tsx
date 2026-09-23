@@ -10,6 +10,7 @@ const mockUpdateRestaurantOpeningHours = FoodDeliveryService.updateRestaurantOpe
 const mockDeleteRestaurant = FoodDeliveryService.deleteRestaurant as jest.Mock;
 const mockShowError = jest.fn();
 const mockShowSuccess = jest.fn();
+const mockSignOut = jest.fn().mockResolvedValue(undefined);
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
@@ -24,6 +25,12 @@ jest.mock('firebase/auth', () => ({
 }));
 
 jest.mock('@/config/firebase', () => ({ auth: { currentUser: null }, db: {} }));
+
+jest.mock('@/services', () => ({
+  AuthService: {
+    signOut: (...args: unknown[]) => mockSignOut(...args),
+  },
+}));
 
 jest.mock('@/services/food-delivery.service', () => ({
   FoodDeliveryService: {
@@ -109,6 +116,7 @@ function makeRestaurant(overrides: Partial<Restaurant> = {}): Restaurant {
 beforeEach(() => {
   mockPush.mockClear();
   mockReplace.mockClear();
+  mockSignOut.mockClear();
   mockGetRestaurantById.mockReset();
   mockUpdateRestaurantOpeningHours.mockReset().mockResolvedValue(undefined);
   mockUpdateRestaurantVisuals.mockReset().mockResolvedValue(undefined);
@@ -130,23 +138,28 @@ beforeEach(() => {
 });
 
 describe('RestaurantSettingsClient', () => {
-  const expandHours = async () => fireEvent.click(await screen.findByRole('button', { name: /Horaires d'ouverture/i }));
-  const expandVisuals = async () => fireEvent.click(await screen.findByRole('button', { name: /Identité visuelle/i }));
+  const openHoursSheet = async () => {
+    const items = await screen.findAllByRole('button', { name: /Horaires d'ouverture/i });
+    fireEvent.click(items[0]);
+  };
 
-  it('renders existing hours and hides controls for a closed day', async () => {
+  const openVisualsSheet = async () => {
+    const items = await screen.findAllByRole('button', { name: /Identité visuelle/i });
+    fireEvent.click(items[0]);
+  };
+
+  it('renders existing hours in BottomSheet and hides controls for a closed day', async () => {
     render(<RestaurantSettingsClient />);
-    await expandHours();
+    await openHoursSheet();
 
     expect(await screen.findByRole('heading', { name: 'Paramètres' })).toBeInTheDocument();
-    expect(screen.queryByText('Gérez les horaires de votre restaurant.')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Tableau de bord' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Lundi ouverture')).toHaveValue('10:00');
     expect(screen.queryByLabelText('Mardi ouverture')).not.toBeInTheDocument();
   });
 
   it('prevents saving when every day is closed', async () => {
     render(<RestaurantSettingsClient />);
-    await expandHours();
+    await openHoursSheet();
 
     const toggles = await screen.findAllByRole('checkbox');
     toggles.forEach((toggle) => {
@@ -160,12 +173,33 @@ describe('RestaurantSettingsClient', () => {
 
   it('saves valid changes and confirms success', async () => {
     render(<RestaurantSettingsClient />);
-    await expandHours();
+    await openHoursSheet();
     fireEvent.change(await screen.findByLabelText('Lundi ouverture'), { target: { value: '08:00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les horaires' }));
 
     await waitFor(() => expect(mockUpdateRestaurantOpeningHours).toHaveBeenCalled());
     expect(mockShowSuccess).toHaveBeenCalledWith('Horaires enregistrés.');
+  });
+
+  it('allows expanding a day and duplicating hours to other open days', async () => {
+    render(<RestaurantSettingsClient />);
+    await openHoursSheet();
+
+    // Click on Lundi to expand it
+    const expandButton = await screen.findByLabelText('Modifier les horaires Lundi');
+    fireEvent.click(expandButton);
+
+    // Change Monday hours
+    fireEvent.change(screen.getByLabelText('Lundi ouverture'), { target: { value: '07:30' } });
+    fireEvent.change(screen.getByLabelText('Lundi fermeture'), { target: { value: '23:00' } });
+
+    // Click "Appliquer à tous les jours ouverts"
+    const applyButtons = screen.getAllByRole('button', { name: /Appliquer à tous les jours ouverts/i });
+    fireEvent.click(applyButtons[0]);
+
+    expect(mockShowSuccess).toHaveBeenCalledWith('Horaires appliqués aux autres jours ouverts');
+    expect(screen.getByLabelText('Mercredi ouverture')).toHaveValue('07:30');
+    expect(screen.getByLabelText('Mercredi fermeture')).toHaveValue('23:00');
   });
 
   it('saves a replacement cover without touching the logo', async () => {
@@ -176,7 +210,7 @@ describe('RestaurantSettingsClient', () => {
 
     try {
       render(<RestaurantSettingsClient />);
-      await expandVisuals();
+      await openVisualsSheet();
       const input = await screen.findByLabelText('Choisir la photo de couverture');
       fireEvent.change(input, {
         target: { files: [new File(['cover'], 'cover.png', { type: 'image/png' })] },
@@ -205,12 +239,12 @@ describe('RestaurantSettingsClient', () => {
   it('keeps an inline error when saving fails', async () => {
     mockUpdateRestaurantOpeningHours.mockRejectedValueOnce(new Error('network'));
     render(<RestaurantSettingsClient />);
-    await expandHours();
+    await openHoursSheet();
     fireEvent.change(await screen.findByLabelText('Lundi ouverture'), { target: { value: '08:00' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les horaires' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Impossible d’enregistrer les horaires. Réessayez.',
+      "Impossible d\u2019enregistrer les horaires. Réessayez.",
     );
   });
 
@@ -228,14 +262,35 @@ describe('RestaurantSettingsClient', () => {
     render(<RestaurantSettingsClient />);
 
     expect(screen.queryByText(/suppression définitive/i)).not.toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer ce restaurant' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Supprimer ce restaurant/i }));
 
     expect(screen.getByText(/suppression définitive/i)).toBeInTheDocument();
-    expect(mockDeleteRestaurant).not.toHaveBeenCalled();
+    const deleteBtn = screen.getByRole('button', { name: 'Supprimer définitivement' });
+    expect(deleteBtn).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Supprimer définitivement' }));
+    const confirmInput = screen.getByRole('textbox');
+    fireEvent.change(confirmInput, { target: { value: 'supprimer' } });
+    expect(deleteBtn).not.toBeDisabled();
+
+    fireEvent.click(deleteBtn);
 
     await waitFor(() => expect(mockDeleteRestaurant).toHaveBeenCalledWith('restaurant-1'));
     expect(mockReplace).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('renders sign out and delete items at the bottom like /profil', async () => {
+    render(<RestaurantSettingsClient />);
+
+    expect(await screen.findByText(/Se déconnecter/i)).toBeInTheDocument();
+    expect(screen.getByText(/Supprimer ce restaurant/i)).toBeInTheDocument();
+  });
+
+  it('signs out when clicking the sign out menu item', async () => {
+    render(<RestaurantSettingsClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Se déconnecter/i }));
+
+    await waitFor(() => expect(mockSignOut).toHaveBeenCalledTimes(1));
+    expect(mockReplace).toHaveBeenCalledWith('/login');
   });
 });

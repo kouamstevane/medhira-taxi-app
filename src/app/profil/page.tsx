@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import Link from 'next/link';
 import { signOut } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -344,8 +343,8 @@ function ProfilPageContent() {
   const displayName = (fullName || currentUser?.displayName || currentUser?.email?.split('@')[0] || t('profile.user')).toUpperCase();
   const displayPhone = userData.phone || currentUser?.phoneNumber || userData.email || '';
   const referralCode = currentUser?.uid ? `MED-${currentUser.uid.slice(0, 6).toUpperCase()}` : 'MEDJIRA2026';
-  const hasDriverRole = Boolean(authUserData?.roles?.driver);
-  const hasRestaurantRole = Boolean(authUserData?.roles?.restaurant);
+  const hasDriverRole = Boolean(authUserData?.roles?.driver != null || authUserData?.activeRole === 'driver');
+  const hasRestaurantRole = Boolean(authUserData?.roles?.restaurant != null || authUserData?.activeRole === 'restaurant');
   const hasProRole = hasDriverRole || hasRestaurantRole;
 
   if (loading && !editing) {
@@ -358,17 +357,7 @@ function ProfilPageContent() {
 
   return (
     <div className="min-h-screen bg-[#141312] text-slate-100 font-sans antialiased pb-28">
-      <div className="max-w-[440px] mx-auto px-4 pt-4">
-        {/* Top Back Button */}
-        <div className="flex items-center justify-between mb-4">
-          <Link
-            href="/dashboard"
-            className="w-11 h-11 rounded-full flex items-center justify-center text-slate-200 hover:text-white hover:bg-white/10 active:scale-95 transition"
-            aria-label={t('common.back')}
-          >
-            <MaterialIcon name="arrow_back" className="text-[22px]" />
-          </Link>
-        </div>
+      <div className="max-w-[440px] mx-auto px-4 pt-6">
 
         {/* Network Error State */}
         {isNetworkError && !userData.email && !userData.firstName ? (
@@ -595,9 +584,8 @@ function ProfilPageContent() {
                 <ProfileMenuItem
                   icon="handshake"
                   iconColorVariant="sky"
-                  title={hasProRole ? t('profile.partnerArea') : t('profile.becomePartner')}
+                  title={hasProRole ? t('profile.partnerArea') : t('profile.becomePartnerShort')}
                   subtitle={hasProRole ? t('profile.accessProDashboard') : t('profile.becomePartnerSubtitle')}
-                  badge={!hasProRole ? t('profile.newBadge') : undefined}
                   onClick={() => setShowPartnerModal(true)}
                 />
                 <ProfileMenuItem
@@ -609,7 +597,7 @@ function ProfilPageContent() {
                 <ProfileMenuItem
                   icon="credit_card"
                   iconColorVariant="sky"
-                  title={t('profile.paymentMethodsAndWallet')}
+                  title={t('profile.paymentMethodsAndWalletShort')}
                   subtitle={hasPaymentMethod ? t('profile.savedCard') : t('profile.addPaymentMethod')}
                   onClick={() => setShowPaymentModal(true)}
                 />
@@ -735,16 +723,18 @@ function ProfilPageContent() {
                   title={loggingOut ? t('profile.loggingOut') : t('profile.logout')}
                   onClick={loggingOut ? undefined : handleLogout}
                 />
-                <ProfileMenuItem
-                  icon="delete_forever"
-                  iconColorVariant="destructive"
-                  title={t('profile.deleteAccount')}
-                  destructive
-                  onClick={() => {
-                    setDeleteConfirmText('');
-                    setShowDeleteModal(true);
-                  }}
-                />
+                {!hasProRole && (
+                  <ProfileMenuItem
+                    icon="delete_forever"
+                    iconColorVariant="destructive"
+                    title={t('profile.deleteAccount')}
+                    destructive
+                    onClick={() => {
+                      setDeleteConfirmText('');
+                      setShowDeleteModal(true);
+                    }}
+                  />
+                )}
               </div>
             </div>
 
@@ -761,7 +751,7 @@ function ProfilPageContent() {
         )}
 
         {/* Delete Account Confirmation Modal */}
-        {showDeleteModal && (
+        {showDeleteModal && !hasProRole && (
           <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
             onClick={() => !deleting && setShowDeleteModal(false)}
@@ -778,12 +768,6 @@ function ProfilPageContent() {
                 <p className="text-slate-400 text-xs mt-1 leading-relaxed">
                   {t('profile.deleteAccountIrreversible')}
                 </p>
-              </div>
-
-              <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-3 text-xs text-slate-300 space-y-1">
-                <p>{t('profile.deleteBulletProfile')}</p>
-                <p>{t('profile.deleteBulletFinancial')}</p>
-                <p>{t('profile.deleteBulletLogout')}</p>
               </div>
 
               <div>

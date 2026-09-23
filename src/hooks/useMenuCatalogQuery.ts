@@ -21,7 +21,7 @@ interface MenuCatalogState {
   isLoadingPage: boolean;
   error: string | null;
   isNetworkError: boolean;
-  selectedIds: string[];
+  selectedItems: MenuItem[];
 }
 
 function readQuery(searchParams: { get: (name: string) => string | null }): Pick<MenuCatalogQuery, 'search' | 'category' | 'availability' | 'sort'> {
@@ -47,7 +47,7 @@ export function useMenuCatalogQuery(restaurantId: string) {
   const [categories, setCategories] = useState<string[]>([]);
   const [state, setState] = useState<MenuCatalogState>({
     items: [], totalCount: 0, availableCount: 0, pageIndex: 0, hasNextPage: false,
-    hasPreviousPage: false, isLoading: true, isLoadingPage: false, error: null, isNetworkError: false, selectedIds: [],
+    hasPreviousPage: false, isLoading: true, isLoadingPage: false, error: null, isNetworkError: false, selectedItems: [],
   });
   const cursorByPageRef = useRef<Array<QueryDocumentSnapshot<DocumentData> | null>>([null]);
   const requestIdRef = useRef(0);
@@ -87,7 +87,6 @@ export function useMenuCatalogQuery(restaurantId: string) {
         isLoadingPage: false,
         error: null,
         isNetworkError: false,
-        selectedIds: [],
       }));
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
@@ -133,7 +132,7 @@ export function useMenuCatalogQuery(restaurantId: string) {
     setCategoryState(nextQuery.category ?? null);
     setAvailabilityState(nextQuery.availability ?? 'all');
     setSortState(nextQuery.sort ?? 'category');
-    setState((previous) => ({ ...previous, isLoading: true, isLoadingPage: true, selectedIds: [] }));
+    setState((previous) => ({ ...previous, isLoading: true, isLoadingPage: true, selectedItems: [] }));
     syncUrl(nextQuery);
   }, [availability, category, search, sort, syncUrl]);
 
@@ -152,15 +151,28 @@ export function useMenuCatalogQuery(restaurantId: string) {
   }, [currentQuery, fetchPage, state.hasPreviousPage, state.isLoadingPage, state.pageIndex]);
 
   const toggleSelected = useCallback((itemId: string) => {
-    setState((previous) => ({ ...previous, selectedIds: previous.selectedIds.includes(itemId) ? previous.selectedIds.filter((id) => id !== itemId) : [...previous.selectedIds, itemId] }));
-  }, []);
-
-  const toggleAllVisible = useCallback(() => {
     setState((previous) => {
-      const allSelected = previous.items.length > 0 && previous.items.every((item) => previous.selectedIds.includes(item.id));
-      return { ...previous, selectedIds: allSelected ? [] : previous.items.map((item) => item.id) };
+      const item = previous.items.find((candidate) => candidate.id === itemId);
+      if (!item) return previous;
+      const isSelected = previous.selectedItems.some((selectedItem) => selectedItem.id === itemId);
+      return {
+        ...previous,
+        selectedItems: isSelected
+          ? previous.selectedItems.filter((selectedItem) => selectedItem.id !== itemId)
+          : [...previous.selectedItems, item],
+      };
     });
   }, []);
+
+  const selectAllMatching = useCallback(async () => {
+    const matchingItems = await FoodDeliveryService.getRestaurantMenuItemsMatchingQuery(restaurantId, currentQuery);
+    setState((previous) => {
+      const allSelected = matchingItems.length > 0 && matchingItems.every((item) => (
+        previous.selectedItems.some((selectedItem) => selectedItem.id === item.id)
+      ));
+      return { ...previous, selectedItems: allSelected ? [] : matchingItems };
+    });
+  }, [currentQuery, restaurantId]);
 
   return {
     ...state,
@@ -178,8 +190,11 @@ export function useMenuCatalogQuery(restaurantId: string) {
     goNext,
     goPrevious,
     toggleSelected,
-    toggleAllVisible,
-    clearSelection: () => setState((previous) => ({ ...previous, selectedIds: [] })),
+    selectedIds: state.selectedItems.map((item) => item.id),
+    selectedItems: state.selectedItems,
+    selectAllMatching,
+    toggleAllVisible: selectAllMatching,
+    clearSelection: () => setState((previous) => ({ ...previous, selectedItems: [] })),
     reload: () => fetchPage(currentQuery, state.pageIndex, cursorByPageRef.current[state.pageIndex] ?? null),
     retry: () => fetchPage(currentQuery, state.pageIndex, cursorByPageRef.current[state.pageIndex] ?? null),
   };

@@ -31,6 +31,7 @@ import {
   where, 
   orderBy, 
   updateDoc,
+  deleteDoc,
   serverTimestamp,
   deleteField,
   limit,
@@ -662,6 +663,31 @@ export interface MenuPage {
   availableCount: number;
 }
 
+const buildMenuCatalogConstraints = (options: MenuCatalogQuery): QueryConstraint[] => {
+  const constraints: QueryConstraint[] = [];
+  const normalizedSearch = normalizeMenuSearchValue(options.search ?? '');
+  if (normalizedSearch.length >= 2) {
+    constraints.push(where('searchPrefixes', 'array-contains', normalizedSearch));
+  }
+  if (options.category) {
+    constraints.push(where('category', '==', options.category));
+  }
+  if (options.availability === 'available') {
+    constraints.push(where('isAvailable', '==', true));
+  } else if (options.availability === 'unavailable') {
+    constraints.push(where('isAvailable', '==', false));
+  }
+  return constraints;
+};
+
+const chunkArray = <T>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+};
+
 /**
  * Récupère le menu d'un restaurant de manière paginée avec curseur Firestore.
  * Trié par catégorie ascendant puis documentId ascendant.
@@ -689,20 +715,8 @@ export const getRestaurantMenuPaginated = async (
       FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS
     );
 
-    const catalogConstraints: QueryConstraint[] = [];
-    const normalizedSearch = normalizeMenuSearchValue(options.search ?? '');
-    if (normalizedSearch.length >= 2) {
-      catalogConstraints.push(where('searchPrefixes', 'array-contains', normalizedSearch));
-    }
-    if (options.category) {
-      catalogConstraints.push(where('category', '==', options.category));
-    }
-    const constraints = [...catalogConstraints];
-    if (options.availability === 'available') {
-      constraints.push(where('isAvailable', '==', true));
-    } else if (options.availability === 'unavailable') {
-      constraints.push(where('isAvailable', '==', false));
-    }
+    const catalogConstraints = buildMenuCatalogConstraints({ ...options, availability: undefined });
+    const constraints = buildMenuCatalogConstraints(options);
 
     const sort: MenuCatalogSort = options.sort ?? 'category';
     const orderField = sort === 'price-asc' || sort === 'price-desc' ? 'price' : sort;
@@ -740,6 +754,25 @@ export const getRestaurantMenuPaginated = async (
   }
 };
 
+export const getRestaurantMenuItemsMatchingQuery = async (
+  restaurantId: string,
+  options: MenuCatalogQuery = {},
+): Promise<MenuItem[]> => {
+  try {
+    const menuRef = collection(
+      db,
+      FIRESTORE_COLLECTIONS.RESTAURANTS,
+      restaurantId,
+      FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+    );
+    const snapshot = await getDocs(query(menuRef, ...buildMenuCatalogConstraints(options)));
+    return snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id } as MenuItem));
+  } catch (error) {
+    console.error('[food-delivery.service] getRestaurantMenuItemsMatchingQuery failed:', error);
+    throw error;
+  }
+};
+
 export const getRestaurantMenuCategories = async (restaurantId: string): Promise<string[]> => {
   const menuRef = collection(
     db,
@@ -760,18 +793,41 @@ export const bulkUpdateMenuItemAvailability = async (
 ): Promise<void> => {
   if (itemIds.length === 0) return;
 
-  const batch = writeBatch(db);
-  for (const itemId of itemIds) {
-    const itemRef = doc(
-      db,
-      FIRESTORE_COLLECTIONS.RESTAURANTS,
-      restaurantId,
-      FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
-      itemId,
-    );
-    batch.update(itemRef, { isAvailable, updatedAt: serverTimestamp() });
+  for (const itemIdChunk of chunkArray(itemIds, 500)) {
+    const batch = writeBatch(db);
+    for (const itemId of itemIdChunk) {
+      const itemRef = doc(
+        db,
+        FIRESTORE_COLLECTIONS.RESTAURANTS,
+        restaurantId,
+        FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+        itemId,
+      );
+      batch.update(itemRef, { isAvailable, updatedAt: serverTimestamp() });
+    }
+    await batch.commit();
   }
-  await batch.commit();
+};
+
+export const bulkDeleteMenuItems = async (
+  restaurantId: string,
+  itemIds: string[],
+): Promise<void> => {
+  if (itemIds.length === 0) return;
+
+  for (const itemIdChunk of chunkArray(itemIds, 500)) {
+    const batch = writeBatch(db);
+    for (const itemId of itemIdChunk) {
+      batch.delete(doc(
+        db,
+        FIRESTORE_COLLECTIONS.RESTAURANTS,
+        restaurantId,
+        FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+        itemId,
+      ));
+    }
+    await batch.commit();
+  }
 };
 
 export const createRestaurant = async (
@@ -1451,7 +1507,10 @@ export const FoodDeliveryService = {
   getCustomerRestaurantMenuCategories,
   getCustomerMenuItemDetails,
   getRestaurantMenuPaginated,
+  getRestaurantMenuItemsMatchingQuery,
   getRestaurantMenuCategories,
+  bulkUpdateMenuItemAvailability,
+  bulkDeleteMenuItems,
   
   /**
    * Récupérer le menu complet (incluant articles indisponibles pour le gérant)
@@ -1591,8 +1650,14 @@ export const FoodDeliveryService = {
    */
   deleteMenuItem: async (restaurantId: string, itemId: string): Promise<void> => {
     try {
-    const itemDocRef = doc(db, FIRESTORE_COLLECTIONS.RESTAURANTS, restaurantId, FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS, itemId);
-    await updateDoc(itemDocRef, { isAvailable: false, updatedAt: serverTimestamp() });
+      const itemDocRef = doc(
+        db,
+        FIRESTORE_COLLECTIONS.RESTAURANTS,
+        restaurantId,
+        FIRESTORE_SUBCOLLECTIONS.MENU_ITEMS,
+        itemId,
+      );
+      await deleteDoc(itemDocRef);
     } catch (error) {
       console.error('[food-delivery.service] deleteMenuItem failed:', error);
       throw error;

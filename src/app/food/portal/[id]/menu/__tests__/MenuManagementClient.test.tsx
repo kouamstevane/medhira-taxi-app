@@ -22,11 +22,21 @@ jest.mock('@/config/firebase', () => ({
 
 jest.mock('@/services/food-delivery.service', () => ({
   FoodDeliveryService: {
-    getRestaurantById: jest.fn(),
-    getRestaurantMenuFull: jest.fn(),
-    getRestaurantMenuPaginated: jest.fn(),
-    deleteMenuItem: jest.fn(),
-  },
+      getRestaurantById: jest.fn(),
+      getRestaurantMenuFull: jest.fn(),
+      getRestaurantMenuPaginated: jest.fn(),
+      getRestaurantMenuItemsMatchingQuery: jest.fn(),
+      deleteMenuItem: jest.fn(),
+    },
+  bulkUpdateMenuItemAvailability: jest.fn(),
+  bulkDeleteMenuItems: jest.fn(),
+}));
+
+jest.mock('@/services/menu-image-storage.service', () => ({
+  deleteMenuImage: jest.fn(),
+  uploadMenuImage: jest.fn(),
+  createMenuItemId: jest.fn(() => 'new-item'),
+  getMenuImageStorageErrorMessage: jest.fn(() => 'error'),
 }));
 
 jest.mock('@/components/food/BulkCsvImportModal', () => ({
@@ -80,7 +90,10 @@ jest.mock('@capacitor/haptics', () => ({
 const mockOnAuthStateChanged = onAuthStateChanged as jest.Mock;
 const mockGetRestaurantById = FoodDeliveryService.getRestaurantById as jest.Mock;
 const mockGetRestaurantMenuPaginated = FoodDeliveryService.getRestaurantMenuPaginated as jest.Mock;
+const mockGetRestaurantMenuItemsMatchingQuery = FoodDeliveryService.getRestaurantMenuItemsMatchingQuery as jest.Mock;
 const mockDeleteMenuItem = FoodDeliveryService.deleteMenuItem as jest.Mock;
+const mockBulkUpdateMenuItemAvailability = require('@/services/food-delivery.service').bulkUpdateMenuItemAvailability as jest.Mock;
+const mockBulkDeleteMenuItems = require('@/services/food-delivery.service').bulkDeleteMenuItems as jest.Mock;
 
 describe('MenuManagementClient', () => {
   beforeEach(() => {
@@ -98,15 +111,21 @@ describe('MenuManagementClient', () => {
     });
     mockGetRestaurantMenuPaginated.mockResolvedValue({
       items: [
-        { id: '1', name: 'Burger Maison', category: 'Burgers Gourmet', price: 15, isAvailable: true },
-        { id: '2', name: 'Tiramisu', category: 'Desserts Italiens', price: 6, isAvailable: true },
+        { id: '1', name: 'Burger Maison', category: 'Burgers Gourmet', price: 15, isAvailable: true, imageStoragePath: 'menu-images/1.webp' },
+        { id: '2', name: 'Tiramisu', category: 'Desserts Italiens', price: 6, isAvailable: true, imageStoragePath: 'menu-images/2.webp' },
       ],
       lastDoc: null,
       hasMore: false,
       totalCount: 2,
       availableCount: 2,
     });
+    mockGetRestaurantMenuItemsMatchingQuery.mockResolvedValue([
+      { id: '1', name: 'Burger Maison', category: 'Burgers Gourmet', price: 15, isAvailable: true, imageStoragePath: 'menu-images/1.webp' },
+      { id: '2', name: 'Tiramisu', category: 'Desserts Italiens', price: 6, isAvailable: true, imageStoragePath: 'menu-images/2.webp' },
+    ]);
     mockDeleteMenuItem.mockResolvedValue(undefined);
+    mockBulkUpdateMenuItemAvailability.mockResolvedValue(undefined);
+    mockBulkDeleteMenuItems.mockResolvedValue(undefined);
   });
 
   it('does not redirect an authenticated restaurant owner to login and loads paginated items', async () => {
@@ -187,6 +206,38 @@ describe('MenuManagementClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirmer la suppression' }));
 
     await waitFor(() => expect(mockDeleteMenuItem).toHaveBeenCalledWith('restaurant-1', '1'));
+  });
+
+  it('selects all filtered results and makes them unavailable immediately', async () => {
+    render(<MenuManagementClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tout sélectionner (2)' }));
+
+    await waitFor(() => expect(screen.getByText('2 plat(s) sélectionné(s)')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Masquer' }));
+
+    await waitFor(() => expect(mockBulkUpdateMenuItemAvailability).toHaveBeenCalledWith(
+      'restaurant-1',
+      ['1', '2'],
+      false,
+    ));
+  });
+
+  it('confirms bulk deletion before deleting all selected items and their images', async () => {
+    const { deleteMenuImage } = require('@/services/menu-image-storage.service');
+    render(<MenuManagementClient />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tout sélectionner (2)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Supprimer la sélection' }));
+
+    expect(screen.getByRole('dialog', { name: 'Supprimer des plats ?' })).toBeInTheDocument();
+    expect(mockBulkDeleteMenuItems).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer la suppression' }));
+
+    await waitFor(() => expect(mockBulkDeleteMenuItems).toHaveBeenCalledWith('restaurant-1', ['1', '2']));
+    expect(deleteMenuImage).toHaveBeenCalledWith('menu-images/1.webp');
+    expect(deleteMenuImage).toHaveBeenCalledWith('menu-images/2.webp');
   });
 
   it('renders descriptive image action choices when opening the add dish modal', async () => {

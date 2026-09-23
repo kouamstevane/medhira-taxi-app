@@ -927,8 +927,9 @@ service cloud.firestore {
           (isValidMenuItem() || isMenuAvailabilityOnlyUpdate()) &&
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['source', 'externalId', 'sourceUpdatedAt', 'lastImportId']);
 
-        // Suppression physique interdite (désactivation logique via isAvailable uniquement)
-        allow delete: if false;
+        // Suppression physique : seul le propriétaire du restaurant parent peut supprimer.
+        allow delete: if isAuthenticated() &&
+          get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
       }
 
       // Sous-collection menu_imports — Traitements d'import de menu

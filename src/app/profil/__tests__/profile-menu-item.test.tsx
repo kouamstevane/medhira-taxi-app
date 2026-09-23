@@ -18,6 +18,12 @@ describe('ProfileMenuItem', () => {
     expect(screen.getByText('Nouveau')).toBeInTheDocument();
   });
 
+  it('does not render a badge when none is provided', () => {
+    render(<ProfileMenuItem icon="handshake" title="Devenir pro" />);
+
+    expect(screen.queryByText('Nouveau')).not.toBeInTheDocument();
+  });
+
   it('triggers onClick when clicked as button', () => {
     const handleClick = jest.fn();
     render(

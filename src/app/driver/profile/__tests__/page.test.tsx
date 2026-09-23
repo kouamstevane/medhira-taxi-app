@@ -9,7 +9,6 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('firebase/auth', () => ({
-  deleteUser: jest.fn(),
   signOut: jest.fn(),
 }));
 
@@ -124,5 +123,11 @@ describe('DriverProfilePage', () => {
 
     await waitFor(() => expect(mockActivateClientRole).toHaveBeenCalledTimes(1));
     expect(mockReloadUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render delete account button on professional driver profile', () => {
+    render(<DriverProfilePage />);
+
+    expect(screen.queryByText(/supprimer mon compte/i)).not.toBeInTheDocument();
   });
 });

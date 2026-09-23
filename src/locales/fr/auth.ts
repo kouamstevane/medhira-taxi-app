@@ -78,6 +78,7 @@ export const auth = {
   resetLinkSentTo: 'Un email de réinitialisation a été envoyé à {email}',
   checkSpamNotice: 'Vérifiez également votre dossier spam si vous ne recevez pas l\'email dans quelques minutes.',
   backToLogin: 'Retour à la connexion',
+  profileSettings: 'Paramètres',
   resendEmail: 'Renvoyer l\'email',
   enterEmailInstruction: 'Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.',
   resetPasswordAction: 'Réinitialiser le mot de passe',

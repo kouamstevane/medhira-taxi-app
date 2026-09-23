@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { FoodDeliveryService, bulkUpdateMenuItemAvailability, type MenuImageUpdate } from '@/services/food-delivery.service';
+import { FoodDeliveryService, bulkDeleteMenuItems, bulkUpdateMenuItemAvailability, type MenuImageUpdate } from '@/services/food-delivery.service';
 import {
   uploadMenuImage,
   deleteMenuImage,
@@ -31,6 +31,7 @@ import { MenuCatalogToolbar } from '@/components/restaurant/menu/MenuCatalogTool
 import { MenuCatalogTable } from '@/components/restaurant/menu/MenuCatalogTable';
 import { MenuCatalogPagination } from '@/components/restaurant/menu/MenuCatalogPagination';
 import { DeleteMenuItemDialog } from '@/components/restaurant/menu/DeleteMenuItemDialog';
+import { DeleteMenuItemsDialog } from '@/components/restaurant/menu/DeleteMenuItemsDialog';
 import { useMenuCatalogQuery } from '@/hooks/useMenuCatalogQuery';
 import { mergeMenuCategories } from '@/utils/menu-categories';
 
@@ -67,6 +68,9 @@ export default function MenuManagementClient() {
   const [isSaving, setIsSaving] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<MenuItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSelectingAll, setIsSelectingAll] = useState(false);
+  const [bulkAction, setBulkAction] = useState<'availability' | 'delete' | null>(null);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [isNetworkError, setIsNetworkError] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -473,6 +477,65 @@ export default function MenuManagementClient() {
     }
   };
 
+  const handleSelectAllMatching = async () => {
+    if (isSelectingAll || bulkAction) return;
+    setIsSelectingAll(true);
+    try {
+      await catalog.selectAllMatching();
+    } catch {
+      showError(t('bulkActionError'));
+    } finally {
+      setIsSelectingAll(false);
+    }
+  };
+
+  const handleBulkAvailability = async (isAvailable: boolean) => {
+    if (catalog.selectedIds.length === 0 || bulkAction) return;
+    setBulkAction('availability');
+    try {
+      await bulkUpdateMenuItemAvailability(restaurantId, catalog.selectedIds, isAvailable);
+      await catalog.reload();
+      const count = catalog.selectedIds.length;
+      catalog.clearSelection();
+      showSuccess(isAvailable
+        ? t('itemsMadeAvailableToast', { count })
+        : t('itemsMadeUnavailableToast', { count }));
+    } catch {
+      showError(t('bulkActionError'));
+    } finally {
+      setBulkAction(null);
+    }
+  };
+
+  const confirmBulkDelete = async () => {
+    if (catalog.selectedItems.length === 0 || bulkAction) return;
+    const itemsToDelete = [...catalog.selectedItems];
+    setBulkAction('delete');
+    try {
+      await bulkDeleteMenuItems(restaurantId, itemsToDelete.map((item) => item.id));
+      let imageCleanupFailures = 0;
+      await Promise.all(itemsToDelete.map(async (item) => {
+        if (!item.imageStoragePath) return;
+        try {
+          await deleteMenuImage(item.imageStoragePath);
+        } catch (error) {
+          imageCleanupFailures += 1;
+          console.error('[MenuManagementClient] Bulk menu image cleanup failed:', error);
+        }
+      }));
+      await catalog.reload();
+      catalog.clearSelection();
+      setShowBulkDeleteModal(false);
+      showSuccess(imageCleanupFailures > 0
+        ? t('bulkImageCleanupFailedToast', { count: itemsToDelete.length })
+        : t('itemsDeletedToast', { count: itemsToDelete.length }));
+    } catch {
+      showError(t('bulkActionError'));
+    } finally {
+      setBulkAction(null);
+    }
+  };
+
   if (isNetworkError && (loading || !id)) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
@@ -509,6 +572,17 @@ export default function MenuManagementClient() {
           }}
           onConfirm={() => void confirmDeleteItem()}
           isProcessing={isDeleting}
+        />
+      )}
+
+      {showBulkDeleteModal && (
+        <DeleteMenuItemsDialog
+          count={catalog.selectedItems.length}
+          onCancel={() => {
+            if (!bulkAction) setShowBulkDeleteModal(false);
+          }}
+          onConfirm={() => void confirmBulkDelete()}
+          isProcessing={bulkAction === 'delete'}
         />
       )}
 
@@ -569,6 +643,22 @@ export default function MenuManagementClient() {
           onSortChange={catalog.setSort}
         />
 
+        {catalog.items.length > 0 && (
+          <button
+            type="button"
+            onClick={() => void handleSelectAllMatching()}
+            disabled={isSelectingAll || Boolean(bulkAction)}
+            aria-busy={isSelectingAll}
+            className="min-h-11 w-full rounded-xl border border-primary/30 bg-primary/[0.08] px-3 text-sm font-bold text-primary transition hover:bg-primary/[0.14] disabled:cursor-wait disabled:opacity-60"
+          >
+            {isSelectingAll
+              ? t('selectAllInProgress')
+              : catalog.selectedItems.length === catalog.totalCount
+                ? t('clearSelection')
+                : t('selectAllFiltered', { count: catalog.totalCount })}
+          </button>
+        )}
+
         {catalog.error && !catalog.isNetworkError && (
           <div role="alert" className="flex items-center justify-between gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-4 text-sm text-red-200">
             <span>{catalog.error}</span>
@@ -579,9 +669,11 @@ export default function MenuManagementClient() {
         {catalog.selectedIds.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/[0.08] p-3">
             <span className="text-xs font-bold text-primary">{t('itemsSelectedCount', { count: catalog.selectedIds.length })}</span>
-            <div className="flex gap-2">
-              <button type="button" onClick={async () => { await bulkUpdateMenuItemAvailability(restaurantId, catalog.selectedIds, true); await catalog.reload(); }} className="min-h-11 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-emerald-300">{t('makeAvailable')}</button>
-              <button type="button" onClick={async () => { await bulkUpdateMenuItemAvailability(restaurantId, catalog.selectedIds, false); await catalog.reload(); }} className="min-h-11 rounded-xl bg-white/[0.06] px-3 text-xs font-bold text-slate-300">{t('hideSelected')}</button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void handleBulkAvailability(true)} disabled={Boolean(bulkAction)} className="min-h-11 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-emerald-300 disabled:opacity-50">{t('makeAvailable')}</button>
+              <button type="button" onClick={() => void handleBulkAvailability(false)} disabled={Boolean(bulkAction)} className="min-h-11 rounded-xl bg-white/[0.06] px-3 text-xs font-bold text-slate-300 disabled:opacity-50">{t('hideSelected')}</button>
+              <button type="button" onClick={() => setShowBulkDeleteModal(true)} disabled={Boolean(bulkAction)} className="min-h-11 rounded-xl bg-red-500/15 px-3 text-xs font-bold text-red-300 disabled:opacity-50">{t('deleteSelected')}</button>
+              <button type="button" onClick={catalog.clearSelection} disabled={Boolean(bulkAction)} className="min-h-11 rounded-xl border border-white/10 px-3 text-xs font-bold text-slate-300 disabled:opacity-50">{t('clearSelection')}</button>
             </div>
           </div>
         )}
@@ -589,9 +681,11 @@ export default function MenuManagementClient() {
         {!catalog.isLoading && catalog.items.length > 0 && (
           <MenuCatalogTable
             items={catalog.items}
+            totalCount={catalog.totalCount}
             selectedIds={catalog.selectedIds}
             onSelect={catalog.toggleSelected}
-            onSelectAll={catalog.toggleAllVisible}
+            onSelectAll={handleSelectAllMatching}
+            isSelectingAll={isSelectingAll}
             onToggleAvailability={toggleAvailability}
             onEdit={handleOpenModal}
             onDelete={requestDeleteItem}

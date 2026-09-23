@@ -99,7 +99,7 @@ describe('LoginPage phone authentication', () => {
   it('uses Twilio phone authentication instead of email and password while keeping Google sign-in', () => {
     render(<LoginPage />);
 
-    expect(screen.getByText('Connexion par téléphone')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Connexion/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/Numéro de téléphone/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Envoyer le code/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Continuer avec Google/i })).toBeInTheDocument();
@@ -275,7 +275,7 @@ describe('LoginPage phone authentication', () => {
 
     render(<LoginPage />);
 
-    expect(await screen.findByText('Connexion par téléphone')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Connexion/i })).toBeInTheDocument();
     await waitFor(() => expect(mockAuthServiceSignOut).toHaveBeenCalled());
     expect(replace).not.toHaveBeenCalled();
   });

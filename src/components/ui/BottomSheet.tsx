@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type ReactNode, type PointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { MaterialIcon } from './MaterialIcon';
 import { cn } from '@/lib/utils';
 
@@ -42,8 +43,10 @@ export function BottomSheet({
   useEffect(() => {
     if (!open) return;
 
-    const previousOverflow = document.body.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -59,7 +62,8 @@ export function BottomSheet({
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = previousOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
     };
   }, [canDismiss, onCloseRequest, onOpenChange, open]);
 
@@ -107,16 +111,18 @@ export function BottomSheet({
     }
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       aria-labelledby={titleId}
       aria-modal="true"
-      className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center overscroll-none"
+      className="fixed inset-0 z-[100] flex items-end justify-center overscroll-none"
       role="dialog"
     >
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 bg-black/75 backdrop-blur-sm"
         data-testid="bottom-sheet-backdrop"
         onClick={(event) => {
           if (event.target === event.currentTarget) {
@@ -131,7 +137,7 @@ export function BottomSheet({
       <section
         className={cn(
           'relative z-10 flex max-h-[90vh] max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-[#18181b] text-foreground border-t border-white/10 pb-[env(safe-area-inset-bottom)] shadow-2xl overscroll-contain',
-          'sm:max-w-lg sm:rounded-2xl sm:border',
+          'sm:max-w-lg sm:rounded-t-3xl sm:rounded-b-none sm:border-x',
           className,
         )}
         style={{
@@ -175,6 +181,7 @@ export function BottomSheet({
         </div>
         <div className={cn('min-h-0 overflow-y-auto px-4 pb-4', contentClassName)}>{children}</div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

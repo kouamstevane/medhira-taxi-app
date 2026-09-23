@@ -78,6 +78,7 @@ export const auth = {
   resetLinkSentTo: 'A password reset email has been sent to {email}',
   checkSpamNotice: 'Also check your spam folder if you do not receive the email within a few minutes.',
   backToLogin: 'Back to login',
+  profileSettings: 'Settings',
   resendEmail: 'Resend email',
   enterEmailInstruction: 'Enter your email address and we will send you a link to reset your password.',
   resetPasswordAction: 'Reset Password',

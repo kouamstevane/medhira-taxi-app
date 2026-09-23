@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { deleteUser, signOut } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '@/config/firebase';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
@@ -82,10 +82,6 @@ export default function DriverProfilePage() {
   } = useDriverProfile();
 
   const [signOutLoading, setSignOutLoading] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState('');
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [clientActivationLoading, setClientActivationLoading] = useState(false);
   const [clientActivationMessage, setClientActivationMessage] = useState<string | null>(null);
   const [clientActivationError, setClientActivationError] = useState<string | null>(null);
@@ -101,30 +97,6 @@ export default function DriverProfilePage() {
       router.replace('/driver/login');
     } finally {
       setSignOutLoading(false);
-    }
-  }
-
-  async function handleDeleteAccount() {
-    if (deleteConfirm !== 'SUPPRIMER') return;
-    setDeleteError(null);
-    setDeleteLoading(true);
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        router.replace('/driver/login');
-        return;
-      }
-      await deleteUser(user);
-      router.replace('/driver/login');
-    } catch (e: unknown) {
-      const code = (e as { code?: string })?.code;
-      if (code === 'auth/requires-recent-login') {
-        setDeleteError('Pour des raisons de sécurité, reconnectez-vous puis réessayez.');
-      } else {
-        setDeleteError('Impossible de supprimer le compte. Réessayez ou contactez le support.');
-      }
-    } finally {
-      setDeleteLoading(false);
     }
   }
 
@@ -554,23 +526,13 @@ export default function DriverProfilePage() {
             <button
               onClick={handleSignOut}
               disabled={signOutLoading}
-              className="flex w-full items-center justify-between px-5 py-4 transition hover:bg-white/[0.02] disabled:opacity-50"
+              className="flex w-full items-center justify-between rounded-b-2xl px-5 py-4 transition hover:bg-white/[0.02] disabled:opacity-50"
             >
               <div className="flex items-center gap-3">
                 <MaterialIcon name="logout" className="text-[20px] text-orange-400" />
                 <span className="text-sm font-medium text-orange-400">
                   {signOutLoading ? t('driver.disconnecting') : t('auth.logout')}
                 </span>
-              </div>
-              <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
-            </button>
-            <button
-              onClick={() => setDeleteModalOpen(true)}
-              className="flex w-full items-center justify-between rounded-b-2xl px-5 py-4 transition hover:bg-white/[0.02]"
-            >
-              <div className="flex items-center gap-3">
-                <MaterialIcon name="delete_forever" className="text-[20px] text-red-400" />
-                <span className="text-sm font-medium text-red-400">{t('driver.deleteAccount')}</span>
               </div>
               <MaterialIcon name="chevron_right" className="text-[20px] text-slate-500" />
             </button>
@@ -581,59 +543,6 @@ export default function DriverProfilePage() {
       </div>
 
       <BottomNav items={driverNavItems} />
-
-      {deleteModalOpen && (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center">
-          <div className="glass-card animate-slide-up w-full max-w-md rounded-3xl p-6">
-            <div className="mb-4 flex items-start gap-3">
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-500/15">
-                <MaterialIcon name="warning" className="text-[24px] text-red-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">{t('driver.deleteAccountTitle')}</h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  {t('driver.deleteAccountDesc')}
-                </p>
-              </div>
-            </div>
-
-            <label className="mb-2 block text-xs text-slate-400">
-              {t('driver.deleteAccountConfirmPrompt')} <span className="font-mono font-bold text-red-400">{t('driver.deleteAccountWord')}</span>
-            </label>
-            <input
-              type="text"
-              value={deleteConfirm}
-              onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder={t('driver.deleteAccountWord')}
-              autoFocus
-              className="glass-input mb-3 h-12 w-full rounded-xl px-4 font-mono uppercase tracking-wider text-white placeholder:text-slate-600 outline-none focus:ring-1 focus:ring-red-400"
-            />
-
-            {deleteError && <p className="mb-3 text-xs text-red-400">{deleteError}</p>}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setDeleteModalOpen(false);
-                  setDeleteConfirm('');
-                  setDeleteError(null);
-                }}
-                disabled={deleteLoading}
-                className="h-12 flex-1 rounded-2xl bg-white/5 font-medium text-slate-300 disabled:opacity-50"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={handleDeleteAccount}
-                disabled={(deleteConfirm.trim().toUpperCase() !== t('driver.deleteAccountWord').toUpperCase() && deleteConfirm.trim().toUpperCase() !== 'SUPPRIMER') || deleteLoading}
-                className="h-12 flex-1 rounded-2xl bg-red-500 font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-500/30"
-              >
-                {deleteLoading ? t('driver.deleting') : t('common.delete')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
