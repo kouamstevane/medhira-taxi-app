@@ -27,7 +27,6 @@ import { isValidPhoneNumber } from '@/lib/validation';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 import { useTranslation } from '@/hooks/useTranslation';
-import { LanguageSelector } from '@/components/ui/LanguageSelector';
 
 function CountryFlag({ code }: { code: string }) {
   if (code === 'CA') {
@@ -301,11 +300,6 @@ export default function LoginPage() {
   return (
     <div className="h-[100dvh] max-h-[100dvh] overflow-hidden bg-background font-sans text-slate-100 antialiased">
       <div className="relative flex h-full max-h-[100dvh] w-full flex-col justify-between max-w-[375px] mx-auto px-5 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] overflow-hidden overscroll-none">
-        {/* Language Selector */}
-        <div className="absolute top-3 right-4 z-20">
-          <LanguageSelector variant="pill" />
-        </div>
-
         <div className="flex flex-col items-center justify-center pt-1 sm:pt-3">
           <div className="bg-primary/10 p-2.5 rounded-xl mb-1.5">
             <MaterialIcon name="local_taxi" className="text-primary text-[28px] font-bold" />
