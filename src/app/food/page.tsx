@@ -10,6 +10,7 @@ import { BottomNav } from '@/components/ui/BottomNav';
 import { NetworkErrorView } from '@/components/ui';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getCategoriesForMerchantType } from '@/utils/restaurant-constants';
 import Link from 'next/link';
 
 export default function FoodHomePage() {
@@ -49,6 +50,7 @@ export default function FoodHomePage() {
     setSelectedMerchantType(typeId);
     setFilters(prev => {
       const next = { ...prev };
+      delete next.cuisineType;
       if (typeId === 'all') {
         delete next.merchantType;
       } else {
@@ -234,8 +236,8 @@ export default function FoodHomePage() {
         </div>
       </div>
 
-      {/* Cuisines Sub-filter (for restaurants or all) */}
-      {(selectedMerchantType === 'all' || selectedMerchantType === 'restaurant') && (
+      {/* Dynamic Sub-filter (for current merchant type) */}
+      {(selectedMerchantType === 'all' || selectedMerchantType === 'restaurant') ? (
         <div className="px-4 mt-3">
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
             {CUISINES.map((cuisine) => {
@@ -251,6 +253,30 @@ export default function FoodHomePage() {
                   }`}
                 >
                   {t(cuisine.labelKey)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="px-4 mt-3">
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
+            {['Tous', ...getCategoriesForMerchantType(selectedMerchantType)].map((catName) => {
+              const isSelected = filters.cuisineType === catName || (!filters.cuisineType && catName === 'Tous');
+              const displayLabel = catName === 'Tous'
+                ? t('food.cuisines.all')
+                : (t(`restaurant.presetCategories.${catName}` as never) || catName);
+              return (
+                <button
+                  key={catName}
+                  onClick={() => handleCuisineFilter(catName)}
+                  className={`snap-start flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all min-h-[36px] ${
+                    isSelected
+                      ? 'bg-white/20 text-white border border-white/30'
+                      : 'bg-white/[0.03] text-slate-400 border border-white/5 hover:bg-white/10'
+                  }`}
+                >
+                  {displayLabel}
                 </button>
               );
             })}

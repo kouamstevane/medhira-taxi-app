@@ -54,4 +54,30 @@ describe('groupUsersByIdentity', () => {
 
     expect(grouped.map((user) => user.id)).toEqual(['user-1', 'user-2']);
   });
+
+  it('gère les utilisateurs avec email manquant, undefined ou null sans crasher', () => {
+    const grouped = groupUsersByIdentity([
+      { id: 'user-phone-only', firstName: 'William', lastName: 'Tewe', phoneNumber: '+33612345678' },
+      { id: 'user-null-email', firstName: 'Bob', lastName: 'Martin', email: null, phoneNumber: '+33698765432' },
+      { id: 'user-undefined-email', firstName: 'Alice', lastName: 'Dupont', email: undefined },
+    ]);
+
+    expect(grouped).toHaveLength(3);
+    expect(grouped[0].id).toBe('user-phone-only');
+    expect(grouped[0].email).toBe('');
+    expect(grouped[0].roles).toContain('client');
+    expect(grouped[1].id).toBe('user-null-email');
+    expect(grouped[2].id).toBe('user-undefined-email');
+  });
+
+  it('détecte correctement les rôles sous forme de tableau ou activeRole', () => {
+    const grouped = groupUsersByIdentity([
+      { id: 'user-driver-arr', firstName: 'Chauffeur', lastName: 'Un', roles: ['driver'], activeRole: 'driver' },
+      { id: 'user-active-resto', firstName: 'Chef', lastName: 'Resto', activeRole: 'restaurant' },
+    ]);
+
+    expect(grouped).toHaveLength(2);
+    expect(grouped[0].roles).toContain('driver');
+    expect(grouped[1].roles).toContain('restaurant');
+  });
 });

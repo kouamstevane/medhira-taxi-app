@@ -2,7 +2,7 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
-import twilio from 'twilio';
+import type twilio from 'twilio';
 import {
   handleStartPhoneVerification,
   handleVerifyPhoneCode,
@@ -54,7 +54,10 @@ function getIp(request: CallableRequest<unknown>): string {
 }
 
 function getTwilioClient() {
-  return twilio(twilioAccountSid.value(), twilioAuthToken.value());
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const twilioMod = require('twilio');
+  const twilioFn = (twilioMod.default ?? twilioMod) as typeof twilio;
+  return twilioFn(twilioAccountSid.value(), twilioAuthToken.value());
 }
 
 function getVerifyService() {

@@ -300,11 +300,10 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
         : rawMessage;
       setCanOpenLocationSettings(locationServicesDisabled && Capacitor.getPlatform() === 'android');
       setLocationFeedback({ type: 'error', message });
-      showError(message);
     } finally {
       setIsLocating(false);
     }
-  }, [applyCountryFields, getCurrentPosition, showError, t]);
+  }, [applyCountryFields, getCurrentPosition, t]);
 
   const handleOpenLocationSettings = useCallback(async () => {
     try {

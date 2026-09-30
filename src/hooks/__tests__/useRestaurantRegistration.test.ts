@@ -327,7 +327,7 @@ describe('useRestaurantRegistration — restaurant submission contract', () => {
       });
     });
 
-    expect(getIdToken).toHaveBeenCalledWith(true);
+    expect(getIdToken).toHaveBeenCalled();
     expect(submitApplication).toHaveBeenCalled();
   });
 

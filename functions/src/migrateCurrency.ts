@@ -18,7 +18,9 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-const storage = admin.storage();
+function getStorage() {
+  return admin.storage();
+}
 
 /**
  * Taux de conversion FCFA → CAD
@@ -67,7 +69,7 @@ function convertFCFAToCAD(amountFCFA: number, conversionRate: number = CONVERSIO
 async function backupCollection(collectionName: string): Promise<void> {
   logger.info(`📦 Backup de la collection: ${collectionName}`);
   
-  const bucket = storage.bucket();
+  const bucket = getStorage().bucket();
   const backupFileName = `backups/${collectionName}_${Date.now()}.json`;
   const file = bucket.file(backupFileName);
   

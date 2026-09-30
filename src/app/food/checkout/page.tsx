@@ -155,12 +155,17 @@ export default function CheckoutPage() {
     setErrorMsg(null);
 
     if (!isPickup && !hasValidAddress) {
-      setErrorMsg('Renseignez une adresse de livraison valide (5 à 500 caractères).');
+      setErrorMsg(t('food.invalidDeliveryAddressError'));
       return;
     }
 
     if (!canStartCheckout) {
-      setErrorMsg(`Solde insuffisant (${(walletBalance ?? 0).toFixed(2)} ${CURRENCY_CODE} disponibles pour un total de ${total.toFixed(2)} ${CURRENCY_CODE}). Veuillez recharger votre portefeuille.`);
+      setErrorMsg(
+        t('food.insufficientBalanceError', {
+          available: `${(walletBalance ?? 0).toFixed(2)} ${CURRENCY_CODE}`,
+          total: `${total.toFixed(2)} ${CURRENCY_CODE}`,
+        }),
+      );
       return;
     }
 
@@ -170,7 +175,7 @@ export default function CheckoutPage() {
         if (paymentMethod === 'card') {
           const payment = await FoodDeliveryService.payFoodOrderWithCard(serverOrder.orderId);
           if (!payment.clientSecret || !payment.amount || !payment.currency) {
-            throw new Error('Impossible de préparer le paiement carte.');
+            throw new Error(t('food.cardPaymentInitError'));
           }
           setCardPayment({
             orderId: serverOrder.orderId,
@@ -186,7 +191,7 @@ export default function CheckoutPage() {
         } catch (payError) {
           await cancelUnpaidOrder(serverOrder.orderId, 'payment_failed');
           const msg = payError instanceof Error ? payError.message : String(payError);
-          throw new Error(`Paiement échoué: ${msg}`);
+          throw new Error(t('food.paymentFailedError', { message: msg }));
         }
 
         setSubmitted(true);
@@ -209,7 +214,7 @@ export default function CheckoutPage() {
       );
       const validation = validateCartForCheckout(items, detailsByItemId);
       if (!validation.valid) {
-        throw new Error(validation.errors[0]?.message ?? 'Vérifiez les personnalisations avant de continuer.');
+        throw new Error(validation.errors[0]?.message ?? t('food.checkCustomizationsError'));
       }
 
       const orderItems = buildCheckoutOrderItems(items);
@@ -220,7 +225,7 @@ export default function CheckoutPage() {
         orderItems,
         deliveryDistance: isPickup ? 0 : deliveryDistance,
         isWeekend,
-        deliveryAddress: isPickup ? (restaurant.address || restaurant.name || 'Retrait en magasin') : deliveryAddress,
+        deliveryAddress: isPickup ? (restaurant.address || restaurant.name || t('food.pickupInStore')) : deliveryAddress,
         deliveryPreference,
         deliveryInstructions,
         paymentMethod,
@@ -230,7 +235,7 @@ export default function CheckoutPage() {
       return;
     } catch (error: unknown) {
       console.error('Erreur lors de la validation:', error);
-      const msg = getFoodCheckoutErrorMessage(error);
+      const msg = getFoodCheckoutErrorMessage(error, t);
       setErrorMsg(msg);
     } finally {
       setLoading(false);
@@ -247,7 +252,7 @@ export default function CheckoutPage() {
       clearCart();
       router.push(getFoodOrderDetailPath(cardPayment.orderId));
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Paiement carte non confirmé.';
+      const msg = error instanceof Error ? error.message : t('food.cardPaymentNotConfirmed');
       setErrorMsg(msg);
     } finally {
       setLoading(false);

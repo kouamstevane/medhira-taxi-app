@@ -7,6 +7,10 @@ jest.mock('@/components/ui/MaterialIcon', () => ({
 }));
 
 describe('DriverInviteModal', () => {
+  afterEach(() => {
+    document.body.style.overflow = '';
+  });
+
   it('does not render when isOpen is false', () => {
     const { container } = render(
       <DriverInviteModal
@@ -24,7 +28,7 @@ describe('DriverInviteModal', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders input fields and submits form when valid', () => {
+  it('renders input fields, transitions to confirmation step, and submits on final confirmation', () => {
     const handleSubmit = jest.fn((e) => e.preventDefault());
     const handleEmailChange = jest.fn();
     const handleClose = jest.fn();
@@ -45,11 +49,47 @@ describe('DriverInviteModal', () => {
     expect(screen.getByRole('heading', { name: /Inviter un chauffeur/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/Email du postulant/i)).toHaveValue('test@example.com');
 
-    const submitBtn = screen.getByRole('button', { name: /Envoyer l[’']invitation/i });
-    expect(submitBtn).toBeEnabled();
+    // Step 1: Click "Continuer vers l’envoi"
+    const continueBtn = screen.getByRole('button', { name: /Continuer vers l[’']envoi/i });
+    expect(continueBtn).toBeEnabled();
+    fireEvent.click(continueBtn);
 
-    fireEvent.click(submitBtn);
-    expect(handleSubmit).toHaveBeenCalled();
+    // Step 2: Confirmation view is shown
+    expect(screen.getByRole('heading', { name: /Confirmer l[’']envoi de l[’']invitation/i })).toBeInTheDocument();
+    expect(screen.getByText(/Validation de l[’']envoi/i)).toBeInTheDocument();
+    expect(screen.getByText('test@example.com')).toBeInTheDocument();
+
+    const confirmBtn = screen.getByRole('button', { name: /Confirmer et envoyer l[’']email/i });
+    expect(confirmBtn).toBeEnabled();
+
+    fireEvent.click(confirmBtn);
+    expect(handleSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows going back to modify details from the confirmation step', () => {
+    render(
+      <DriverInviteModal
+        isOpen={true}
+        onClose={jest.fn()}
+        email="candidate@example.com"
+        onEmailChange={jest.fn()}
+        role="livreur"
+        onRoleChange={jest.fn()}
+        onSubmit={jest.fn()}
+        isLoading={false}
+      />
+    );
+
+    // Advance to confirmation step
+    fireEvent.click(screen.getByRole('button', { name: /Continuer vers l[’']envoi/i }));
+    expect(screen.getByText(/Validation de l[’']envoi/i)).toBeInTheDocument();
+
+    // Click "Modifier" to return to step 1
+    const modifyBtn = screen.getByRole('button', { name: /Modifier/i });
+    fireEvent.click(modifyBtn);
+
+    expect(screen.getByRole('heading', { name: /Inviter un chauffeur/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Email du postulant/i)).toBeInTheDocument();
   });
 
   it('allows closing via the close button', () => {
@@ -74,7 +114,7 @@ describe('DriverInviteModal', () => {
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
-  it('uses a bottom sheet on mobile and stays centered on larger screens', () => {
+  it('uses the shared BottomSheet with gesture handle and accessible panel', () => {
     render(
       <DriverInviteModal
         isOpen={true}
@@ -89,19 +129,39 @@ describe('DriverInviteModal', () => {
     );
 
     const dialog = screen.getByRole('dialog');
-    expect(dialog).toHaveClass('items-end', 'sm:items-center', 'p-0', 'sm:p-4', 'z-[60]');
-    const panel = screen.getByTestId('driver-invite-panel');
-    expect(panel).toHaveClass('rounded-t-3xl', 'rounded-b-none', 'sm:rounded-2xl');
-    expect(screen.getByTestId('driver-invite-handle')).toBeInTheDocument();
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getByTestId('bottom-sheet-handle')).toBeInTheDocument();
+    expect(screen.getByTestId('driver-invite-panel')).toBeInTheDocument();
     expect(screen.getByLabelText(/Email du postulant/i)).not.toHaveFocus();
   });
 
-  it('makes the final action explicitly about sending the invitation', () => {
+  it('allows selecting role via interactive touch options without unexpected unmount', () => {
+    const handleRoleChange = jest.fn();
+
     render(
       <DriverInviteModal
         isOpen={true}
         onClose={jest.fn()}
         email="test@example.com"
+        onEmailChange={jest.fn()}
+        role="chauffeur"
+        onRoleChange={handleRoleChange}
+        onSubmit={jest.fn()}
+        isLoading={false}
+      />
+    );
+
+    const livreurRadio = screen.getByRole('radio', { name: 'Livreur' });
+    fireEvent.click(livreurRadio);
+    expect(handleRoleChange).toHaveBeenCalledWith('livreur');
+  });
+
+  it('disables continue button when email is empty', () => {
+    render(
+      <DriverInviteModal
+        isOpen={true}
+        onClose={jest.fn()}
+        email="   "
         onEmailChange={jest.fn()}
         role="chauffeur"
         onRoleChange={jest.fn()}
@@ -110,6 +170,7 @@ describe('DriverInviteModal', () => {
       />
     );
 
-    expect(screen.getByRole('button', { name: /Envoyer l[’']invitation/i })).toBeInTheDocument();
+    const continueBtn = screen.getByRole('button', { name: /Continuer vers l[’']envoi/i });
+    expect(continueBtn).toBeDisabled();
   });
 });

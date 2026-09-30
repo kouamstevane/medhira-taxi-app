@@ -76,7 +76,7 @@ export function ProfilePaymentMethodsModal({
       <div className="space-y-5 pb-2">
         {/* Intro */}
         <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-          <div className="w-10 h-10 rounded-2xl bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary shrink-0">
             <MaterialIcon name="credit_card" className="text-[20px]" />
           </div>
           <div>
@@ -98,9 +98,9 @@ export function ProfilePaymentMethodsModal({
           </div>
 
           {hasPaymentMethod ? (
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-[#181d38] to-slate-950 border border-indigo-500/30 p-5 space-y-4 shadow-2xl">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-zinc-900 via-zinc-850 to-black border border-white/10 p-5 space-y-4 shadow-2xl">
               {/* Subtle background glow */}
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/15 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
 
               {/* Card Top Row */}
               <div className="flex items-center justify-between relative">
@@ -110,7 +110,7 @@ export function ProfilePaymentMethodsModal({
                   </div>
                   <MaterialIcon name="wifi" className="text-slate-400 text-[18px] rotate-90" />
                 </div>
-                <span className="text-xs font-bold tracking-wider text-indigo-300">
+                <span className="text-xs font-bold tracking-wider text-slate-300">
                   {brandName}
                 </span>
               </div>

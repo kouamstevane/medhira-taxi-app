@@ -22,7 +22,7 @@ export function DeleteMenuItemDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="delete-menu-item-dialog-title"
-        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#171a20] p-5 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-[#18181b] p-5 shadow-2xl"
       >
         <h2 id="delete-menu-item-dialog-title" className="text-lg font-bold text-white">
           {t('deleteItemPrompt')}

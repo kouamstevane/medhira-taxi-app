@@ -32,7 +32,7 @@ import {
   filterAdminDrivers,
   hideReviewedDriverApplications,
 } from './adminDriversData';
-import { getApplicationActionsClassName, getInvitationPreparedMessage } from './adminDriversUi';
+import { getApplicationActionsClassName } from './adminDriversUi';
 import { buildAdminDriverActionPayload } from './adminDriversActions';
 
 export interface Driver {
@@ -284,7 +284,6 @@ export default function AdminDriversPage() {
     setInvitationEmail(application.email);
     if (application.role) setInvitationRole(application.role);
     setIsInviteModalOpen(true);
-    showSuccess(getInvitationPreparedMessage(application.email));
   };
 
 
@@ -529,10 +528,14 @@ export default function AdminDriversPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleApplicationForInvitation(application)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleApplicationForInvitation(application);
+                        }}
                         className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-primary/90"
                       >
-                        <MaterialIcon name="send" size="sm" />
+                        <MaterialIcon name="person_add" size="sm" />
                         <span>Préparer l’invitation</span>
                       </button>
                     </div>
@@ -546,9 +549,9 @@ export default function AdminDriversPage() {
         {/* Drivers Section */}
         {activeTab === 'drivers' && (
           <div className="space-y-5 sm:space-y-6">
-            {/* 4-column Segmented Controls for Status */}
+            {/* Segmented Controls for Status */}
             <section className="rounded-xl bg-white/[0.03] p-1.5 sm:p-2">
-              <div role="tablist" aria-label="Filtres statut chauffeurs" className="grid grid-cols-4 gap-1.5">
+              <div role="tablist" aria-label="Filtres statut chauffeurs" className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scrollbar-none sm:grid sm:grid-cols-4">
                 {(['all', 'pending', 'approved', 'rejected'] as const).map((f) => (
                   <button
                     key={f}
@@ -556,13 +559,13 @@ export default function AdminDriversPage() {
                     role="tab"
                     aria-selected={filter === f}
                     onClick={() => setFilter(f)}
-                    className={`flex min-h-[44px] sm:min-h-14 min-w-0 items-center justify-start gap-1.5 rounded-xl px-2.5 py-2 text-left transition-colors sm:px-3.5 ${
+                    className={`flex min-h-[44px] sm:min-h-14 shrink-0 sm:shrink items-center justify-between sm:justify-start gap-2 rounded-xl px-3 py-2 text-left transition-colors sm:px-3.5 ${
                       filter === f
                         ? 'bg-white/[0.09] text-white shadow-sm'
                         : 'text-slate-400 hover:bg-white/5 hover:text-white'
                     }`}
                   >
-                    <span className={`truncate text-[11px] font-semibold transition-colors sm:text-xs ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
+                    <span className={`whitespace-nowrap text-xs font-semibold transition-colors ${filter === f ? 'text-primary' : 'text-slate-400'}`}>
                       {f === 'all' ? 'Tous' : f === 'pending' ? 'En attente' : f === 'approved' ? 'Approuvés' : 'Refusés'}
                     </span>
                     <span className={`inline-flex min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold sm:text-xs ${filter === f ? 'bg-primary text-white' : 'bg-white/10 text-slate-300'}`}>
@@ -573,7 +576,7 @@ export default function AdminDriversPage() {
               </div>
 
               {/* Profile Type filter pills */}
-              <div role="tablist" aria-label="Types de profil" className="mt-1 flex gap-1.5 overflow-x-auto pt-1">
+              <div role="tablist" aria-label="Types de profil" className="mt-1 flex gap-1.5 overflow-x-auto pt-1 no-scrollbar scrollbar-none">
                 {(['all', 'chauffeur', 'livreur', 'les_deux'] as const).map((t) => (
                   <button
                     key={t}

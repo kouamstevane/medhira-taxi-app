@@ -23,6 +23,7 @@ export default function DriverRegisterWizard() {
     currentStep,
     loading,
     error,
+    clearError,
     warning,
     isSubmitting,
     submissionSuccess,
@@ -99,12 +100,22 @@ export default function DriverRegisterWizard() {
 
         <div className="p-8">
           {error && (
-            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-xl flex">
-              <MaterialIcon name="error" size="md" className="text-destructive mr-3 shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-medium text-destructive">{error}</p>
-                <p className="text-sm mt-1 text-slate-400">{t('driver.supportFallback')}</p>
+            <div className="mb-6 p-4 bg-destructive/10 border border-destructive/30 rounded-xl flex items-start justify-between gap-3 animate-in fade-in transition-all duration-300" role="alert">
+              <div className="flex items-start gap-3 min-w-0">
+                <MaterialIcon name="error" size="md" className="text-destructive shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-destructive">{error}</p>
+                  <p className="text-sm mt-1 text-slate-400">{t('driver.supportFallback')}</p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={clearError}
+                className="p-1 rounded-lg text-destructive/70 hover:text-destructive hover:bg-white/10 transition-colors shrink-0"
+                aria-label="Fermer"
+              >
+                <MaterialIcon name="close" size="sm" />
+              </button>
             </div>
           )}
           {warning && (

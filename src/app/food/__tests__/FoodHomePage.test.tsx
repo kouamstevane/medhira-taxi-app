@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import FoodHomePage from '@/app/food/page';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 
@@ -41,5 +41,35 @@ describe('FoodHomePage order tracking entry point', () => {
     });
 
     expect(screen.getByRole('button', { name: /réessayer/i })).toBeInTheDocument();
+  });
+
+  it('updates category filters when selecting retail merchant type and filters by category', async () => {
+    const mockGetApproved = FoodDeliveryService.getApprovedRestaurants as jest.Mock;
+    mockGetApproved.mockResolvedValue({ restaurants: [], lastDoc: null });
+
+    render(<FoodHomePage />);
+
+    // Select retail / boutique merchant type
+    const retailBtn = screen.getByRole('button', { name: /Boutique/i });
+    fireEvent.click(retailBtn);
+
+    // Verify retail categories appear
+    expect(await screen.findByRole('button', { name: 'Mode Femme' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Informatique & Téléphonie' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Maison & Décoration' })).toBeInTheDocument();
+
+    // Click on a category filter
+    fireEvent.click(screen.getByRole('button', { name: 'Mode Femme' }));
+
+    await waitFor(() => {
+      expect(mockGetApproved).toHaveBeenCalledWith(
+        expect.objectContaining({
+          merchantType: 'retail',
+          cuisineType: 'Mode Femme',
+        }),
+        20,
+        null
+      );
+    });
   });
 });

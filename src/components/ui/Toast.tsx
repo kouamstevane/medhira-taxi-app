@@ -31,24 +31,33 @@ export const GlobalToast: React.FC<GlobalToastProps> = ({ toast, visible, onDism
     info: <Info className="h-5 w-5 text-blue-400" />,
   };
 
-  const borders = {
-    success: 'border-emerald-500/30',
-    error: 'border-rose-500/30',
-    warning: 'border-amber-500/30',
-    info: 'border-blue-500/30',
+  const badgeBgs = {
+    success: 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400',
+    error: 'bg-rose-500/20 border-rose-500/30 text-rose-400',
+    warning: 'bg-amber-500/20 border-amber-500/30 text-amber-400',
+    info: 'bg-blue-500/20 border-blue-500/30 text-blue-400',
+  };
+
+  const cardStyles = {
+    success: 'bg-[#0d1f18] border-emerald-500/50 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8),0_0_25px_rgba(16,185,129,0.2)]',
+    error: 'bg-[#230f13] border-rose-500/50 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8),0_0_25px_rgba(239,68,68,0.2)]',
+    warning: 'bg-[#261e12] border-amber-500/50 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8),0_0_25px_rgba(245,158,11,0.2)]',
+    info: 'bg-[#121c2a] border-blue-500/50 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8),0_0_25px_rgba(59,130,246,0.2)]',
   };
 
   return (
     <div
       role="status"
-      className={`flex w-[min(92vw,420px)] items-start gap-3 rounded-xl border bg-[#1A1A1A]/95 p-4 text-white shadow-2xl backdrop-blur-md ${borders[toast.type]} ${visible ? 'medjira-toast-enter' : 'medjira-toast-exit'}`}
+      className={`flex w-[min(92vw,440px)] items-center gap-3.5 rounded-2xl border p-4 text-white backdrop-blur-xl ${cardStyles[toast.type]} ${visible ? 'medjira-toast-enter' : 'medjira-toast-exit'}`}
     >
-      <span className="mt-0.5 shrink-0">{icons[toast.type]}</span>
-      <p className="min-w-0 flex-1 text-sm font-medium leading-5">{toast.message}</p>
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${badgeBgs[toast.type]}`}>
+        {icons[toast.type]}
+      </div>
+      <p className="min-w-0 flex-1 text-sm font-semibold leading-5 text-white">{toast.message}</p>
       <button
         type="button"
         onClick={onDismiss}
-        className="-m-1 shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+        className="-m-1 shrink-0 rounded-xl p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
         aria-label="Fermer la notification"
       >
         <X className="h-4 w-4" />

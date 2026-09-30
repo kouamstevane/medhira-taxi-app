@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useMemo, useState } from 'react';
 import { MenuItemImage } from '@/components/food/MenuItemImage';
 import { CustomerMenuItemDetails } from '@/components/food/CustomerMenuItemDetails';

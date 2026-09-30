@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { InputField } from '@/components/forms/InputField';
 import { cn } from '@/lib/utils';
@@ -31,20 +31,29 @@ export function Step1Account({ onSubmit, onGoogleSignIn, loading, error: externa
 
   const error = externalError || localError;
 
+  useEffect(() => {
+    if (!localError) return;
+    const timer = setTimeout(() => setLocalError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [localError]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setLocalError(null);
 
     if (!firstName.trim() || !lastName.trim()) {
-      setLocalError(t('requiredNamesError'));
+      const msg = t('requiredNamesError');
+      setLocalError(msg);
       return;
     }
     if (!email.trim() || !email.includes('@')) {
-      setLocalError(t('invalidEmailError'));
+      const msg = t('invalidEmailError');
+      setLocalError(msg);
       return;
     }
     if (!isValidPassword(password)) {
-      setLocalError(t('passwordMinLengthError'));
+      const msg = t('passwordMinLengthError');
+      setLocalError(msg);
       return;
     }
 
@@ -58,8 +67,19 @@ export function Step1Account({ onSubmit, onGoogleSignIn, loading, error: externa
         <p className="text-gray-400 mb-6">{t('step1Subtitle')}</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm" role="alert">
-            {error}
+          <div
+            className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-center justify-between gap-2 transition-all duration-300 animate-in fade-in"
+            role="alert"
+          >
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => setLocalError(null)}
+              className="p-1 rounded-lg text-red-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              aria-label="Fermer"
+            >
+              <MaterialIcon name="close" size="sm" />
+            </button>
           </div>
         )}
 

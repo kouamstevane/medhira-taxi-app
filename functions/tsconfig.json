@@ -12,7 +12,9 @@
     "target": "es2017",
     "jsx": "react-jsx",
     "lib": ["esnext", "dom"],
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "incremental": true,
+    "tsBuildInfoFile": "lib/.tsbuildinfo"
   },
   "compileOnSave": true,
   "include": [

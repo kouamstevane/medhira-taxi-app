@@ -1,5 +1,3 @@
-import yauzl from 'yauzl';
-
 const MAX_UNCOMPRESSED_TOTAL_BYTES = 64 * 1024 * 1024; // 64 MiB
 const MAX_ENTRIES_COUNT = 1000;
 
@@ -7,8 +5,9 @@ const MAX_ENTRIES_COUNT = 1000;
  * Inspects a ZIP/XLSX archive before decompression to prevent ZIP bombs and resource exhaustion.
  */
 export async function assertXlsxArchiveWithinLimits(buffer: Buffer): Promise<void> {
+  const yauzlMod = (await import('yauzl')).default;
   return new Promise((resolve, reject) => {
-    yauzl.fromBuffer(buffer, { lazyEntries: true }, (err, zipfile) => {
+    yauzlMod.fromBuffer(buffer, { lazyEntries: true }, (err, zipfile) => {
       if (err) {
         return reject(new Error(`Fichier XLSX invalide ou corrompu: ${err.message}`));
       }

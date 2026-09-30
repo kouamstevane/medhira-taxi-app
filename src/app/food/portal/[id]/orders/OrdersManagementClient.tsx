@@ -99,27 +99,29 @@ export default function OrdersManagementClient() {
           },
           (err) => {
             console.error("Error loading orders:", err);
-            if (
+            const isNet =
               isFirestoreNetworkError(err) ||
               (err as Error)?.message?.toLowerCase().includes('offline') ||
-              (typeof navigator !== 'undefined' && !navigator.onLine)
-            ) {
+              (typeof navigator !== 'undefined' && !navigator.onLine);
+            if (isNet) {
               setIsNetworkError(true);
+            } else {
+              showError(t('ordersLoadError'));
             }
-            showError(t('ordersLoadError'));
             setLoading(false);
           },
         );
       } catch (error) {
         console.error("Error loading orders:", error);
-        if (
+        const isNet =
           isFirestoreNetworkError(error) ||
           (error as Error)?.message?.toLowerCase().includes('offline') ||
-          (typeof navigator !== 'undefined' && !navigator.onLine)
-        ) {
+          (typeof navigator !== 'undefined' && !navigator.onLine);
+        if (isNet) {
           setIsNetworkError(true);
+        } else {
+          showError(t('ordersLoadError'));
         }
-        showError(t('ordersLoadError'));
         setLoading(false);
       }
     });
@@ -154,7 +156,8 @@ export default function OrdersManagementClient() {
       ) {
         setIsNetworkError(true);
       }
-      showError(t('historyLoadError'));
+      const isNet = isFirestoreNetworkError(error) || (error as Error)?.message?.toLowerCase().includes('offline') || (typeof navigator !== 'undefined' && !navigator.onLine);
+      if (!isNet) showError(t('historyLoadError'));
     } finally {
       setHistoryLoading(false);
     }
@@ -415,7 +418,7 @@ export default function OrdersManagementClient() {
                           <p className="mt-0.5 text-xs text-slate-300">{t('nextActionDesc')}</p>
                         </div>
                         <div className="flex w-full gap-2 sm:w-auto sm:justify-end">
-                          {order.status === 'confirmed' && (
+                          {(order.status === 'confirmed' || order.status === 'pending') && (
                             <button
                               onClick={() => updateOrderStatus(order.id, 'accepted')}
                               className="h-11 min-h-[44px] flex-1 rounded-lg bg-primary px-3 text-xs font-bold text-white sm:flex-none sm:px-4 sm:text-sm"

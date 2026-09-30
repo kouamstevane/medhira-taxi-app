@@ -28,7 +28,11 @@ export function getRestaurantIdsFromRole(role: unknown): string[] {
 }
 
 export const submitRestaurantApplication = onCall(
-  { region: 'europe-west1' },
+  {
+    region: 'europe-west1',
+    memory: '256MiB',
+    cpu: 1,
+  },
   async (request: CallableRequest) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Vous devez être connecté.');

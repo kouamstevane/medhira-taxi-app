@@ -142,6 +142,12 @@ export default function MenuManagementClient() {
     }
   }, [id, router]);
 
+  useEffect(() => {
+    if (!compressionError) return;
+    const timer = setTimeout(() => setCompressionError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [compressionError]);
+
   const showErrorRef = useRef(showError);
   showErrorRef.current = showError;
 
@@ -286,7 +292,6 @@ export default function MenuManagementClient() {
       if (!controller.signal.aborted) {
         const msg = err instanceof Error ? err.message : "Échec de la compression de l'image";
         setCompressionError(msg);
-        showError(msg);
       }
     } finally {
       if (compressionAbortControllerRef.current === controller) {

@@ -30,7 +30,7 @@ export const useToast = (): UseToastReturn => {
         visible: toastInstance.visible,
         onDismiss: () => globalToast.dismiss(toastInstance.id),
       })
-    ), { id, duration });
+    ), { id, duration, style: { background: 'transparent', boxShadow: 'none', padding: 0, border: 'none' } });
   }, []);
 
   const showSuccess = useCallback((message: string, duration?: number) => {

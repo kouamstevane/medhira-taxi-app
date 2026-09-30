@@ -2,9 +2,9 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import toast from 'react-hot-toast';
 import OTPInput from '@/components/ui/OTPInput';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { Alert } from '@/components/ui/Alert';
 import { functions } from '@/config/firebase';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -21,6 +21,14 @@ export function Step2EmailVerification({ email, onVerified, loading: externalLoa
   const [localError, setLocalError] = useState<string | null>(null);
   const initialRequestEmail = useRef<string | null>(null);
 
+  useEffect(() => {
+    if (!localError) return;
+    const timer = setTimeout(() => {
+      setLocalError(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [localError]);
+
   const error = externalError || localError;
 
   const sendCode = useCallback(async () => {
@@ -35,12 +43,10 @@ export function Step2EmailVerification({ email, onVerified, loading: externalLoa
       if (mapped.code === 'functions/resource-exhausted') {
         const msg = t('tooManyAttemptsError');
         setLocalError(msg);
-        toast.error(msg);
         return { success: false, error: t('tooManyAttempts') };
       } else {
         const msg = mapped.message || t('codeSentError');
         setLocalError(msg);
-        toast.error(msg);
         return { success: false, error: msg };
       }
     } finally {
@@ -76,9 +82,12 @@ export function Step2EmailVerification({ email, onVerified, loading: externalLoa
         <p className="text-gray-400 mb-6">{t('step2Subtitle')} <strong>{email}</strong></p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm" role="alert">
-            {error}
-          </div>
+          <Alert
+            type="error"
+            message={error}
+            onClose={() => setLocalError(null)}
+            className="mb-4"
+          />
         )}
 
         <div className="flex justify-center mb-6">

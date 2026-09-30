@@ -1,6 +1,45 @@
+export const MERCHANT_PRESET_CATEGORIES: Record<MerchantType, readonly string[]> = {
+  restaurant: [
+    'Africaine', 'Européenne', 'Asiatique', 'Fast Food', 'Pâtisserie',
+    'Pizza', 'Burger', 'Grillades', 'Salades & Santé', 'Street Food',
+    'Végétarien & Bio', 'Desserts', 'Italien', 'Français',
+  ],
+  supermarket: [
+    'Fruits & Légumes', 'Produits frais', 'Boucherie & Volaille',
+    'Poissonnerie', 'Épicerie salée', 'Épicerie sucrée', 'Boissons & Jus',
+    'Surgelés', 'Entretien & Maison', 'Hygiène & Beauté', 'Bio & Diététique',
+  ],
+  pharmacy: [
+    'Cosmétiques & Beauté', 'Bien-être & Santé', 'Premiers secours',
+    'Maternité & Bébé', 'Compléments alimentaires', 'Matériel médical',
+    'Hygiène corporelle', 'Soins & Pansements', 'Bio & Naturel',
+  ],
+  grocery: [
+    'Fruits & Légumes', 'Produits frais', 'Boucherie',
+    'Épicerie salée', 'Épicerie sucrée', 'Boissons & Jus', 'Surgelés',
+    'Produits du terroir', 'Épices & Condiments', 'Bio & Artisanal',
+  ],
+  bakery: [
+    'Pains & Baguettes', 'Viennoiseries', 'Pâtisseries',
+    'Sandwiches & Snacking', 'Boissons chaudes', 'Boissons fraîches',
+    'Traiteur & Salades', 'Gâteaux & Tartes',
+  ],
+  retail: [
+    'Mode Femme', 'Mode Homme', 'Chaussures', 'Maroquinerie & Sacs',
+    'Bijoux & Montres', 'Beauté & Parfumerie', 'Informatique & Téléphonie',
+    'High-Tech & Audio', 'Maison & Décoration', 'Cuisine & Art de la table',
+    'Électroménager', 'Sport & Fitness', 'Bricolage & Jardin', 'Jeux & Jouets',
+    'Papeterie & Cadeaux',
+  ],
+  other: [
+    'Fleurs & Plantes', 'Papeterie & Fournitures', 'Animalerie',
+    'Artisanat & Cadeaux', 'Épicerie fine', 'Presse & Tabac', 'Services & Divers',
+  ],
+};
+
 export const CUISINE_TYPES = [
   'Africaine', 'Européenne', 'Asiatique', 'Fast Food', 'Pâtisserie',
-  'Pizza', 'Burger', 'Santé/Bio', 'Desserts',
+  'Pizza', 'Burger', 'Bio', 'Desserts',
 ] as const;
 
 export const RESTAURANT_DAYS = [
@@ -15,6 +54,13 @@ export const RESTAURANT_DAYS = [
 
 export type CuisineType = (typeof CUISINE_TYPES)[number];
 export type RestaurantDayKey = (typeof RESTAURANT_DAYS)[number]['key'];
+
+export function getCategoriesForMerchantType(type?: MerchantType | string | null): readonly string[] {
+  if (type && type in MERCHANT_PRESET_CATEGORIES) {
+    return MERCHANT_PRESET_CATEGORIES[type as MerchantType];
+  }
+  return MERCHANT_PRESET_CATEGORIES.restaurant;
+}
 
 export type MerchantType =
   | 'restaurant'
@@ -38,43 +84,43 @@ export const MERCHANT_TYPES_CONFIG: MerchantTypeOption[] = [
     id: 'restaurant',
     labelKey: 'restaurant.merchantTypes.restaurant',
     icon: 'restaurant',
-    defaultLabelFr: 'Restaurant & Restauration rapide',
-    defaultLabelEn: 'Restaurant & Fast Food',
+    defaultLabelFr: 'Restaurant',
+    defaultLabelEn: 'Restaurant',
   },
   {
     id: 'supermarket',
     labelKey: 'restaurant.merchantTypes.supermarket',
     icon: 'local_grocery_store',
-    defaultLabelFr: 'Supermarché & Épicerie',
-    defaultLabelEn: 'Supermarket & Grocery',
+    defaultLabelFr: 'Supermarché',
+    defaultLabelEn: 'Supermarket',
   },
   {
     id: 'pharmacy',
     labelKey: 'restaurant.merchantTypes.pharmacy',
     icon: 'local_pharmacy',
-    defaultLabelFr: 'Pharmacie & Parapharmacie',
-    defaultLabelEn: 'Pharmacy & Health',
+    defaultLabelFr: 'Pharmacie',
+    defaultLabelEn: 'Pharmacy',
   },
   {
     id: 'bakery',
     labelKey: 'restaurant.merchantTypes.bakery',
     icon: 'bakery_dining',
-    defaultLabelFr: 'Boulangerie & Pâtisserie',
-    defaultLabelEn: 'Bakery & Pastry',
+    defaultLabelFr: 'Boulangerie',
+    defaultLabelEn: 'Bakery',
   },
   {
     id: 'retail',
     labelKey: 'restaurant.merchantTypes.retail',
     icon: 'shopping_bag',
-    defaultLabelFr: 'Boutique & Vêtements / Électronique',
-    defaultLabelEn: 'Shop & Retail (Fashion, Tech, etc.)',
+    defaultLabelFr: 'Boutique',
+    defaultLabelEn: 'Retail',
   },
   {
     id: 'other',
     labelKey: 'restaurant.merchantTypes.other',
     icon: 'storefront',
-    defaultLabelFr: 'Autre commerce / Vendeur indépendant',
-    defaultLabelEn: 'Other Merchant / Independent Seller',
+    defaultLabelFr: 'Autre',
+    defaultLabelEn: 'Other',
   },
 ];
 

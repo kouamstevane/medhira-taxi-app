@@ -14,7 +14,6 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import toast from 'react-hot-toast';
 import { db, auth, functions } from '@/config/firebase';
 import { mapHttpsError } from '@/services/cloud-functions.helpers';
 import { createRestaurantOnboardingAccount, signInWithGoogleForRestaurant, signOut } from '@/services/auth.service';
@@ -84,10 +83,46 @@ export function useRestaurantRegistration() {
   const [restoringDraft, setRestoringDraft] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
+  // Auto-dismiss errors after 5s so they never remain permanently fixed
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
   const [step1Data, setStep1DataState] = useState<Partial<Step1Data>>({});
   const [step2Data, setStep2DataState] = useState<Partial<Step2Data>>({});
   const [step3Data, setStep3DataState] = useState<Partial<Step3Data>>({});
   const [step4Data, setStep4DataState] = useState<Partial<Step4Data>>({});
+
+  // Cache of pre-compressed image blobs so heavy canvas processing occurs ahead of time
+  const preparedVisualsRef = useRef<{
+    logo?: { file: File; blob: Blob };
+    cover?: { file: File; blob: Blob };
+  }>({});
+
+  useEffect(() => {
+    if (step3Data.logoFile && preparedVisualsRef.current.logo?.file !== step3Data.logoFile) {
+      const file = step3Data.logoFile;
+      void prepareRestaurantImage(file, 'logo')
+        .then((blob) => {
+          preparedVisualsRef.current.logo = { file, blob };
+        })
+        .catch(() => {
+          // Fallback will execute during submission
+        });
+    }
+    if (step3Data.coverFile && preparedVisualsRef.current.cover?.file !== step3Data.coverFile) {
+      const file = step3Data.coverFile;
+      void prepareRestaurantImage(file, 'cover')
+        .then((blob) => {
+          preparedVisualsRef.current.cover = { file, blob };
+        })
+        .catch(() => {
+          // Fallback will execute during submission
+        });
+    }
+  }, [step3Data.logoFile, step3Data.coverFile]);
 
   const goToStep = useCallback((step: number) => {
     if (step >= 1 && step <= 4) {
@@ -128,7 +163,6 @@ export function useRestaurantRegistration() {
     } catch (err: unknown) {
       const mapped = mapHttpsError(err);
       setError(mapped.message);
-      toast.error(mapped.message);
       setIsLeaving(false);
     }
   }, [router]);
@@ -165,10 +199,8 @@ export function useRestaurantRegistration() {
       ) {
         const msg = 'Cet email est déjà utilisé. Connectez-vous pour ajouter un restaurant.';
         setError(msg);
-        toast.error(msg);
       } else {
         setError(mapped.message);
-        toast.error(mapped.message);
       }
     } finally {
       setLoading(false);
@@ -185,7 +217,6 @@ export function useRestaurantRegistration() {
     } catch (err: unknown) {
       const mapped = mapHttpsError(err);
       setError(mapped.message);
-      toast.error(mapped.message);
     } finally {
       setLoading(false);
     }
@@ -212,7 +243,6 @@ export function useRestaurantRegistration() {
       } catch (err: unknown) {
         const mapped = mapHttpsError(err);
         setError(mapped.message);
-        toast.error(mapped.message);
         return;
       }
     }
@@ -284,13 +314,27 @@ export function useRestaurantRegistration() {
       setStep4DataState(data);
       const user = auth.currentUser;
       if (!user) throw new Error('Non authentifié');
-      await user.getIdToken(true);
-
-      const submit = httpsCallable(functions, 'submitRestaurantApplication');
 
       if (!step3Data.location) {
         throw new Error("Impossible de soumettre le restaurant sans coordonnées vérifiées.");
       }
+
+      // Concurrently start preparing image blobs so canvas processing overlaps with token refresh & backend call
+      const getOrPrepareBlob = async (kind: 'logo' | 'cover', file?: File): Promise<Blob | null> => {
+        if (!file) return null;
+        const cached = kind === 'logo' ? preparedVisualsRef.current.logo : preparedVisualsRef.current.cover;
+        if (cached && cached.file === file) {
+          return cached.blob;
+        }
+        return prepareRestaurantImage(file, kind);
+      };
+
+      const prepareLogoPromise = getOrPrepareBlob('logo', step3Data.logoFile);
+      const prepareCoverPromise = getOrPrepareBlob('cover', step3Data.coverFile);
+
+      await user.getIdToken();
+
+      const submit = httpsCallable(functions, 'submitRestaurantApplication');
 
       const payload: Record<string, unknown> = {
         name: step3Data.name,
@@ -311,48 +355,71 @@ export function useRestaurantRegistration() {
         requestPayload.restaurantId = resubmitRestaurantId;
       }
 
-      const result = await submit(requestPayload);
+      let result;
+      try {
+        result = await submit(requestPayload);
+      } catch (submitErr: unknown) {
+        // Fallback for deployed backend instances running previous schema without merchantType/fulfillmentModes
+        if (
+          payload.merchantType === 'restaurant' &&
+          Array.isArray(payload.fulfillmentModes)
+        ) {
+          const fallbackPayload = { ...payload };
+          delete fallbackPayload.merchantType;
+          delete fallbackPayload.fulfillmentModes;
+          result = await submit({ ...requestPayload, data: fallbackPayload });
+        } else {
+          throw submitErr;
+        }
+      }
       const resultData = result.data as { restaurantId: string };
+
+      // Ensure image blobs are ready (already resolved while the Cloud Function was executing)
+      const [preparedLogo, preparedCover] = await Promise.all([
+        prepareLogoPromise,
+        prepareCoverPromise,
+      ]);
 
       const uploadedPaths: string[] = [];
       const visualUpdates: Record<string, unknown> = {};
       try {
-        const visualInputs: Array<{
-          kind: 'logo' | 'cover';
-          file?: File;
-          removed?: boolean;
-          field: 'logoUrl' | 'coverImageUrl';
-          previousUrl?: string;
-        }> = [
-          {
-            kind: 'logo',
-            file: step3Data.logoFile,
-            removed: step3Data.logoRemoved,
-            field: 'logoUrl',
-            previousUrl: step3Data.logoUrl,
-          },
-          {
-            kind: 'cover',
-            file: step3Data.coverFile,
-            removed: step3Data.coverRemoved,
-            field: 'coverImageUrl',
-            previousUrl: step3Data.coverImageUrl,
-          },
-        ];
+        const uploadTasks: Promise<void>[] = [];
 
-        for (const visual of visualInputs) {
-          if (visual.file) {
-            const preparedImage = await prepareRestaurantImage(visual.file, visual.kind);
-            const uploadedImage = await uploadRestaurantImage({
-              restaurantId: resultData.restaurantId,
-              kind: visual.kind,
-              blob: preparedImage,
-            });
-            uploadedPaths.push(uploadedImage.path);
-            visualUpdates[visual.field] = uploadedImage.url;
-          } else if (visual.removed) {
-            visualUpdates[visual.field] = null;
-          }
+        if (preparedLogo) {
+          uploadTasks.push(
+            (async () => {
+              const uploadedImage = await uploadRestaurantImage({
+                restaurantId: resultData.restaurantId,
+                kind: 'logo',
+                blob: preparedLogo,
+              });
+              uploadedPaths.push(uploadedImage.path);
+              visualUpdates.logoUrl = uploadedImage.url;
+            })()
+          );
+        } else if (step3Data.logoRemoved) {
+          visualUpdates.logoUrl = null;
+        }
+
+        if (preparedCover) {
+          uploadTasks.push(
+            (async () => {
+              const uploadedImage = await uploadRestaurantImage({
+                restaurantId: resultData.restaurantId,
+                kind: 'cover',
+                blob: preparedCover,
+              });
+              uploadedPaths.push(uploadedImage.path);
+              visualUpdates.coverImageUrl = uploadedImage.url;
+            })()
+          );
+        } else if (step3Data.coverRemoved) {
+          visualUpdates.coverImageUrl = null;
+        }
+
+        // Upload both visuals concurrently in parallel over HTTP/2
+        if (uploadTasks.length > 0) {
+          await Promise.all(uploadTasks);
         }
 
         if (Object.keys(visualUpdates).length > 0) {
@@ -362,14 +429,26 @@ export function useRestaurantRegistration() {
           });
         }
 
-        for (const visual of visualInputs) {
-          const nextUrl = visualUpdates[visual.field];
-          const previousPath = visual.previousUrl
-            ? getRestaurantImagePathFromUrl(visual.previousUrl)
-            : null;
-          if (previousPath && nextUrl !== undefined && nextUrl !== visual.previousUrl) {
-            await deleteRestaurantImage(previousPath);
-          }
+        // Clean up superseded visuals concurrently
+        const deletionTasks: Promise<void>[] = [];
+        if (
+          step3Data.logoUrl &&
+          visualUpdates.logoUrl !== undefined &&
+          visualUpdates.logoUrl !== step3Data.logoUrl
+        ) {
+          const previousPath = getRestaurantImagePathFromUrl(step3Data.logoUrl);
+          if (previousPath) deletionTasks.push(deleteRestaurantImage(previousPath));
+        }
+        if (
+          step3Data.coverImageUrl &&
+          visualUpdates.coverImageUrl !== undefined &&
+          visualUpdates.coverImageUrl !== step3Data.coverImageUrl
+        ) {
+          const previousPath = getRestaurantImagePathFromUrl(step3Data.coverImageUrl);
+          if (previousPath) deletionTasks.push(deleteRestaurantImage(previousPath));
+        }
+        if (deletionTasks.length > 0) {
+          await Promise.all(deletionTasks);
         }
       } catch (visualError) {
         await Promise.all(uploadedPaths.map((path) => deleteRestaurantImage(path).catch(() => undefined)));
@@ -385,7 +464,6 @@ export function useRestaurantRegistration() {
     } catch (err: unknown) {
       const mapped = mapHttpsError(err);
       setError(mapped.message);
-      toast.error(mapped.message);
     } finally {
       setLoading(false);
       setIsSubmitting(false);

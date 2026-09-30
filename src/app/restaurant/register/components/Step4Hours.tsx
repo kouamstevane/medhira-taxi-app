@@ -38,6 +38,12 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange, e
     errorElement.focus({ preventScroll: true });
   }, [error]);
 
+  useEffect(() => {
+    if (!validationError) return;
+    const timer = setTimeout(() => setValidationError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [validationError]);
+
   const updateDay = (key: string, field: string, value: string | boolean) => {
     const next = {
       ...hours,
@@ -53,7 +59,8 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange, e
 
     const openDays = Object.entries(hours).filter(([, v]) => !v.closed);
     if (openDays.length === 0) {
-      setValidationError(t('atLeastOneDayOpenError'));
+      const msg = t('atLeastOneDayOpenError');
+      setValidationError(msg);
       return;
     }
 
@@ -69,23 +76,35 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange, e
         {error && (
           <div
             ref={errorRef}
-            className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm"
+            className="mb-4 p-3.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm flex items-center justify-between gap-2 transition-all duration-300 animate-in fade-in"
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
             tabIndex={-1}
           >
-            {error}
+            <div className="flex items-center gap-2 min-w-0">
+              <MaterialIcon name="error_outline" size="sm" className="text-red-400 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setValidationError(null)}
+              className="p-1 rounded-lg text-red-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+              aria-label={t('closeAlert')}
+            >
+              <MaterialIcon name="close" size="sm" />
+            </button>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-3" noValidate>
           {RESTAURANT_DAYS.map(({ key, label }) => {
             const day = hours[key];
+            const dayLabel = t(`days.${key}` as never) || label;
             return (
               <div key={key} className="glass-card p-3 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-sm">{label}</span>
+                  <span className="font-medium text-sm">{dayLabel}</span>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <span className="text-xs text-gray-400">{t('closedDay')}</span>
                     <input
@@ -93,7 +112,7 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange, e
                       checked={day.closed}
                       onChange={(e) => updateDay(key, 'closed', e.target.checked)}
                       className="w-4 h-4 rounded"
-                      aria-label={t('dayClosedLabel', { label })}
+                      aria-label={t('dayClosedLabel', { label: dayLabel })}
                     />
                   </label>
                 </div>
@@ -104,7 +123,7 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange, e
                       value={day.open}
                       onChange={(e) => updateDay(key, 'open', e.target.value)}
                       className={cn(driverFieldClassName, 'min-w-0 text-sm')}
-                      aria-label={t('dayOpenLabel', { label })}
+                      aria-label={t('dayOpenLabel', { label: dayLabel })}
                     />
                     <span className="text-gray-400 self-center">—</span>
                     <input
@@ -112,7 +131,7 @@ export function Step4Hours({ onSubmit, onBack, initialData, loading, onChange, e
                       value={day.close}
                       onChange={(e) => updateDay(key, 'close', e.target.value)}
                       className={cn(driverFieldClassName, 'min-w-0 text-sm')}
-                      aria-label={t('dayCloseLabel', { label })}
+                      aria-label={t('dayCloseLabel', { label: dayLabel })}
                     />
                   </div>
                 )}

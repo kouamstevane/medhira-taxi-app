@@ -179,7 +179,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
       delete (window as unknown as Record<string, unknown>)[callbackName];
       initializeServices();
     };
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&callback=${callbackName}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&loading=async&callback=${callbackName}`;
     script.async = true;
     script.defer = true;
 

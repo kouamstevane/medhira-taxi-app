@@ -167,7 +167,8 @@ describe('RestaurantSettingsClient', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer les horaires' }));
 
-    expect(mockShowError).toHaveBeenCalledWith('Au moins un jour doit être ouvert.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Au moins un jour doit être ouvert.');
+    expect(mockShowError).not.toHaveBeenCalled();
     expect(mockUpdateRestaurantOpeningHours).not.toHaveBeenCalled();
   });
 

@@ -120,13 +120,46 @@ export default function LayoutClient({ children }: LayoutClientProps) {
       <Toaster
         position="top-center"
         reverseOrder={false}
-        gutter={10}
+        gutter={12}
+        containerStyle={{
+          top: 24,
+          zIndex: 99999,
+        }}
         toastOptions={{
           duration: 5000,
           style: {
-            background: 'transparent',
-            boxShadow: 'none',
-            padding: 0,
+            background: '#18181b',
+            color: '#FFFFFF',
+            border: '1.5px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '16px',
+            fontSize: '14px',
+            fontWeight: 600,
+            padding: '14px 18px',
+            boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 0, 0, 0.5)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10B981',
+              secondary: '#18181b',
+            },
+            style: {
+              background: '#0d1f18',
+              border: '1.5px solid rgba(16, 185, 129, 0.5)',
+              boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 25px rgba(16, 185, 129, 0.2)',
+              color: '#FFFFFF',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#EF4444',
+              secondary: '#18181b',
+            },
+            style: {
+              background: '#230f13',
+              border: '1.5px solid rgba(239, 68, 68, 0.5)',
+              boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 25px rgba(239, 68, 68, 0.2)',
+              color: '#FFFFFF',
+            },
           },
         }}
       />

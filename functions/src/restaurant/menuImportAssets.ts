@@ -1,6 +1,4 @@
-import yauzl from 'yauzl';
-import ExcelJS from 'exceljs';
-import JSZip from 'jszip';
+import type ExcelJS from 'exceljs';
 import { parseCsvBuffer, MAX_IMPORT_COLUMNS, MAX_IMPORT_ROWS } from './menuImportParsing.js';
 import { assertXlsxArchiveWithinLimits } from './xlsxLimits.js';
 
@@ -46,9 +44,10 @@ function getImageExtension(fileName: string): MenuImportImageExtension {
   return extension as MenuImportImageExtension;
 }
 
-function readZipEntries(buffer: Buffer): Promise<ArchiveEntry[]> {
+async function readZipEntries(buffer: Buffer): Promise<ArchiveEntry[]> {
+  const yauzlMod = (await import('yauzl')).default;
   return new Promise((resolve, reject) => {
-    yauzl.fromBuffer(buffer, { lazyEntries: true }, (error, zipfile) => {
+    yauzlMod.fromBuffer(buffer, { lazyEntries: true }, (error, zipfile) => {
       if (error || !zipfile) {
         reject(new Error(`Archive ZIP invalide ou corrompue${error ? `: ${error.message}` : ''}`));
         return;
@@ -153,12 +152,14 @@ export function normalizePrefixedWorkbookXml(xml: string): string {
 }
 
 async function loadXlsxWorkbook(buffer: Buffer): Promise<ExcelJS.Workbook> {
-  const workbook = new ExcelJS.Workbook();
+  const ExcelJSMod = (await import('exceljs')).default;
+  const workbook = new ExcelJSMod.Workbook();
   try {
     await workbook.xlsx.load(Buffer.from(buffer) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
     return workbook;
   } catch (firstError) {
-    const zip = await JSZip.loadAsync(buffer);
+    const JSZipMod = (await import('jszip')).default;
+    const zip = await JSZipMod.loadAsync(buffer);
     const xmlEntries = Object.keys(zip.files).filter((name) => name.startsWith('xl/') && name.endsWith('.xml'));
     let normalizedAny = false;
     for (const entryName of xmlEntries) {
@@ -185,7 +186,7 @@ async function loadXlsxWorkbook(buffer: Buffer): Promise<ExcelJS.Workbook> {
     }
     if (!normalizedAny) throw firstError;
 
-    const compatibleWorkbook = new ExcelJS.Workbook();
+    const compatibleWorkbook = new ExcelJSMod.Workbook();
     const normalizedBuffer = await zip.generateAsync({ type: 'nodebuffer' });
     await compatibleWorkbook.xlsx.load(normalizedBuffer as unknown as Parameters<typeof compatibleWorkbook.xlsx.load>[0]);
     return compatibleWorkbook;

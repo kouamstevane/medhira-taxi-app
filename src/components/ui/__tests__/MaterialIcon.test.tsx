@@ -3,7 +3,10 @@ import { MaterialIcon, materialIconMap } from '../MaterialIcon';
 
 const applicationIconNames = [
   'address',
+  'add_circle_outline',
+  'apps',
   'arrow_outward',
+  'bakery_dining',
   'bar_chart',
   'bolt',
   'calendar_month',
@@ -11,6 +14,7 @@ const applicationIconNames = [
   'chat',
   'cloud_upload',
   'compare_arrows',
+  'content_copy',
   'delete',
   'delete_outline',
   'description',
@@ -36,6 +40,8 @@ const applicationIconNames = [
   'link',
   'list_alt',
   'local_florist',
+  'local_grocery_store',
+  'local_pharmacy',
   'local_shipping',
   'lunch_dining',
   'mark_email_read',

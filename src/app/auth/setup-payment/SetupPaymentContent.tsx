@@ -291,7 +291,7 @@ export default function SetupPaymentContent() {
     theme: 'night' as const,
     variables: {
       colorPrimary: '#f29200',
-      colorBackground: '#1a1a2e',
+      colorBackground: '#1A1A1A',
       colorText: '#f1f5f9',
       colorDanger: '#ef4444',
       fontFamily: 'Inter, system-ui, sans-serif',

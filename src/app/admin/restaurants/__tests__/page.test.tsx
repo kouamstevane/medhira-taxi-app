@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { Restaurant } from '@/types/food-delivery';
 
 const mockGetPendingRestaurants = jest.fn();
 const mockCallable = jest.fn();
@@ -73,7 +74,7 @@ const restaurant = {
   phone: '555-0100',
   createdAt: new Date('2026-01-01'),
   openingHours: {},
-} as never;
+} as unknown as Restaurant;
 
 describe('AdminRestaurantsPage commission editor', () => {
   beforeEach(() => {
@@ -89,7 +90,7 @@ describe('AdminRestaurantsPage commission editor', () => {
     const tablist = screen.getByRole('tablist', { name: 'Filtres restaurants' });
 
     expect(tablist).toBeInTheDocument();
-    expect(tablist).toHaveClass('bg-[#151a26]');
+    expect(tablist).toHaveClass('bg-[#18181b]');
     expect(tablist).toHaveClass('border-white/10');
     expect(screen.getByRole('tab', { name: 'En attente' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Actifs' })).toBeInTheDocument();
@@ -97,7 +98,7 @@ describe('AdminRestaurantsPage commission editor', () => {
     expect(screen.getByRole('tab', { name: 'Tous' })).toBeInTheDocument();
   });
 
-  it('allows an administrator to save a restaurant commission rate', async () => {
+  it('allows an administrator to save a restaurant commission rate after confirmation', async () => {
     const { default: AdminRestaurantsPage } = await import('../page');
     render(<AdminRestaurantsPage />);
 
@@ -107,12 +108,37 @@ describe('AdminRestaurantsPage commission editor', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la commission' }));
 
+    // Confirmation dialog should be visible and server not yet called
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Confirmer le taux de commission')).toBeInTheDocument();
+    expect(mockCallable).not.toHaveBeenCalled();
+
+    // Confirm the change
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmer la modification' }));
+
     await waitFor(() => expect(mockCallable).toHaveBeenCalledWith({
       action: 'set_commission_rate',
       restaurantId: 'restaurant-1',
       commissionRate: 10,
     }));
     expect(mockToastSuccess).toHaveBeenCalledWith('Commission mise à jour.');
+  });
+
+  it('allows cancelling the commission confirmation dialog without calling the server', async () => {
+    const { default: AdminRestaurantsPage } = await import('../page');
+    render(<AdminRestaurantsPage />);
+
+    fireEvent.click(await screen.findByText('Restaurant A'));
+    fireEvent.change(await screen.findByLabelText('Taux de commission du restaurant'), {
+      target: { value: '12' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer la commission' }));
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mockCallable).not.toHaveBeenCalled();
   });
 
   it('rejects a commission rate above 100 percent before calling the server', async () => {
@@ -127,5 +153,55 @@ describe('AdminRestaurantsPage commission editor', () => {
 
     expect(mockCallable).not.toHaveBeenCalled();
     expect(mockToastError).toHaveBeenCalledWith('Le taux de commission doit être compris entre 0 et 100 %.');
+  });
+
+  it('allows an administrator to approve a pending restaurant', async () => {
+    const pendingRestaurant = {
+      ...restaurant,
+      id: 'restaurant-pending',
+      name: 'Restaurant En Attente',
+      status: 'pending_approval',
+    };
+    mockGetPendingRestaurants.mockResolvedValue([pendingRestaurant]);
+    mockCallable.mockResolvedValue({ data: { success: true, emailSent: true } });
+
+    const { default: AdminRestaurantsPage } = await import('../page');
+    render(<AdminRestaurantsPage />);
+
+    fireEvent.click(await screen.findByText('Restaurant En Attente'));
+    fireEvent.click(screen.getByRole('button', { name: 'Approuver' }));
+
+    await waitFor(() => expect(mockCallable).toHaveBeenCalledWith({
+      action: 'approve',
+      restaurantId: 'restaurant-pending',
+    }));
+    expect(mockToastSuccess).toHaveBeenCalledWith('Restaurant approuvé !');
+  });
+
+  it('allows an administrator to reject a pending restaurant with a reason', async () => {
+    const pendingRestaurant = {
+      ...restaurant,
+      id: 'restaurant-pending',
+      name: 'Restaurant En Attente',
+      status: 'pending_approval',
+    };
+    mockGetPendingRestaurants.mockResolvedValue([pendingRestaurant]);
+    mockCallable.mockResolvedValue({ data: { success: true } });
+
+    const { default: AdminRestaurantsPage } = await import('../page');
+    render(<AdminRestaurantsPage />);
+
+    fireEvent.click(await screen.findByText('Restaurant En Attente'));
+    fireEvent.change(screen.getByPlaceholderText('Motif du refus...'), {
+      target: { value: 'Documents non conformes' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Refuser' }));
+
+    await waitFor(() => expect(mockCallable).toHaveBeenCalledWith({
+      action: 'reject',
+      restaurantId: 'restaurant-pending',
+      reason: 'Documents non conformes',
+    }));
+    expect(mockToastSuccess).toHaveBeenCalledWith('Restaurant refusé.');
   });
 });

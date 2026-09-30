@@ -44,9 +44,9 @@ interface UserRolesShape {
 
 interface UserData {
   id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
   phoneNumber?: string;
   profileImageUrl?: string;
   profileImage?: string;
@@ -60,7 +60,7 @@ interface UserData {
   address?: string;
   city?: string;
   bio?: string;
-  createdAt: unknown;
+  createdAt?: unknown;
   updatedAt?: unknown;
 }
 
@@ -165,12 +165,15 @@ export default function AdminUsersPage() {
   };
 
   const groupedUsers = groupUsersByIdentity(users);
-  const filteredUsers = groupedUsers.filter(user =>
-    user.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.lastName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.phoneNumber?.includes(searchQuery)
-  );
+  const queryText = searchQuery.trim().toLowerCase();
+  const filteredUsers = groupedUsers.filter((user) => {
+    if (!queryText) return true;
+    const first = (user.firstName || '').toLowerCase();
+    const last = (user.lastName || '').toLowerCase();
+    const email = (user.email || '').toLowerCase();
+    const phone = user.phoneNumber || '';
+    return first.includes(queryText) || last.includes(queryText) || email.includes(queryText) || phone.includes(queryText);
+  });
 
   const totalPages = Math.ceil(filteredUsers.length / PAGE_SIZE);
   const pagedUsers = filteredUsers.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
@@ -313,7 +316,7 @@ export default function AdminUsersPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
                           <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold">
-                            {user.firstName?.[0]}{user.lastName?.[0]}
+                            {`${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'U'}
                           </div>
                           <div>
                             <button
@@ -321,9 +324,9 @@ export default function AdminUsersPage() {
                               onClick={() => setSelectedUser(user)}
                               className="text-left text-sm font-semibold text-white transition-colors hover:text-primary"
                             >
-                              {user.firstName} {user.lastName}
+                              {`${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Utilisateur'}
                             </button>
-                            <div className="text-[11px] text-slate-500">{user.email}</div>
+                            <div className="text-[11px] text-slate-500">{user.email || user.phoneNumber || 'Non renseigné'}</div>
                           </div>
                         </div>
                       </td>

@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { Alert } from '@/components/ui/Alert';
 import { BottomNav, portalNavItems } from '@/components/ui/BottomNav';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { RestaurantPortalHeader } from '../RestaurantPortalHeader';
@@ -73,6 +74,12 @@ export default function RestaurantSettingsClient() {
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
+    if (!validationError) return;
+    const timer = setTimeout(() => setValidationError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [validationError]);
+
+  useEffect(() => {
     if (!id) {
       router.replace('/restaurant/dashboard');
     }
@@ -115,14 +122,13 @@ export default function RestaurantSettingsClient() {
       } catch {
         const message = t('settingsLoadError');
         setLoadError(message);
-        showError(message);
       } finally {
         setLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [id, router, showError, t]);
+  }, [id, router, t]);
 
   const isDirty = useMemo(
     () => Boolean(hours && savedHours && JSON.stringify(hours) !== JSON.stringify(savedHours)),
@@ -179,7 +185,6 @@ export default function RestaurantSettingsClient() {
     const error = validateOpeningHours(hours);
     if (error) {
       setValidationError(error);
-      showError(error);
       return;
     }
 
@@ -194,7 +199,6 @@ export default function RestaurantSettingsClient() {
     } catch {
       const saveError = t('hoursSaveError');
       setValidationError(saveError);
-      showError(saveError);
     } finally {
       setIsSaving(false);
     }
@@ -454,9 +458,12 @@ export default function RestaurantSettingsClient() {
           </div>
 
           {validationError && (
-            <div role="alert" className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              {validationError}
-            </div>
+            <Alert
+              type="error"
+              message={validationError}
+              onClose={() => setValidationError(null)}
+              className="mb-4"
+            />
           )}
 
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2" noValidate>

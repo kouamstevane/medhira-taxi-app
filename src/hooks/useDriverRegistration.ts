@@ -38,6 +38,14 @@ export function useDriverRegistration() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
+  const clearError = useCallback(() => setError(null), []);
   const [isExistingUser, setIsExistingUser] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
@@ -673,6 +681,7 @@ export function useDriverRegistration() {
     currentStep,
     loading,
     error,
+    clearError,
     warning,
     isOnline: connectivityOnline,
     isSubmitting,

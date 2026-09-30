@@ -20,11 +20,11 @@ import { createLogger } from '@/utils/logger';
 const logger = createLogger('AdminRestaurants');
 
 const RestaurantSkeleton = () => (
-  <div className="space-y-4 animate-pulse p-4">
+  <div className="space-y-3">
     {[1, 2, 3, 4, 5].map((i) => (
-      <div key={i} className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl">
+      <div key={i} className="flex items-center justify-between p-4 bg-[#18181b] border border-white/10 rounded-2xl animate-pulse">
         <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-white/10" />
+          <div className="h-12 w-12 shrink-0 rounded-xl bg-white/10" />
           <div className="space-y-2">
             <div className="h-4 w-48 bg-white/10 rounded" />
             <div className="h-3 w-32 bg-white/10 rounded" />
@@ -46,6 +46,8 @@ export default function AdminRestaurantsPage() {
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [commissionRateDraft, setCommissionRateDraft] = useState('');
+  const [showCommissionConfirm, setShowCommissionConfirm] = useState(false);
+  const [commissionJustSaved, setCommissionJustSaved] = useState(false);
   const [processing, setProcessing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const isAdmin = useAdminAuth();
@@ -54,6 +56,8 @@ export default function AdminRestaurantsPage() {
     setCommissionRateDraft(
       selectedRestaurant ? String(selectedRestaurant.commissionRate ?? 5) : '',
     );
+    setShowCommissionConfirm(false);
+    setCommissionJustSaved(false);
   }, [selectedRestaurant]);
 
   // Fetch Restaurants
@@ -131,7 +135,7 @@ export default function AdminRestaurantsPage() {
     }
   };
 
-  const handleCommissionRateSave = async (restaurantId: string) => {
+  const handleOpenCommissionConfirm = () => {
     if (!auth.currentUser) {
       toast.error(t('adminSessionExpired'));
       return;
@@ -140,6 +144,23 @@ export default function AdminRestaurantsPage() {
     const commissionRate = Number(commissionRateDraft);
     if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
       toast.error(t('adminCommissionRateError'));
+      return;
+    }
+
+    setShowCommissionConfirm(true);
+  };
+
+  const handleCommissionRateSave = async (restaurantId: string) => {
+    if (!auth.currentUser) {
+      toast.error(t('adminSessionExpired'));
+      setShowCommissionConfirm(false);
+      return;
+    }
+
+    const commissionRate = Number(commissionRateDraft);
+    if (!Number.isFinite(commissionRate) || commissionRate < 0 || commissionRate > 100) {
+      toast.error(t('adminCommissionRateError'));
+      setShowCommissionConfirm(false);
       return;
     }
 
@@ -166,6 +187,9 @@ export default function AdminRestaurantsPage() {
           ? { ...prev, commissionRate: savedRate }
           : prev
       ));
+      setShowCommissionConfirm(false);
+      setCommissionJustSaved(true);
+      setTimeout(() => setCommissionJustSaved(false), 4000);
       toast.success(t('adminCommissionUpdated'));
     } catch (err) {
       const message = err instanceof Error ? err.message : t('adminCommissionUpdateError');
@@ -216,7 +240,7 @@ export default function AdminRestaurantsPage() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div role="tablist" aria-label={t('adminTablistLabel')} className="mb-4 grid grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-[#151a26] p-1">
+        <div role="tablist" aria-label={t('adminTablistLabel')} className="mb-4 grid grid-cols-4 gap-1 rounded-2xl border border-white/10 bg-[#18181b] p-1">
           {([
             ['pending_approval', 'schedule', t('adminTabPending')],
             ['approved', 'check_circle', t('adminTabApproved')],
@@ -279,12 +303,12 @@ export default function AdminRestaurantsPage() {
           </div>
         )}
 
-        {/* Content Table */}
-        <div className="glass-card border border-white/5 rounded-3xl overflow-hidden">
+        {/* Content Table & Mobile Cards */}
+        <div className="w-full min-w-0 md:glass-card md:border md:border-white/5 md:rounded-3xl md:overflow-hidden">
           {loading ? (
             <RestaurantSkeleton />
           ) : filteredRestaurants.length === 0 ? (
-            <div className="py-24 text-center">
+            <div className="py-24 text-center rounded-2xl md:rounded-3xl border border-white/10 md:border-0 bg-[#18181b] md:bg-transparent">
               <div className="inline-flex p-4 rounded-full bg-white/5 mb-4 text-slate-500">
                 <MaterialIcon name="store" size="xl" />
               </div>
@@ -294,28 +318,33 @@ export default function AdminRestaurantsPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-white/5">
-                <thead className="bg-white/[0.03]">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThMerchant')}</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThTypeBudget')}</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThLocation')}</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThStatus')}</th>
-                    <th className="px-6 py-4 text-left text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThCreatedAt')}</th>
-                    <th className="px-6 py-4 text-right text-[11px] font-bold text-slate-500 uppercase tracking-widest">{t('adminThDetails')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {filteredRestaurants.map((restaurant) => {
-                    const merchantType = restaurant.merchantType || 'restaurant';
-                    const typeConfig = getMerchantTypeOption(merchantType);
+            <div className="w-full min-w-0 overflow-x-hidden md:overflow-x-auto">
+              {/* Desktop Header Row */}
+              <div className="hidden md:grid md:grid-cols-[minmax(220px,2fr)_minmax(140px,1.2fr)_minmax(160px,1.5fr)_110px_100px_48px] items-center gap-4 px-6 py-3.5 bg-white/[0.03] border-b border-white/5 text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                <div>{t('adminThMerchant')}</div>
+                <div>{t('adminThTypeBudget')}</div>
+                <div>{t('adminThLocation')}</div>
+                <div>{t('adminThStatus')}</div>
+                <div>{t('adminThCreatedAt')}</div>
+                <div className="text-right">{t('adminThDetails')}</div>
+              </div>
 
-                    return (
-                    <tr key={restaurant.id} className="group hover:bg-white/5 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-4">
-                          <div className="h-12 w-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary relative overflow-hidden">
+              {/* Items List (Cards on Mobile, Grid Rows on Desktop) */}
+              <div className="space-y-3 md:space-y-0 md:divide-y md:divide-white/5 w-full min-w-0">
+                {filteredRestaurants.map((restaurant) => {
+                  const merchantType = restaurant.merchantType || 'restaurant';
+                  const typeConfig = getMerchantTypeOption(merchantType);
+
+                  return (
+                    <div
+                      key={restaurant.id}
+                      onClick={() => setSelectedRestaurant(restaurant)}
+                      className="group block md:grid md:grid-cols-[minmax(220px,2fr)_minmax(140px,1.2fr)_minmax(160px,1.5fr)_110px_100px_48px] items-center gap-4 rounded-2xl md:rounded-none border border-white/10 md:border-0 bg-[#18181b] md:bg-transparent p-4 md:px-6 md:py-4 hover:border-white/20 hover:bg-white/[0.06] md:hover:bg-white/5 transition-all cursor-pointer active:scale-[0.99] md:active:scale-100 w-full min-w-0 max-w-full overflow-hidden box-border"
+                    >
+                      {/* Column 1: Merchant Identity & Status Badge (Mobile Top Row) */}
+                      <div className="flex items-start md:items-center justify-between md:justify-start gap-2.5 md:gap-4 w-full min-w-0">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="h-12 w-12 shrink-0 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary relative overflow-hidden">
                             {restaurant.coverImageUrl ? (
                               <Image src={restaurant.coverImageUrl} alt={restaurant.name} fill className="object-cover" />
                             ) : restaurant.imageUrl ? (
@@ -324,62 +353,111 @@ export default function AdminRestaurantsPage() {
                               <MaterialIcon name={typeConfig.icon} size="lg" />
                             )}
                           </div>
-                          <div>
-                            <div
-                              className="text-sm font-bold text-white group-hover:text-primary transition-colors cursor-pointer"
-                              onClick={() => setSelectedRestaurant(restaurant)}
-                            >
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-bold text-white group-hover:text-primary transition-colors cursor-pointer truncate">
                               {restaurant.name}
                             </div>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-slate-300 font-medium inline-flex items-center gap-1">
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-slate-300 font-medium inline-flex items-center gap-1 shrink-0">
                                 <MaterialIcon name={typeConfig.icon} size="sm" />
                                 {t(`merchantTypes.${merchantType}` as never)}
                               </span>
-                              <div className="text-[11px] text-slate-500 flex items-center gap-1">
-                                <MaterialIcon name="verified_user" size="sm" className="text-emerald-500" />
-                                ID: {restaurant.ownerId.slice(0, 8)}...
-                              </div>
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-primary font-semibold inline-flex items-center gap-1 shrink-0">
+                                <MaterialIcon name="percent" size="sm" />
+                                {restaurant.commissionRate ?? 5}%
+                              </span>
                             </div>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-xs text-slate-300 font-medium">
-                          {restaurant.cuisineType.slice(0, 2).join(', ')}
-                          {restaurant.cuisineType.length > 2 && '...'}
+
+                        {/* Mobile-only status badge pinned to top-right of card */}
+                        <div className="shrink-0 md:hidden">
+                          {getStatusBadge(restaurant.status)}
                         </div>
-                        <div className="text-[11px] text-slate-500">
-                          {t('adminBudgetPerPerson', { price: restaurant.avgPricePerPerson, currency: CURRENCY_CODE })}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                          <MaterialIcon name="location_on" size="sm" className="text-slate-500" />
-                          <span className="truncate max-w-[150px]">{restaurant.address}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      </div>
+
+                      {/* Column 2: Cuisine / Budget */}
+                      <div className="mt-2.5 md:mt-0 flex flex-col gap-1 min-w-0 w-full">
+                        {restaurant.cuisineType && restaurant.cuisineType.length > 0 && (
+                          <div className="text-xs text-slate-300 font-medium flex items-start gap-1.5 min-w-0 w-full">
+                            <MaterialIcon name="restaurant" size="sm" className="text-slate-500 shrink-0 mt-0.5 md:hidden" />
+                            <span className="line-clamp-2 md:line-clamp-1 break-words min-w-0 flex-1 leading-snug">
+                              {restaurant.cuisineType.join(', ')}
+                            </span>
+                          </div>
+                        )}
+                        {typeof restaurant.avgPricePerPerson === 'number' && restaurant.avgPricePerPerson > 0 ? (
+                          <div className="text-[11px] text-slate-400 flex items-center gap-1.5 min-w-0 w-full">
+                            <MaterialIcon name="payments" size="sm" className="text-slate-500 shrink-0 md:hidden" />
+                            <span className="truncate min-w-0">{t('adminBudgetPerPerson', { price: restaurant.avgPricePerPerson, currency: CURRENCY_CODE })}</span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {/* Column 3: Location & Contact */}
+                      <div className="mt-2 md:mt-0 flex flex-col gap-1 text-xs md:text-[11px] text-slate-400 min-w-0 w-full">
+                        {restaurant.address && (
+                          <div className="flex items-center gap-1.5 min-w-0 w-full">
+                            <MaterialIcon name="location_on" size="sm" className="text-slate-500 shrink-0" />
+                            <span className="truncate min-w-0 flex-1">{restaurant.address}</span>
+                          </div>
+                        )}
+                        {restaurant.phone && (
+                          <div className="flex items-center gap-1.5 min-w-0 w-full">
+                            <MaterialIcon name="phone" size="sm" className="text-slate-500 shrink-0" />
+                            <a
+                              href={`tel:${restaurant.phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-slate-400 hover:text-primary transition-colors truncate min-w-0"
+                              title={restaurant.phone}
+                            >
+                              {restaurant.phone}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Column 4: Status (Desktop only) */}
+                      <div className="hidden md:flex items-center min-w-0">
                         {getStatusBadge(restaurant.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-[11px] font-medium text-slate-500">
-                        {restaurant.createdAt instanceof Timestamp
-                          ? restaurant.createdAt.toDate().toLocaleDateString(locale === 'en' ? 'en-US' : 'fr-FR')
-                          : new Date(restaurant.createdAt as unknown as Date).toLocaleDateString(locale === 'en' ? 'en-US' : 'fr-FR')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                      </div>
+
+                      {/* Column 5: Date (Mobile Bottom Row with Details Hint) */}
+                      <div className="mt-2.5 md:mt-0 pt-2.5 md:pt-0 border-t border-white/5 md:border-0 flex items-center justify-between md:justify-start text-[11px] font-medium text-slate-500 min-w-0 w-full">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <MaterialIcon name="calendar_today" size="sm" className="text-slate-500 md:hidden" />
+                          <span>
+                            {restaurant.createdAt instanceof Timestamp
+                              ? restaurant.createdAt.toDate().toLocaleDateString(locale === 'en' ? 'en-US' : 'fr-FR')
+                              : new Date(restaurant.createdAt as unknown as Date).toLocaleDateString(locale === 'en' ? 'en-US' : 'fr-FR')}
+                          </span>
+                        </div>
+
+                        {/* Mobile chevron with "Détails" label */}
+                        <div className="flex items-center gap-1 text-slate-400 group-hover:text-primary transition-colors font-semibold text-xs md:hidden shrink-0">
+                          <span>{t('adminThDetails')}</span>
+                          <MaterialIcon name="chevron_right" size="sm" />
+                        </div>
+                      </div>
+
+                      {/* Column 6: Desktop Details button */}
+                      <div className="hidden md:flex items-center justify-end">
                         <button
-                          onClick={() => setSelectedRestaurant(restaurant)}
-                          className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-primary"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedRestaurant(restaurant);
+                          }}
+                          className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400 hover:text-primary min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
+                          aria-label={`Détails du commerce ${restaurant.name}`}
                         >
                           <MaterialIcon name="chevron_right" size="md" />
                         </button>
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -464,10 +542,12 @@ export default function AdminRestaurantsPage() {
                         ))}
                       </div>
                     </div>
-                    <div>
-                      <span className="block text-[10px] text-slate-500 uppercase mb-1">{t('adminAvgBudget')}</span>
-                      <p className="text-sm font-bold text-white">{selectedRestaurant.avgPricePerPerson} {CURRENCY_CODE} {t('adminPerPerson')}</p>
-                    </div>
+                    {typeof selectedRestaurant.avgPricePerPerson === 'number' && selectedRestaurant.avgPricePerPerson > 0 ? (
+                      <div>
+                        <span className="block text-[10px] text-slate-500 uppercase mb-1">{t('adminAvgBudget')}</span>
+                        <p className="text-sm font-bold text-white">{selectedRestaurant.avgPricePerPerson} {CURRENCY_CODE} {t('adminPerPerson')}</p>
+                      </div>
+                    ) : null}
                   </div>
                 </section>
 
@@ -496,7 +576,9 @@ export default function AdminRestaurantsPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {selectedRestaurant.openingHours && Object.entries(selectedRestaurant.openingHours).map(([day, hours]) => (
                     <div key={day} className={`p-3 rounded-xl border ${hours ? 'bg-primary/5 border-primary/10' : 'bg-white/[0.02] border-white/5'}`}>
-                      <span className="block text-[10px] font-bold capitalize text-slate-500 mb-1">{day}</span>
+                      <span className="block text-[10px] font-bold capitalize text-slate-500 mb-1">
+                        {t(`days.${day.toLowerCase()}` as never) || day}
+                      </span>
                       <span className="text-[11px] font-semibold text-slate-300">
                         {hours ? `${hours.open} - ${hours.close}` : t('adminClosedDay')}
                       </span>
@@ -506,12 +588,22 @@ export default function AdminRestaurantsPage() {
               </section>
 
               <section className="pt-8 border-t border-white/10 space-y-4">
-                <div className="flex items-center gap-3">
-                  <MaterialIcon name="percent" size="md" className="text-primary" />
-                  <div>
-                    <h3 className="text-lg font-bold text-white">{t('adminCommissionMedjira')}</h3>
-                    <p className="text-xs text-slate-400">{t('adminCommissionNotice')}</p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                      <MaterialIcon name="percent" size="sm" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-white">{t('adminCommissionMedjira')}</h3>
+                      <p className="text-xs text-slate-400">{t('adminCommissionNotice')}</p>
+                    </div>
                   </div>
+                  {commissionJustSaved && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 animate-in fade-in">
+                      <MaterialIcon name="check_circle" size="sm" />
+                      {t('adminCommissionUpdated')}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-end gap-4 p-5 bg-primary/5 rounded-2xl border border-primary/10">
@@ -527,16 +619,20 @@ export default function AdminRestaurantsPage() {
                         max={100}
                         step={0.01}
                         value={commissionRateDraft}
-                        onChange={(event) => setCommissionRateDraft(event.target.value)}
+                        onChange={(event) => {
+                          setCommissionRateDraft(event.target.value);
+                          if (commissionJustSaved) setCommissionJustSaved(false);
+                        }}
                         className="glass-input w-full p-3 pr-10 rounded-xl text-sm"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">%</span>
                     </div>
                   </div>
                   <button
-                    onClick={() => handleCommissionRateSave(selectedRestaurant.id)}
+                    type="button"
+                    onClick={handleOpenCommissionConfirm}
                     disabled={!!processing}
-                    className="h-12 px-5 bg-primary hover:bg-primary/90 text-black font-bold rounded-xl transition-all disabled:opacity-50"
+                    className="h-12 px-5 bg-primary hover:bg-primary/90 text-black font-bold rounded-xl transition-all disabled:opacity-50 min-h-[44px] flex items-center justify-center gap-2"
                   >
                     {processing === selectedRestaurant.id ? t('adminSavingCommission') : t('adminSaveCommission')}
                   </button>
@@ -587,6 +683,72 @@ export default function AdminRestaurantsPage() {
           </div>
         </div>
       )}
+      {/* Commission Rate Confirmation Modal */}
+      {showCommissionConfirm && selectedRestaurant && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-commission-title"
+        >
+          <div className="relative w-full max-w-sm rounded-3xl border border-white/10 bg-[#18181b] p-6 shadow-2xl space-y-5">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-primary/20 text-primary border border-primary/30 flex items-center justify-center shrink-0">
+                <MaterialIcon name="percent" size="md" />
+              </div>
+              <div className="min-w-0">
+                <h3 id="confirm-commission-title" className="text-base font-bold text-white">
+                  {t('adminConfirmCommissionTitle')}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]">
+                  {selectedRestaurant.name}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400">{t('adminCommissionCurrentRate')}</span>
+                <span className="font-semibold text-slate-300">{selectedRestaurant.commissionRate ?? 5} %</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-300 font-medium">{t('adminCommissionNewRate')}</span>
+                <span className="font-bold text-primary text-base">{commissionRateDraft} %</span>
+              </div>
+              <div className="pt-2 border-t border-white/5 text-[11px] text-slate-400 leading-relaxed">
+                {t('adminConfirmCommissionDetails')}
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse sm:flex-row gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowCommissionConfirm(false)}
+                disabled={processing === selectedRestaurant.id}
+                className="w-full sm:flex-1 py-3 px-4 rounded-xl text-xs font-semibold text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 transition-colors min-h-[44px] disabled:opacity-50"
+              >
+                {t('adminConfirmCommissionCancelBtn')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCommissionRateSave(selectedRestaurant.id)}
+                disabled={processing === selectedRestaurant.id}
+                className="w-full sm:flex-1 py-3 px-4 rounded-xl text-xs font-bold text-black bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all min-h-[44px] disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {processing === selectedRestaurant.id ? (
+                  <>
+                    <span className="animate-spin text-sm">⏳</span>
+                    <span>{t('adminSavingCommission')}</span>
+                  </>
+                ) : (
+                  <span>{t('adminConfirmCommissionConfirmBtn')}</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <BottomNav items={adminNavItems} hidden={Boolean(selectedRestaurant)} />
     </div>
   );

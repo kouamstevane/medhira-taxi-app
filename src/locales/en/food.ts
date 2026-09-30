@@ -130,6 +130,15 @@ export const food: DeepString<typeof FoodFr> = {
   missingDeliveryAddress: 'Missing delivery address',
   confirmAndPay: 'Confirm and pay {amount}',
   payAmount: 'Pay {amount}',
+  invalidDeliveryAddressError: 'Please provide a valid delivery address (5 to 500 characters).',
+  insufficientBalanceError: 'Insufficient balance ({available} available for a total of {total}). Please top up your wallet.',
+  cardPaymentInitError: 'Unable to prepare card payment.',
+  paymentFailedError: 'Payment failed: {message}',
+  checkCustomizationsError: 'Please check customizations before continuing.',
+  pickupInStore: 'In-store pickup',
+  cardPaymentNotConfirmed: 'Card payment not confirmed.',
+  checkoutInvalidArgumentError: 'Check your address and order information, then try again.',
+  checkoutGenericError: 'An error occurred while validating your order.',
 
   // Restaurant details
   restaurantUnavailable: 'Restaurant unavailable',

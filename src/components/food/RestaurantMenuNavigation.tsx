@@ -31,7 +31,7 @@ export function RestaurantMenuNavigation({
   return (
     <section
       aria-label={t('menuNavigationLabel')}
-      className="sticky top-0 z-30 -mx-4 overflow-x-clip border-b border-white/10 bg-[#091018]/90 px-4 py-4 backdrop-blur-2xl supports-[backdrop-filter]:bg-[#091018]/80"
+      className="sticky top-0 z-30 -mx-4 overflow-x-clip border-b border-white/10 bg-[#0F0F0F]/90 px-4 py-4 backdrop-blur-2xl supports-[backdrop-filter]:bg-[#0F0F0F]/80"
     >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
         <div className="flex items-end justify-between gap-3">
@@ -87,7 +87,7 @@ export function RestaurantMenuNavigation({
             className={cn(
               'min-h-11 rounded-full px-4 text-sm',
               isAllActive
-                ? 'bg-[#F2C87D] text-[#0E1320] hover:bg-[#F2C87D] hover:text-[#0E1320]'
+                ? 'bg-[#F2C87D] text-[#0F0F0F] hover:bg-[#F2C87D] hover:text-[#0F0F0F]'
                 : 'border border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06] hover:text-white',
             )}
             onClick={() => onCategoryChange(null)}
@@ -107,7 +107,7 @@ export function RestaurantMenuNavigation({
                 className={cn(
                   'min-h-11 rounded-full px-4 text-sm',
                   active
-                    ? 'bg-white text-[#0E1320] hover:bg-white hover:text-[#0E1320]'
+                    ? 'bg-white text-[#0F0F0F] hover:bg-white hover:text-[#0F0F0F]'
                     : 'border border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.06] hover:text-white',
                 )}
                 onClick={() => onCategoryChange(item.name)}

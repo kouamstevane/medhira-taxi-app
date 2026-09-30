@@ -1,5 +1,4 @@
 import * as crypto from 'crypto';
-import ExcelJS from 'exceljs';
 import * as admin from 'firebase-admin';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { CallableRequest, HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -250,7 +249,8 @@ export function getTemplateHeaderError(headers: string[]): string | null {
 export async function parseXlsxBuffer(buffer: Buffer): Promise<Array<Record<string, string>>> {
   await assertXlsxArchiveWithinLimits(buffer);
 
-  const workbook = new ExcelJS.Workbook();
+  const ExcelJSMod = (await import('exceljs')).default;
+  const workbook = new ExcelJSMod.Workbook();
   const xlsxBuffer = Buffer.from(buffer) as unknown as Parameters<typeof workbook.xlsx.load>[0];
   await workbook.xlsx.load(xlsxBuffer);
 

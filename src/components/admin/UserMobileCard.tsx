@@ -6,10 +6,10 @@ import type { AdminManageableRole } from '@/app/admin/users/adminUsersUi';
 
 export interface UserMobileCardUser {
   id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phoneNumber?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phoneNumber?: string | null;
   roles: Array<'client' | 'driver' | 'restaurant'>;
   roleUserIds: Partial<Record<'client' | 'driver' | 'restaurant', string>>;
 }
@@ -49,8 +49,9 @@ export function UserMobileCard({
 }: UserMobileCardProps) {
   const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'U';
   const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Utilisateur';
-  const hasRestaurantRole = user.roles.includes('restaurant');
-  const manageableRoles = user.roles.filter(
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  const hasRestaurantRole = roles.includes('restaurant');
+  const manageableRoles = roles.filter(
     (role): role is AdminManageableRole => role === 'restaurant' || role === 'driver',
   );
 
@@ -62,12 +63,24 @@ export function UserMobileCard({
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-white">{fullName}</h3>
-          <p className="truncate text-[11px] text-slate-400">{user.email}</p>
-          {user.phoneNumber && <p className="truncate text-[10px] text-slate-500">{user.phoneNumber}</p>}
+          {user.email ? (
+            <>
+              <p className="truncate text-[11px] text-slate-400">{user.email}</p>
+              {user.phoneNumber && <p className="truncate text-[10px] text-slate-500">{user.phoneNumber}</p>}
+            </>
+          ) : (
+            <p className="truncate text-[11px] text-slate-400">{user.phoneNumber || 'Non renseigné'}</p>
+          )}
         </div>
         <div className="flex max-w-[58%] shrink-0 flex-wrap justify-end gap-1">
-          {user.roles.map((role) => {
-            const metadata = roleMetadata[role];
+          {roles.map((role) => {
+            const metadata = (role in roleMetadata)
+              ? roleMetadata[role as keyof typeof roleMetadata]
+              : {
+                  label: role,
+                  icon: 'person' as const,
+                  className: 'bg-white/5 text-slate-400 border-white/10',
+                };
             return (
               <span key={role} className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${metadata.className}`}>
                 <MaterialIcon name={metadata.icon} size="sm" />

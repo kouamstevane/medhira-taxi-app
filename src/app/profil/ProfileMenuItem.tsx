@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 
 export type IconColorVariant =
+  | 'primary'
   | 'sky'
   | 'purple'
   | 'amber'
@@ -26,6 +27,10 @@ interface ProfileMenuItemProps {
 }
 
 const variantStyles: Record<IconColorVariant, { bg: string; text: string }> = {
+  primary: {
+    bg: 'bg-primary/15 border-primary/25',
+    text: 'text-primary',
+  },
   sky: {
     bg: 'bg-sky-500/15 border-sky-500/25',
     text: 'text-sky-400',

@@ -20,6 +20,7 @@ import { NetworkErrorView } from '@/components/ui';
 import { InputField } from '@/components/forms/InputField';
 import { SelectField } from '@/components/forms/SelectField';
 import { ProtectedPageGuard } from '@/components/auth/ProtectedPageGuard';
+import { Alert } from '@/components/ui/Alert';
 import type { PlaceSuggestion } from '@/types';
 import { useTranslation } from '@/hooks/useTranslation';
 import { LanguageSelector } from '@/components/ui/LanguageSelector';
@@ -34,6 +35,7 @@ import { ProfileReferralModal } from './ProfileReferralModal';
 import { ProfileFaqModal } from './ProfileFaqModal';
 import { ProfilePartnerModal } from './ProfilePartnerModal';
 import { ProfilePaymentMethodsModal, type CardDetails } from './ProfilePaymentMethodsModal';
+import { ProfileSecurityModal } from './ProfileSecurityModal';
 import { subscribeToWallet } from '@/services/wallet.service';
 
 interface ProfileFormData {
@@ -70,12 +72,19 @@ function ProfilPageContent() {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [error]);
+
   // Modals state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [showReferralModal, setShowReferralModal] = useState(false);
   const [showFaqModal, setShowFaqModal] = useState(false);
   const [showPartnerModal, setShowPartnerModal] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -287,7 +296,6 @@ function ProfilPageContent() {
     } catch (err) {
       logFirestoreError(err, 'mise à jour du profil client');
       const errorMessage = getFirestoreErrorMessage(err, 'mise à jour de votre profil');
-      showError(errorMessage);
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -384,16 +392,12 @@ function ProfilPageContent() {
             </div>
 
             {error && (
-              <div className="p-3.5 bg-destructive/15 border border-destructive/30 text-destructive text-sm rounded-2xl flex justify-between items-center">
-                <p>{error}</p>
-                <button
-                  type="button"
-                  onClick={() => setError(null)}
-                  className="text-destructive font-bold ml-2"
-                >
-                  <MaterialIcon name="close" size="sm" />
-                </button>
-              </div>
+              <Alert
+                type="error"
+                message={error}
+                onClose={() => setError(null)}
+                className="mb-4"
+              />
             )}
 
             <GlassCard className="p-5">
@@ -583,29 +587,29 @@ function ProfilPageContent() {
               <div className="rounded-3xl bg-[#1c1b1a] border border-white/[0.06] p-1.5 divide-y divide-white/[0.04]">
                 <ProfileMenuItem
                   icon="handshake"
-                  iconColorVariant="sky"
+                  iconColorVariant="amber"
                   title={hasProRole ? t('profile.partnerArea') : t('profile.becomePartnerShort')}
                   subtitle={hasProRole ? t('profile.accessProDashboard') : t('profile.becomePartnerSubtitle')}
                   onClick={() => setShowPartnerModal(true)}
                 />
                 <ProfileMenuItem
                   icon="person"
-                  iconColorVariant="sky"
+                  iconColorVariant="primary"
                   title={t('profile.personalInfo')}
                   onClick={() => setEditing(true)}
                 />
                 <ProfileMenuItem
                   icon="credit_card"
-                  iconColorVariant="sky"
+                  iconColorVariant="amber"
                   title={t('profile.paymentMethodsAndWalletShort')}
                   subtitle={hasPaymentMethod ? t('profile.savedCard') : t('profile.addPaymentMethod')}
                   onClick={() => setShowPaymentModal(true)}
                 />
                 <ProfileMenuItem
                   icon="lock"
-                  iconColorVariant="sky"
+                  iconColorVariant="primary"
                   title={t('profile.securityAndLogin')}
-                  href="/auth/reset-password"
+                  onClick={() => setShowSecurityModal(true)}
                 />
               </div>
             </div>
@@ -846,6 +850,10 @@ function ProfilPageContent() {
           cardholderName={`${userData.firstName} ${userData.lastName}`.trim()}
           walletBalance={walletBalance}
           onRemoveCard={handleRemoveCard}
+        />
+        <ProfileSecurityModal
+          isOpen={showSecurityModal}
+          onClose={() => setShowSecurityModal(false)}
         />
       </div>
 

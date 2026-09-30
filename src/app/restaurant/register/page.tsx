@@ -66,7 +66,7 @@ function RestaurantRegisterWizard() {
               type="button"
               onClick={() => void leaveRegistration('/')}
               disabled={isLeaving}
-              className={cn(driverSecondaryButtonClassName, 'h-10 min-h-10 w-auto gap-2 rounded-xl px-3 text-sm')}
+              className={cn(driverSecondaryButtonClassName, 'h-9 min-h-9 w-auto gap-2 rounded-xl px-3 text-xs bg-white/[0.03] border-white/10 text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all')}
               aria-label={t('homeNav')}
             >
               <MaterialIcon name="home" size="sm" />
@@ -76,26 +76,28 @@ function RestaurantRegisterWizard() {
               type="button"
               onClick={() => void leaveRegistration('/login')}
               disabled={isLeaving}
-              className={cn(driverSecondaryButtonClassName, 'h-10 min-h-10 w-auto gap-2 rounded-xl px-3 text-sm')}
+              className={cn(driverSecondaryButtonClassName, 'h-9 min-h-9 w-auto gap-2 rounded-xl px-3 text-xs bg-white/[0.03] border-white/10 text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all')}
               aria-label={t('loginNav')}
             >
               <MaterialIcon name="login" size="sm" />
               {t('loginNav')}
             </button>
           </div>
+          <span className="text-xs font-semibold text-primary/90 bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full">
+            {t('stepIndicator', { step: currentStep })}
+          </span>
         </nav>
-        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
           <div
-            className="h-full bg-primary rounded-full transition-all duration-300"
+            className="h-full bg-gradient-to-r from-amber-500 to-[#f29200] rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(242,146,0,0.4)]"
             style={{ width: `${progress}%` }}
           />
         </div>
-        <div className="flex justify-between mt-1">
-          <span className="text-xs text-gray-400">{t('stepIndicator', { step: currentStep })}</span>
-          {fromBecomePro && (
+        {fromBecomePro && (
+          <div className="flex justify-end mt-1.5">
             <span className="text-xs text-primary font-medium">{t('addingRoleBadge')}</span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {currentStep === 1 && (

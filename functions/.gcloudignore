@@ -1,0 +1,17 @@
+.gcloudignore
+.git
+.gitignore
+node_modules
+*.local
+src/
+!lib/**
+**/*.map
+**/__tests__/**
+**/*.test.*
+**/*.spec.*
+jest.*
+*.log
+debug_load.cjs
+profile_imports.cjs
+**/.tsbuildinfo
+

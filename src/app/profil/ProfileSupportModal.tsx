@@ -36,7 +36,7 @@ export function ProfileSupportModal({ isOpen, onClose }: ProfileSupportModalProp
       icon: 'call',
       href: 'tel:+237693372118',
       badge: undefined,
-      color: 'bg-sky-500/15 border-sky-500/25 text-sky-400',
+      color: 'bg-primary/15 border-primary/25 text-primary',
     },
     {
       title: t('profile.emailSupport'),
