@@ -139,8 +139,8 @@ export const taxi = {
   viewVehicleDescription: 'Voir la description de {name}',
   vehicleDetailsTitle: 'Détails du véhicule {name}',
   vehicleCapacity: 'Capacité',
-  vehicleSeatsCount: '{count} passagers',
-  vehicleWait: 'Attente',
+  vehicleSeatsCount: '{count} places',
+  vehicleWait: 'd\'attente',
   vehicleIncluded: 'Ce qui est inclus',
   selectCategoryFromList: 'Sélectionnez cette catégorie depuis la liste principale.',
   whenToLeave: 'Quand souhaitez-vous partir ?',
@@ -217,4 +217,10 @@ export const taxi = {
   enterPassengerName: 'Veuillez entrer le nom du passager',
   stripeConnectionError: 'Impossible de joindre Stripe pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.',
   rideCreationError: 'Erreur lors de la création de la course',
+  locationServiceUnavailable: 'Service de géolocalisation indisponible',
+
+  // NewRideForm & Notifications
+  fareCalculationError: "Erreur lors du calcul de l'estimation",
+  fillAllFieldsWaitEstimate: "Veuillez remplir tous les champs et attendre l'estimation",
+  driverArrivedToast: 'Votre conducteur est arrivé !',
 } as const;

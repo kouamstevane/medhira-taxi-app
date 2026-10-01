@@ -3,10 +3,12 @@
 import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 function StripeReturnContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const role = searchParams.get('role') || 'driver';
@@ -24,7 +26,7 @@ function StripeReturnContent() {
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white flex flex-col items-center justify-center px-6">
       <Loader2 className="w-10 h-10 animate-spin text-[#635bff]" />
-      <p className="mt-4 text-[#9CA3AF]">Redirection depuis Stripe…</p>
+      <p className="mt-4 text-[#9CA3AF]">{t('screens.stripeReturn.redirecting')}</p>
     </div>
   );
 }

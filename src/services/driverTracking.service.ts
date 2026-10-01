@@ -4,6 +4,7 @@ import { getDatabase, ref, set, onValue, off } from 'firebase/database';
 import { serverTimestamp } from 'firebase/firestore';
 import { getFirestore, doc, updateDoc } from 'firebase/firestore';
 import { z } from 'zod';
+import { translate } from '@/locales';
 import { ensureConsent, ConsentRequiredError } from '@/services/gdpr-consent.service';
 
 /**
@@ -95,7 +96,7 @@ class DriverTrackingService {
             if (err instanceof ConsentRequiredError) {
                 const trackingError: TrackingError = {
                     code: 'CONSENT_REQUIRED',
-                    message: 'Consentement de géolocalisation requis (RGPD).',
+                    message: translate('serviceMessages.driverTracking.consentRequired'),
                     recoverable: false,
                 };
                 config.onError?.(trackingError);
@@ -230,7 +231,7 @@ class DriverTrackingService {
             console.error('Invalid location data:', error);
             this.config?.onError?.({
                 code: 'NETWORK_ERROR',
-                message: 'Données de localisation invalides',
+                message: translate('serviceMessages.driverTracking.invalidLocation'),
                 recoverable: true,
             });
         }
@@ -359,7 +360,7 @@ class DriverTrackingService {
             if (error.message.includes('offline') || error.message.includes('network')) {
                 return {
                     code: 'OFFLINE_MODE',
-                    message: 'Mode hors ligne activé',
+                    message: translate('serviceMessages.driverTracking.offlineMode'),
                     recoverable: true,
                 };
             }

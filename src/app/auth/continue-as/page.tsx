@@ -13,13 +13,15 @@ import {
 } from '@/services/roles.service';
 import type { ActiveRole } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
+import type { TranslationKey } from '@/locales';
 
 type SelectableRole = Exclude<ActiveRole, 'driver_onboarding' | 'restaurant_onboarding'>;
 
-const ROLE_META: Record<SelectableRole, { label: string; icon: string; color: string }> = {
-  client: { label: 'Espace Client', icon: 'person', color: 'bg-blue-500' },
-  driver: { label: 'Espace Chauffeur', icon: 'local_taxi', color: 'bg-orange-500' },
-  restaurant: { label: 'Espace Restaurateur', icon: 'restaurant', color: 'bg-green-500' },
+const ROLE_META: Record<SelectableRole, { labelKey: TranslationKey; icon: string; color: string }> = {
+  client: { labelKey: 'auth.clientSpace' as TranslationKey, icon: 'person', color: 'bg-blue-500' },
+  driver: { labelKey: 'auth.driverSpace' as TranslationKey, icon: 'local_taxi', color: 'bg-orange-500' },
+  restaurant: { labelKey: 'auth.restaurantSpace' as TranslationKey, icon: 'restaurant', color: 'bg-green-500' },
 };
 
 type BadgeVariant = 'approved' | 'pending' | 'draft' | 'rejected' | 'suspended' | 'none';
@@ -68,6 +70,7 @@ function getBadge(
 }
 
 export default function ContinueAsPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { currentUser, userData, loading } = useAuth();
   const effectiveStatuses = useEffectiveRoleStatus();
@@ -155,10 +158,10 @@ export default function ContinueAsPage() {
 
         <div className="px-6 text-center">
           <h1 className="text-white text-[28px] font-bold leading-tight mb-2">
-            Continuer en tant que…
+            {t('auth.continueAsTitle')}
           </h1>
           <p className="text-slate-400 text-base font-normal">
-            Sélectionnez l&apos;espace auquel vous souhaitez accéder
+            {t('auth.selectSpaceToAccess')}
           </p>
         </div>
 
@@ -184,7 +187,7 @@ export default function ContinueAsPage() {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-lg font-semibold text-white">{meta.label}</h2>
+                    <h2 className="text-lg font-semibold text-white">{t(meta.labelKey)}</h2>
                     {badge.variant !== 'none' && (
                       <span
                         className={`inline-block mt-1 px-2.5 py-0.5 text-xs font-medium rounded-full border ${

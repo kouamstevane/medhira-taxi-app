@@ -1,11 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { CarType } from '@/types';
-
-jest.mock('lucide-react', () => ({
-  Info: () => <span data-testid="info-icon" />,
-}));
-
-const { VehicleOption } = require('./VehicleOption');
+import { VehicleOption } from './VehicleOption';
 
 const carType: CarType = {
   id: 'eco',

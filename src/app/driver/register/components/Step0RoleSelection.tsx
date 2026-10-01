@@ -58,7 +58,7 @@ export default function Step0RoleSelection({ onNext }: Props) {
         data-testid="step0-continue-btn"
         className={cn(driverPrimaryButtonClassName)}
       >
-        {t('common.next')}
+        {t('common.continue')}
         <MaterialIcon name="arrow_forward" size="md" className="ml-2" />
       </button>
     </div>

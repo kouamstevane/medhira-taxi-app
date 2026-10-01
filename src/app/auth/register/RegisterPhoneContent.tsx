@@ -185,16 +185,16 @@ export default function RegisterPhoneContent() {
       console.error("Erreur d'authentification:", error);
     }
 
-    let errorMessage = "Une erreur est survenue";
+    let errorMessage = t('auth.authGenericError');
     const errorCode = getErrorCode(error);
     const errorMsg = getErrorMessage(error);
 
     switch (errorCode) {
       case 'functions/resource-exhausted':
-        errorMessage = errorMsg || "Trop de tentatives. Veuillez réessayer plus tard.";
+        errorMessage = errorMsg || t('auth.tooManyAttempts');
         break;
       case 'functions/failed-precondition':
-        errorMessage = errorMsg || "Le service SMS n'est pas encore prêt pour ce numéro.";
+        errorMessage = errorMsg || t('auth.smsServiceUnavailable');
         break;
       case 'functions/invalid-argument':
       case 'auth/invalid-phone-number':
@@ -202,24 +202,24 @@ export default function RegisterPhoneContent() {
         break;
       case 'auth/invalid-verification-code':
       case 'functions/permission-denied':
-        errorMessage = "Code de vérification invalide";
+        errorMessage = t('auth.invalidVerificationCode');
         break;
       case 'functions/unavailable':
       case 'auth/network-request-failed':
         errorMessage = ERROR_MESSAGES.NETWORK_ERROR;
         break;
       case 'functions/internal':
-        errorMessage = "Le service SMS est temporairement indisponible. Veuillez réessayer plus tard.";
+        errorMessage = t('auth.smsServiceUnavailable');
         break;
       case 'auth/unauthorized-domain':
         console.error("[Auth] Domaine non autorisé dans Firebase Auth (auth/unauthorized-domain). Ajoutez ce domaine dans Firebase Console > Authentication > Paramètres > Domaines autorisés.");
-        errorMessage = "Connexion temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.";
+        errorMessage = t('auth.connectionUnavailable');
         break;
       default:
         if (errorMsg && !errorMsg.includes('Firebase')) {
           errorMessage = errorMsg;
         } else {
-          errorMessage = "Une erreur est survenue lors de l'authentification. Veuillez réessayer.";
+          errorMessage = t('auth.authGenericError');
         }
     }
 

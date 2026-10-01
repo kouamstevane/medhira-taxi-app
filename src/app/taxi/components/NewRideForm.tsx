@@ -33,16 +33,17 @@ import { logger } from '@/utils/logger';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import type { BookingStatus } from '@/types/booking';
 import type { StripePaymentMethod, PaymentStatus } from '@/types/stripe';
 
 //  Schéma Zod de validation pour la création de course (medJira.md #85)
 const BookingSchema = z.object({
-  userId: z.string().min(1, 'UID utilisateur requis'),
-  userEmail: z.string().email('Email invalide').nullable().optional(),
+  userId: z.string().min(1, { error: () => translate('screens.rideForm.userIdRequired') }),
+  userEmail: z.string().email({ error: () => translate('screens.rideForm.invalidEmail') }).nullable().optional(),
   rideMode: z.enum(['immediate', 'scheduled']),
-  pickup: z.string().min(5, 'Adresse de départ trop courte (min 5 caractères)'),
-  destination: z.string().min(5, 'Adresse de destination trop courte (min 5 caractères)'),
+  pickup: z.string().min(5, { error: () => translate('screens.rideForm.pickupTooShort') }),
+  destination: z.string().min(5, { error: () => translate('screens.rideForm.destinationTooShort') }),
   pickupLocation: z.object({
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
@@ -52,10 +53,10 @@ const BookingSchema = z.object({
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
   }).optional(),
-  distance: z.number().positive('Distance doit être positive'),
-  duration: z.number().positive('Durée doit être positive'),
-  price: z.number().positive('Prix doit être positif'),
-  carType: z.string().min(1, 'Type de véhicule requis'),
+  distance: z.number().positive({ error: () => translate('screens.rideForm.distancePositive') }),
+  duration: z.number().positive({ error: () => translate('screens.rideForm.durationPositive') }),
+  price: z.number().positive({ error: () => translate('screens.rideForm.pricePositive') }),
+  carType: z.string().min(1, { error: () => translate('screens.rideForm.vehicleTypeRequired') }),
   scheduledAt: z.date().nullable().optional(),
   bonus: z.number().min(0).optional(),
   bookedForSomeoneElse: z.boolean().optional(),
@@ -320,7 +321,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
       logger.info('Estimation calculée', { estimate: result });
     } catch (err: unknown) {
       logger.error('Erreur calcul estimation', { error: err });
-      setError((err as Error).message || 'Erreur lors du calcul de l\'estimation');
+      setError((err as Error).message || t('taxi.fareCalculationError'));
       setEstimate(null);
     } finally {
       setEstimating(false);
@@ -388,7 +389,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
     e.preventDefault();
 
     if (!pickupAddress || !destinationAddress || !selectedCarType || !estimate) {
-      setError('Veuillez remplir tous les champs et attendre l\'estimation');
+      setError(t('taxi.fillAllFieldsWaitEstimate'));
       return;
     }
 
@@ -546,7 +547,13 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
       return await createBooking(bookingData);
     } catch (err) {
       logger.error('Erreur création réservation', { error: err });
-      setError(err instanceof Error ? err.message : t('taxi.rideCreationError'));
+      setError(
+        err instanceof z.ZodError
+          ? err.issues[0]?.message ?? t('taxi.rideCreationError')
+          : err instanceof Error
+            ? err.message
+            : t('taxi.rideCreationError')
+      );
       setLoading(false);
       return null;
     }
@@ -694,7 +701,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
           {carTypes.length === 0 ? (
             <div className="p-4 border-2 border-dashed border-white/[0.08] rounded-lg text-center">
               <p className="text-[#9CA3AF] text-sm">
-                {error && (error === t('taxi.failedLoadingVehicleTypes') || error.includes('types de véhicules'))
+                {error && error === t('taxi.failedLoadingVehicleTypes')
                   ? t('taxi.failedLoadingVehicleTypes')
                   : t('taxi.loadingVehicleTypes')}
               </p>

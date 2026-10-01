@@ -27,4 +27,14 @@ export const errors = {
     actionSuccess: 'Operation completed successfully.',
     actionFailed: 'Operation failed.',
   },
+
+  // Firestore errors
+  firestorePermission: "You do not have the required permissions to perform this action{context}. Check that your account is active and your email is verified.",
+  firestoreNotFound: "The requested document does not exist{context}. Please refresh the page and try again.",
+  firestoreNetwork: "Connection problem detected{context}. Please check your internet connection and try again.",
+  firestoreGeneric: "An error occurred{context}. Please try again. If the issue persists, contact support.",
+  context: {
+    profileUpdate: 'while updating your profile',
+    statusChange: 'while changing your status',
+  },
 } as const;

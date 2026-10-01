@@ -61,4 +61,26 @@ export const wallet = {
   minAmountNotice: 'Le montant minimum est de {min} {currency}',
   mustBeLoggedIn: 'Vous devez être connecté pour recharger',
   pendingProcessing: 'Recharge en cours de traitement. Votre solde sera mis à jour dans quelques instants.',
+
+  // Stripe payment element
+  amountToPay: 'Montant à payer',
+  confirmPayment: 'Confirmer le paiement',
+  securedByStripe: 'Paiement sécurisé par Stripe · PCI DSS Niveau 1',
+  paymentError: 'Erreur de paiement',
+  authFailed: 'Authentification échouée',
+  paymentFailedAfterAuth: 'Paiement non abouti après authentification',
+  paymentProcessing: 'Paiement en cours de traitement',
+  paymentFailed: 'Paiement non abouti',
+  clientSecretMissing: 'Erreur interne: client_secret manquant',
+  loadError: 'Impossible de charger les données de votre portefeuille. Veuillez vérifier votre connexion internet et réessayer.',
+  tapToOpenPaymentSheet: 'Appuyez sur le bouton ci-dessous pour ouvrir le formulaire de paiement sécurisé.',
+  threeDSecureIncluded: 'Stripe PaymentSheet · 3D Secure inclus',
+  cardSetupTitle: 'Configuration de carte',
+  cardSetupSubtitle: 'Stripe PaymentSheet · Sauvegarde sécurisée',
+  tapToOpenCardSetup: 'Appuyez sur le bouton ci-dessous pour ajouter une carte bancaire.',
+  verifying: 'Vérification…',
+  insufficientForFare: '— Insuffisant pour {fare}',
+
+  // Notifications
+  paymentReceivedToast: 'Paiement de {amount} {currency} reçu !',
 } as const;

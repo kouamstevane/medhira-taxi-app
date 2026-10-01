@@ -6,6 +6,8 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import { getFirestoreErrorMessage, logFirestoreError } from '@/utils/firestore-error-handler';
 import { ACTIVE_MARKET } from '@/utils/constants';
 import { useDriverStore, type DriverCoreData, type DriverPrivateData } from '@/store/driverStore';
@@ -26,6 +28,7 @@ export interface StripeConnectData {
 
 export function useDriverProfile() {
   const router = useRouter();
+  const { t } = useTranslation();
   const { isEmailVerified } = useAuth();
   const { driver, setDriver, updateDriver } = useDriverStore();
 
@@ -134,10 +137,10 @@ export function useDriverProfile() {
         fetchStripeData();
         fetchPrivateData(user.uid);
       } else {
-        setError('Profil chauffeur non trouvé');
+        setError(t('driver.noDriverProfileFound'));
       }
     }).catch(() => {
-      setError('Erreur de chargement du profil');
+      setError(t('driver.profileLoadError'));
     }).finally(() => {
       setLoading(false);
     });
@@ -146,7 +149,7 @@ export function useDriverProfile() {
   const handleUpdateProfile = useCallback(async () => {
     if (!auth.currentUser || !formData) return;
     if (!isEmailVerified) {
-      setError('Vous devez vérifier votre email avant de modifier votre profil.');
+      setError(t('driver.verifyEmailBeforeEditProfile'));
       return;
     }
     setLoading(true);
@@ -163,7 +166,7 @@ export function useDriverProfile() {
       setEditMode(false);
     } catch (err) {
       logFirestoreError(err, 'mise à jour du profil chauffeur');
-      setError(getFirestoreErrorMessage(err, 'mise à jour de votre profil'));
+      setError(getFirestoreErrorMessage(err, 'errors.context.profileUpdate'));
     } finally {
       setLoading(false);
     }
@@ -179,7 +182,7 @@ export function useDriverProfile() {
     } catch (err) {
       updateDriver({ isAvailable: prevValue });
       logFirestoreError(err, 'changement de disponibilité');
-      setError(getFirestoreErrorMessage(err, 'changement de statut'));
+      setError(getFirestoreErrorMessage(err, 'errors.context.statusChange'));
     }
   }, [driver, updateDriver]);
 
@@ -251,7 +254,7 @@ export function useDriverProfile() {
       const payoutFn = httpsCallable<{ action: string }, { amount?: number; currency?: string }>(functions, 'stripeConnectPayout');
       const result = await payoutFn({ action: 'manual_payout' });
       const data = result.data;
-      setPayoutSuccess(`Virement de ${data.amount} ${data.currency?.toUpperCase()} envoyé !`);
+      setPayoutSuccess(translate('systemMessages.payout.sent', { amount: String(data.amount), currency: String(data.currency?.toUpperCase()) }));
       const timeout = setTimeout(() => {
         if (mountedRef.current) setPayoutSuccess('');
         timeoutsRef.current = timeoutsRef.current.filter(t => t !== timeout);

@@ -15,6 +15,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/config/firebase';
 import { AuthContextType, UserData } from '@/types';
 import type { AuthStatus } from '@/types/user';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const AUTH_DATA_RETRY_LIMIT = 2;
 const AUTH_DATA_RETRY_DELAY_MS = 150;
@@ -48,6 +49,7 @@ export const AuthContext = createContext<AuthContextType | null>(null);
  * Wrapper qui fournit l'état d'authentification à tous les composants enfants.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -176,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (result.transient) {
-      setError('Connexion temporairement indisponible. Synchronisation en attente.');
+      setError(t('auth.connectionUnavailablePendingSync'));
       setAuthStatus('degraded');
       setLoading(true);
       return;
@@ -238,14 +240,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Recharger aussi les données Firestore
         const result = await fetchUserData(refreshedUser);
         if (result.transient) {
-          setError('Connexion temporairement indisponible. Synchronisation en attente.');
+          setError(t('auth.connectionUnavailablePendingSync'));
           setAuthStatus('degraded');
           return;
         }
         if (!result.data) {
           setUserData(null);
           setAuthStatus('unauthenticated');
-          throw new Error('Impossible de recharger le profil utilisateur.');
+          throw new Error(t('auth.cannotReloadUserProfile'));
         }
         setError(null);
         setAuthStatus('authenticated');

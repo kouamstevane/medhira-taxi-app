@@ -76,7 +76,7 @@ export function Step1Account({ onSubmit, onGoogleSignIn, loading, error: externa
               type="button"
               onClick={() => setLocalError(null)}
               className="p-1 rounded-lg text-red-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
             >
               <MaterialIcon name="close" size="sm" />
             </button>
@@ -112,15 +112,15 @@ export function Step1Account({ onSubmit, onGoogleSignIn, loading, error: externa
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <InputField id="firstName" type="text" label={t('firstName')} aria-label={t('firstName')} value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Marc" required aria-required="true" containerClassName="min-w-0" />
+              <InputField id="firstName" type="text" label={t('firstName')} aria-label={t('firstName')} value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder={t('placeholderFirstName')} required aria-required="true" containerClassName="min-w-0" />
             </div>
             <div>
-              <InputField id="lastName" type="text" label={t('lastName')} aria-label={t('lastName')} value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Lefèvre" required aria-required="true" containerClassName="min-w-0" />
+              <InputField id="lastName" type="text" label={t('lastName')} aria-label={t('lastName')} value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder={t('placeholderLastName')} required aria-required="true" containerClassName="min-w-0" />
             </div>
           </div>
 
           <div>
-            <InputField id="email" type="email" label={t('email')} aria-label={t('email')} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="marc@bistro.fr" required aria-required="true" autoComplete="email" />
+            <InputField id="email" type="email" label={t('email')} aria-label={t('email')} value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('placeholderEmail')} required aria-required="true" autoComplete="email" />
           </div>
 
           <div>

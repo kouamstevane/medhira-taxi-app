@@ -129,7 +129,7 @@ export function ProfilePaymentMethodsModal({
                   <p className="font-medium truncate text-white">{cardholderName || t('profile.user')}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] uppercase tracking-wider text-slate-400">EXPIRE</p>
+                  <p className="text-[9px] uppercase tracking-wider text-slate-400">{t('screens.profilePayment.expires')}</p>
                   <p className="font-mono font-medium text-white">{formattedExpiry}</p>
                 </div>
               </div>

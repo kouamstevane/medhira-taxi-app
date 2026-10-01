@@ -54,9 +54,14 @@ function ConfigurerContent() {
   );
 }
 
+function LoadingFallback() {
+  const { t } = useTranslation();
+  return <div className="p-8 text-center text-slate-400">{t('common.loading')}</div>;
+}
+
 export default function PersonalDriverConfigurationPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-slate-400">Chargement...</div>}>
+    <Suspense fallback={<LoadingFallback />}>
       <ConfigurerContent />
     </Suspense>
   );

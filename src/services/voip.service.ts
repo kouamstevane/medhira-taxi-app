@@ -8,6 +8,7 @@ import { db, app } from '@/config/firebase';
 const FUNCTIONS_REGION = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
 import { VoipCallState, CallStatus, CallParticipant, IVoipEngine, DEFAULT_CALL_TIMEOUTS } from '@/types/voip';
 import { logger } from '@/utils/logger';
+import { translate } from '@/locales';
 import { TwilioVoipEngine } from './voip/engines/twilio.engine';
 
 interface VoipForegroundPlugin {
@@ -84,7 +85,7 @@ class VoipService {
       this.isEngineInitialized = true;
     } catch (error) {
       console.error('[voip.service] initEngine failed:', error);
-      this.updateState({ error: 'Initialisation moteur d\'appel échouée' });
+      this.updateState({ error: translate('serviceMessages.voip.engineInitFailed') });
     }
   }
 

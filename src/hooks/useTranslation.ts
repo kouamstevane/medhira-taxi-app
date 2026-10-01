@@ -37,7 +37,8 @@ export function useTranslation(namespace?: string): UseTranslationReturn {
       const topLevelNamespaces = [
         'common', 'auth', 'taxi', 'colis', 'food', 'client',
         'driver', 'wallet', 'profile', 'errors', 'personalDriver',
-        'notifications', 'history', 'restaurant'
+        'notifications', 'history', 'restaurant',
+        'serviceMessages', 'systemMessages', 'screens', 'legal'
       ];
       const hasNamespacePrefix = topLevelNamespaces.some((ns) => key.startsWith(`${ns}.`));
       const resolvedKey = hasNamespacePrefix ? key : (`${namespace}.${key}` as TranslationKey);

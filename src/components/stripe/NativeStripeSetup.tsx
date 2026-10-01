@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getStripeAdapter } from '@/lib/stripe-adapters';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface NativeStripeSetupProps {
   clientSecret: string;
@@ -15,6 +16,7 @@ export function NativeStripeSetup({
   onSuccess,
   onError,
 }: NativeStripeSetupProps) {
+  const { t } = useTranslation('wallet');
   const [processing, setProcessing] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -25,12 +27,12 @@ export function NativeStripeSetup({
         .then(() => setInitialized(true))
         .catch((err: unknown) => {
           console.error('[NativeStripeSetup] Init failed:', err);
-          onError(err instanceof Error ? err.message : 'Erreur d\'initialisation Stripe');
+          onError(err instanceof Error ? err.message : t('paymentError'));
         });
     } else {
       setInitialized(true);
     }
-  }, [onError]);
+  }, [onError, t]);
 
   const handleSetup = async () => {
     setProcessing(true);
@@ -39,10 +41,10 @@ export function NativeStripeSetup({
       await adapter.setupCard({ clientSecret });
       onSuccess();
     } catch (err: unknown) {
-      if (err instanceof Error && err.message.includes('annulé')) {
+      if (err instanceof Error && (err.message.includes('annulé') || err.message.toLowerCase().includes('cancel'))) {
         return;
       }
-      const msg = err instanceof Error ? err.message : 'Erreur lors de la sauvegarde de la carte';
+      const msg = err instanceof Error ? err.message : t('paymentError');
       onError(msg);
     } finally {
       setProcessing(false);
@@ -57,12 +59,12 @@ export function NativeStripeSetup({
             <MaterialIcon name="credit_card" size="md" className="text-primary" />
           </div>
           <div>
-            <p className="text-white font-medium text-sm">Configuration de carte</p>
-            <p className="text-slate-500 text-xs">Stripe PaymentSheet · Sauvegarde sécurisée</p>
+            <p className="text-white font-medium text-sm">{t('cardSetupTitle')}</p>
+            <p className="text-slate-500 text-xs">{t('cardSetupSubtitle')}</p>
           </div>
         </div>
         <p className="text-slate-400 text-sm text-center">
-          Appuyez sur le bouton ci-dessous pour ajouter une carte bancaire.
+          {t('tapToOpenCardSetup')}
         </p>
       </div>
 
@@ -78,19 +80,19 @@ export function NativeStripeSetup({
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            Vérification…
+            {t('verifying')}
           </>
         ) : (
           <>
             <MaterialIcon name="credit_card" size="md" />
-            Ajouter une carte
+            {t('addPaymentMethod')}
           </>
         )}
       </button>
 
       <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
         <MaterialIcon name="verified_user" size="sm" />
-        <span>Paiement sécurisé par Stripe · PCI DSS Niveau 1</span>
+        <span>{t('securedByStripe')}</span>
       </div>
     </div>
   );

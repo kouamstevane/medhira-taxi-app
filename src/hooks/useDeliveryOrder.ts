@@ -1,6 +1,8 @@
 // src/hooks/useDeliveryOrder.ts
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useTranslation } from '@/hooks/useTranslation'
+import { translate } from '@/locales'
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { ref as rtdbRef, set } from 'firebase/database'
@@ -30,6 +32,7 @@ export interface UseDeliveryOrderOptions {
 }
 
 export function useDeliveryOrder(orderId: string, options?: UseDeliveryOrderOptions) {
+  const { t } = useTranslation()
   const [order, setOrder] = useState<FoodDeliveryOrder | null>(null)
   const [loading, setLoading] = useState(true)
   const [localStatus, setLocalStatus] = useState<DeliveryStatus | null>(null)
@@ -52,7 +55,7 @@ export function useDeliveryOrder(orderId: string, options?: UseDeliveryOrderOpti
       setLoading(false)
     }, (err) => {
       console.error('[useDeliveryOrder] Erreur de synchronisation:', err)
-      setError('Erreur de connexion aux données')
+      setError(t('errors.dataConnectionError'))
       setLoading(false)
       onError?.(err)
     })
@@ -114,7 +117,7 @@ export function useDeliveryOrder(orderId: string, options?: UseDeliveryOrderOpti
       })
     } catch {
       setLocalStatus(previousStatus)
-      throw new Error('Erreur de connexion — réessayez')
+      throw new Error(translate('systemMessages.delivery.connectionError'))
     }
   }, [orderId])
 
@@ -126,8 +129,8 @@ export function useDeliveryOrder(orderId: string, options?: UseDeliveryOrderOpti
       })
     } catch (err) {
       console.error('[useDeliveryOrder] refuseOrder failed:', err)
-      setError('Erreur de connexion — réessayez')
-      throw new Error('Erreur de connexion — réessayez')
+      setError(t('errors.dataConnectionRetry'))
+      throw new Error(translate('systemMessages.delivery.connectionError'))
     }
   }, [orderId])
 
@@ -140,8 +143,8 @@ export function useDeliveryOrder(orderId: string, options?: UseDeliveryOrderOpti
       await validate({ orderId, pickupCode })
     } catch (err) {
       console.error('[useDeliveryOrder] confirmPickup failed:', err)
-      setError('Code de récupération incorrect ou expiré')
-      throw new Error('Code de récupération incorrect ou expiré')
+      setError(t('restaurant.pickupCodeInvalidOrExpired'))
+      throw new Error(translate('systemMessages.delivery.pickupCodeInvalid'))
     }
   }, [orderId])
 
@@ -168,8 +171,8 @@ export function useDeliveryOrder(orderId: string, options?: UseDeliveryOrderOpti
         await validate({ orderId, pin: payload })
       } catch (err) {
         console.error('[useDeliveryOrder] confirmDelivery pin failed:', err)
-        setError('Code PIN incorrect ou expiré')
-        throw new Error('Code PIN incorrect ou expiré')
+        setError(t('restaurant.pinCodeInvalidOrExpired'))
+        throw new Error(translate('systemMessages.delivery.pinInvalid'))
       }
       return
     }
@@ -184,8 +187,8 @@ export function useDeliveryOrder(orderId: string, options?: UseDeliveryOrderOpti
       await updateDoc(doc(db, 'food_delivery_orders', orderId), update)
     } catch (err) {
       console.error('[useDeliveryOrder] confirmDelivery failed:', err)
-      setError('Erreur de connexion — réessayez')
-      throw new Error('Erreur de connexion — réessayez')
+      setError(t('errors.dataConnectionRetry'))
+      throw new Error(translate('systemMessages.delivery.connectionError'))
     }
   }, [orderId])
 
@@ -198,8 +201,8 @@ export function useDeliveryOrder(orderId: string, options?: UseDeliveryOrderOpti
       await updateDoc(doc(db, 'food_delivery_orders', orderId), updates)
     } catch (err) {
       console.error('[useDeliveryOrder] reportNotReady failed:', err)
-      setError('Erreur de connexion — réessayez')
-      throw new Error('Erreur de connexion — réessayez')
+      setError(t('errors.dataConnectionRetry'))
+      throw new Error(translate('systemMessages.delivery.connectionError'))
     }
   }, [orderId, order])
 

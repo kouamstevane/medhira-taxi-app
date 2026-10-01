@@ -162,8 +162,8 @@ export default function ColisPage() {
       setPriceEstimate(null);
       setFieldErrors((prev) => ({
         ...prev,
-        ...(pickupOk ? {} : { pickup: `Service disponible uniquement dans les pays supportés (${supportedNames})` }),
-        ...(dropoffOk ? {} : { dropoff: `Service disponible uniquement dans les pays supportés (${supportedNames})` }),
+        ...(pickupOk ? {} : { pickup: t('colis.supportedCountriesOnly', { countries: supportedNames }) }),
+        ...(dropoffOk ? {} : { dropoff: t('colis.supportedCountriesOnly', { countries: supportedNames }) }),
       }));
       return;
     }
@@ -171,7 +171,7 @@ export default function ColisPage() {
       setPriceEstimate(null);
       setFieldErrors((prev) => ({
         ...prev,
-        dropoff: 'Transport national uniquement — retrait et livraison doivent être dans le même pays',
+        dropoff: t('colis.nationalTransportOnly'),
       }));
       return;
     }
@@ -196,7 +196,7 @@ export default function ColisPage() {
     } finally {
       setPriceLoading(false);
     }
-  }, [detectedCountry, formData.pickupLocation, formData.dropoffLocation]);
+  }, [detectedCountry, formData.pickupLocation, formData.dropoffLocation, t]);
 
   useEffect(() => {
     updatePriceEstimate();
@@ -204,20 +204,20 @@ export default function ColisPage() {
 
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!formData.pickupLocation) errors.pickup = "L'adresse de retrait est requise";
-    if (!formData.dropoffLocation) errors.dropoff = "L'adresse de livraison est requise";
+    if (!formData.pickupLocation) errors.pickup = t('colis.pickupAddressRequired');
+    if (!formData.dropoffLocation) errors.dropoff = t('colis.dropoffAddressRequired');
     if (formData.parcelType === 'other' && !formData.customType.trim()) {
-      errors.customType = 'Veuillez préciser le type de colis';
+      errors.customType = t('colis.customTypeRequired');
     }
-    if (formData.recipientName.trim().length < 2) errors.recipientName = 'Le nom du destinataire est requis';
-    if (formData.recipientPhone.trim().length < 8) errors.recipientPhone = 'Numéro de téléphone invalide';
+    if (formData.recipientName.trim().length < 2) errors.recipientName = t('colis.recipientNameRequired');
+    if (formData.recipientPhone.trim().length < 8) errors.recipientPhone = t('colis.recipientPhoneInvalid');
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async () => {
     if (!currentUser) {
-      setErrorMsg('Vous devez être connecté pour demander le transport d\'un colis');
+      setErrorMsg(t('colis.loginRequiredForParcel'));
       return;
     }
     if (!validate()) {
@@ -259,7 +259,7 @@ export default function ColisPage() {
         setStep('form');
         return;
       }
-      const message = err instanceof Error ? err.message : 'Une erreur est survenue lors de la création du colis';
+      const message = err instanceof Error ? err.message : t('colis.creationError');
       setErrorMsg(message);
       setStep('error');
     }
@@ -274,7 +274,7 @@ export default function ColisPage() {
       setStep('success');
     } catch (err) {
       await triggerHaptic('error');
-      setErrorMsg(err instanceof Error ? err.message : 'Impossible de finaliser le paiement.');
+      setErrorMsg(err instanceof Error ? err.message : t('colis.paymentFinalizeError'));
       setStep('card_payment');
     }
   };
@@ -305,14 +305,14 @@ export default function ColisPage() {
             <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto border border-green-500/20 mb-5">
               <MaterialIcon name="check_circle" className="text-green-500 text-[32px]" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Demande enregistrée !</h2>
+            <h2 className="text-xl font-bold text-white mb-2">{t('colis.successTitle')}</h2>
             <p className="text-sm text-slate-400 mb-6">
-              Votre demande de transport a été créée. Un chauffeur sera bientôt assigné.
+              {t('colis.successSubtitle')}
             </p>
             {priceEstimate && (
               <div className="glass-card p-4 rounded-xl border border-white/5 mb-6">
                 <div className="flex justify-between items-center text-lg font-bold text-white">
-                  <span>Prix estimé</span>
+                  <span>{t('colis.priceEstimate')}</span>
                   <span>{priceEstimate.price.toFixed(2)} {priceEstimate.currency}</span>
                 </div>
               </div>
@@ -322,7 +322,7 @@ export default function ColisPage() {
               className="w-full h-14 bg-gradient-to-r from-primary to-[#ffae33] text-white font-bold rounded-2xl primary-glow active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
             >
               <MaterialIcon name="receipt_long" size="md" />
-              Voir mes colis
+              {t('colis.viewMyParcels')}
             </button>
             <button
               onClick={() => {
@@ -334,7 +334,7 @@ export default function ColisPage() {
               }}
               className="w-full mt-3 h-14 glass-card text-slate-300 font-semibold rounded-2xl border border-white/10 active:scale-[0.98] transition-transform flex items-center justify-center"
             >
-              Nouveau transport
+              {t('colis.newTransport')}
             </button>
           </div>
         </div>
@@ -348,9 +348,9 @@ export default function ColisPage() {
       <div className="min-h-screen bg-background max-w-[430px] mx-auto flex flex-col">
         <div className="flex-1 p-4 pt-8">
           <div className="glass-card rounded-2xl border border-white/10 p-5">
-            <h2 className="mb-2 text-xl font-bold text-white">Paiement sécurisé</h2>
+            <h2 className="mb-2 text-xl font-bold text-white">{t('colis.securePayment')}</h2>
             <p className="mb-6 text-sm text-slate-400">
-              Confirmez le paiement pour lancer la recherche d’un chauffeur.
+              {t('colis.securePaymentSubtitle')}
             </p>
             <StripePaymentElement
               clientSecret={pendingCardPayment.clientSecret}
@@ -358,7 +358,7 @@ export default function ColisPage() {
               currency={pendingCardPayment.currency}
               onSuccess={handleCardPaymentSuccess}
               onError={(message) => setErrorMsg(message)}
-              submitLabel="Payer et confirmer le colis"
+              submitLabel={t('colis.payAndConfirmParcel')}
             />
             {errorMsg && <p className="mt-4 text-sm text-red-400">{errorMsg}</p>}
           </div>
@@ -465,7 +465,7 @@ export default function ColisPage() {
                     ].join(' ')}
                   >
                     <MaterialIcon name={info.icon} className={isSelected ? 'text-primary' : 'text-slate-400'} size="md" />
-                    <span className="text-sm">{info.label}</span>
+                    <span className="text-sm">{t(`colis.types.${key}` as `colis.types.${ParcelType}`) || info.label}</span>
                   </button>
                 );
               }
@@ -507,7 +507,7 @@ export default function ColisPage() {
               type="text"
               value={formData.recipientName}
               onChange={(e) => setFormData((prev) => ({ ...prev, recipientName: e.target.value }))}
-              placeholder="Nom complet"
+              placeholder={t('colis.fullNamePlaceholder')}
               className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
               style={{ fontSize: '16px' }}
             />

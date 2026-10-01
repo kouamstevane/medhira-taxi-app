@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { collection, query, where, orderBy, limit, onSnapshot, Timestamp } from 'firebase/firestore'
 import { db } from '@/config/firebase'
+import { translate } from '@/locales'
 
 export interface ActivityRecord {
   id: string
@@ -77,7 +78,7 @@ export function useDriverActivity(
         taxiRecordsRef.push({
           id: d.id,
           type: 'taxi',
-          description: `Course — ${data.pickupAddress ?? 'Départ inconnu'}`,
+          description: translate('systemMessages.activity.taxiRide', { pickup: data.pickupAddress ?? translate('systemMessages.activity.unknownPickup') }),
           date: ts.toLocaleDateString('fr-CA'),
           amount: getTaxiActivityAmount(data),
         })

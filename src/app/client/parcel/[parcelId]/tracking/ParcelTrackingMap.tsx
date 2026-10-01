@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useGoogleMaps } from '@/hooks/useGoogleMaps'
+import { useTranslation } from '@/hooks/useTranslation'
 
 const mapContainerStyle = { width: '100%', height: '320px' }
 const defaultCenter = { lat: 3.848, lng: 11.502 } // Yaoundé fallback
@@ -17,6 +18,7 @@ interface Props {
 type MapsApi = typeof import('@react-google-maps/api')
 
 export default function ParcelTrackingMap({ driverLocation, pickup, dropoff }: Props) {
+  const { t } = useTranslation()
   const center = driverLocation || pickup || dropoff || defaultCenter
   const { isLoaded } = useGoogleMaps()
   const [mapsApi, setMapsApi] = useState<MapsApi | null>(null)
@@ -28,7 +30,7 @@ export default function ParcelTrackingMap({ driverLocation, pickup, dropoff }: P
   if (!isLoaded || !mapsApi) {
     return (
       <div style={mapContainerStyle} className="flex items-center justify-center bg-[#1A1A1A]">
-        <p className="text-slate-400 text-sm">Chargement de la carte…</p>
+        <p className="text-slate-400 text-sm">{t('common.mapLoadingDots')}</p>
       </div>
     )
   }

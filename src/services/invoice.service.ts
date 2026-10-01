@@ -8,6 +8,7 @@
 
 import { Booking } from "@/types/booking";
 import { Timestamp } from "firebase/firestore";
+import { translate } from "@/locales";
 import { CURRENCY_CODE, DEFAULT_PRICING, DEFAULT_LOCALE } from "@/utils/constants";
 
 /**
@@ -133,7 +134,7 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
 
   doc.setFontSize(12);
   doc.setFont("helvetica", "normal");
-  doc.text("Votre trajet en toute confiance", pageWidth / 2, 32, {
+  doc.text(translate('serviceMessages.invoice.tagline'), pageWidth / 2, 32, {
     align: "center",
   });
 
@@ -145,22 +146,22 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.setTextColor(...darkColor);
   doc.setFontSize(20);
   doc.setFont("helvetica", "bold");
-  doc.text("FACTURE", 20, y);
+  doc.text(translate('serviceMessages.invoice.title'), 20, y);
 
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...grayColor);
-  doc.text(`N° ${invoiceNumber}`, pageWidth - 20, y, { align: "right" });
+  doc.text(translate('serviceMessages.invoice.number', { number: invoiceNumber }), pageWidth - 20, y, { align: "right" });
 
   y += 15;
 
   // === DATES ===
   doc.setFontSize(10);
   doc.setTextColor(...grayColor);
-  doc.text(`Date de la course: ${formatDate(data.createdAt)}`, 20, y);
+  doc.text(translate('serviceMessages.invoice.rideDate', { date: formatDate(data.createdAt) }), 20, y);
   if (data.completedAt) {
     doc.text(
-      `Terminée le: ${formatDate(data.completedAt)}`,
+      translate('serviceMessages.invoice.completedOn', { date: formatDate(data.completedAt) }),
       pageWidth - 20,
       y,
       { align: "right" }
@@ -176,11 +177,11 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.setTextColor(...darkColor);
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  doc.text("Client", 20, y + 5);
+  doc.text(translate('serviceMessages.invoice.client'), 20, y + 5);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text(data.clientEmail || "Client", 20, y + 15);
+  doc.text(data.clientEmail || translate('serviceMessages.invoice.client'), 20, y + 15);
 
   y += 35;
 
@@ -188,7 +189,7 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.setTextColor(...darkColor);
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("Détails du trajet", 20, y);
+  doc.text(translate('serviceMessages.invoice.rideDetails'), 20, y);
 
   y += 10;
 
@@ -198,7 +199,7 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...grayColor);
-  doc.text("Départ:", 32, y);
+  doc.text(translate('serviceMessages.invoice.departure'), 32, y);
   doc.setTextColor(...darkColor);
 
   // Tronquer le texte si trop long
@@ -215,7 +216,7 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.setFillColor(244, 67, 54); // Rouge
   doc.circle(25, y + 2, 3, "F");
   doc.setTextColor(...grayColor);
-  doc.text("Destination:", 32, y);
+  doc.text(translate('serviceMessages.invoice.destination'), 32, y);
   doc.setTextColor(...darkColor);
 
   let destText = data.destination;
@@ -230,25 +231,25 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   if (data.driverName || data.carModel) {
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Véhicule", 20, y);
+    doc.text(translate('serviceMessages.invoice.vehicleHeading'), 20, y);
 
     y += 8;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
 
     if (data.driverName) {
-      doc.text(`Chauffeur: ${data.driverName}`, 20, y);
+      doc.text(translate('serviceMessages.invoice.driverLine', { name: data.driverName }), 20, y);
       y += 6;
     }
     if (data.carModel) {
-      doc.text(`Véhicule: ${data.carModel}`, 20, y);
+      doc.text(translate('serviceMessages.invoice.vehicleLine', { model: data.carModel }), 20, y);
       y += 6;
     }
     if (data.carPlate) {
-      doc.text(`Immatriculation: ${data.carPlate}`, 20, y);
+      doc.text(translate('serviceMessages.invoice.plateLine', { plate: data.carPlate }), 20, y);
       y += 6;
     }
-    doc.text(`Type: ${data.carType}`, 20, y);
+    doc.text(translate('serviceMessages.invoice.typeLine', { type: data.carType }), 20, y);
 
     y += 15;
   }
@@ -257,7 +258,7 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...darkColor);
-  doc.text("Détail de la facturation", 20, y);
+  doc.text(translate('serviceMessages.invoice.billingDetails'), 20, y);
 
   y += 10;
 
@@ -272,8 +273,8 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
-  doc.text("Description", col1, y + 2);
-  doc.text("Montant", col2, y + 2, { align: "right" });
+  doc.text(translate('serviceMessages.invoice.description'), col1, y + 2);
+  doc.text(translate('serviceMessages.invoice.amount'), col2, y + 2, { align: "right" });
 
   y += 12;
 
@@ -283,15 +284,15 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
 
   const rows = [
     {
-      label: "Tarif de base",
+      label: translate('serviceMessages.invoice.baseFare'),
       value: `${data.basePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`,
     },
     {
-      label: `Distance (${data.distance.toFixed(2)} km)`,
+      label: translate('serviceMessages.invoice.distanceRow', { km: data.distance.toFixed(2) }),
       value: `${data.distancePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`,
     },
     {
-      label: `Durée (${data.duration} min)`,
+      label: translate('serviceMessages.invoice.durationRow', { min: data.duration }),
       value: `${data.durationPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`,
     },
   ];
@@ -313,7 +314,7 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(12);
   doc.setFont("helvetica", "bold");
-  doc.text("TOTAL", col1, y + 4);
+  doc.text(translate('serviceMessages.invoice.total'), col1, y + 4);
   doc.text(`${data.finalPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`, col2, y + 4, {
     align: "right",
   });
@@ -324,14 +325,14 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.setFontSize(9);
   doc.setTextColor(...grayColor);
   doc.setFont("helvetica", "italic");
-  doc.text("Merci pour votre confiance !", pageWidth / 2, y, {
+  doc.text(translate('serviceMessages.invoice.thanks'), pageWidth / 2, y, {
     align: "center",
   });
 
   y += 8;
   doc.setFont("helvetica", "normal");
   doc.text(
-    "Cette facture a été générée automatiquement par Medjira.",
+    translate('serviceMessages.invoice.autoGenerated'),
     pageWidth / 2,
     y,
     { align: "center" }
@@ -343,7 +344,7 @@ export const generateInvoicePDF = async (data: InvoiceData): Promise<void> => {
   doc.line(20, 280, pageWidth - 20, 280);
 
   doc.setFontSize(8);
-  doc.text("© Medjira - Tous droits réservés", pageWidth / 2, 287, {
+  doc.text(translate('serviceMessages.invoice.copyright'), pageWidth / 2, 287, {
     align: "center",
   });
 
@@ -367,21 +368,18 @@ export const getInvoiceText = (booking: Booking): string => {
   const data = extractInvoiceData(booking);
   const invoiceNumber = generateInvoiceNumber(data.bookingId, data.createdAt);
 
-  return `🏁 Course terminée !
+  const money = (value: number) =>
+    `${value.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}`;
 
-📋 Facture N° ${invoiceNumber}
-━━━━━━━━━━━━━━━━━━━━━
-
-📍 De: ${data.pickup}
-📍 Vers: ${data.destination}
-
-📊 Détails:
-• Tarif de base: ${data.basePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}
-• Distance (${data.distance.toFixed(2)} km): ${data.distancePrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}
-• Durée (${data.duration} min): ${data.durationPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}
-
-━━━━━━━━━━━━━━━━━━━━━
-💰 TOTAL: ${data.finalPrice.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 })} ${CURRENCY_CODE}
-
-Merci pour votre confiance ! 🙏`;
+  return translate('serviceMessages.invoice.chatText', {
+    number: invoiceNumber,
+    pickup: data.pickup,
+    destination: data.destination,
+    basePrice: money(data.basePrice),
+    km: data.distance.toFixed(2),
+    distancePrice: money(data.distancePrice),
+    min: data.duration,
+    durationPrice: money(data.durationPrice),
+    total: money(data.finalPrice),
+  });
 };

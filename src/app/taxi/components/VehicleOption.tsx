@@ -31,8 +31,8 @@ export const VehicleOption = ({
   estimatedPrice = null,
   disabled = false,
 }: VehicleOptionProps) => {
-  const { t } = useTranslation();
-  const meta = getVehicleMeta(carType);
+  const { t, locale } = useTranslation();
+  const meta = getVehicleMeta(carType, locale);
 
   return (
     <button

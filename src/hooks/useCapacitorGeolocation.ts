@@ -5,6 +5,7 @@ import { secureStorage } from '@/services/secureStorage.service';
 import { withTimeout } from '@/utils/promise';
 import { haversineKm } from '@/utils/distance';
 import { GpsKalmanFilter, type SmoothingOptions } from '@/utils/gpsSmoothing';
+import { translate } from '@/locales';
 //  Conforme à medJiraV2.md §6.1 (modes adaptatifs + fallback lastKnownPosition)
 
 export interface Location {
@@ -84,11 +85,11 @@ export const useCapacitorGeolocation = () => {
 
     const readBrowserPosition = useCallback(async (mode: GeolocationMode): Promise<PreciseLocation> => {
         if (typeof navigator === 'undefined' || !navigator.geolocation) {
-            throw new Error('La géolocalisation du navigateur n’est pas disponible.');
+            throw new Error(translate('systemMessages.geolocation.browserUnavailable'));
         }
 
         if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost') {
-            throw new Error('Le web exige HTTPS ou localhost pour accéder au GPS.');
+            throw new Error(translate('systemMessages.geolocation.httpsRequired'));
         }
 
         const options: PositionOptions = {
@@ -113,7 +114,7 @@ export const useCapacitorGeolocation = () => {
                 } else if (value) {
                     resolve(value);
                 } else {
-                    reject(new Error('Impossible d’obtenir une position fiable.'));
+                    reject(new Error(translate('systemMessages.geolocation.noReliablePosition')));
                 }
             };
 
@@ -137,7 +138,7 @@ export const useCapacitorGeolocation = () => {
                 },
                 (error) => {
                     if (resolved) return;
-                    void finish(clearWatchSafe, new Error(error.message || 'Erreur de géolocalisation navigateur'));
+                    void finish(clearWatchSafe, new Error(error.message || translate('systemMessages.geolocation.browserError')));
                 },
                 options
             );
@@ -147,7 +148,7 @@ export const useCapacitorGeolocation = () => {
                 if (best) {
                     void finish(clearWatchSafe, best);
                 } else {
-                    void finish(clearWatchSafe, new Error('Impossible d’obtenir une position fiable.'));
+                    void finish(clearWatchSafe, new Error(translate('systemMessages.geolocation.noReliablePosition')));
                 }
             }, mode === 'tracking' ? 12000 : 10000);
         });
@@ -222,7 +223,7 @@ export const useCapacitorGeolocation = () => {
             setState({
                 location: null,
                 preciseLocation: null,
-                error: "Délai d'attente GPS dépassé. Vérifiez que la localisation est activée.",
+                error: translate('systemMessages.geolocation.gpsTimeout'),
                 loading: false,
                 accuracy: null,
             });
@@ -251,7 +252,7 @@ export const useCapacitorGeolocation = () => {
                 );
                 console.log('[Geolocation] Résultat demande:', request);
                 if (request.location === 'denied') {
-                    throw new Error('Permission de géolocalisation refusée');
+                    throw new Error(translate('systemMessages.geolocation.permissionDenied'));
                 }
             }
 
@@ -346,7 +347,7 @@ export const useCapacitorGeolocation = () => {
             }
 
             if (!bestPosition) {
-                throw new Error("Impossible d'obtenir une localisation valide. Vérifiez que le GPS est activé.");
+                throw new Error(translate('systemMessages.geolocation.noValidLocation'));
             }
 
             const preciseLocation: PreciseLocation = {
@@ -440,7 +441,7 @@ export const useCapacitorGeolocation = () => {
                 'requestPermissions'
             );
             if (request.location === 'denied') {
-                throw new Error('Permission de géolocalisation refusée');
+                throw new Error(translate('systemMessages.geolocation.permissionDenied'));
             }
         }
 
@@ -453,7 +454,7 @@ export const useCapacitorGeolocation = () => {
                 watchId = null;
             }
             if (!best) {
-                throw new Error("Impossible d'obtenir une localisation précise.");
+                throw new Error(translate('systemMessages.geolocation.noPreciseLocation'));
             }
             const precise: PreciseLocation = {
                 lat: best.coords.latitude,
@@ -499,7 +500,7 @@ export const useCapacitorGeolocation = () => {
                             try { await Geolocation.clearWatch({ id: watchId }); } catch {}
                         }
                         setState(prev => ({ ...prev, loading: false, error: err?.message ?? 'Erreur' }));
-                        reject(err ?? new Error('Annulé'));
+                        reject(err ?? new Error(translate('systemMessages.geolocation.cancelled')));
                     } else {
                         resolve(await finish());
                     }
@@ -510,10 +511,10 @@ export const useCapacitorGeolocation = () => {
 
             if (signal) {
                 if (signal.aborted) {
-                    settle('reject', new Error('Annulé'));
+                    settle('reject', new Error(translate('systemMessages.geolocation.cancelled')));
                     return;
                 }
-                signal.addEventListener('abort', () => settle('reject', new Error('Annulé')), { once: true });
+                signal.addEventListener('abort', () => settle('reject', new Error(translate('systemMessages.geolocation.cancelled'))), { once: true });
             }
 
             Geolocation.watchPosition(
@@ -717,12 +718,12 @@ export const useCapacitorGeolocation = () => {
      * Obtenir une description textuelle de la qualité de la précision
      */
     const getAccuracyQuality = useCallback(() => {
-        if (!state.accuracy) return 'Inconnue';
-        if (state.accuracy <= 10) return 'Excellente (GPS)';
-        if (state.accuracy <= IDEAL_ACCURACY) return 'Très bonne';
-        if (state.accuracy <= MIN_ACCEPTABLE_ACCURACY) return 'Bonne';
-        if (state.accuracy <= 100) return 'Moyenne';
-        return 'Faible (WiFi/Réseau)';
+        if (!state.accuracy) return translate('systemMessages.geolocation.quality.unknown');
+        if (state.accuracy <= 10) return translate('systemMessages.geolocation.quality.excellent');
+        if (state.accuracy <= IDEAL_ACCURACY) return translate('systemMessages.geolocation.quality.veryGood');
+        if (state.accuracy <= MIN_ACCEPTABLE_ACCURACY) return translate('systemMessages.geolocation.quality.good');
+        if (state.accuracy <= 100) return translate('systemMessages.geolocation.quality.average');
+        return translate('systemMessages.geolocation.quality.poor');
     }, [state.accuracy]);
 
     return {

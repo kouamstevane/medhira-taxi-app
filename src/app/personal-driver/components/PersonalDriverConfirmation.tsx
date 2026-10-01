@@ -109,8 +109,8 @@ function parseEstimate(value: unknown): PersonalDriverEstimateSession | null {
   return estimate as PersonalDriverEstimateSession;
 }
 
-function formatKm(distanceKm: number): string {
-  return distanceKm.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+function formatKm(distanceKm: number, locale: string): string {
+  return distanceKm.toLocaleString(locale === 'en' ? 'en-US' : 'fr-FR', { maximumFractionDigits: 1 });
 }
 
 function getStoredCheckout(): { config: PersonalDriverConfiguration; estimate: PersonalDriverEstimateSession } | null {
@@ -184,20 +184,20 @@ function buildPaymentInput(
   };
 }
 
-function getPaymentPreparationErrorMessage(error: unknown): string {
+function getPaymentPreparationErrorMessage(error: unknown, t: (key: string) => string): string {
   const message = error instanceof Error ? error.message : '';
   if (/expected string|received null|invalid input/i.test(message)) {
-    return 'Certaines informations du trajet sont incomplètes. Revenez à la configuration et vérifiez les horaires.';
+    return t('personalDriver.paymentErrorIncomplete');
   }
   if (/internal|distance matrix|request_denied|google maps/i.test(message)) {
-    return 'Le calcul de la distance est temporairement indisponible. Réessayez dans quelques instants.';
+    return t('personalDriver.paymentErrorDistance');
   }
-  return message || 'Impossible de préparer le paiement. Veuillez réessayer.';
+  return message || t('personalDriver.paymentErrorGeneral');
 }
 
 export function PersonalDriverConfirmation() {
   const { plans, error: plansError, reload: reloadPlans } = usePersonalDriverPlans();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { push, replace } = useRouter();
   const searchParams = useSearchParams();
   const [checkout, setCheckout] = useState<{ config: PersonalDriverConfiguration; estimate: PersonalDriverEstimateSession } | null>(null);
@@ -291,7 +291,7 @@ export function PersonalDriverConfirmation() {
       const result = await createPersonalDriverSubscriptionPayment(buildPaymentInput(checkout, selectedPlanId));
       setPayment(result);
     } catch (err) {
-      setError(getPaymentPreparationErrorMessage(err));
+      setError(getPaymentPreparationErrorMessage(err, t));
     } finally {
       setLoading(false);
     }
@@ -430,9 +430,9 @@ export function PersonalDriverConfirmation() {
       <div className="border-t border-white/10 px-4 py-4 sm:px-6">
         <h2 className="mb-3 text-base font-bold text-white">{t('personalDriver.fareCalculation')}</h2>
         <div className="grid gap-2 text-sm text-slate-300">
-          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.distancePerTrip')}</span><strong className="text-right text-white">{formatKm(displayedTripDistanceKm)} km</strong></div>
-          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.monthlyMileage')}</span><strong className="text-right text-white">{formatKm(displayedMonthlyDistanceKm)} km</strong></div>
-          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.formula')}</span><strong className="max-w-[62%] text-right text-white">{formatKm(displayedMonthlyDistanceKm)} km x {formatPersonalDriverCurrency(displayedPrice.pricePerKm, displayedCurrency)}/km</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.distancePerTrip')}</span><strong className="text-right text-white">{formatKm(displayedTripDistanceKm, locale)} km</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.monthlyMileage')}</span><strong className="text-right text-white">{formatKm(displayedMonthlyDistanceKm, locale)} km</strong></div>
+          <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.formula')}</span><strong className="max-w-[62%] text-right text-white">{formatKm(displayedMonthlyDistanceKm, locale)} km x {formatPersonalDriverCurrency(displayedPrice.pricePerKm, displayedCurrency)}/km</strong></div>
           {displayedPrice.minimumApplied && (
             <div className="flex items-start justify-between gap-4"><span>{t('personalDriver.minimumApplied')}</span><strong className="text-right text-white">{formatPersonalDriverCurrency(displayedPrice.minimumAmount, displayedCurrency)}</strong></div>
           )}

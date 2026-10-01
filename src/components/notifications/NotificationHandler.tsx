@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/config/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { CURRENCY_CODE } from '@/utils/constants';
+import { useTranslation } from '@/hooks/useTranslation';
 
 /**
  * Composant de gestion des push notifications
@@ -23,6 +24,7 @@ import { CURRENCY_CODE } from '@/utils/constants';
  */
 
 export function NotificationHandler() {
+    const { t } = useTranslation();
     const router = useRouter();
     const { currentUser, userData } = useAuth();
     // Capacité conducteur (spec §6.2) : présence de roles.driver
@@ -62,13 +64,13 @@ export function NotificationHandler() {
             router.push(`/taxi/confirmation?bookingId=${tripId}`);
 
             // Notification toast
-            showNotification('Votre conducteur est arrivé !', 'success');
+            showNotification(t('taxi.driverArrivedToast'), 'success');
         },
         onPaymentReceived: (amount) => {
             console.log('[NotificationHandler] Paiement reçu:', amount);
             
             // Notification toast
-            showNotification(`Paiement de ${amount} ${CURRENCY_CODE} reçu !`, 'success');
+            showNotification(t('wallet.paymentReceivedToast', { amount, currency: CURRENCY_CODE }), 'success');
         },
         onAlert: (message) => {
             console.log('[NotificationHandler] Alerte:', message);

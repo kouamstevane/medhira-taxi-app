@@ -372,7 +372,7 @@ export default function DriverDashboard() {
 
       } catch (err) {
         console.error('Erreur de chargement:', err);
-        setError("Erreur de chargement");
+        setError(t('common.errorOccurred'));
       } finally {
         setLoading(false);
       }
@@ -793,7 +793,7 @@ export default function DriverDashboard() {
                             <div className="mt-2">
                               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/20 text-amber-400 text-xs font-bold border border-amber-500/30">
                                 <MaterialIcon name="person" size="sm" />
-                                Pour un tiers
+                                {t('screens.driverDashboard.forSomeoneElse')}
                               </span>
                             </div>
                           )}

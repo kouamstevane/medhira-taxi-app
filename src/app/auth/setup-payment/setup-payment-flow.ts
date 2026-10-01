@@ -1,4 +1,5 @@
 import type { User } from 'firebase/auth';
+import { translate } from '@/locales';
 
 export interface AuthStateReader {
   currentUser: User | null;
@@ -27,8 +28,8 @@ export function getStripeSetupReturnError(status: string | null): string | null 
   if (!status || status === 'succeeded') return null;
 
   if (status === 'failed') {
-    return 'La configuration de votre carte a échoué. Vérifiez les informations et réessayez.';
+    return translate('screens.setupPayment.setupFailed');
   }
 
-  return 'La configuration de votre carte n’est pas terminée. Réessayez.';
+  return translate('screens.setupPayment.setupIncomplete');
 }

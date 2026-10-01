@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, AlertCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -24,6 +25,7 @@ interface GlobalToastProps {
 }
 
 export const GlobalToast: React.FC<GlobalToastProps> = ({ toast, visible, onDismiss }) => {
+  const { t } = useTranslation();
   const icons = {
     success: <CheckCircle className="h-5 w-5 text-emerald-400" />,
     error: <AlertCircle className="h-5 w-5 text-rose-400" />,
@@ -58,7 +60,7 @@ export const GlobalToast: React.FC<GlobalToastProps> = ({ toast, visible, onDism
         type="button"
         onClick={onDismiss}
         className="-m-1 shrink-0 rounded-xl p-2 text-slate-400 transition-colors hover:bg-white/10 hover:text-white min-h-[44px] min-w-[44px] flex items-center justify-center"
-        aria-label="Fermer la notification"
+        aria-label={t('common.closeNotification')}
       >
         <X className="h-4 w-4" />
       </button>
@@ -67,6 +69,7 @@ export const GlobalToast: React.FC<GlobalToastProps> = ({ toast, visible, onDism
 };
 
 const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
+  const { t } = useTranslation();
   const [isExiting, setIsExiting] = useState(false);
 
   useEffect(() => {
@@ -120,7 +123,7 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onRemove }) => {
           setTimeout(() => onRemove(toast.id), 300);
         }}
         className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
-        aria-label="Fermer"
+        aria-label={t('common.close')}
       >
         <X className="w-4 h-4" />
       </button>

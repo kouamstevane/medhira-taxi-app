@@ -10,6 +10,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { translate } from '@/locales';
 import type { PlacesAutocompleteService } from './usePlacesAutocomplete';
 
 interface UseGoogleMapsReturn {
@@ -63,7 +64,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
               }
             } else {
               if (!mountedRef.current) return;
-              setLoadError('La bibliothèque "places" n\'est pas disponible. Vérifiez que l\'API Places est activée.');
+              setLoadError(translate('systemMessages.googleMaps.placesUnavailable'));
             }
           }, 500);
           return;
@@ -109,7 +110,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
         const placesTimeout = setTimeout(() => {
           clearInterval(checkPlaces);
           if (!window.google?.maps?.places) {
-            setLoadError('La bibliothèque "places" n\'est pas disponible. Vérifiez que l\'API Places est activée.');
+            setLoadError(translate('systemMessages.googleMaps.placesUnavailable'));
           }
         }, 5000);
 
@@ -135,7 +136,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
       const loadTimeout = setTimeout(() => {
         clearInterval(checkLoaded);
         if (!window.google?.maps?.places) {
-          setLoadError('Timeout: La bibliothèque "places" n\'a pas pu être chargée. Vérifiez que l\'API Places est activée.');
+          setLoadError(translate('systemMessages.googleMaps.placesTimeout'));
         }
       }, 5000);
 
@@ -160,7 +161,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
 
     if (!apiKey) {
       const errorTimer = window.setTimeout(() => {
-        setLoadError('Clé API Google Maps manquante.');
+        setLoadError(translate('systemMessages.googleMaps.apiKeyMissing'));
       }, 0);
       return () => window.clearTimeout(errorTimer);
     }
@@ -168,7 +169,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
     // Vérifier que la clé API a le bon format
     if (!apiKey.startsWith('AIza')) {
       const errorTimer = window.setTimeout(() => {
-        setLoadError('Format de clé API invalide. La clé doit commencer par "AIza"');
+        setLoadError(translate('systemMessages.googleMaps.apiKeyInvalidFormat'));
       }, 0);
       return () => window.clearTimeout(errorTimer);
     }
@@ -185,13 +186,13 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
 
     // Gérer les erreurs de chargement du script
     script.onerror = () => {
-      setLoadError('Erreur de chargement de Google Maps. Vérifiez votre clé API dans Google Cloud Console.');
+      setLoadError(translate('systemMessages.googleMaps.loadError'));
     };
 
     // Écouter les erreurs globales de Google Maps
     const errorHandler = (event: ErrorEvent) => {
       if (event.message && event.message.includes('ApiProjectMapError')) {
-        setLoadError('Erreur de configuration de la clé API. Vérifiez que les APIs sont activées dans Google Cloud Console et que les restrictions autorisent localhost:3000');
+        setLoadError(translate('systemMessages.googleMaps.configError'));
         window.removeEventListener('error', errorHandler);
       }
     };

@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useTranslation } from '@/hooks/useTranslation'
 import { ref, onValue } from 'firebase/database'
 import { getFirebaseDatabase } from '@/config/firebase'
 
@@ -16,6 +17,7 @@ export function useDeliveryTracking(orderId: string | null): {
   isOnline: boolean
   error: string | null
 } {
+  const { t } = useTranslation()
   const [location, setLocation] = useState<DriverLocation | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -27,7 +29,7 @@ export function useDeliveryTracking(orderId: string | null): {
       setLocation(snap.val() as DriverLocation | null)
     }, (err) => {
       console.error('[useDeliveryTracking] Erreur de synchronisation:', err)
-      setError('Erreur de connexion aux données')
+      setError(t('errors.dataConnectionError'))
     })
     return () => unsub()
   }, [orderId])

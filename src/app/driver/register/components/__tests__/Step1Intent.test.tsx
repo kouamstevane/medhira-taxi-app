@@ -37,7 +37,7 @@ describe('Step1Intent', () => {
   it('keeps OTP inside the shared wizard presentation', async () => {
     render(<Step1Intent onNext={jest.fn()} onGoogleSignIn={jest.fn()} sendVerificationCode={jest.fn().mockResolvedValue({ success: true })} verifyCode={jest.fn()} />)
 
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'driver@example.com' } });
+    fireEvent.change(screen.getByLabelText(/e-?mail/i), { target: { value: 'driver@example.com' } });
     fireEvent.change(screen.getByLabelText('Mot de passe'), { target: { value: 'secret123' } });
     fireEvent.click(screen.getByTestId('step1-submit-btn'));
 

@@ -97,17 +97,24 @@ export function I18nProvider({ children, initialLocale }: I18nProviderProps) {
   return <I18nContext.Provider value={contextValue}>{children}</I18nContext.Provider>;
 }
 
+const fallbackT = (key: TranslationKey, params?: TranslationParams) =>
+  getTranslation(DEFAULT_LOCALE, key, params);
+
+const fallbackSetLocale = async () => {};
+
+const FALLBACK_I18N_VALUE: I18nContextValue = {
+  locale: DEFAULT_LOCALE,
+  setLocale: fallbackSetLocale,
+  t: fallbackT,
+  isLoaded: true,
+  dir: 'ltr',
+};
+
 export function useI18n(): I18nContextValue {
   const context = useContext(I18nContext);
   if (!context) {
-    // Fallback gracieux si utilisé en dehors du provider
-    return {
-      locale: DEFAULT_LOCALE,
-      setLocale: async () => {},
-      t: (key: TranslationKey, params?: TranslationParams) => getTranslation(DEFAULT_LOCALE, key, params),
-      isLoaded: true,
-      dir: 'ltr',
-    };
+    // Fallback gracieux et stable si utilisé en dehors du provider
+    return FALLBACK_I18N_VALUE;
   }
   return context;
 }

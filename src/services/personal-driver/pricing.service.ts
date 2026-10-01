@@ -14,9 +14,10 @@ type PersonalDriverPlanMap = Record<PersonalDriverPlanId, PersonalDriverPlan>;
 export function formatPersonalDriverCurrency(
   amount: number,
   currency = CURRENCY_CODE,
+  locale = DEFAULT_LOCALE,
 ): string {
   const isoCurrency = CURRENCY_MAP[currency.toUpperCase()] || currency.toUpperCase();
-  return new Intl.NumberFormat(DEFAULT_LOCALE, {
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
     currency: isoCurrency,
   }).format(amount);

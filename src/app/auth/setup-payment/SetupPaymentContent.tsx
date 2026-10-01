@@ -18,6 +18,7 @@ import type { User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import {
   getAuthenticatedUser,
   getStripeSetupReturn,
@@ -198,11 +199,11 @@ export default function SetupPaymentContent() {
     if (returnError) throw new Error(returnError);
 
     if (!stripeReturn.clientSecret) {
-      throw new Error('Retour Stripe incomplet. Réessayez.');
+      throw new Error(translate('screens.setupPayment.returnIncomplete'));
     }
 
     const stripe = await getStripe();
-    if (!stripe) throw new Error('Stripe est indisponible. Réessayez.');
+    if (!stripe) throw new Error(translate('screens.setupPayment.stripeUnavailable'));
 
     const result = await stripe.retrieveSetupIntent(stripeReturn.clientSecret);
     if (result.error) throw new Error(result.error.message);
@@ -223,7 +224,7 @@ export default function SetupPaymentContent() {
       return true;
     }
 
-    throw new Error('La configuration de votre carte n’est pas terminée. Réessayez.');
+    throw new Error(translate('screens.setupPayment.setupIncomplete'));
   }, [handleSetupSuccess]);
 
   useEffect(() => {

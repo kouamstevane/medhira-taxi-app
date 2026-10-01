@@ -16,6 +16,7 @@ import { Capacitor } from '@capacitor/core';
 import { LoadingSpinner } from './LoadingSpinner';
 import { MapFallback } from './MapFallback';
 import dynamic from 'next/dynamic';
+import { useTranslation } from '@/hooks/useTranslation';
 
 type GoogleMapsApi = typeof import('@react-google-maps/api');
 
@@ -77,6 +78,7 @@ export const MapView: React.FC<MapViewProps> = ({
   showRecenterButton = true,
   className = '',
 }) => {
+  const { t } = useTranslation();
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [mapsApi, setMapsApi] = useState<GoogleMapsApi | null>(null);
@@ -162,7 +164,7 @@ export const MapView: React.FC<MapViewProps> = ({
       <div className="w-full h-full flex items-center justify-center bg-[#1A1A1A]">
         <div className="text-center">
           <LoadingSpinner size="lg" />
-          <p className="text-gray-600 mt-4">Chargement de la carte...</p>
+          <p className="text-gray-600 mt-4">{t('common.mapLoadingDots')}</p>
         </div>
       </div>
     );
@@ -226,7 +228,7 @@ export const MapView: React.FC<MapViewProps> = ({
         <button
           onClick={recenterMap}
           className="absolute bottom-24 right-4 bg-white p-3 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
-          aria-label="Recentrer sur ma position"
+          aria-label={t('common.recenterMap')}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

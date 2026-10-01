@@ -14,6 +14,7 @@ import { downloadInvoiceFromBooking, extractInvoiceData } from '@/services/invoi
 import { DEFAULT_LOCALE, CURRENCY_CODE } from '@/utils/constants';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface InvoiceModalProps {
   booking: Booking;
@@ -24,6 +25,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const { showError, toasts, removeToast } = useToast();
+  const { t, locale } = useTranslation('common');
   
   const invoiceData = extractInvoiceData(booking);
   
@@ -35,14 +37,15 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
       setTimeout(() => setDownloaded(false), 3000);
     } catch (error) {
       console.error('Erreur téléchargement facture:', error);
-      showError('Erreur lors du téléchargement de la facture');
+      showError(t('common.invoiceDownloadError'));
     } finally {
       setDownloading(false);
     }
   };
   
   const formatPrice = (price: number): string => {
-    return price.toLocaleString(DEFAULT_LOCALE, { minimumFractionDigits: 2 });
+    const numLocale = locale === 'en' ? 'en-CA' : DEFAULT_LOCALE;
+    return price.toLocaleString(numLocale, { minimumFractionDigits: 2 });
   };
 
   return (
@@ -59,8 +62,8 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
               <MaterialIcon name="check_circle" className="text-primary text-[40px]" />
             </div>
           </div>
-          <h2 className="relative text-2xl font-bold text-center text-white">Course terminée !</h2>
-          <p className="relative text-slate-400 text-center text-sm mt-1">Voici le récapitulatif de votre trajet</p>
+          <h2 className="relative text-2xl font-bold text-center text-white">{t('common.invoiceRideCompleted')}</h2>
+          <p className="relative text-slate-400 text-center text-sm mt-1">{t('common.invoiceSummarySubtitle')}</p>
         </div>
         
         {/* Contenu */}
@@ -75,11 +78,11 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
               </div>
               <div className="flex-1 space-y-4">
                 <div>
-                  <p className="text-xs text-slate-500 uppercase font-medium">Départ</p>
+                  <p className="text-xs text-slate-500 uppercase font-medium">{t('common.invoicePickup')}</p>
                   <p className="text-sm text-white font-medium truncate">{invoiceData.pickup}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 uppercase font-medium">Destination</p>
+                  <p className="text-xs text-slate-500 uppercase font-medium">{t('common.invoiceDestination')}</p>
                   <p className="text-sm text-white font-medium truncate">{invoiceData.destination}</p>
                 </div>
               </div>
@@ -102,26 +105,26 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
               <div className="text-center">
                 <MaterialIcon name="directions_car" size="sm" className="text-primary mx-auto mb-1" />
                 <p className="text-lg font-bold text-white mt-1">{invoiceData.carType}</p>
-                <p className="text-xs text-slate-500">véhicule</p>
+                <p className="text-xs text-slate-500">{t('common.invoiceVehicle')}</p>
               </div>
             </div>
           </div>
           
           {/* Détail facturation */}
           <div className="border-t border-white/5 pt-4 mb-6">
-            <h3 className="text-sm font-bold text-white mb-3">Détail de la facturation</h3>
+            <h3 className="text-sm font-bold text-white mb-3">{t('common.invoiceBillingDetails')}</h3>
 
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Tarif de base</span>
+                <span className="text-slate-400">{t('common.invoiceBaseFare')}</span>
                 <span className="font-medium text-slate-200">{formatPrice(invoiceData.basePrice)} {CURRENCY_CODE}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Distance ({invoiceData.distance.toFixed(2)} km)</span>
+                <span className="text-slate-400">{t('common.invoiceDistanceFare', { distance: invoiceData.distance.toFixed(2) })}</span>
                 <span className="font-medium text-slate-200">{formatPrice(invoiceData.distancePrice)} {CURRENCY_CODE}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Durée ({invoiceData.duration} min)</span>
+                <span className="text-slate-400">{t('common.invoiceDurationFare', { duration: invoiceData.duration })}</span>
                 <span className="font-medium text-slate-200">{formatPrice(invoiceData.durationPrice)} {CURRENCY_CODE}</span>
               </div>
             </div>
@@ -129,7 +132,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
             {/* Total */}
             <div className="mt-4 pt-4 border-t border-white/10">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-bold text-white">Total</span>
+                <span className="text-lg font-bold text-white">{t('common.invoiceTotal')}</span>
                 <span className="text-2xl font-bold text-primary">
                   {formatPrice(invoiceData.finalPrice)} {CURRENCY_CODE}
                 </span>
@@ -147,7 +150,7 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
                 <div>
                   <p className="font-medium text-white">{invoiceData.driverName}</p>
                   <p className="text-sm text-slate-400">
-                    {[invoiceData.carModel, invoiceData.carPlate].filter(Boolean).join(' • ') || 'Véhicule non spécifié'}
+                    {[invoiceData.carModel, invoiceData.carPlate].filter(Boolean).join(' • ') || t('common.invoiceVehicleUnspecified')}
                   </p>
                 </div>
               </div>
@@ -164,17 +167,17 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
               {downloading ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-                  <span>Génération...</span>
+                  <span>{t('common.invoiceGenerating')}</span>
                 </>
               ) : downloaded ? (
                 <>
                   <MaterialIcon name="check" size="md" />
-                  <span>Téléchargé !</span>
+                  <span>{t('common.invoiceDownloaded')}</span>
                 </>
               ) : (
                 <>
                   <MaterialIcon name="download" size="md" />
-                  <span>Télécharger la facture PDF</span>
+                  <span>{t('common.invoiceDownloadPdf')}</span>
                 </>
               )}
             </button>
@@ -183,13 +186,13 @@ export function InvoiceModal({ booking, onClose }: InvoiceModalProps) {
               onClick={onClose}
               className="w-full glass-card hover:bg-white/5 text-slate-300 font-medium py-4 px-4 rounded-xl transition border border-white/10"
             >
-              Fermer
+              {t('common.close')}
             </button>
           </div>
           
           {/* Note */}
           <p className="text-xs text-center text-slate-500 mt-4">
-            Vous pouvez retrouver vos factures dans l'historique de vos courses
+            {t('common.invoiceHistoryHint')}
           </p>
         </div>
       </div>

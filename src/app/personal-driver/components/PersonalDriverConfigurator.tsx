@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
+import { useTranslation } from '@/hooks/useTranslation';
 import type { PlacesAutocompleteService } from '@/hooks/usePlacesAutocomplete';
 import {
   DISTANCE_ESTIMATE_ERROR_MESSAGE,
@@ -139,6 +140,8 @@ function getLocalCalendarDate(date: Date): string {
 
 export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorProps) {
   const router = useRouter();
+  const { t, locale } = useTranslation();
+  const numLocale = locale === 'en' ? 'en-US' : 'fr-FR';
   const { autocompleteService } = useGoogleMaps();
   const requestIdRef = useRef<string | null>(null);
   const latestCalculationIdRef = useRef(0);
@@ -244,23 +247,23 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
   const validate = (targetDistance: number | null = distanceKm): FormErrors => {
     const nextErrors: FormErrors = {};
 
-    if (!pickupAddress.trim()) nextErrors.pickupAddress = "L'adresse de depart est requise.";
-    if (!destinationAddress.trim()) nextErrors.destinationAddress = 'La destination est requise.';
-    if (weekdays.length === 0) nextErrors.weekdays = 'Choisissez au moins un jour.';
-    if (!departureTime) nextErrors.departureTime = "L'heure de depart est requise.";
+    if (!pickupAddress.trim()) nextErrors.pickupAddress = t('personalDriver.errorPickupRequired');
+    if (!destinationAddress.trim()) nextErrors.destinationAddress = t('personalDriver.errorDestinationRequired');
+    if (weekdays.length === 0) nextErrors.weekdays = t('personalDriver.errorWeekdaysRequired');
+    if (!departureTime) nextErrors.departureTime = t('personalDriver.errorDepartureTimeRequired');
     if (tripType === 'round_trip' && !returnTime) {
-      nextErrors.returnTime = "L'heure de retour est requise pour un aller-retour.";
+      nextErrors.returnTime = t('personalDriver.errorReturnTimeRequired');
     } else if (tripType === 'round_trip' && returnTime <= departureTime) {
-      nextErrors.returnTime = "L'heure de retour doit etre posterieure a l'heure de depart.";
+      nextErrors.returnTime = t('personalDriver.errorReturnBeforeDeparture');
     }
     const minDateStr = minimumStartDate || getLocalCalendarDate(new Date());
     if (!startDate) {
-      nextErrors.startDate = 'La date de debut est requise.';
+      nextErrors.startDate = t('personalDriver.errorStartDateRequired');
     } else if (startDate < minDateStr) {
-      nextErrors.startDate = 'La date de debut ne peut pas etre dans le passe.';
+      nextErrors.startDate = t('personalDriver.errorStartDatePast');
     }
     if (!targetDistance || targetDistance <= 0) {
-      nextErrors.distance = 'Calculez une distance positive avant de continuer.';
+      nextErrors.distance = t('personalDriver.errorDistanceRequired');
     }
 
     return nextErrors;
@@ -341,7 +344,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
     >
       <section className="space-y-4" aria-label="Itineraire">
         <AccessibleAddressInput
-          label="Adresse de depart"
+          label={t('personalDriver.pickupLabel')}
           value={pickupAddress}
           onChange={(value) => {
             setPickupAddress(value);
@@ -364,7 +367,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           }}
         />
         <AccessibleAddressInput
-          label="Destination"
+          label={t('personalDriver.destinationLabel')}
           value={destinationAddress}
           onChange={(value) => {
             setDestinationAddress(value);
@@ -392,17 +395,17 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           disabled={isCalculatingDistance}
           className="min-h-11 rounded-lg border border-primary/50 px-4 text-sm font-semibold text-primary transition hover:bg-primary/10 disabled:cursor-wait disabled:opacity-60"
         >
-          {isCalculatingDistance ? 'Calcul en cours...' : 'Calculer la distance'}
+          {isCalculatingDistance ? t('personalDriver.calculatingDistanceAction') : t('personalDriver.calculateDistanceAction')}
         </button>
         {distanceKm !== null && !distanceError && (
-          <p className="text-sm font-semibold text-emerald-400">{distanceKm.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} km</p>
+          <p className="text-sm font-semibold text-emerald-400">{distanceKm.toLocaleString(numLocale, { maximumFractionDigits: 1 })} km</p>
         )}
         {distanceError && <p id="distance-error" role="alert" className={fieldErrorClassName}>{distanceError}</p>}
         {!distanceError && errors.distance && <p id="distance-error" role="alert" className={fieldErrorClassName}>{errors.distance}</p>}
       </section>
 
       <fieldset className="grid grid-cols-2 gap-3">
-        <legend className="mb-3 text-sm font-semibold text-white">Type de trajet</legend>
+        <legend className="mb-3 text-sm font-semibold text-white">{t('personalDriver.tripTypeLabel')}</legend>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-slate-200">
           <input
             type="radio"
@@ -414,7 +417,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
             }}
             className="accent-primary"
           />
-          Aller simple
+          {t('personalDriver.oneWay')}
         </label>
         <label className="flex min-h-11 items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-slate-200">
           <input
@@ -424,7 +427,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
             onChange={() => setTripType('round_trip')}
             className="accent-primary"
           />
-          Aller-retour
+          {t('personalDriver.roundTrip')}
         </label>
       </fieldset>
 
@@ -444,7 +447,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm font-semibold text-white">
-          Heure de depart
+          {t('personalDriver.departureTimeLabel')}
           <input
             type="time"
             value={departureTime}
@@ -460,7 +463,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
         </label>
         {tripType === 'round_trip' && (
           <label className="text-sm font-semibold text-white">
-            Heure de retour
+            {t('personalDriver.returnTimeLabel')}
             <input
               type="time"
               value={returnTime}
@@ -476,7 +479,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
           </label>
         )}
         <label className="text-sm font-semibold text-white">
-          Date de debut
+          {t('personalDriver.startDateLabel')}
           <input
             type="date"
             min={minimumStartDate || undefined}
@@ -493,12 +496,12 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
         </label>
         <div className="flex flex-col">
           <label htmlFor="passenger-count-input" className="text-sm font-semibold text-white">
-            Nombre de passagers
+            {t('personalDriver.passengerCountLabel')}
           </label>
           <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
-              aria-label="Diminuer le nombre de passagers"
+              aria-label={t('personalDriver.decreasePassengers')}
               onClick={() => handlePassengerCountChange(passengerCount - 1)}
               disabled={passengerCount <= 1}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-lg font-bold text-white transition hover:bg-white/10 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
@@ -533,7 +536,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
             />
             <button
               type="button"
-              aria-label="Augmenter le nombre de passagers"
+              aria-label={t('personalDriver.increasePassengers')}
               onClick={() => handlePassengerCountChange(passengerCount + 1)}
               disabled={passengerCount >= 8}
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-lg font-bold text-white transition hover:bg-white/10 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
@@ -545,11 +548,12 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       </div>
 
       <label className="block text-sm font-semibold text-white">
-        Notes pour Medjira
+        {t('personalDriver.specialNotesLabel')}
         <textarea
           value={notes}
           onChange={(event) => setNotes(event.target.value)}
           rows={4}
+          placeholder={t('personalDriver.specialNotesPlaceholder')}
           className={`mt-2 ${fieldClassName} py-3`}
         />
       </label>
@@ -559,7 +563,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
         disabled={isCalculatingDistance || isSubmitting}
         className="min-h-12 w-full rounded-lg bg-primary px-4 text-sm font-bold text-white transition active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
       >
-        {isCalculatingDistance ? "Calcul de l'itinéraire..." : "Continuer vers l estimation"}
+        {isCalculatingDistance ? t('personalDriver.calculatingRouteAction') : t('personalDriver.continueToEstimateAction')}
       </button>
     </form>
   );

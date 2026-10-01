@@ -142,8 +142,8 @@ export const taxi: DeepString<typeof TaxiFr> = {
   viewVehicleDescription: 'View description of {name}',
   vehicleDetailsTitle: 'Vehicle details: {name}',
   vehicleCapacity: 'Capacity',
-  vehicleSeatsCount: '{count} passengers',
-  vehicleWait: 'Wait time',
+  vehicleSeatsCount: '{count} seats',
+  vehicleWait: 'wait',
   vehicleIncluded: "What's included",
   selectCategoryFromList: 'Select this category from the main vehicle list.',
   whenToLeave: 'When would you like to depart?',
@@ -220,4 +220,10 @@ export const taxi: DeepString<typeof TaxiFr> = {
   enterPassengerName: 'Please enter the passenger\'s name',
   stripeConnectionError: 'Unable to reach Stripe right now. Check your connection and try again in a few moments.',
   rideCreationError: 'Error creating the ride',
+  locationServiceUnavailable: 'Location service unavailable',
+
+  // NewRideForm & Notifications
+  fareCalculationError: 'Error calculating fare estimate',
+  fillAllFieldsWaitEstimate: 'Please fill in all fields and wait for the estimate',
+  driverArrivedToast: 'Your driver has arrived!',
 } as const;

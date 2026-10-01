@@ -12,6 +12,7 @@
 
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import type { StripePaymentMethod } from '@/types/stripe';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface PaymentMethodSelectorProps {
   walletBalance: number;
@@ -30,21 +31,24 @@ export function PaymentMethodSelector({
   onSelect,
   loading = false,
 }: PaymentMethodSelectorProps) {
+  const { t, locale } = useTranslation('wallet');
   const walletSufficient = walletBalance >= fareAmount;
 
-  const formattedBalance = new Intl.NumberFormat('fr-CA', {
+  const numberLocale = locale === 'en' ? 'en-CA' : 'fr-CA';
+
+  const formattedBalance = new Intl.NumberFormat(numberLocale, {
     style: 'currency',
     currency: currency.toUpperCase(),
   }).format(walletBalance);
 
-  const formattedFare = new Intl.NumberFormat('fr-CA', {
+  const formattedFare = new Intl.NumberFormat(numberLocale, {
     style: 'currency',
     currency: currency.toUpperCase(),
   }).format(fareAmount);
 
   return (
     <div className="space-y-3">
-      <p className="text-slate-400 text-sm font-medium">Mode de paiement</p>
+      <p className="text-slate-400 text-sm font-medium">{t('paymentMethod')}</p>
 
       {/* Option Portefeuille */}
       <button
@@ -73,11 +77,13 @@ export function PaymentMethodSelector({
         </div>
 
         <div className="flex-1 text-left">
-          <p className="text-white font-medium text-sm">Portefeuille</p>
+          <p className="text-white font-medium text-sm">{t('title')}</p>
           <p className="text-slate-400 text-xs">
-            Solde : {formattedBalance}
+            {t('balance')} : {formattedBalance}
             {!walletSufficient && (
-              <span className="text-destructive ml-1">— Insuffisant pour {formattedFare}</span>
+              <span className="text-destructive ml-1">
+                {t('insufficientForFare', { fare: formattedFare })}
+              </span>
             )}
           </p>
         </div>
@@ -113,8 +119,8 @@ export function PaymentMethodSelector({
         </div>
 
         <div className="flex-1 text-left">
-          <p className="text-white font-medium text-sm">Carte bancaire</p>
-          <p className="text-slate-400 text-xs">Visa · Mastercard · Apple Pay · Google Pay</p>
+          <p className="text-white font-medium text-sm">{t('creditCardOption')}</p>
+          <p className="text-slate-400 text-xs">{t('creditCardSubtitle')}</p>
         </div>
 
         {selectedMethod === 'card' && (
@@ -125,7 +131,7 @@ export function PaymentMethodSelector({
       {/* Note de sécurité */}
       <div className="flex items-center gap-1.5 justify-center pt-1">
         <MaterialIcon name="lock" size="sm" className="text-slate-500" />
-        <span className="text-xs text-slate-500">Paiement sécurisé · PCI DSS</span>
+        <span className="text-xs text-slate-500">{t('securedByStripe')}</span>
       </div>
     </div>
   );

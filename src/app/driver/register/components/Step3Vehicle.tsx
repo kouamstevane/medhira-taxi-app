@@ -213,7 +213,7 @@ export default function Step3Vehicle({
             disabled={loading}
             className={cn(driverPrimaryButtonClassName, 'flex-[2]')}
           >
-            {t('common.next')}
+            {t('common.continue')}
           </button>
         </div>
       </div>
@@ -281,7 +281,7 @@ export default function Step3Vehicle({
             {t('common.back')}
           </button>
           <button type="submit" disabled={loading} className={cn(driverPrimaryButtonClassName, 'flex-[2]')}>
-            {loading ? <Loader2 className="animate-spin mr-2" /> : null} {t('common.next')}
+            {loading ? <Loader2 className="animate-spin mr-2" /> : null} {t('common.continue')}
           </button>
         </div>
       </form>

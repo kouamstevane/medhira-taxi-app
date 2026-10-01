@@ -56,7 +56,7 @@ export default function ResetPasswordPage() {
           setError(t('auth.noAccountFound'));
           break;
         case 'auth/invalid-email':
-          setError(ERROR_MESSAGES.INVALID_EMAIL);
+          setError(t('auth.invalidEmailError'));
           break;
         case 'auth/too-many-requests':
           setError(t('auth.tooManyAttempts'));

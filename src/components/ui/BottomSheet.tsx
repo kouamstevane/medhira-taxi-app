@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type ReactNode, type PointerEvent }
 import { createPortal } from 'react-dom';
 import { MaterialIcon } from './MaterialIcon';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface BottomSheetProps {
   readonly open: boolean;
@@ -33,6 +34,7 @@ export function BottomSheet({
   showCloseButton = false,
   closeLabel,
 }: BottomSheetProps) {
+  const { t } = useTranslation();
   const titleId = `bottom-sheet-title-${useId().replace(/:/g, '')}`;
   const startYRef = useRef<number | null>(null);
   const pointerIdRef = useRef<number | null>(null);
@@ -163,7 +165,7 @@ export function BottomSheet({
             </h2>
             {showCloseButton && (
               <button
-                aria-label={closeLabel || 'Fermer'}
+                aria-label={closeLabel || t('common.close')}
                 className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => {
                   if (onCloseRequest) {

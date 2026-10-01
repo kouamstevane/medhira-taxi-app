@@ -105,7 +105,7 @@ function parseCountryFields(addressComponents: google.maps.GeocoderAddressCompon
 }
 
 export default function Step2Identity({ onNext, onBack, initialData, initialPhoto, loading }: Step2IdentityProps) {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const { showError } = useToast();
   const { autocompleteService } = useGoogleMaps();
   const { getCurrentPosition } = useCapacitorGeolocation();
@@ -518,7 +518,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                   type="text"
                   inputMode="numeric"
                   maxLength={2}
-                  placeholder={locale === 'en' ? 'DD' : 'JJ'}
+                  placeholder={t('screens.dateInput.dayPlaceholder')}
                   value={dayVal}
                   onChange={(e) => handleDobFieldChange(e, 'day', 2, monthRef)}
                   onKeyDown={(e) => handleDobKeyDown(e, dayRef)}
@@ -546,7 +546,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
                   type="text"
                   inputMode="numeric"
                   maxLength={4}
-                  placeholder={locale === 'en' ? 'YYYY' : 'AAAA'}
+                  placeholder={t('screens.dateInput.yearPlaceholder')}
                   value={yearVal}
                   onChange={(e) => handleDobFieldChange(e, 'year', 4, { current: null })}
                   onKeyDown={(e) => handleDobKeyDown(e, monthRef)}
@@ -704,7 +704,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
             className={cn(driverPrimaryButtonClassName, 'w-2/3')}
           >
             {loading ? <Loader2 className="animate-spin mr-2" /> : null}
-            {t('common.next')}
+            {t('common.continue')}
           </button>
         </div>
       </form>

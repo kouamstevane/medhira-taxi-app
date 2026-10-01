@@ -15,17 +15,20 @@ import {
 } from '@/services/roles.service';
 import type { ActiveRole } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
+import type { TranslationKey } from '@/locales';
 import { functions } from '@/config/firebase';
 
 type SwitchableRole = Exclude<ActiveRole, 'driver_onboarding' | 'restaurant_onboarding'>;
 
-const ROLE_META: Record<SwitchableRole, { label: string; icon: string }> = {
-  client: { label: 'Client', icon: 'person' },
-  driver: { label: 'Chauffeur', icon: 'local_taxi' },
-  restaurant: { label: 'Restaurateur', icon: 'restaurant' },
+const ROLE_META: Record<SwitchableRole, { labelKey: TranslationKey; icon: string }> = {
+  client: { labelKey: 'auth.clientRole' as TranslationKey, icon: 'person' },
+  driver: { labelKey: 'auth.driverRole' as TranslationKey, icon: 'local_taxi' },
+  restaurant: { labelKey: 'auth.restaurantRole' as TranslationKey, icon: 'restaurant' },
 };
 
 export function RoleSwitcher({ allowClientActivation = false }: { allowClientActivation?: boolean }) {
+  const { t } = useTranslation();
   const { userData, reloadUser } = useAuth();
   const statuses = useEffectiveRoleStatus();
   const { hasActiveRide } = useActiveRideGuard();
@@ -55,8 +58,10 @@ export function RoleSwitcher({ allowClientActivation = false }: { allowClientAct
   }
 
   function getRoleLabel(role: SwitchableRole): string {
-    const action = role === 'client' && !profile.roles?.client ? 'Activer' : 'Passer à';
-    return `${action} l’espace ${ROLE_META[role].label.toLowerCase()}`;
+    const roleName = t(ROLE_META[role].labelKey);
+    return role === 'client' && !profile.roles?.client
+      ? t('auth.activateSpace', { role: roleName })
+      : t('auth.switchToSpace', { role: roleName });
   }
 
   async function handleSelect(role: SwitchableRole) {
@@ -89,7 +94,7 @@ export function RoleSwitcher({ allowClientActivation = false }: { allowClientAct
     <div className="flex flex-col items-end gap-2">
       <div
         role="group"
-        aria-label="Changer d’espace"
+        aria-label={t('screens.roleSwitcher.changeSpace')}
         className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1 shadow-sm"
       >
         {visibleRoles.map((role) => {
@@ -102,9 +107,9 @@ export function RoleSwitcher({ allowClientActivation = false }: { allowClientAct
               type="button"
               onClick={() => void handleSelect(role)}
               disabled={disabled}
-              aria-label={isActive ? `${ROLE_META[role].label} actif` : getRoleLabel(role)}
+              aria-label={isActive ? `${t('auth.activeRoleBadge', { role: t(ROLE_META[role].labelKey) })}` : getRoleLabel(role)}
               aria-pressed={isActive}
-              title={isActive ? `${ROLE_META[role].label} actif` : getRoleLabel(role)}
+              title={isActive ? t('auth.activeRoleBadge', { role: t(ROLE_META[role].labelKey) }) : getRoleLabel(role)}
               data-testid={`role-toggle-${role}`}
               className={[
                 'flex size-10 items-center justify-center rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',

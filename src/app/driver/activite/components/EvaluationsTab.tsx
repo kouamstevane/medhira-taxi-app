@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { useDriverRatings } from '@/hooks/useDriverRatings'
+import { useTranslation } from '@/hooks/useTranslation'
 import type { DriverRating } from '@/types/firestore-collections'
 
 type Period = '7days' | '30days' | 'all'
@@ -18,7 +19,8 @@ function StarDisplay({ score }: { score: number }) {
 }
 
 function RatingRow({ rating }: { rating: DriverRating }) {
-  const dateStr = (rating.createdAt as unknown as { toDate?: () => Date }).toDate?.()?.toLocaleDateString('fr-CA') ?? '—'
+  const { locale } = useTranslation()
+  const dateStr = (rating.createdAt as unknown as { toDate?: () => Date }).toDate?.()?.toLocaleDateString(locale === 'en' ? 'en-CA' : 'fr-CA') ?? '—'
   return (
     <div className="glass-card rounded-2xl border border-white/10 p-4 space-y-2">
       <div className="flex items-center justify-between">
@@ -38,8 +40,11 @@ export function EvaluationsTab({ uid, totalRatings, globalRating }: {
   totalRatings?: number
   globalRating?: number
 }) {
+  const { t } = useTranslation()
   const [period, setPeriod] = useState<Period>('all')
   const { ratings, avgScore, loading } = useDriverRatings(uid, period)
+
+  const count = totalRatings ?? ratings.length
 
   return (
     <div className="space-y-4">
@@ -50,8 +55,12 @@ export function EvaluationsTab({ uid, totalRatings, globalRating }: {
           <StarDisplay score={Math.round(globalRating ?? avgScore ?? 0)} />
         </div>
         <div>
-          <p className="text-white font-semibold">{totalRatings ?? ratings.length} évaluation{(totalRatings ?? ratings.length) > 1 ? 's' : ''}</p>
-          <p className="text-xs text-slate-400">Note globale</p>
+          <p className="text-white font-semibold">
+            {count > 1
+              ? t('driver.evaluationCountPlural', { count })
+              : t('driver.evaluationCount', { count })}
+          </p>
+          <p className="text-xs text-slate-400">{t('driver.overallRating')}</p>
         </div>
       </div>
 
@@ -61,7 +70,7 @@ export function EvaluationsTab({ uid, totalRatings, globalRating }: {
           <button key={p} onClick={() => setPeriod(p)}
             className={['flex-1 h-8 rounded-xl text-xs font-medium transition-all',
               period === p ? 'bg-primary text-white' : 'bg-white/5 text-slate-400'].join(' ')}>
-            {p === '7days' ? '7 jours' : p === '30days' ? '30 jours' : 'Tout'}
+            {p === '7days' ? t('driver.period7days') : p === '30days' ? t('driver.period30days') : t('driver.periodAll')}
           </button>
         ))}
       </div>
@@ -71,7 +80,7 @@ export function EvaluationsTab({ uid, totalRatings, globalRating }: {
           <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       ) : ratings.length === 0 ? (
-        <p className="text-slate-500 text-center py-8">Aucune évaluation pour cette période.</p>
+        <p className="text-slate-500 text-center py-8">{t('driver.noEvaluationsPeriod')}</p>
       ) : (
         <div className="space-y-3">
           {ratings.map((r) => <RatingRow key={r.ratingId} rating={r} />)}

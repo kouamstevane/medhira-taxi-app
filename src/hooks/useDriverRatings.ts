@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from '@/hooks/useTranslation'
 import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type { DriverRating } from '@/types/firestore-collections'
@@ -8,6 +9,7 @@ import { getTimestamp } from '@/utils/distance'
 type PeriodFilter = '7days' | '30days' | 'all'
 
 export function useDriverRatings(uid: string, period: PeriodFilter = 'all') {
+  const { t } = useTranslation()
   const [ratings, setRatings] = useState<DriverRating[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,7 +35,7 @@ export function useDriverRatings(uid: string, period: PeriodFilter = 'all') {
       setLoading(false)
     }, (err) => {
       console.error('[useDriverRatings] Erreur de synchronisation:', err)
-      setError('Erreur de connexion aux données')
+      setError(t('errors.dataConnectionError'))
       setLoading(false)
     })
     return () => unsub()

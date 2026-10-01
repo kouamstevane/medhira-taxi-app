@@ -111,7 +111,7 @@ export default function LoginPage() {
     accountSwitchRequestedRef.current = true;
     void AuthService.signOut().catch((err: unknown) => {
       accountSwitchRequestedRef.current = false;
-      setError(err instanceof Error ? err.message : 'Impossible de changer de compte.');
+      setError(err instanceof Error ? err.message : t('auth.unableToSwitchAccount'));
     });
   }, [authStatus, registrationType, userData]);
 
@@ -122,7 +122,7 @@ export default function LoginPage() {
     const userSnap = await getDoc(doc(db, 'users', uid));
     if (!userSnap.exists()) {
       await signOut(auth);
-      setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
+      setError(t('auth.incompleteSession'));
       return false;
     }
     const userData = userSnap.data() as UserData;
@@ -146,7 +146,7 @@ export default function LoginPage() {
     });
     if (!route) {
       await signOut(auth);
-      setError("Votre session est incomplète. Reconnectez-vous ou recréez votre profil.");
+      setError(t('auth.incompleteSession'));
       return false;
     }
 
@@ -163,13 +163,13 @@ export default function LoginPage() {
     e.preventDefault();
 
     if (!phone.trim()) {
-      setError('Numéro de téléphone requis');
+      setError(t('auth.phoneRequired'));
       return;
     }
 
     const fullPhoneNumber = buildPhoneNumber();
     if (!isValidPhoneNumber(fullPhoneNumber, selectedCountry.dialCode)) {
-      setError(`Numéro invalide pour ${selectedCountry.name}.`);
+      setError(t('auth.invalidNumberForCountry', { country: selectedCountry.name }));
       return;
     }
 
@@ -191,12 +191,12 @@ export default function LoginPage() {
     e.preventDefault();
 
     if (!verificationPhone) {
-      setError('Aucun numéro en attente de vérification');
+      setError(t('auth.noPendingPhoneVerification'));
       return;
     }
 
     if (!code || code.length < 6) {
-      setError('Veuillez entrer le code complet');
+      setError(t('auth.enterCompleteCode'));
       return;
     }
 
@@ -248,38 +248,38 @@ export default function LoginPage() {
 
   const handleAuthError = (error: unknown) => {
     const err = error as { code?: string; message?: string };
-    let errorMessage = "Une erreur est survenue";
+    let errorMessage = t('auth.authGenericError');
 
     switch (err.code) {
       case AuthErrorCodes.TOO_MANY_ATTEMPTS_TRY_LATER:
       case 'functions/resource-exhausted':
-        errorMessage = err.message || "Trop de tentatives. Veuillez réessayer plus tard.";
+        errorMessage = err.message || t('auth.tooManyAttempts');
         break;
       case 'functions/invalid-argument':
         errorMessage = err.message === 'Nom complet requis.'
-          ? "Ce numéro n'est pas encore inscrit. Créez un compte pour continuer."
+          ? t('auth.accountNotRegistered')
           : err.message || ERROR_MESSAGES.INVALID_PHONE;
         break;
       case 'auth/invalid-verification-code':
       case 'functions/permission-denied':
-        errorMessage = 'Code de vérification invalide';
+        errorMessage = t('auth.invalidVerificationCode');
         break;
       case AuthErrorCodes.NETWORK_REQUEST_FAILED:
       case 'functions/unavailable':
         errorMessage = ERROR_MESSAGES.NETWORK_ERROR;
         break;
       case 'auth/popup-closed-by-user':
-        errorMessage = "Connexion Google annulée";
+        errorMessage = t('auth.googleLoginCancelled');
         break;
       case 'auth/unauthorized-domain':
         console.error("[Auth] Domaine non autorisé dans Firebase Auth (auth/unauthorized-domain). Ajoutez ce domaine dans Firebase Console > Authentication > Paramètres > Domaines autorisés.");
-        errorMessage = "Connexion temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.";
+        errorMessage = t('auth.connectionUnavailable');
         break;
       case 'functions/internal':
-        errorMessage = "Le service SMS est temporairement indisponible. Réessayez.";
+        errorMessage = t('auth.smsServiceUnavailable');
         break;
       default:
-        errorMessage = err.message || ERROR_MESSAGES.AUTH_ERROR;
+        errorMessage = err.message || t('auth.authGenericError');
     }
 
     setError(errorMessage);
@@ -357,7 +357,7 @@ export default function LoginPage() {
               </div>
 
               {isCountryDropdownOpen && (
-                <div role="listbox" aria-label="Pays disponibles" className="mt-2 w-full max-h-56 overflow-y-auto glass-card border border-white/10 rounded-xl shadow-xl">
+                <div role="listbox" aria-label={t('screens.login.availableCountries')} className="mt-2 w-full max-h-56 overflow-y-auto glass-card border border-white/10 rounded-xl shadow-xl">
                   <div className="py-1">
                     {SUPPORTED_COUNTRIES.map((country) => (
                       <button

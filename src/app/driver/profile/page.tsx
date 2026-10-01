@@ -109,10 +109,10 @@ export default function DriverProfilePage() {
       const activateClientRole = httpsCallable<unknown, { success: boolean }>(functions, 'activateClientRole');
       await activateClientRole();
       await reloadUser();
-      setClientActivationMessage('Espace client activé. Vous pouvez maintenant changer d’espace depuis le sélecteur.');
+      setClientActivationMessage(t('driver.clientSpaceActivatedMessage'));
     } catch (e: unknown) {
       const message = (e as { message?: string })?.message;
-      setClientActivationError(message || 'Impossible d’activer l’espace client pour le moment.');
+      setClientActivationError(message || t('driver.clientSpaceActivateError'));
     } finally {
       setClientActivationLoading(false);
     }
@@ -139,7 +139,7 @@ export default function DriverProfilePage() {
             onClick={() => router.push('/driver/login')}
             className="primary-glow h-14 w-full rounded-2xl bg-gradient-to-r from-primary to-[#ffae33] font-bold text-white transition-transform active:scale-[0.98]"
           >
-            Se connecter
+            {t('driver.signIn')}
           </button>
         </div>
       </div>
@@ -148,14 +148,16 @@ export default function DriverProfilePage() {
 
   if (!driver) return null;
 
-  const vehicleSummary = getVehicleProfileSummary(driver.car);
+  const vehicleSummary = getVehicleProfileSummary(driver.car, t);
   const verificationBadges = getDriverVerificationBadges({
     isEmailVerified,
     driverStatus: driver.status,
+    t,
   });
   const availabilityState = getDriverAvailabilityProfileState({
     isApproved: driver.status === 'approved',
     isAvailable: Boolean(driver.isAvailable),
+    t,
   });
 
   return (

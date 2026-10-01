@@ -3,6 +3,7 @@
 import React from 'react';
 import { Loader2, UploadCloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   driverUploadEmptyClassName,
   driverUploadLoadedClassName,
@@ -33,10 +34,14 @@ export function DriverDocumentUploadField({
   file,
   loading = false,
   helperText,
-  emptyHint = 'Image ou PDF (Max 10Mo)',
+  emptyHint,
   emptyStateClassName,
   onRemove,
 }: DriverDocumentUploadFieldProps) {
+  const { t } = useTranslation();
+  const resolvedEmptyHint = emptyHint ?? t('common.uploadHintImagePdf');
+  const resolvedOptionalLabel = optionalLabel ?? `(${t('common.optional').toLowerCase()})`;
+
   return (
     <div className="border border-white/[0.06] rounded-xl p-4 bg-[#1A1A1A]">
       <label htmlFor={inputId} className="block text-sm font-medium text-[#9CA3AF] mb-2">
@@ -44,7 +49,7 @@ export function DriverDocumentUploadField({
         {required ? (
           <span className="text-red-500">*</span>
         ) : (
-          <span className="text-[#4B5563] text-xs">{optionalLabel ?? '(facultatif)'}</span>
+          <span className="text-[#4B5563] text-xs">{resolvedOptionalLabel}</span>
         )}
       </label>
 
@@ -59,7 +64,7 @@ export function DriverDocumentUploadField({
               onClick={onRemove}
               className="text-red-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
             >
-              Supprimer
+              {t('common.delete')}
             </button>
           ) : null}
         </div>
@@ -80,8 +85,8 @@ export function DriverDocumentUploadField({
           ) : (
             <UploadCloud className="text-slate-500 w-8 h-8 mb-2" />
           )}
-          <span className="text-sm font-medium text-[#9CA3AF]">Cliquez pour ajouter</span>
-          <span className="text-xs text-[#4B5563] mt-1">{emptyHint}</span>
+          <span className="text-sm font-medium text-[#9CA3AF]">{t('common.clickToAdd')}</span>
+          <span className="text-xs text-[#4B5563] mt-1">{resolvedEmptyHint}</span>
         </div>
       )}
 

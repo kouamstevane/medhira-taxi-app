@@ -27,4 +27,14 @@ export const errors = {
     actionSuccess: 'Opération réussie.',
     actionFailed: 'L\'opération a échoué.',
   },
+
+  // Firestore errors
+  firestorePermission: "Vous n'avez pas les permissions nécessaires pour effectuer cette action{context}. Vérifiez que votre compte est activé et que votre email est vérifié.",
+  firestoreNotFound: "Le document demandé n'existe pas{context}. Veuillez actualiser la page et réessayer.",
+  firestoreNetwork: "Problème de connexion détecté{context}. Vérifiez votre connexion internet et réessayez.",
+  firestoreGeneric: "Une erreur est survenue{context}. Veuillez réessayer. Si le problème persiste, contactez le support.",
+  context: {
+    profileUpdate: 'lors de la mise à jour de votre profil',
+    statusChange: 'lors du changement de statut',
+  },
 } as const;

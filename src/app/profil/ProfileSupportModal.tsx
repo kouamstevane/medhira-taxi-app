@@ -11,15 +11,11 @@ interface ProfileSupportModalProps {
 }
 
 export function ProfileSupportModal({ isOpen, onClose }: ProfileSupportModalProps) {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
 
-  const whatsappMessage = locale === 'en'
-    ? encodeURIComponent('Hello Medjira, I need assistance')
-    : encodeURIComponent("Bonjour Medjira, j'ai besoin d'assistance");
+  const whatsappMessage = encodeURIComponent(t('screens.profileSupport.whatsappMessage'));
 
-  const emailSubject = locale === 'en'
-    ? encodeURIComponent('Medjira Support Request')
-    : encodeURIComponent("Demande d'assistance Medjira");
+  const emailSubject = encodeURIComponent(t('screens.profileSupport.emailSubject'));
 
   const supportChannels = [
     {

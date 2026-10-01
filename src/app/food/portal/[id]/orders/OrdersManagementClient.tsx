@@ -43,7 +43,7 @@ export default function OrdersManagementClient() {
   const searchParams = useSearchParams();
   const id = searchParams.get('restaurantId')?.trim() || null;
   const { showError, showSuccess, toasts, removeToast } = useToast();
-  const { t } = useTranslation('restaurant');
+  const { t, locale } = useTranslation('restaurant');
   const [loading, setLoading] = useState(true);
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [orders, setOrders] = useState<FoodOrder[]>([]);
@@ -200,7 +200,7 @@ export default function OrdersManagementClient() {
     try {
       await FoodDeliveryService.updateFoodOrderStatus(orderId, status);
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-      showSuccess(t('orderUpdatedSuccess', { status: getRestaurantOrderStatusLabel(status) }));
+      showSuccess(t('orderUpdatedSuccess', { status: getRestaurantOrderStatusLabel(status, locale) }));
       return true;
     } catch {
       showError(t('updateError'));
@@ -236,7 +236,7 @@ export default function OrdersManagementClient() {
     ? visibleOrders
     : visibleOrders.filter((order) => activeStatuses.includes(order.status));
 
-  const activeFilterLabel = getRestaurantOrderFilterGroupLabel(filterGroup);
+  const activeFilterLabel = getRestaurantOrderFilterGroupLabel(filterGroup, locale);
 
   if (isNetworkError && !restaurant) {
     return (
@@ -340,13 +340,13 @@ export default function OrdersManagementClient() {
                   key={group}
                   type="button"
                   aria-pressed={filterGroup === group}
-                  aria-label={`${getRestaurantOrderFilterGroupLabel(group)} (${getRestaurantOrderFilterCount(orderStatuses, group)})`}
+                  aria-label={`${getRestaurantOrderFilterGroupLabel(group, locale)} (${getRestaurantOrderFilterCount(orderStatuses, group)})`}
                   onClick={() => {
                     setFilterGroup(group);
                   }}
                   className={`${getRestaurantOrderFilterClassName(filterGroup === group)} min-h-[44px] flex items-center`}
                 >
-                  <span>{getRestaurantOrderFilterGroupLabel(group)}</span>
+                  <span>{getRestaurantOrderFilterGroupLabel(group, locale)}</span>
                   <span className="ml-1.5 rounded-full bg-black/10 px-1.5 py-0.5 text-[11px] font-bold tabular-nums">
                     {getRestaurantOrderFilterCount(orderStatuses, group)}
                   </span>
@@ -397,7 +397,7 @@ export default function OrdersManagementClient() {
                               {t('orderTitleNum', { id: order.id.slice(-5).toUpperCase() })}
                             </h3>
                             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getRestaurantOrderStatusTone(order.status).colorClassName}`}>
-                              {getRestaurantOrderStatusLabel(order.status)}
+                              {getRestaurantOrderStatusLabel(order.status, locale)}
                             </span>
                           </div>
                           <p className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-400">

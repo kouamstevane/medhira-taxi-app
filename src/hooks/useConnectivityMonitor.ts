@@ -1,5 +1,6 @@
 // src/hooks/useConnectivityMonitor.ts
 import { useState, useEffect } from 'react';
+import { translate } from '@/locales';
 
 function checkConnectivity(): boolean {
   return typeof navigator !== 'undefined' ? navigator.onLine : true;
@@ -15,7 +16,7 @@ export function useConnectivityMonitor(
 
     const handleOffline = () => {
       setIsOnline(false);
-      showWarning('Connexion internet perdue. Veuillez vérifier votre connexion.');
+      showWarning(translate('systemMessages.connectivity.lost'));
     };
 
     window.addEventListener('online', handleOnline);

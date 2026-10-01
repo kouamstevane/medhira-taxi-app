@@ -7,6 +7,8 @@
  * @module utils/firestore-error-handler
  */
 
+import { translate } from '@/locales';
+
 /**
  * Détecte si une erreur est une erreur de permission Firestore
  *
@@ -105,35 +107,33 @@ export function isFirestoreNetworkError(error: unknown): boolean {
  * Formate un message d'erreur Firestore pour l'afficher à l'utilisateur
  *
  * @param error - L'erreur à formater
- * @param context - Le contexte de l'erreur (ex: "mise à jour du profil")
- * @returns Un message d'erreur explicite en français
+ * @param context - Clé de traduction du contexte de l'erreur (ex: "errors.context.profileUpdate")
+ * @returns Un message d'erreur explicite dans la langue active
  *
  * @example
  * ```ts
  * try {
  *   await updateDoc(docRef, data);
  * } catch (error) {
- *   const message = getFirestoreErrorMessage(error, "mise à jour du profil");
+ *   const message = getFirestoreErrorMessage(error, 'errors.context.profileUpdate');
  *   showError(message);
  * }
  * ```
  */
-export function getFirestoreErrorMessage(error: unknown, context?: string): string {
-  const contextPrefix = context ? ` lors de la ${context}` : '';
+export function getFirestoreErrorMessage(error: unknown, context?: string, t?: (key: string, params?: Record<string, string | number>) => string): string {
+  const tr = t ?? translate;
+  const contextPrefix = context ? ` ${tr(context)}` : '';
 
   if (isFirestorePermissionError(error)) {
-    return `Vous n'avez pas les permissions nécessaires pour effectuer cette action${contextPrefix}. ` +
-           `Vérifiez que votre compte est activé et que votre email est vérifié.`;
+    return tr('errors.firestorePermission', { context: contextPrefix });
   }
 
   if (isFirestoreNotFoundError(error)) {
-    return `Le document demandé n'existe pas${contextPrefix}. ` +
-           `Veuillez actualiser la page et réessayer.`;
+    return tr('errors.firestoreNotFound', { context: contextPrefix });
   }
 
   if (isFirestoreNetworkError(error)) {
-    return `Problème de connexion détecté${contextPrefix}. ` +
-           `Vérifiez votre connexion internet et réessayez.`;
+    return tr('errors.firestoreNetwork', { context: contextPrefix });
   }
 
   // Erreur générique
@@ -148,7 +148,7 @@ export function getFirestoreErrorMessage(error: unknown, context?: string): stri
     console.error('Erreur inconnue:', error);
   }
 
-  return `Une erreur est survenue${contextPrefix}. Veuillez réessayer. Si le problème persiste, contactez le support.`;
+  return tr('errors.firestoreGeneric', { context: contextPrefix });
 }
 
 /**

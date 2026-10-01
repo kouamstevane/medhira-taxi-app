@@ -1,4 +1,5 @@
 import type { FoodOrderStatus } from '@/types/food-delivery';
+import { en, fr } from '@/locales';
 export {
   RESTAURANT_ORDER_HISTORY_STATUSES,
   RESTAURANT_ORDER_OPERATIONAL_STATUSES,
@@ -14,13 +15,9 @@ export const RESTAURANT_ORDER_FILTER_GROUPS = [
 
 export type RestaurantOrderFilterGroup = typeof RESTAURANT_ORDER_FILTER_GROUPS[number];
 
-export const RESTAURANT_ORDER_FILTER_GROUP_LABELS: Record<RestaurantOrderFilterGroup, string> = {
-  all: 'Toutes',
-  to_process: 'À traiter',
-  preparing: 'En préparation',
-  in_delivery: 'En livraison',
-  completed: 'Terminées',
-};
+export const RESTAURANT_ORDER_FILTER_GROUP_LABELS = fr.screens.orderFilterGroups as Record<RestaurantOrderFilterGroup, string>;
+
+export const RESTAURANT_ORDER_FILTER_GROUP_LABELS_EN = en.screens.orderFilterGroups as Record<RestaurantOrderFilterGroup, string>;
 
 export const RESTAURANT_ORDER_FILTERS = [
   'all',
@@ -65,32 +62,18 @@ const RESTAURANT_ORDER_FILTER_STATUS_SETS: Record<Exclude<RestaurantOrderFilterG
   completed: ['delivered', 'no_driver_available', 'cancelled', 'cancelled_by_restaurant'],
 };
 
-export const RESTAURANT_ORDER_STATUS_LABELS: Record<FoodOrderStatus | 'all', string> = {
-  all: 'Toutes',
-  pending_payment: 'Paiement en attente',
-  pending: 'En attente',
-  confirmed: 'Confirmée',
-  accepted: 'Acceptée',
-  preparing: 'Préparation',
-  ready: 'Prête',
-  driver_heading_to_restaurant: 'Livreur en route',
-  driver_arrived_restaurant: 'Livreur au resto',
-  picked_up: 'Récupérée',
-  out_for_delivery: 'En livraison',
-  arriving: 'Livreur proche',
-  delivering: 'En livraison',
-  delivered: 'Livrée',
-  no_driver_available: 'Aucun livreur',
-  cancelled: 'Annulée',
-  cancelled_by_restaurant: 'Refusée restaurant',
-};
+export const RESTAURANT_ORDER_STATUS_LABELS = fr.screens.orderStatus as Record<FoodOrderStatus | 'all', string>;
 
-export function getRestaurantOrderStatusLabel(status: FoodOrderStatus | 'all'): string {
-  return RESTAURANT_ORDER_STATUS_LABELS[status] ?? status;
+export const RESTAURANT_ORDER_STATUS_LABELS_EN = en.screens.orderStatus as Record<FoodOrderStatus | 'all', string>;
+
+export function getRestaurantOrderStatusLabel(status: FoodOrderStatus | 'all', locale: 'fr' | 'en' = 'fr'): string {
+  const dict = locale === 'en' ? RESTAURANT_ORDER_STATUS_LABELS_EN : RESTAURANT_ORDER_STATUS_LABELS;
+  return dict[status] ?? status;
 }
 
-export function getRestaurantOrderFilterGroupLabel(group: RestaurantOrderFilterGroup): string {
-  return RESTAURANT_ORDER_FILTER_GROUP_LABELS[group];
+export function getRestaurantOrderFilterGroupLabel(group: RestaurantOrderFilterGroup, locale: 'fr' | 'en' = 'fr'): string {
+  const dict = locale === 'en' ? RESTAURANT_ORDER_FILTER_GROUP_LABELS_EN : RESTAURANT_ORDER_FILTER_GROUP_LABELS;
+  return dict[group] ?? group;
 }
 
 export function getRestaurantOrderFilterCount(

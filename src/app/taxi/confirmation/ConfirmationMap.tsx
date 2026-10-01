@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useGoogleMaps } from "@/hooks/useGoogleMaps";
+import { useTranslation } from "@/hooks/useTranslation";
 
 type GoogleMapsApi = typeof import("@react-google-maps/api");
 
@@ -18,6 +19,7 @@ interface ConfirmationMapProps {
 }
 
 export function ConfirmationMap({ driverLocation, driverMarkerLocation, pickupLocation, directions }: ConfirmationMapProps) {
+  const { t } = useTranslation();
   const markerPosition = driverMarkerLocation ?? driverLocation;
   const { isLoaded } = useGoogleMaps();
   const [mapsApi, setMapsApi] = useState<GoogleMapsApi | null>(null);
@@ -38,7 +40,7 @@ export function ConfirmationMap({ driverLocation, driverMarkerLocation, pickupLo
   if (!isLoaded || !mapsApi) {
     return (
       <div style={mapContainerStyle} className="flex items-center justify-center bg-[#1A1A1A]">
-        <p className="text-[#9CA3AF]">Chargement de la carte...</p>
+        <p className="text-[#9CA3AF]">{t('common.mapLoadingDots')}</p>
       </div>
     );
   }

@@ -6,12 +6,16 @@
 
 'use client';
 
+import React from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
+
 interface MapFallbackProps {
   error?: string;
   apiKey?: string;
 }
 
 export const MapFallback = ({ error, apiKey }: MapFallbackProps) => {
+  const { t } = useTranslation();
   return (
     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#0F0F0F] to-[#1A1A1A]">
       <div className="text-center p-8 max-w-lg bg-[#1A1A1A] border border-white/[0.06] rounded-2xl shadow-xl">
@@ -33,35 +37,35 @@ export const MapFallback = ({ error, apiKey }: MapFallbackProps) => {
         </div>
         
         <h2 className="text-2xl font-bold text-white mb-4">
-          Carte non disponible
+          {t('common.mapUnavailable')}
         </h2>
         
         {!apiKey ? (
           <div className="space-y-4">
             <p className="text-[#9CA3AF]">
-              La clé API Google Maps n'est pas configurée.
+              {t('common.apiKeyNotConfigured')}
             </p>
             <div className="bg-[#F59E0B]/10 border-l-4 border-[#F59E0B]/20 p-4 text-left rounded">
-              <p className="font-semibold text-[#F59E0B] mb-2">Action requise :</p>
+              <p className="font-semibold text-[#F59E0B] mb-2">{t('common.actionRequired')}</p>
               <p className="text-sm text-[#F59E0B]">
-                Ajoutez <code className="bg-[#F59E0B]/20 px-2 py-1 rounded">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> dans votre fichier <code className="bg-[#F59E0B]/20 px-2 py-1 rounded">.env.local</code>
+                {t('common.addMapsApiKeyToEnv', { key: 'NEXT_PUBLIC_GOOGLE_MAPS_API_KEY', file: '.env.local' })}
               </p>
             </div>
           </div>
         ) : error?.includes('ApiProjectMapError') ? (
           <div className="space-y-4">
             <p className="text-[#9CA3AF]">
-              Erreur de configuration de la clé API Google Maps.
+              {t('common.apiConfigError')}
             </p>
             <div className="bg-[#EF4444]/10 border-l-4 border-[#EF4444]/20 p-4 text-left rounded">
-              <p className="font-semibold text-[#EF4444] mb-2">Vérifications nécessaires :</p>
+              <p className="font-semibold text-[#EF4444] mb-2">{t('common.requiredVerifications')}</p>
               <ul className="text-sm text-[#EF4444] space-y-1 list-disc list-inside">
-                <li>La clé API est valide dans Google Cloud Console</li>
-                <li>Maps JavaScript API est activée</li>
-                <li>Places API est activée</li>
-                <li>Directions API est activée</li>
-                <li>Les restrictions autorisent <code className="bg-[#EF4444]/20 px-1 rounded">localhost:3000</code></li>
-                <li>Le billing est activé sur votre compte Google Cloud</li>
+                <li>{t('common.apiKeyValidInConsole')}</li>
+                <li>{t('common.mapsJsApiEnabled')}</li>
+                <li>{t('common.placesApiEnabled')}</li>
+                <li>{t('common.directionsApiEnabled')}</li>
+                <li>{t('common.localhostRestrictionHint')}</li>
+                <li>{t('common.billingEnabledGoogleCloud')}</li>
               </ul>
             </div>
             <a
@@ -70,17 +74,17 @@ export const MapFallback = ({ error, apiKey }: MapFallbackProps) => {
               rel="noopener noreferrer"
               className="inline-block mt-4 px-6 py-3 bg-[#f29200] hover:bg-[#e68600] text-white font-semibold rounded-lg transition"
             >
-              Ouvrir Google Cloud Console
+              {t('common.openGoogleCloudConsole')}
             </a>
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-[#9CA3AF]">{error || 'Erreur de chargement de la carte'}</p>
+            <p className="text-[#9CA3AF]">{error || t('common.mapLoadingError')}</p>
             <button
               onClick={() => window.location.reload()}
               className="px-6 py-3 bg-[#f29200] hover:bg-[#e68600] text-white font-semibold rounded-lg transition"
             >
-              Recharger la page
+              {t('common.reloadPage')}
             </button>
           </div>
         )}
@@ -88,4 +92,3 @@ export const MapFallback = ({ error, apiKey }: MapFallbackProps) => {
     </div>
   );
 };
-

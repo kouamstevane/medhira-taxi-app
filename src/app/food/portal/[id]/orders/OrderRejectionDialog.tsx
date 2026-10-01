@@ -16,7 +16,9 @@ export function OrderRejectionDialog({
 }: OrderRejectionDialogProps) {
   const { t } = useTranslation('restaurant');
   const orderReference = order.id.slice(-5).toUpperCase();
-  const customer = order.customerName ? ` de ${order.customerName}` : '';
+  const customer = order.customerName
+    ? t('screens.orderRejection.fromCustomer', { name: order.customerName })
+    : '';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">

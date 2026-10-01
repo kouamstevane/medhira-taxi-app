@@ -9,6 +9,7 @@ import {
 } from '@/utils/constants';
 import { getDeliveryDistance } from '@/utils/distance';
 import { z } from 'zod';
+import { translate } from '@/locales';
 
 export const MAX_PARCEL_DISTANCE_KM = 800;
 
@@ -30,19 +31,19 @@ export const PARCEL_TYPE_LABELS: Record<ParcelType, { label: string; icon: strin
 };
 
 const LocationSchema = z.object({
-  address: z.string().min(5, "L'adresse est requise"),
+  address: z.string().min(5, { error: () => translate('serviceMessages.parcel.addressRequired') }),
   latitude: z.number(),
   longitude: z.number(),
   country: z.string().refine(
     (c) => getMarketByCountryCode(c) !== null,
-    { message: `Service disponible uniquement dans les pays supportés` }
+    { error: () => translate('serviceMessages.parcel.unsupportedCountry') }
   ),
 });
 
 const CreateParcelSchema = z.object({
   senderId: z.string().min(1),
-  recipientName: z.string().min(2, 'Le nom du destinataire est requis'),
-  recipientPhone: z.string().min(8, 'Numéro de téléphone invalide'),
+  recipientName: z.string().min(2, { error: () => translate('serviceMessages.parcel.recipientNameRequired') }),
+  recipientPhone: z.string().min(8, { error: () => translate('serviceMessages.parcel.invalidRecipientPhone') }),
   pickupLocation: LocationSchema,
   dropoffLocation: LocationSchema,
   parcelType: z.enum(['food', 'medicine', 'document', 'flowers', 'other']),
@@ -53,7 +54,7 @@ const CreateParcelSchema = z.object({
   paymentMethod: z.enum(['wallet', 'card']).default('wallet'),
 }).refine(
   (data) => data.pickupLocation.country === data.dropoffLocation.country,
-  { message: 'Le retrait et la livraison doivent être dans le même pays (envoi national uniquement)', path: ['dropoffLocation'] }
+  { error: () => translate('serviceMessages.parcel.sameCountryOnly'), path: ['dropoffLocation'] }
 );
 
 export type CreateParcelInput = z.infer<typeof CreateParcelSchema>;
@@ -88,19 +89,25 @@ export const estimateParcelPrice = async (
   const pickupMarket = getMarketByCountryCode(pickup.country);
   if (!pickupMarket) {
     throw new ParcelValidationError(
-      `Le retrait doit être dans un pays supporté (${getSupportedCountryNames()}) (pays détecté : ${pickup.country || 'inconnu'})`,
+      translate('serviceMessages.parcel.pickupCountryUnsupported', {
+        countries: getSupportedCountryNames(),
+        detected: pickup.country || translate('serviceMessages.parcel.unknownCountry'),
+      }),
       'pickup'
     );
   }
   if (!getMarketByCountryCode(dropoff.country)) {
     throw new ParcelValidationError(
-      `La livraison doit être dans un pays supporté (${getSupportedCountryNames()}) (pays détecté : ${dropoff.country || 'inconnu'})`,
+      translate('serviceMessages.parcel.dropoffCountryUnsupported', {
+        countries: getSupportedCountryNames(),
+        detected: dropoff.country || translate('serviceMessages.parcel.unknownCountry'),
+      }),
       'dropoff'
     );
   }
   if (pickup.country !== dropoff.country) {
     throw new ParcelValidationError(
-      'Envoi international non supporté — le retrait et la livraison doivent être dans le même pays',
+      translate('serviceMessages.parcel.internationalUnsupported'),
       'dropoff'
     );
   }
@@ -112,7 +119,7 @@ export const estimateParcelPrice = async (
 
   if (distanceKm > MAX_PARCEL_DISTANCE_KM) {
     throw new ParcelValidationError(
-      `Distance trop élevée (${distanceKm.toFixed(0)} km). Maximum : ${MAX_PARCEL_DISTANCE_KM} km`,
+      translate('serviceMessages.parcel.distanceTooHigh', { distance: distanceKm.toFixed(0), max: MAX_PARCEL_DISTANCE_KM }),
       'dropoff'
     );
   }

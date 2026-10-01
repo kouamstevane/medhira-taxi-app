@@ -3,6 +3,7 @@ import type { PersonalDriverPlan } from '@/types/personal-driver';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { useTranslation } from '@/hooks/useTranslation';
+import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 
 interface PersonalDriverPlanCardProps {
   readonly plan: PersonalDriverPlan;
@@ -11,15 +12,51 @@ interface PersonalDriverPlanCardProps {
 export function PersonalDriverPlanCard({ plan }: PersonalDriverPlanCardProps) {
   const { t, locale } = useTranslation();
   const numLocale = locale === 'en' ? 'en-US' : 'fr-FR';
-  const benefits = plan.benefits;
-  const planLabels: Partial<Record<PersonalDriverPlan['id'], string>> = {
+  const defaultBadges: Record<PersonalDriverPlan['id'], string> = {
+    basic: t('personalDriver.standardFormula'),
     classic: t('personalDriver.mostPopular'),
     premium: t('personalDriver.priorityService'),
   };
-  const badge = (plan.badge ?? planLabels[plan.id])?.toLocaleUpperCase(numLocale);
+
+  const defaultPromises: Record<PersonalDriverPlan['id'], string> = {
+    basic: t('personalDriver.planBasicPromise'),
+    classic: t('personalDriver.planClassicPromise'),
+    premium: t('personalDriver.planPremiumPromise'),
+  };
+
+  const defaultBenefits: Record<PersonalDriverPlan['id'], string[]> = {
+    basic: [
+      t('personalDriver.benefitMonFri'),
+      t('personalDriver.benefitWait3'),
+      t('personalDriver.benefitFixedHours'),
+    ],
+    classic: [
+      t('personalDriver.benefitWeekAndWeekend'),
+      t('personalDriver.benefitWait5'),
+      t('personalDriver.benefitSpecialTrips2'),
+      t('personalDriver.benefitHigherPriority'),
+    ],
+    premium: [
+      t('personalDriver.benefit7On7'),
+      t('personalDriver.benefitWait10'),
+      t('personalDriver.benefitSpecialTrips4'),
+      t('personalDriver.benefitMaxPriority'),
+    ],
+  };
+
+  const defaultPlan = PERSONAL_DRIVER_PLANS[plan.id];
+  const isDefaultPromise = !plan.promise || plan.promise === defaultPlan?.promise;
+  const promise = isDefaultPromise ? defaultPromises[plan.id] : plan.promise;
+
+  const isDefaultBenefits = !plan.benefits || JSON.stringify(plan.benefits) === JSON.stringify(defaultPlan?.benefits);
+  const benefits = isDefaultBenefits ? defaultBenefits[plan.id] : plan.benefits;
+
+  const isDefaultBadge = !plan.badge || plan.badge === defaultPlan?.badge;
+  const rawBadge = isDefaultBadge ? defaultBadges[plan.id] : plan.badge;
+  const badge = rawBadge?.toLocaleUpperCase(numLocale);
   const isClassic = plan.id === 'classic';
   const isPremium = plan.id === 'premium';
-  const chooseLabel = locale === 'en' ? `Choose ${plan.name}` : `Choisir ${plan.name}`;
+  const chooseLabel = t('screens.personalDriverPlan.choose', { name: plan.name });
 
   return (
     <article
@@ -53,7 +90,7 @@ export function PersonalDriverPlanCard({ plan }: PersonalDriverPlanCardProps) {
         </div>
 
         <h2 className="mt-2 text-2xl font-black text-white tracking-tight">{plan.name}</h2>
-        <p className="mt-1 min-h-10 text-xs leading-5 text-slate-300">{plan.promise}</p>
+        <p className="mt-1 min-h-10 text-xs leading-5 text-slate-300">{promise}</p>
 
         <div className="mt-5 rounded-2xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t('personalDriver.startingFrom')}</p>

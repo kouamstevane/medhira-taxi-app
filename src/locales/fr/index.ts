@@ -12,9 +12,17 @@ import { personalDriver } from './personalDriver';
 import { notifications } from './notifications';
 import { history } from './history';
 import { restaurant } from './restaurant';
+import { serviceMessages } from './serviceMessages';
+import { systemMessages } from './systemMessages';
+import { screens } from './screens';
+import { legal } from './legal';
 import type { DeepString } from '../types';
 
 export const fr = {
+  serviceMessages,
+  systemMessages,
+  screens,
+  legal,
   common,
   auth,
   taxi,

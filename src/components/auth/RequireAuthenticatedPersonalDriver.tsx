@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 import type { UserData } from '@/types/user';
 
 export interface RequireAuthenticatedPersonalDriverProps {
@@ -17,6 +18,7 @@ export function RequireAuthenticatedPersonalDriver({
 }: RequireAuthenticatedPersonalDriverProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useTranslation();
   const { currentUser, userData, loading, authStatus } = useAuth();
   const isRedirectingRef = useRef(false);
 
@@ -39,18 +41,15 @@ export function RequireAuthenticatedPersonalDriver({
       const hasAdminRole =
         (activeRole as string | undefined) === 'admin' ||
         Boolean(userDataRecord?.isAdmin) ||
-        userDataRecord?.role === 'admin';
+        Boolean(userDataRecord?.role === 'admin');
 
-      let isAllowed = true;
-      if (role === 'driver' && !hasDriverRole) {
-        isAllowed = false;
-      } else if (role === 'admin' && !hasAdminRole) {
-        isAllowed = false;
-      } else if (
-        role === 'client'
-        && (activeRole === 'driver_onboarding' || activeRole === 'restaurant_onboarding')
-      ) {
-        isAllowed = false;
+      let isAllowed = false;
+      if (role === 'client') {
+        isAllowed = true;
+      } else if (role === 'driver') {
+        isAllowed = hasDriverRole || hasAdminRole;
+      } else if (role === 'admin') {
+        isAllowed = hasAdminRole;
       }
 
       if (!isAllowed) {
@@ -68,7 +67,7 @@ export function RequireAuthenticatedPersonalDriver({
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-600/20 text-red-500 animate-pulse">
             <MaterialIcon name="local_taxi" className="text-2xl" />
           </div>
-          <p className="text-sm font-medium animate-pulse">Verification des accés en cours...</p>
+          <p className="text-sm font-medium animate-pulse">{t('auth.verifying')}</p>
         </div>
       </div>
     );
@@ -83,14 +82,10 @@ export function RequireAuthenticatedPersonalDriver({
     const hasAdminRole =
       (activeRole as string | undefined) === 'admin' ||
       Boolean(userDataRecord?.isAdmin) ||
-      userDataRecord?.role === 'admin';
+      Boolean(userDataRecord?.role === 'admin');
 
-    if (role === 'driver' && !hasDriverRole) return null;
+    if (role === 'driver' && !hasDriverRole && !hasAdminRole) return null;
     if (role === 'admin' && !hasAdminRole) return null;
-    if (
-      role === 'client'
-      && (activeRole === 'driver_onboarding' || activeRole === 'restaurant_onboarding')
-    ) return null;
   }
 
   return <>{children}</>;

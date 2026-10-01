@@ -9,17 +9,18 @@ import { createDriverOnboardingAccount, signInWithGoogleForDriver } from '@/serv
 import { InputField } from '@/components/forms/InputField';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useToast } from '@/hooks/useToast';
+import { useTranslation } from '@/hooks/useTranslation';
 import { buildDriverInvitationDeepLink } from './driver-invitation-links';
 
 type Role = 'chauffeur' | 'livreur' | 'les_deux';
 
-const errorMessage = (error: unknown): string => {
+const getErrorMessage = (error: unknown, t: (key: string) => string): string => {
   const value = error as { code?: string; message?: string };
-  if (value.code === 'functions/deadline-exceeded') return 'Cette invitation a expiré après 48 heures.';
-  if (value.code === 'functions/permission-denied') return 'L’adresse email ou le code ne correspond pas à l’invitation.';
-  if (value.code === 'auth/email-already-in-use') return 'Cette adresse possède déjà un compte. Connectez-vous avec ce compte ou contactez l’administration.';
-  if (value.code === 'auth/popup-closed-by-user') return 'La fenêtre Google a été fermée. Réessayez pour continuer.';
-  return value.message || 'Une erreur est survenue. Vérifiez vos informations et réessayez.';
+  if (value.code === 'functions/deadline-exceeded') return t('auth.invitationExpired');
+  if (value.code === 'functions/permission-denied') return t('auth.invitationMismatch');
+  if (value.code === 'auth/email-already-in-use') return t('auth.emailAlreadyInUse');
+  if (value.code === 'auth/popup-closed-by-user') return t('auth.googleWindowClosed');
+  return value.message || t('common.errorOccurred');
 };
 
 export default function DriverInvitationClient() {
@@ -33,6 +34,7 @@ export default function DriverInvitationClient() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { showError } = useToast();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const value = new URLSearchParams(window.location.search).get('invitationId');
@@ -49,16 +51,21 @@ export default function DriverInvitationClient() {
     return () => window.clearTimeout(timer);
   }, [invitationId]);
 
-  const roleLabel = useMemo(() => role === 'les_deux' ? 'Chauffeur / Livreur' : role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Chauffeur / Livreur', [role]);
+  const roleLabel = useMemo(() => {
+    if (role === 'les_deux') return t('auth.driverRole');
+    if (role === 'chauffeur') return t('common.roles.driver') || 'Chauffeur';
+    if (role === 'livreur') return t('common.roles.delivery') || 'Livreur';
+    return t('auth.driverRole');
+  }, [role, t]);
 
   const validate = async (event: FormEvent) => {
     event.preventDefault();
     if (!invitationId.trim()) {
-      showError('Vous devez d’abord déposer votre candidature en cliquant sur « Vous souhaitez devenir chauffeur / livreur ». Après validation, Medjira vous enverra un lien et un code personnel par e-mail.');
+      showError(t('auth.needToApplyFirst'));
       return;
     }
     if (!code.trim()) {
-      showError('Saisissez le code reçu par e-mail.');
+      showError(t('auth.enterCompleteCode'));
       return;
     }
     setLoading(true);
@@ -68,7 +75,7 @@ export default function DriverInvitationClient() {
       setRole(result.data.role);
       setStep('account');
     } catch (err) {
-      showError(errorMessage(err));
+      showError(getErrorMessage(err, t));
     } finally {
       setLoading(false);
     }
@@ -83,7 +90,7 @@ export default function DriverInvitationClient() {
   const createWithPassword = async (event: FormEvent) => {
     event.preventDefault();
     if (password.length < 8) {
-      showError('Le mot de passe doit contenir au moins 8 caractères.');
+      showError(t('auth.passwordMinLengthPlaceholder'));
       return;
     }
     setLoading(true);
@@ -91,7 +98,7 @@ export default function DriverInvitationClient() {
       await createDriverOnboardingAccount(email.trim(), password);
       await complete();
     } catch (err) {
-      showError(errorMessage(err));
+      showError(getErrorMessage(err, t));
       await auth.signOut().catch(() => undefined);
     } finally {
       setLoading(false);
@@ -104,11 +111,11 @@ export default function DriverInvitationClient() {
       const user = await signInWithGoogleForDriver();
       if ((user.email || '').toLowerCase() !== email.trim().toLowerCase()) {
         await auth.signOut();
-        throw new Error('Cette adresse Google ne correspond pas à l’adresse email de l’invitation.');
+        throw new Error(t('auth.invitationMismatch'));
       }
       await complete();
     } catch (err) {
-      showError(errorMessage(err));
+      showError(getErrorMessage(err, t));
       await auth.signOut().catch(() => undefined);
     } finally {
       setLoading(false);
@@ -122,16 +129,16 @@ export default function DriverInvitationClient() {
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/15 text-primary">
             <MaterialIcon name="verified_user" size="lg" />
           </div>
-          <h1 className="text-2xl font-bold">Créer votre compte</h1>
-          <p className="mt-2 text-sm text-slate-400">Invitation professionnelle Medjira</p>
+          <h1 className="text-2xl font-bold">{t('auth.driverInvitationTitle')}</h1>
+          <p className="mt-2 text-sm text-slate-400">{t('auth.driverInvitationSubtitle')}</p>
         </div>
 
         {invitationResolved && !invitationId ? (
           <div role="alert" className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm leading-6 text-amber-200">
-            Vous devez d’abord déposer votre candidature en cliquant sur « Vous souhaitez devenir chauffeur / livreur ». Après validation, Medjira vous enverra un lien et un code personnel par e-mail.
+            {t('auth.needToApplyFirst')}
           </div>
         ) : !invitationResolved ? (
-          <p className="text-center text-sm text-slate-400">Chargement…</p>
+          <p className="text-center text-sm text-slate-400">{t('common.loading')}</p>
         ) : null}
 
         {invitationResolved && invitationId && step === 'code' ? (
@@ -139,7 +146,7 @@ export default function DriverInvitationClient() {
             <InputField
               required
               type="email"
-              label="Adresse email autorisée"
+              label={t('auth.authorizedEmail')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="vous@exemple.com"
@@ -147,33 +154,33 @@ export default function DriverInvitationClient() {
             />
             <InputField
               required
-              label="Code reçu par email"
+              label={t('auth.codeReceivedByEmail')}
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               className="uppercase tracking-[0.2em]"
               placeholder="AB12CD34"
               autoComplete="off"
             />
-            <p className="text-xs leading-5 text-slate-500">Votre code est valable 48 heures. Passé ce délai, il expirera automatiquement.</p>
-            <button disabled={loading} className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50">{loading ? 'Vérification…' : 'Vérifier mon invitation'}</button>
+            <p className="text-xs leading-5 text-slate-500">{t('auth.invitationCodeValidityNotice')}</p>
+            <button disabled={loading} className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50">{loading ? t('common.verifying') || 'Vérification…' : t('auth.verifyMyInvitation')}</button>
           </form>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">Invitation validée pour le poste : <strong>{roleLabel}</strong></div>
-            <button type="button" disabled={loading} onClick={createWithGoogle} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 font-semibold text-slate-900 disabled:opacity-50"><MaterialIcon name="login" size="sm" /> Continuer avec Google</button>
-            <div className="flex items-center gap-3 text-xs text-slate-500"><span className="h-px flex-1 bg-white/10" />ou<span className="h-px flex-1 bg-white/10" /></div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-200">{t('auth.invitationValidatedForRole', { role: roleLabel })}</div>
+            <button type="button" disabled={loading} onClick={createWithGoogle} className="flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 font-semibold text-slate-900 disabled:opacity-50"><MaterialIcon name="login" size="sm" /> {t('auth.continueWithGoogle')}</button>
+            <div className="flex items-center gap-3 text-xs text-slate-500"><span className="h-px flex-1 bg-white/10" />{t('common.or')}<span className="h-px flex-1 bg-white/10" /></div>
             <form onSubmit={createWithPassword} className="space-y-4">
               <InputField
                 required
                 minLength={8}
                 type="password"
-                label="Mot de passe"
+                label={t('auth.password')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="8 caractères minimum"
+                placeholder={t('auth.passwordMinLengthPlaceholder')}
                 autoComplete="new-password"
               />
-              <button disabled={loading} className="w-full rounded-xl border border-primary/40 bg-primary/15 px-4 py-3 font-semibold text-primary disabled:opacity-50">{loading ? 'Création…' : 'Créer avec email et mot de passe'}</button>
+              <button disabled={loading} className="w-full rounded-xl border border-primary/40 bg-primary/15 px-4 py-3 font-semibold text-primary disabled:opacity-50">{loading ? t('common.saving') || 'Création…' : t('auth.createWithEmailAndPassword')}</button>
             </form>
           </div>
         )}

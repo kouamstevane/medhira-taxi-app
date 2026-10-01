@@ -12,6 +12,7 @@ import { getFunctions, httpsCallable, Functions } from 'firebase/functions';
 //  CORRECTIF : Importer l'app Firebase déjà initialisée plutôt que d'appeler initializeApp()
 // Rappeler initializeApp() cause "Firebase App named '[DEFAULT]' already exists"
 import { app } from '../config/firebase';
+import { translate } from '@/locales';
 
 // Type pour les données chiffrées retournées par le serveur
 export interface EncryptedData {
@@ -52,7 +53,7 @@ class ServerEncryptionService {
    */
   async encrypt(plainText: string): Promise<EncryptedData> {
     if (!plainText || plainText.length === 0) {
-      throw new Error('Le texte à chiffrer ne peut pas être vide');
+      throw new Error(translate('serviceMessages.serverEncryption.emptyText'));
     }
 
     try {
@@ -65,7 +66,7 @@ class ServerEncryptionService {
       const result = await encryptFunction({ plaintext: plainText });
 
       if (!result.data || !result.data.encrypted) {
-        throw new Error('Format de réponse invalide du serveur');
+        throw new Error(translate('serviceMessages.serverEncryption.invalidResponse'));
       }
 
       return result.data.encrypted;
@@ -75,18 +76,18 @@ class ServerEncryptionService {
 
       // Gérer les erreurs spécifiques
       if (err.code === 'functions/unauthenticated') {
-        throw new Error('Vous devez être connecté pour chiffrer des données.');
+        throw new Error(translate('serviceMessages.serverEncryption.mustBeSignedIn'));
       } else if (err.code === 'functions/resource-exhausted') {
-        throw new Error('Trop de tentatives. Réessayez dans une minute.');
+        throw new Error(translate('serviceMessages.serverEncryption.tooManyAttempts'));
       } else if (err.code === 'functions/invalid-argument') {
-        throw new Error('Données à chiffrer invalides.');
+        throw new Error(translate('serviceMessages.serverEncryption.invalidData'));
       } else if (err.code === 'functions/internal') {
-        throw new Error('Erreur serveur lors du chiffrement. Veuillez réessayer.');
+        throw new Error(translate('serviceMessages.serverEncryption.serverError'));
       }
 
       // Erreur générique
       throw new Error(
-        'Impossible de chiffrer les données. Vérifiez votre connexion et réessayez.'
+        translate('serviceMessages.serverEncryption.genericFailure')
       );
     }
   }

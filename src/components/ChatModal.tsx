@@ -8,6 +8,7 @@ import { Message } from '@/types/chat';
 import {
   ConversationContext,
   ConversationParticipant,
+  ParticipantRole,
   buildConversationId,
   getRoleLabel,
 } from '@/types/conversation';
@@ -19,6 +20,7 @@ import {
 } from '@/services/chat.service';
 import { useVoipCall } from '@/hooks/useVoipCall';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 /**
  * Nouvelle signature recommandée :
@@ -50,6 +52,24 @@ type ChatModalProps =
 export function ChatModal(props: ChatModalProps) {
   const { currentUser } = useAuth();
   const { startCall } = useVoipCall();
+  const { t, locale } = useTranslation('common');
+
+  const getLocalizedRoleLabel = (role: ParticipantRole): string => {
+    switch (role) {
+      case 'client':
+        return t('common.roleClient');
+      case 'chauffeur':
+        return t('common.roleDriver');
+      case 'restaurant':
+        return t('common.roleRestaurant');
+      case 'livreur':
+        return t('common.roleDelivery');
+      case 'expediteur':
+        return t('common.roleSender');
+      default:
+        return t('common.roleInterlocutor');
+    }
+  };
 
   // ----- Résolution du contexte (rétrocompat) -----
   const [resolvedContext, setResolvedContext] = useState<ConversationContext | null>(
@@ -80,27 +100,27 @@ export function ChatModal(props: ChatModalProps) {
       try {
         const bookingSnap = await getDoc(doc(db, 'bookings', legacyBookingId));
         if (!bookingSnap.exists()) {
-          setResolutionError('Course introuvable');
+          setResolutionError(t('common.rideNotFound'));
           return;
         }
         const data = bookingSnap.data();
         const clientUid: string | undefined = data.userId;
         const driverUid: string | undefined = data.driverId || legacyDriverId;
         if (!clientUid || !driverUid) {
-          setResolutionError('Participants incomplets pour cette course');
+          setResolutionError(t('common.incompleteParticipants'));
           return;
         }
 
         const clientParticipant: ConversationParticipant = {
           uid: clientUid,
           name: legacyCurrentRole === 'client'
-            ? (currentUser?.displayName || 'Client')
-            : 'Client',
+            ? (currentUser?.displayName || t('common.roleClient'))
+            : t('common.roleClient'),
           role: 'client',
         };
         const driverParticipant: ConversationParticipant = {
           uid: driverUid,
-          name: legacyDriverName || 'Chauffeur',
+          name: legacyDriverName || t('common.roleDriver'),
           role: 'chauffeur',
         };
 
@@ -112,7 +132,7 @@ export function ChatModal(props: ChatModalProps) {
         });
       } catch (err) {
         console.error('[ChatModal] legacy context resolution failed', err);
-        setResolutionError('Impossible de charger la conversation');
+        setResolutionError(t('common.somethingWentWrong'));
       }
     })();
   }, [resolvedContext, currentUserUid, props, currentUser?.displayName]);
@@ -204,7 +224,7 @@ export function ChatModal(props: ChatModalProps) {
       setNewMessage('');
     } catch (error) {
       console.error('Erreur envoi message:', error);
-      setToast({ message: "Erreur lors de l'envoi du message", type: 'error' });
+      setToast({ message: t('common.messageSendError'), type: 'error' });
       setTimeout(() => setToast(null), 3000);
     } finally {
       setSending(false);
@@ -217,13 +237,13 @@ export function ChatModal(props: ChatModalProps) {
     try {
       await startCall(conversationId, meParticipant, otherParticipant);
       setToast({
-        message: `📞 Appel initié ! ${otherParticipant.name} a été notifié.`,
+        message: t('common.callInitiated', { name: otherParticipant.name }),
         type: 'success',
       });
       setTimeout(() => setToast(null), 4000);
     } catch (error) {
       console.error('Erreur lors du lancement de l\'appel:', error);
-      setToast({ message: "Impossible de lancer l'appel", type: 'error' });
+      setToast({ message: t('common.callLaunchError'), type: 'error' });
       setTimeout(() => setToast(null), 4000);
     } finally {
       setInitiatingCall(false);
@@ -231,11 +251,11 @@ export function ChatModal(props: ChatModalProps) {
   };
 
   const headerName = otherParticipant?.name
-    || (otherParticipant ? getRoleLabel(otherParticipant.role) : 'Conversation');
+    || (otherParticipant ? getLocalizedRoleLabel(otherParticipant.role) : t('common.chatConversation'));
 
   const headerSub = otherParticipant
-    ? `Chat avec ${getRoleLabel(otherParticipant.role)}`
-    : 'Conversation active';
+    ? t('common.chatWith', { role: getLocalizedRoleLabel(otherParticipant.role) })
+    : t('common.chatActive');
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-end sm:items-center sm:justify-center">
@@ -268,7 +288,7 @@ export function ChatModal(props: ChatModalProps) {
                   ? 'opacity-50 cursor-not-allowed bg-white/10 text-slate-400'
                   : 'bg-primary/15 border border-primary/30 hover:bg-primary/25 text-primary'
               }`}
-              aria-label="Appeler"
+              aria-label={t('common.callUser')}
             >
               {initiatingCall ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -292,8 +312,8 @@ export function ChatModal(props: ChatModalProps) {
           )}
           {!resolutionError && messages.length === 0 && (
             <div className="text-center text-slate-500 mt-8">
-              <p className="text-sm">Aucun message pour le moment</p>
-              <p className="text-xs mt-2">Envoyez un message pour démarrer la conversation</p>
+              <p className="text-sm">{t('common.noMessagesYet')}</p>
+              <p className="text-xs mt-2">{t('common.sendMessageToStart')}</p>
             </div>
           )}
 
@@ -341,10 +361,10 @@ export function ChatModal(props: ChatModalProps) {
                       isOwnMessage ? 'text-white/70' : 'text-slate-500'
                     }`}
                   >
-                    {message.createdAt?.toDate?.()?.toLocaleTimeString('fr-FR', {
+                    {message.createdAt?.toDate?.()?.toLocaleTimeString(locale === 'en' ? 'en-US' : 'fr-FR', {
                       hour: '2-digit',
                       minute: '2-digit',
-                    }) || 'Envoi...'}
+                    }) || t('common.sendingMessage')}
                     {isOwnMessage && (
                       <span className="ml-1 inline-flex items-center">
                         {message.read ? (
@@ -372,7 +392,7 @@ export function ChatModal(props: ChatModalProps) {
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !sending && handleSendMessage()}
-              placeholder="Écrivez votre message..."
+              placeholder={t('common.writeMessagePlaceholder')}
               className="glass-input flex-1 px-4 py-3 rounded-full text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary outline-none"
               disabled={sending || !conversationId}
             />

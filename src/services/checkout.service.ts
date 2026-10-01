@@ -1,3 +1,4 @@
+import { translate } from '@/locales';
 import type {
   CustomerMenuCustomizationPayload,
   CustomerMenuItemDetails,
@@ -76,7 +77,7 @@ export function validateCustomerMenuCustomization(
   const itemId = details.itemId;
 
   if (payload.itemId !== itemId) {
-    errors.push(createError(itemId, 'item_mismatch', 'La configuration du plat n’est plus valide.'));
+    errors.push(createError(itemId, 'item_mismatch', translate('serviceMessages.checkout.itemConfigInvalid')));
   }
 
   const groupsById = new Map(details.modifierGroups.map((group) => [group.id, group]));
@@ -85,14 +86,14 @@ export function validateCustomerMenuCustomization(
   for (const selection of payload.modifierSelections) {
     const group = groupsById.get(selection.groupId);
     if (!group) {
-      errors.push(createError(itemId, 'unknown_modifier_group', 'Une option de personnalisation est invalide.', {
+      errors.push(createError(itemId, 'unknown_modifier_group', translate('serviceMessages.checkout.invalidCustomizationOption'), {
         groupId: selection.groupId,
       }));
       continue;
     }
 
     if (selectedGroupIds.has(selection.groupId)) {
-      errors.push(createError(itemId, 'modifier_selection_limit', `Le groupe ${group.label} ne peut être sélectionné qu’une seule fois.`, {
+      errors.push(createError(itemId, 'modifier_selection_limit', translate('serviceMessages.checkout.modifierGroupSingleSelection', { group: group.label }), {
         groupId: group.id,
       }));
       continue;
@@ -101,12 +102,12 @@ export function validateCustomerMenuCustomization(
 
     const selectedOptionIds = new Set(selection.optionIds);
     if (selectedOptionIds.size !== selection.optionIds.length) {
-      errors.push(createError(itemId, 'duplicate_modifier_option', `Une option ne peut pas être sélectionnée plusieurs fois pour ${group.label}.`, {
+      errors.push(createError(itemId, 'duplicate_modifier_option', translate('serviceMessages.checkout.duplicateModifierOption', { group: group.label }), {
         groupId: group.id,
       }));
     }
     if (group.selectionType === 'single' && selection.optionIds.length > 1) {
-      errors.push(createError(itemId, 'single_selection_limit', `Choisissez une seule option pour ${group.label}.`, {
+      errors.push(createError(itemId, 'single_selection_limit', translate('serviceMessages.checkout.singleOptionOnly', { group: group.label }), {
         groupId: group.id,
       }));
     }
@@ -115,7 +116,7 @@ export function validateCustomerMenuCustomization(
       ? 1
       : group.maxSelections > 0 ? group.maxSelections : Number.POSITIVE_INFINITY;
     if (selection.optionIds.length > maxSelections) {
-      errors.push(createError(itemId, 'modifier_selection_limit', `Trop d’options sélectionnées pour ${group.label}.`, {
+      errors.push(createError(itemId, 'modifier_selection_limit', translate('serviceMessages.checkout.tooManyOptions', { group: group.label }), {
         groupId: group.id,
       }));
     }
@@ -123,12 +124,12 @@ export function validateCustomerMenuCustomization(
     for (const optionId of selectedOptionIds) {
       const option = group.options.find((candidate) => candidate.id === optionId);
       if (!option) {
-        errors.push(createError(itemId, 'unknown_modifier_option', 'Une option de personnalisation est introuvable.', {
+        errors.push(createError(itemId, 'unknown_modifier_option', translate('serviceMessages.checkout.customizationOptionNotFound'), {
           groupId: group.id,
           optionId,
         }));
       } else if (!option.isAvailable) {
-        errors.push(createError(itemId, 'unavailable_modifier_option', `L’option ${option.label} n’est plus disponible.`, {
+        errors.push(createError(itemId, 'unavailable_modifier_option', translate('serviceMessages.checkout.optionUnavailable', { label: option.label }), {
           groupId: group.id,
           optionId,
         }));
@@ -141,7 +142,7 @@ export function validateCustomerMenuCustomization(
     const count = selection?.optionIds.length ?? 0;
     const minimum = group.required ? Math.max(group.minSelections, 1) : Math.max(group.minSelections, 0);
     if (count < minimum) {
-      errors.push(createError(itemId, 'required_modifier_group', `Sélectionnez au moins ${minimum} option pour ${group.label}.`, {
+      errors.push(createError(itemId, 'required_modifier_group', translate('serviceMessages.checkout.requiredModifierGroup', { minimum, group: group.label }), {
         groupId: group.id,
       }));
     }
@@ -151,15 +152,15 @@ export function validateCustomerMenuCustomization(
   for (const supplementId of new Set(payload.supplementIds)) {
     const supplement = supplementsById.get(supplementId);
     if (!supplement) {
-      errors.push(createError(itemId, 'unknown_supplement', 'Un supplément sélectionné est introuvable.', { supplementId }));
+      errors.push(createError(itemId, 'unknown_supplement', translate('serviceMessages.checkout.unknownSupplement'), { supplementId }));
     } else if (!supplement.isAvailable) {
-      errors.push(createError(itemId, 'unavailable_supplement', `Le supplément ${supplement.label} n’est plus disponible.`, { supplementId }));
+      errors.push(createError(itemId, 'unavailable_supplement', translate('serviceMessages.checkout.unavailableSupplement', { label: supplement.label }), { supplementId }));
     }
   }
 
   const maxQuantity = details.checkoutRules.maxQuantity;
   if (!Number.isInteger(payload.quantity) || payload.quantity < 1 || (maxQuantity !== undefined && payload.quantity > maxQuantity)) {
-    errors.push(createError(itemId, 'quantity_limit', 'La quantité sélectionnée n’est pas valide.'));
+    errors.push(createError(itemId, 'quantity_limit', translate('serviceMessages.checkout.invalidQuantity')));
   }
 
   return { valid: errors.length === 0, errors };
@@ -176,10 +177,10 @@ export function validateCartForCheckout(
     const details = detailsByItemId.get(itemId);
     if (!details) {
       if (item.customization) {
-        errors.push(createError(itemId, 'item_mismatch', 'Les détails de personnalisation de ce plat sont indisponibles.'));
+        errors.push(createError(itemId, 'item_mismatch', translate('serviceMessages.checkout.customizationUnavailable')));
       }
       if (!Number.isInteger(item.quantity) || item.quantity < 1) {
-        errors.push(createError(itemId, 'quantity_limit', 'La quantité sélectionnée n’est pas valide.'));
+        errors.push(createError(itemId, 'quantity_limit', translate('serviceMessages.checkout.invalidQuantity')));
       }
       continue;
     }

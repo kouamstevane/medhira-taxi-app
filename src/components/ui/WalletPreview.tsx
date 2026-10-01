@@ -12,6 +12,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { Wallet } from '@/types';
@@ -35,6 +36,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
   position = 'top-right',
 }) => {
   const router = useRouter();
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -149,7 +151,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
           {/* Solde */}
           <div className="text-left">
             <p className="text-xs text-[#9CA3AF] font-medium">
-              Mon solde
+              {t('common.myBalance')}
             </p>
             <p className="text-lg font-bold text-white">
               {formatAmount(wallet?.balance || 0)}{' '}
@@ -179,7 +181,7 @@ export const WalletPreview: React.FC<WalletPreviewProps> = ({
         {/* Badge "Recharger" si solde faible (inférieur à LOW_BALANCE_THRESHOLD) */}
         {(wallet?.balance || 0) < LIMITS.LOW_BALANCE_THRESHOLD && (
           <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full animate-pulse">
-            Recharger
+            {t('common.topUp')}
           </div>
         )}
       </button>

@@ -9,6 +9,7 @@
 
 import { env } from './env';
 import { logger } from '@/utils/logger';
+import { translate } from '@/locales';
 
 /**
  * Configuration de base pour les requêtes API
@@ -113,7 +114,7 @@ class APIClient {
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Request timeout', { endpoint });
-        throw new Error('La requête a expiré');
+        throw new Error(translate('systemMessages.api.requestTimeout'));
       }
       throw error;
     } finally {
@@ -143,7 +144,7 @@ class APIClient {
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Request timeout', { endpoint });
-        throw new Error('La requête a expiré');
+        throw new Error(translate('systemMessages.api.requestTimeout'));
       }
       throw error;
     } finally {
@@ -173,7 +174,7 @@ class APIClient {
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Request timeout', { endpoint });
-        throw new Error('La requête a expiré');
+        throw new Error(translate('systemMessages.api.requestTimeout'));
       }
       throw error;
     } finally {
@@ -202,7 +203,7 @@ class APIClient {
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'AbortError') {
         logger.error('Request timeout', { endpoint });
-        throw new Error('La requête a expiré');
+        throw new Error(translate('systemMessages.api.requestTimeout'));
       }
       throw error;
     } finally {

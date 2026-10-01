@@ -64,4 +64,26 @@ export const wallet: DeepString<typeof WalletFr> = {
   minAmountNotice: 'Minimum amount is {min} {currency}',
   mustBeLoggedIn: 'You must be logged in to top up',
   pendingProcessing: 'Top-up is processing. Your balance will update in a few moments.',
-};
+
+  // Stripe payment element
+  amountToPay: 'Amount to pay',
+  confirmPayment: 'Confirm payment',
+  securedByStripe: 'Secure payment by Stripe · PCI DSS Level 1',
+  paymentError: 'Payment error',
+  authFailed: 'Authentication failed',
+  paymentFailedAfterAuth: 'Payment not completed after authentication',
+  paymentProcessing: 'Payment is being processed',
+  paymentFailed: 'Payment failed',
+  clientSecretMissing: 'Internal error: client_secret missing',
+  loadError: 'Unable to load your wallet data. Please check your internet connection and try again.',
+  tapToOpenPaymentSheet: 'Tap the button below to open the secure payment sheet.',
+  threeDSecureIncluded: 'Stripe PaymentSheet · 3D Secure included',
+  cardSetupTitle: 'Card setup',
+  cardSetupSubtitle: 'Stripe PaymentSheet · Secure storage',
+  tapToOpenCardSetup: 'Tap the button below to add a payment card.',
+  verifying: 'Verifying…',
+  insufficientForFare: '— Insufficient for {fare}',
+
+  // Notifications
+  paymentReceivedToast: 'Payment of {amount} {currency} received!',
+} as const;

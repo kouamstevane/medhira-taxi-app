@@ -4,9 +4,11 @@ import React, { useEffect } from 'react';
 import Image from 'next/image';
 import { useVoipCall } from '@/hooks/useVoipCall';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 export function IncomingCallOverlay() {
+  const { t } = useTranslation();
   const { callState, acceptCall, declineCall } = useVoipCall();
 
   // Gérer la vibration et la sonnerie
@@ -53,9 +55,9 @@ export function IncomingCallOverlay() {
         </div>
         
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-white mb-2">{caller?.name || 'Inconnu'}</h2>
+          <h2 className="text-3xl font-bold text-white mb-2">{caller?.name || t('common.unknown')}</h2>
           <p className="text-blue-400 font-medium tracking-widest uppercase text-sm animate-pulse">
-            Appel vocal entrant...
+            {t('common.incomingVoiceCall')}
           </p>
         </div>
       </div>
@@ -64,6 +66,7 @@ export function IncomingCallOverlay() {
         {/* Bouton Refuser */}
         <button
           onClick={declineCall}
+          aria-label={t('common.callDecline')}
           className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform"
         >
           <MaterialIcon name="call_end" className="text-[36px]" />
@@ -72,6 +75,7 @@ export function IncomingCallOverlay() {
         {/* Bouton Accepter */}
         <button
           onClick={acceptCall}
+          aria-label={t('common.callAccept')}
           className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform animate-bounce"
         >
           <MaterialIcon name="call" className="text-[36px]" />

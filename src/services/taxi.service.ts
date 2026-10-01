@@ -9,6 +9,7 @@
 
 // [CODE-01] Residual eslint-disable comment removed — typedServerTimestamp() helper used instead of serverTimestamp() as Timestamp
 import { logger } from '@/utils/logger';
+import { translate } from '@/locales';
 import {
   collection,
   doc,
@@ -183,7 +184,7 @@ export const cancelBooking = async (bookingId: string, reason?: string, extraFie
       const bookingSnap = await tx.get(bookingRef);
 
       if (!bookingSnap.exists()) {
-        throw new Error('Réservation introuvable');
+        throw new Error(translate('serviceMessages.taxi.bookingNotFound'));
       }
 
       const booking = bookingSnap.data() as Booking;
@@ -309,7 +310,7 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
     resolveDefaultCarType(normalizedType);
 
   if (!carType) {
-    throw new Error(`Type de véhicule "${type}" introuvable`);
+    throw new Error(translate('serviceMessages.taxi.vehicleTypeNotFound', { type }));
   }
 
   // Calculer la distance et la durée
@@ -319,7 +320,7 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
   if (typeof from === 'string' && typeof to === 'string') {
     // Utiliser Google Directions API pour calculer distance et durée
     if (typeof window === 'undefined' || !window.google || !window.google.maps) {
-      throw new Error('Google Maps API non chargée');
+      throw new Error(translate('serviceMessages.taxi.mapsApiNotLoaded'));
     }
 
     try {
@@ -333,12 +334,12 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
       } catch (err) {
         if (err instanceof DirectionsError) {
           if (err.code === 'ZERO_RESULTS') {
-            throw new Error('Aucun itinéraire trouvé entre ces deux points. Vérifiez les adresses.');
+            throw new Error(translate('serviceMessages.taxi.noRouteBetweenPoints'));
           }
           if (err.code === 'NOT_FOUND') {
-            throw new Error("Une ou plusieurs adresses n'ont pas pu être trouvées. Vérifiez les adresses saisies.");
+            throw new Error(translate('serviceMessages.taxi.addressesNotFound'));
           }
-          throw new Error(`Erreur calcul itinéraire: ${err.code}. Vérifiez que l'API Directions est activée.`);
+          throw new Error(translate('serviceMessages.taxi.routeCalculationError', { code: err.code }));
         }
         throw err;
       }
@@ -347,14 +348,14 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
       const leg = route.legs[0];
 
       if (!leg || !leg.distance || !leg.duration) {
-        throw new Error('Impossible de calculer la distance et la durée');
+        throw new Error(translate('serviceMessages.taxi.distanceDurationFailed'));
       }
 
       distance = leg.distance.value / 1000; // Convertir en km
       duration = Math.ceil(leg.duration.value / 60); // Convertir en minutes
     } catch (directionsError: unknown) {
       // Si Directions API échoue, essayer avec Geocoding pour obtenir les coordonnées
-      const errorMessage = directionsError instanceof Error ? directionsError.message : 'Erreur inconnue';
+      const errorMessage = directionsError instanceof Error ? directionsError.message : translate('serviceMessages.taxi.unknownError');
       logger.warn('Directions API échoué, tentative avec Geocoding', { error: errorMessage });
 
       try {
@@ -367,7 +368,7 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
               if (status === 'OK' && results && results.length > 0) {
                 resolve(results[0]);
               } else {
-                reject(new Error(`Impossible de géocoder le point de départ: ${status}`));
+                reject(new Error(translate('serviceMessages.taxi.geocodeOriginFailed', { status })));
               }
             });
           }),
@@ -376,7 +377,7 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
               if (status === 'OK' && results && results.length > 0) {
                 resolve(results[0]);
               } else {
-                reject(new Error(`Impossible de géocoder la destination: ${status}`));
+                reject(new Error(translate('serviceMessages.taxi.geocodeDestinationFailed', { status })));
               }
             });
           }),
@@ -401,8 +402,8 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
         console.log("Le Geocoding de secours a aussi échoué", { error: geoErrorMessage });
 
         // Si tout échoue, relancer l'erreur originale
-        const directionsErrorMessage = directionsError instanceof Error ? directionsError.message : 'Erreur inconnue';
-        throw new Error(`Impossible de calculer l'itinéraire: ${directionsErrorMessage}. Vérifiez que les adresses sont correctes et que l'API Directions est activée.`);
+        const directionsErrorMessage = directionsError instanceof Error ? directionsError.message : translate('serviceMessages.taxi.unknownError');
+        throw new Error(translate('serviceMessages.taxi.routeFailed', { details: directionsErrorMessage }));
       }
     }
   } else if (typeof from === 'object' && typeof to === 'object') {
@@ -411,7 +412,7 @@ export const estimateFare = async (params: EstimateFareParams): Promise<FareEsti
     // Estimation de durée basée sur la distance (vitesse moyenne 40 km/h)
     duration = Math.ceil((distance / 40) * 60);
   } else {
-    throw new Error('Format de départ ou destination invalide');
+    throw new Error(translate('serviceMessages.taxi.invalidOriginOrDestination'));
   }
 
   // Calculer le prix
@@ -508,7 +509,7 @@ export const updateDestination = async (
   const bookingRef = doc(db, 'bookings', bookingId);
   const bookingSnap = await getDoc(bookingRef);
 
-  if (!bookingSnap.exists()) throw new Error('Réservation introuvable');
+  if (!bookingSnap.exists()) throw new Error(translate('serviceMessages.taxi.bookingNotFound'));
   
   const booking = bookingSnap.data() as Booking;
   
@@ -555,7 +556,7 @@ export const calculateFinalFare = async (bookingId: string): Promise<number> => 
   const bookingRef = doc(db, 'bookings', bookingId);
   const bookingSnap = await getDoc(bookingRef);
 
-  if (!bookingSnap.exists()) throw new Error('Réservation introuvable');
+  if (!bookingSnap.exists()) throw new Error(translate('serviceMessages.taxi.bookingNotFound'));
   const booking = bookingSnap.data() as Booking;
 
   // Calculer la durée réelle depuis le début de la course
@@ -596,7 +597,7 @@ export const markDriverArrived = async (bookingId: string): Promise<void> => {
   // Envoyer une notification au client via le chat système
   try {
     const { sendSystemMessage } = await import('@/services/chat.service');
-    await sendSystemMessage(bookingId, '🚗 Votre chauffeur est arrivé au point de rendez-vous !');
+    await sendSystemMessage(bookingId, translate('serviceMessages.taxi.driverArrivedChat'));
   } catch (error) {
     logger.error('Erreur envoi message système', { error, bookingId });
   }
@@ -614,7 +615,7 @@ export const startTrip = async (bookingId: string): Promise<void> => {
   // Notification système
   try {
     const { sendSystemMessage } = await import('@/services/chat.service');
-    await sendSystemMessage(bookingId, ' Course démarrée ! Bon trajet !');
+    await sendSystemMessage(bookingId, translate('serviceMessages.taxi.tripStartedChat'));
   } catch (error) {
     logger.error('Erreur envoi message système', { error, bookingId });
   }
@@ -647,7 +648,7 @@ export const completeTrip = async (bookingId: string): Promise<void> => {
     if (err instanceof Error && 'code' in err && callableError?.data?.paymentFailed) {
       result = callableError.data;
     } else {
-      throw new Error(err instanceof Error ? err.message : 'Échec de la complétion de la course');
+      throw new Error(err instanceof Error ? err.message : translate('serviceMessages.taxi.rideCompletionFailed'));
     }
   }
 
@@ -656,9 +657,17 @@ export const completeTrip = async (bookingId: string): Promise<void> => {
 
   try {
     const { sendSystemMessage } = await import('@/services/chat.service');
+    const total = `${finalPrice.toFixed(2)} ${CURRENCY_CODE}`;
     const invoice = carType
-      ? `🏁 Course terminée !\n\n📋 Facture détaillée :\n• Tarif de base : ${carType.basePrice} ${CURRENCY_CODE}\n• Distance (${booking.distance.toFixed(2)} km) : ${(booking.distance * carType.pricePerKm).toFixed(2)} ${CURRENCY_CODE}\n• Durée (${durationMinutes} min) : ${(durationMinutes * carType.pricePerMinute).toFixed(2)} ${CURRENCY_CODE}\n\n💰 Total : ${finalPrice.toFixed(2)} ${CURRENCY_CODE}\n\nMerci pour votre confiance ! 🙏`
-      : `🏁 Course terminée !\n\n💰 Total : ${finalPrice.toFixed(2)} ${CURRENCY_CODE}\n\nMerci pour votre confiance ! 🙏`;
+      ? translate('serviceMessages.taxi.completedDetailedChat', {
+          basePrice: `${carType.basePrice} ${CURRENCY_CODE}`,
+          km: booking.distance.toFixed(2),
+          distancePrice: `${(booking.distance * carType.pricePerKm).toFixed(2)} ${CURRENCY_CODE}`,
+          min: durationMinutes,
+          durationPrice: `${(durationMinutes * carType.pricePerMinute).toFixed(2)} ${CURRENCY_CODE}`,
+          total,
+        })
+      : translate('serviceMessages.taxi.completedSimpleChat', { total });
     await sendSystemMessage(bookingId, invoice);
   } catch (error) {
     logger.error('Erreur envoi facture', { error, bookingId });

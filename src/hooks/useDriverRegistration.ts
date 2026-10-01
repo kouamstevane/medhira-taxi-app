@@ -16,6 +16,8 @@ import { redirectWithFallback } from '@/utils/navigation';
 import { useConnectivityMonitor, checkConnectivity } from '@/hooks/useConnectivityMonitor';
 import { buildDriverApplicationPublicData, getDriverApplicationEmail } from '@/hooks/driverRegistrationPayload';
 import { getDriverSubmissionErrorMessage } from '@/hooks/driverRegistrationErrors';
+import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import type { Step1FormData } from '@/app/driver/register/components/Step1Intent';
 import type { Step2FormData } from '@/app/driver/register/components/Step2Identity';
 import type { Step3FormData } from '@/app/driver/register/components/Step3Vehicle';
@@ -33,6 +35,7 @@ interface RegistrationProgress {
 
 export function useDriverRegistration() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -234,7 +237,7 @@ export function useDriverRegistration() {
             const data = driverDoc.data();
             if (data.status === 'action_required' || data.status === 'rejected') {
               setRejectionCode(data.rejectionCode || 'R000');
-              setRejectionReason(data.rejectionReason || data.rejectionMessage || 'Votre dossier nécessite une action.');
+              setRejectionReason(data.rejectionReason || data.rejectionMessage || t('driver.submissionActionRequired'));
               let privateData: Record<string, unknown> = {};
               try {
                 const privateDoc = await getDoc(doc(db, 'drivers', user.uid, 'private', 'personal'));
@@ -303,7 +306,7 @@ export function useDriverRegistration() {
     return retryWithBackoff(
       async () => {
         const user = auth.currentUser;
-        if (!user || user.uid !== userId) throw new Error('Utilisateur non authentifié');
+        if (!user || user.uid !== userId) throw new Error(translate('systemMessages.registration.userNotAuthenticated'));
         const ext = file.name.split('.').pop() || 'tmp';
         const folder = isDraft ? `drivers/${userId}/drafts/${fileCategory}` : `drivers/${userId}/${fileCategory}`;
         const storageRef = ref(getFirebaseStorage(), `${folder}/${Date.now()}.${ext}`);
@@ -343,9 +346,9 @@ export function useDriverRegistration() {
       const code = (err as { code?: string })?.code;
       if (code === 'auth/unauthorized-domain') {
         console.error("[Auth] Domaine non autorisé dans Firebase Auth (auth/unauthorized-domain). Ajoutez ce domaine dans Firebase Console > Authentication > Paramètres > Domaines autorisés.");
-        setError("Connexion temporairement indisponible. Veuillez réessayer plus tard ou contacter le support.");
+        setError(t('driver.connectionUnavailableSupport'));
       } else {
-        setError('Erreur : ' + (err as Error).message);
+        setError(`${t('common.error')} : ${(err as Error).message}`);
       }
     } finally {
       setLoading(false);
@@ -367,7 +370,7 @@ export function useDriverRegistration() {
       setStep1Data(data);
       const sendResult = await handleSendVerificationCode(data.email);
       if (!sendResult.success) {
-        throw new Error(sendResult.error ?? 'Erreur lors de l\'envoi du code de vérification.');
+        throw new Error(sendResult.error ?? translate('systemMessages.registration.verificationCodeSendError'));
       }
     } catch (err: unknown) {
       if (newlyCreatedUser) {
@@ -379,11 +382,11 @@ export function useDriverRegistration() {
       }
       const error = err as { code?: string; message?: string };
       if (error?.code === 'auth/email-already-in-use' || error?.message === 'EMAIL_ALREADY_IN_USE') {
-        setError('Un compte avec cet email existe déjà. Si vous avez commencé une inscription, connectez-vous pour reprendre votre dossier.');
+        setError(t('driver.accountAlreadyExistsLogin'));
       } else if (error?.code === 'auth/weak-password') {
-        setError('Le mot de passe est trop faible. Utilisez au moins 6 caractères.');
+        setError(t('driver.passwordTooWeakMin6'));
       } else {
-        setError(error?.message || 'Erreur inconnue');
+        setError(error?.message || t('common.errorOccurred'));
       }
       throw err;
     } finally {
@@ -396,12 +399,12 @@ export function useDriverRegistration() {
     setError(null);
     try {
       const user = auth.currentUser;
-      if (!user?.uid) throw new Error('Utilisateur non connecté');
+      if (!user?.uid) throw new Error(translate('systemMessages.registration.userNotSignedIn'));
       setStep2Data(data);
       setBiometricsPhoto(photo);
       setCurrentStep(3);
     } catch (err: unknown) {
-      setError('Erreur : ' + (err as Error).message);
+      setError(`${t('common.error')} : ${(err as Error).message}`);
     } finally {
       setLoading(false);
     }
@@ -434,7 +437,7 @@ export function useDriverRegistration() {
     setError(null);
 
     if (!checkConnectivity()) {
-      setError("Vous n'êtes pas connecté à internet.");
+      setError(t('common.networkErrorMessage'));
       setLoading(false);
       isSubmittingRef.current = false;
       setIsSubmitting(false);
@@ -444,7 +447,7 @@ export function useDriverRegistration() {
     const user = auth.currentUser;
     const userId = user?.uid;
     if (!userId || !user) {
-      setError('Vous devez être connecté pour soumettre votre dossier.');
+      setError(t('driver.mustBeLoggedInToSubmit'));
       setLoading(false);
       isSubmittingRef.current = false;
       setIsSubmitting(false);
@@ -493,7 +496,7 @@ export function useDriverRegistration() {
 
       const failedUploads = uploadResults.filter(r => r.status === 'rejected');
       if (failedUploads.length > 0) {
-        throw new Error("Erreur lors de l'upload de certains fichiers. Veuillez réessayer.");
+        throw new Error(translate('systemMessages.registration.someFilesUploadError'));
       }
 
       const getValue = (r: PromiseSettledResult<string | null>) =>
@@ -574,7 +577,7 @@ export function useDriverRegistration() {
       }
 
       const error = err as { code?: string; message?: string };
-      setError(getDriverSubmissionErrorMessage(error));
+      setError(getDriverSubmissionErrorMessage(error, t));
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
@@ -609,7 +612,7 @@ export function useDriverRegistration() {
     }
     try {
       const user = auth.currentUser;
-      if (!user) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+      if (!user) return { success: false, error: t('auth.sessionExpired') };
 
       await user.getIdToken(true);
       const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
@@ -621,18 +624,18 @@ export function useDriverRegistration() {
       const data = result.data;
 
       if (!data.success) {
-        return { success: false, error: data.error ?? 'Erreur lors de l\'envoi du code.' };
+        return { success: false, error: data.error ?? translate('systemMessages.registration.codeSendError') };
       }
       return { success: true };
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       if (error.code === 'functions/unauthenticated') {
-        return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+        return { success: false, error: t('auth.sessionExpired') };
       }
       if (error.code === 'functions/resource-exhausted') {
-        return { success: false, error: 'Trop de tentatives. Réessayez dans quelques secondes.' };
+        return { success: false, error: t('auth.tooManyAttempts') };
       }
-      return { success: false, error: error.message || 'Erreur réseau. Réessayez.' };
+      return { success: false, error: error.message || translate('systemMessages.registration.networkError') };
     }
   };
 
@@ -642,7 +645,7 @@ export function useDriverRegistration() {
     }
     try {
       const user = auth.currentUser;
-      if (!user) return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+      if (!user) return { success: false, error: t('auth.sessionExpired') };
 
       await user.getIdToken(true);
       const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
@@ -670,9 +673,9 @@ export function useDriverRegistration() {
     } catch (err: unknown) {
       const error = err as { code?: string; message?: string };
       if (error.code === 'functions/unauthenticated') {
-        return { success: false, error: 'Session expirée. Reconnectez-vous.' };
+        return { success: false, error: t('auth.sessionExpired') };
       }
-      return { success: false, error: error.message || 'Erreur réseau. Réessayez.' };
+      return { success: false, error: error.message || translate('systemMessages.registration.networkError') };
     }
   };
 

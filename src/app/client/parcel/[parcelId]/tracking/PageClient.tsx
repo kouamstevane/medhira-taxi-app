@@ -237,7 +237,7 @@ export default function ClientParcelTrackingPage() {
           <div className="glass-card rounded-2xl p-5 border border-white/5 space-y-2">
             <h2 className="text-sm font-bold text-white uppercase tracking-wide mb-2">{t('common.details')}</h2>
             <div className="flex justify-between text-sm">
-              <span className="text-slate-400">Description</span>
+              <span className="text-slate-400">{t('screens.parcelTracking.description')}</span>
               <span className="text-white text-right max-w-[60%] truncate">{parcel.description}</span>
             </div>
             <div className="flex justify-between text-sm">

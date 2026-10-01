@@ -62,7 +62,7 @@ export default function DriverRegisterWizard() {
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">{t('driver.actionRequired')}</h2>
           <div className="mb-4 p-4 bg-white/5 rounded-xl border border-white/10">
-            <span className="font-mono text-xs text-destructive block mb-1">Code: {rejectionCode}</span>
+            <span className="font-mono text-xs text-destructive block mb-1">{t('screens.driverRegister.codeLabel')} {rejectionCode}</span>
             <p className="text-slate-400">{rejectionReason}</p>
           </div>
           <div className="space-y-3 mt-8">

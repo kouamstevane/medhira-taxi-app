@@ -37,6 +37,33 @@ export const DRIVER_DOCUMENT_CATALOG: DriverDocumentCatalogEntry[] = [
   { key: 'licenseBack', label: 'Permis de conduire (verso)' },
 ]
 
+
+export function getLocalizedDocumentLabel(
+  key: string,
+  t?: (key: string) => string,
+): string {
+  if (t) {
+    const docKeyMap: Record<string, string> = {
+      biometricPhoto: 'driver.docBiometricPhoto',
+      carRegistration: 'driver.docCarRegistration',
+      insurance: 'driver.docInsurance',
+      techControl: 'driver.docTechControl',
+      vehicleExterior: 'driver.docVehicleExterior',
+      workEligibility: 'driver.docWorkEligibility',
+      driversAbstract: 'driver.docDriversAbstract',
+      licenseFront: 'driver.docLicenseFront',
+      licenseBack: 'driver.docLicenseBack',
+    };
+    const transKey = docKeyMap[key];
+    if (transKey) {
+      const translated = t(transKey);
+      if (translated && translated !== transKey) return translated;
+    }
+  }
+  const entry = DRIVER_DOCUMENT_CATALOG.find((d) => d.key === key);
+  return entry?.label ?? key;
+}
+
 export const DRIVER_DOCUMENT_KEYS = DRIVER_DOCUMENT_CATALOG.map(
   ({ key }) => key,
 ) as DriverDocumentKey[]
@@ -115,13 +142,14 @@ export function migrateLegacyDriverDocuments(
 
 export function normalizeDriverDocuments(
   rawDocuments: Record<string, DocumentEntry | undefined> | undefined,
+  t?: (key: string) => string,
 ): DriverDocumentStatusEntry[] {
   return DRIVER_DOCUMENT_CATALOG.map(({ key, label }) => {
     const entry = rawDocuments?.[key]
 
     return {
       key,
-      label,
+      label: t ? getLocalizedDocumentLabel(key, t) : label,
       status: entry?.status ?? 'not_submitted',
       url: entry?.url ?? null,
       rejectionReason: entry?.rejectionReason,

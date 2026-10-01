@@ -3,6 +3,8 @@
  * @module utils/menu-image
  */
 
+import { translate } from '@/locales';
+
 export type MenuImageState =
   | 'image-none'
   | 'image-unchanged'
@@ -40,31 +42,30 @@ export function isKnownShareUrl(value: string): boolean {
  */
 export function validateMenuImageUrl(value: string): { valid: boolean; error?: string } {
   if (!value || typeof value !== 'string') {
-    return { valid: false, error: "L'URL est requise" };
+    return { valid: false, error: translate('systemMessages.menuImage.urlRequired') };
   }
 
   const trimmed = value.trim();
 
   if (trimmed.length > 2048) {
-    return { valid: false, error: "L'URL est trop longue (maximum 2048 caractères)" };
+    return { valid: false, error: translate('systemMessages.menuImage.urlTooLong') };
   }
 
   let parsedUrl: URL;
   try {
     parsedUrl = new URL(trimmed);
   } catch {
-    return { valid: false, error: 'Format d URL invalide' };
+    return { valid: false, error: translate('systemMessages.menuImage.urlInvalidFormat') };
   }
 
   if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
-    return { valid: false, error: 'L URL doit utiliser le protocole http ou https' };
+    return { valid: false, error: translate('systemMessages.menuImage.urlProtocol') };
   }
 
   if (isKnownShareUrl(trimmed)) {
     return {
       valid: false,
-      error:
-        'Les liens de partage (Google Photos, Drive, Dropbox, etc.) ne sont pas supportés. Utilisez un lien direct vers l image ou importez un fichier.',
+      error: translate('systemMessages.menuImage.shareLinkUnsupported'),
     };
   }
 
@@ -113,7 +114,7 @@ export function validateExternalImageLoad(
   return new Promise((resolve, reject) => {
     const signal = options?.signal;
     if (signal?.aborted) {
-      return reject(new Error('Validation d image annulée (aborted)'));
+      return reject(new Error(translate('systemMessages.menuImage.validationAborted')));
     }
 
     const timeoutMs = options?.timeoutMs ?? 5000;
@@ -138,7 +139,7 @@ export function validateExternalImageLoad(
 
     const onAbort = () => {
       cleanup();
-      reject(new Error('Validation d image annulée par le signal'));
+      reject(new Error(translate('systemMessages.menuImage.validationAbortedBySignal')));
     };
 
     if (signal) {
@@ -147,7 +148,7 @@ export function validateExternalImageLoad(
 
     timerId = setTimeout(() => {
       cleanup();
-      reject(new Error('Délai dépassé lors de la validation de l image (timeout)'));
+      reject(new Error(translate('systemMessages.menuImage.validationTimeout')));
     }, timeoutMs);
 
     // En environnement de test Node sans HTMLImageElement global complet, fallback basique ou Image mock
@@ -159,7 +160,7 @@ export function validateExternalImageLoad(
       };
       img.onerror = () => {
         cleanup();
-        reject(new Error("Impossible de charger l'image depuis cette URL"));
+        reject(new Error(translate('systemMessages.menuImage.loadFailed')));
       };
       img.src = url;
     } else {

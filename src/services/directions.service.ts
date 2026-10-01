@@ -11,6 +11,8 @@
  * Coordonnées arrondies à 4 décimales (~11 m) pour grouper les ticks proches.
  */
 
+import { translate } from '@/locales';
+
 export type Endpoint = string | google.maps.LatLngLiteral;
 
 interface DirectionsRequest {
@@ -58,7 +60,7 @@ function cacheKey(req: DirectionsRequest): string {
 
 function ensureMapsLoaded(): void {
     if (typeof window === 'undefined' || !window.google?.maps?.DirectionsService) {
-        throw new DirectionsError('API_NOT_LOADED', 'Google Maps API non chargée');
+        throw new DirectionsError('API_NOT_LOADED', translate('serviceMessages.directions.apiNotLoaded'));
     }
 }
 
@@ -126,7 +128,7 @@ export async function getDirections(
         })
         .then((result) => {
             if (!result.routes || result.routes.length === 0) {
-                throw new DirectionsError('ZERO_RESULTS', 'Aucun itinéraire trouvé');
+                throw new DirectionsError('ZERO_RESULTS', translate('serviceMessages.directions.noRouteFound'));
             }
             cache.set(key, { result, expiresAt: Date.now() + TTL_MS });
             return result;

@@ -2,6 +2,7 @@
 'use client';
 import React, { useRef, useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface OTPInputProps {
   email: string;
@@ -12,6 +13,7 @@ interface OTPInputProps {
 }
 
 export default function OTPInput({ email, onVerify, onResend, onSuccess, loading = false }: OTPInputProps) {
+  const { t } = useTranslation();
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
   const [error, setError] = useState<string | null>(null);
   const [attemptsLeft, setAttemptsLeft] = useState(3);
@@ -63,7 +65,7 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
   const handleVerify = async () => {
     const code = digits.join('');
     if (code.length !== 6) {
-      setError('Veuillez saisir les 6 chiffres du code.');
+      setError(t('auth.otpEnter6Digits'));
       return;
     }
     setVerifying(true);
@@ -73,7 +75,7 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
     if (result.success) {
       onSuccess?.();
     } else {
-      setError(result.error ?? 'Code incorrect.');
+      setError(result.error ?? t('auth.otpIncorrectCode'));
       if (result.attemptsLeft !== undefined) setAttemptsLeft(result.attemptsLeft);
       setDigits(['', '', '', '', '', '']);
       inputsRef.current[0]?.focus();
@@ -90,7 +92,7 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
       setDigits(['', '', '', '', '', '']);
       setAttemptsLeft(3);
     } else {
-      setError(result.error ?? 'Erreur lors du renvoi. Réessayez.');
+      setError(result.error ?? t('auth.otpResendError'));
     }
   };
 
@@ -100,7 +102,7 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
     <div className="space-y-6" data-testid="otp-input-container">
       <div className="text-center">
         <p className="text-[#9CA3AF] text-sm">
-          Un code a été envoyé à <span className="font-semibold text-white">{email}</span>
+          {t('auth.otpSentTo', { email })}
         </p>
       </div>
 
@@ -131,7 +133,9 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
         <div className="p-3 bg-[#EF4444]/10 border border-[#EF4444]/30 rounded-lg text-center" data-testid="otp-error">
           <p className="text-[#EF4444] text-sm">{error}</p>
           {attemptsLeft > 0 && attemptsLeft < 3 && (
-            <p className="text-[#EF4444]/60 text-xs mt-1" data-testid="otp-attempts-remaining">{attemptsLeft} tentative{attemptsLeft > 1 ? 's' : ''} restante{attemptsLeft > 1 ? 's' : ''}</p>
+            <p className="text-[#EF4444]/60 text-xs mt-1" data-testid="otp-attempts-remaining">
+              {t('auth.otpAttemptsRemaining', { count: attemptsLeft })}
+            </p>
           )}
         </div>
       )}
@@ -145,14 +149,16 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
         data-testid="otp-verify-btn"
       >
         {verifying ? <Loader2 className="animate-spin mr-2 h-5 w-5" /> : null}
-        Vérifier mon email
+        {t('auth.otpVerifyEmail')}
       </button>
 
       {/* Renvoyer le code */}
       <div className="text-center">
-        <p className="text-[#9CA3AF] text-sm">Vous n'avez rien reçu ?</p>
+        <p className="text-[#9CA3AF] text-sm">{t('auth.otpNotReceived')}</p>
         {countdown > 0 ? (
-          <p className="text-[#4B5563] text-sm mt-1" data-testid="otp-countdown">Renvoyer dans <span className="font-semibold text-[#f29200]">{countdown}s</span></p>
+          <p className="text-[#4B5563] text-sm mt-1" data-testid="otp-countdown">
+            {t('auth.otpResendIn', { seconds: countdown })}
+          </p>
         ) : (
           <button
             type="button"
@@ -161,7 +167,7 @@ export default function OTPInput({ email, onVerify, onResend, onSuccess, loading
             className="mt-1 text-[#f29200] font-semibold text-sm hover:underline disabled:opacity-50"
             data-testid="otp-resend-btn"
           >
-            {resendLoading ? 'Envoi...' : 'Renvoyer le code'}
+            {resendLoading ? t('auth.otpSending') : t('auth.otpResendCode')}
           </button>
         )}
       </div>

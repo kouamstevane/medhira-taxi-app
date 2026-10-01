@@ -6,7 +6,7 @@ import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { PERSONAL_DRIVER_PLAN_IDS } from '@/services/personal-driver/plans';
 import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
 import { useTranslation } from '@/hooks/useTranslation';
-import type { PersonalDriverPlan, PersonalDriverPlanId, PersonalDriverWeekday } from '@/types/personal-driver';
+import type { PersonalDriverPlanId, PersonalDriverWeekday } from '@/types/personal-driver';
 import { CURRENCY_CODE } from '@/utils/constants';
 import { PersonalDriverPlanCard } from './components/PersonalDriverPlanCard';
 

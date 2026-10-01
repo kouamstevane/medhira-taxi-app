@@ -223,7 +223,7 @@ export default function Step4Compliance({
             disabled={loading}
             className={cn(driverPrimaryButtonClassName, 'flex-[2]')}
           >
-            {loading ? <Loader2 className="animate-spin mr-2" /> : null} {t('common.next')}
+            {loading ? <Loader2 className="animate-spin mr-2" /> : null} {t('common.continue')}
           </button>
         </div>
       </form>

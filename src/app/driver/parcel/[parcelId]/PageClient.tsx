@@ -101,7 +101,7 @@ export default function DriverParcelPage() {
           <button
             onClick={() => router.replace('/driver/dashboard')}
             className="flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full glass-card text-white active:scale-95 transition-transform"
-            aria-label="Retour au tableau de bord"
+            aria-label={t('backToDashboard')}
           >
             <MaterialIcon name="arrow_back" size="md" />
           </button>

@@ -104,6 +104,16 @@ global.console = {
   error: jest.fn(),
 };
 
+// Mock de @capacitor/preferences pour les tests unitaires
+jest.mock('@capacitor/preferences', () => ({
+  Preferences: {
+    get: jest.fn().mockResolvedValue({ value: null }),
+    set: jest.fn().mockResolvedValue(undefined),
+    remove: jest.fn().mockResolvedValue(undefined),
+    clear: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
 
 
 

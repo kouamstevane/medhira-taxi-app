@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { getStripeAdapter, type PaymentResult } from '@/lib/stripe-adapters';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { toIntlCurrencyCode } from '@/utils/format';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface NativeStripePaymentProps {
   clientSecret: string;
@@ -20,8 +21,9 @@ export function NativeStripePayment({
   currency,
   onSuccess,
   onError,
-  submitLabel = 'Confirmer le paiement',
+  submitLabel,
 }: NativeStripePaymentProps) {
+  const { t, locale } = useTranslation();
   const [processing, setProcessing] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -32,12 +34,12 @@ export function NativeStripePayment({
         .then(() => setInitialized(true))
         .catch((err: unknown) => {
           console.error('[NativeStripePayment] Init failed:', err);
-          onError(err instanceof Error ? err.message : 'Erreur d\'initialisation Stripe');
+          onError(err instanceof Error ? err.message : t('wallet.paymentError'));
         });
     } else {
       setInitialized(true);
     }
-  }, [onError]);
+  }, [onError, t]);
 
   const handlePay = async () => {
     setProcessing(true);
@@ -52,17 +54,17 @@ export function NativeStripePayment({
       if (result.status === 'succeeded' || result.status === 'requires_capture') {
         onSuccess(result.paymentIntentId);
       } else {
-        onError('Paiement annulé');
+        onError(t('wallet.paymentFailed'));
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur de paiement';
+      const msg = err instanceof Error ? err.message : t('wallet.paymentError');
       onError(msg);
     } finally {
       setProcessing(false);
     }
   };
 
-  const formattedAmount = new Intl.NumberFormat('fr-CA', {
+  const formattedAmount = new Intl.NumberFormat(locale === 'en' ? 'en-CA' : 'fr-CA', {
     style: 'currency',
     currency: toIntlCurrencyCode(currency),
   }).format(amount);
@@ -70,7 +72,7 @@ export function NativeStripePayment({
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-        <span className="text-slate-400 text-sm">Montant à payer</span>
+        <span className="text-slate-400 text-sm">{t('wallet.amountToPay')}</span>
         <span className="text-white font-bold text-lg">{formattedAmount}</span>
       </div>
 
@@ -80,12 +82,12 @@ export function NativeStripePayment({
             <MaterialIcon name="lock" size="md" className="text-primary" />
           </div>
           <div>
-            <p className="text-white font-medium text-sm">Paiement sécurisé</p>
-            <p className="text-slate-500 text-xs">Stripe PaymentSheet · 3D Secure inclus</p>
+            <p className="text-white font-medium text-sm">{t('common.securePayment')}</p>
+            <p className="text-slate-500 text-xs">{t('wallet.threeDSecureIncluded')}</p>
           </div>
         </div>
         <p className="text-slate-400 text-sm text-center">
-          Appuyez sur le bouton ci-dessous pour ouvrir le formulaire de paiement sécurisé.
+          {t('wallet.tapToOpenPaymentSheet')}
         </p>
       </div>
 
@@ -101,19 +103,19 @@ export function NativeStripePayment({
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            Traitement…
+            {t('wallet.processing')}
           </>
         ) : (
           <>
             <MaterialIcon name="lock" size="md" />
-            {submitLabel}
+            {submitLabel || t('wallet.confirmPayment')}
           </>
         )}
       </button>
 
       <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
         <MaterialIcon name="verified_user" size="sm" />
-        <span>Paiement sécurisé par Stripe · PCI DSS Niveau 1</span>
+        <span>{t('wallet.securedByStripe')}</span>
       </div>
     </div>
   );

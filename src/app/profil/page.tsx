@@ -295,7 +295,7 @@ function ProfilPageContent() {
       showSuccess(t('profile.profileUpdated'));
     } catch (err) {
       logFirestoreError(err, 'mise à jour du profil client');
-      const errorMessage = getFirestoreErrorMessage(err, 'mise à jour de votre profil');
+      const errorMessage = getFirestoreErrorMessage(err, 'errors.context.profileUpdate');
       setError(errorMessage);
     } finally {
       setLoading(false);

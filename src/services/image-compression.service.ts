@@ -12,6 +12,7 @@ import {
   MENU_IMAGE_MAX_PIXELS,
   MENU_IMAGE_MAX_OUTPUT_DIMENSION,
 } from '../utils/menu-image';
+import { translate } from '@/locales';
 
 export interface CompressionOptions {
   maxWidth?: number;
@@ -67,18 +68,18 @@ class ImageCompressionService {
     return new Promise((resolve, reject) => {
       // 1. Vérification du signal AbortSignal avant tout traitement
       if (opts.signal?.aborted) {
-        return reject(new Error('Compression d image annulée (aborted)'));
+        return reject(new Error(translate('serviceMessages.imageCompression.aborted')));
       }
 
       // 2. Validation du type MIME
       if (!file.type.startsWith('image/')) {
-        return reject(new Error("Le fichier n'est pas une image"));
+        return reject(new Error(translate('serviceMessages.imageCompression.notAnImage')));
       }
 
       // 3. Validation de la taille du fichier d'entrée (10 Mo max)
       if (file.size > MENU_IMAGE_MAX_INPUT_BYTES) {
         return reject(
-          new Error("Le fichier dépasse la taille maximale autorisée de 10 Mo")
+          new Error(translate('serviceMessages.imageCompression.fileTooLarge'))
         );
       }
 
@@ -119,7 +120,7 @@ class ImageCompressionService {
       };
 
       const onAbort = () => {
-        safeReject(new Error('Compression d image annulée (aborted)'));
+        safeReject(new Error(translate('serviceMessages.imageCompression.aborted')));
       };
 
       if (opts.signal) {
@@ -128,14 +129,14 @@ class ImageCompressionService {
 
       // Timeout de sécurité global
       timerId = setTimeout(() => {
-        safeReject(new Error('Timeout lors de la compression de l image'));
+        safeReject(new Error(translate('serviceMessages.imageCompression.timeout')));
       }, opts.timeoutMs);
 
       const img = new Image();
       try {
         objectUrl = URL.createObjectURL(file);
       } catch (err) {
-        return safeReject(err instanceof Error ? err : new Error('Erreur création ObjectURL'));
+        return safeReject(err instanceof Error ? err : new Error(translate('serviceMessages.imageCompression.objectUrlFailed')));
       }
 
       img.onload = () => {
@@ -144,13 +145,13 @@ class ImageCompressionService {
         // 4. Validation des dimensions avant Canvas (6000px max et 16 Mégapixels max)
         if (img.width > MENU_IMAGE_MAX_DIMENSION || img.height > MENU_IMAGE_MAX_DIMENSION) {
           return safeReject(
-            new Error(`Dimension de l'image trop grande (${img.width}x${img.height}px, maximum ${MENU_IMAGE_MAX_DIMENSION}px par côté)`)
+            new Error(translate('serviceMessages.imageCompression.dimensionTooLarge', { width: img.width, height: img.height, max: MENU_IMAGE_MAX_DIMENSION }))
           );
         }
 
         if (img.width * img.height > MENU_IMAGE_MAX_PIXELS) {
           return safeReject(
-            new Error(`Résolution de l'image trop élevée (${(img.width * img.height / 1_000_000).toFixed(1)} MP, maximum 16 mégapixels)`)
+            new Error(translate('serviceMessages.imageCompression.resolutionTooHigh', { megapixels: (img.width * img.height / 1_000_000).toFixed(1) }))
           );
         }
 
@@ -172,7 +173,7 @@ class ImageCompressionService {
             const ctx = canvas.getContext('2d');
 
             if (!ctx) {
-              return safeReject(new Error('Impossible de créer le contexte Canvas'));
+              return safeReject(new Error(translate('serviceMessages.imageCompression.canvasContextFailed')));
             }
 
             ctx.drawImage(img, 0, 0, width, height);
@@ -193,7 +194,7 @@ class ImageCompressionService {
               if (attemptIndex >= qualities.length) {
                 return safeReject(
                   new Error(
-                    `Taille de l'image compressée supérieure à la limite de ${Math.round(maxOutputBytes / 1024)} Ko après ${qualities.length} essais`
+                    translate('serviceMessages.imageCompression.compressedTooLarge', { maxKb: Math.round(maxOutputBytes / 1024), attempts: qualities.length })
                   )
                 );
               }
@@ -206,7 +207,7 @@ class ImageCompressionService {
                   if (isSettled) return;
 
                   if (!blob) {
-                    return safeReject(new Error('Échec de la génération du Blob image'));
+                    return safeReject(new Error(translate('serviceMessages.imageCompression.blobFailed')));
                   }
 
                   if (blob.size <= maxOutputBytes) {

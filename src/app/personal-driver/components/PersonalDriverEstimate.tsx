@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { PersonalDriverConfiguration } from './PersonalDriverConfigurator';
 import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   calculatePersonalDriverPrices,
   formatPersonalDriverCurrency,
@@ -18,11 +19,14 @@ interface PersonalDriverEstimateProps {
 
 const planIds: PersonalDriverPlanId[] = ['basic', 'classic', 'premium'];
 
-function formatKm(distanceKm: number): string {
-  return distanceKm.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+function formatKm(distanceKm: number, locale: string): string {
+  const numLocale = locale === 'en' ? 'en-US' : 'fr-FR';
+  return distanceKm.toLocaleString(numLocale, { maximumFractionDigits: 1 });
 }
 
 export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDriverEstimateProps) {
+  const { t, locale } = useTranslation();
+  const numLocale = locale === 'en' ? 'en-US' : 'fr-FR';
   const { plans, error, reload } = usePersonalDriverPlans();
   const comparison = calculatePersonalDriverPrices({
     monthlyDistanceKm: configuration.monthlyDistanceKm,
@@ -50,35 +54,38 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
     onContinue(selectedPlanId);
   };
 
+  const recommendedPlanName = plans[comparison.recommendedPlanId]?.name ?? '';
+  const recommendationText = t('personalDriver.recommendedRateNotice', { plan: recommendedPlanName });
+
   return (
     <div className="space-y-6">
-      <section aria-label="Resume du trajet" className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
+      <section aria-label={t('personalDriver.tripSummaryTitle')} className="space-y-2 rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-slate-300">
         {error && (
           <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-amber-100">
-            Les forfaits par défaut restent affichés. Impossible de charger les forfaits configurés.
+            {t('personalDriver.fallbackNotice')}
             <button type="button" onClick={() => void reload()} className="ml-3 font-bold underline underline-offset-4">
-              Réessayer
+              {t('personalDriver.retry')}
             </button>
           </p>
         )}
-        <p><span className="font-semibold text-white">Forfait initial :</span> {plans[configuration.planId].name}</p>
-        <p><span className="font-semibold text-white">Aller :</span> {formatKm(configuration.distanceOneWayKm)} km</p>
+        <p><span className="font-semibold text-white">{t('personalDriver.initialPlanLabel')}</span> {plans[configuration.planId].name}</p>
+        <p><span className="font-semibold text-white">{t('personalDriver.outwardLabel')}</span> {formatKm(configuration.distanceOneWayKm, locale)} km</p>
         {configuration.tripType === 'round_trip' && configuration.distanceReturnKm !== undefined && (
-          <p><span className="font-semibold text-white">Retour :</span> {formatKm(configuration.distanceReturnKm)} km</p>
+          <p><span className="font-semibold text-white">{t('personalDriver.returnLabel')}</span> {formatKm(configuration.distanceReturnKm, locale)} km</p>
         )}
-        <p><span className="font-semibold text-white">Distance mensuelle :</span> {formatKm(configuration.monthlyDistanceKm)} km</p>
+        <p><span className="font-semibold text-white">{t('personalDriver.monthlyDistanceLabel')}</span> {formatKm(configuration.monthlyDistanceKm, locale)} km</p>
       </section>
 
       <section aria-labelledby="estimate-heading">
         <div className="mb-4">
-          <p className="text-sm font-semibold text-primary">VOTRE ESTIMATION</p>
-          <h2 id="estimate-heading" className="text-2xl font-bold text-white">Choisissez votre forfait</h2>
-          <p className="mt-1 text-sm text-slate-400">Estimation indicative</p>
+          <p className="text-sm font-semibold text-primary">{t('personalDriver.yourEstimateBadge')}</p>
+          <h2 id="estimate-heading" className="text-2xl font-bold text-white">{t('personalDriver.chooseYourPlanTitle')}</h2>
+          <p className="mt-1 text-sm text-slate-400">{t('personalDriver.indicativeEstimateText')}</p>
         </div>
-        <p className="mb-4 text-sm text-slate-400">{comparison.recommendationReasons.join(' ')}</p>
+        <p className="mb-4 text-sm text-slate-400">{recommendationText}</p>
 
         <fieldset className="space-y-3">
-          <legend className="sr-only">Forfaits disponibles</legend>
+          <legend className="sr-only">{t('personalDriver.availablePlansLegend')}</legend>
           {planIds.map((planId) => {
             const plan = plans[planId];
             const price = comparison.plans[planId];
@@ -95,7 +102,7 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
                   <input
                     type="radio"
                     name="personal-driver-plan"
-                    aria-label={`Choisir ${plan.name}`}
+                    aria-label={t('screens.personalDriverPlan.choose', { name: plan.name })}
                     checked={selectedPlanId === planId}
                     disabled={!price.isEligible}
                     onChange={() => setSelectedPlanId(planId)}
@@ -104,12 +111,17 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h2 className="text-lg font-bold text-white">{plan.name}</h2>
-                      {isRecommended && <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-bold text-primary">Recommande</span>}
+                      {isRecommended && <span className="rounded-full bg-primary/15 px-3 py-1 text-xs font-bold text-primary">{t('personalDriver.recommendedBadge')}</span>}
                     </div>
-                    <p className="mt-1 text-xl font-bold text-white">{formatPersonalDriverCurrency(price.totalBeforeTax)} <span className="text-sm font-medium text-slate-400">/ mois</span></p>
-                    {!price.isEligible && <p className="mt-2 text-sm text-amber-300">Ce forfait ne couvre pas tous les jours choisis.</p>}
+                    <p className="mt-1 text-xl font-bold text-white">
+                      {formatPersonalDriverCurrency(price.totalBeforeTax, undefined, numLocale)}{' '}
+                      <span className="text-sm font-medium text-slate-400">{t('personalDriver.perMonth')}</span>
+                    </p>
+                    {!price.isEligible && <p className="mt-2 text-sm text-amber-300">{t('personalDriver.notCoveredDays')}</p>}
                     {price.minimumApplied && (
-                      <p className="mt-2 text-sm text-slate-400">Le minimum de {formatKm(price.minimumBillableKm)} km est applique pour ce forfait.</p>
+                      <p className="mt-2 text-sm text-slate-400">
+                        {t('personalDriver.minimumAppliedNotice', { km: formatKm(price.minimumBillableKm, locale) })}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -122,12 +134,12 @@ export function PersonalDriverEstimate({ configuration, onContinue }: PersonalDr
       <button
         type="button"
         onClick={handleContinue}
-        className="min-h-12 w-full rounded-lg bg-primary px-4 text-sm font-bold text-white transition active:scale-[0.98]"
+        className="min-h-12 w-full rounded-lg bg-primary px-4 text-sm font-bold text-black transition active:scale-[0.98]"
       >
-        Continuer avec ce forfait
+        {t('personalDriver.continueWithPlan')}
       </button>
       <a href={`/personal-driver/configurer?plan=${configuration.planId}`} className="block text-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
-        Modifier mon trajet
+        {t('personalDriver.editMyTrip')}
       </a>
     </div>
   );

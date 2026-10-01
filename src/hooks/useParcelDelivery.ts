@@ -1,5 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
+import { useTranslation } from '@/hooks/useTranslation'
+import { translate } from '@/locales'
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { ref as rtdbRef, set, remove } from 'firebase/database'
 import { db, getFirebaseDatabase } from '@/config/firebase'
@@ -47,6 +49,7 @@ export interface UseParcelDeliveryOptions {
 }
 
 export function useParcelDelivery(parcelId: string, options?: UseParcelDeliveryOptions) {
+  const { t } = useTranslation()
   const [parcel, setParcel] = useState<ParcelDoc | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,7 +77,7 @@ export function useParcelDelivery(parcelId: string, options?: UseParcelDeliveryO
       },
       (err) => {
         console.error('[useParcelDelivery] sync error:', err)
-        setError('Erreur de connexion aux données')
+        setError(t('errors.dataConnectionError'))
         setLoading(false)
         onError?.(err)
       }
@@ -145,7 +148,7 @@ export function useParcelDelivery(parcelId: string, options?: UseParcelDeliveryO
     } catch (err) {
       setLocalStatus(previous)
       console.error('[useParcelDelivery] updateStatus failed:', err)
-      throw new Error('Erreur de connexion — réessayez')
+      throw new Error(translate('systemMessages.delivery.connectionError'))
     }
   }, [parcelId])
 

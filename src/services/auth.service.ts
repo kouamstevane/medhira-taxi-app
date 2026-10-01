@@ -23,6 +23,7 @@ import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firest
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '@/config/firebase';
 import { UserData } from '@/types';
+import { translate } from '@/locales';
 import { Capacitor } from '@capacitor/core';
 import { SocialLogin } from '@capgo/capacitor-social-login';
 import {
@@ -238,13 +239,13 @@ export const resendVerificationEmail = async (
 ): Promise<void> => {
   try {
     await sendVerificationEmail(user);
-    const successMessage = "Un nouvel email de validation a été envoyé à votre adresse. Veuillez vérifier votre boîte de réception.";
+    const successMessage = translate('serviceMessages.auth.verificationEmailResent');
     if (onSuccess) {
       onSuccess(successMessage);
     }
   } catch (err: unknown) {
     const error = err as { code?: string; message?: string };
-    const errorMessage = error.message || 'Erreur lors de l\'envoi de l\'email de vérification';
+    const errorMessage = error.message || translate('serviceMessages.auth.verificationEmailSendFailed');
     console.error('[AuthService] Erreur lors de l\'envoi de l\'email de vérification:', error);
     if (onError) {
       onError(errorMessage);
@@ -376,7 +377,7 @@ export const signInWithGoogle = async (
       });
       try { await deleteUser(user); } catch {}
       try { await firebaseSignOut(auth); } catch {}
-      throw new Error('Erreur lors de la création du profil. Veuillez réessayer.');
+      throw new Error(translate('serviceMessages.auth.profileCreationFailed'));
     }
   } else {
     const data = userDoc.data();

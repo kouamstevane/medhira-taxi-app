@@ -1,5 +1,6 @@
 'use client';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface DriverPendingBannerProps {
   approvedDocs?: number;
@@ -7,6 +8,7 @@ interface DriverPendingBannerProps {
 }
 
 export function DriverPendingBanner({ approvedDocs, totalDocs }: DriverPendingBannerProps = {}) {
+  const { t } = useTranslation();
   const showProgress = typeof approvedDocs === 'number' && typeof totalDocs === 'number' && totalDocs > 0;
   const pct = showProgress ? Math.min(100, Math.round((approvedDocs! / totalDocs!) * 100)) : 0;
 
@@ -17,9 +19,9 @@ export function DriverPendingBanner({ approvedDocs, totalDocs }: DriverPendingBa
           <MaterialIcon name="hourglass_top" className="text-amber-400 text-[22px]" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-amber-400 font-bold text-sm">Candidature en cours d&apos;examen</p>
+          <p className="text-amber-400 font-bold text-sm">{t('driver.applicationUnderReview')}</p>
           <p className="text-slate-300 text-xs mt-0.5 leading-relaxed">
-            Vos données sont en lecture seule jusqu&apos;à approbation par notre équipe.
+            {t('driver.readOnlyUntilApproved')}
           </p>
         </div>
       </div>
@@ -27,7 +29,7 @@ export function DriverPendingBanner({ approvedDocs, totalDocs }: DriverPendingBa
       {showProgress && (
         <div className="mt-4">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">Progression du dossier</span>
+            <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">{t('driver.fileProgress')}</span>
             <span className="text-[11px] font-bold text-white">{approvedDocs} / {totalDocs}</span>
           </div>
           <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">

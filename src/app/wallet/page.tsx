@@ -20,7 +20,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import type { CardDetails } from '@/app/profil/ProfilePaymentMethodsModal';
 
 export default function WalletPage() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [hasPaymentMethod, setHasPaymentMethod] = useState(false);
@@ -114,7 +114,7 @@ export default function WalletPage() {
   }, [router, refreshKey, t]);
 
   const formatDate = (date: Date) =>
-    date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    date.toLocaleDateString(locale === 'en' ? 'en-US' : 'fr-FR', { day: 'numeric', month: 'short' });
 
   return (
     <div className="min-h-screen bg-background pb-28 max-w-[430px] mx-auto">
@@ -137,8 +137,8 @@ export default function WalletPage() {
         {/* Network Error State (Oops!) */}
         {isNetworkError && !balance && transactions.length === 0 ? (
           <NetworkErrorView
-            title="Oops !"
-            message="Impossible de charger les données de votre portefeuille. Veuillez vérifier votre connexion internet et réessayer."
+            title={t('common.networkError') || 'Oops !'}
+            message={t('wallet.loadError')}
             onRetry={() => {
               setIsNetworkError(false);
               setLoading(true);
@@ -228,7 +228,7 @@ export default function WalletPage() {
                     </span>
                   </div>
                   <p className="text-xs text-slate-400">
-                    {cardDetails.brand ? cardDetails.brand.toUpperCase() : 'CARTE BANCAIRE'}
+                    {cardDetails.brand ? cardDetails.brand.toUpperCase() : t('wallet.creditCardOption')}
                     {cardDetails.expMonth && cardDetails.expYear
                       ? ` · ${String(cardDetails.expMonth).padStart(2, '0')}/${String(cardDetails.expYear).slice(-2)}`
                       : ''}

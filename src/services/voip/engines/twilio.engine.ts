@@ -1,5 +1,6 @@
 import { IVoipEngine } from '@/types/voip';
 import { logger } from '@/utils/logger';
+import { translate } from '@/locales';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
 
@@ -34,7 +35,7 @@ export class TwilioVoipEngine implements IVoipEngine {
       const token = result.data.token;
 
       if (!token) {
-        throw new Error('Twilio access token non reçu depuis le serveur');
+        throw new Error(translate('serviceMessages.voip.twilioTokenMissing'));
       }
 
       const { Device } = await import('@twilio/voice-sdk');
@@ -72,7 +73,7 @@ export class TwilioVoipEngine implements IVoipEngine {
     });
 
     this.device.on('offline', () => {
-      this.onError('Périphérique Twilio hors ligne');
+      this.onError(translate('serviceMessages.voip.twilioOffline'));
     });
 
     this.device.on('tokenWillExpire', async () => {
@@ -92,7 +93,7 @@ export class TwilioVoipEngine implements IVoipEngine {
 
   async join(channel: string, token: string | null, uid: string): Promise<void> {
     if (!this.device) {
-      throw new Error('Twilio non initialisé');
+      throw new Error(translate('serviceMessages.voip.twilioNotInitialized'));
     }
 
     try {

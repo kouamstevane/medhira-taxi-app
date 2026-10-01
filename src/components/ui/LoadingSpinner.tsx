@@ -6,12 +6,16 @@
  * @component
  */
 
+'use client';
+
 import React from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   color?: string;
   fullScreen?: boolean;
+  label?: string;
 }
 
 /**
@@ -21,7 +25,10 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   size = 'md',
   color = '#f29200',
   fullScreen = false,
+  label,
 }) => {
+  const { t } = useTranslation();
+  const loadingText = label || t('common.loading');
   const sizeClasses = {
     sm: 'h-4 w-4',
     md: 'h-8 w-8',
@@ -34,9 +41,9 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
       className={`animate-spin rounded-full border-t-2 border-b-2 ${sizeClasses[size]}`}
       style={{ borderColor: color }}
       role="status"
-      aria-label="Chargement"
+      aria-label={loadingText}
     >
-      <span className="sr-only">Chargement...</span>
+      <span className="sr-only">{loadingText}</span>
     </div>
   );
 

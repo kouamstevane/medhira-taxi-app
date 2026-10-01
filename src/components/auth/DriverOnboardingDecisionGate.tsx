@@ -5,6 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { useRouter } from 'next/navigation';
 import { auth, db, functions } from '@/config/firebase';
 import { secureStorage } from '@/services/secureStorage.service';
+import { translate } from '@/locales';
 import { AuthService } from '@/services';
 import { DriverOnboardingDecision } from './DriverOnboardingDecision';
 
@@ -43,14 +44,14 @@ export function DriverOnboardingDecisionGate({
       const deletionResult = await requestAccountDeletion({ confirm: 'DELETE_MY_ACCOUNT' });
       const deletionReport = deletionResult.data as { success?: boolean };
       if (deletionReport.success !== true) {
-        throw new Error('La suppression du compte n’a pas pu être terminée. Réessayez.');
+        throw new Error(translate('screens.onboardingGate.deletionIncomplete'));
       }
       await secureStorage.clearLegacyDriverProgress();
       if (uid) {
         await secureStorage.removeItem(`driver_registration_progress_${uid}`);
       }
     } else {
-      if (!user) throw new Error('Session expirée. Reconnectez-vous puis réessayez.');
+      if (!user) throw new Error(translate('screens.onboardingGate.sessionExpired'));
       const userRef = doc(db, 'users', user.uid);
       const userSnap = await getDoc(userRef);
       const userData = userSnap.data();

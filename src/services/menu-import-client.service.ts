@@ -1,4 +1,5 @@
 import { db, functions, getFirebaseStorage } from '@/config/firebase';
+import { translate } from '@/locales';
 import {
   FIRESTORE_COLLECTIONS,
   FIRESTORE_SUBCOLLECTIONS,
@@ -59,11 +60,11 @@ export async function uploadMenuImportFile(
   options: MenuImportUploadOptions = {}
 ): Promise<MenuImportUploadResult> {
   if (!restaurantId || !restaurantId.trim()) {
-    throw new Error('Identifiant du restaurant requis pour le téléversement');
+    throw new Error(translate('serviceMessages.menuImport.restaurantIdRequired'));
   }
 
   if (!file) {
-    throw new Error('Aucun fichier sélectionné');
+    throw new Error(translate('serviceMessages.menuImport.noFileSelected'));
   }
 
   const fileName = file.name.toLowerCase();
@@ -72,15 +73,15 @@ export async function uploadMenuImportFile(
   const isXlsx = fileName.endsWith('.xlsx');
 
   if (!isCsv && !isZip && !isXlsx) {
-    throw new Error('Format de fichier non supporté. Veuillez sélectionner un fichier .csv, .zip ou .xlsx');
+    throw new Error(translate('serviceMessages.menuImport.unsupportedFormat'));
   }
 
   const maxSizeBytes = 15 * 1024 * 1024; // 15 MiB
   if (file.size > maxSizeBytes) {
-    throw new Error('La taille du fichier dépasse la limite autorisée de 15 Mo');
+    throw new Error(translate('serviceMessages.menuImport.fileTooLarge'));
   }
   if (file.size === 0) {
-    throw new Error('Le fichier sélectionné est vide');
+    throw new Error(translate('serviceMessages.menuImport.emptyFile'));
   }
 
   const type: 'csv' | 'excel' = isXlsx ? 'excel' : 'csv';
@@ -104,7 +105,7 @@ export async function uploadMenuImportFile(
 
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted) {
-      const error = new Error('Téléversement annulé');
+      const error = new Error(translate('serviceMessages.menuImport.uploadCancelled'));
       error.name = 'AbortError';
       reject(error);
       return;
@@ -125,7 +126,7 @@ export async function uploadMenuImportFile(
     const handleAbort = () => {
       if (settled) return;
       uploadTask.cancel();
-      const error = new Error('Téléversement annulé');
+      const error = new Error(translate('serviceMessages.menuImport.uploadCancelled'));
       error.name = 'AbortError';
       rejectUpload(error);
     };
@@ -133,7 +134,7 @@ export async function uploadMenuImportFile(
     options.signal?.addEventListener('abort', handleAbort, { once: true });
     const timeoutId = setTimeout(() => {
       uploadTask.cancel();
-      rejectUpload(new Error('Le téléversement du fichier a expiré'));
+      rejectUpload(new Error(translate('serviceMessages.menuImport.uploadTimeout')));
     }, options.timeoutMs ?? MENU_IMPORT_UPLOAD_TIMEOUT_MS);
 
     uploadTask.on(
@@ -146,12 +147,12 @@ export async function uploadMenuImportFile(
       },
       (error: { code?: string; message: string }) => {
         if (error.code === 'storage/canceled') {
-          const cancelledError = new Error('Téléversement annulé');
+          const cancelledError = new Error(translate('serviceMessages.menuImport.uploadCancelled'));
           cancelledError.name = 'AbortError';
           rejectUpload(cancelledError);
           return;
         }
-        rejectUpload(new Error(`Échec du téléversement du fichier: ${error.message}`));
+        rejectUpload(new Error(translate('serviceMessages.menuImport.uploadFailed', { details: error.message })));
       },
       () => {
         if (settled) return;

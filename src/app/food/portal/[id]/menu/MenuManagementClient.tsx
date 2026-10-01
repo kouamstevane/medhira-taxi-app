@@ -51,8 +51,6 @@ function getMenuItemSaveErrorMessage(error: unknown, t: (key: string) => string)
   return getMenuImageStorageErrorMessage(error);
 }
 
-const DEFAULT_CATEGORIES = ['Entrées', 'Plats', 'Desserts', 'Boissons', 'Accompagnements', 'Snacks'];
-
 export default function MenuManagementClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -84,9 +82,20 @@ export default function MenuManagementClient() {
   }, [catalog]);
 
   // Dynamic Categories calculation (for creation form suggestions)
+  const defaultCategories = useMemo(
+    () => [
+      t('screens.menuManagement.defaultCategories.starters'),
+      t('screens.menuManagement.defaultCategories.mains'),
+      t('screens.menuManagement.defaultCategories.desserts'),
+      t('screens.menuManagement.defaultCategories.drinks'),
+      t('screens.menuManagement.defaultCategories.sides'),
+      t('screens.menuManagement.defaultCategories.snacks'),
+    ],
+    [t],
+  );
   const dynamicCategories = useMemo(
-    () => mergeMenuCategories(DEFAULT_CATEGORIES, menuItems, catalog.categories),
-    [catalog.categories, menuItems],
+    () => mergeMenuCategories(defaultCategories, menuItems, catalog.categories),
+    [catalog.categories, defaultCategories, menuItems],
   );
 
   // Filter categories: strictly the categories with existing dishes in this restaurant
@@ -245,7 +254,7 @@ export default function MenuManagementClient() {
         name: '',
         description: '',
         price: '',
-        category: dynamicCategories[0] || 'Plats',
+        category: dynamicCategories[0] || defaultCategories[1],
         isAvailable: true,
       });
       setImageChoice('image-unchanged');
@@ -290,7 +299,7 @@ export default function MenuManagementClient() {
       }
     } catch (err) {
       if (!controller.signal.aborted) {
-        const msg = err instanceof Error ? err.message : "Échec de la compression de l'image";
+        const msg = err instanceof Error ? err.message : t('screens.menuManagement.compressionFailed');
         setCompressionError(msg);
       }
     } finally {
@@ -316,7 +325,7 @@ export default function MenuManagementClient() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.price || !form.category) {
-      showError(ERROR_MESSAGES.REQUIRED_FIELDS);
+      showError(t('errors.fieldRequired') || ERROR_MESSAGES.REQUIRED_FIELDS);
       return;
     }
 
@@ -1119,7 +1128,7 @@ export default function MenuManagementClient() {
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={compressedPreviewUrl}
-                            alt="Aperçu WebP"
+                            alt={t('screens.menuManagement.webpPreviewAlt')}
                             className="w-full h-full object-cover"
                           />
                         </div>

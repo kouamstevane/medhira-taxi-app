@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { Stripe, PaymentSheetEventsEnum } from '@capacitor-community/stripe';
+import { translate } from '@/locales';
 import type { StripeAdapter, PayParams, PaymentResult, SetupCardParams, SetupResult } from './stripe-adapter';
 
 export class NativeStripeAdapter implements StripeAdapter {
@@ -64,7 +65,7 @@ export class NativeStripeAdapter implements StripeAdapter {
         };
       case PaymentSheetEventsEnum.Failed:
       default:
-        throw new Error('Le paiement a échoué. Veuillez réessayer.');
+        throw new Error(translate('systemMessages.payment.failed'));
     }
   }
 
@@ -94,10 +95,10 @@ export class NativeStripeAdapter implements StripeAdapter {
           status: 'succeeded',
         };
       case PaymentSheetEventsEnum.Canceled:
-        throw new Error('Configuration de carte annulée.');
+        throw new Error(translate('systemMessages.payment.cardSetupCancelled'));
       case PaymentSheetEventsEnum.Failed:
       default:
-        throw new Error('La configuration de la carte a échoué. Veuillez réessayer.');
+        throw new Error(translate('systemMessages.payment.cardSetupFailed'));
     }
   }
 }

@@ -20,8 +20,8 @@ interface VehicleDetailsSheetProps {
 }
 
 export function VehicleDetailsSheet({ carType, onClose }: VehicleDetailsSheetProps) {
-  const { t } = useTranslation();
-  const meta = getVehicleMeta(carType);
+  const { t, locale } = useTranslation();
+  const meta = getVehicleMeta(carType, locale);
 
   // Fermeture clavier (Escape) — confort desktop / Capacitor web view
   useEffect(() => {

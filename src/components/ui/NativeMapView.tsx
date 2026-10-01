@@ -5,6 +5,7 @@ import { GoogleMap } from '@capacitor/google-maps';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Network } from '@capacitor/network';
 import { App } from '@capacitor/app';
+import { useTranslation } from '@/hooks/useTranslation';
 
 //  Interfaces strictement typées (medJiraV2.md #2)
 interface MapClickEvent {
@@ -41,6 +42,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
     onError,
     enableClustering = true,
 }) => {
+    const { t } = useTranslation();
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<GoogleMap | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -330,13 +332,13 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
         return (
             <div 
                 className={`relative w-full h-full bg-white/10 animate-pulse ${className}`}
-                aria-label="Chargement de la carte"
+                aria-label={t('common.mapLoading')}
                 role="status"
             >
                 <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3">
                     <div className="w-12 h-12 bg-white/5 rounded-full animate-pulse" />
                     <div className="text-gray-500 text-sm font-medium">
-                        Chargement de la carte...
+                        {t('common.mapLoadingDots')}
                     </div>
                 </div>
             </div>
@@ -357,10 +359,10 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
                     </svg>
                 </div>
                 <h3 className="text-white font-semibold text-lg mb-2">
-                    Mode hors ligne
+                    {t('common.offlineMode')}
                 </h3>
                 <p className="text-[#9CA3AF] text-center text-sm mb-4 max-w-xs">
-                    La carte nécessite une connexion internet pour fonctionner.
+                    {t('common.mapOfflineDesc')}
                 </p>
                 <button
                     onClick={async () => {
@@ -373,7 +375,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
                     }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium
                              active:bg-blue-700 transition-colors min-h-[44px] min-w-[44px]"
-                    aria-label="Vérifier la connexion"
+                    aria-label={t('common.checkConnection')}
                 >
                     Réessayer
                 </button>
@@ -398,13 +400,13 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
                 className="w-full h-full"
                 style={{ display: 'block', minHeight: '100%', minWidth: '100%' }}
                 role="application"
-                aria-label="Carte interactive"
+                aria-label={t('common.interactiveMap')}
             />
             
             {/*  Indicateur background si nécessaire */}
             {!isAppActive && (
                 <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                    App en pause
+                    {t('common.appPaused')}
                 </div>
             )}
         </div>

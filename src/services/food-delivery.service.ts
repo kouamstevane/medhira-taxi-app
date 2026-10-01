@@ -20,6 +20,7 @@
  */
 
 import { logger } from '@/utils/logger';
+import { translate } from '@/locales';
 import { FOOD_DELIVERY_PRICING, LIMITS } from '@/utils/constants';
 import { 
   collection, 
@@ -91,12 +92,12 @@ import {
 // ==================== SCHEMAS DE VALIDATION ====================
 
 const CreateRestaurantSchema = z.object({
-  ownerId: z.string().min(1, 'ID propriétaire requis'),
-  name: z.string().min(2, 'Le nom doit avoir au moins 2 caractères'),
-  description: z.string().min(10, 'La description doit avoir au moins 10 caractères'),
-  address: z.string().min(5, 'L\'adresse doit avoir au moins 5 caractères'),
-  phone: z.string().min(8, 'Le téléphone doit avoir au moins 8 caractères'),
-  email: z.string().email('Email invalide'),
+  ownerId: z.string().min(1, { error: () => translate('serviceMessages.food.ownerIdRequired') }),
+  name: z.string().min(2, { error: () => translate('serviceMessages.food.nameMin') }),
+  description: z.string().min(10, { error: () => translate('serviceMessages.food.descriptionMin') }),
+  address: z.string().min(5, { error: () => translate('serviceMessages.food.addressMin') }),
+  phone: z.string().min(8, { error: () => translate('serviceMessages.food.phoneMin') }),
+  email: z.string().email({ error: () => translate('serviceMessages.food.emailInvalid') }),
   cuisineType: z.union([z.string(), z.array(z.string())]),
   avgPricePerPerson: z.number().positive().optional(),
   commissionRate: z.number().min(0).max(100).optional(),
@@ -840,7 +841,7 @@ export const createRestaurant = async (
   try {
     const validationResult = CreateRestaurantSchema.safeParse(restaurantData);
     if (!validationResult.success) {
-      throw new Error(`Données de restaurant invalides: ${validationResult.error.message}`);
+      throw new Error(translate('serviceMessages.food.invalidRestaurantData', { details: validationResult.error.message }));
     }
 
     const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
@@ -887,8 +888,8 @@ export const deleteRestaurant = async (restaurantId: string): Promise<void> => {
 // ============================================================================
 
 const CreateFoodOrderSchema = z.object({
-  userId: z.string().min(1, 'User ID requis'),
-  restaurantId: z.string().min(1, 'Restaurant ID requis'),
+  userId: z.string().min(1, { error: () => translate('serviceMessages.food.userIdRequired') }),
+  restaurantId: z.string().min(1, { error: () => translate('serviceMessages.food.restaurantIdRequired') }),
   orderItems: z.array(z.object({
     menuItemId: z.string(),
     itemName: z.string(),
@@ -902,10 +903,10 @@ const CreateFoodOrderSchema = z.object({
       })),
       supplementIds: z.array(z.string()),
     }).optional(),
-  })).min(1, 'La commande doit contenir au moins un article'),
+  })).min(1, { error: () => translate('serviceMessages.food.orderMinItems') }),
   deliveryDistance: z.number().nonnegative(),
   isWeekend: z.boolean(),
-  deliveryAddress: z.string().min(5, 'Adresse invalide'),
+  deliveryAddress: z.string().min(5, { error: () => translate('serviceMessages.food.deliveryAddressInvalid') }),
   deliveryLocation: z.object({
     lat: z.number(),
     lng: z.number()
@@ -957,7 +958,7 @@ export const createFoodOrder = async (
   try {
     const validationResult = CreateFoodOrderSchema.safeParse(orderData);
     if (!validationResult.success) {
-      throw new Error(`Données de commande invalides: ${validationResult.error.message}`);
+      throw new Error(translate('serviceMessages.food.invalidOrderData', { details: validationResult.error.message }));
     }
 
     const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
@@ -1325,7 +1326,7 @@ export const submitRestaurantReview = async (
 ): Promise<string> => {
   try {
   if (review.rating < 1 || review.rating > 5) {
-    throw new Error('La note doit être entre 1 et 5');
+    throw new Error(translate('serviceMessages.food.ratingRange'));
   }
 
   const reviewId = `${review.orderId}_${review.userId}`;
@@ -1353,7 +1354,7 @@ export const submitDeliveryReview = async (
 ): Promise<string> => {
   try {
   if (review.rating < 1 || review.rating > 5) {
-    throw new Error('La note doit être entre 1 et 5');
+    throw new Error(translate('serviceMessages.food.ratingRange'));
   }
 
   const reviewId = `${review.orderId}_${review.driverId}_${review.userId}`;

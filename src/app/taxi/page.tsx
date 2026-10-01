@@ -32,8 +32,9 @@ type Step = 'form' | 'searching' | 'driver_found' | 'completed' | 'failed' | 'sc
 export default function TaxiPage() {
   const router = useRouter();
   const { currentUser } = useAuth();
-  const { t } = useTranslation();
-  
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'en' ? 'en-US' : 'fr-FR';
+
   //  Fonction pour déclencher le haptic feedback (medJira.md #93)
   const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Medium) => {
     if (Capacitor.isNativePlatform()) {
@@ -93,7 +94,7 @@ export default function TaxiPage() {
           setPickupAddress(bookingData.pickup);
           setDestinationAddress(bookingData.destination);
           if (bookingData.status === 'scheduled' && bookingData.scheduledAt?.toDate) {
-            setScheduledAtLabel(bookingData.scheduledAt.toDate().toLocaleString('fr-FR', {
+            setScheduledAtLabel(bookingData.scheduledAt.toDate().toLocaleString(dateLocale, {
               weekday: 'short',
               day: '2-digit',
               month: 'short',
@@ -138,7 +139,7 @@ export default function TaxiPage() {
 
     if (booking.rideMode === 'scheduled') {
       setScheduledAtLabel(
-        booking.scheduledAt?.toLocaleString('fr-FR', {
+        booking.scheduledAt?.toLocaleString(dateLocale, {
           weekday: 'short',
           day: '2-digit',
           month: 'short',

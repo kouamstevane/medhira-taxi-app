@@ -44,7 +44,7 @@ export default function DriverResetPasswordPage() {
           setError(t('auth.noAccountFound'));
           break;
         case 'auth/invalid-email':
-          setError(ERROR_MESSAGES.INVALID_EMAIL);
+          setError(t('auth.invalidEmailError'));
           break;
         case 'auth/too-many-requests':
           setError(t('auth.tooManyAttempts'));
@@ -154,7 +154,7 @@ export default function DriverResetPasswordPage() {
                       setError(null);
                     }}
                     className="glass-input w-full h-14 pl-12 pr-4 rounded-xl text-white placeholder:text-slate-500 focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
-                    placeholder="votre@email.com"
+                    placeholder={t('auth.emailPlaceholder')}
                     required
                   />
                 </div>

@@ -48,3 +48,17 @@ export function getTranslation(
   // Si non trouvé (sécurité absolue), renvoyer la clé elle-même
   return key;
 }
+
+/**
+ * Traduction hors React (services, utilitaires, validations zod, etc.).
+ * La locale active est lue depuis <html lang> (synchronisé par I18nProvider) ;
+ * côté serveur ou sans DOM, la locale par défaut est utilisée.
+ */
+export function translate(key: TranslationKey, params?: TranslationParams): string {
+  const htmlLang =
+    typeof document !== 'undefined' ? document.documentElement.lang.toLowerCase().split('-')[0] : '';
+  const locale: Locale = (Object.keys(translations) as Locale[]).includes(htmlLang as Locale)
+    ? (htmlLang as Locale)
+    : DEFAULT_LOCALE;
+  return getTranslation(locale, key, params);
+}

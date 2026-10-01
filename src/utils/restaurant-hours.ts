@@ -1,4 +1,5 @@
 import { RESTAURANT_DAYS, type RestaurantDayKey } from '@/utils/restaurant-constants';
+import { translate } from '@/locales';
 
 export type RestaurantOpeningHour = {
   open: string;
@@ -63,18 +64,18 @@ export function validateOpeningHours(hours: RestaurantOpeningHours): string | nu
   const openDays = RESTAURANT_DAYS.filter(({ key }) => !hours[key].closed);
 
   if (openDays.length === 0) {
-    return 'Au moins un jour doit être ouvert.';
+    return translate('systemMessages.openingHours.atLeastOneDay');
   }
 
   for (const { key, label } of openDays) {
     const day = hours[key];
 
     if (!TIME_PATTERN.test(day.open) || !TIME_PATTERN.test(day.close)) {
-      return `Renseignez des horaires valides pour ${label.toLowerCase()}.`;
+      return translate('systemMessages.openingHours.invalidTimes', { day: label.toLowerCase() });
     }
 
     if (timeToMinutes(day.close) <= timeToMinutes(day.open)) {
-      return `L’heure de fermeture doit être après l’heure d’ouverture pour ${label.toLowerCase()}.`;
+      return translate('systemMessages.openingHours.closeBeforeOpen', { day: label.toLowerCase() });
     }
   }
 

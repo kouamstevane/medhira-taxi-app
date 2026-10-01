@@ -10,6 +10,7 @@ import {
 } from '@/services/menu-import-client.service';
 import type { MenuImportJob } from '@/types/food-delivery';
 import type { Unsubscribe } from 'firebase/firestore';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface StoreConnectorModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
   restaurantId,
   onSyncCompleted,
 }) => {
+  const { t } = useTranslation();
   const [siteUrl, setSiteUrl] = useState('');
   const [consumerKey, setConsumerKey] = useState('');
   const [consumerSecret, setConsumerSecret] = useState('');
@@ -73,19 +75,19 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
     setErrorMessage(null);
     const trimmedUrl = siteUrl.trim();
     if (!trimmedUrl) {
-      setErrorMessage("L'URL de votre boutique est requise");
+      setErrorMessage(t('restaurant.storeUrlRequired'));
       return false;
     }
     if (!trimmedUrl.startsWith('https://')) {
-      setErrorMessage("L'URL de la boutique doit obligatoirement commencer par https://");
+      setErrorMessage(t('restaurant.storeUrlHttpsRequired'));
       return false;
     }
     if (!consumerKey.trim()) {
-      setErrorMessage('La clé client (Consumer Key) est requise');
+      setErrorMessage(t('restaurant.consumerKeyRequired'));
       return false;
     }
     if (!consumerSecret.trim()) {
-      setErrorMessage('Le secret client (Consumer Secret) est requis');
+      setErrorMessage(t('restaurant.consumerSecretRequired'));
       return false;
     }
     return true;
@@ -110,7 +112,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
     } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : 'Échec du test de connexion',
+        message: err instanceof Error ? err.message : t('restaurant.testConnectionFailed'),
       });
     } finally {
       setIsTesting(false);
@@ -136,7 +138,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
     } catch (err: unknown) {
       setSaveResult({
         success: false,
-        message: err instanceof Error ? err.message : "Échec de l'enregistrement de l'intégration",
+        message: err instanceof Error ? err.message : t('restaurant.saveIntegrationFailed'),
       });
     } finally {
       setIsSaving(false);
@@ -182,13 +184,13 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
           }
         },
         (error) => {
-          setErrorMessage(error.message || 'Erreur lors du suivi de la synchronisation');
+          setErrorMessage(error.message || t('restaurant.syncTrackingError'));
           setIsSyncing(false);
         }
       );
     } catch (err: unknown) {
       setIsSyncing(false);
-      setErrorMessage(err instanceof Error ? err.message : 'Échec du lancement de la synchronisation');
+      setErrorMessage(err instanceof Error ? err.message : t('restaurant.syncLaunchFailed'));
     }
   };
 
@@ -206,13 +208,13 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
       onCloseRequest={() => {
         if (!isTesting && !isSaving && !isSyncing) handleClose();
       }}
-      title="Connecter une boutique"
+      title={t('restaurant.connectStoreTitle')}
       canDismiss={!isTesting && !isSaving && !isSyncing}
       className="sm:max-w-2xl"
     >
       <div className="flex flex-col">
         <p className="border-b border-zinc-200 pb-4 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-          Synchronisez automatiquement votre catalogue WooCommerce vers votre menu Medjira
+          {t('restaurant.connectStoreSubtitle')}
         </p>
 
         {/* Body */}
@@ -221,9 +223,8 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
           <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 text-xs text-blue-900 dark:text-blue-200 flex items-start gap-3">
             <span className="text-base">🔒</span>
             <div className="leading-relaxed">
-              <span className="font-semibold">Sécurité de niveau bancaire :</span> Vos identifiants API sont
-              chiffrés avec <span className="font-mono font-bold">AES-256-GCM</span> côté serveur. Ils ne sont jamais
-              stockés sur votre navigateur ni exposés publiquement.
+              <span className="font-semibold">{t('restaurant.bankLevelSecurityTitle')}</span>{' '}
+              {t('restaurant.bankLevelSecurityDesc')}
             </div>
           </div>
 
@@ -232,11 +233,11 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1">
-                  URL de la boutique (HTTPS)
+                  {t('restaurant.storeUrlLabel')}
                 </label>
                 <input
                   type="url"
-                  placeholder="https://mon-restaurant.com"
+                  placeholder={t('restaurant.storeUrlPlaceholder')}
                   value={siteUrl}
                   onChange={(e) => setSiteUrl(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all"
@@ -246,11 +247,11 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1">
-                    Consumer Key (ck_...)
+                    {t('restaurant.consumerKeyLabel')}
                   </label>
                   <input
                     type="text"
-                    placeholder="ck_xxxxxxxxxxxxxxxx"
+                    placeholder={t('restaurant.consumerKeyPlaceholder')}
                     value={consumerKey}
                     onChange={(e) => setConsumerKey(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all font-mono"
@@ -259,11 +260,11 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1">
-                    Consumer Secret (cs_...)
+                    {t('restaurant.consumerSecretLabel')}
                   </label>
                   <input
                     type="password"
-                    placeholder="cs_xxxxxxxxxxxxxxxx"
+                    placeholder={t('restaurant.consumerSecretPlaceholder')}
                     value={consumerSecret}
                     onChange={(e) => setConsumerSecret(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none transition-all font-mono"
@@ -279,7 +280,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
                   disabled={isTesting || isSaving || isSyncing}
                   className="px-4 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-semibold transition-colors min-h-[44px] flex items-center gap-2"
                 >
-                  {isTesting ? '🔄 Test en cours...' : '🔌 Tester la connexion'}
+                  {isTesting ? t('restaurant.testingConnectionBtn') : t('restaurant.testConnectionBtn')}
                 </button>
 
                 <button
@@ -288,7 +289,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
                   disabled={isTesting || isSaving || isSyncing}
                   className="px-4 py-2.5 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-900 dark:text-amber-200 text-xs font-semibold transition-colors min-h-[44px] flex items-center gap-2"
                 >
-                  {isSaving ? '💾 Enregistrement...' : '💾 Enregistrer la configuration'}
+                  {isSaving ? t('restaurant.savingConfigBtn') : t('restaurant.saveConfigBtn')}
                 </button>
               </div>
             </div>
@@ -333,7 +334,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
             <div className="space-y-4 p-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-sm text-zinc-800 dark:text-zinc-200">
-                  Synchronisation du catalogue WooCommerce
+                  {t('restaurant.syncCatalogWoo')}
                 </span>
                 <span
                   className={`text-xs px-2.5 py-1 rounded-full font-medium ${
@@ -344,10 +345,10 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
                       : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 animate-pulse'
                   }`}
                 >
-                  {importJob.status === 'pending' && 'Démarrage...'}
-                  {importJob.status === 'processing' && 'Synchronisation en cours...'}
-                  {importJob.status === 'completed' && 'Synchronisation réussie'}
-                  {importJob.status === 'failed' && 'Échec'}
+                  {importJob.status === 'pending' && t('restaurant.syncStarting')}
+                  {importJob.status === 'processing' && t('restaurant.syncInProgress')}
+                  {importJob.status === 'completed' && t('restaurant.syncSuccess')}
+                  {importJob.status === 'failed' && t('restaurant.syncFailed')}
                 </span>
               </div>
 
@@ -373,15 +374,15 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
               {/* Stats Counters */}
               <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
                 <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                  <div className="text-zinc-500 dark:text-zinc-400">Total produits</div>
+                  <div className="text-zinc-500 dark:text-zinc-400">{t('restaurant.totalProducts')}</div>
                   <div className="font-bold text-zinc-900 dark:text-zinc-100 text-base">{total || '—'}</div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                  <div className="text-emerald-600 dark:text-emerald-400">Synchronisés</div>
+                  <div className="text-emerald-600 dark:text-emerald-400">{t('restaurant.syncedProducts')}</div>
                   <div className="font-bold text-emerald-700 dark:text-emerald-300 text-base">{processed}</div>
                 </div>
                 <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                  <div className="text-red-600 dark:text-red-400">Ignorés / Erreurs</div>
+                  <div className="text-red-600 dark:text-red-400">{t('restaurant.ignoredOrErrors')}</div>
                   <div className="font-bold text-red-700 dark:text-red-300 text-base">{failed}</div>
                 </div>
               </div>
@@ -394,8 +395,8 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
                     onClick={() => setShowErrorsList(!showErrorsList)}
                     className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline flex items-center justify-between w-full"
                   >
-                    <span>{importJob.errors.length} anomalie(s)</span>
-                    <span>{showErrorsList ? '▲ Masquer' : '▼ Voir les détails'}</span>
+                    <span>{t('restaurant.anomaliesCount', { count: importJob.errors.length })}</span>
+                    <span>{showErrorsList ? t('restaurant.hideErrors') : t('restaurant.showErrorDetails')}</span>
                   </button>
 
                   {showErrorsList && (
@@ -421,7 +422,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
             disabled={isTesting || isSaving || isSyncing}
             className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 font-medium text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors min-h-[44px]"
           >
-            {importJob?.status === 'completed' ? 'Fermer' : 'Annuler'}
+            {importJob?.status === 'completed' ? t('common.close') : t('common.cancel')}
           </button>
 
           {!importJob && (
@@ -434,7 +435,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
                   : 'bg-amber-600 hover:bg-amber-700 active:scale-95'
               }`}
             >
-              {isSyncing ? 'Synchronisation...' : 'Synchroniser maintenant'}
+              {isSyncing ? t('restaurant.syncing') : t('restaurant.syncNow')}
             </button>
           )}
 
@@ -443,7 +444,7 @@ export const StoreConnectorModal: React.FC<StoreConnectorModalProps> = ({
               onClick={handleClose}
               className="px-6 py-2.5 rounded-xl font-medium text-sm text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-md min-h-[44px]"
             >
-              Voir le menu mis à jour
+              {t('restaurant.viewUpdatedMenuBtn')}
             </button>
           )}
         </div>

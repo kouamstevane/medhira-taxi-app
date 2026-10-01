@@ -1,3 +1,5 @@
+import { translate } from '@/locales';
+
 export type RestaurantImageKind = 'logo' | 'cover';
 
 export interface RestaurantImageSelection {
@@ -9,7 +11,7 @@ const MAX_RESTAURANT_IMAGE_BYTES = 2 * 1024 * 1024;
 const MANAGED_IMAGE_URL_HOST = 'firebasestorage.googleapis.com';
 
 const getImageLabel = (kind: RestaurantImageKind): string => (
-  kind === 'logo' ? 'logo' : 'photo de couverture'
+  translate(kind === 'logo' ? 'systemMessages.restaurantImage.labelLogo' : 'systemMessages.restaurantImage.labelCover')
 );
 
 export function validateRestaurantImageFile(
@@ -17,15 +19,15 @@ export function validateRestaurantImageFile(
   kind: RestaurantImageKind,
 ): string | null {
   if (!file.type.startsWith('image/')) {
-    return `Le format du ${getImageLabel(kind)} doit être une image JPEG, PNG ou WebP.`;
+    return translate('systemMessages.restaurantImage.mustBeImage', { label: getImageLabel(kind) });
   }
 
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    return `Le format du ${getImageLabel(kind)} doit être JPEG, PNG ou WebP.`;
+    return translate('systemMessages.restaurantImage.invalidFormat', { label: getImageLabel(kind) });
   }
 
   if (file.size > MAX_RESTAURANT_IMAGE_BYTES) {
-    return `Le ${getImageLabel(kind)} ne doit pas dépasser 2 Mo.`;
+    return translate('systemMessages.restaurantImage.tooLarge', { label: getImageLabel(kind) });
   }
 
   return null;
@@ -71,7 +73,7 @@ export async function prepareRestaurantImage(
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const element = new Image();
       element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error(`Impossible de lire le ${getImageLabel(kind)}.`));
+      element.onerror = () => reject(new Error(translate('systemMessages.restaurantImage.unreadable', { label: getImageLabel(kind) })));
       element.src = objectUrl;
     });
 
@@ -96,7 +98,7 @@ export async function prepareRestaurantImage(
     canvas.width = outputWidth;
     canvas.height = outputHeight;
     const context = canvas.getContext('2d');
-    if (!context) throw new Error('Impossible de préparer le visuel.');
+    if (!context) throw new Error(translate('systemMessages.restaurantImage.prepareFailed'));
 
     context.drawImage(
       image,
@@ -114,9 +116,9 @@ export async function prepareRestaurantImage(
       canvas.toBlob(resolve, 'image/webp', 0.84);
     });
 
-    if (!blob) throw new Error('Impossible de convertir le visuel en WebP.');
+    if (!blob) throw new Error(translate('systemMessages.restaurantImage.convertFailed'));
     if (blob.size > MAX_RESTAURANT_IMAGE_BYTES) {
-      throw new Error(`Le ${getImageLabel(kind)} converti ne doit pas dépasser 2 Mo.`);
+      throw new Error(translate('systemMessages.restaurantImage.convertedTooLarge', { label: getImageLabel(kind) }));
     }
 
     return blob;

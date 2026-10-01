@@ -315,7 +315,7 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
               type="button"
               onClick={() => setError(null)}
               className="p-1 rounded-lg text-red-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-              aria-label="Fermer l'alerte"
+              aria-label={t('screens.restaurantRegister.dismissAlert')}
             >
               <MaterialIcon name="close" size="sm" />
             </button>

@@ -470,6 +470,7 @@ export default function RestaurantSettingsClient() {
             {RESTAURANT_DAYS.map(({ key, label }) => {
               const day = hours[key];
               const isExpanded = expandedDay === key;
+              const dayLabel = t(`days.${key}` as never) || label;
 
               return (
                 <div
@@ -484,7 +485,7 @@ export default function RestaurantSettingsClient() {
                     role="button"
                     tabIndex={0}
                     aria-expanded={!day.closed ? isExpanded : undefined}
-                    aria-label={`${label} ${day.closed ? t('closedDay') : `${day.open} – ${day.close}`}`}
+                    aria-label={`${dayLabel} ${day.closed ? t('closedDay') : `${day.open} – ${day.close}`}`}
                     onClick={() => {
                       if (!day.closed) {
                         setExpandedDay((prev) => (prev === key ? null : key));
@@ -501,7 +502,7 @@ export default function RestaurantSettingsClient() {
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <p className="font-semibold text-white text-sm shrink-0">{label}</p>
+                      <p className="font-semibold text-white text-sm shrink-0">{dayLabel}</p>
                       {day.closed ? (
                         <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium text-slate-400">
                           {t('closedDay')}
@@ -526,7 +527,7 @@ export default function RestaurantSettingsClient() {
                           checked={!day.closed}
                           onChange={(event) => handleToggleDayClosed(key, !event.target.checked)}
                           disabled={isDeleting}
-                          aria-label={`${label} ouvert`}
+                          aria-label={`${dayLabel} ${t('openDay')}`}
                           className="peer sr-only"
                         />
                         <span
@@ -546,7 +547,7 @@ export default function RestaurantSettingsClient() {
                       {!day.closed && (
                         <button
                           type="button"
-                          aria-label={isExpanded ? `${t('fold')} ${label}` : `${t('modifyHours')} ${label}`}
+                          aria-label={isExpanded ? `${t('fold')} ${dayLabel}` : `${t('modifyHours')} ${dayLabel}`}
                           onClick={(e) => {
                             e.stopPropagation();
                             setExpandedDay((prev) => (prev === key ? null : key));
@@ -580,7 +581,7 @@ export default function RestaurantSettingsClient() {
                             disabled={isDeleting}
                             value={day.open}
                             onChange={(event) => updateDay(key, 'open', event.target.value)}
-                            aria-label={`${label} ouverture`}
+                            aria-label={`${dayLabel} ${t('openDay')}`}
                             className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-semibold text-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 min-h-[44px]"
                           />
                         </label>
@@ -594,7 +595,7 @@ export default function RestaurantSettingsClient() {
                             disabled={isDeleting}
                             value={day.close}
                             onChange={(event) => updateDay(key, 'close', event.target.value)}
-                            aria-label={`${label} fermeture`}
+                            aria-label={`${dayLabel} ${t('closedDay')}`}
                             className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-semibold text-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 min-h-[44px]"
                           />
                         </label>

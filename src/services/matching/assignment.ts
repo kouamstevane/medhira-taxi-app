@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { logger } from '@/utils/logger';
+import { translate } from '@/locales';
 import {
   markCandidateAccepted,
   expireAllPendingCandidates,
@@ -51,7 +52,7 @@ export const assignDriver = async (
       const rideSnap = await transaction.get(rideRef);
 
       if (!rideSnap.exists()) {
-        throw new Error('Course non trouvée');
+        throw new Error(translate('serviceMessages.matching.rideNotFound'));
       }
 
       const rideData = rideSnap.data();
@@ -67,7 +68,7 @@ export const assignDriver = async (
       const driverRef = doc(db, 'drivers', driverId);
       const driverSnap = await transaction.get(driverRef);
       if (!driverSnap.exists()) {
-        throw new Error('Chauffeur non trouvé');
+        throw new Error(translate('serviceMessages.matching.driverNotFound'));
       }
       const txDriverData = driverSnap.data();
       const txIsAvailable = txDriverData.isAvailable !== undefined ? txDriverData.isAvailable : true;
@@ -98,7 +99,7 @@ export const assignDriver = async (
         // Vérifier l'expiration (seulement si elle existe)
         const expiresAt = candidateData.expiresAt?.toDate();
         if (expiresAt && expiresAt < new Date()) {
-          throw new Error('La candidature a expiré');
+          throw new Error(translate('serviceMessages.matching.applicationExpired'));
         }
 
         // Marquer la candidature comme acceptée
@@ -194,7 +195,7 @@ export const cancelAssignment = async (
     const previousDriverId = await runTransaction(db, async (tx) => {
       const rideSnap = await tx.get(rideRef);
       if (!rideSnap.exists()) {
-        throw new Error('Course non trouvée');
+        throw new Error(translate('serviceMessages.matching.rideNotFound'));
       }
 
       const rideData = rideSnap.data();

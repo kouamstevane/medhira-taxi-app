@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useGoogleMaps } from '@/hooks/useGoogleMaps'
+import { useTranslation } from '@/hooks/useTranslation'
 
 type GoogleMapsApi = typeof import('@react-google-maps/api')
 
@@ -15,6 +16,7 @@ interface TrackingMapProps {
 }
 
 export default function TrackingMap({ driverLocation, restaurantAddress, clientAddress }: TrackingMapProps) {
+  const { t } = useTranslation()
   const center = driverLocation || clientAddress || defaultCenter
   const { isLoaded } = useGoogleMaps()
   const [mapsApi, setMapsApi] = useState<GoogleMapsApi | null>(null)
@@ -26,7 +28,7 @@ export default function TrackingMap({ driverLocation, restaurantAddress, clientA
   if (!isLoaded || !mapsApi) {
     return (
       <div style={mapContainerStyle} className="flex items-center justify-center bg-[#1A1A1A]">
-        <p className='text-[#9CA3AF]'>Chargement de la carte...</p>
+        <p className='text-[#9CA3AF]'>{t('common.mapLoadingDots')}</p>
       </div>
     )
   }

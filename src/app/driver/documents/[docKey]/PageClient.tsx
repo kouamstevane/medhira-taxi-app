@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { useTranslation } from '@/hooks/useTranslation'
+import type { TranslationKey } from '@/locales'
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { auth, db, getFirebaseStorage } from '@/config/firebase'
@@ -25,6 +27,7 @@ const DOC_LABELS: Record<AllowedDocKey, string> = {
 }
 
 export default function DocumentReuploadPage() {
+  const { t } = useTranslation();
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -79,7 +82,7 @@ export default function DocumentReuploadPage() {
       setSuccess(true)
       setTimeout(() => router.push('/driver/documents'), 2000)
     } catch (uploadError) {
-      setError('Erreur lors du téléversement. Réessayez.')
+      setError(t('driver.upload.error') || t('driver.documents'))
       console.error(uploadError)
     } finally {
       setUploading(false)
@@ -91,8 +94,8 @@ export default function DocumentReuploadPage() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="space-y-3 text-center">
           <MaterialIcon name="check_circle" className="text-[64px] text-green-400" />
-          <p className="font-bold text-white">Document soumis !</p>
-          <p className="text-sm text-slate-400">Redirection en cours...</p>
+          <p className="font-bold text-white">{t('driver.docSubmitted')}</p>
+          <p className="text-sm text-slate-400">{t('common.redirecting')}</p>
         </div>
       </div>
     )
@@ -103,11 +106,11 @@ export default function DocumentReuploadPage() {
       <div className="mx-auto max-w-lg">
         <button onClick={() => router.back()} className="mb-6 flex items-center gap-2 text-slate-400">
           <MaterialIcon name="arrow_back" className="text-[20px]" />
-          Retour
+          {t('common.back')}
         </button>
 
         <h1 className="mb-2 text-xl font-bold">{DOC_LABELS[docKey as AllowedDocKey] ?? docKey}</h1>
-        <p className="mb-6 text-sm text-slate-400">Téléversez une nouvelle version de ce document.</p>
+        <p className="mb-6 text-sm text-slate-400">{t('driver.uploadNewVersion')}</p>
 
         <label className="glass-card block cursor-pointer rounded-2xl border border-dashed border-white/20 p-6 text-center transition-all hover:border-primary/40">
           <input
@@ -120,9 +123,9 @@ export default function DocumentReuploadPage() {
           {file ? (
             <p className="font-medium text-white">{file.name}</p>
           ) : (
-            <p className="text-slate-400">Cliquez pour sélectionner un fichier</p>
+            <p className="text-slate-400">{t('driver.clickToSelectFile')}</p>
           )}
-          <p className="mt-1 text-xs text-slate-500">Image ou PDF</p>
+          <p className="mt-1 text-xs text-slate-500">{t('driver.imageOrPdf')}</p>
         </label>
 
         {error && <p className="mt-3 text-center text-sm text-red-400">{error}</p>}
@@ -135,7 +138,7 @@ export default function DocumentReuploadPage() {
           {uploading ? (
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
           ) : (
-            'Soumettre le document'
+            t('driver.submitDocument')
           )}
         </button>
       </div>

@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export function BecomeProCard() {
+  const { t } = useTranslation();
   const { userData } = useAuth();
   const hasDriver = userData?.roles?.driver != null;
   const hasRestaurant = userData?.roles?.restaurant != null;
@@ -21,8 +23,8 @@ export function BecomeProCard() {
             <MaterialIcon name="rocket_launch" className="text-primary" />
           </div>
           <div>
-            <p className="text-white font-semibold">Devenir professionnel</p>
-            <p className="text-slate-400 text-sm">Chauffeur ou restaurateur</p>
+            <p className="text-white font-semibold">{t('auth.becomeProTitle')}</p>
+            <p className="text-slate-400 text-sm">{t('auth.driverOrRestaurant')}</p>
           </div>
         </div>
       </Link>
@@ -39,8 +41,8 @@ export function BecomeProCard() {
             <MaterialIcon name="local_taxi" className="text-primary" />
           </div>
           <div>
-            <p className="text-white font-semibold">Devenir chauffeur</p>
-            <p className="text-slate-400 text-sm">Transport de personnes</p>
+            <p className="text-white font-semibold">{t('auth.becomeDriverOption')}</p>
+            <p className="text-slate-400 text-sm">{t('auth.becomeDriverDesc')}</p>
           </div>
         </div>
       </Link>
@@ -56,8 +58,8 @@ export function BecomeProCard() {
           <MaterialIcon name="restaurant" className="text-primary" />
         </div>
         <div>
-          <p className="text-white font-semibold">Ouvrir un restaurant</p>
-          <p className="text-slate-400 text-sm">Vendez vos plats sur Medjira</p>
+          <p className="text-white font-semibold">{t('auth.openRestaurantOption')}</p>
+          <p className="text-slate-400 text-sm">{t('auth.openRestaurantDesc')}</p>
         </div>
       </div>
     </Link>

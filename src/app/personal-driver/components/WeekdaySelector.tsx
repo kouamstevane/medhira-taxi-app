@@ -1,6 +1,7 @@
 'use client';
 
 import type { PersonalDriverWeekday } from '@/types/personal-driver';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface WeekdaySelectorProps {
   allowedWeekdays: PersonalDriverWeekday[];
@@ -10,17 +11,10 @@ interface WeekdaySelectorProps {
   hasError?: boolean;
 }
 
-const weekdays: Array<{ value: PersonalDriverWeekday; label: string }> = [
-  { value: 1, label: 'Lundi' },
-  { value: 2, label: 'Mardi' },
-  { value: 3, label: 'Mercredi' },
-  { value: 4, label: 'Jeudi' },
-  { value: 5, label: 'Vendredi' },
-  { value: 6, label: 'Samedi' },
-  { value: 0, label: 'Dimanche' },
-];
+const weekdayOrder: PersonalDriverWeekday[] = [1, 2, 3, 4, 5, 6, 0];
 
 export function WeekdaySelector({ allowedWeekdays, selectedWeekdays, onChange, errorId, hasError = false }: WeekdaySelectorProps) {
+  const { t } = useTranslation('personalDriver');
   const excludesWeekend = !allowedWeekdays.includes(6) || !allowedWeekdays.includes(0);
 
   const toggleWeekday = (weekday: PersonalDriverWeekday) => {
@@ -40,11 +34,12 @@ export function WeekdaySelector({ allowedWeekdays, selectedWeekdays, onChange, e
       aria-describedby={hasError ? errorId : undefined}
       aria-invalid={hasError}
     >
-      <legend className="mb-3 text-sm font-semibold text-white">Jours</legend>
+      <legend className="mb-3 text-sm font-semibold text-white">{t('days')}</legend>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {weekdays.map(({ value, label }) => {
+        {weekdayOrder.map((value) => {
           const isAllowed = allowedWeekdays.includes(value);
           const isSelected = selectedWeekdays.includes(value);
+          const label = t(`weekday${value}` as 'weekday0' | 'weekday1' | 'weekday2' | 'weekday3' | 'weekday4' | 'weekday5' | 'weekday6');
 
           return (
             <label
@@ -69,7 +64,7 @@ export function WeekdaySelector({ allowedWeekdays, selectedWeekdays, onChange, e
       </div>
       {excludesWeekend && (
         <p className="mt-3 rounded-lg border border-primary/20 bg-primary/10 p-3 text-xs leading-5 text-slate-300">
-          Le service Basic est offert du lundi au vendredi. Pour ajouter le samedi ou le dimanche, choisissez Classic ou Premium.
+          {t('basicWeekdayNotice')}
         </p>
       )}
     </fieldset>

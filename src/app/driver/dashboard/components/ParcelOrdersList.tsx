@@ -1,5 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { useTranslation } from '@/hooks/useTranslation'
 import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore'
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections'
 import { useDriverAssignedDocs } from '@/hooks/useDriverAssignedDocs'
@@ -17,6 +18,7 @@ const mapParcel = (d: QueryDocumentSnapshot<DocumentData>): ParcelDoc =>
 
 export default function ParcelOrdersList({ uid, header }: Props) {
   const router = useRouter()
+  const { t } = useTranslation()
   const { items: parcels, loading } = useDriverAssignedDocs<ParcelDoc>({
     uid,
     collectionPath: FIRESTORE_COLLECTIONS.PARCELS,
@@ -34,12 +36,12 @@ export default function ParcelOrdersList({ uid, header }: Props) {
         <OrderCard
           key={p.parcelId}
           title={p.description}
-          badge={p.parcelType ? (p.customType || p.parcelType) : (p.sizeCategory || 'Colis')}
+          badge={p.parcelType ? (p.customType || p.parcelType) : (p.sizeCategory || t('driver.parcelBadgeDefault'))}
           lines={[
             { icon: 'my_location', text: p.pickupLocation.address },
             { icon: 'location_on', text: p.dropoffLocation.address },
           ]}
-          statusLabel={p.status === 'accepted' ? 'À récupérer' : 'En transit'}
+          statusLabel={p.status === 'accepted' ? t('driver.parcelStatusPendingPickup') : t('driver.parcelStatusInTransit')}
           statusVariant={p.status === 'accepted' ? 'amber' : 'primary'}
           priceLabel={`${p.price.toFixed(2)} ${p.currency}`}
           onClick={() => router.push(getDriverParcelPath(p.parcelId))}

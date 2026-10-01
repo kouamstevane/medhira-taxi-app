@@ -1,5 +1,6 @@
 'use client'
 import { useRouter } from 'next/navigation'
+import { useTranslation } from '@/hooks/useTranslation'
 import { useDriverAssignedDocs } from '@/hooks/useDriverAssignedDocs'
 import {
   ACTIVE_DELIVERY_STATUSES,
@@ -16,17 +17,20 @@ interface Props {
   header?: React.ReactNode
 }
 
-const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
-  assigned: 'Assignée',
-  refused: 'Refusée',
-  heading_to_restaurant: 'En route resto',
-  arrived_restaurant: 'Au restaurant',
-  waiting: 'En attente',
-  picked_up: 'Commande récupérée',
-  heading_to_client: 'En route client',
-  arrived_client: 'Chez le client',
-  delivered: 'Livrée',
-  cancelled: 'Annulée',
+function getDeliveryStatusLabel(status: DeliveryStatus, t: (key: string) => string): string {
+  switch (status) {
+    case 'assigned': return t('driver.deliveryStatusAssigned')
+    case 'refused': return t('driver.deliveryStatusRefused')
+    case 'heading_to_restaurant': return t('driver.deliveryStatusHeadingToRestaurant')
+    case 'arrived_restaurant': return t('driver.deliveryStatusArrivedRestaurant')
+    case 'waiting': return t('driver.deliveryStatusWaiting')
+    case 'picked_up': return t('driver.deliveryStatusPickedUp')
+    case 'heading_to_client': return t('driver.deliveryStatusHeadingToClient')
+    case 'arrived_client': return t('driver.deliveryStatusArrivedClient')
+    case 'delivered': return t('driver.deliveryStatusDelivered')
+    case 'cancelled': return t('driver.deliveryStatusCancelled')
+    default: return status
+  }
 }
 
 const mapOrder = (d: QueryDocumentSnapshot<DocumentData>): FoodDeliveryOrder =>
@@ -34,6 +38,7 @@ const mapOrder = (d: QueryDocumentSnapshot<DocumentData>): FoodDeliveryOrder =>
 
 export default function DeliveryOrdersList({ uid, header }: Props) {
   const router = useRouter()
+  const { t } = useTranslation()
   const { items: orders, loading } = useDriverAssignedDocs<FoodDeliveryOrder>({
     uid,
     collectionPath: 'food_delivery_orders',
@@ -52,7 +57,7 @@ export default function DeliveryOrdersList({ uid, header }: Props) {
           title={order.restaurantName}
           badge={order.orderNumber}
           lines={[{ icon: 'location_on', text: order.clientNeighbourhood }]}
-          statusLabel={DELIVERY_STATUS_LABELS[order.status]}
+          statusLabel={getDeliveryStatusLabel(order.status, t)}
           statusVariant={order.status === 'assigned' ? 'amber' : 'primary'}
           priceLabel={formatCurrencyWithCode(order.driverEarnings ?? 0)}
           onClick={() => router.push(getDriverDeliveryPath(order.orderId))}

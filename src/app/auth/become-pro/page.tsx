@@ -6,23 +6,25 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { useTranslation } from '@/hooks/useTranslation';
+import type { TranslationKey } from '@/locales';
 import type { ActiveRole } from '@/types/user';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 
 type ProRoleKey = 'driver' | 'restaurant';
 
-const PRO_ROLE_META: Record<ProRoleKey, { label: string; description: string; icon: string; href: string; color: string }> = {
+const PRO_ROLE_META: Record<ProRoleKey, { labelKey: TranslationKey; descKey: TranslationKey; icon: string; href: string; color: string }> = {
   driver: {
-    label: 'Devenir chauffeur',
-    description: 'Transport de personnes et livraison',
+    labelKey: 'auth.becomeDriverOption' as TranslationKey,
+    descKey: 'auth.becomeDriverDesc' as TranslationKey,
     icon: 'local_taxi',
     href: '/driver/register?from=become-pro',
     color: 'bg-orange-500',
   },
   restaurant: {
-    label: 'Ouvrir un restaurant',
-    description: 'Vendez vos plats sur Medjira',
+    labelKey: 'auth.openRestaurantOption' as TranslationKey,
+    descKey: 'auth.openRestaurantDesc' as TranslationKey,
     icon: 'restaurant',
     href: '/restaurant/register?from=become-pro',
     color: 'bg-green-500',
@@ -30,6 +32,7 @@ const PRO_ROLE_META: Record<ProRoleKey, { label: string; description: string; ic
 };
 
 export default function BecomeProPage() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { currentUser, userData, loading } = useAuth();
   const registrationType = userData ? getIncompleteRegistrationType(userData) : null;
@@ -89,10 +92,8 @@ export default function BecomeProPage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        <h1 className="text-3xl font-bold text-center mb-2 text-white">Devenir professionnel</h1>
-        <p className="text-slate-400 text-center mb-8">
-          Choisissez une activit&eacute; pour commencer
-        </p>
+        <h1 className="text-3xl font-bold text-center mb-2 text-white">{t('auth.becomeProTitle')}</h1>
+        <p className="text-slate-400 text-center mb-8">{t('auth.chooseActivityToStart')}</p>
 
         <div className="space-y-4">
           {missingRoles.map((key) => {
@@ -105,8 +106,8 @@ export default function BecomeProPage() {
                       <MaterialIcon name={meta.icon} size="lg" className="text-white" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h2 className="text-lg font-semibold text-white">{meta.label}</h2>
-                      <p className="text-sm text-slate-400 mt-1">{meta.description}</p>
+                      <h2 className="text-lg font-semibold text-white">{t(meta.labelKey)}</h2>
+                      <p className="text-sm text-slate-400 mt-1">{t(meta.descKey)}</p>
                     </div>
                     <MaterialIcon name="chevron_right" size="md" className="text-slate-500 flex-shrink-0" />
                   </div>

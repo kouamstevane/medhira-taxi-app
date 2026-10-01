@@ -12,6 +12,7 @@ import { isNativeStripe } from '@/lib/stripe-adapters';
 import { NativeStripePayment } from '@/components/stripe/NativeStripePayment';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { toIntlCurrencyCode } from '@/utils/format';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface PaymentFormProps {
   amount: number;
@@ -26,12 +27,14 @@ function PaymentForm({
   currency,
   onSuccess,
   onError,
-  submitLabel = 'Confirmer le paiement',
+  submitLabel,
 }: PaymentFormProps) {
+  const { t, locale } = useTranslation('wallet');
   const stripe = useStripe();
   const elements = useElements();
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const finalSubmitLabel = submitLabel || t('wallet.confirmPayment');
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -47,7 +50,7 @@ function PaymentForm({
     });
 
     if (error) {
-      const msg = error.message ?? 'Erreur de paiement';
+      const msg = error.message ?? t('wallet.paymentError');
       setProcessing(false);
       setErrorMessage(msg);
       onError(msg);
@@ -68,8 +71,8 @@ function PaymentForm({
       case 'requires_action': {
         if (!paymentIntent.client_secret) {
           setProcessing(false);
-          setErrorMessage('Erreur interne: client_secret manquant');
-          onError('Erreur interne: client_secret manquant');
+          setErrorMessage(t('wallet.clientSecretMissing'));
+          onError(t('wallet.clientSecretMissing'));
           return;
         }
 
@@ -81,32 +84,32 @@ function PaymentForm({
         setProcessing(false);
 
         if (actionError) {
-          const actionMsg = actionError.message ?? 'Authentification échouée';
+          const actionMsg = actionError.message ?? t('wallet.authFailed');
           setErrorMessage(actionMsg);
           onError(actionMsg);
         } else if (updatedPi) {
           if (updatedPi.status === 'succeeded' || updatedPi.status === 'requires_capture') {
             onSuccess(updatedPi.id);
           } else {
-            setErrorMessage('Paiement non abouti après authentification');
-            onError('Paiement non abouti après authentification');
+            setErrorMessage(t('wallet.paymentFailedAfterAuth'));
+            onError(t('wallet.paymentFailedAfterAuth'));
           }
         }
         break;
       }
       case 'processing':
         setProcessing(false);
-        setErrorMessage('Paiement en cours de traitement');
-        onError('Paiement en cours de traitement');
+        setErrorMessage(t('wallet.paymentProcessing'));
+        onError(t('wallet.paymentProcessing'));
         break;
       default:
         setProcessing(false);
-        setErrorMessage('Paiement non abouti');
-        onError('Paiement non abouti');
+        setErrorMessage(t('wallet.paymentFailed'));
+        onError(t('wallet.paymentFailed'));
     }
   };
 
-  const formattedAmount = new Intl.NumberFormat('fr-CA', {
+  const formattedAmount = new Intl.NumberFormat(locale === 'en' ? 'en-CA' : 'fr-CA', {
     style: 'currency',
     currency: toIntlCurrencyCode(currency),
   }).format(amount);
@@ -114,7 +117,7 @@ function PaymentForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
-        <span className="text-slate-400 text-sm">Montant à payer</span>
+        <span className="text-slate-400 text-sm">{t('wallet.amountToPay')}</span>
         <span className="text-white font-bold text-lg">{formattedAmount}</span>
       </div>
 
@@ -145,19 +148,19 @@ function PaymentForm({
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            Traitement…
+            {t('wallet.processing')}
           </>
         ) : (
           <>
             <MaterialIcon name="lock" size="md" />
-            {submitLabel}
+            {finalSubmitLabel}
           </>
         )}
       </button>
 
       <div className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
         <MaterialIcon name="verified_user" size="sm" />
-        <span>Paiement sécurisé par Stripe · PCI DSS Niveau 1</span>
+        <span>{t('wallet.securedByStripe')}</span>
       </div>
     </form>
   );
@@ -180,6 +183,7 @@ export function StripePaymentElement({
   onError,
   submitLabel,
 }: StripePaymentElementProps) {
+  const { locale } = useTranslation();
   const stripePromise = useMemo(() => getStripe(), []);
 
   const options = useMemo(
@@ -211,9 +215,9 @@ export function StripePaymentElement({
           },
         },
       },
-      locale: 'fr' as const,
+      locale: (locale === 'en' ? 'en' : 'fr') as 'en' | 'fr',
     }),
-    [clientSecret]
+    [clientSecret, locale]
   );
 
   if (isNativeStripe()) {

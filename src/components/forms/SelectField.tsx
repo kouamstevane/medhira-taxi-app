@@ -9,6 +9,7 @@
 'use client';
 
 import React, { SelectHTMLAttributes, ReactNode } from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 import { cn } from '@/lib/utils';
 import {
   driverFieldClassName,
@@ -40,7 +41,7 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
       error,
       helperText,
       options,
-      placeholder = 'Sélectionner...',
+      placeholder: customPlaceholder,
       icon,
       className = '',
       containerClassName = '',
@@ -50,6 +51,8 @@ export const SelectField = React.forwardRef<HTMLSelectElement, SelectFieldProps>
     },
     ref
   ) => {
+    const { t } = useTranslation();
+    const placeholder = customPlaceholder ?? t('common.select');
     const errorClasses = error
       ? 'border-[#EF4444] focus:ring-[#EF4444] focus:border-[#EF4444]'
       : 'border-white/[0.08]';

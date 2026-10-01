@@ -6,6 +6,7 @@ import { ChatModal } from '@/components/ChatModal';
 import { useVoipCall } from '@/hooks/useVoipCall';
 import { ConversationContext, buildConversationId } from '@/types/conversation';
 import { ensureConversation } from '@/services/chat.service';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export interface ConversationLauncherProps {
   context: ConversationContext;
@@ -24,6 +25,7 @@ export function ConversationLauncher({
   showChatButton = true,
   className = '',
 }: ConversationLauncherProps) {
+  const { t } = useTranslation();
   const [chatOpen, setChatOpen] = useState(false);
   const [calling, setCalling] = useState(false);
   const { startCall } = useVoipCall();
@@ -82,11 +84,11 @@ export function ConversationLauncher({
             type="button"
             onClick={handleOpenChat}
             className={`${baseBtn} bg-primary/15 border border-primary/30 hover:bg-primary/25 text-primary transition`}
-            aria-label="Ouvrir la conversation"
+            aria-label={t('common.openConversation')}
           >
             <MaterialIcon name="chat" size="md" />
             {variant === 'icon-label' && (
-              <span className="text-xs font-semibold">Message</span>
+              <span className="text-xs font-semibold">{t('common.message')}</span>
             )}
           </button>
         )}
@@ -100,7 +102,7 @@ export function ConversationLauncher({
                 ? 'opacity-50 cursor-not-allowed bg-white/10 text-slate-400'
                 : 'bg-primary/15 border border-primary/30 hover:bg-primary/25 text-primary'
             } transition`}
-            aria-label="Appeler"
+            aria-label={t('common.call')}
           >
             {calling ? (
               <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -108,7 +110,7 @@ export function ConversationLauncher({
               <MaterialIcon name="phone" size="md" />
             )}
             {variant === 'icon-label' && !calling && (
-              <span className="text-xs font-semibold">Appeler</span>
+              <span className="text-xs font-semibold">{t('common.call')}</span>
             )}
           </button>
         )}

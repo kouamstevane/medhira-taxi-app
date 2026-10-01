@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useTranslation } from '@/hooks/useTranslation'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '@/config/firebase'
 import type { DocumentEntry } from '@/types/firestore-collections'
@@ -20,6 +21,7 @@ export interface UseDocumentStatusOptions {
 }
 
 export function useDocumentStatus(uid: string | null, options?: UseDocumentStatusOptions) {
+  const { t } = useTranslation()
   const [documents, setDocuments] = useState<DocumentStatusEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +58,7 @@ export function useDocumentStatus(uid: string | null, options?: UseDocumentStatu
         }
 
         console.error('[useDocumentStatus] Sync error:', snapshotError)
-        setError('Erreur de connexion aux données')
+        setError(t('errors.dataConnectionError'))
         setLoading(false)
         onError?.(snapshotError)
       },

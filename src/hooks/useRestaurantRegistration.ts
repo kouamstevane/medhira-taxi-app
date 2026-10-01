@@ -2,6 +2,8 @@
 
 import { useState, useCallback, useContext, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import {
   getAuth,
   onAuthStateChanged,
@@ -68,6 +70,7 @@ type Step = 1 | 2 | 3 | 4;
 
 export function useRestaurantRegistration() {
   const router = useRouter();
+  const { t } = useTranslation();
   const searchParams = useSearchParams();
   const authContext = useContext(AuthContext);
   const fromBecomePro = searchParams.get('from') === 'become-pro';
@@ -197,7 +200,7 @@ export function useRestaurantRegistration() {
         'code' in err &&
         (err as { code: string }).code === 'auth/email-already-in-use'
       ) {
-        const msg = 'Cet email est déjà utilisé. Connectez-vous pour ajouter un restaurant.';
+        const msg = translate('systemMessages.registration.restaurantEmailInUse');
         setError(msg);
       } else {
         setError(mapped.message);
@@ -313,10 +316,10 @@ export function useRestaurantRegistration() {
     try {
       setStep4DataState(data);
       const user = auth.currentUser;
-      if (!user) throw new Error('Non authentifié');
+      if (!user) throw new Error(translate('systemMessages.registration.notAuthenticated'));
 
       if (!step3Data.location) {
-        throw new Error("Impossible de soumettre le restaurant sans coordonnées vérifiées.");
+        throw new Error(translate('systemMessages.registration.restaurantNoVerifiedCoordinates'));
       }
 
       // Concurrently start preparing image blobs so canvas processing overlaps with token refresh & backend call
@@ -485,7 +488,7 @@ export function useRestaurantRegistration() {
         }));
         await markRestaurantOnboarding(user.uid, 2);
       } catch {
-        setError('Impossible de reprendre cette inscription. Réessayez.');
+        setError(t('restaurant.cannotResumeRegistration'));
       } finally {
         setRestoringDraft(false);
       }
@@ -502,7 +505,7 @@ export function useRestaurantRegistration() {
         try {
           await markRestaurantOnboarding(user.uid, 3);
         } catch {
-          setError('Impossible de reprendre cette inscription. Réessayez.');
+          setError(t('restaurant.cannotResumeRegistration'));
           return;
         }
         setStep1DataState((prev) => ({

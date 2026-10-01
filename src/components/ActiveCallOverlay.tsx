@@ -4,8 +4,10 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { useVoipCall } from '@/hooks/useVoipCall';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export function ActiveCallOverlay() {
+  const { t } = useTranslation();
   const { callState, endCall, toggleMute, toggleSpeaker } = useVoipCall();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -61,10 +63,10 @@ export function ActiveCallOverlay() {
         </div>
 
         <div className="text-center">
-          <h3 className="text-2xl font-semibold text-white">{otherParticipant?.name || 'Utilisateur'}</h3>
+          <h3 className="text-2xl font-semibold text-white">{otherParticipant?.name || t('common.user')}</h3>
           <p className="text-slate-400 text-sm mt-1">
-            {callState.status === 'calling' && 'Appel en cours...'}
-            {callState.status === 'ringing' && 'Sonnerie...'}
+            {callState.status === 'calling' && t('common.callInProgress')}
+            {callState.status === 'ringing' && t('common.callRinging')}
             {callState.status === 'accepted' && displayTimer}
           </p>
         </div>
@@ -83,7 +85,7 @@ export function ActiveCallOverlay() {
             >
               {callState.isMuted ? <MaterialIcon name="mic_off" className="text-[24px]" /> : <MaterialIcon name="mic" className="text-[24px]" />}
             </button>
-            <span className="text-xs text-slate-400">Secret</span>
+            <span className="text-xs text-slate-400">{t('common.callMute')}</span>
           </div>
 
           {/* Speaker Button */}
@@ -96,13 +98,14 @@ export function ActiveCallOverlay() {
             >
               {callState.isSpeakerOn ? <MaterialIcon name="volume_up" className="text-[24px]" /> : <MaterialIcon name="volume_off" className="text-[24px]" />}
             </button>
-            <span className="text-xs text-slate-400">Haut-parleur</span>
+            <span className="text-xs text-slate-400">{t('common.callSpeaker')}</span>
           </div>
         </div>
 
         {/* End Call Button */}
         <button
           onClick={() => endCall()}
+          aria-label={t('common.callEnd')}
           className="w-20 h-20 rounded-full bg-red-500 flex items-center justify-center text-white shadow-xl active:scale-95 transition-transform"
         >
           <MaterialIcon name="call_end" className="text-[36px]" />
