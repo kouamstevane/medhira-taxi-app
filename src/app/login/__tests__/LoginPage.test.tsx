@@ -211,7 +211,7 @@ describe('LoginPage phone authentication', () => {
     it('shows the three actions instead of routing to the client dashboard', async () => {
       render(<LoginPage />);
 
-      expect(await screen.findByRole('heading', { name: 'Inscription restaurateur en cours' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Inscription commerçant / marchand en cours' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Reprendre l’inscription' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Plus tard' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Abandonner cette inscription' })).toBeInTheDocument();

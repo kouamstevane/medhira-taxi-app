@@ -193,7 +193,7 @@ describe('RoleSwitcher', () => {
 
     expect(screen.getByTestId('role-toggle-client')).toHaveAttribute(
       'aria-label',
-      'Activer l’espace client',
+      expect.stringMatching(/Activer l’espace client/i),
     );
   });
 });

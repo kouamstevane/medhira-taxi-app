@@ -581,7 +581,7 @@ export default function RestaurantSettingsClient() {
                             disabled={isDeleting}
                             value={day.open}
                             onChange={(event) => updateDay(key, 'open', event.target.value)}
-                            aria-label={`${dayLabel} ${t('openDay')}`}
+                            aria-label={t('dayOpenLabel', { label: dayLabel })}
                             className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-semibold text-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 min-h-[44px]"
                           />
                         </label>
@@ -595,7 +595,7 @@ export default function RestaurantSettingsClient() {
                             disabled={isDeleting}
                             value={day.close}
                             onChange={(event) => updateDay(key, 'close', event.target.value)}
-                            aria-label={`${dayLabel} ${t('closedDay')}`}
+                            aria-label={t('dayCloseLabel', { label: dayLabel })}
                             className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-semibold text-white outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 min-h-[44px]"
                           />
                         </label>

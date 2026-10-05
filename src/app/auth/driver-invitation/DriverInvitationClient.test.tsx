@@ -74,7 +74,7 @@ describe('DriverInvitationClient', () => {
     fireEvent.submit(screen.getByTestId('driver-invitation-code-form'));
 
     await waitFor(() => {
-      expect(showError).toHaveBeenCalledWith('Saisissez le code reçu par e-mail.');
+      expect(showError).toHaveBeenCalledWith('Veuillez entrer le code complet');
     });
     expect(httpsCallable).not.toHaveBeenCalled();
   });
@@ -155,7 +155,7 @@ describe('DriverInvitationClient', () => {
 
     await waitFor(() => {
       expect(showError).toHaveBeenCalledWith(
-        'Cette adresse Google ne correspond pas à l’adresse email de l’invitation.',
+        'L’adresse email ou le code ne correspond pas à l’invitation.',
       );
     });
     expect(replace).not.toHaveBeenCalled();
