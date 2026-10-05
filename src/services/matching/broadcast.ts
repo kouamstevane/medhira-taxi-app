@@ -28,6 +28,7 @@ import { db } from '@/config/firebase';
 import { findAvailableDrivers } from './findAvailableDrivers';
 import { RideCandidate, BroadcastRideParams } from '@/types';
 import { LIMITS, CURRENCY_CODE } from '@/utils/constants';
+import { translate } from '@/locales';
 
 /**
  * Diffuser une demande de course aux chauffeurs disponibles
@@ -120,10 +121,10 @@ export const broadcastRideRequest = async (
 
     return driverIds;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    const errorMessage = error instanceof Error ? error.message : translate('serviceMessages.taxi.unknownError');
     //  Typage correct de l'erreur (medJira.md #116)
     console.error('[BROADCAST] Erreur lors du broadcast:', errorMessage);
-    throw new Error(`Erreur lors du broadcast: ${errorMessage}`);
+    throw new Error(translate('systemMessages.matching.broadcastFailed', { details: errorMessage }));
   }
 };
 

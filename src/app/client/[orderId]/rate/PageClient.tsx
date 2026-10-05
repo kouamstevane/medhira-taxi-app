@@ -174,7 +174,7 @@ export default function RateDriverPage() {
               onClick={() => setScore(s)}
               onMouseEnter={() => setHovered(s)}
               onMouseLeave={() => setHovered(0)}
-              aria-label={`Score ${s}`}
+              aria-label={t('common.ratingScoreAria', { score: s })}
               className="min-w-[44px] min-h-[44px] flex items-center justify-center">
               <MaterialIcon name="star"
                 className={`text-[40px] transition-colors ${s <= (hovered || score) ? 'text-amber-400' : 'text-slate-600'}`} />

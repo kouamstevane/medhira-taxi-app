@@ -21,6 +21,7 @@ import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import { formatCurrencyWithCode } from '@/utils/format';
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import {
   getClientOrderTrackingPath,
   getClientParcelTrackingPath,
@@ -153,7 +154,7 @@ export default function ClientOrdersPage() {
           status: data.status || 'pending',
           price: data.price || data.finalPrice || 0,
           createdAt: data.createdAt || null,
-          title: data.pickup || 'Course taxi',
+          title: data.pickup || translate('systemMessages.ui.orderTitleTaxi'),
           subtitle: data.destination || '',
           destination: data.destination,
         };
@@ -167,7 +168,7 @@ export default function ClientOrdersPage() {
           status: data.status || 'pending',
           price: data.totalOrderPrice || 0,
           createdAt: data.createdAt || null,
-          title: data.restaurantName || 'Commande repas',
+          title: data.restaurantName || translate('systemMessages.ui.orderTitleFood'),
           subtitle: data.orderItems
             ? (data.orderItems as Array<{ itemQuantity: number; itemName: string }>)
                 .map((i) => `${i.itemQuantity}x ${i.itemName}`)
@@ -185,7 +186,7 @@ export default function ClientOrdersPage() {
           status: data.status || 'pending',
           price: data.price || 0,
           createdAt: data.createdAt || null,
-          title: data.description || 'Livraison colis',
+          title: data.description || translate('systemMessages.ui.orderTitleParcel'),
           subtitle: data.dropoffLocation?.address || data.destination || '',
           destination: data.dropoffLocation?.address || data.destination,
         };
@@ -219,7 +220,7 @@ export default function ClientOrdersPage() {
       ) {
         setIsNetworkError(true);
       } else {
-        setFetchError('Impossible de charger vos commandes. Veuillez réessayer.');
+        setFetchError(translate('systemMessages.ui.ordersLoadFailed'));
       }
     } finally {
       setLoading(false);
@@ -317,7 +318,7 @@ export default function ClientOrdersPage() {
         {isNetworkError && orders.length === 0 ? (
           <div className="p-4">
             <NetworkErrorView
-              title="Oops !"
+              title={t('common.networkErrorTitle')}
               message={t('common.offlineMessage')}
               onRetry={handleRetry}
             />

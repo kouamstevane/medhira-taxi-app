@@ -1,5 +1,6 @@
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { getFirebaseStorage } from '@/config/firebase';
+import { translate } from '@/locales';
 import {
   getRestaurantImagePath,
   type RestaurantImageKind,
@@ -35,15 +36,15 @@ export function getRestaurantImageStorageErrorMessage(error: unknown): string {
     : '';
 
   if (code === 'storage/unauthenticated') {
-    return 'Votre session Firebase a expiré. Reconnectez-vous avant de modifier les visuels du restaurant.';
+    return translate('systemMessages.storageErrors.restaurantSessionExpired');
   }
   if (code === 'storage/unauthorized') {
-    return 'Vous n’avez pas les droits pour modifier les visuels de ce restaurant.';
+    return translate('systemMessages.storageErrors.restaurantUnauthorized');
   }
   if (code === 'storage/canceled') {
-    return 'Le chargement du visuel a été annulé.';
+    return translate('systemMessages.storageErrors.restaurantCanceled');
   }
-  return 'Impossible d’enregistrer le visuel du restaurant. Vérifiez le fichier et réessayez.';
+  return translate('systemMessages.storageErrors.restaurantSaveFailed');
 }
 
 export async function uploadRestaurantImage(

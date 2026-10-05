@@ -35,7 +35,7 @@ export default function WalletPage() {
 
   useEffect(() => {
     if (searchParams.get('success')) {
-      toast.success(t('wallet.rechargeSuccess', { amount: '' }) || 'Recharge effectuée avec succès !');
+      toast.success(t('wallet.rechargeSuccess', { amount: '' }));
       router.replace('/wallet');
     }
   }, [searchParams, router, t]);
@@ -99,7 +99,7 @@ export default function WalletPage() {
           if (isFirestoreNetworkError(err) || errMsg.includes('offline')) {
             setIsNetworkError(true);
           } else if (!errMsg.includes('permission')) {
-            setError(t('common.error') || 'Erreur lors du chargement du portefeuille');
+            setError(t('wallet.loadError'));
           }
           setLoading(false);
         }
@@ -137,7 +137,7 @@ export default function WalletPage() {
         {/* Network Error State (Oops!) */}
         {isNetworkError && !balance && transactions.length === 0 ? (
           <NetworkErrorView
-            title={t('common.networkError') || 'Oops !'}
+            title={t('common.networkErrorTitle')}
             message={t('wallet.loadError')}
             onRetry={() => {
               setIsNetworkError(false);

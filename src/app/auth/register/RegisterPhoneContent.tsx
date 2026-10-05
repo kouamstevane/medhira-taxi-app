@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { InputField } from '@/components/forms';
 import { isValidPhoneNumber } from '@/lib/validation';
-import { SUPPORTED_COUNTRIES, ERROR_MESSAGES } from '@/utils/constants';
+import { SUPPORTED_COUNTRIES, ERROR_MESSAGES, getCountryDisplayName } from '@/utils/constants';
 import { getErrorMessage, getErrorCode } from '@/utils/error-utils';
 import {
   startTwilioPhoneVerification,
@@ -33,7 +33,7 @@ const splitFullName = (fullName: string) => {
 export default function RegisterPhoneContent() {
   const router = useRouter();
   const phoneInputId = useId();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
@@ -273,7 +273,7 @@ export default function RegisterPhoneContent() {
               name="fullName"
               value={formData.fullName}
               onChange={handleChange}
-              placeholder="Jean Dupont"
+              placeholder={t('systemMessages.ui.fullNamePlaceholder')}
               autoComplete="name"
               error={fieldErrors.fullName}
               required
@@ -334,7 +334,7 @@ export default function RegisterPhoneContent() {
                       >
                         <span className="font-semibold mr-3">{country.code}</span>
                         <span className="font-medium mr-2">{country.dialCode}</span>
-                        <span className="text-slate-400">{country.name}</span>
+                        <span className="text-slate-400">{getCountryDisplayName(country, locale)}</span>
                       </button>
                     ))}
                   </div>

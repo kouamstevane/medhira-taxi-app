@@ -318,7 +318,7 @@ export default function HistoriquePage() {
                             day: '2-digit',
                             month: 'long',
                             year: 'numeric'
-                          })} {locale === 'en' ? 'at' : 'à'} {new Date(timestamp).toLocaleTimeString(dateLocale, {
+                          })} {t('history.dateTimeAt')} {new Date(timestamp).toLocaleTimeString(dateLocale, {
                             hour: '2-digit',
                             minute: '2-digit'
                           })}

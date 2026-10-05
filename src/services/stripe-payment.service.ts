@@ -15,6 +15,7 @@
 
 import Stripe from 'stripe';
 import stripe from '@/lib/stripe';
+import { translate, translateDefault } from '@/locales';
 import type {
   CreatePaymentIntentResponse,
   PaymentIntentMetadata,
@@ -85,7 +86,7 @@ export async function createRidePaymentIntent(
       currency: currency.toLowerCase(),
       capture_method: 'manual',
       metadata: metadata as unknown as Record<string, string>,
-      description: `Course taxi #${bookingId}`,
+      description: translateDefault('systemMessages.payment.taxiRideDescription', { id: bookingId }),
       automatic_payment_methods: {
         enabled: true,
       },
@@ -108,7 +109,7 @@ export async function createRidePaymentIntent(
     );
 
     if (!paymentIntent.client_secret) {
-      throw new Error('Impossible de créer le PaymentIntent : client_secret manquant');
+      throw new Error(translate('systemMessages.ui.paymentIntentSecretMissing'));
     }
 
     return {
@@ -224,7 +225,7 @@ export async function createWalletRechargePaymentIntent(
       currency: currency.toLowerCase(),
       capture_method: 'automatic',
       metadata: metadata as unknown as Record<string, string>,
-      description: `Recharge portefeuille — utilisateur ${userId}`,
+      description: translateDefault('systemMessages.payment.walletTopUpDescription', { userId }),
       automatic_payment_methods: {
         enabled: true,
         allow_redirects: 'never',
@@ -242,7 +243,7 @@ export async function createWalletRechargePaymentIntent(
     );
 
     if (!paymentIntent.client_secret) {
-      throw new Error('Impossible de créer le PaymentIntent : client_secret manquant');
+      throw new Error(translate('systemMessages.ui.paymentIntentSecretMissing'));
     }
 
     return {

@@ -20,6 +20,7 @@ import { CURRENCY_CODE, DEFAULT_PRICING, DEFAULT_LOCALE } from '@/utils/constant
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/ui/Toast';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translateDefault } from '@/locales';
 
 type GoogleMapsApi = typeof import('@react-google-maps/api');
 
@@ -263,7 +264,7 @@ export function DriverFoundView({ bookingId, onComplete }: DriverFoundViewProps)
     setCancelling(true);
     try {
       const { cancelBooking } = await import('@/services/taxi.service');
-      await cancelBooking(bookingId, 'Annulé par le client', {
+      await cancelBooking(bookingId, translateDefault('systemMessages.bookingReasons.cancelledByClient'), {
         cancelledBy: 'client',
         cancellationFee: fee,
       });

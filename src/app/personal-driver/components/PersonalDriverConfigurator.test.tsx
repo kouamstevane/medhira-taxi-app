@@ -7,9 +7,11 @@ import { PERSONAL_DRIVER_PLANS } from '@/services/personal-driver/plans';
 import { PersonalDriverConfigurator } from './PersonalDriverConfigurator';
 import { getPersonalDriverPlans } from '@/services/personal-driver/plan-config.service';
 import {
-  DISTANCE_ESTIMATE_ERROR_MESSAGE,
+  getDistanceEstimateErrorMessage,
   estimateRoadDistanceKm,
 } from '@/services/personal-driver/distance.service';
+
+const DISTANCE_ESTIMATE_ERROR_MESSAGE = getDistanceEstimateErrorMessage();
 
 const mockPush = jest.fn();
 let mockSearchParams = new URLSearchParams();

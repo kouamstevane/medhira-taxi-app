@@ -18,7 +18,9 @@ export const errors = {
   paymentFailed: 'Payment failed. Please check your card or payment method.',
   rideCreationFailed: 'Unable to create ride request.',
   driverNotFound: 'No driver available in your area.',
-  uploadFailed: 'File upload failed. Please try again.',
+  dataConnectionError: 'Data connection error',
+  dataConnectionRetry: 'Connection error — please try again',
+  uploadFailed:'File upload failed. Please try again.',
   fileTooLarge: 'File exceeds the maximum allowed size.',
   toasts: {
     copied: 'Copied to clipboard!',
@@ -37,4 +39,14 @@ export const errors = {
     profileUpdate: 'while updating your profile',
     statusChange: 'while changing your status',
   },
+
+  // Service-level errors
+  unknownError: 'Unknown error',
+  unknownObjectError: 'Object error',
+  microphonePermissionRequired: 'Microphone permission required',
+  locationPermissionRequired: 'Location permissions required',
+  cannotCancelBooking: 'Unable to cancel: current status "{status}"',
+  imageLoadFailed: 'Unable to load the image from this URL',
+  imageCompressionLoadFailed: 'Unable to load the image for compression',
+  restaurantIdRequired: 'Restaurant identifier required.',
 } as const;

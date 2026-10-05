@@ -12,6 +12,7 @@ import { broadcastRideRequest } from './broadcast';
 import { Location, MatchingMetrics } from '@/types';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/config/firebase';
+import { translateDefault } from '@/locales';
 
 export interface RetryConfig {
   initialPerimeterMinutes: number; // Plan A: 3-5 min
@@ -182,7 +183,7 @@ const notifyNoDriverAvailable = async (rideId: string): Promise<void> => {
     const bookingRef = doc(db, 'bookings', rideId);
     await updateDoc(bookingRef, {
       status: 'failed',
-      failureReason: 'Aucun chauffeur disponible dans la zone',
+      failureReason: translateDefault('systemMessages.bookingReasons.noDriverInZone'),
       updatedAt: serverTimestamp(),
     });
 

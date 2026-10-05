@@ -6,6 +6,7 @@ import type { QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { FoodDeliveryService } from '@/services/food-delivery.service';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
 import type { MenuItem } from '@/types';
+import { translate } from '@/locales';
 import type { MenuCatalogAvailability, MenuCatalogQuery, MenuCatalogSort } from '@/utils/menu-catalog';
 
 const PAGE_SIZE = 50;
@@ -97,7 +98,7 @@ export function useMenuCatalogQuery(restaurantId: string) {
         ...previous,
         isLoading: false,
         isLoadingPage: false,
-        error: 'Impossible de charger le catalogue.',
+        error: translate('systemMessages.ui.catalogLoadFailed'),
         isNetworkError: isNet,
       }));
     }

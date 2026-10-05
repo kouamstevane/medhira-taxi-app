@@ -238,11 +238,11 @@ function ProfilPageContent() {
       await callable();
       setHasPaymentMethod(false);
       setCardDetails({});
-      showSuccess(t('profile.cardDeleted') || 'Carte retirée avec succès');
+      showSuccess(t('profile.cardDeleted'));
       await reloadUser();
     } catch (err) {
       console.error('Erreur suppression carte:', err);
-      showError(t('common.error') || 'Erreur lors de la suppression de la carte');
+      showError(t('common.error'));
     }
   };
 

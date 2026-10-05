@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getLocalizedPlanContent } from '@/services/personal-driver/localizePlan';
 import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import {
   createPersonalDriverSubscriptionPayment,
@@ -444,7 +445,7 @@ export function PersonalDriverConfirmation() {
       <div className="border-t border-white/10 px-4 py-4 sm:px-6">
         <h2 className="mb-3 text-base font-bold text-white">{t('personalDriver.includedInPlan')}</h2>
         <ul className="grid gap-2 sm:grid-cols-2">
-          {plan.benefits.map((benefit) => (
+          {getLocalizedPlanContent(plan.id, plan, t).benefits.map((benefit) => (
             <li key={benefit} className="flex min-h-8 items-center gap-2 text-sm text-slate-300">
               <MaterialIcon name="check_circle" size="sm" className="text-emerald-400" />
               <span>{benefit}</span>

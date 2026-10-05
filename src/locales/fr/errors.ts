@@ -18,7 +18,9 @@ export const errors = {
   paymentFailed: 'Le paiement a échoué. Veuillez vérifier votre carte ou moyen de paiement.',
   rideCreationFailed: 'Impossible de créer la demande de course.',
   driverNotFound: 'Aucun chauffeur disponible dans votre secteur.',
-  uploadFailed: 'Échec de l\'envoi du fichier. Veuillez réessayer.',
+  dataConnectionError: 'Erreur de connexion aux données',
+  dataConnectionRetry: 'Erreur de connexion — réessayez',
+  uploadFailed:'Échec de l\'envoi du fichier. Veuillez réessayer.',
   fileTooLarge: 'Le fichier dépasse la taille maximale autorisée.',
   toasts: {
     copied: 'Copié dans le presse-papiers !',
@@ -37,4 +39,14 @@ export const errors = {
     profileUpdate: 'lors de la mise à jour de votre profil',
     statusChange: 'lors du changement de statut',
   },
+
+  // Service-level errors
+  unknownError: 'Erreur inconnue',
+  unknownObjectError: 'Erreur objet',
+  microphonePermissionRequired: 'Permission microphone requise',
+  locationPermissionRequired: 'Permissions localisation requises',
+  cannotCancelBooking: 'Impossible d\'annuler : statut actuel "{status}"',
+  imageLoadFailed: 'Impossible de charger l\'image depuis cette URL',
+  imageCompressionLoadFailed: 'Impossible de charger l\'image pour la compression',
+  restaurantIdRequired: 'Identifiant de restaurant requis.',
 } as const;

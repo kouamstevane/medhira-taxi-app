@@ -190,7 +190,7 @@ export const cancelBooking = async (bookingId: string, reason?: string, extraFie
       const booking = bookingSnap.data() as Booking;
 
       if (!CANCELLABLE_STATUSES.includes(booking.status)) {
-        throw new Error(`Impossible d'annuler : statut actuel "${booking.status}"`);
+        throw new Error(translate('errors.cannotCancelBooking', { status: booking.status }));
       }
 
       const driverRef = booking.driverId

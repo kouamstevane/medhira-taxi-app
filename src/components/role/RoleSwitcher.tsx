@@ -84,7 +84,7 @@ export function RoleSwitcher({ allowClientActivation = false }: { allowClientAct
         stripeConnectStatus: statuses.restaurant?.stripeConnectStatus as StripeConnectStatus | undefined,
       }));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Impossible de changer d’espace pour le moment.');
+      setError(err instanceof Error ? err.message : t('systemMessages.ui.roleSwitchFailed'));
     } finally {
       setSwitching(null);
     }

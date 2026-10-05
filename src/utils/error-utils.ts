@@ -1,4 +1,5 @@
 import type { FirebaseError } from 'firebase/app';
+import { translate } from '@/locales';
 
 export function isFirebaseError(e: unknown): e is FirebaseError {
   return (
@@ -11,7 +12,7 @@ export function isFirebaseError(e: unknown): e is FirebaseError {
   );
 }
 
-export function getErrorMessage(err: unknown, fallback = 'Une erreur est survenue'): string {
+export function getErrorMessage(err: unknown, fallback = translate('errors.generic')): string {
   if (isFirebaseError(err)) return err.message;
   if (err instanceof Error) return err.message;
   if (typeof err === 'string') return err;

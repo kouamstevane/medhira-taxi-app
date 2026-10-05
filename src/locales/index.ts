@@ -62,3 +62,11 @@ export function translate(key: TranslationKey, params?: TranslationParams): stri
     : DEFAULT_LOCALE;
   return getTranslation(locale, key, params);
 }
+
+/**
+ * Traduction dans la locale par défaut (fr), indépendante de la langue de l'utilisateur.
+ * Pour les libellés persistés en base et relus par l'équipe (motifs d'annulation, d'échec).
+ */
+export function translateDefault(key: TranslationKey, params?: TranslationParams): string {
+  return getTranslation(DEFAULT_LOCALE, key, params);
+}

@@ -48,6 +48,7 @@ export const getPasswordCriteria = (password: string) => {
  * Format international avec indicatif pays et validation stricte par pays
  */
 import { SUPPORTED_COUNTRIES } from '@/utils/constants';
+import { translate } from '@/locales';
 
 export const isValidPhoneNumber = (phone: string, countryCode?: string): boolean => {
   if (!phone) return false;
@@ -205,7 +206,7 @@ export const validateObject = (data: Record<string, unknown>, schema: Validation
 
     // Required check
     if (rules.required && (!value || (typeof value === 'string' && !value.trim()))) {
-      errors[field] = rules.message || `${field} est requis`;
+      errors[field] = rules.message || translate('systemMessages.formValidation.required', { field });
       continue;
     }
 
@@ -214,24 +215,24 @@ export const validateObject = (data: Record<string, unknown>, schema: Validation
 
     // Length validations
     if (rules.minLength && typeof value === 'string' && value.length < rules.minLength) {
-      errors[field] = rules.message || `${field} doit contenir au moins ${rules.minLength} caractères`;
+      errors[field] = rules.message || translate('systemMessages.formValidation.minLength', { field, min: rules.minLength });
       continue;
     }
 
     if (rules.maxLength && typeof value === 'string' && value.length > rules.maxLength) {
-      errors[field] = rules.message || `${field} ne doit pas dépasser ${rules.maxLength} caractères`;
+      errors[field] = rules.message || translate('systemMessages.formValidation.maxLength', { field, max: rules.maxLength });
       continue;
     }
 
     // Pattern validation
     if (rules.pattern && typeof value === 'string' && !rules.pattern.test(value)) {
-      errors[field] = rules.message || `${field} n'est pas valide`;
+      errors[field] = rules.message || translate('systemMessages.formValidation.invalid', { field });
       continue;
     }
 
     // Custom validation
     if (rules.custom && !rules.custom(value)) {
-      errors[field] = rules.message || `${field} n'est pas valide`;
+      errors[field] = rules.message || translate('systemMessages.formValidation.invalid', { field });
     }
   }
 

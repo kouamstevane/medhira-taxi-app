@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             onClick={onNotificationClick}
             className="relative p-2 rounded-full hover:bg-[#333] transition duration-200 group"
-            aria-label="Notifications"
+            aria-label={t('common.notifications')}
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -103,7 +103,7 @@ export const Header: React.FC<HeaderProps> = ({
               {userData.profileImageUrl ? (
                 <Image
                   src={userData.profileImageUrl}
-                  alt="Profil"
+                  alt={t('common.profile')}
                   width={36}
                   height={36}
                   className="w-9 h-9 rounded-full object-cover border-2 border-[#f29200] shadow-sm"

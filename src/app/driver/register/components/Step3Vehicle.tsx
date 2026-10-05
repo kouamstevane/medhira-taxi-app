@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/useToast';
 import { InputField } from '@/components/forms/InputField';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import { DriverDocumentUploadField } from './DriverDocumentUploadField';
 import {
   driverPrimaryButtonClassName,
@@ -19,7 +20,7 @@ import {
 
 const step3Schema = z.object({
   productionYear: z.string()
-    .regex(/^(19|20)\d{2}$/, "Année invalide (ex: 2021)"),
+    .regex(/^(19|20)\d{2}$/, { error: () => translate('systemMessages.driverRegistration.productionYearInvalid') }),
   hasFourDoors: z.boolean().optional(),
 });
 

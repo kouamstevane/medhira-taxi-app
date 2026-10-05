@@ -60,7 +60,7 @@ export const assignDriver = async (
       // Vérifier que la course est toujours en attente
       if (rideData.status !== 'pending') {
         throw new Error(
-          `La course n'est plus disponible. Statut actuel: ${rideData.status}`
+          translate('systemMessages.matching.rideNoLongerAvailable', { status: rideData.status })
         );
       }
 
@@ -73,7 +73,7 @@ export const assignDriver = async (
       const txDriverData = driverSnap.data();
       const txIsAvailable = txDriverData.isAvailable !== undefined ? txDriverData.isAvailable : true;
       if (!txIsAvailable) {
-        throw new Error('Le chauffeur n\'est pas disponible');
+        throw new Error(translate('systemMessages.matching.driverNotAvailable'));
       }
 
       // Vérifier ou créer la candidature
@@ -83,16 +83,14 @@ export const assignDriver = async (
       if (!candidateSnap.exists()) {
         // La candidature doit exister (créée par le broadcast) pour que le chauffeur puisse accepter.
         // Sans candidature, l'attribution n'est pas possible car le chauffeur n'a pas consenti.
-        throw new Error(
-          'Candidature non trouvée. Le chauffeur doit recevoir une offre de course via le broadcast avant de pouvoir accepter.'
-        );
+        throw new Error(translate('systemMessages.matching.candidateNotFound'));
       } else {
         // Si la candidature existe, vérifier qu'elle est en attente
         const candidateData = candidateSnap.data();
 
         if (candidateData.status !== 'pending') {
           throw new Error(
-            `Candidature déjà traitée. Statut: ${candidateData.status}`
+            translate('systemMessages.matching.candidateAlreadyProcessed', { status: candidateData.status })
           );
         }
 
@@ -168,13 +166,13 @@ export const assignDriver = async (
     logger.info('Course attribuée avec succès', { rideId, driverId });
     return result;
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+    const errorMessage = error instanceof Error ? error.message : translate('serviceMessages.taxi.unknownError');
     // Log l'erreur complète pour le débogage
     console.error('[ASSIGNMENT_DEBUG] Full error:', error);
     logger.error('Erreur lors de l\'attribution', { error: errorMessage, rideId, driverId, fullError: error });
     return {
       success: false,
-      error: errorMessage || 'Erreur lors de l\'attribution de la course',
+      error: errorMessage || translate('systemMessages.matching.assignmentFailed'),
     };
   }
 };
@@ -203,7 +201,7 @@ export const cancelAssignment = async (
       const cancellableStatuses = ['pending', 'accepted', 'driver_arrived'];
       if (!cancellableStatuses.includes(rideData.status)) {
         throw new Error(
-          `Impossible d'annuler: statut actuel "${rideData.status}"`
+          translate('systemMessages.matching.cannotCancel', { status: rideData.status })
         );
       }
 

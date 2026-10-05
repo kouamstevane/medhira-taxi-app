@@ -45,7 +45,7 @@ describe('NetworkErrorView Component', () => {
   it('renders default text, button and illustration properly', () => {
     render(<NetworkErrorView onRetry={jest.fn()} />);
 
-    expect(screen.getByText('Oops!')).toBeInTheDocument();
+    expect(screen.getAllByText('Oops !')[0]).toBeInTheDocument();
     expect(
       screen.getByText('Échec du chargement des données. Veuillez vérifier votre connexion internet et réessayer.')
     ).toBeInTheDocument();

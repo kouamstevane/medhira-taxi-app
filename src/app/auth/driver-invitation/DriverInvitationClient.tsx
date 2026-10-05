@@ -53,8 +53,8 @@ export default function DriverInvitationClient() {
 
   const roleLabel = useMemo(() => {
     if (role === 'les_deux') return t('auth.driverRole');
-    if (role === 'chauffeur') return t('common.roles.driver') || 'Chauffeur';
-    if (role === 'livreur') return t('common.roles.delivery') || 'Livreur';
+    if (role === 'chauffeur') return t('common.roles.driver');
+    if (role === 'livreur') return t('common.roles.delivery');
     return t('auth.driverRole');
   }, [role, t]);
 
@@ -149,7 +149,7 @@ export default function DriverInvitationClient() {
               label={t('auth.authorizedEmail')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="vous@exemple.com"
+              placeholder={t('auth.emailPlaceholder')}
               autoComplete="email"
             />
             <InputField
@@ -162,7 +162,7 @@ export default function DriverInvitationClient() {
               autoComplete="off"
             />
             <p className="text-xs leading-5 text-slate-500">{t('auth.invitationCodeValidityNotice')}</p>
-            <button disabled={loading} className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50">{loading ? t('common.verifying') || 'Vérification…' : t('auth.verifyMyInvitation')}</button>
+            <button disabled={loading} className="w-full rounded-xl bg-primary px-4 py-3 font-semibold text-white disabled:opacity-50">{loading ? t('common.verifying') : t('auth.verifyMyInvitation')}</button>
           </form>
         ) : (
           <div className="space-y-4">
@@ -180,7 +180,7 @@ export default function DriverInvitationClient() {
                 placeholder={t('auth.passwordMinLengthPlaceholder')}
                 autoComplete="new-password"
               />
-              <button disabled={loading} className="w-full rounded-xl border border-primary/40 bg-primary/15 px-4 py-3 font-semibold text-primary disabled:opacity-50">{loading ? t('common.saving') || 'Création…' : t('auth.createWithEmailAndPassword')}</button>
+              <button disabled={loading} className="w-full rounded-xl border border-primary/40 bg-primary/15 px-4 py-3 font-semibold text-primary disabled:opacity-50">{loading ? t('common.creating') : t('auth.createWithEmailAndPassword')}</button>
             </form>
           </div>
         )}

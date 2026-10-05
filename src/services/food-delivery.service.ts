@@ -868,7 +868,7 @@ export const createRestaurant = async (
 
 export const deleteRestaurant = async (restaurantId: string): Promise<void> => {
   try {
-    if (!restaurantId.trim()) throw new Error('Identifiant de restaurant requis.');
+    if (!restaurantId.trim()) throw new Error(translate('errors.restaurantIdRequired'));
 
     const functionsRegion = process.env.NEXT_PUBLIC_FIREBASE_FUNCTIONS_REGION || 'europe-west1';
     const app = getApps().length ? getApp() : undefined;

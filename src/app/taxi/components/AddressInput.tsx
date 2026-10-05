@@ -17,6 +17,7 @@ import {
 } from '@/app/driver/register/components/driverOnboardingStyles';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 
 export interface AddressInputProps {
   label: string;
@@ -141,7 +142,7 @@ export const AddressInput = ({
       }
     } catch (err: unknown) {
       if (!isMounted.current) return;
-      const msg = err instanceof Error ? err.message : 'Impossible de récupérer votre position';
+      const msg = err instanceof Error ? err.message : translate('systemMessages.ui.positionUnavailable');
       setGeoErrorMessage(msg);
     } finally {
       if (isMounted.current) {

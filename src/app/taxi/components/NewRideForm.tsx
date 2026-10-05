@@ -187,7 +187,7 @@ export const NewRideForm = ({ onBookingCreated, onSearchDriver }: NewRideFormPro
           setPickupLocation(location);
 
           // Afficher immédiatement les coordonnées pendant qu'on cherche l'adresse
-          const coordsAddress = `Ma position (${location.lat.toFixed(4)}, ${location.lng.toFixed(4)})`;
+          const coordsAddress = translate('systemMessages.ui.myPosition', { lat: location.lat.toFixed(4), lng: location.lng.toFixed(4) });
           setPickupAddress(coordsAddress);
 
           // Reverse Geocoding optimisé (client-side uniquement pour vitesse)

@@ -30,6 +30,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '@/config/firebase';
 import { Driver } from '@/types';
+import { translate } from '@/locales';
 
 /**
  * Vérifie que l'utilisateur courant est authentifié ET admin.
@@ -42,11 +43,11 @@ import { Driver } from '@/types';
 async function requireAdmin(): Promise<string> {
   const user = auth.currentUser;
   if (!user) {
-    throw new Error('unauthenticated: Vous devez être connecté pour effectuer cette action.');
+    throw new Error(`unauthenticated: ${translate('systemMessages.accountStatus.unauthenticated')}`);
   }
   const adminSnap = await getDoc(doc(db, 'admins', user.uid));
   if (!adminSnap.exists()) {
-    throw new Error('permission-denied: Rôle administrateur requis.');
+    throw new Error(`permission-denied: ${translate('systemMessages.accountStatus.adminRequired')}`);
   }
   return user.uid;
 }
@@ -169,7 +170,7 @@ export const canDriverLogin = async (driverId: string): Promise<{
   if (!driverSnap.exists()) {
     return {
       canLogin: false,
-      reason: 'Compte introuvable',
+      reason: translate('systemMessages.accountStatus.notFound'),
     };
   }
 
@@ -179,7 +180,7 @@ export const canDriverLogin = async (driverId: string): Promise<{
   if (driver.isActive === false) {
     return {
       canLogin: false,
-      reason: 'Votre compte a été désactivé par un administrateur. Contactez le support.',
+      reason: translate('systemMessages.accountStatus.deactivated'),
     };
   }
 
@@ -187,7 +188,7 @@ export const canDriverLogin = async (driverId: string): Promise<{
   if (driver.isSuspended) {
     return {
       canLogin: false,
-      reason: driver.suspensionReason || 'Votre compte a été suspendu temporairement. Contactez le support.',
+      reason: driver.suspensionReason || translate('systemMessages.accountStatus.suspended'),
     };
   }
 
@@ -195,14 +196,14 @@ export const canDriverLogin = async (driverId: string): Promise<{
   if (driver.status === 'pending') {
     return {
       canLogin: false,
-      reason: 'Votre compte est en cours de vérification.',
+      reason: translate('systemMessages.accountStatus.underVerification'),
     };
   }
 
   if (driver.status === 'rejected') {
     return {
       canLogin: false,
-      reason: 'Votre demande a été rejetée. Vous pouvez soumettre une nouvelle demande.',
+      reason: translate('systemMessages.accountStatus.rejected'),
     };
   }
 

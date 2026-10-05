@@ -65,7 +65,7 @@ export default function Level7A_LeaveAtDoor({ order, confirmDelivery, uploadProo
         <label className="glass-card block p-6 rounded-2xl border border-dashed border-white/20 text-center cursor-pointer">
           <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
           {preview ? (
-            <img src={preview} alt="Preuve" className="w-full max-h-48 object-cover rounded-xl" />
+            <img src={preview} alt={t('systemMessages.ui.proofAlt')} className="w-full max-h-48 object-cover rounded-xl" />
           ) : (
             <>
               <MaterialIcon name="photo_camera" className="text-slate-400 text-[48px] mb-2" />

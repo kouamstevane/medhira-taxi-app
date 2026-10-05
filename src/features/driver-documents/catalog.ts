@@ -44,15 +44,15 @@ export function getLocalizedDocumentLabel(
 ): string {
   if (t) {
     const docKeyMap: Record<string, string> = {
-      biometricPhoto: 'driver.docBiometricPhoto',
-      carRegistration: 'driver.docCarRegistration',
-      insurance: 'driver.docInsurance',
-      techControl: 'driver.docTechControl',
-      vehicleExterior: 'driver.docVehicleExterior',
-      workEligibility: 'driver.docWorkEligibility',
-      driversAbstract: 'driver.docDriversAbstract',
-      licenseFront: 'driver.docLicenseFront',
-      licenseBack: 'driver.docLicenseBack',
+      biometricPhoto: 'driver.docNameBiometricPhoto',
+      carRegistration: 'driver.docNameCarRegistration',
+      insurance: 'driver.docNameInsurance',
+      techControl: 'driver.docNameTechControl',
+      vehicleExterior: 'driver.docNameVehicleExterior',
+      workEligibility: 'driver.docNameWorkEligibility',
+      driversAbstract: 'driver.docNameDriversAbstract',
+      licenseFront: 'driver.docNameLicenseFront',
+      licenseBack: 'driver.docNameLicenseBack',
     };
     const transKey = docKeyMap[key];
     if (transKey) {

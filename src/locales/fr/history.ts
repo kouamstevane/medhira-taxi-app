@@ -1,5 +1,6 @@
 export const history = {
   title: 'Historique des commandes',
+  dateTimeAt: 'à',
   backToDashboard: 'Retour au tableau de bord',
   allTrips: 'Toutes vos courses',
   filterByPeriod: 'Filtrez par période ci-dessous',

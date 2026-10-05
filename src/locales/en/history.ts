@@ -3,6 +3,7 @@ import type { history as HistoryFr } from '../fr/history';
 
 export const history: DeepString<typeof HistoryFr> = {
   title: 'Order History',
+  dateTimeAt: 'at',
   backToDashboard: 'Back to dashboard',
   allTrips: 'All your rides',
   filterByPeriod: 'Filter by period below',

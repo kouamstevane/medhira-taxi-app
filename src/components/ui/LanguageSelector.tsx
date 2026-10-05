@@ -15,7 +15,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   variant = 'toggle',
   className = '',
 }) => {
-  const { locale, setLocale } = useTranslation();
+  const { t, locale, setLocale } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -51,7 +51,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     return (
       <div
         role="group"
-        aria-label="Language selection"
+        aria-label={t('common.languageSelection')}
         className={`inline-flex items-center rounded-xl bg-white/[0.06] p-1 border border-white/[0.08] ${className}`}
       >
         {LOCALE_OPTIONS.map((opt) => {
@@ -85,7 +85,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       <button
         type="button"
         onClick={() => handleSelect(nextLocale)}
-        aria-label={`Current language: ${currentOpt.label}. Click to switch to ${nextLocale.toUpperCase()}`}
+        aria-label={t('common.languageToggleAria', { current: currentOpt.label, next: nextLocale.toUpperCase() })}
         className={`min-h-[44px] min-w-[44px] px-2 font-sans text-[11px] font-semibold tracking-[0.18em] text-primary/80 transition-colors hover:text-primary active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b0c0d] ${className}`}
       >
         {locale.toUpperCase()}
@@ -103,7 +103,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
         onClick={() => setIsOpen(!isOpen)}
         aria-haspopup="true"
         aria-expanded={isOpen}
-        aria-label="Select language"
+        aria-label={t('common.selectLanguage')}
         className="min-w-[44px] min-h-[44px] px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-sm text-white flex items-center gap-2 transition-all active:scale-95"
       >
         <span className="text-base">{currentOpt.flag}</span>

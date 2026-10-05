@@ -109,7 +109,7 @@ export function useDriverActivity(
         deliveryRecordsRef.push({
           id: d.id,
           type: 'livraison',
-          description: `Livraison — ${data.restaurantName ?? 'Restaurant inconnu'}`,
+          description: translate('systemMessages.activity.deliveryTitle', { restaurant: data.restaurantName ?? translate('systemMessages.activity.unknownRestaurant') }),
           date: ts.toLocaleDateString('fr-CA'),
           amount: typeof data.driverEarnings === 'number' ? data.driverEarnings : 0,
         })

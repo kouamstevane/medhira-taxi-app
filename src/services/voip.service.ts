@@ -197,7 +197,7 @@ class VoipService {
       // Check permissions before joining
       const hasPermission = await this.ensureMicrophonePermission();
       if (!hasPermission) {
-        throw new Error('Permission microphone requise');
+        throw new Error(translate('errors.microphonePermissionRequired'));
       }
 
       // Start Android foreground service
@@ -221,7 +221,7 @@ class VoipService {
       logger.error('Erreur startCall', { error });
       this.updateState({ 
         status: 'failed', 
-        error: err.message || 'Impossible d\'initier l\'appel' 
+        error: err.message || translate('systemMessages.ui.callInitFailed') 
       });
       throw error;
     }
@@ -243,7 +243,7 @@ class VoipService {
       const hasPermission = await this.ensureMicrophonePermission();
       if (!hasPermission) {
         this.endCall('failed');
-        throw new Error('Permission microphone requise');
+        throw new Error(translate('errors.microphonePermissionRequired'));
       }
 
       // Start Android foreground service
@@ -477,7 +477,7 @@ class VoipService {
       caller,
       callee: {
         uid: calleeUid,
-        name: 'Moi',
+        name: translate('systemMessages.ui.me'),
         role: guessedCalleeRole
       },
       error: null

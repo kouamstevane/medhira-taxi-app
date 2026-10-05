@@ -85,7 +85,7 @@ class APIClient {
 
       throw {
         status: response.status,
-        message: error.message || 'Une erreur est survenue',
+        message: error.message || translate('errors.generic'),
         data: error,
       };
     }

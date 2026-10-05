@@ -218,7 +218,8 @@ export default function DriverDashboard() {
           submissionParam,
           emailVerifiedParam,
           userEmailVerified,
-          driverData.status
+          driverData.status,
+          t
         );
 
         if (infoMessage) {
@@ -634,9 +635,10 @@ export default function DriverDashboard() {
   const driverType = driver?.driverType ?? 'chauffeur'
   const activeMode = driver?.activeMode ?? 'taxi'
   const viewOnly = driver?.status === 'pending'
-  const notificationState = getDriverDashboardNotificationState(unreadCount);
+  const notificationState = getDriverDashboardNotificationState(unreadCount, t);
   const quickActions = getDriverDashboardQuickActions(
-    driverDocs.some(d => d.status === 'rejected' || d.status === 'not_submitted')
+    driverDocs.some(d => d.status === 'rejected' || d.status === 'not_submitted'),
+    t
   );
   const driverLocation = driver.currentLocation;
   const hasValidCurrentLocation = !!(
@@ -649,6 +651,7 @@ export default function DriverDashboard() {
     isUpdating: availabilityUpdating,
     isApproved: isDriverApprovedOrActive(driver.status),
     hasLocation: hasValidCurrentLocation,
+    t,
   });
   const availabilityGlowClass = availabilityState.indicatorTone === 'online'
     ? 'bg-green-500/10'
@@ -670,7 +673,7 @@ export default function DriverDashboard() {
           <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => router.push('/driver/profile')}
-              aria-label="Profil"
+              aria-label={t('common.profile')}
               className="size-10 shrink-0 rounded-full border border-primary/30 bg-gradient-to-r from-primary to-[#ffae33] flex items-center justify-center shadow-sm hover:opacity-85 transition-opacity"
             >
               <span className="text-white font-bold text-sm">{getInitials(driver.firstName, driver.lastName)}</span>
@@ -695,7 +698,7 @@ export default function DriverDashboard() {
         <div className="px-6 pt-5 pb-2">
           <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">{t('driver.dashboard')}</span>
           <h1 className="text-xl font-bold text-white mt-1 leading-tight">
-            Bonjour, {formatValue(driver.firstName)} !
+            {t('driver.greetingWithName', { name: String(formatValue(driver.firstName)) })}
           </h1>
         </div>
 
@@ -785,7 +788,7 @@ export default function DriverDashboard() {
                     <GlassCard key={trip.id} variant="bordered" className="p-5">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1">Course #{trip.id.slice(-4)}</p>
+                          <p className="text-slate-400 text-[10px] uppercase font-bold tracking-widest mb-1">{t('driver.tripNumber', { id: trip.id.slice(-4) })}</p>
                           <div className="flex items-center gap-2">
                             <span className="text-2xl font-black text-white">{formatCurrencyWithCode(trip.price)}</span>
                           </div>

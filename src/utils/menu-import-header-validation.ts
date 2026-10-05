@@ -1,4 +1,5 @@
 import type JSZipType from 'jszip';
+import { translate } from '@/locales';
 
 const loadJSZip = async (): Promise<JSZipType> => {
   const jszipModule = await import('jszip');
@@ -280,7 +281,7 @@ const readFileArrayBuffer = async (file: File): Promise<ArrayBuffer> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(reader.error ?? new Error('Impossible de lire le fichier'));
+    reader.onerror = () => reject(reader.error ?? new Error(translate('systemMessages.ui.fileReadFailed')));
     reader.readAsArrayBuffer(file);
   });
 };

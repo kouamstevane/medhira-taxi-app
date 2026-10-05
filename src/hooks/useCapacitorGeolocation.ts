@@ -199,7 +199,7 @@ export const useCapacitorGeolocation = () => {
                 return await readBrowserPosition(mode);
             } catch (browserErr) {
                 if (!fallbackToCache || !Capacitor.isNativePlatform()) {
-                    const errorMessage = browserErr instanceof Error ? browserErr.message : 'Impossible d\'obtenir la position';
+                    const errorMessage = browserErr instanceof Error ? browserErr.message : translate('systemMessages.geolocation.noPreciseLocation');
                     setState({
                         location: null,
                         preciseLocation: null,
@@ -398,7 +398,7 @@ export const useCapacitorGeolocation = () => {
             console.error('[Geolocation] Erreur:', err);
             const errorMessage = err instanceof Error && err.message
                 ? err.message
-                : 'Impossible d\'obtenir la position';
+                : translate('systemMessages.geolocation.noPreciseLocation');
 
             safeSetState({
                 location: null,
@@ -499,7 +499,7 @@ export const useCapacitorGeolocation = () => {
                         if (watchId) {
                             try { await Geolocation.clearWatch({ id: watchId }); } catch {}
                         }
-                        setState(prev => ({ ...prev, loading: false, error: err?.message ?? 'Erreur' }));
+                        setState(prev => ({ ...prev, loading: false, error: err?.message ?? translate('systemMessages.ui.genericError') }));
                         reject(err ?? new Error(translate('systemMessages.geolocation.cancelled')));
                     } else {
                         resolve(await finish());

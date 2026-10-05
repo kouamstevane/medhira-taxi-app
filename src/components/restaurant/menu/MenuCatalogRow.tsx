@@ -136,7 +136,7 @@ export function MenuCatalogRow({ item, selected, onSelect, onToggleAvailability,
           ref={actionButtonRef}
           onClick={() => setActionsOpen((open) => !open)}
           aria-expanded={actionsOpen}
-          aria-label={`Actions pour ${item.name}`}
+          aria-label={t('systemMessages.ui.actionsFor', { name: item.name })}
           className="flex size-10 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <MaterialIcon name="more_vert" size="sm" />

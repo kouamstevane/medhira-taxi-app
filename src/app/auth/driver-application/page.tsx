@@ -31,8 +31,8 @@ export default function DriverApplicationPage() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const subject = encodeURIComponent('Candidature Chauffeur / Livreur Medjira');
-  const body = encodeURIComponent('Bonjour l’équipe Medjira,\n\nJe souhaite postuler en tant que Chauffeur / Livreur.\n\nNom complet :\nTéléphone :\nVille :\nPoste souhaité : Chauffeur / Livreur / Les deux\n\nVous trouverez mon CV en pièce jointe.\n\nCordialement,');
+  const subject = encodeURIComponent(t('auth.driverApplicationMailSubject'));
+  const body = encodeURIComponent(t('auth.driverApplicationMailBody'));
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -82,7 +82,7 @@ export default function DriverApplicationPage() {
           <div className="space-y-6 p-8 sm:p-10">
             {message && <div className={`rounded-2xl border p-4 text-sm ${message.type === 'success' ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200' : 'border-rose-400/30 bg-rose-400/10 text-rose-200'}`}>{message.text}</div>}
             <form noValidate onSubmit={submit} className="space-y-4">
-              <InputField required label={t('auth.emailAddress')} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jean@email.com" />
+              <InputField required label={t('auth.emailAddress')} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('auth.emailPlaceholder')} />
               <label htmlFor="cv-file" className={driverUploadEmptyClassName}><span className="flex items-center gap-2 font-semibold text-white"><MaterialIcon name="attach_file" size="sm" /> {cv ? cv.name : t('auth.attachCV')} <span className="text-red-500">*</span></span><span className="mt-2 text-sm text-slate-400">{t('auth.cvFormatHint')}</span><input id="cv-file" required type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="sr-only" onChange={(e) => setCv(e.target.files?.[0] ?? null)} /></label>
               <button type="submit" disabled={submitting} className={driverPrimaryButtonClassName}><MaterialIcon name={submitting ? 'progress_activity' : 'send'} size="sm" /> {submitting ? t('auth.submittingApplication') : t('auth.submitApplication')}</button>
             </form>

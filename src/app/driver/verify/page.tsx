@@ -3,6 +3,7 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import { auth } from '@/config/firebase';
 import { functions } from '@/config/firebase';
 import { httpsCallable } from 'firebase/functions';
@@ -82,7 +83,7 @@ function DriverVerifyContent() {
         window.location.href = url;
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erreur lors de la régénération du lien';
+      const msg = err instanceof Error ? err.message : translate('systemMessages.ui.linkRegenerationFailed');
       setRegenerateError(msg);
       setRegenerating(false);
     }
@@ -188,7 +189,7 @@ function DriverVerifyContent() {
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">{t('driver.applicationSubmittedSuccess')}</h2>
           <p className="text-slate-400 mb-6">
-            Votre demande d&apos;inscription a été reçue. Notre équipe va vérifier vos documents et vous contactera sous 48h.
+            {t('driver.applicationUnderReviewDesc')}
           </p>
           <div className="flex items-center justify-center gap-2">
             <svg className="animate-spin h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24">

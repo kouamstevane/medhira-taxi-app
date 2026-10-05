@@ -32,6 +32,7 @@ export interface NetworkErrorViewProps {
  * Illustration SVG sur-mesure inspirée de la capture (câble orange débranché avec Oops!)
  */
 export function DisconnectedCableIllustration({ className }: { className?: string }) {
+  const { t } = useTranslation();
   return (
     <svg
       viewBox="0 0 260 180"
@@ -60,7 +61,7 @@ export function DisconnectedCableIllustration({ className }: { className?: strin
         letterSpacing="0.5"
         style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
       >
-        Oops!
+        {t('common.networkErrorTitle')}
       </text>
 
       {/* Connecteur gauche (Prise mâle) */}

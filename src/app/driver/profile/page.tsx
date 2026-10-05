@@ -11,6 +11,7 @@ import { useDriverProfile } from '@/hooks/useDriverProfile';
 import { useAuth } from '@/hooks/useAuth';
 import { CardSkeleton } from '@/components/ui/Skeleton';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import {
   getDriverAvailabilityProfileState,
   getDriverVerificationBadges,
@@ -42,7 +43,7 @@ interface InfoRowProps {
   emptyFallback?: string;
 }
 
-function InfoRow({ label, value, italic, emptyFallback = 'Non spécifié' }: InfoRowProps) {
+function InfoRow({ label, value, italic, emptyFallback = translate('driver.notSpecified') }: InfoRowProps) {
   const display = value && value.length > 0 ? value : emptyFallback;
   const isEmpty = !value || value.length === 0;
 

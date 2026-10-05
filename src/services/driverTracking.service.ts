@@ -353,7 +353,7 @@ class DriverTrackingService {
             if (error.message.includes('PERMISSION_DENIED')) {
                 return {
                     code: 'PERMISSION_DENIED',
-                    message: 'Permissions localisation requises',
+                    message: translate('errors.locationPermissionRequired'),
                     recoverable: false,
                 };
             }
@@ -367,7 +367,7 @@ class DriverTrackingService {
         }
         return {
             code: 'NETWORK_ERROR',
-            message: error instanceof Error ? error.message : 'Erreur inconnue',
+            message: error instanceof Error ? error.message : translate('serviceMessages.taxi.unknownError'),
             recoverable: true,
         };
     }

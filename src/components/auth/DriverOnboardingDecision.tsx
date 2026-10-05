@@ -31,7 +31,7 @@ export function DriverOnboardingDecision({
     try {
       await action();
     } catch (actionError: unknown) {
-      setError(actionError instanceof Error ? actionError.message : 'Une erreur est survenue. Réessayez.');
+      setError(actionError instanceof Error ? actionError.message : t('systemMessages.ui.retryableError'));
     } finally {
       setIsProcessing(false);
     }
@@ -47,7 +47,7 @@ export function DriverOnboardingDecision({
           {isRestaurant ? t('auth.restaurantOnboardingInProgress') : t('auth.driverOnboardingInProgress')}
         </h1>
         <p className="text-slate-400 leading-6 mb-8">
-          {t('auth.onboardingIncompleteDesc', { role: isRestaurant ? (t('auth.restaurantRole') || 'restaurateur') : (t('common.roles.driver') || 'chauffeur') })}
+          {t('auth.onboardingIncompleteDesc', { role: isRestaurant ? t('auth.restaurantRole') : t('auth.driverRoleInline') })}
         </p>
 
         {error && (
@@ -107,7 +107,7 @@ export function DriverOnboardingDecision({
                 disabled={isProcessing}
                 className="h-12 flex-1 rounded-xl bg-destructive px-4 font-bold text-white transition-opacity disabled:opacity-50"
               >
-                {isProcessing ? (t('common.saving') || 'Suppression…') : t('auth.confirmAbandon')}
+                {isProcessing ? t('common.deleting') : t('auth.confirmAbandon')}
               </button>
               <button
                 type="button"

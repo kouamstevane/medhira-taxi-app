@@ -253,7 +253,7 @@ class ImageCompressionService {
       };
 
       img.onerror = () => {
-        safeReject(new Error("Impossible de charger l'image pour la compression"));
+        safeReject(new Error(translate('errors.imageCompressionLoadFailed')));
       };
 
       img.src = objectUrl;

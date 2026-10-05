@@ -1,9 +1,9 @@
+import { translate } from '@/locales';
+
 type CallableErrorLike = {
   code?: unknown;
   message?: unknown;
 };
-
-const FALLBACK_MESSAGE = 'Une erreur est survenue. Réessayez dans un instant.';
 
 export function getUserFacingCallableError(error: unknown, t?: (key: string) => string): string {
   const candidate = error as CallableErrorLike | null;
@@ -11,14 +11,14 @@ export function getUserFacingCallableError(error: unknown, t?: (key: string) => 
   const message = typeof candidate?.message === 'string' ? candidate.message.trim() : '';
 
   if (code === 'functions/permission-denied' || code === 'permission-denied') {
-    return t ? t('errors.unauthorized') : 'Vous n’êtes pas autorisé à effectuer cette action.';
+    return t ? t('errors.unauthorized') : translate('systemMessages.callable.permissionDenied');
   }
   if (code === 'functions/unavailable' || code === 'unavailable') {
-    return t ? t('errors.serverError') : 'Le service est momentanément indisponible. Réessayez dans un instant.';
+    return t ? t('errors.serverError') : translate('systemMessages.callable.unavailable');
   }
   if (code === 'functions/unauthenticated' || code === 'unauthenticated') {
-    return t ? t('errors.unauthorized') : 'Votre session a expiré. Connectez-vous à nouveau puis réessayez.';
+    return t ? t('errors.unauthorized') : translate('systemMessages.callable.sessionExpired');
   }
   if (message && !/^(internal|unknown|error)$/i.test(message)) return message;
-  return t ? t('errors.generic') : FALLBACK_MESSAGE;
+  return t ? t('errors.generic') : translate('systemMessages.callable.fallback');
 }

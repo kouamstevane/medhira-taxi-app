@@ -24,6 +24,7 @@ import { cancelBooking } from '@/services/taxi.service';
 import { BonusSelector } from './components/BonusSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translateDefault } from '@/locales';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { BottomNav } from '@/components/ui/BottomNav';
 
@@ -181,14 +182,14 @@ export default function TaxiPage() {
 
     // Arrêter aussi via Firestore pour être sûr
     await stopAutomaticSearch(bookingId);
-    await cancelBooking(bookingId, 'Annulé par le client');
+    await cancelBooking(bookingId, translateDefault('systemMessages.bookingReasons.cancelledByClient'));
 
     try {
       // Mettre à jour le statut du booking à "cancelled"
       const bookingRef = doc(db, 'bookings', bookingId);
       await updateDoc(bookingRef, {
         status: 'cancelled',
-        cancellationReason: 'Annulé par le client',
+        cancellationReason: translateDefault('systemMessages.bookingReasons.cancelledByClient'),
         updatedAt: serverTimestamp(),
       });
 
@@ -305,7 +306,7 @@ export default function TaxiPage() {
               if (bookingData.status === 'pending') {
                 updateDoc(bookingRef, {
                   status: 'failed',
-                  failureReason: 'Aucun chauffeur disponible après 60 secondes',
+                  failureReason: translateDefault('systemMessages.bookingReasons.noDriverAfterTimeout'),
                   updatedAt: serverTimestamp(),
                 }).then(() => {
                   logger.info('Booking marqué comme failed après timeout', { bookingId });
@@ -517,7 +518,7 @@ export default function TaxiPage() {
                   onClick={async () => {
                     if (!bookingId) return;
                     await triggerHaptic(ImpactStyle.Light);
-                    await cancelBooking(bookingId, 'Annulé par le client');
+                    await cancelBooking(bookingId, translateDefault('systemMessages.bookingReasons.cancelledByClient'));
                     setStep('form');
                     setBookingId(null);
                     setPickupAddress('');

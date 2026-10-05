@@ -1,11 +1,12 @@
 import { getDirections } from '@/services/directions.service';
+import { translate } from '@/locales';
 
-export const DISTANCE_ESTIMATE_ERROR_MESSAGE =
-  'Impossible de calculer la distance. Verifiez les adresses puis reessayez.';
+export const getDistanceEstimateErrorMessage = (): string =>
+  translate('systemMessages.ui.distanceEstimateFailed');
 
 export class DistanceEstimateError extends Error {
   constructor() {
-    super(DISTANCE_ESTIMATE_ERROR_MESSAGE);
+    super(getDistanceEstimateErrorMessage());
     this.name = 'DistanceEstimateError';
   }
 }

@@ -6,6 +6,7 @@ import type {
   PersonalDriverPriceInput,
 } from '@/types/personal-driver';
 import { CURRENCY_CODE, CURRENCY_MAP, DEFAULT_LOCALE } from '@/utils/constants';
+import { translate } from '@/locales';
 import { PERSONAL_DRIVER_PLANS } from './plans';
 
 const PLAN_ORDER: PersonalDriverPlanId[] = ['basic', 'classic', 'premium'];
@@ -83,7 +84,7 @@ export function calculatePersonalDriverPrices(
     monthlyDistanceKm: input.monthlyDistanceKm,
     plans,
     recommendedPlanId: recommendedPlan.planId,
-    recommendationReasons: [`${plansCatalogue[recommendedPlan.planId].name} offre le meilleur tarif pour votre besoin.`],
+    recommendationReasons: [translate('systemMessages.ui.recommendedPlanReason', { plan: plansCatalogue[recommendedPlan.planId].name })],
   };
 }
 

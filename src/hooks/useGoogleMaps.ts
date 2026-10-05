@@ -60,7 +60,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
                 setLoadError(null);
               } catch (err: unknown) {
                 console.error('Erreur lors de l\'initialisation des services Google Maps:', err);
-                setLoadError((err as Error).message || 'Erreur d\'initialisation de Google Maps');
+                setLoadError((err as Error).message || translate('systemMessages.googleMaps.initError'));
               }
             } else {
               if (!mountedRef.current) return;
@@ -83,7 +83,7 @@ export const useGoogleMaps = (): UseGoogleMapsReturn => {
       } catch (err: unknown) {
         console.error('Erreur lors de l\'initialisation des services Google Maps:', err);
         if (!mountedRef.current) return;
-        setLoadError((err as Error).message || 'Erreur d\'initialisation de Google Maps');
+        setLoadError((err as Error).message || translate('systemMessages.googleMaps.initError'));
       }
     }
   }, []);

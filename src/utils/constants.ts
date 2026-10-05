@@ -24,6 +24,7 @@
  */
 
 import { Country } from '@/types';
+import { translate } from '@/locales';
 
 // ============================================================================
 // SEUL ENDROIT A MODIFIER POUR CHANGER DE MARCHE
@@ -470,6 +471,18 @@ export function getMarketByCountryCode(code: string): { code: MarketCode; config
   return { code: upper, config };
 }
 
+export function getCountryDisplayName(country: Pick<Country, 'code' | 'name'>, locale?: string): string {
+  const lang = locale
+    ?? (typeof document !== 'undefined' ? document.documentElement.lang : '')
+    ?? '';
+  try {
+    const displayNames = new Intl.DisplayNames([lang || 'fr'], { type: 'region' });
+    return displayNames.of(country.code) ?? country.name;
+  } catch {
+    return country.name;
+  }
+}
+
 export function getSupportedCountryNames(detectedCountry?: MarketCode | null): string {
   const sorted = detectedCountry
     ? [
@@ -477,7 +490,7 @@ export function getSupportedCountryNames(detectedCountry?: MarketCode | null): s
         ...SUPPORTED_COUNTRIES.filter((c) => c.code !== detectedCountry),
       ].filter(Boolean)
     : SUPPORTED_COUNTRIES;
-  return sorted.map((c) => c!.name).join(', ');
+  return sorted.map((c) => getCountryDisplayName(c!)).join(', ');
 }
 
 export function getDefaultCountryRestriction(detectedCountry?: MarketCode | null): string[] {
@@ -563,12 +576,12 @@ export const LIMITS = {
  * Messages d'erreur courants.
  */
 export const ERROR_MESSAGES = {
-  NETWORK_ERROR: 'Probleme de connexion. Verifiez votre reseau.',
-  AUTH_ERROR: "Erreur d'authentification",
-  FIREBASE_ERROR: 'Erreur de communication avec le serveur',
-  INVALID_PHONE: 'Numero de telephone invalide',
-  INVALID_EMAIL: 'Adresse email invalide',
-  REQUIRED_FIELDS: 'Veuillez remplir tous les champs obligatoires',
+  get NETWORK_ERROR() { return translate('systemMessages.constants.networkError'); },
+  get AUTH_ERROR() { return translate('systemMessages.constants.authError'); },
+  get FIREBASE_ERROR() { return translate('systemMessages.constants.firebaseError'); },
+  get INVALID_PHONE() { return translate('systemMessages.constants.invalidPhone'); },
+  get INVALID_EMAIL() { return translate('systemMessages.constants.invalidEmail'); },
+  get REQUIRED_FIELDS() { return translate('systemMessages.constants.requiredFields'); },
 };
 
 /**

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersonalDriverPlans } from '@/hooks/usePersonalDriverPlans';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getLocalizedPlanContent } from '@/services/personal-driver/localizePlan';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { formatPersonalDriverCurrency } from '@/services/personal-driver/pricing.service';
 import { getUserFacingCallableError } from '@/utils/callable-error';
@@ -544,7 +545,7 @@ export function PersonalDriverClientDashboard() {
           {t('personalDriver.includedBenefitsTitle', { name: planInfo.name })}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
-          {planInfo.benefits.map((benefit, i) => (
+          {getLocalizedPlanContent(rawPlanId, planInfo, t).benefits.map((benefit, i) => (
             <div key={i} className="flex items-center gap-2.5 rounded-xl border border-white/5 bg-white/5 p-3 text-xs sm:text-sm text-slate-200">
               <MaterialIcon name="check_circle" size="sm" className="text-emerald-400 shrink-0" />
               <span>{benefit}</span>

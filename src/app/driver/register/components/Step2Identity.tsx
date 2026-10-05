@@ -19,6 +19,7 @@ import { PlaceSuggestion } from '@/types';
 import { isValidPhoneNumber } from '@/lib/validation';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import {
   driverFieldClassName,
   driverPrimaryButtonClassName,
@@ -38,18 +39,18 @@ const minDate = new Date();
 minDate.setFullYear(minDate.getFullYear() - 18);
 
 const step2Schema = z.object({
-  firstName: z.string().min(2, "Prénom requis"),
-  lastName: z.string().min(2, "Nom requis"),
-  dob: z.string().min(1, "Date de naissance requise").refine((val) => {
+  firstName: z.string().min(2, { error: () => translate('systemMessages.driverRegistration.firstNameRequired') }),
+  lastName: z.string().min(2, { error: () => translate('systemMessages.driverRegistration.lastNameRequired') }),
+  dob: z.string().min(1, { error: () => translate('systemMessages.driverRegistration.dobRequired') }).refine((val) => {
     const date = new Date(val);
     return !isNaN(date.getTime()) && date <= minDate;
-  }, "Vous devez avoir au moins 18 ans"),
-  phone: z.string().refine((value) => isValidPhoneNumber(value), ERROR_MESSAGES.INVALID_PHONE),
-  address: z.string().min(5, "Adresse de résidence requise"),
-  city: z.string().min(1, "Ville requise"),
+  }, { error: () => translate('systemMessages.driverRegistration.mustBeAdult') }),
+  phone: z.string().refine((value) => isValidPhoneNumber(value), { error: () => ERROR_MESSAGES.INVALID_PHONE }),
+  address: z.string().min(5, { error: () => translate('systemMessages.driverRegistration.addressRequired') }),
+  city: z.string().min(1, { error: () => translate('systemMessages.driverRegistration.cityRequired') }),
   zipCode: z.string().optional(),
-  province: z.string().min(1, "Province/Région requise"),
-  country: z.string().min(1, "Pays requis"),
+  province: z.string().min(1, { error: () => translate('systemMessages.driverRegistration.provinceRequired') }),
+  country: z.string().min(1, { error: () => translate('systemMessages.driverRegistration.countryRequired') }),
 });
 
 export type Step2FormData = z.infer<typeof step2Schema>;
@@ -270,7 +271,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
       const position = await getCurrentPosition('booking', false);
 
       if (!window.google?.maps?.Geocoder) {
-        throw new Error('Google Maps est indisponible pour convertir votre position en adresse.');
+        throw new Error(t('systemMessages.driverRegistration.mapsUnavailableForAddress'));
       }
 
       const geocoder = new window.google.maps.Geocoder();
@@ -282,7 +283,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
               resolve(results[0]);
               return;
             }
-            reject(new Error("Impossible de convertir votre position en adresse."));
+            reject(new Error(t('systemMessages.driverRegistration.cannotConvertPosition')));
           }
         );
       });
@@ -317,9 +318,9 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
   const phonePlaceholder = phoneCountry
     ? `${phonePrefix} ${phoneCountry.defaultNumber}`
     : '+XXX XXXXXXXX';
-  const phoneHelperText = phoneCountry
-    ? `Format international requis, ex. ${phonePrefix} ${phoneCountry.defaultNumber}`
-    : 'Format international requis, ex. +237 655 744 484';
+  const phoneHelperText = t('systemMessages.ui.phoneFormatHint', {
+    example: phoneCountry ? `${phonePrefix} ${phoneCountry.defaultNumber}` : '+237 655 744 484',
+  });
 
   const dayRef = useRef<HTMLInputElement>(null);
   const monthRef = useRef<HTMLInputElement>(null);
@@ -667,7 +668,7 @@ export default function Step2Identity({ onNext, onBack, initialData, initialPhot
           <div className="flex flex-col items-center justify-center py-4">
             {photoDataUrl ? (
               <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-[#f29200]">
-                <img src={photoDataUrl} alt="Biometric" className="w-full h-full object-cover" />
+                <img src={photoDataUrl} alt={t('driver.docNameBiometricPhoto')} className="w-full h-full object-cover" />
               </div>
             ) : (
               <div className="w-48 h-48 rounded-full bg-[#242424] flex items-center justify-center border-4 border-dashed border-white/20">

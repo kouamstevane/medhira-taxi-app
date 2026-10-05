@@ -6,10 +6,7 @@ import { AddressInput } from '@/app/taxi/components/AddressInput';
 import { useGoogleMaps } from '@/hooks/useGoogleMaps';
 import { useTranslation } from '@/hooks/useTranslation';
 import type { PlacesAutocompleteService } from '@/hooks/usePlacesAutocomplete';
-import {
-  DISTANCE_ESTIMATE_ERROR_MESSAGE,
-  estimateRoadDistanceKm,
-} from '@/services/personal-driver/distance.service';
+import { estimateRoadDistanceKm } from '@/services/personal-driver/distance.service';
 import type {
   PersonalDriverPlan,
   PersonalDriverTripType,
@@ -211,7 +208,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
     setDistanceKm(null);
 
     if (!p.trim() || !d.trim()) {
-      setDistanceError(DISTANCE_ESTIMATE_ERROR_MESSAGE);
+      setDistanceError(t('systemMessages.ui.distanceEstimateFailed'));
       return null;
     }
 
@@ -234,7 +231,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
       return estimatedDistance;
     } catch {
       if (calcId === latestCalculationIdRef.current) {
-        setDistanceError(DISTANCE_ESTIMATE_ERROR_MESSAGE);
+        setDistanceError(t('systemMessages.ui.distanceEstimateFailed'));
       }
       return null;
     } finally {
@@ -342,7 +339,7 @@ export function PersonalDriverConfigurator({ plan }: PersonalDriverConfiguratorP
         void continueToEstimate();
       }}
     >
-      <section className="space-y-4" aria-label="Itineraire">
+      <section className="space-y-4" aria-label={t('history.itinerary')}>
         <AccessibleAddressInput
           label={t('personalDriver.pickupLabel')}
           value={pickupAddress}

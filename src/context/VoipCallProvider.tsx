@@ -17,6 +17,7 @@ import { pushNotifications } from '@/services/pushNotifications.service';
 import { IncomingCallOverlay } from '@/components/IncomingCallOverlay';
 import { ActiveCallOverlay } from '@/components/ActiveCallOverlay';
 import { isFirestoreNetworkError } from '@/utils/firestore-error-handler';
+import { translate } from '@/locales';
 
 type VoipContextType = Record<string, never>;
 
@@ -89,7 +90,7 @@ export function VoipCallProvider({ children }: { children: ReactNode }) {
         // qui va ensuite s'abonner au doc Firestore pour être sûr des données
         const caller: CallParticipant = {
           uid: data.callerId || '', // Si on n'a pas tout dans la notification, handleIncomingCall complètera via Firestore
-          name: data.callerName || 'Appel entrant',
+          name: data.callerName || translate('systemMessages.ui.incomingCall'),
           avatar: data.callerAvatar,
           role: data.callerRole || 'client'
         };

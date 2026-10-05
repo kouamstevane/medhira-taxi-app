@@ -4,6 +4,7 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { ref, onValue, off } from 'firebase/database'
 import { db, getFirebaseDatabase } from '@/config/firebase'
 import { FIRESTORE_COLLECTIONS } from '@/types/firestore-collections'
+import { translate } from '@/locales'
 import type { ParcelDoc } from './useParcelDelivery'
 
 interface DriverLocationRTDB {
@@ -32,7 +33,7 @@ export function useClientParcelTracking(parcelId: string | null) {
       },
       (err) => {
         console.error('[useClientParcelTracking] parcel sync error:', err)
-        setParcelError('Impossible de charger le colis')
+        setParcelError(translate('systemMessages.ui.parcelLoadFailed'))
         setParcelLoading(false)
       }
     )

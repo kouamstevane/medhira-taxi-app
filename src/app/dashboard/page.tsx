@@ -264,7 +264,7 @@ export default function Dashboard() {
             {userData.profileImageUrl && userData.profileImageUrl !== DEFAULT_URLS.DEFAULT_AVATAR ? (
               <Image
                 src={userData.profileImageUrl}
-                alt="Profil"
+                alt={t('common.profile')}
                 width={40}
                 height={40}
                 className="size-10 rounded-full object-cover"
@@ -288,7 +288,7 @@ export default function Dashboard() {
             <button
               onClick={handleNotifications}
               className="relative p-2 bg-card rounded-full border border-white/5"
-              aria-label="Notifications"
+              aria-label={t('common.notifications')}
             >
               <MaterialIcon name="notifications" size="md" className="text-slate-400 text-[22px]" />
               {notifCount > 0 && (
@@ -301,7 +301,7 @@ export default function Dashboard() {
               <button
                 onClick={() => router.push('/admin/drivers')}
                 className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-full"
-                aria-label="Administration"
+                aria-label={t('systemMessages.ui.administration')}
               >
                 <MaterialIcon name="admin_panel_settings" size="md" className="text-purple-400" />
               </button>

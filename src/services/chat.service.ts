@@ -31,6 +31,7 @@ import {
   buildConversationId,
 } from '@/types/conversation';
 import { logger } from '@/utils/logger';
+import { translate } from '@/locales';
 
 /**
  * Crée le document de conversation s'il n'existe pas, et retourne son id.
@@ -209,7 +210,7 @@ export const initiateCall = async (
       callerId,
       callerName,
       callerRole,
-      `${callerName} souhaite vous appeler`,
+      translate('systemMessages.chat.callRequest', { name: callerName }),
       'voice_call'
     );
     logger.info('Appel initié', { conversationId, callerId });

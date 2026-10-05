@@ -216,7 +216,7 @@ export function useDriverProfile() {
         }
       }
     } catch (err) {
-      setStripeError(err instanceof Error ? err.message : 'Erreur Stripe');
+      setStripeError(err instanceof Error ? err.message : translate('systemMessages.ui.stripeError'));
     } finally {
       setStripeLoading(false);
     }
@@ -239,7 +239,7 @@ export function useDriverProfile() {
       }, 4000);
       timeoutsRef.current.push(timeout);
     } catch (err) {
-      setStripeError(err instanceof Error ? err.message : 'Erreur');
+      setStripeError(err instanceof Error ? err.message : translate('systemMessages.ui.genericError'));
     } finally {
       setPayoutToggleLoading(false);
     }
@@ -262,7 +262,7 @@ export function useDriverProfile() {
       timeoutsRef.current.push(timeout);
       await fetchStripeData();
     } catch (err) {
-      setStripeError(err instanceof Error ? err.message : 'Erreur');
+      setStripeError(err instanceof Error ? err.message : translate('systemMessages.ui.genericError'));
     } finally {
       setManualPayoutLoading(false);
     }

@@ -175,7 +175,7 @@ export default function SetupPaymentContent() {
       setClientSecret(data.clientSecret);
       setSetupIntentId(data.setupIntentId);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erreur lors du chargement';
+      const msg = err instanceof Error ? err.message : translate('systemMessages.ui.loadingError');
       console.error('[SetupPayment] Erreur:', msg);
       setError(msg);
     } finally {
@@ -247,7 +247,7 @@ export default function SetupPaymentContent() {
         }
       } catch (err) {
         if (!cancelled) {
-          const msg = err instanceof Error ? err.message : 'Erreur lors du chargement';
+          const msg = err instanceof Error ? err.message : translate('systemMessages.ui.loadingError');
           console.error('[SetupPayment] Erreur:', msg);
           setError(msg);
         }

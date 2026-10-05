@@ -14,6 +14,7 @@ import {
   UploadTask,
 } from 'firebase/storage';
 import { getFirebaseStorage } from '../config/firebase';
+import { translate } from '@/locales';
 
 export interface UploadMenuImageInput {
   restaurantId: string;
@@ -70,15 +71,15 @@ export function getMenuImageStorageErrorMessage(error: unknown): string {
     : '';
 
   if (code === 'storage/unauthenticated') {
-    return 'Votre session Firebase a expiré. Reconnectez-vous avant de modifier les images du menu.';
+    return translate('systemMessages.storageErrors.menuSessionExpired');
   }
   if (code === 'storage/unauthorized') {
-    return 'Vous n’avez pas les droits pour modifier les images de ce restaurant.';
+    return translate('systemMessages.storageErrors.menuUnauthorized');
   }
   if (code === 'storage/canceled') {
-    return 'Le chargement de l’image a été annulé.';
+    return translate('systemMessages.storageErrors.menuCanceled');
   }
-  return 'Impossible d’enregistrer l’article du menu. Vérifiez le fichier et réessayez.';
+  return translate('systemMessages.storageErrors.menuSaveFailed');
 }
 
 /**

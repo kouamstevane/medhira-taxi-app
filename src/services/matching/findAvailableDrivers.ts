@@ -17,6 +17,7 @@ import {
 import { db } from '@/config/firebase';
 import { Location, AvailableDriver, FindDriversConfig } from '@/types';
 import { logger } from '@/utils/logger';
+import { translate } from '@/locales';
 import { LIMITS } from '@/utils/constants';
 import { haversineKm } from '@/utils/distance';
 import { getDirections } from '@/services/directions.service';
@@ -267,6 +268,6 @@ export const findAvailableDrivers = async (
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error('Erreur lors de la recherche de chauffeurs', { error });
-    throw new Error(`Erreur lors de la recherche de chauffeurs: ${errorMessage}`);
+    throw new Error(translate('systemMessages.matching.driverSearchFailed', { details: errorMessage }));
   }
 };

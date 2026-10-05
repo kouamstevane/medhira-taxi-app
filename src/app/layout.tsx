@@ -17,6 +17,7 @@
 
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { translateDefault } from "@/locales";
 import { AuthProvider } from "@/context/AuthContext";
 import { I18nProvider } from "@/context/I18nContext";
 import LayoutClient from "./LayoutClient";
@@ -42,26 +43,11 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL('https://medjira.com'),
   title: {
-    default: "Medjira - Taxi et Livraison au Canada",
+    default: translateDefault('systemMessages.seo.title'),
     template: "%s | Medjira",
   },
-  description: 
-    "Application de mobilité et livraison au Canada. Commander un taxi ou faire livrer vos repas en quelques clics. Service rapide, fiable et sécurisé.",
-  keywords: [
-    "taxi",
-    "livraison",
-    "canada",
-    "toronto",
-    "ottawa",
-    "montréal",
-    "transport",
-    "medjira",
-    "mobilité",
-    "VTC",
-    "course",
-    "chauffeur",
-    "food delivery",
-  ],
+  description: translateDefault('systemMessages.seo.description'),
+  keywords: translateDefault('systemMessages.seo.keywords').split(','),
   authors: [{ name: "Medjira Service", url: "https://medjira.com" }],
   creator: "Medjira Service",
   publisher: "Medjira Service",
@@ -72,14 +58,14 @@ export const metadata: Metadata = {
     locale: "fr_CA",
     url: "https://medjira.com",
     siteName: "Medjira",
-    title: "Medjira - Taxi et Livraison au Canada",
-    description: "Commander un taxi ou faire livrer vos repas en quelques clics",
+    title: translateDefault('systemMessages.seo.title'),
+    description: translateDefault('systemMessages.seo.shortDescription'),
     images: [
       {
         url: "/images/og-image.webp",
         width: 1200,
         height: 630,
-        alt: "Medjira - Service de taxi et livraison",
+        alt: translateDefault('systemMessages.seo.imageAlt'),
       },
     ],
   },
@@ -87,8 +73,8 @@ export const metadata: Metadata = {
   // Twitter Card
   twitter: {
     card: "summary_large_image",
-    title: "Medjira - Taxi et Livraison",
-    description: "Commander un taxi ou faire livrer vos repas en quelques clics",
+    title: translateDefault('systemMessages.seo.shortTitle'),
+    description: translateDefault('systemMessages.seo.shortDescription'),
     images: ["/images/twitter-image.webp"],
     creator: "@medjira",
   },

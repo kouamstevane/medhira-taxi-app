@@ -168,7 +168,7 @@ export function getFirestoreErrorDetails(error: unknown): {
   const details = {
     type: 'UnknownError',
     code: undefined as string | undefined,
-    message: 'Erreur inconnue',
+    message: translate('errors.unknownError'),
     isPermissionError: false,
     isNotFoundError: false,
     isNetworkError: false
@@ -184,7 +184,7 @@ export function getFirestoreErrorDetails(error: unknown): {
   } else if (error && typeof error === 'object') {
     details.type = 'ObjectError';
     details.code = (error as { code?: string }).code;
-    details.message = (error as { message?: string }).message || 'Erreur objet';
+    details.message = (error as { message?: string }).message || translate('errors.unknownObjectError');
     details.isPermissionError = isFirestorePermissionError(error);
     details.isNotFoundError = isFirestoreNotFoundError(error);
     details.isNetworkError = isFirestoreNetworkError(error);

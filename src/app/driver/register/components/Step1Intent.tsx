@@ -9,11 +9,12 @@ import { ERROR_MESSAGES } from '@/utils/constants';
 import OTPInput from '@/components/ui/OTPInput';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
+import { translate } from '@/locales';
 import { driverPrimaryButtonClassName, driverSecondaryButtonClassName, driverSectionCardClassName } from './driverOnboardingStyles';
 
 const step1Schema = z.object({
-  email: z.string().email(ERROR_MESSAGES.INVALID_EMAIL),
-  password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères"),
+  email: z.string().email({ error: () => ERROR_MESSAGES.INVALID_EMAIL }),
+  password: z.string().min(6, { error: () => translate('systemMessages.driverRegistration.passwordMin') }),
 });
 
 export type Step1FormData = z.infer<typeof step1Schema>;
@@ -144,7 +145,7 @@ export default function Step1Intent({ onNext, onGoogleSignIn, initialData, loadi
             {...register('email')}
             type="email"
             label={t('auth.email')}
-            placeholder="votre@email.com"
+            placeholder={t('auth.emailPlaceholder')}
             error={errors.email?.message}
             required
           />

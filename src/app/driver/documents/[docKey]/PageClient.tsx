@@ -9,22 +9,10 @@ import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { auth, db, getFirebaseStorage } from '@/config/firebase'
 import { MaterialIcon } from '@/components/ui/MaterialIcon'
 import { retryWithBackoff } from '@/utils/retry'
-import { DRIVER_DOCUMENT_KEYS, type DriverDocumentKey } from '@/features/driver-documents/catalog'
+import { DRIVER_DOCUMENT_KEYS, getLocalizedDocumentLabel, type DriverDocumentKey } from '@/features/driver-documents/catalog'
 
 export const CANONICAL_UPLOADABLE_DOCUMENT_KEYS = DRIVER_DOCUMENT_KEYS
 type AllowedDocKey = DriverDocumentKey
-
-const DOC_LABELS: Record<AllowedDocKey, string> = {
-  biometricPhoto: 'Photo biométrique',
-  carRegistration: 'Carte grise',
-  insurance: 'Assurance',
-  techControl: 'Contrôle technique',
-  vehicleExterior: 'Photo extérieure du véhicule',
-  workEligibility: "Preuve d'admissibilité au travail",
-  driversAbstract: "Dossier de conduite (Driver's Abstract)",
-  licenseFront: 'Permis de conduire (recto)',
-  licenseBack: 'Permis de conduire (verso)',
-}
 
 export default function DocumentReuploadPage() {
   const { t } = useTranslation();
@@ -43,7 +31,7 @@ export default function DocumentReuploadPage() {
     }
 
     if (!CANONICAL_UPLOADABLE_DOCUMENT_KEYS.includes(docKey as AllowedDocKey)) {
-      setError('Type de document non reconnu')
+      setError(t('systemMessages.ui.unknownDocumentType'))
       return
     }
 
@@ -82,7 +70,7 @@ export default function DocumentReuploadPage() {
       setSuccess(true)
       setTimeout(() => router.push('/driver/documents'), 2000)
     } catch (uploadError) {
-      setError(t('driver.upload.error') || t('driver.documents'))
+      setError(t('errors.uploadFailed'))
       console.error(uploadError)
     } finally {
       setUploading(false)
@@ -109,7 +97,7 @@ export default function DocumentReuploadPage() {
           {t('common.back')}
         </button>
 
-        <h1 className="mb-2 text-xl font-bold">{DOC_LABELS[docKey as AllowedDocKey] ?? docKey}</h1>
+        <h1 className="mb-2 text-xl font-bold">{getLocalizedDocumentLabel(docKey, t)}</h1>
         <p className="mb-6 text-sm text-slate-400">{t('driver.uploadNewVersion')}</p>
 
         <label className="glass-card block cursor-pointer rounded-2xl border border-dashed border-white/20 p-6 text-center transition-all hover:border-primary/40">

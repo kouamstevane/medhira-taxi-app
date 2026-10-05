@@ -26,13 +26,13 @@ const ROLE_META: Record<SelectableRole, { labelKey: TranslationKey; icon: string
 
 type BadgeVariant = 'approved' | 'pending' | 'draft' | 'rejected' | 'suspended' | 'none';
 
-const BADGE_LABELS: Record<string, string> = {
-  approved: 'Approuvé',
-  pending: 'En attente',
-  pending_approval: 'En attente',
-  draft: 'En attente',
-  rejected: 'Refusé',
-  suspended: 'Suspendu',
+const BADGE_LABEL_KEYS: Record<string, TranslationKey> = {
+  approved: 'auth.statusApproved',
+  pending: 'auth.statusPending',
+  pending_approval: 'auth.statusPending',
+  draft: 'auth.statusPending',
+  rejected: 'auth.statusRejected',
+  suspended: 'auth.statusSuspended',
 };
 
 const BADGE_STYLES: Record<string, string> = {
@@ -47,21 +47,27 @@ const BADGE_STYLES: Record<string, string> = {
 function getBadge(
   role: SelectableRole,
   effectiveStatuses: ReturnType<typeof useEffectiveRoleStatus>,
+  t: (key: TranslationKey) => string,
 ): { variant: BadgeVariant; label: string } {
+  const labelFor = (status: string): string => {
+    const key = BADGE_LABEL_KEYS[status];
+    return key ? t(key) : status;
+  };
+
   if (role === 'client') {
     return { variant: 'none', label: '' };
   }
 
   if (role === 'driver' && effectiveStatuses.driver) {
     const status = effectiveStatuses.driver.status;
-    return { variant: status as BadgeVariant, label: BADGE_LABELS[status] ?? status };
+    return { variant: status as BadgeVariant, label: labelFor(status) };
   }
 
   if (role === 'restaurant' && effectiveStatuses.restaurant) {
     const { status, stripeConnectStatus } = effectiveStatuses.restaurant;
-    let label = BADGE_LABELS[status] ?? status;
+    let label = labelFor(status);
     if (status === 'approved' && stripeConnectStatus !== 'active') {
-      label = 'Approuvé (Stripe en attente)';
+      label = t('auth.statusApprovedStripePending');
     }
     return { variant: status as BadgeVariant, label };
   }
@@ -168,7 +174,7 @@ export default function ContinueAsPage() {
         <div className="px-6 mt-8 space-y-3">
           {ownedRoles.map((role) => {
             const meta = ROLE_META[role];
-            const badge = getBadge(role, effectiveStatuses);
+            const badge = getBadge(role, effectiveStatuses, t);
             const isLoading = selecting === role;
 
             return (

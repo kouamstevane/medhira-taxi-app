@@ -608,7 +608,7 @@ export function useDriverRegistration() {
 
   const handleSendVerificationCode = async (email: string): Promise<{ success: boolean; error?: string }> => {
     if (!checkConnectivity()) {
-      return { success: false, error: 'Pas de connexion internet.' };
+      return { success: false, error: translate('systemMessages.connectivity.noConnection') };
     }
     try {
       const user = auth.currentUser;
@@ -641,7 +641,7 @@ export function useDriverRegistration() {
 
   const handleVerifyCode = async (code: string): Promise<{ success: boolean; error?: string; attemptsLeft?: number }> => {
     if (!checkConnectivity()) {
-      return { success: false, error: 'Pas de connexion internet.' };
+      return { success: false, error: translate('systemMessages.connectivity.noConnection') };
     }
     try {
       const user = auth.currentUser;

@@ -377,7 +377,7 @@ export const NativeMapView: React.FC<NativeMapViewProps> = ({
                              active:bg-blue-700 transition-colors min-h-[44px] min-w-[44px]"
                     aria-label={t('common.checkConnection')}
                 >
-                    Réessayer
+                    {t('common.retry')}
                 </button>
             </div>
         );

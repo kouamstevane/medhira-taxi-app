@@ -130,7 +130,7 @@ export default function RestaurantClient() {
               {restaurant.logoUrl ? (
                 <Image
                   src={restaurant.logoUrl}
-                  alt={`Logo ${restaurant.name}`}
+                  alt={t('systemMessages.ui.logoAlt', { name: restaurant.name })}
                   width={52}
                   height={52}
                   className="size-13 shrink-0 rounded-xl object-cover ring-2 ring-white/10"

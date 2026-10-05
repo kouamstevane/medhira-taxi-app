@@ -9,6 +9,7 @@ import {
   type CustomerRestaurantMenuCategory,
 } from '@/services/food-delivery.service';
 import type { MenuItem } from '@/types';
+import { translate } from '@/locales';
 
 const PAGE_SIZE = 24;
 const DEBOUNCE_MS = 250;
@@ -126,7 +127,7 @@ export function useCustomerRestaurantMenuQuery(restaurantId: string) {
         ...previous,
         isLoading: false,
         isLoadingMore: false,
-        error: error instanceof Error ? error.message : 'Impossible de charger le menu.',
+        error: error instanceof Error ? error.message : translate('systemMessages.ui.menuLoadFailed'),
         hasMore: false,
       }));
     }

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { translate } from '@/locales';
 import { validateMenuImageUrl, validateExternalImageLoad } from '@/utils/menu-image';
 
 export interface UseMenuImageUrlValidationReturn {
@@ -60,7 +61,7 @@ export function useMenuImageUrlValidation(): UseMenuImageUrlValidationReturn {
         if (!controller.signal.aborted) {
           setIsValidating(false);
           const errorMsg =
-            err instanceof Error ? err.message : "Impossible de charger l'image depuis cette URL";
+            err instanceof Error ? err.message : translate('errors.imageLoadFailed');
           setValidationError(errorMsg);
         }
         return false;

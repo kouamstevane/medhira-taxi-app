@@ -41,7 +41,7 @@ export default function DriverFoodContacts({ order, target }: Props) {
         }
       : {
           uid: order.clientId,
-          name: 'Client',
+          name: t('client'),
           role: 'client' as const,
         }
 

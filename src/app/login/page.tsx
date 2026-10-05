@@ -22,7 +22,7 @@ import {
 } from '@/services/roles.service';
 import type { UserData } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
-import { ERROR_MESSAGES, SUPPORTED_COUNTRIES } from '@/utils/constants';
+import { ERROR_MESSAGES, SUPPORTED_COUNTRIES, getCountryDisplayName } from '@/utils/constants';
 import { isValidPhoneNumber } from '@/lib/validation';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
@@ -81,7 +81,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { authStatus, userData } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const router = useRouter();
   const countryDropdownRef = useRef<HTMLDivElement>(null);
   const accountSwitchRequestedRef = useRef(false);
@@ -331,7 +331,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
-                  aria-label={`Indicatif ${selectedCountry.name} ${selectedCountry.dialCode}`}
+                  aria-label={t('auth.dialCodeAria', { country: getCountryDisplayName(selectedCountry, locale), code: selectedCountry.dialCode })}
                   aria-haspopup="listbox"
                   aria-expanded={isCountryDropdownOpen}
                   className="flex h-full shrink-0 items-center gap-2 border-r border-white/[0.08] px-3 text-sm font-semibold text-white outline-none transition-colors hover:bg-white/[0.04]"
@@ -376,7 +376,7 @@ export default function LoginPage() {
                       >
                         <span className="mr-3"><CountryFlag code={country.code} /></span>
                         <span className="font-medium mr-2">{country.dialCode}</span>
-                        <span className="text-slate-400">{country.name}</span>
+                        <span className="text-slate-400">{getCountryDisplayName(country, locale)}</span>
                       </button>
                     ))}
                   </div>

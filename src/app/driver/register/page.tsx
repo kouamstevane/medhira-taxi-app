@@ -112,7 +112,7 @@ export default function DriverRegisterWizard() {
                 type="button"
                 onClick={clearError}
                 className="p-1 rounded-lg text-destructive/70 hover:text-destructive hover:bg-white/10 transition-colors shrink-0"
-                aria-label="Fermer"
+                aria-label={t('common.close')}
               >
                 <MaterialIcon name="close" size="sm" />
               </button>
