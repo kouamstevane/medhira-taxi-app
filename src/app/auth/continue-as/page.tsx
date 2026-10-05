@@ -21,7 +21,7 @@ type SelectableRole = Exclude<ActiveRole, 'driver_onboarding' | 'restaurant_onbo
 const ROLE_META: Record<SelectableRole, { labelKey: TranslationKey; icon: string; color: string }> = {
   client: { labelKey: 'auth.clientSpace' as TranslationKey, icon: 'person', color: 'bg-blue-500' },
   driver: { labelKey: 'auth.driverSpace' as TranslationKey, icon: 'local_taxi', color: 'bg-orange-500' },
-  restaurant: { labelKey: 'auth.restaurantSpace' as TranslationKey, icon: 'restaurant', color: 'bg-green-500' },
+  restaurant: { labelKey: 'auth.restaurantSpace' as TranslationKey, icon: 'storefront', color: 'bg-green-500' },
 };
 
 type BadgeVariant = 'approved' | 'pending' | 'draft' | 'rejected' | 'suspended' | 'none';

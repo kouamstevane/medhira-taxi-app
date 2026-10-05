@@ -26,7 +26,7 @@ test('E2E-3 — Devenir pro depuis dashboard client (AC6)', async ({
   await expect(page).toHaveURL(/\/dashboard/);
 
   await page
-    .getByRole('button', { name: /ouvrir un restaurant/i })
+    .getByRole('button', { name: /(ouvrir un restaurant|devenir commerçant)/i })
     .click();
   await expect(page).toHaveURL(
     /\/restaurant\/register\?from=become-pro/,

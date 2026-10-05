@@ -27,7 +27,6 @@ export const restaurant = {
   // Register Wizard
   navLabel: "Navigation de l'inscription",
   homeNav: 'Accueil',
-  loginNav: 'Connexion',
   stepIndicator: 'Étape {step} / 4',
   addingRoleBadge: 'Ajout de rôle',
   step1Title: 'Créer votre compte',
@@ -43,7 +42,8 @@ export const restaurant = {
   hidePassword: 'Masquer le mot de passe',
   orContinueWith: 'Ou continuer avec',
   continueWithGoogle: 'Continuer avec Google',
-  orCreateManually: 'ou créer manuellement',
+  continueWithEmail: 'Email',
+  changeMethod: 'Changer de méthode',
   alreadyHaveAccount: 'Vous avez déjà un compte ? Se connecter',
   requiredNamesError: 'Prénom et nom sont requis.',
   invalidEmailError: 'Adresse email invalide.',
@@ -66,7 +66,8 @@ export const restaurant = {
   merchantTypePlaceholder: "Sélectionnez votre activité",
   merchantTypes: {
     restaurant: 'Restaurant',
-    supermarket: 'Supermarché',
+    supermarket: 'Épicerie',
+    grocery: 'Épicerie',
     pharmacy: 'Pharmacie',
     bakery: 'Boulangerie',
     retail: 'Boutique',
@@ -74,7 +75,8 @@ export const restaurant = {
   },
   merchantNamePlaceholders: {
     restaurant: 'Le Bistrot Parisien',
-    supermarket: 'Supermarché Express',
+    supermarket: 'Épicerie du Quartier',
+    grocery: 'Épicerie du Quartier',
     pharmacy: 'Pharmacie Centrale',
     bakery: 'Boulangerie Artisanale',
     retail: 'Boutique Tendance',

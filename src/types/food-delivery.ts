@@ -34,7 +34,7 @@ export type RestaurantStatus = 'pending_approval' | 'approved' | 'suspended' | '
 
 /**
  * Interface Restaurant / Merchant
- * Représente un établissement partenaire sur la plateforme (Restaurant, Supermarché, Pharmacie, etc.).
+ * Représente un établissement partenaire sur la plateforme (Restaurant, Épicerie, Pharmacie, etc.).
  */
 export interface Restaurant {
   id: string;

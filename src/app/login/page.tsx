@@ -22,53 +22,12 @@ import {
 } from '@/services/roles.service';
 import type { UserData } from '@/types/user';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 import { ERROR_MESSAGES, SUPPORTED_COUNTRIES, getCountryDisplayName } from '@/utils/constants';
 import { isValidPhoneNumber } from '@/lib/validation';
 import { DriverOnboardingDecisionGate } from '@/components/auth/DriverOnboardingDecisionGate';
 import { getIncompleteRegistrationType, getRegistrationRestoreRole, getRegistrationResumePath } from '@/services/registration-draft.service';
 import { useTranslation } from '@/hooks/useTranslation';
-
-function CountryFlag({ code }: { code: string }) {
-  if (code === 'CA') {
-    return (
-      <svg aria-hidden="true" className="h-4 w-6 shrink-0 rounded-[2px]" viewBox="0 0 24 16">
-        <rect width="24" height="16" fill="#fff" />
-        <rect width="5" height="16" fill="#d52b1e" />
-        <rect x="19" width="5" height="16" fill="#d52b1e" />
-        <path d="m12 3 .8 2.5 2-.8-1.1 2.2 1.8 1.2-2.3.2.3 2.5-1.5-1.5-1.5 1.5.3-2.5-2.3-.2L8.3 7 7.2 4.8l2 .8L10 3l1 1.2L12 3Z" fill="#d52b1e" />
-      </svg>
-    );
-  }
-
-  if (code === 'CM') {
-    return (
-      <svg aria-hidden="true" className="h-4 w-6 shrink-0 rounded-[2px]" viewBox="0 0 24 16">
-        <rect width="8" height="16" fill="#007a5e" />
-        <rect x="8" width="8" height="16" fill="#ce1126" />
-        <rect x="16" width="8" height="16" fill="#fcd116" />
-        <path d="m12 4 .7 2.1h2.2l-1.8 1.3.7 2.1L12 8.2l-1.8 1.3.7-2.1-1.8-1.3h2.2L12 4Z" fill="#fcd116" />
-      </svg>
-    );
-  }
-
-  if (code === 'FR') {
-    return (
-      <svg aria-hidden="true" className="h-4 w-6 shrink-0 rounded-[2px]" viewBox="0 0 24 16">
-        <rect width="8" height="16" fill="#0055a4" />
-        <rect x="8" width="8" height="16" fill="#fff" />
-        <rect x="16" width="8" height="16" fill="#ef4135" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg aria-hidden="true" className="h-4 w-6 shrink-0 rounded-[2px]" viewBox="0 0 24 16">
-      <rect width="8" height="16" fill="#000" />
-      <rect x="8" width="8" height="16" fill="#fdda24" />
-      <rect x="16" width="8" height="16" fill="#ef3340" />
-    </svg>
-  );
-}
 
 export default function LoginPage() {
   const phoneInputId = useId();
@@ -298,8 +257,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background font-sans text-slate-100 antialiased">
-      <div className="relative flex min-h-screen w-full flex-col max-w-[375px] mx-auto overflow-x-hidden">
+    <div className="min-h-dvh bg-background font-sans text-slate-100 antialiased">
+      <div className="relative flex min-h-dvh w-full flex-col max-w-[375px] mx-auto overflow-x-hidden">
         <div className="h-12 w-full" />
 
         <div className="flex flex-col items-center justify-center pt-8 pb-10">
@@ -476,10 +435,10 @@ export default function LoginPage() {
           </button>
         </div>
 
-        <div className="mt-auto pb-10 text-center">
+        <div className="mt-auto pt-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] text-center">
           <p className="text-slate-400 text-sm">
             {t('auth.noAccount')}
-            <Link href="/auth/role" className="text-primary font-bold ml-1 hover:underline">
+            <Link href="/auth/role" className="text-primary font-bold ml-1 inline-block py-2 hover:underline">
               {t('auth.createAccount')}
             </Link>
           </p>

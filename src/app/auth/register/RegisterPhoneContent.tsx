@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 import { InputField } from '@/components/forms';
 import { isValidPhoneNumber } from '@/lib/validation';
 import { SUPPORTED_COUNTRIES, ERROR_MESSAGES, getCountryDisplayName } from '@/utils/constants';
@@ -293,7 +294,7 @@ export default function RegisterPhoneContent() {
                   aria-expanded={isCountryDropdownOpen}
                   className="flex h-full shrink-0 items-center gap-2 border-r border-white/[0.08] px-3 text-sm font-semibold text-white outline-none transition-colors hover:bg-white/[0.04] focus:bg-white/[0.04]"
                 >
-                  <span>{selectedCountry.code}</span>
+                  <CountryFlag code={selectedCountry.code} /><span className="sr-only">{selectedCountry.code}</span>
                   <span className="text-slate-300">{selectedCountry.dialCode}</span>
                   <MaterialIcon name="expand_more" size="sm" className="text-slate-400" />
                 </button>
@@ -312,7 +313,7 @@ export default function RegisterPhoneContent() {
                   inputMode="tel"
                   autoComplete="tel-national"
                   aria-invalid={fieldErrors.phone ? 'true' : undefined}
-                  aria-describedby={fieldErrors.phone ? `${phoneInputId}-error` : `${phoneInputId}-helper`}
+                  aria-describedby={fieldErrors.phone ? `${phoneInputId}-error` : undefined}
                   className="h-full min-w-0 flex-1 bg-transparent px-4 text-base text-white outline-none placeholder:text-slate-500"
                   required
                 />
@@ -332,7 +333,7 @@ export default function RegisterPhoneContent() {
                           selectedCountry.code === country.code ? 'bg-primary/20 text-white' : 'text-slate-300'
                         }`}
                       >
-                        <span className="font-semibold mr-3">{country.code}</span>
+                        <span className="mr-3 flex items-center"><CountryFlag code={country.code} /><span className="sr-only">{country.code}</span></span>
                         <span className="font-medium mr-2">{country.dialCode}</span>
                         <span className="text-slate-400">{getCountryDisplayName(country, locale)}</span>
                       </button>
@@ -341,13 +342,9 @@ export default function RegisterPhoneContent() {
                 </div>
               )}
 
-              {fieldErrors.phone ? (
+              {fieldErrors.phone && (
                 <p id={`${phoneInputId}-error`} className="mt-1 text-sm text-red-500 flex items-center">
                   {fieldErrors.phone}
-                </p>
-              ) : (
-                <p id={`${phoneInputId}-helper`} className="mt-1 text-sm text-slate-400">
-                  {t('auth.phoneExample', { example: selectedCountry.defaultNumber })}
                 </p>
               )}
             </div>

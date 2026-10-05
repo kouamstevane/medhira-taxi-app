@@ -220,7 +220,7 @@ export default function FoodHomePage() {
                     ? t('food.merchantFilterAll')
                     : cat.id === 'restaurant'
                     ? t('food.merchantFilterRestaurant')
-                    : cat.id === 'supermarket'
+                    : (cat.id === 'supermarket' || cat.id === 'grocery')
                     ? t('food.merchantFilterSupermarket')
                     : cat.id === 'pharmacy'
                     ? t('food.merchantFilterPharmacy')
@@ -292,7 +292,7 @@ export default function FoodHomePage() {
               ? t('food.allMerchants')
               : selectedMerchantType === 'restaurant'
               ? t('food.merchantFilterRestaurant')
-              : selectedMerchantType === 'supermarket'
+              : (selectedMerchantType === 'supermarket' || selectedMerchantType === 'grocery')
               ? t('food.merchantFilterSupermarket')
               : selectedMerchantType === 'pharmacy'
               ? t('food.merchantFilterPharmacy')

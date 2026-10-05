@@ -193,7 +193,7 @@ describe('Step3Restaurant', () => {
     fireEvent.click(screen.getByRole('button', { name: /Informations/i }));
 
     // Switch to supermarket
-    fireEvent.click(screen.getByRole('button', { name: /^Supermarché/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Épicerie/i }));
 
     expect(screen.getByRole('button', { name: 'Fruits & Légumes' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Boissons/i })).toBeInTheDocument();
@@ -238,8 +238,8 @@ describe('Step3Restaurant', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Burger' }));
     expect(screen.getByRole('button', { name: 'Burger' })).toHaveAttribute('aria-pressed', 'true');
 
-    // Attempt to switch to Supermarché
-    fireEvent.click(screen.getByRole('button', { name: /^Supermarché/i }));
+    // Attempt to switch to Épicerie
+    fireEvent.click(screen.getByRole('button', { name: /^Épicerie/i }));
 
     // Confirmation dialog should appear
     expect(screen.getByText("Changer d'activité ?")).toBeInTheDocument();
@@ -249,7 +249,7 @@ describe('Step3Restaurant', () => {
     expect(screen.getByRole('button', { name: 'Burger' })).toHaveAttribute('aria-pressed', 'true');
 
     // Click again and confirm change
-    fireEvent.click(screen.getByRole('button', { name: /^Supermarché/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Épicerie/i }));
     fireEvent.click(screen.getByRole('button', { name: /Confirmer le changement/i }));
 
     // Burger should no longer be pressed, and supermarket categories should appear

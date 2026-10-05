@@ -137,9 +137,9 @@ describe('RestaurantRegisterPage', () => {
     render(<RestaurantRegisterPage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Accueil' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Connexion' }));
 
-    expect(leaveRegistration).toHaveBeenNthCalledWith(1, '/');
-    expect(leaveRegistration).toHaveBeenNthCalledWith(2, '/login');
+    expect(screen.queryByRole('button', { name: 'Connexion' })).not.toBeInTheDocument();
+    expect(leaveRegistration).toHaveBeenCalledTimes(1);
+    expect(leaveRegistration).toHaveBeenCalledWith('/');
   });
 });

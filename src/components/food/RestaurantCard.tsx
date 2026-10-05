@@ -19,7 +19,7 @@ export const RestaurantCard: React.FC<RestaurantCardProps> = ({ restaurant }) =>
   const allowsPickup = restaurant.fulfillmentModes?.includes('pickup');
   const merchantFallbackIcon = merchantType === 'pharmacy'
     ? 'local_pharmacy'
-    : merchantType === 'supermarket'
+    : merchantType === 'supermarket' || merchantType === 'grocery'
     ? 'local_grocery_store'
     : merchantType === 'bakery'
     ? 'bakery_dining'

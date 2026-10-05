@@ -163,31 +163,6 @@ export default function Loading() {
         >
           {t('loading')}
         </p>
-
-        {/* Barre de progression */}
-        <div
-          className="w-64 h-2 bg-white/10 rounded-full mt-6 mx-auto overflow-hidden"
-          style={{
-            width: '256px',
-            maxWidth: '100%',
-            height: '6px',
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '9999px',
-            marginTop: '24px',
-            marginLeft: 'auto',
-            marginRight: 'auto',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            className="h-full bg-[#f29200] rounded-full animate-loading-bar"
-            style={{
-              height: '100%',
-              backgroundColor: '#f29200',
-              borderRadius: '9999px',
-            }}
-          />
-        </div>
       </div>
     </div>
   );

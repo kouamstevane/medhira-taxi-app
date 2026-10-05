@@ -72,16 +72,6 @@ function RestaurantRegisterWizard() {
               <MaterialIcon name="home" size="sm" />
               {t('homeNav')}
             </button>
-            <button
-              type="button"
-              onClick={() => void leaveRegistration('/login')}
-              disabled={isLeaving}
-              className={cn(driverSecondaryButtonClassName, 'h-9 min-h-9 w-auto gap-2 rounded-xl px-3 text-xs bg-white/[0.03] border-white/10 text-gray-300 hover:bg-white/[0.06] hover:text-white transition-all')}
-              aria-label={t('loginNav')}
-            >
-              <MaterialIcon name="login" size="sm" />
-              {t('loginNav')}
-            </button>
           </div>
           <span className="text-xs font-semibold text-primary/90 bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full">
             {t('stepIndicator', { step: currentStep })}

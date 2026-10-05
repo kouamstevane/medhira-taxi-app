@@ -6,19 +6,19 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import { MaterialIcon } from '@/components/ui/MaterialIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 
-interface ProfilePartnerModalProps {
+export interface BecomePartnerModalProps {
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly hasDriverRole?: boolean;
   readonly hasRestaurantRole?: boolean;
 }
 
-export function ProfilePartnerModal({
+export function BecomePartnerModal({
   isOpen,
   onClose,
   hasDriverRole = false,
   hasRestaurantRole = false,
-}: ProfilePartnerModalProps) {
+}: BecomePartnerModalProps) {
   const { t } = useTranslation();
 
   return (
@@ -78,7 +78,7 @@ export function ProfilePartnerModal({
             </div>
           </Link>
 
-          {/* Restaurant Option */}
+          {/* Merchant / Restaurant Option */}
           <Link
             href={hasRestaurantRole ? '/dashboard?role=restaurant' : '/restaurant/register?from=become-pro'}
             onClick={onClose}

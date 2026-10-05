@@ -33,7 +33,7 @@ import { ProfileMenuItem } from './ProfileMenuItem';
 import { ProfileSupportModal } from './ProfileSupportModal';
 import { ProfileReferralModal } from './ProfileReferralModal';
 import { ProfileFaqModal } from './ProfileFaqModal';
-import { ProfilePartnerModal } from './ProfilePartnerModal';
+import { BecomePartnerModal } from '@/components/role/BecomePartnerModal';
 import { ProfilePaymentMethodsModal, type CardDetails } from './ProfilePaymentMethodsModal';
 import { ProfileSecurityModal } from './ProfileSecurityModal';
 import { subscribeToWallet } from '@/services/wallet.service';
@@ -836,7 +836,7 @@ function ProfilPageContent() {
           isOpen={showFaqModal}
           onClose={() => setShowFaqModal(false)}
         />
-        <ProfilePartnerModal
+        <BecomePartnerModal
           isOpen={showPartnerModal}
           onClose={() => setShowPartnerModal(false)}
           hasDriverRole={hasDriverRole}

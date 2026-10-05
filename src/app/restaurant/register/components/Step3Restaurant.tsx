@@ -145,6 +145,7 @@ export function Step3Restaurant({ onNext, onBack, initialData, loading }: Step3R
       case 'restaurant':
         return t('merchantTypes.restaurant');
       case 'supermarket':
+      case 'grocery':
         return t('merchantTypes.supermarket');
       case 'pharmacy':
         return t('merchantTypes.pharmacy');

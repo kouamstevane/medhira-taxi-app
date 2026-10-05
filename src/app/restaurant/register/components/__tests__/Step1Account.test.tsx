@@ -61,3 +61,26 @@ describe('Step1Account', () => {
     });
   });
 });
+
+describe('Step1Account method choice', () => {
+  it('shows two method cards and hides the form until email is chosen', () => {
+    render(<Step1Account onSubmit={jest.fn()} onGoogleSignIn={jest.fn()} loading={false} error={null} />);
+
+    expect(screen.getByRole('button', { name: 'Continuer avec Google' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Prénom')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email' }));
+    expect(screen.getByLabelText('Prénom')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Changer de méthode/i }));
+    expect(screen.queryByLabelText('Prénom')).not.toBeInTheDocument();
+  });
+
+  it('calls onGoogleSignIn from the Google card', () => {
+    const onGoogleSignIn = jest.fn();
+    render(<Step1Account onSubmit={jest.fn()} onGoogleSignIn={onGoogleSignIn} loading={false} error={null} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer avec Google' }));
+    expect(onGoogleSignIn).toHaveBeenCalled();
+  });
+});

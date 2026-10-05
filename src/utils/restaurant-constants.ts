@@ -91,8 +91,8 @@ export const MERCHANT_TYPES_CONFIG: MerchantTypeOption[] = [
     id: 'supermarket',
     labelKey: 'restaurant.merchantTypes.supermarket',
     icon: 'local_grocery_store',
-    defaultLabelFr: 'Supermarché',
-    defaultLabelEn: 'Supermarket',
+    defaultLabelFr: 'Épicerie',
+    defaultLabelEn: 'Grocery Store',
   },
   {
     id: 'pharmacy',
@@ -113,7 +113,7 @@ export const MERCHANT_TYPES_CONFIG: MerchantTypeOption[] = [
     labelKey: 'restaurant.merchantTypes.retail',
     icon: 'shopping_bag',
     defaultLabelFr: 'Boutique',
-    defaultLabelEn: 'Retail',
+    defaultLabelEn: 'Shop',
   },
   {
     id: 'other',
@@ -127,6 +127,9 @@ export const MERCHANT_TYPES_CONFIG: MerchantTypeOption[] = [
 export const MERCHANT_TYPES_MAP: Record<MerchantType, MerchantTypeOption> = MERCHANT_TYPES_CONFIG.reduce(
   (acc, item) => {
     acc[item.id] = item;
+    if (item.id === 'supermarket') {
+      acc['grocery'] = item;
+    }
     return acc;
   },
   {} as Record<MerchantType, MerchantTypeOption>,
